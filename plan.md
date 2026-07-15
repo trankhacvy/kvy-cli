@@ -644,7 +644,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
 - [ ] `POST /v1/auth` Ed25519 challenge/response → account upsert by `signPublicKey` **(V** from `authRoutes.ts`**)**
 - [ ] OAuth sign-in routes (Google/GitHub/email) binding `oauthProvider/oauthSubject` **(N — DELTA D5)**
-- [ ] Pairing endpoints: `POST /v1/auth/pair`, `GET /v1/auth/pair/status`, `POST /v1/auth/pair/approve` **(P** from Happy's `/v1/auth/request*` — add `expiresAt` TTL, one of the reported Happy vulns**)**
+- [x] Pairing endpoints: `POST /v1/auth/pair`, `GET /v1/auth/pair/status`, `POST /v1/auth/pair/approve` **(P** from Happy's `/v1/auth/request*` — add `expiresAt` TTL, one of the reported Happy vulns**)**
 - [x] `docker-compose.dev.yml`: postgres:16 for local dev
 
 **Phase 0 exit:** `pnpm build && pnpm test` green; a script can register an account, pass the challenge, and get a JWT against a local server.

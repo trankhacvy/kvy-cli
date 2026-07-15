@@ -16,6 +16,7 @@
     "db:migrate": "tsx -e \"import('./src/db/migrate.ts').then(m => m.runMigrations())\""
   },
   "dependencies": {
+    "@falcon/crypto": "workspace:*",
     "@paralleldrive/cuid2": "^2.2.2",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.10.0",

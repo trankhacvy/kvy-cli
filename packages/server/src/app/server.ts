@@ -7,6 +7,7 @@ import {
 import { authPlugin } from "../auth/index.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
+import { pairRoutes } from "./api/pair.js";
 
 // App factory (kept separate from process startup in src/main.ts) so tests
 // can build+inject() without opening a real port or a real pino transport.
@@ -27,6 +28,7 @@ export async function buildServer(opts: FastifyServerOptions = {}) {
   await app.register(authPlugin);
 
   await app.register(healthRoutes);
+  await app.register(pairRoutes);
 
   return app;
 }

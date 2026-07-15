@@ -42,6 +42,9 @@ importers:
 
   packages/server:
     dependencies:
+      '@falcon/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@paralleldrive/cuid2':
         specifier: ^2.2.2
         version: 2.3.1
