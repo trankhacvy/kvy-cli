@@ -43,8 +43,10 @@ packages/
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
 │                             module (src/auth/: JWT HS256 mint/verify, in-memory token
-│                             cache, app.authenticate preHandler) + POST /v1/auth
-│                             challenge/response route. Socket.IO routes still [planned].
+│                             cache, app.authenticate preHandler) + `POST /v1/auth`
+│                             challenge/response route, `POST /v1/auth/register` OAuth
+│                             (Google/GitHub) sign-in, and `/v1/auth/pair*` device-pairing
+│                             routes. Socket.IO routes still [planned].
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme, one placeholder route. Auth,
                               sync engine, crypto bridge, and API calls still [planned].
