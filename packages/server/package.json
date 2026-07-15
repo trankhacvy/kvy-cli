@@ -19,7 +19,9 @@
     "@paralleldrive/cuid2": "^2.2.2",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.10.0",
+    "fastify-plugin": "^6.0.0",
     "fastify-type-provider-zod": "^7.0.0",
+    "jose": "^6.2.3",
     "pino": "^10.3.1",
     "postgres": "^3.4.9",
     "zod": "^4.0.0"
