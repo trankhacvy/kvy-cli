@@ -2326,3 +2326,112 @@ tests total, 0 failures).
    three are incremental additions on top of a stable base.
 3. **Land `P1-1.5-daemon-singleton-lock`** — `packages/cli/src/daemon/`
    still doesn't exist on `main`; unchanged blocker since Cycle 16.
+
+## Cycle 21 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `9808dc4`, "chore: cycle 20 — completed 3 tasks (re-verified auth routes, transcript scanner, crypto worker)")
+
+### Verification run on `main`
+
+- `pnpm typecheck` (forced, `npx turbo run typecheck --force`, 0 cached) →
+  **PASSED**: 6/6 tasks — `@falcon/wire`, `@falcon/crypto` (+ its `build`),
+  `@falcon/server`, `@falcon/web`, `falcon` (cli). `tsc --noEmit` clean on
+  every package.
+- `pnpm test` (forced, `npx turbo run test --force`, 0 cached) → **PASSED**:
+  9/9 tasks, **315 tests total, 0 failures** — `falcon` (cli) 66,
+  `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/wire` 61, `@falcon/server`
+  87. Same totals as Cycle 20 — no regressions, no new tests landed.
+
+### Task-summary read this cycle
+
+This cycle's instructions named two files: `task-summary/P1-1.4-envelope-mapper.md`
+and `task-summary/P1-1.4-http-outbox.md`, described as "successful tasks."
+**Neither exists on `main`.** Confirmed via the environment-note-recommended
+method (absolute/proxied lookup, not a bare `ls`/`find` through the Bash tool,
+which this session also observed silently returning empty/mis-parsed output
+for plain `ls -la` and `find … -not …` — same class of masking bug documented
+in Cycles 18–20; routed everything through `rtk proxy <cmd>` instead once
+noticed):
+
+- **`task-summary/P1-1.4-envelope-mapper.md`** — not in `main`'s
+  `task-summary/` directory. It **does** exist in worktree
+  `.worktrees/P1-1.4-envelope-mapper` (`git show P1-1.4-envelope-mapper:task-summary/P1-1.4-envelope-mapper.md`
+  reads cleanly) and describes real, complete work: a faithful port of
+  Happy's `sessionProtocolMapper.ts` as `packages/cli/src/claude/envelopeMapper.ts`,
+  21 tests including 5 golden-fixture tests against real Claude transcript
+  samples, self-reported green. `git merge-base --is-ancestor
+  P1-1.4-envelope-mapper main` → **not an ancestor** — confirmed not merged.
+  `packages/cli/src/claude/` on `main` still only contains
+  `types.ts`/`fileWatcher.ts`/`scanner.ts` (verified via `Read` after the
+  proxied `ls`) — no `envelopeMapper.ts`. Checkbox at `plan.md` line 684
+  stays unchecked; landing is out of this tracker's scope.
+- **`task-summary/P1-1.4-http-outbox.md`** — also not on `main`, and unlike
+  every prior "unmerged but complete" case this tracker has seen, **there is
+  no work to find anywhere**: `git diff main P1-1.4-http-outbox --stat` is
+  completely empty, and `git merge-base --is-ancestor P1-1.4-http-outbox
+  main` returns **true** — meaning the branch's tip is itself an ancestor of
+  `main`, i.e. it never diverged from `main` at all. No commits, no
+  task-summary, no `outbox.ts` anywhere in the worktree. This task was named
+  as "successful" in this cycle's instructions but has not actually been
+  started. `plan.md` line 685 stays unchecked.
+
+**Net conclusion:** this cycle's request diverged from `main`'s actual state
+in a new way relative to the recurring "unmerged-but-complete" pattern —
+one of the two named tasks (`http-outbox`) has literally no implementation
+work behind it at all, on any branch. Nothing was checked off in `plan.md`
+as a result; only a narrative annotation was added (line 681 section) so
+future cycles don't have to re-derive this.
+
+### Tasks completed this cycle
+
+None merged into `main`. `main` remains green (315/315 tests, clean
+typecheck) but unchanged in scope from Cycle 20 — `plan.md` checkbox count
+stays **34/135**.
+
+### Blockers / issues found
+
+1. **Requested tasks not actually done**: `P1-1.4-http-outbox` has zero
+   commits past whatever `main` commit it was branched from — the task has
+   not been started, despite this cycle's instructions listing it as a
+   "successful task" with a task-summary to read. `P1-1.4-envelope-mapper`
+   *is* genuinely complete and self-verified, but only in its own unmerged
+   worktree — same recurring "done-in-a-worktree, never landed" gap flagged
+   every cycle since Cycle 1.
+2. **`rtk` Bash-hook proxy quirks reproduced again this session**: plain
+   `ls -la` and `find … -not …` through the Bash tool returned empty/errored
+   output even though the paths/files genuinely exist (confirmed via `rtk
+   proxy ls`/`rtk proxy find`, which returned correct results). Consistent
+   with the fabrication risk documented in Cycles 18–20 — resolved this
+   cycle by prefixing raw filesystem commands with `rtk proxy`, and using
+   `Read`/`git show` for anything load-bearing.
+3. Unmerged worktrees remain unchanged from Cycle 20 (`git worktree list`):
+   `P0-land-phase0-worktrees`, `P1-1.1-server-realtime`,
+   `P1-1.2-server-write-http`, `P1-1.3-claude-launcher-script`,
+   `P1-1.3-falcon-home-persistence`, `P1-1.3-provider-detection`,
+   `P1-1.4-envelope-mapper` (new, complete, unlanded), `P1-1.4-http-outbox`
+   (new, but empty — no work done), `P1-1.5-daemon-singleton-lock`.
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **34 checked on `main`**,
+unchanged from Cycle 20 (0.1 5/5, 0.2 8/8, 0.3 7/7, 0.4 7/8, 1.3 1/9, 1.4
+2/6, 1.6 2/8). **Completion: ~25.2%** (34/135), verified against a forced,
+cache-bypassed `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (315 tests total, 0 failures, identical to Cycle 20 — confirming no
+silent regression since).
+
+### Next recommended tasks
+
+1. **Land `P1-1.4-envelope-mapper`** — genuinely complete and
+   self-verified (21 tests incl. 5 golden fixtures) in
+   `.worktrees/P1-1.4-envelope-mapper`; just needs an actual merge onto
+   `main` to flip `plan.md` line 684.
+2. **Actually implement `P1-1.4-http-outbox`** (§6.5, DELTA D1: 300ms/20-event
+   coalescing, disk-backed queue with 10MB cap, blind retry w/ backoff) —
+   the branch exists but has no code yet; this is net-new work, not a
+   landing task.
+3. **Land `P1-1.1-server-realtime` and `P1-1.2-server-write-http` together**
+   (carried over from Cycles 19–20 — still unlanded, share a pre-1.1 base
+   with independently-implemented `eventRouter`).
