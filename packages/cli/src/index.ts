@@ -10,7 +10,10 @@ import {
   runDaemonStatus,
   runDaemonStop,
 } from "./daemon/commands.js";
-import { createEnsureDaemonRunningDeps, ensureDaemonRunning } from "./daemon/ensureDaemonRunning.js";
+import {
+  createEnsureDaemonRunningDeps,
+  ensureDaemonRunning,
+} from "./daemon/ensureDaemonRunning.js";
 import {
   describeKillSummary,
   type KillTarget,
@@ -85,7 +88,9 @@ function describeStart(command: Extract<FalconCommand, { type: "start" }>): stri
  * over daemon lifecycle management themselves.
  */
 async function ensureDaemon(): Promise<{ ok: true } | { ok: false; message: string }> {
-  const result = await ensureDaemonRunning(createEnsureDaemonRunningDeps({ version: readVersion() }));
+  const result = await ensureDaemonRunning(
+    createEnsureDaemonRunningDeps({ version: readVersion() }),
+  );
   if (result.ok || result.reason === "disabled") return { ok: true };
   return { ok: false, message: result.message };
 }

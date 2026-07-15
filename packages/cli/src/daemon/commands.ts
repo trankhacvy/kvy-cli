@@ -164,7 +164,10 @@ export async function runDaemonStart(
   while (Date.now() < deadline) {
     const state = await readDaemonState(deps.homeDir);
     if (state && deps.isProcessAlive(state.pid)) {
-      return { code: 0, message: `falcon daemon: started (pid ${state.pid}, port ${state.port})\n` };
+      return {
+        code: 0,
+        message: `falcon daemon: started (pid ${state.pid}, port ${state.port})\n`,
+      };
     }
     await deps.sleep(READY_POLL_MS);
   }

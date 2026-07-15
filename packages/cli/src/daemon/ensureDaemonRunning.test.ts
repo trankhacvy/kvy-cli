@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import {
   createEnsureDaemonRunningDeps,
-  ensureDaemonRunning,
   type EnsureDaemonRunningDeps,
+  ensureDaemonRunning,
 } from "./ensureDaemonRunning.js";
 import { writeDaemonState } from "./state.js";
 
