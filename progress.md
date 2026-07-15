@@ -774,3 +774,138 @@ raising overall completion to ~15.6% (21/135).
 3. **Clean up redundant worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
    and `.worktrees/P0-land-phase0-worktrees` are both fully landed on `main`
    already and can be removed with `git worktree remove`.
+
+## Cycle 9 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `03c6537`, "chore: cycle 8 — completed 0
+tasks, re-verified main green")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 3/3 packages (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`) — `tsc --noEmit` clean on all three
+  (turbo full cache hit).
+- `pnpm test` → **PASSED**: 6/6 tasks, **144 tests total** — 61 in
+  `@falcon/wire` (6 files), 65 in `@falcon/crypto` (8 files), 18 in
+  `@falcon/server` (3 files). Zero failures. Same green result as Cycles
+  7–8, confirming `main` is still stable. No content commits landed on
+  `main` since Cycle 8's tracker commit — `main` is content-unchanged from
+  Cycle 8.
+
+### Task-summary read this cycle
+
+This cycle's instructions asked to read three task-summary files as
+"successful tasks":
+
+- **`task-summary/P0-0.4-auth-module.md`** — **does not exist on `main`.**
+  It exists only inside
+  `.worktrees/P0-0.4-auth-module/task-summary/P0-0.4-auth-module.md`, on
+  branch `P0-0.4-auth-module` (tip `c9823c4 refactor: P0-0.4-auth-module -
+  code review fixes`, 3 commits ahead of `main`: `feat`/`fix`/`refactor`).
+  `git merge-base --is-ancestor P0-0.4-auth-module main` confirms **not
+  merged**.
+- **`task-summary/P1-1.3-cli-skeleton.md`** — **does not exist on `main`.**
+  It exists only inside
+  `.worktrees/P1-1.3-cli-skeleton/task-summary/P1-1.3-cli-skeleton.md`, on
+  branch `P1-1.3-cli-skeleton` (tip `77fc254 feat: P1-1.3-cli-skeleton -
+  packages/cli scaffold: arg parsing, flag passthrough, file-only logger`, 1
+  commit ahead of `main`). **Not merged.** Note there is also a *second*,
+  apparently-duplicate worktree/branch for the same plan item,
+  `P1-1.3-cli-package-scaffold` (tip `523da96`, 2 commits ahead,
+  `feat`+`refactor`) — two independent attempts at the same `1.3` scope
+  exist in parallel, neither merged.
+- **`task-summary/P1-1.6-web-app-scaffold.md`** — **does not exist on
+  `main`.** It exists only inside
+  `.worktrees/P1-1.6-web-app-scaffold/task-summary/P1-1.6-web-app-scaffold.md`,
+  on branch `P1-1.6-web-app-scaffold` (tip `91aaf1c fix:
+  P1-1.6-web-app-scaffold - resolve test failures`, 3 commits ahead of
+  `main`: `feat`+`fix`+`fix`). **Not merged.**
+
+Per this tracker's established convention (Cycles 1–3, 7, 8): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked — doing so would
+attribute code to `main` that isn't actually there. All three requested
+files fall in this bucket this cycle, so **zero** task-summaries were
+credited. `plan.md` was updated only to (a) add a `re-verified cycle 9`
+stamp to the `0.1 Scaffold` and `0.4 Server foundation` headers (both still
+green on `main`), and (b) add cycle-9 notes to the `1.3 CLI skeleton` and
+`1.6 Web app v1` section headers pointing at the complete-but-unmerged
+worktree work, so the next tracker cycle (or a human) knows real progress
+exists off-`main` even though the checkboxes correctly stay `[ ]`.
+
+### Tasks completed this cycle
+
+None. No branches were merged onto `main` this cycle (merging worktrees is
+out of scope for this tracker role — it only verifies and records what's
+already on `main`). `plan.md` §16 checkbox count is unchanged from Cycle 8:
+**21/135** checked (0.1: 5/5, 0.2: 8/8, 0.3: 7/7, 0.4: 1/8). (Note: Cycle 8's
+own summary stated "19/135" for this same set of checked boxes — recounting
+directly from `plan.md` this cycle gives 21/135, which is the actual number
+of `- [x]` lines present; treating 21/135 as authoritative going forward.)
+
+### Blockers / issues found
+
+1. **All three requested task-summaries are unmerged, again** — this is now
+   the dominant pattern across Cycles 1, 2, 3, 7, 8, and 9: the tracker is
+   repeatedly handed task-summary paths for work that was done in a
+   worktree but never landed on `main`. The tracker cannot credit work that
+   isn't in the branch it's asked to track. **Recommendation for whoever
+   schedules tracker cycles**: either (a) run a merge/landing step (like
+   `P0-merge-pending-worktrees` / `P0-land-phase0-worktrees` did in earlier
+   cycles) before the next tracker cycle, or (b) point the tracker at the
+   worktree branches directly if the intent is to verify pre-merge work.
+2. **Duplicate work on the same plan item**: `P1-1.3-cli-skeleton` and
+   `P1-1.3-cli-package-scaffold` both implement plan §1.3's `packages/cli`
+   scaffold bullet independently, in separate worktrees, neither merged.
+   Whoever lands `1.3` should pick one (probably the more complete/recent —
+   `P1-1.3-cli-package-scaffold` has a code-review-fix commit) and discard
+   or rebase the other to avoid wasted/conflicting merge work.
+3. **Unmerged worktrees keep accumulating** (recurring since Cycle 1):
+   `git worktree list` shows 8 worktrees besides the main checkout:
+
+   | Branch | Commits ahead of `main` | Status |
+   |---|---|---|
+   | `P0-0.1-monorepo-scaffold` | 0 (content) | stale — already landed on `main`; safe to remove |
+   | `P0-land-phase0-worktrees` | 0 (content) | stale — already landed on `main`; safe to remove |
+   | `P0-0.4-drizzle-schema` | 1 | complete, has task-summary, **not merged** (flagged since Cycle 8) |
+   | `P0-0.4-docker-compose-dev` | 3 | complete, has task-summary, **not merged** (flagged since Cycle 7) |
+   | `P0-0.4-auth-module` | 3 | complete, has task-summary, **not merged** — new this cycle |
+   | `P1-1.3-cli-skeleton` | 1 | complete, has task-summary, **not merged** — new this cycle |
+   | `P1-1.3-cli-package-scaffold` | 2 | complete, has task-summary, **not merged** — new this cycle, duplicate of the above |
+   | `P1-1.6-web-app-scaffold` | 3 | complete, has task-summary, **not merged** — new this cycle |
+
+   Six of these eight represent verified, ready-to-land work sitting idle.
+   `main`'s own gate remains green regardless (typecheck + 144 tests pass),
+   but overall plan completion is materially understated until a landing
+   pass runs.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **21 checked on `main`**
+(unchanged from Cycle 8 in absolute terms — see the recount note above).
+**Completion: ~15.6%** (21/135), verified against a green `pnpm
+typecheck`/`pnpm test` run covering all 3 packages currently on `main` (144
+tests total). If the six ready-but-unmerged worktrees above were landed,
+`0.4` would gain 2 bullets (drizzle schema, docker-compose — auth module is
+one bullet but its worktree also covers the token mint/verify piece) and
+`1.3`/`1.6` would each gain their lead bullet at minimum, likely pushing
+completion into the low-20s/135 (~17–18%) immediately, and higher once the
+full worktree contents are cross-checked bullet-by-bullet against `plan.md`
+during a landing cycle.
+
+### Next recommended tasks
+
+1. **Run a landing pass** (a `P0-land-*`/`P0-merge-pending-worktrees`-style
+   task) to merge the six ready worktrees into `main` in dependency order —
+   `P0-0.4-drizzle-schema` and `P0-0.4-docker-compose-dev` first (oldest,
+   already flagged twice), then `P0-0.4-auth-module`, then pick one of
+   `P1-1.3-cli-skeleton` / `P1-1.3-cli-package-scaffold` (not both), then
+   `P1-1.6-web-app-scaffold`. Only after landing can a tracker cycle credit
+   these against `plan.md`.
+2. **Resolve the `P1-1.3` duplicate** before landing — compare
+   `P1-1.3-cli-skeleton` (1 commit) vs. `P1-1.3-cli-package-scaffold` (2
+   commits, includes a code-review-fix pass) and keep one; merging both
+   would conflict on the same `packages/cli` scaffold.
+3. **Clean up fully-landed stale worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
+   and `.worktrees/P0-land-phase0-worktrees` remain safe to `git worktree
+   remove` — flagged every cycle since they landed with no action taken yet.

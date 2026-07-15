@@ -610,7 +610,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 ### Phase 0 — Repo & contracts (M0, week 1)
 
-**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5, re-verified cycle 6, re-verified cycle 7, re-verified cycle 8 — `pnpm typecheck`/`pnpm test` green)*
+**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5, re-verified cycle 6, re-verified cycle 7, re-verified cycle 8, re-verified cycle 9 — `pnpm typecheck`/`pnpm test` green)*
 - [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
 - [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
 - [x] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
@@ -636,7 +636,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Browser build: `.web.ts` split (libsodium-wrappers + WebCrypto AES-GCM); cross-impl test vectors (node encrypts → web decrypts, and vice versa)
 - [x] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
 
-**0.4 Server foundation** — §3.2, §4 *(Fastify skeleton bullet verified on `main` 2026-07-15, cycle 7, re-verified cycle 8 — `pnpm typecheck`/`pnpm test` green, 18/18 `@falcon/server` tests; remaining bullets not started/not merged — `P0-0.4-drizzle-schema` and `P0-0.4-docker-compose-dev` exist complete in unmerged worktrees per cycle 8's check, not yet credited)*
+**0.4 Server foundation** — §3.2, §4 *(Fastify skeleton bullet verified on `main` 2026-07-15, cycle 7, re-verified cycle 8, re-verified cycle 9 — `pnpm typecheck`/`pnpm test` green, 18/18 `@falcon/server` tests; remaining bullets not started/not merged — `P0-0.4-drizzle-schema`, `P0-0.4-docker-compose-dev`, and now `P0-0.4-auth-module` exist complete in unmerged worktrees per cycle 9's check, not yet credited)*
 - [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
 - [ ] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
 - [ ] `drizzle-kit generate` initial migration; migration-on-boot runner
@@ -667,7 +667,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Rate limits on auth + ingest; request-size caps
 - [ ] Integration test: POST message twice with same localId → one row, one fan-out
 
-**1.3 CLI skeleton + local mode** — §6.1–§6.3
+**1.3 CLI skeleton + local mode** — §6.1–§6.3 *(cycle 9 note: `packages/cli` scaffold work exists complete in two unmerged worktrees — `P1-1.3-cli-skeleton` and `P1-1.3-cli-package-scaffold` — with task-summary docs; neither is merged into `main`, so this section stays unchecked and uncredited pending a merge + re-verification cycle)*
 - [ ] `packages/cli` scaffold: hand-rolled arg parse, `falcon`/`falcon claude [args]` with full flag passthrough; file-only logger (never stdout)
 - [ ] `~/.falcon/` persistence: `settings.json` (atomic lock-file writes), `access.key` (0600) **(P** from happy `persistence.ts`**)**
 - [ ] `falcon auth login/logout/status`: OAuth browser flow + pairing fallback (QR/URL) — §5
@@ -695,7 +695,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Session self-report: `notifyDaemonSessionStarted` webhook incl. encryption material — §7.1
 - [ ] `falcon kill daemon/sessions/all/all-force` (process-scan based, works when daemon wedged)
 
-**1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)**
+**1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)** *(cycle 9 note: `packages/web` Next.js App Router scaffold work exists complete in the unmerged `P1-1.6-web-app-scaffold` worktree, with task-summary doc; not merged into `main`, so this section stays unchecked and uncredited pending a merge + re-verification cycle)*
 - [ ] Next.js App Router scaffold, static export config, Tailwind + shadcn/ui init, dark default theme
 - [ ] Auth pages: OAuth sign-in; key generation on signup; recovery-code export flow; pairing-approve page (`/pair#<ephPub>`)
 - [ ] Crypto worker (`crypto-bridge`): keys in worker memory from IndexedDB; seal/open message API **(N)**
