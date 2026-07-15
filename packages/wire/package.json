@@ -1,0 +1,36 @@
+{
+  "name": "@falcon/wire",
+  "version": "0.1.0",
+  "description": "Wire-protocol contracts shared by every Falcon package. Additive-only forever — see src/index.ts.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "shx rm -rf dist && tsc --noEmit && pkgroll",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@paralleldrive/cuid2": "^2.2.2",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": ">=20",
+    "pkgroll": "^2.14.2",
+    "shx": "^0.3.4",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  }
+}

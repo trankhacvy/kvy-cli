@@ -1,0 +1,2519 @@
+{
+  "EncryptedBoxSchema": {
+    "kind": "object",
+    "fields": {
+      "c": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "t": {
+        "kind": "literal",
+        "values": ["enc"]
+      },
+      "v": {
+        "kind": "literal",
+        "values": [1]
+      }
+    }
+  },
+  "PermissionModeSchema": {
+    "kind": "enum",
+    "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+  },
+  "PermDecisionSchema": {
+    "kind": "union",
+    "options": [
+      {
+        "kind": "object",
+        "fields": {
+          "kind": {
+            "kind": "literal",
+            "values": ["allow"]
+          },
+          "scope": {
+            "kind": "enum",
+            "options": ["once", "session"]
+          },
+          "updatedInput": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "unknown"
+            }
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "kind": {
+            "kind": "literal",
+            "values": ["deny"]
+          },
+          "message": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "kind": {
+            "kind": "literal",
+            "values": ["mode"]
+          },
+          "mode": {
+            "kind": "enum",
+            "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+          }
+        }
+      }
+    ]
+  },
+  "SessionEventSchema": {
+    "kind": "union",
+    "options": [
+      {
+        "kind": "object",
+        "fields": {
+          "md": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["text"]
+          },
+          "thinking": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "boolean"
+            }
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "t": {
+            "kind": "literal",
+            "values": ["service"]
+          },
+          "text": {
+            "kind": "leaf",
+            "type": "string"
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "args": {
+            "kind": "leaf",
+            "type": "unknown"
+          },
+          "call": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "name": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "risk": {
+            "kind": "optional",
+            "inner": {
+              "kind": "enum",
+              "options": ["exec", "network", "read", "write"]
+            }
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["tool-start"]
+          },
+          "title": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "call": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "ok": {
+            "kind": "leaf",
+            "type": "boolean"
+          },
+          "output": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "unknown"
+            }
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["tool-end"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "image": {
+            "kind": "optional",
+            "inner": {
+              "kind": "object",
+              "fields": {
+                "h": {
+                  "kind": "leaf",
+                  "type": "number"
+                },
+                "thumbhash": {
+                  "kind": "leaf",
+                  "type": "string"
+                },
+                "w": {
+                  "kind": "leaf",
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "name": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "ref": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "size": {
+            "kind": "leaf",
+            "type": "number"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["file"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "t": {
+            "kind": "literal",
+            "values": ["turn-start"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "status": {
+            "kind": "enum",
+            "options": ["cancelled", "completed", "failed"]
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["turn-end"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "args": {
+            "kind": "leaf",
+            "type": "unknown"
+          },
+          "call": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          },
+          "modes": {
+            "kind": "array",
+            "element": {
+              "kind": "enum",
+              "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+            }
+          },
+          "name": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "reqId": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["perm-request"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "decision": {
+            "kind": "union",
+            "options": [
+              {
+                "kind": "object",
+                "fields": {
+                  "kind": {
+                    "kind": "literal",
+                    "values": ["allow"]
+                  },
+                  "scope": {
+                    "kind": "enum",
+                    "options": ["once", "session"]
+                  },
+                  "updatedInput": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "unknown"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "kind": {
+                    "kind": "literal",
+                    "values": ["deny"]
+                  },
+                  "message": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "kind": {
+                    "kind": "literal",
+                    "values": ["mode"]
+                  },
+                  "mode": {
+                    "kind": "enum",
+                    "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+                  }
+                }
+              }
+            ]
+          },
+          "reqId": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["perm-resolve"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "by": {
+            "kind": "enum",
+            "options": ["client", "terminal"]
+          },
+          "control": {
+            "kind": "enum",
+            "options": ["local", "remote"]
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["mode-switch"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "t": {
+            "kind": "literal",
+            "values": ["sub-start"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "t": {
+            "kind": "literal",
+            "values": ["sub-stop"]
+          }
+        }
+      }
+    ]
+  },
+  "SessionEnvelopeSchema": {
+    "kind": "object",
+    "fields": {
+      "ev": {
+        "kind": "union",
+        "options": [
+          {
+            "kind": "object",
+            "fields": {
+              "md": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["text"]
+              },
+              "thinking": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "t": {
+                "kind": "literal",
+                "values": ["service"]
+              },
+              "text": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "args": {
+                "kind": "leaf",
+                "type": "unknown"
+              },
+              "call": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "name": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "risk": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "enum",
+                  "options": ["exec", "network", "read", "write"]
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["tool-start"]
+              },
+              "title": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "call": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "ok": {
+                "kind": "leaf",
+                "type": "boolean"
+              },
+              "output": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "unknown"
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["tool-end"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "image": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "object",
+                  "fields": {
+                    "h": {
+                      "kind": "leaf",
+                      "type": "number"
+                    },
+                    "thumbhash": {
+                      "kind": "leaf",
+                      "type": "string"
+                    },
+                    "w": {
+                      "kind": "leaf",
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "name": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "ref": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "size": {
+                "kind": "leaf",
+                "type": "number"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["file"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "t": {
+                "kind": "literal",
+                "values": ["turn-start"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "status": {
+                "kind": "enum",
+                "options": ["cancelled", "completed", "failed"]
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["turn-end"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "args": {
+                "kind": "leaf",
+                "type": "unknown"
+              },
+              "call": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
+              },
+              "modes": {
+                "kind": "array",
+                "element": {
+                  "kind": "enum",
+                  "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+                }
+              },
+              "name": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "reqId": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["perm-request"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "decision": {
+                "kind": "union",
+                "options": [
+                  {
+                    "kind": "object",
+                    "fields": {
+                      "kind": {
+                        "kind": "literal",
+                        "values": ["allow"]
+                      },
+                      "scope": {
+                        "kind": "enum",
+                        "options": ["once", "session"]
+                      },
+                      "updatedInput": {
+                        "kind": "optional",
+                        "inner": {
+                          "kind": "leaf",
+                          "type": "unknown"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "kind": "object",
+                    "fields": {
+                      "kind": {
+                        "kind": "literal",
+                        "values": ["deny"]
+                      },
+                      "message": {
+                        "kind": "optional",
+                        "inner": {
+                          "kind": "leaf",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "kind": "object",
+                    "fields": {
+                      "kind": {
+                        "kind": "literal",
+                        "values": ["mode"]
+                      },
+                      "mode": {
+                        "kind": "enum",
+                        "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+                      }
+                    }
+                  }
+                ]
+              },
+              "reqId": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["perm-resolve"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "by": {
+                "kind": "enum",
+                "options": ["client", "terminal"]
+              },
+              "control": {
+                "kind": "enum",
+                "options": ["local", "remote"]
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["mode-switch"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "t": {
+                "kind": "literal",
+                "values": ["sub-start"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "t": {
+                "kind": "literal",
+                "values": ["sub-stop"]
+              }
+            }
+          }
+        ]
+      },
+      "id": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "role": {
+        "kind": "enum",
+        "options": ["agent", "user"]
+      },
+      "subagent": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "time": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "turn": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "SessionRowSchema": {
+    "kind": "object",
+    "fields": {
+      "accountId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "agentState": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "value": {
+              "kind": "object",
+              "fields": {
+                "c": {
+                  "kind": "leaf",
+                  "type": "string"
+                },
+                "t": {
+                  "kind": "literal",
+                  "values": ["enc"]
+                },
+                "v": {
+                  "kind": "literal",
+                  "values": [1]
+                }
+              }
+            },
+            "version": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          }
+        }
+      },
+      "createdAt": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "dek": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "executionTarget": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "id": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "machineId": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "metadata": {
+        "kind": "object",
+        "fields": {
+          "value": {
+            "kind": "object",
+            "fields": {
+              "c": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["enc"]
+              },
+              "v": {
+                "kind": "literal",
+                "values": [1]
+              }
+            }
+          },
+          "version": {
+            "kind": "leaf",
+            "type": "number"
+          }
+        }
+      },
+      "msgSeq": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "provider": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "status": {
+        "kind": "enum",
+        "options": ["active", "archived", "compacted", "failed"]
+      },
+      "tag": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "updatedAt": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "workspaceId": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "MachineRowSchema": {
+    "kind": "object",
+    "fields": {
+      "accountId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "daemonState": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "value": {
+              "kind": "object",
+              "fields": {
+                "c": {
+                  "kind": "leaf",
+                  "type": "string"
+                },
+                "t": {
+                  "kind": "literal",
+                  "values": ["enc"]
+                },
+                "v": {
+                  "kind": "literal",
+                  "values": [1]
+                }
+              }
+            },
+            "version": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          }
+        }
+      },
+      "dek": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "id": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "lastSeenAt": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "metadata": {
+        "kind": "object",
+        "fields": {
+          "value": {
+            "kind": "object",
+            "fields": {
+              "c": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["enc"]
+              },
+              "v": {
+                "kind": "literal",
+                "values": [1]
+              }
+            }
+          },
+          "version": {
+            "kind": "leaf",
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "UnmanagedSessionRowSchema": {
+    "kind": "object",
+    "fields": {
+      "accountId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "dek": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "id": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "machineId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "providerRef": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "summary": {
+        "kind": "object",
+        "fields": {
+          "c": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["enc"]
+          },
+          "v": {
+            "kind": "literal",
+            "values": [1]
+          }
+        }
+      },
+      "updatedAt": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "workspaceId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "UpdateSchema": {
+    "kind": "object",
+    "fields": {
+      "body": {
+        "kind": "union",
+        "options": [
+          {
+            "kind": "object",
+            "fields": {
+              "session": {
+                "kind": "object",
+                "fields": {
+                  "accountId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "agentState": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "object",
+                      "fields": {
+                        "value": {
+                          "kind": "object",
+                          "fields": {
+                            "c": {
+                              "kind": "leaf",
+                              "type": "string"
+                            },
+                            "t": {
+                              "kind": "literal",
+                              "values": ["enc"]
+                            },
+                            "v": {
+                              "kind": "literal",
+                              "values": [1]
+                            }
+                          }
+                        },
+                        "version": {
+                          "kind": "leaf",
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "createdAt": {
+                    "kind": "leaf",
+                    "type": "number"
+                  },
+                  "dek": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "executionTarget": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "id": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "machineId": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  },
+                  "metadata": {
+                    "kind": "object",
+                    "fields": {
+                      "value": {
+                        "kind": "object",
+                        "fields": {
+                          "c": {
+                            "kind": "leaf",
+                            "type": "string"
+                          },
+                          "t": {
+                            "kind": "literal",
+                            "values": ["enc"]
+                          },
+                          "v": {
+                            "kind": "literal",
+                            "values": [1]
+                          }
+                        }
+                      },
+                      "version": {
+                        "kind": "leaf",
+                        "type": "number"
+                      }
+                    }
+                  },
+                  "msgSeq": {
+                    "kind": "leaf",
+                    "type": "number"
+                  },
+                  "provider": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "status": {
+                    "kind": "enum",
+                    "options": ["active", "archived", "compacted", "failed"]
+                  },
+                  "tag": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "updatedAt": {
+                    "kind": "leaf",
+                    "type": "number"
+                  },
+                  "workspaceId": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["session-new"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "agentState": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "object",
+                  "fields": {
+                    "value": {
+                      "kind": "object",
+                      "fields": {
+                        "c": {
+                          "kind": "leaf",
+                          "type": "string"
+                        },
+                        "t": {
+                          "kind": "literal",
+                          "values": ["enc"]
+                        },
+                        "v": {
+                          "kind": "literal",
+                          "values": [1]
+                        }
+                      }
+                    },
+                    "version": {
+                      "kind": "leaf",
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "id": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "metadata": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "object",
+                  "fields": {
+                    "value": {
+                      "kind": "object",
+                      "fields": {
+                        "c": {
+                          "kind": "leaf",
+                          "type": "string"
+                        },
+                        "t": {
+                          "kind": "literal",
+                          "values": ["enc"]
+                        },
+                        "v": {
+                          "kind": "literal",
+                          "values": [1]
+                        }
+                      }
+                    },
+                    "version": {
+                      "kind": "leaf",
+                      "type": "number"
+                    }
+                  }
+                }
+              },
+              "status": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "enum",
+                  "options": ["active", "archived", "compacted", "failed"]
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["session-update"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "id": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["session-delete"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "content": {
+                "kind": "object",
+                "fields": {
+                  "c": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["enc"]
+                  },
+                  "v": {
+                    "kind": "literal",
+                    "values": [1]
+                  }
+                }
+              },
+              "localId": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
+              },
+              "msgSeq": {
+                "kind": "leaf",
+                "type": "number"
+              },
+              "sessionId": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["message-new"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "machine": {
+                "kind": "object",
+                "fields": {
+                  "accountId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "daemonState": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "object",
+                      "fields": {
+                        "value": {
+                          "kind": "object",
+                          "fields": {
+                            "c": {
+                              "kind": "leaf",
+                              "type": "string"
+                            },
+                            "t": {
+                              "kind": "literal",
+                              "values": ["enc"]
+                            },
+                            "v": {
+                              "kind": "literal",
+                              "values": [1]
+                            }
+                          }
+                        },
+                        "version": {
+                          "kind": "leaf",
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "dek": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "id": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "lastSeenAt": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "number"
+                    }
+                  },
+                  "metadata": {
+                    "kind": "object",
+                    "fields": {
+                      "value": {
+                        "kind": "object",
+                        "fields": {
+                          "c": {
+                            "kind": "leaf",
+                            "type": "string"
+                          },
+                          "t": {
+                            "kind": "literal",
+                            "values": ["enc"]
+                          },
+                          "v": {
+                            "kind": "literal",
+                            "values": [1]
+                          }
+                        }
+                      },
+                      "version": {
+                        "kind": "leaf",
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["machine-new"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "machine": {
+                "kind": "object",
+                "fields": {
+                  "accountId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "daemonState": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "object",
+                      "fields": {
+                        "value": {
+                          "kind": "object",
+                          "fields": {
+                            "c": {
+                              "kind": "leaf",
+                              "type": "string"
+                            },
+                            "t": {
+                              "kind": "literal",
+                              "values": ["enc"]
+                            },
+                            "v": {
+                              "kind": "literal",
+                              "values": [1]
+                            }
+                          }
+                        },
+                        "version": {
+                          "kind": "leaf",
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "dek": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "id": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "lastSeenAt": {
+                    "kind": "nullable",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "number"
+                    }
+                  },
+                  "metadata": {
+                    "kind": "object",
+                    "fields": {
+                      "value": {
+                        "kind": "object",
+                        "fields": {
+                          "c": {
+                            "kind": "leaf",
+                            "type": "string"
+                          },
+                          "t": {
+                            "kind": "literal",
+                            "values": ["enc"]
+                          },
+                          "v": {
+                            "kind": "literal",
+                            "values": [1]
+                          }
+                        }
+                      },
+                      "version": {
+                        "kind": "leaf",
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["machine-update"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "item": {
+                "kind": "object",
+                "fields": {
+                  "accountId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "dek": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "id": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "machineId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "providerRef": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "kind": "object",
+                    "fields": {
+                      "c": {
+                        "kind": "leaf",
+                        "type": "string"
+                      },
+                      "t": {
+                        "kind": "literal",
+                        "values": ["enc"]
+                      },
+                      "v": {
+                        "kind": "literal",
+                        "values": [1]
+                      }
+                    }
+                  },
+                  "updatedAt": {
+                    "kind": "leaf",
+                    "type": "number"
+                  },
+                  "workspaceId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["unmanaged-new"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "item": {
+                "kind": "object",
+                "fields": {
+                  "accountId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "dek": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "id": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "machineId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "providerRef": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "summary": {
+                    "kind": "object",
+                    "fields": {
+                      "c": {
+                        "kind": "leaf",
+                        "type": "string"
+                      },
+                      "t": {
+                        "kind": "literal",
+                        "values": ["enc"]
+                      },
+                      "v": {
+                        "kind": "literal",
+                        "values": [1]
+                      }
+                    }
+                  },
+                  "updatedAt": {
+                    "kind": "leaf",
+                    "type": "number"
+                  },
+                  "workspaceId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["unmanaged-update"]
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "settings": {
+                "kind": "object",
+                "fields": {
+                  "c": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["enc"]
+                  },
+                  "v": {
+                    "kind": "literal",
+                    "values": [1]
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["account-update"]
+              }
+            }
+          }
+        ]
+      },
+      "seq": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "ts": {
+        "kind": "leaf",
+        "type": "number"
+      }
+    }
+  },
+  "EphemeralSchema": {
+    "kind": "union",
+    "options": [
+      {
+        "kind": "object",
+        "fields": {
+          "sessionId": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["activity"]
+          },
+          "working": {
+            "kind": "leaf",
+            "type": "boolean"
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "machineId": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "online": {
+            "kind": "leaf",
+            "type": "boolean"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["machine-presence"]
+          }
+        }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "kind": {
+            "kind": "enum",
+            "options": ["done", "failed", "perm", "question"]
+          },
+          "sessionId": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["attention"]
+          }
+        }
+      }
+    ]
+  },
+  "RpcCallSchema": {
+    "kind": "object",
+    "fields": {
+      "method": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "params": {
+        "kind": "object",
+        "fields": {
+          "c": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["enc"]
+          },
+          "v": {
+            "kind": "literal",
+            "values": [1]
+          }
+        }
+      },
+      "target": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "SpawnParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "branch": {
+        "kind": "optional",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "createWorktree": {
+              "kind": "leaf",
+              "type": "boolean"
+            },
+            "name": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "continueFrom": {
+        "kind": "optional",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "providerSessionId": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "directory": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "model": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "permissionMode": {
+        "kind": "enum",
+        "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+      },
+      "provider": {
+        "kind": "enum",
+        "options": ["claude-code", "codex"]
+      },
+      "workspaceId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "SpawnResultSchema": {
+    "kind": "object",
+    "fields": {
+      "sessionId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "StopSessionParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "force": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "sessionId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "StopSessionResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "ResumeSessionParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "sessionId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "ResumeSessionResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "ListSessionsResultSchema": {
+    "kind": "object",
+    "fields": {
+      "sessions": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "controlMode": {
+              "kind": "enum",
+              "options": ["local", "remote"]
+            },
+            "pid": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "number"
+              }
+            },
+            "provider": {
+              "kind": "enum",
+              "options": ["claude-code", "codex"]
+            },
+            "sessionId": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "startedAt": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "status": {
+              "kind": "enum",
+              "options": ["active", "failed", "stopped"]
+            },
+            "workspaceId": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "GitStatusParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitStatusResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ahead": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "behind": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "branch": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "files": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "path": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "status": {
+              "kind": "enum",
+              "options": ["added", "deleted", "modified", "renamed", "untracked"]
+            }
+          }
+        }
+      }
+    }
+  },
+  "GitDiffParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "baseRef": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "path": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitDiffResultSchema": {
+    "kind": "object",
+    "fields": {
+      "blobRef": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "inline": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "FsReadParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "path": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "range": {
+        "kind": "optional",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "end": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "start": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          }
+        }
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "FsReadResultSchema": {
+    "kind": "object",
+    "fields": {
+      "blobRef": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "inline": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "truncated": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "AdoptListParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "workspaceId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "AdoptListResultSchema": {
+    "kind": "object",
+    "fields": {
+      "items": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "lastActivityAt": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "providerSessionId": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "running": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "boolean"
+              }
+            },
+            "title": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "AdoptTakeParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "mode": {
+        "kind": "enum",
+        "options": ["fork", "takeover"]
+      },
+      "providerSessionId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "AdoptTakeResultSchema": {
+    "kind": "object",
+    "fields": {
+      "sessionId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "MessageRpcParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "envelope": {
+        "kind": "object",
+        "fields": {
+          "ev": {
+            "kind": "union",
+            "options": [
+              {
+                "kind": "object",
+                "fields": {
+                  "md": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["text"]
+                  },
+                  "thinking": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "boolean"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "t": {
+                    "kind": "literal",
+                    "values": ["service"]
+                  },
+                  "text": {
+                    "kind": "leaf",
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "args": {
+                    "kind": "leaf",
+                    "type": "unknown"
+                  },
+                  "call": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "name": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "risk": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "enum",
+                      "options": ["exec", "network", "read", "write"]
+                    }
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["tool-start"]
+                  },
+                  "title": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "call": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "ok": {
+                    "kind": "leaf",
+                    "type": "boolean"
+                  },
+                  "output": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "unknown"
+                    }
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["tool-end"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "image": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "object",
+                      "fields": {
+                        "h": {
+                          "kind": "leaf",
+                          "type": "number"
+                        },
+                        "thumbhash": {
+                          "kind": "leaf",
+                          "type": "string"
+                        },
+                        "w": {
+                          "kind": "leaf",
+                          "type": "number"
+                        }
+                      }
+                    }
+                  },
+                  "name": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "ref": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "size": {
+                    "kind": "leaf",
+                    "type": "number"
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["file"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "t": {
+                    "kind": "literal",
+                    "values": ["turn-start"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "status": {
+                    "kind": "enum",
+                    "options": ["cancelled", "completed", "failed"]
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["turn-end"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "args": {
+                    "kind": "leaf",
+                    "type": "unknown"
+                  },
+                  "call": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  },
+                  "modes": {
+                    "kind": "array",
+                    "element": {
+                      "kind": "enum",
+                      "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+                    }
+                  },
+                  "name": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "reqId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["perm-request"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "decision": {
+                    "kind": "union",
+                    "options": [
+                      {
+                        "kind": "object",
+                        "fields": {
+                          "kind": {
+                            "kind": "literal",
+                            "values": ["allow"]
+                          },
+                          "scope": {
+                            "kind": "enum",
+                            "options": ["once", "session"]
+                          },
+                          "updatedInput": {
+                            "kind": "optional",
+                            "inner": {
+                              "kind": "leaf",
+                              "type": "unknown"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "object",
+                        "fields": {
+                          "kind": {
+                            "kind": "literal",
+                            "values": ["deny"]
+                          },
+                          "message": {
+                            "kind": "optional",
+                            "inner": {
+                              "kind": "leaf",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "object",
+                        "fields": {
+                          "kind": {
+                            "kind": "literal",
+                            "values": ["mode"]
+                          },
+                          "mode": {
+                            "kind": "enum",
+                            "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "reqId": {
+                    "kind": "leaf",
+                    "type": "string"
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["perm-resolve"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "by": {
+                    "kind": "enum",
+                    "options": ["client", "terminal"]
+                  },
+                  "control": {
+                    "kind": "enum",
+                    "options": ["local", "remote"]
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["mode-switch"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "t": {
+                    "kind": "literal",
+                    "values": ["sub-start"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "t": {
+                    "kind": "literal",
+                    "values": ["sub-stop"]
+                  }
+                }
+              }
+            ]
+          },
+          "id": {
+            "kind": "leaf",
+            "type": "string"
+          },
+          "role": {
+            "kind": "enum",
+            "options": ["agent", "user"]
+          },
+          "subagent": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          },
+          "time": {
+            "kind": "leaf",
+            "type": "number"
+          },
+          "turn": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "MessageRpcResultSchema": {
+    "kind": "object",
+    "fields": {
+      "queued": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "PermAnswerParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "decision": {
+        "kind": "union",
+        "options": [
+          {
+            "kind": "object",
+            "fields": {
+              "kind": {
+                "kind": "literal",
+                "values": ["allow"]
+              },
+              "scope": {
+                "kind": "enum",
+                "options": ["once", "session"]
+              },
+              "updatedInput": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "unknown"
+                }
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "kind": {
+                "kind": "literal",
+                "values": ["deny"]
+              },
+              "message": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "kind": {
+                "kind": "literal",
+                "values": ["mode"]
+              },
+              "mode": {
+                "kind": "enum",
+                "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+              }
+            }
+          }
+        ]
+      },
+      "reqId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "PermAnswerResultSchema": {
+    "kind": "object",
+    "fields": {
+      "decision": {
+        "kind": "optional",
+        "inner": {
+          "kind": "union",
+          "options": [
+            {
+              "kind": "object",
+              "fields": {
+                "kind": {
+                  "kind": "literal",
+                  "values": ["allow"]
+                },
+                "scope": {
+                  "kind": "enum",
+                  "options": ["once", "session"]
+                },
+                "updatedInput": {
+                  "kind": "optional",
+                  "inner": {
+                    "kind": "leaf",
+                    "type": "unknown"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "object",
+              "fields": {
+                "kind": {
+                  "kind": "literal",
+                  "values": ["deny"]
+                },
+                "message": {
+                  "kind": "optional",
+                  "inner": {
+                    "kind": "leaf",
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            {
+              "kind": "object",
+              "fields": {
+                "kind": {
+                  "kind": "literal",
+                  "values": ["mode"]
+                },
+                "mode": {
+                  "kind": "enum",
+                  "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "reason": {
+        "kind": "optional",
+        "inner": {
+          "kind": "literal",
+          "values": ["already-answered"]
+        }
+      }
+    }
+  },
+  "InterruptResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "TakeControlResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "SetModeParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "mode": {
+        "kind": "enum",
+        "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
+      }
+    }
+  },
+  "SetModeResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  }
+}
