@@ -100,4 +100,20 @@ describe("config env parsing", () => {
 
     await expect(importFreshConfig()).rejects.toThrow();
   });
+
+  it("throws when NODE_ENV=production and FALCON_MASTER_SECRET is left at its dev-only default", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.FALCON_MASTER_SECRET;
+
+    await expect(importFreshConfig()).rejects.toThrow(/FALCON_MASTER_SECRET/);
+  });
+
+  it("allows NODE_ENV=production when FALCON_MASTER_SECRET is overridden", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+
+    const { env } = await importFreshConfig();
+
+    expect(env.NODE_ENV).toBe("production");
+  });
 });
