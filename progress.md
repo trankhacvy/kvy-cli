@@ -909,3 +909,171 @@ during a landing cycle.
 3. **Clean up fully-landed stale worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
    and `.worktrees/P0-land-phase0-worktrees` remain safe to `git worktree
    remove` — flagged every cycle since they landed with no action taken yet.
+
+---
+
+## Cycle 10 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `bfb4792`, "chore: cycle 9 — completed 0
+tasks, re-verified main green")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 3/3 packages (`@falcon/crypto`,
+  `@falcon/server`, `@falcon/wire`) — `tsc --noEmit` clean on all three
+  (turbo full cache hit).
+- `pnpm test` → **PASSED**: 6/6 tasks, **144 tests total** — 18 in
+  `@falcon/server` (3 files), 61 in `@falcon/wire` (6 files), 65 in
+  `@falcon/crypto` (8 files). Zero failures. Same green result as Cycles
+  4–9, confirming `main` is still stable. No content commits landed on
+  `main` since Cycle 9's tracker commit — `main` is content-unchanged from
+  Cycle 9.
+
+### Task-summary read this cycle
+
+This cycle's instructions asked to read three task-summary files as
+"successful tasks":
+
+- **`task-summary/P0-0.4-auth-module.md`** — **does not exist on `main`.**
+  Confirmed via `find task-summary -maxdepth 1` (11 files present, none
+  named `P0-0.4-auth-module.md`) and `git merge-base --is-ancestor
+  P0-0.4-auth-module main` → not an ancestor. It exists only inside
+  `.worktrees/P0-0.4-auth-module/task-summary/P0-0.4-auth-module.md` (branch
+  tip `c9823c4 refactor: P0-0.4-auth-module - code review fixes`, 3 commits
+  ahead of `main`: `feat`/`fix`/`refactor`). Read there for context only
+  (per this tracker's established convention, not credited): adds
+  `packages/server/src/auth/{tokens,token-cache,plugin,index}.ts` —
+  HS256 JWT mint/verify (explicit rationale for HS256 over RS256: single
+  process mints and verifies, no asymmetric-split use case), 1h TTL,
+  never-throws `verifyToken` (mirrors `@falcon/crypto`'s null-on-failure
+  rule), an in-memory `TokenCache` with lazy expiry + FIFO eviction, a
+  `fastify-plugin`-wrapped `authPlugin` decorating `app.authenticate`/
+  `request.accountId`, and a new `FALCON_MASTER_SECRET` config field
+  (zod min-32-chars, dev-only default) wired into `server.ts` before
+  `healthRoutes`.
+- **`task-summary/P1-1.3-cli-package-scaffold.md`** — **does not exist on
+  `main`.** Same check pattern: absent from `task-summary/`, `git
+  merge-base --is-ancestor P1-1.3-cli-package-scaffold main` → not an
+  ancestor. Exists only inside
+  `.worktrees/P1-1.3-cli-package-scaffold/task-summary/` (branch tip
+  `523da96 refactor: P1-1.3-cli-package-scaffold - code review fixes`, 2
+  commits ahead of `main`). Read there for context only: scaffolds
+  `packages/cli` (bin `falcon`) — hand-rolled `parseArgs` (discriminated
+  union, no framework, full passthrough for `falcon claude [args...]`/
+  `falcon codex [args...]`, `-b`/`--branch` extraction only on the bare
+  `falcon [args...]` form), `~/.falcon` home-dir resolution, a file-only
+  logger (spy-tested to never touch stdout/stderr), 56 tests total, `pnpm
+  --filter falcon build`/`typecheck` both green. Note: as flagged in Cycle
+  9, this is one of **two** independent, unmerged implementations of the
+  same `1.3` scaffold bullet — the sibling branch `P1-1.3-cli-skeleton` (1
+  commit, no review-fix pass) still exists too; `P1-1.3-cli-package-scaffold`
+  remains the more complete of the pair.
+- **`task-summary/P1-1.6-web-app-scaffold.md`** — **does not exist on
+  `main`.** Same check pattern confirms not merged. Exists only inside
+  `.worktrees/P1-1.6-web-app-scaffold/task-summary/` (branch tip `241b422
+  refactor: P1-1.6-web-app-scaffold - code review fixes`, 4 commits ahead of
+  `main`: `feat`/`fix`/`fix`/`refactor`). Read there for context only: adds
+  `packages/web` (`@falcon/web`) — Next.js App Router with static export
+  (`output: "export"`), Tailwind v4 + shadcn/ui wired the v4 way
+  (`@theme inline`, `components.json`), dark-default theme baked into
+  `layout.tsx` (verified present in the exported `out/index.html`), one
+  ported shadcn `Button` primitive, a placeholder landing route, a PWA
+  manifest stub, and monorepo wiring (`turbo.json` build-output override,
+  `.gitignore`, `CLAUDE.md` package-table update). `pnpm build`/`pnpm
+  --filter @falcon/web typecheck` both reported green in-worktree.
+
+Per this tracker's established convention (Cycles 1–3, 7, 8, 9): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked — crediting `main` with
+code that isn't actually there would misrepresent this tracker's scope
+("working on `main` branch"). All three requested files fall in this bucket
+again this cycle — identical outcome to Cycle 9, confirming zero landing
+activity happened between Cycle 9 and Cycle 10.
+
+`plan.md` was updated only to: (a) add a `re-verified cycle 10` stamp to the
+`0.1 Scaffold` and `0.4 Server foundation` section headers (both still green
+on `main`), noting on the `0.4` header that `P0-0.4-seq-allocator` and
+`P0-0.4-auth-challenge-route` have also now appeared as worktrees (both
+still unmerged, not yet independently verified by this tracker), and (b)
+extend the existing cycle-9 notes on the `1.3 CLI skeleton` and `1.6 Web app
+v1` section headers with a cycle-10 re-confirmation that both remain
+unmerged, plus a note on which of the two duplicate `1.3` branches is more
+complete.
+
+### Tasks completed this cycle
+
+None. No branches were merged onto `main` this cycle (merging worktrees is
+out of scope for this tracker role). `plan.md` §16 checkbox count is
+unchanged from Cycle 9: **21/135** checked (0.1: 5/5, 0.2: 8/8, 0.3: 7/7,
+0.4: 1/8) — recounted directly via `awk` against `^- \[x\]`/`^- \[ \]`
+markers this cycle to confirm the total (135) and checked count (21) are
+both accurate.
+
+### Blockers / issues found
+
+1. **All three requested task-summaries are unmerged, again** — now the
+   dominant pattern across Cycles 1, 2, 3, 7, 8, 9, and 10. Between Cycle 9
+   and Cycle 10, `main`'s `HEAD` only advanced by the Cycle 9 tracker's own
+   commit (`bfb4792`) — zero content commits landed. No landing pass ran in
+   the intervening cycle despite Cycle 9 explicitly recommending one as the
+   #1 next task. **Recommendation stands unchanged from Cycle 9**: either
+   (a) run a merge/landing task before the next tracker cycle, or (b) point
+   the tracker at worktree branches directly if pre-merge verification is
+   the actual intent.
+2. **Duplicate work on the same plan item, still unresolved**:
+   `P1-1.3-cli-skeleton` and `P1-1.3-cli-package-scaffold` both remain open,
+   both still unmerged, one cycle later. No action taken to pick one and
+   discard/rebase the other.
+3. **Unmerged worktrees have grown from 8 to 10** since Cycle 9: two new
+   worktrees appeared, both building on top of `P0-0.4-drizzle-schema`'s
+   commit rather than `main`'s tip, which is itself a new detail worth
+   flagging:
+
+   | Branch | Commits ahead of `main` | Status |
+   |---|---|---|
+   | `P0-0.1-monorepo-scaffold` | 0 (content) | stale — already landed on `main`; safe to remove |
+   | `P0-land-phase0-worktrees` | 0 (content) | stale — already landed on `main`; safe to remove |
+   | `P0-0.4-drizzle-schema` | 1 | complete, has task-summary, **not merged** (flagged since Cycle 8) |
+   | `P0-0.4-docker-compose-dev` | 3 | complete, has task-summary, **not merged** (flagged since Cycle 7) |
+   | `P0-0.4-auth-module` | 3 | complete, has task-summary, **not merged** (flagged since Cycle 9) |
+   | `P0-0.4-seq-allocator` | 0 beyond `P0-0.4-drizzle-schema`'s tip | **new this cycle** — branched from `P0-0.4-drizzle-schema`'s commit (`9c66020`), not `main`; identical tip commit, no seq-allocator-specific commit visible yet — appears to be a freshly-created worktree for the next `0.4` bullet (`seq.ts`), no new work landed in it yet |
+   | `P0-0.4-auth-challenge-route` | 5 (includes all of `P0-0.4-auth-module`'s 3 commits via a merge) | **new this cycle** — a merge commit (`c86161a`) folding `P0-0.4-auth-module` in on top of `P0-0.4-drizzle-schema`'s tip, suggesting the next `0.4` bullet (`POST /v1/auth` challenge/response route) is being built on top of both the schema and the auth-module work; no task-summary present yet for this branch specifically |
+
+   Same orchestration gap flagged every cycle since Cycle 1: verified
+   worktree work keeps piling up (now including a branch that itself merges
+   two other unmerged branches together) faster than anything lands on
+   `main`. Does not block `main`'s own gate (both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **21 checked on `main`**
+(unchanged from Cycle 9 — no new task-branch merges landed this cycle).
+**Completion: ~15.6%** (21/135), verified against a green `pnpm
+typecheck`/`pnpm test` run covering all 3 packages currently on `main` (144
+tests total). The ready-but-unmerged worktree total is now larger than at
+Cycle 9 (10 vs. 8, including a `P0-0.4-auth-challenge-route` branch that
+already stacks two others together) — if the full stack (drizzle-schema →
+docker-compose → auth-module → auth-challenge-route → one of the two 1.3
+duplicates → 1.6 web scaffold) were landed in dependency order, `0.4` would
+likely close out most of its remaining 7 bullets and `1.3`/`1.6` would each
+gain their lead bullet, pushing completion well into the 20s/135 (~20%+)
+immediately.
+
+### Next recommended tasks
+
+1. **Run a landing pass** (a `P0-land-*`-style integration task) to merge
+   the ready worktrees into `main` in dependency order: `P0-0.4-drizzle-schema`
+   first (nothing else can land cleanly without it, since `seq-allocator`
+   and `auth-challenge-route` both build on its tip), then
+   `P0-0.4-docker-compose-dev` (disjoint, any time), then `P0-0.4-auth-module`,
+   then `P0-0.4-auth-challenge-route` (already includes auth-module via its
+   own merge — verify it doesn't double-apply), then `P0-0.4-seq-allocator`
+   once it has actual new commits, then one of `P1-1.3-cli-skeleton` /
+   `P1-1.3-cli-package-scaffold` (not both — pick `P1-1.3-cli-package-scaffold`,
+   the more complete of the two), then `P1-1.6-web-app-scaffold`. This has
+   now been the #1 recommendation for two cycles running with zero action.
+2. **Resolve the `P1-1.3` duplicate before landing** — same recommendation
+   as Cycle 9, still outstanding.
+3. **Clean up fully-landed stale worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
+   and `.worktrees/P0-land-phase0-worktrees` remain safe to `git worktree
+   remove` — flagged every cycle since Cycle 6/7 with no action taken yet.
