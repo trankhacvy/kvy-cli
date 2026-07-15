@@ -3395,3 +3395,143 @@ Cycle 27.
    fully self-verified (35 files, 4156 insertions, own green build/
    typecheck/test); only the final `git checkout main && git merge --no-ff
    P1-land-1.1-1.2-server-realtime-write-path` step is missing.
+
+## Cycle 29 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `17d3db5` — "chore: cycle 28 — 0 tasks
+merged, verified 2 requested tasks unlanded"). Confirmed via `/usr/bin/git
+rev-parse HEAD` / `/usr/bin/git rev-parse main` (identical) and
+`/usr/bin/git branch --show-current` → `main`.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`@falcon/crypto`, `@falcon/wire` cache hits; `falcon` (cli),
+  `@falcon/web`, `@falcon/server` cache hits too — no source changes since
+  Cycle 28).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green, 382 tests
+  total, 0 failures: `@falcon/web` 36, `@falcon/crypto` 65, `@falcon/server`
+  87, `falcon` (cli) 133 (cross-checked the per-suite breakdown in the raw
+  `vitest` output, not just the turbo summary line). Identical to Cycles
+  27–28 — no regression, no new landings since.
+- Reconfirmed the `rtk` Bash-hook is still mangling plain filesystem
+  commands in this session: a bare `ls`/`ls -la` (via the Bash tool, which
+  routes through the hook) on both the repo root and `task-summary/`
+  returned an empty result for non-empty directories, and a bare `grep`
+  returned a garbled "N matches in N files" summary instead of real
+  matches. `/bin/ls`, `/usr/bin/grep`, and `/usr/bin/git` (full paths,
+  bypassing the hook's rewrite) all returned correct output throughout
+  this cycle — every load-bearing claim below was verified via one of
+  those three, not plain shell built-ins.
+
+### Tasks completed this cycle
+
+**Neither requested task-summary is credited — both describe real,
+complete, self-verified work that is still unmerged into `main`,
+continuing the exact pattern flagged every cycle since 16.**
+
+- `task-summary/P1-1.3-hook-server.md` — **does not exist on `main`.**
+  Confirmed via `/usr/bin/git ls-tree main --
+  task-summary/P1-1.3-hook-server.md` (empty) and `git cat-file -e
+  main:packages/cli/src/claude/hookServer.ts` (fails — file doesn't exist
+  on `main`). The file/code exist in worktree `.worktrees/P1-1.3-hook-server`
+  (tip `a756eec`): `packages/cli/src/claude/hookServer.ts`
+  (`startHookServer` — Fastify loopback server on an ephemeral port
+  exposing `POST /hook/session-start`, validated with zod, mirroring the
+  already-merged `daemon/controlServer.ts` pattern exactly) and
+  `writeHookSettingsFile` (writes a temp Claude Code `--settings` file plus
+  a companion `.cjs` forwarder script per design §7.4, so the real
+  provider session UUID can be learned via the `SessionStart` hook). 11
+  new tests in `hookServer.test.ts`, including one real end-to-end test
+  that spawns the generated forwarder as an actual child process and pipes
+  it a synthetic hook payload on stdin. Own task-summary reports
+  `pnpm build`/`typecheck`/`test` all green (144/144 `falcon` tests, +11
+  over Cycle 28's 133) and `pnpm lint` clean. `/usr/bin/git merge-base
+  --is-ancestor P1-1.3-hook-server main` → **not an ancestor**. `plan.md`
+  line 680's "Hook server" checkbox correctly stays unchecked; added a
+  Cycle 29 annotation to the §1.3 narrative recording this.
+- `task-summary/P1-1.5-notify-daemon-session-started.md` — **does not
+  exist on `main`.** Confirmed via `/usr/bin/git ls-tree main --
+  task-summary/P1-1.5-notify-daemon-session-started.md` (empty) and `git
+  cat-file -e main:packages/cli/src/daemon/notify.ts` (fails). The
+  file/code exist in worktree
+  `.worktrees/P1-1.5-notify-daemon-session-started` (tip `3864766`):
+  `packages/cli/src/daemon/notify.ts` (`notifyDaemonSessionStarted` — reads
+  `daemon.state.json` via the already-merged `state.ts`, checks liveness
+  via the already-merged `lock.ts`'s `isProcessAlive`, POSTs to the
+  already-merged `controlServer.ts`'s `/session-started` route with an
+  injectable `fetchImpl` and a 2s default timeout, never throws — returns
+  typed `no-daemon`/`ok`/`unreachable` results) plus a
+  `createNotifyDaemonSessionStartedDeps` factory. 5 unit tests (mocked
+  fetch) + 2 integration tests against a real, unmocked `startControlServer`.
+  Own task-summary reports 140/140 `falcon` tests green (+7 over Cycle
+  28's 133) and workspace-wide `pnpm build`/`typecheck`/`test` all green
+  (9/9 turbo tasks). `/usr/bin/git merge-base --is-ancestor
+  P1-1.5-notify-daemon-session-started main` → **not an ancestor**.
+  `plan.md` line 697's "Session self-report" checkbox correctly stays
+  unchecked; added a Cycle 29 annotation to the §1.5 narrative recording
+  this.
+
+### Blockers / issues found
+
+1. **Both tasks requested for credit this cycle are unmerged worktree
+   work, not `main` state** — same recurring pattern flagged every cycle
+   since 16 (most recently Cycle 28's two unlanded tasks). Neither is
+   credited and no `plan.md` checkboxes were flipped, per this tracker's
+   established scope (verify `main`, not worktrees). Both are small,
+   self-contained, and depend only on already-merged §1.5 daemon pieces
+   (`state.ts`/`lock.ts`/`controlServer.ts`) — good land candidates.
+2. **§1.1/1.2 server realtime + write path remains unlanded** — no change
+   since Cycle 27/28; `P1-land-1.1-1.2-server-realtime-write-path` (tip
+   `2f20499`) is still not an ancestor of `main`
+   (`packages/server/src/app/socket.ts` still absent). Still the single
+   highest-value pending land, unchanged for three cycles running.
+3. **`P1-1.5-daemon-cli-commands` and
+   `P0-cross-cutting-mit-attribution-headers`** (flagged unlanded in Cycle
+   28) also remain unlanded this cycle — not re-verified in depth since
+   neither was requested this cycle, but no evidence of any merge having
+   happened (`main`'s HEAD is still exactly Cycle 28's commit until this
+   cycle's own `chore` commit).
+4. **`rtk` Bash-hook continues to mangle plain filesystem output** in this
+   environment — same long-running issue, no functional impact this cycle
+   (see Verification section for the cross-check discipline used).
+5. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16 (verified via
+`/usr/bin/grep -c '^\- \[x\]' plan.md` → 38, `'^\- \[ \]'` → 97,
+38 + 97 = 135); **38 checked on `main`**, unchanged from Cycles 27–28
+(neither task requested this cycle actually landed onto `main`, so the
+checked count cannot move). **Completion: ~28.1%** (38/135), verified
+against a green `pnpm typecheck`/`pnpm test` run covering all 5 packages
+on `main` (382 tests total, 0 failures, identical to Cycles 27–28 —
+confirming no silent regression across three consecutive cycles). Four
+complete, self-verified pieces of work are now sitting ready in worktrees
+pending a land step: the two from this cycle (`P1-1.3-hook-server`,
+`P1-1.5-notify-daemon-session-started`) plus the two carried over from
+Cycle 28 (`P1-1.5-daemon-cli-commands`,
+`P0-cross-cutting-mit-attribution-headers`), on top of the §1.1/1.2 server
+realtime/write-path work queued since Cycle 27.
+
+### Next recommended tasks
+
+1. **Actually land `P1-land-1.1-1.2-server-realtime-write-path` onto
+   `main`** — still the highest-value pending item, unchanged for three
+   cycles: the branch forks with zero drift from `main`'s current tip and
+   is fully self-verified (35 files, 4156 insertions, own green build/
+   typecheck/test); only the final `git checkout main && git merge --no-ff
+   P1-land-1.1-1.2-server-realtime-write-path` step is missing.
+2. **Land the two small, self-verified §1.5 pieces** —
+   `P1-1.5-daemon-cli-commands` and this cycle's
+   `P1-1.5-notify-daemon-session-started` — both depend only on
+   already-merged daemon primitives (`lock.ts`/`state.ts`/`controlServer.ts`)
+   and report green build/typecheck/test in their own task-summaries;
+   merging them (in either order — they touch different files:
+   `commands.ts` vs `notify.ts`) is a small, low-risk win.
+3. **Land `P1-1.3-hook-server`** — this cycle's other unlanded piece,
+   self-contained (`packages/cli/src/claude/hookServer.ts` +
+   `writeHookSettingsFile`, no dependencies on other unmerged work),
+   144/144 `falcon` tests green in its own worktree; a good third
+   candidate for the next land pass.
