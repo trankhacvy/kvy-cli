@@ -1786,3 +1786,131 @@ against a fresh `pnpm typecheck`/`pnpm test` run covering all 5 packages on
 3. **Sequence `P0-0.4-auth-challenge-route` on top of whichever `0.4`
    land-branch wins**, re-applying only its own new commits, per the
    standing caution since Cycle 10.
+
+## Cycle 17 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `c93617d`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` — **PASSED** (5/5 packages: `@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon`; turbo full-cache replay, all
+  green).
+- `pnpm test` — **PASSED** (9/9 turbo tasks green): `@falcon/wire` 61/61,
+  `@falcon/crypto` 65/65, `@falcon/server` 55/55 (up from 18/18 at Cycle 16 —
+  the `db/`+`seq`+`auth` test files are now present since the `0.4` land
+  completed between Cycle 16 and this cycle), `falcon` (cli) 58/58,
+  `@falcon/web` 14/14 — **253/253 tests, 0 failures.**
+
+### Task-summaries requested this cycle
+
+This cycle's instructions asked to read three task-summary files as
+"successful tasks":
+
+- `task-summary/P0-land-0.4-worktrees-final.md`
+- `task-summary/P1-land-1.4-transcript-scanner.md`
+- `task-summary/P1-land-1.6-crypto-worker.md`
+
+**Only the first exists on `main`.** Between Cycle 16 and this cycle,
+`P0-land-0.4-worktrees-final` (merge commit `9ede082`) and its follow-up
+`c93617d` ("resolve test failures") landed directly on `main`, fast-forwarding
+`4ed02a4` → `9ede082` → `c93617d`. That task's own commits already flipped
+the `plan.md` §16 `0.4` checkboxes it lands (Fastify skeleton, Drizzle
+schema+migration, `seq.ts`, auth module, `docker-compose.dev.yml` — 5
+bullets) and appended the dated integration note at the `0.4` section header
+— confirmed accurate against its `task-summary/P0-land-0.4-worktrees-final.md`
+content, nothing left for this cycle to change there.
+
+`task-summary/P1-land-1.4-transcript-scanner.md` and
+`task-summary/P1-land-1.6-crypto-worker.md` **do not exist on `main`** —
+confirmed by listing `main`'s `task-summary/` directory (still the same 25
+files, no new `P1-land-1.4-*`/`P1-land-1.6-*` entries) and by
+`git merge-base --is-ancestor <branch> main` for both `P1-land-1.4-transcript-scanner`
+(tip `521b743`) and `P1-land-1.6-crypto-worker` (tip `1be84b9`) — neither is
+an ancestor of `main`. Both files exist, complete and self-reporting green
+`pnpm build`/`typecheck`/`test`, but only inside their own worktrees:
+
+| Task | Worktree/branch | Tip | Merged into `main`? |
+|---|---|---|---|
+| `P1-land-1.4-transcript-scanner` | `.worktrees/P1-land-1.4-transcript-scanner` | `521b743` | No — not an ancestor |
+| `P1-land-1.6-crypto-worker` | `.worktrees/P1-land-1.6-crypto-worker` | `1be84b9` | No — not an ancestor |
+
+This is progress beyond Cycle 16 (a dedicated land-branch with test-failure
+and code-review fix-up commits now exists for both, where at Cycle 16 only
+the raw feature branches did) but the actual fast-forward/merge onto `main`
+still never happened — corroborated on the filesystem: `main`'s
+`packages/cli/src/claude/` and `packages/web/src/crypto/` **still do not
+exist**, exactly matching Cycle 16's finding. Same recurring
+"verified-in-isolation, unlanded-on-main" pattern flagged every cycle since
+Cycle 9.
+
+### Tasks completed this cycle
+
+**One task's landing was confirmed and reconciled** (`P0-land-0.4-worktrees-final`
+— already merged onto `main` by its own commits before this cycle ran; this
+cycle verified the merge is real, `pnpm typecheck`/`pnpm test` are green on
+the merged tree, and the `plan.md` checkboxes it flipped are accurate). **No
+new checkboxes were flipped this cycle** — per the standing rule (Cycle 1
+onward), a task is only checked off once its code is actually present and
+verified on `main`, never on an in-worktree self-report. Since
+`P1-land-1.4-transcript-scanner` and `P1-land-1.6-crypto-worker` are not on
+`main`, their checkboxes remain unchecked.
+
+`plan.md` §16 was re-annotated (not checked) at the `1.4` bullet and the
+`1.6` crypto-worker bullet with a dated Cycle 17 note recording: the
+requested `P1-land-*` task-summary is still missing from `main`, the
+land-branch that now exists for each and its tip commit, and that `main`'s
+corresponding source directory still doesn't exist — appended alongside the
+existing Cycle 16 annotations rather than replacing them.
+
+`plan.md` checkbox count: **28/135** (`grep -c '^\s*- \[x\]'` /
+`'^\s*- \[ \]'` → 28 checked / 107 unchecked) — **up from 23/135 at Cycle
+16**, entirely from the `0.4` land that completed between cycles (+5:
+Fastify skeleton, Drizzle schema+migration, `seq.ts`, auth module,
+`docker-compose.dev.yml`). No new checkboxes flipped by this cycle itself.
+
+### Blockers / issues found
+
+1. **Two more unlanded task worktrees, now one step further along than
+   Cycle 16**: `P1-land-1.4-transcript-scanner` (tip `521b743`) and
+   `P1-land-1.6-crypto-worker` (tip `1be84b9`) each have a dedicated
+   land-branch with fix-up commits, self-reporting green, but were never
+   fast-forwarded/merged onto `main`. Landing them is out of this tracker's
+   scope, but each is a real, ready-to-merge unit of work — same class of
+   gap as `0.4` was for eight prior cycles before `P0-land-0.4-worktrees-final`
+   finally closed it.
+2. **Task-summary files requested by this cycle's instructions that don't
+   exist on `main`** — the orchestrator's cycle instructions named
+   `P1-land-1.4-transcript-scanner.md` and `P1-land-1.6-crypto-worker.md` as
+   "successful tasks" to read and check off, but neither file is reachable
+   on `main` (they only exist in their respective worktrees). Flagging this
+   mismatch again, as in Cycle 16, so the orchestrator's landing step gets
+   pointed at these two ready branches.
+3. No `pnpm lint` run this cycle (out of this role's required verification
+   gate — only `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **28 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (6/8, up from 1/8), 1.3 (1/9), 1.6 (1/8) —
+**up from 23/135 (~17.0%) at Cycle 16**. **Completion: ~20.7%** (28/135),
+verified against a fresh `pnpm typecheck`/`pnpm test` run covering all 5
+packages on `main` (253 tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Land the two ready `1.4`/`1.6` land-branches** — `P1-land-1.4-transcript-scanner`
+   (tip `521b743`) and `P1-land-1.6-crypto-worker` (tip `1be84b9`) are each
+   complete, self-verified, and already carry their own test-failure/code-review
+   fix-up commits; they touch disjoint directories
+   (`packages/cli/src/claude/` and `packages/web/src/crypto/`). This is the
+   single highest-value close-out available right now.
+2. **Sequence `P0-0.4-auth-challenge-route`, `P0-0.4-oauth-signin-routes`,
+   and `P0-0.4-pairing-endpoints` on top of the now-landed `0.4` foundation**
+   — the Drizzle schema and auth module they depend on are finally on
+   `main` as of this cycle; these three route-level worktrees were
+   explicitly left out of scope by `P0-land-0.4-worktrees-final` and are
+   next in line.
+3. **Land `P1-1.5-daemon-singleton-lock`** (not requested this cycle but
+   still outstanding since Cycle 16, worktree unchanged) — `packages/cli/src/daemon/`
+   still doesn't exist on `main`.
