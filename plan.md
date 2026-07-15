@@ -610,14 +610,14 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 ### Phase 0 — Repo & contracts (M0, week 1)
 
-**0.1 Scaffold**
+**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4 — `pnpm typecheck`/`pnpm test` green)*
 - [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
 - [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
 - [ ] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
 - [x] `docs/` seeded with `protocol.md`, `encryption.md` stubs that link to the design doc (institutional-memory habit from Happy)
 - [ ] Root `CLAUDE.md` once the scaffold exists (last task of 0.1): build/test/typecheck commands, package layout, monorepo conventions, pointers to `plan.md` + `falcon-system-design.md` + `falcon-prd.md` — keep it minimal (commands + conventions, not a duplicate of the plan); update it as each phase lands new packages
 
-**0.2 `@falcon/wire`** — §2
+**0.2 `@falcon/wire`** — §2 *(verified on `main` 2026-07-15, cycle 4 — 61/61 tests green)*
 - [x] Package skeleton with pkgroll dual CJS/ESM build, `zod` + `cuid2` only
 - [x] `EncryptedBoxSchema` + versioned-value helpers (`Versioned<T>`)
 - [x] `SessionEventSchema` (11 event types) + `SessionEnvelopeSchema` + `createEnvelope()` helper with cuid2 minting
@@ -627,7 +627,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Snapshot tests freezing every schema (additive-only lint: CI fails if a field is removed/retyped) — design §5.3 policy
 - [x] Reserved namespaces documented in-file: `checkpoint:*`, `preview:*`, `voice:*` (deferred features)
 
-**0.3 `@falcon/crypto`** — §3.1
+**0.3 `@falcon/crypto`** — §3.1 *(verified on `main` 2026-07-15, cycle 4 — 65/65 tests green)*
 - [x] Port `encryption.ts` from Happy **(V)**: base64/base64url, `getRandomBytes`, `libsodiumPublicKeyFromSecretKey`, `libsodiumEncryptForPublicKey`, `encryptLegacy/decryptLegacy`, `encryptBlob/decryptBlob`, `encryptWithDataKey/decryptWithDataKey`, `authChallenge` — preserve MIT attribution header
 - [x] `seal()/open()` EncryptedBox wrappers; `open()` returns `null`, never throws **(N)**
 - [x] Key hierarchy: `deriveKeyTree(masterSecret)` → auth signing keypair, content keypair, anonId, blob master (HKDF/HMAC-SHA512 with domain separation) **(N)** — design §5.1

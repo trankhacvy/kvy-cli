@@ -255,3 +255,94 @@ i.e. effectively ~11.9% "done, pending one fast-forward merge").
    root `postinstall` build-wire-first bullet (plan.md line 616, flagged as
    a real gap by the integration task-summary), root `CLAUDE.md` (line
    618), and the `0.4` server skeleton work (lines 640+).
+
+---
+
+## Cycle 4 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `1ffac8c`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 2/2 packages (`@falcon/crypto`, `@falcon/wire`) — `tsc --noEmit` clean on both (turbo full cache hit).
+- `pnpm test` → **PASSED**: 4/4 tasks, **126 tests total** — 65 in `@falcon/crypto` (8 files), 61 in `@falcon/wire` (6 files). Zero failures.
+
+**Root cause of prior failures resolved:** the `P0-merge-pending-worktrees`
+integration branch (merged into `main` at `fcc974d`'s tree, landed via merge
+commit `7724b1d`/`P0-land-integration-branch`, plus a follow-up fix commit
+`1ffac8c` that restored an orphaned task-summary file) brought the full
+Phase-0 scaffold — `package.json`, `pnpm-workspace.yaml`, `turbo.json`,
+`packages/wire`, `packages/crypto` — onto `main`. `pnpm typecheck`/`pnpm
+test` now resolve a workspace manifest and run for real, three cycles after
+the blocker was first identified.
+
+### Task-summary read this cycle
+
+`task-summary/P0-land-integration-branch.md` (now present directly on
+`main`, confirming the file-landing fix from commit `1ffac8c` worked):
+describes creating an isolated worktree, validating `git merge --no-ff
+P0-merge-pending-worktrees` conflict-free (59 files, +8798/-18) with a green
+build/typecheck/test gate, then applying the identical merge to `main`
+directly (per this task's explicit, out-of-the-ordinary instructions to land
+on `main`), and removing six now-redundant worktrees. This matches what
+`git log`/`git worktree list` show on `main` today: the five original
+Phase-0 branches plus `P0-merge-pending-worktrees` are all merged ancestors
+of `HEAD`, and no stray worktrees remain (`git worktree list` shows only the
+main checkout).
+
+### Tasks completed this cycle
+
+**`P0-land-integration-branch` — verified successful.** Confirmed via:
+1. `git merge-base`/ancestry check: `fcc974d` (tip of
+   `P0-merge-pending-worktrees`) is a reachable ancestor of `main`'s `HEAD`.
+2. `pnpm typecheck` and `pnpm test` both green on `main` as run fresh this
+   cycle (see above) — matches the task-summary's own reported gate.
+3. `git worktree list` shows no leftover worktrees, matching the cleanup the
+   summary claims.
+
+`plan.md` §16 checkboxes for **0.1 Scaffold** (2 of 4 items — monorepo init,
+CI/lint; `postinstall` and root `CLAUDE.md` remain legitimately unchecked
+and unstarted), **0.2 `@falcon/wire`** (all 7 items), and **0.3
+`@falcon/crypto`** (all 7 items) were already `[x]` on `main` (landed by the
+merge itself) — this cycle is the first to actually verify them against a
+green `main` build, so each of the three subsection headers now carries an
+explicit verification date stamp (`*(verified on main 2026-07-15, cycle
+4)*`) rather than leaving the checkmarks undated.
+
+### Blockers / issues found
+
+None blocking. Two minor notes carried forward, neither gating:
+1. `pnpm lint` was not part of this cycle's required gate (only
+   `typecheck`/`test` per this role's instructions) and was not re-run; the
+   prior cycle's task-summary noted a local biome OOM warning in the
+   sandboxed environment — worth a follow-up but not a `main` code defect.
+2. The orchestrator's Phase 6 merge step in
+   `.claude/workflows/falcon-dev-workflow.js` is still a stub (per
+   `P0-land-integration-branch`'s own summary) — it worked around it this
+   time by merging directly, but the underlying gap remains for future
+   cycles unless a task is scoped to fix it.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **18 now checked on `main`** —
+0.1 (2/4), 0.2 (7/7), 0.3 (7/7) — all freshly verified this cycle against a
+green `pnpm typecheck`/`pnpm test` run.
+**Completion: ~13.3%** (18/135), up from 0% (verified) / ~11.9% (pending
+merge) at Cycle 3.
+
+### Next recommended tasks
+
+1. **`0.1` cleanup items**: root `postinstall` script to build `@falcon/wire`
+   first (plan.md line 616), and root `CLAUDE.md` (plan.md line 618) — both
+   small, unblock closing out Phase 0.1 entirely.
+2. **`0.4` Server foundation** (plan.md lines 639–648): Fastify 5 app
+   skeleton + zod type-provider + `/health`, Drizzle schema for
+   `accounts`/`machines`/`workspaces`/`sessions`/etc., `seq.ts` allocator,
+   auth module + `POST /v1/auth` challenge/response — this is the next
+   substantial unstarted block and the last item before the "Phase 0 exit"
+   milestone (`pnpm build && pnpm test` green + working auth against a local
+   server).
+3. Consider a small task to fix the orchestrator's stub merge step in
+   `.claude/workflows/falcon-dev-workflow.js` Phase 6, so future
+   verified-worktree → `main` landings don't require an ad hoc task like
+   `P0-land-integration-branch` to unstick them.
