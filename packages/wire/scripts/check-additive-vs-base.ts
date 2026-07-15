@@ -16,7 +16,7 @@
  * point is always the real base branch, not whatever JSON happens to be on
  * disk.
  *
- * Usage: pnpm --filter @falcon/wire exec tsx scripts/check-additive-vs-base.ts
+ * Usage: pnpm --filter @falcon/wire run lint:additive
  *
  * Base ref resolution (first one `git rev-parse` accepts, in order):
  *   1. $WIRE_LINT_BASE_REF        (explicit override)

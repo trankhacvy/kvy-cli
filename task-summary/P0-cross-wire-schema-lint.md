@@ -63,11 +63,12 @@ This is independent of the fixture entirely — regenerating
 state comes from `git archive`, not from disk.
 
 **`packages/wire/package.json`** — added `"lint:additive": "tsx
-scripts/check-additive-vs-base.ts"` (mirrors the existing convention for
-`scripts/snapshot-shapes.ts`, which also isn't declared with its own `tsx`
-devDependency — it runs via `pnpm --filter @falcon/wire exec tsx`, hoisted
-from `pkgroll`/`vitest`'s transitive `tsx` dep, same as the pre-existing
-script).
+scripts/check-additive-vs-base.ts"`, invoked from CI as `pnpm --filter
+@falcon/wire run lint:additive` (not a raw `exec tsx`, so the script and its
+CI entry point can't drift apart). The script itself still isn't declared
+with its own `tsx` devDependency — it runs on the workspace-hoisted
+transitive `tsx` dep (from `pkgroll`/`vitest`), same convention as the
+pre-existing `scripts/snapshot-shapes.ts`.
 
 **`.github/workflows/ci.yml`** — two new `pull_request`-only steps after
 "Build @falcon/wire":
@@ -79,8 +80,8 @@ script).
   repo's script-injection guard for untrusted/PR-controlled workflow
   context values.
 - "Wire schema additive-only lint (vs base branch)" — runs `pnpm --filter
-  @falcon/wire exec tsx scripts/check-additive-vs-base.ts` with
-  `GITHUB_BASE_REF` in `env:`.
+  @falcon/wire run lint:additive` (the package.json script, not a raw `exec
+  tsx` of the file) with `GITHUB_BASE_REF` in `env:`.
 
 Both steps are gated on `github.event_name == 'pull_request'` — this is a
 PR-gating lint (per the task: "fails a **PR**"); on a push-to-main event
