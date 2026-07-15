@@ -2984,3 +2984,175 @@ percentage is unchanged at 25.2%.
 3. **Land `P0-land-cross-wire-schema-lint`** — small, standalone CI-only
    addition (plus the discovered `tsx` devDependency fix); no dependency on
    any other unmerged work.
+
+## Cycle 26 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `fc886a6`, "fix: P0-land-cross-wire-schema-lint-final - land stranded task summary doc onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: forced (`turbo run typecheck --force`, no
+  cache) — 6/6 tasks (`@falcon/crypto` + its `build`, `@falcon/wire`,
+  `falcon` (cli), `@falcon/server`, `@falcon/web`), `tsc --noEmit` clean on
+  every package, all executed against the real repo-root paths (not stale
+  worktree paths from a cache hit — confirmed by forcing).
+- `pnpm test` → **PASSED**: forced (`turbo run test --force`, no cache) —
+  9/9 tasks, **315 tests total, 0 failures** — `@falcon/wire` 61,
+  `falcon` (cli) 66, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server`
+  87. Identical totals to Cycles 20–25 — `main` remains stable, no
+  regressions.
+
+### Task-summary read this cycle
+
+This cycle's instructions named three files as "successful tasks":
+`task-summary/P0-land-cross-wire-schema-lint-final.md`,
+`task-summary/P1-land-1.1-1.2-server-realtime-and-write-path-final.md`, and
+`task-summary/P1-land-1.5-daemon-worktrees-final.md`. Checked the working
+tree directly (`/bin/ls task-summary/`, 40 files) — **only the first of the
+three exists on `main`.**
+
+- **`task-summary/P0-land-cross-wire-schema-lint-final.md`** — **exists on
+  `main`**, and independent verification confirms its claim this time:
+  `git merge-base --is-ancestor P0-land-cross-wire-schema-lint main` →
+  **true**, `git cat-file -e main:packages/wire/scripts/check-additive-vs-base.ts`
+  → exists, `main:packages/wire/package.json` has `tsx: ^4.20.0`. `main`'s
+  HEAD (`fc886a6`, plus its parent `0226396`) is the actual merge that
+  finally landed the Cycle-24/25-stranded `P0-cross-wire-schema-lint` +
+  `P0-land-cross-wire-schema-lint` lineage. `plan.md`'s cross-cutting
+  checkbox was already flipped to `[x]` by this task itself (part of its
+  own landing commit) — verified accurate, no change needed beyond adding
+  a Cycle 26 re-confirmation annotation.
+- **`task-summary/P1-land-1.1-1.2-server-realtime-and-write-path-final.md`**
+  — **does not exist on `main`**; exists only in worktree
+  `.worktrees/P1-land-1.1-1.2-server-realtime-and-write-path-final` (tip
+  `76b7556`). `git merge-base --is-ancestor
+  P1-land-1.1-1.2-server-realtime-and-write-path-final main` → **not an
+  ancestor**. `main`'s `packages/server/src/` is still unchanged (no
+  `socket.ts`, `eventRouter`, or write-path routes). Its own task-summary
+  narrates a clean `--no-ff` merge of the prior integration branch plus
+  green `pnpm build`/`typecheck`/forced `test` (9/9 tasks, `@falcon/server`
+  20 files/140 tests) — genuinely complete, self-verified work, but
+  performed only inside its own fresh worktree; never pushed/merged onto
+  the shared `main` ref.
+- **`task-summary/P1-land-1.5-daemon-worktrees-final.md`** — **does not
+  exist on `main`**; exists only in worktree
+  `.worktrees/P1-land-1.5-daemon-worktrees-final` (tip `8d9e492`). `git
+  merge-base --is-ancestor P1-land-1.5-daemon-worktrees-final main` →
+  **not an ancestor**. `main`'s `packages/cli/src/daemon/` still does not
+  exist. Its own task-summary is explicit in its "Assumptions" section that
+  it "did **not** push or fast-forward the shared `main` ref myself from
+  inside this worktree" — an admitted, not just inferred, gap.
+
+Per this tracker's established convention (Cycles 1–3, 7–9, 16–25): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked, no matter how complete
+or well-verified the underlying work is. Two of the three requested files
+this cycle fall in that bucket. The third (`P0-land-cross-wire-schema-lint-final`)
+is the first "-final" land-task across this entire tracker's history (26
+cycles) whose claim to have actually touched the shared `main` ref
+independently verifies as **true** — worth noting as a positive signal
+that a "-final" retry pattern can eventually close the gap, though it took
+until a second dedicated attempt (`P0-land-cross-wire-schema-lint` →
+`P0-land-cross-wire-schema-lint-final`) to do so. The other two "-final"
+attempts this cycle (1.1/1.2 and 1.5) repeat the exact same
+worktree-only-landing mistake the "-final" naming convention exists to fix
+— see Blockers below. `plan.md` was updated with Cycle 26 narrative
+annotations on the Cross-cutting, 1.1, 1.2, and 1.5 sections recording
+these findings; no checkbox changes were needed since `plan.md`'s
+cross-cutting checkbox was already correctly `[x]` (flipped by the landing
+task itself) and none of 1.1/1.2/1.5's bullets have genuinely landed yet.
+
+### Tasks completed this cycle
+
+**1 task's landing independently re-confirmed:** `P0-land-cross-wire-schema-lint-final`
+— the cross-wire-schema-lint CI lint is now verifiably live on `main`
+(this is the first cycle this tracker can confirm that claim rather than
+refute it). This checkbox was already flipped before this cycle started
+(by the landing task's own commit), so it does not change this cycle's
+checked-count delta, but it is the first of the three long-pending "big"
+land targets (cross-wire-schema-lint, 1.1/1.2 server, 1.5 daemon) to
+actually cross the line. `plan.md` checkbox count: **35/135**, up from
+34/135 at Cycle 25 (the +1 landed between Cycle 25 and Cycle 26, credited
+to the landing task itself, not to this tracker's own edits this cycle).
+
+### Blockers / issues found
+
+1. **Two of three requested "-final" tasks are still unmerged**, repeating
+   the exact failure mode their naming convention was invented to fix:
+   `P1-land-1.1-1.2-server-realtime-and-write-path-final` and
+   `P1-land-1.5-daemon-worktrees-final` both created a fresh worktree,
+   merged their prerequisite branch in cleanly, re-verified green, and then
+   stopped — never running the actual `git merge --no-ff <branch>` from
+   inside a working copy checked out on `main` itself (the step
+   `P0-land-cross-wire-schema-lint-final` did do, per its own task-summary's
+   "actual landing step" section). Flagging for the orchestrator: a task
+   named `*-final` that only reconfirms green tests in its own worktree is
+   not sufficient — the branch must be merged from a checkout of the
+   shared `main` ref for the work to actually land.
+2. **`task-summary/` files for both unmerged "-final" tasks are themselves
+   not visible on `main`** — since neither task ever merged into `main`,
+   their own summary docs (committed only on their own branches) are
+   invisible to anyone reading `main`'s working tree, same as every prior
+   cycle's unmerged-worktree findings.
+3. Unmerged worktrees per `git worktree list` (33 entries), largely
+   unchanged from Cycle 25 plus the two "-final" attempts above:
+   `P0-land-phase0-worktrees`, `P1-1.3-claude-launcher-script`,
+   `P1-1.3-cli-locator`, `P1-1.3-falcon-home-persistence`,
+   `P1-1.3-provider-detection`, `P1-1.4-envelope-mapper`,
+   `P1-1.4-http-outbox`, `P1-1.5-control-server`,
+   `P1-1.5-daemon-singleton-lock`, `P1-1.5-kill-commands`,
+   `P1-1.6-api-socket`, `P1-1.6-auth-pages`, `P1-1.6-reducer-port`,
+   `P1-1.3-cli-auth-login`, `P1-1.3-cli-auth-login` duplicates,
+   `P1-land-1.1-1.2-server-realtime-and-write-path`,
+   `P1-land-1.1-1.2-server-realtime-and-write-path-final`,
+   `P1-land-1.5-daemon-worktrees`, `P1-land-1.5-daemon-worktrees-final`,
+   `P1-1.1-server-realtime`, `P1-1.2-server-write-http`. Not re-verified
+   individually this cycle (only the three requested branches were
+   re-checked); listed here for continuity.
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+5. The `rtk` Bash-hook continues to intermittently mangle plain
+   `ls`/`git status`/`grep` output inside this working directory (e.g.
+   `ls` on a non-empty directory returning nothing, `git status --short`
+   on a clean tree printing the literal string `ok`) — same issue prior
+   cycles have flagged. Worked around this cycle by invoking absolute
+   binary paths (`/opt/homebrew/bin/git`, `/usr/bin/grep`, `/bin/ls`) for
+   anything load-bearing; no impact on the findings above since everything
+   was cross-checked with an unaffected tool.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **35 checked on `main`**, up
+from 34 at Cycles 20–25 (0.1 5/5, 0.2 8/8, 0.3 7/7, 0.4 7/8, Cross-cutting
+1/5, 1.3 1/9, 1.4 2/6, 1.6 2/8). **Completion: ~25.9%** (35/135), verified
+against a green forced `pnpm typecheck`/`pnpm test` run covering all 5
+packages on `main` (315 tests total, 0 failures, identical to Cycles
+20–25 — confirming no silent regression since). Note: a large fraction of
+Phase 1 (Socket.IO read path, HTTP write path, daemon singleton lock,
+control server, kill commands, CLI auth login, HTTP outbox, CLI locator,
+auth pages, reducer port) is implementation-complete and self-verified in
+unmerged worktrees, several with "-final" land-attempts already made —
+but the actual `main` completion percentage moved by only this one item
+since Cycle 20.
+
+### Next recommended tasks
+
+1. **Actually land `P1-land-1.1-1.2-server-realtime-and-write-path-final`
+   onto `main`** — the work and its worktree-local merge are both already
+   done and green; what's missing is the final step demonstrated by
+   `P0-land-cross-wire-schema-lint-final`: check out `main` itself and
+   `git merge --no-ff P1-land-1.1-1.2-server-realtime-and-write-path-final`
+   directly on the shared ref (or fast-forward if trivial), then re-verify.
+2. **Actually land `P1-land-1.5-daemon-worktrees-final`onto `main`** —
+   same gap, same fix: merge the already-prepared `-final` branch directly
+   onto the shared `main` ref rather than stopping once its own worktree
+   is green.
+3. **Investigate the recurring "-final worktree merges cleanly but is
+   never merged onto the actual `main` ref" failure mode at the process
+   level** — this is now the second and third instances (after the
+   original `P0-land-cross-wire-schema-lint` before its own `-final` fix)
+   of a "land" task doing all the right verification work but omitting the
+   one step (`git checkout main && git merge --no-ff <branch>`) that
+   actually moves the shared ref. Worth a explicit instruction/template fix
+   for future land-tasks rather than relying on each one to independently
+   discover the right final step.
