@@ -2037,3 +2037,111 @@ cache-bypassed `pnpm typecheck`/`pnpm test` run covering all 5 packages on
 3. **Sequence `P0-0.4-auth-challenge-route`, `P0-0.4-oauth-signin-routes`,
    and `P0-0.4-pairing-endpoints`** on top of the now-landed `0.4`
    foundation (unchanged from Cycle 17 — still not started).
+
+## Cycle 19 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `fad6f3e`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → bare run showed a cache hit replaying logs from a
+  `.worktrees/P0-land-0.4-auth-routes/...` path again (same class of
+  cache-masking incident flagged in Cycle 18). Re-ran forced
+  (`npx turbo run typecheck --force`): **5/5 packages pass, 0 errors** —
+  genuinely clean on `main`, no repeat of the Cycle 18 `node_modules` link
+  gap.
+- `pnpm test` → forced (`npx turbo run test --force`, no cache): **9/9 tasks
+  green, 253/253 tests** — `@falcon/web` 14, `falcon` (cli) 58,
+  `@falcon/crypto` 65, `@falcon/wire` 61, `@falcon/server` 55 (incl. the two
+  Postgres-backed `seq.test.ts` concurrency tests, connected fine against
+  local `docker-compose.dev.yml` Postgres).
+- Both gates green on `main` as of `fad6f3e`.
+
+### Tasks completed this cycle
+
+**None.** This cycle's instructions named three task-summaries to read and
+check off — `task-summary/P0-land-0.4-auth-routes.md`,
+`task-summary/P1-land-1.4-transcript-scanner-onto-main.md`, and
+`task-summary/P1-land-1.6-crypto-worker-onto-main.md` — but **none of the
+three exist in `main`'s `task-summary/` directory** (still the same 25 files
+as Cycles 17/18, no new entries). Confirmed for each: (1) directory listing,
+(2) `git merge-base --is-ancestor <branch> main` → none is an ancestor, (3)
+filesystem check — `main`'s `packages/server/src/app/server.ts` has no
+`buildAuthRoutes`/`buildOAuthRoutes`/`pairRoutes` registrations,
+`packages/cli/src/` has no `claude/` subdirectory, `packages/web/src/` has
+no `crypto/` subdirectory. All three files exist, complete and
+self-reporting green `pnpm build`/`typecheck`/`test`, but only inside their
+own worktrees:
+
+| Task | Worktree/branch | Tip | Commits ahead of `main` | Merge-base w/ `main` | Merged? |
+|---|---|---|---|---|---|
+| `P0-land-0.4-auth-routes` | `.worktrees/P0-land-0.4-auth-routes` | `37a658c` | 13 | `fad6f3e` (= current `main` tip, zero drift) | No |
+| `P1-land-1.4-transcript-scanner-onto-main` | `.worktrees/P1-land-1.4-transcript-scanner-onto-main` | `22bc70d` | 7 | `fad6f3e` (= current `main` tip, zero drift) | No |
+| `P1-land-1.6-crypto-worker-onto-main` | `.worktrees/P1-land-1.6-crypto-worker-onto-main` | `7b38ccf` | 9 | `fad6f3e` (= current `main` tip, zero drift) | No |
+
+Per the standing rule (Cycle 1 onward), a task is only checked off once its
+code is actually present and verified on `main`, never on an in-worktree
+self-report — so **no `plan.md` checkboxes were flipped this cycle.**
+`plan.md` §16 was annotated (not checked) at the `0.4` header, the `1.4`
+header, and the `1.6`/crypto-worker bullet, each recording this cycle's
+confirmation and the exact tip/staleness of the corresponding land-branch.
+
+`plan.md` checkbox count: **28/135** — unchanged from Cycle 18, since
+nothing new landed on `main` this cycle.
+
+### Blockers / issues found
+
+1. **Three ready, zero-drift land-branches remain unlanded.** Unlike some
+   earlier cycles' worktrees, all three requested this cycle
+   (`P0-land-0.4-auth-routes`, `P1-land-1.4-transcript-scanner-onto-main`,
+   `P1-land-1.6-crypto-worker-onto-main`) have a merge-base with `main`
+   equal to `main`'s *current* tip (`fad6f3e`) — no rebase needed, each is a
+   clean fast-forward/merge candidate right now. They also appear disjoint
+   in the files they touch (`packages/server` auth routes vs.
+   `packages/cli/src/claude/` vs. `packages/web/src/crypto/`), so no
+   inter-branch conflict is expected. Landing them is out of this tracker's
+   scope (this role only verifies + records; it does not merge), but it is
+   the single highest-value action available for the next work cycle.
+2. **Turbo cache continues to mask verification with stale worktree
+   paths** — the bare, non-forced `pnpm typecheck` this cycle again
+   replayed a cached log whose command path pointed at a `.worktrees/*`
+   directory rather than `main`'s own tree (same phenomenon as Cycle 18,
+   though this time the forced re-run confirmed `main` actually is clean —
+   no repeat of the `node_modules` link-gap defect). Continuing to
+   recommend every cycle default to `--force` for this gate.
+3. **Task-summary files requested by this cycle's instructions don't exist
+   on `main`** — same recurring mismatch pattern as Cycles 16/17/18, now
+   for `P0-land-0.4-auth-routes.md`,
+   `P1-land-1.4-transcript-scanner-onto-main.md`, and
+   `P1-land-1.6-crypto-worker-onto-main.md`. Flagging again so the
+   orchestrator's landing step gets pointed at these three specific,
+   currently-clean-to-merge branches.
+4. No `pnpm lint` run this cycle (out of this role's required verification
+   gate — only `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **28 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (6/8), 1.3 (1/9), 1.6 (1/8) — **unchanged
+from Cycle 18.** **Completion: ~20.7%** (28/135), verified against a forced,
+cache-bypassed `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (253 tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P0-land-0.4-auth-routes` (tip `37a658c`), `P1-land-1.4-transcript-scanner-onto-main`
+   (tip `22bc70d`), and `P1-land-1.6-crypto-worker-onto-main` (tip `7b38ccf`)** —
+   all three are complete, self-verified, and each has a merge-base
+   identical to `main`'s current tip (zero drift/rebase needed); they touch
+   disjoint directories (`packages/server` routes, `packages/cli/src/claude/`,
+   `packages/web/src/crypto/`) so should land cleanly with no
+   inter-branch conflict. This is the single highest-value close-out
+   available right now — three cycles' worth of completed work sitting idle.
+2. **Land `P1-1.1-server-realtime` (tip `d491fb5`) and
+   `P1-1.2-server-write-http` (tip `714c5d6`) together, deliberately** —
+   both are complete and self-verified, but they share a pre-1.1 base and
+   each independently implemented `eventRouter`; land as one reconciliation
+   pass (not two independent fast-forwards) to avoid a broken merge.
+3. **Land `P1-1.5-daemon-singleton-lock`** (unchanged since Cycle 16,
+   worktree unchanged) — `packages/cli/src/daemon/` still doesn't exist on
+   `main`.
