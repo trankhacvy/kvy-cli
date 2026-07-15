@@ -29,9 +29,9 @@
  * secretbox/sign. See `encryption.web.ts` for the browser counterpart
  * (libsodium-wrappers + WebCrypto AES-GCM).
  */
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import tweetnacl from 'tweetnacl';
-import { decodeBase64, encodeBase64, encodeBase64Url } from './base64.js';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import tweetnacl from "tweetnacl";
+import { decodeBase64, encodeBase64, encodeBase64Url } from "./base64.js";
 
 export { decodeBase64, encodeBase64, encodeBase64Url };
 
@@ -44,12 +44,15 @@ export function getRandomBytes(size: number): Uint8Array {
 
 export function libsodiumPublicKeyFromSecretKey(seed: Uint8Array): Uint8Array {
   // NOTE: This matches libsodium implementation, tweetnacl doesnt do this by default
-  const hashedSeed = new Uint8Array(createHash('sha512').update(seed).digest());
+  const hashedSeed = new Uint8Array(createHash("sha512").update(seed).digest());
   const secretKey = hashedSeed.slice(0, 32);
   return new Uint8Array(tweetnacl.box.keyPair.fromSecretKey(secretKey).publicKey);
 }
 
-export function libsodiumEncryptForPublicKey(data: Uint8Array, recipientPublicKey: Uint8Array): Uint8Array {
+export function libsodiumEncryptForPublicKey(
+  data: Uint8Array,
+  recipientPublicKey: Uint8Array,
+): Uint8Array {
   // Generate ephemeral keypair for this encryption
   const ephemeralKeyPair = tweetnacl.box.keyPair();
 
@@ -60,7 +63,9 @@ export function libsodiumEncryptForPublicKey(data: Uint8Array, recipientPublicKe
   const encrypted = tweetnacl.box(data, nonce, recipientPublicKey, ephemeralKeyPair.secretKey);
 
   // Bundle format: ephemeral public key (32 bytes) + nonce (24 bytes) + encrypted data
-  const result = new Uint8Array(ephemeralKeyPair.publicKey.length + nonce.length + encrypted.length);
+  const result = new Uint8Array(
+    ephemeralKeyPair.publicKey.length + nonce.length + encrypted.length,
+  );
   result.set(ephemeralKeyPair.publicKey, 0);
   result.set(nonce, ephemeralKeyPair.publicKey.length);
   result.set(encrypted, ephemeralKeyPair.publicKey.length + nonce.length);
@@ -75,7 +80,10 @@ export function libsodiumEncryptForPublicKey(data: Uint8Array, recipientPublicKe
  * added here because @falcon/crypto's `unwrapDek` needs the symmetric decrypt.
  * Never throws — returns null on any failure (design principle #1).
  */
-export function libsodiumDecryptWithSecretKey(bundle: Uint8Array, recipientSecretKey: Uint8Array): Uint8Array | null {
+export function libsodiumDecryptWithSecretKey(
+  bundle: Uint8Array,
+  recipientSecretKey: Uint8Array,
+): Uint8Array | null {
   const pubLen = tweetnacl.box.publicKeyLength;
   const nonceLen = tweetnacl.box.nonceLength;
   if (bundle.length < pubLen + nonceLen) {
@@ -105,7 +113,11 @@ export function libsodiumDecryptWithSecretKey(bundle: Uint8Array, recipientSecre
  */
 export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(tweetnacl.secretbox.nonceLength);
-  const encrypted = tweetnacl.secretbox(new TextEncoder().encode(JSON.stringify(data)), nonce, secret);
+  const encrypted = tweetnacl.secretbox(
+    new TextEncoder().encode(JSON.stringify(data)),
+    nonce,
+    secret,
+  );
   const result = new Uint8Array(nonce.length + encrypted.length);
   result.set(nonce);
   result.set(encrypted, nonce.length);
@@ -146,8 +158,10 @@ export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null 
  */
 export function encryptBlob(data: Uint8Array, key: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(tweetnacl.secretbox.nonceLength);
-  const dataStandalone = data.byteOffset === 0 && data.buffer.byteLength === data.length ? data : data.slice();
-  const keyStandalone = key.byteOffset === 0 && key.buffer.byteLength === key.length ? key : key.slice();
+  const dataStandalone =
+    data.byteOffset === 0 && data.buffer.byteLength === data.length ? data : data.slice();
+  const keyStandalone =
+    key.byteOffset === 0 && key.buffer.byteLength === key.length ? key : key.slice();
   const encrypted = tweetnacl.secretbox(dataStandalone, nonce, keyStandalone);
   const result = new Uint8Array(nonce.length + encrypted.length);
   result.set(nonce, 0);
@@ -187,7 +201,7 @@ export function decryptBlob(bundle: Uint8Array, key: Uint8Array): Uint8Array | n
  */
 export function encryptWithDataKey(data: any, dataKey: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(12); // GCM uses 12-byte nonces
-  const cipher = createCipheriv('aes-256-gcm', dataKey, nonce);
+  const cipher = createCipheriv("aes-256-gcm", dataKey, nonce);
 
   const plaintext = new TextEncoder().encode(JSON.stringify(data));
   const encrypted = Buffer.concat([cipher.update(plaintext), cipher.final()]);
@@ -228,28 +242,32 @@ export function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array): any
   const ciphertext = bundle.slice(13, bundle.length - 16);
 
   try {
-    const decipher = createDecipheriv('aes-256-gcm', dataKey, nonce);
+    const decipher = createDecipheriv("aes-256-gcm", dataKey, nonce);
     decipher.setAuthTag(authTag);
 
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 
     return JSON.parse(new TextDecoder().decode(decrypted));
-  } catch (error) {
+  } catch {
     // Decryption failed
     return null;
   }
 }
 
-export function encrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: any): Uint8Array {
-  if (variant === 'legacy') {
+export function encrypt(key: Uint8Array, variant: "legacy" | "dataKey", data: any): Uint8Array {
+  if (variant === "legacy") {
     return encryptLegacy(data, key);
   } else {
     return encryptWithDataKey(data, key);
   }
 }
 
-export function decrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: Uint8Array): any | null {
-  if (variant === 'legacy') {
+export function decrypt(
+  key: Uint8Array,
+  variant: "legacy" | "dataKey",
+  data: Uint8Array,
+): any | null {
+  if (variant === "legacy") {
     return decryptLegacy(data, key);
   } else {
     return decryptWithDataKey(data, key);

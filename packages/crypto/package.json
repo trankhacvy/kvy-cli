@@ -7,15 +7,29 @@
   "description": "Falcon's E2E encryption primitives — ported from Happy (github.com/slopus/happy, MIT). Isomorphic: node build (tweetnacl + node:crypto) and browser build (libsodium-wrappers + WebCrypto AES-GCM).",
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./web": {
-      "import": { "types": "./dist/index.web.d.mts", "default": "./dist/index.web.mjs" },
-      "require": { "types": "./dist/index.web.d.cts", "default": "./dist/index.web.cjs" }
+      "import": {
+        "types": "./dist/index.web.d.mts",
+        "default": "./dist/index.web.mjs"
+      },
+      "require": {
+        "types": "./dist/index.web.d.cts",
+        "default": "./dist/index.web.cjs"
+      }
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "pkgroll",
     "typecheck": "tsc --noEmit",

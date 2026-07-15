@@ -4,12 +4,17 @@
  * principle #1): `open()` returns `null` on any failure, it never throws —
  * one corrupt record can't poison a sync batch.
  */
-import { decodeBase64, encodeBase64, encryptWithDataKey, decryptWithDataKey } from './encryption.js';
-import type { EncryptedBox } from './types.js';
+import {
+  decodeBase64,
+  decryptWithDataKey,
+  encodeBase64,
+  encryptWithDataKey,
+} from "./encryption.js";
+import type { EncryptedBox } from "./types.js";
 
 /** Seal `data` into an EncryptedBox using AES-256-GCM under `dek`. */
 export function seal(data: unknown, dek: Uint8Array): EncryptedBox {
-  return { t: 'enc', v: 1, c: encodeBase64(encryptWithDataKey(data, dek)) };
+  return { t: "enc", v: 1, c: encodeBase64(encryptWithDataKey(data, dek)) };
 }
 
 /**

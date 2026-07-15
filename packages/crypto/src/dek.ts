@@ -7,7 +7,7 @@
  * New code. `unwrapDek` never throws — returns `null` on any failure (wrong
  * key, corrupt bytes, unknown version byte), same contract as `box.open()`.
  */
-import { libsodiumEncryptForPublicKey, libsodiumDecryptWithSecretKey } from './encryption.js';
+import { libsodiumDecryptWithSecretKey, libsodiumEncryptForPublicKey } from "./encryption.js";
 
 const WRAP_VERSION = 0x00;
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * Outermost container the server stores/routes for any content field. The
@@ -7,7 +7,7 @@ import { z } from 'zod';
  * decrypt): [ver(1)=0x01 | nonce(12) | ciphertext | gcmTag(16)] (design §4.1).
  */
 export const EncryptedBoxSchema = z.object({
-  t: z.literal('enc'),
+  t: z.literal("enc"),
   v: z.literal(1),
   c: z.string(),
 });

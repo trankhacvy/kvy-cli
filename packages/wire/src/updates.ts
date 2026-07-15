@@ -1,6 +1,11 @@
-import { z } from 'zod';
-import { EncryptedBoxSchema, VersionedSchema } from './box';
-import { MachineRowSchema, SessionRowSchema, SessionStatusSchema, UnmanagedSessionRowSchema } from './rows';
+import { z } from "zod";
+import { EncryptedBoxSchema, VersionedSchema } from "./box";
+import {
+  MachineRowSchema,
+  SessionRowSchema,
+  SessionStatusSchema,
+  UnmanagedSessionRowSchema,
+} from "./rows";
 
 /**
  * Persistent, seq-ordered server -> client updates (design §4.3).
@@ -12,47 +17,47 @@ import { MachineRowSchema, SessionRowSchema, SessionStatusSchema, UnmanagedSessi
  * for the high-rate transcript stream never contends with the low-rate
  * header stream).
  */
-export const UpdateBodySchema = z.discriminatedUnion('t', [
+export const UpdateBodySchema = z.discriminatedUnion("t", [
   z.object({
-    t: z.literal('session-new'),
+    t: z.literal("session-new"),
     session: SessionRowSchema,
   }),
   z.object({
-    t: z.literal('session-update'),
+    t: z.literal("session-update"),
     id: z.string(),
     metadata: VersionedSchema(EncryptedBoxSchema).optional(),
     agentState: VersionedSchema(EncryptedBoxSchema).optional(),
     status: SessionStatusSchema.optional(),
   }),
   z.object({
-    t: z.literal('session-delete'),
+    t: z.literal("session-delete"),
     id: z.string(),
   }),
   z.object({
-    t: z.literal('message-new'),
+    t: z.literal("message-new"),
     sessionId: z.string(),
     msgSeq: z.number(), // per-session order; NOT the account headerSeq
     localId: z.string().optional(),
     content: EncryptedBoxSchema,
   }),
   z.object({
-    t: z.literal('machine-new'),
+    t: z.literal("machine-new"),
     machine: MachineRowSchema,
   }),
   z.object({
-    t: z.literal('machine-update'),
+    t: z.literal("machine-update"),
     machine: MachineRowSchema,
   }),
   z.object({
-    t: z.literal('unmanaged-new'),
+    t: z.literal("unmanaged-new"),
     item: UnmanagedSessionRowSchema,
   }),
   z.object({
-    t: z.literal('unmanaged-update'),
+    t: z.literal("unmanaged-update"),
     item: UnmanagedSessionRowSchema,
   }),
   z.object({
-    t: z.literal('account-update'),
+    t: z.literal("account-update"),
     settings: EncryptedBoxSchema,
   }),
 ]);
@@ -69,21 +74,21 @@ export type Update = z.infer<typeof UpdateSchema>;
  * Volatile server -> client signals: never persisted, never gap-checked,
  * safe to coalesce/drop under backpressure (design §4.3).
  */
-export const EphemeralSchema = z.discriminatedUnion('t', [
+export const EphemeralSchema = z.discriminatedUnion("t", [
   z.object({
-    t: z.literal('activity'),
+    t: z.literal("activity"),
     sessionId: z.string(),
     working: z.boolean(),
   }),
   z.object({
-    t: z.literal('machine-presence'),
+    t: z.literal("machine-presence"),
     machineId: z.string(),
     online: z.boolean(),
   }),
   z.object({
-    t: z.literal('attention'),
+    t: z.literal("attention"),
     sessionId: z.string(),
-    kind: z.enum(['perm', 'question', 'done', 'failed']),
+    kind: z.enum(["perm", "question", "done", "failed"]),
   }),
 ]);
 export type Ephemeral = z.infer<typeof EphemeralSchema>;

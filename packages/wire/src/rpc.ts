@@ -1,7 +1,7 @@
-import { z } from 'zod';
-import { EncryptedBoxSchema } from './box';
-import { PermDecisionSchema, PermissionModeSchema } from './permissions';
-import { SessionEnvelopeSchema } from './session';
+import { z } from "zod";
+import { EncryptedBoxSchema } from "./box";
+import { PermDecisionSchema, PermissionModeSchema } from "./permissions";
+import { SessionEnvelopeSchema } from "./session";
 
 /**
  * RPC call envelope sent over the WS `rpc-call` client emit (design §4.4).
@@ -31,7 +31,7 @@ export const SpawnParamsSchema = z.object({
   idempotencyKey: z.string(), // cuid2 minted by caller; daemon replays the prior result on retry
   workspaceId: z.string(),
   directory: z.string(),
-  provider: z.enum(['claude-code', 'codex']),
+  provider: z.enum(["claude-code", "codex"]),
   permissionMode: PermissionModeSchema,
   model: z.string().optional(),
   branch: z
@@ -65,9 +65,9 @@ export const ListSessionsParamsSchema = z.object({});
 export const LocalSessionInfoSchema = z.object({
   sessionId: z.string(),
   workspaceId: z.string(),
-  provider: z.enum(['claude-code', 'codex']),
-  controlMode: z.enum(['local', 'remote']),
-  status: z.enum(['active', 'failed', 'stopped']),
+  provider: z.enum(["claude-code", "codex"]),
+  controlMode: z.enum(["local", "remote"]),
+  status: z.enum(["active", "failed", "stopped"]),
   pid: z.number().optional(),
   startedAt: z.number(),
 });
@@ -84,7 +84,7 @@ export const GitStatusParamsSchema = z.object({
 
 export const FileStatusSchema = z.object({
   path: z.string(),
-  status: z.enum(['added', 'modified', 'deleted', 'renamed', 'untracked']),
+  status: z.enum(["added", "modified", "deleted", "renamed", "untracked"]),
 });
 export type FileStatus = z.infer<typeof FileStatusSchema>;
 
@@ -145,7 +145,7 @@ export const AdoptListResultSchema = z.object({
 export const AdoptTakeParamsSchema = z.object({
   idempotencyKey: z.string(),
   providerSessionId: z.string(),
-  mode: z.enum(['takeover', 'fork']),
+  mode: z.enum(["takeover", "fork"]),
 });
 
 export const AdoptTakeResultSchema = z.object({ sessionId: z.string() });
@@ -167,7 +167,7 @@ export const PermAnswerParamsSchema = z.object({
 // actually won, so the client can render "answered on another device".
 export const PermAnswerResultSchema = z.object({
   ok: z.boolean(),
-  reason: z.literal('already-answered').optional(),
+  reason: z.literal("already-answered").optional(),
   decision: PermDecisionSchema.optional(),
 });
 

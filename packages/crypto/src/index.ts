@@ -2,24 +2,25 @@
  * @falcon/crypto — node entry point (CLI, server). For the browser build
  * (libsodium-wrappers + WebCrypto AES-GCM), import "@falcon/crypto/web" instead.
  */
-export * from './types.js';
-export * from './base64.js';
+
+export * from "./base64.js";
+export { open, seal } from "./box.js";
+export { unwrapDek, wrapDek } from "./dek.js";
 export {
-  getRandomBytes,
-  libsodiumPublicKeyFromSecretKey,
-  libsodiumEncryptForPublicKey,
-  libsodiumDecryptWithSecretKey,
-  encryptLegacy,
-  decryptLegacy,
-  encryptBlob,
+  authChallenge,
+  decrypt,
   decryptBlob,
-  encryptWithDataKey,
+  decryptLegacy,
   decryptWithDataKey,
   encrypt,
-  decrypt,
-  authChallenge,
-} from './encryption.js';
-export { seal, open } from './box.js';
-export { deriveKeyTree } from './keys.js';
-export { wrapDek, unwrapDek } from './dek.js';
-export { encodeRecoveryCode, decodeRecoveryCode } from './recovery.js';
+  encryptBlob,
+  encryptLegacy,
+  encryptWithDataKey,
+  getRandomBytes,
+  libsodiumDecryptWithSecretKey,
+  libsodiumEncryptForPublicKey,
+  libsodiumPublicKeyFromSecretKey,
+} from "./encryption.js";
+export { deriveKeyTree } from "./keys.js";
+export { decodeRecoveryCode, encodeRecoveryCode } from "./recovery.js";
+export * from "./types.js";

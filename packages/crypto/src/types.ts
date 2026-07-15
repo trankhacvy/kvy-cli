@@ -9,7 +9,7 @@
 
 /** The versioned, opaque envelope every encrypted payload travels in over the wire / in Postgres. */
 export interface EncryptedBox {
-  t: 'enc';
+  t: "enc";
   v: 1;
   /** base64-encoded ciphertext bundle produced by encryptWithDataKey. */
   c: string;

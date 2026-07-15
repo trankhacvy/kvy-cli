@@ -4,7 +4,7 @@
  * synchronous once `ready` has resolved — only the AES-GCM data-key path
  * needs WebCrypto's async API. See dek.ts for the wire format.
  */
-import { libsodiumEncryptForPublicKey, libsodiumDecryptWithSecretKey } from './encryption.web.js';
+import { libsodiumDecryptWithSecretKey, libsodiumEncryptForPublicKey } from "./encryption.web.js";
 
 const WRAP_VERSION = 0x00;
 

@@ -8,25 +8,26 @@
  * here — WebCrypto has no synchronous API. Wire formats are identical; a
  * ciphertext produced by one platform decrypts fine on the other.
  */
-export * from './types.js';
-export * from './base64.js';
+
+export * from "./base64.js";
+export { open, seal } from "./box.web.js";
+export { unwrapDek, wrapDek } from "./dek.web.js";
 export {
-  ready,
-  getRandomBytes,
-  libsodiumPublicKeyFromSecretKey,
-  libsodiumEncryptForPublicKey,
-  libsodiumDecryptWithSecretKey,
-  encryptLegacy,
-  decryptLegacy,
-  encryptBlob,
+  authChallenge,
+  decrypt,
   decryptBlob,
-  encryptWithDataKey,
+  decryptLegacy,
   decryptWithDataKey,
   encrypt,
-  decrypt,
-  authChallenge,
-} from './encryption.web.js';
-export { seal, open } from './box.web.js';
-export { deriveKeyTree } from './keys.js';
-export { wrapDek, unwrapDek } from './dek.web.js';
-export { encodeRecoveryCode, decodeRecoveryCode } from './recovery.js';
+  encryptBlob,
+  encryptLegacy,
+  encryptWithDataKey,
+  getRandomBytes,
+  libsodiumDecryptWithSecretKey,
+  libsodiumEncryptForPublicKey,
+  libsodiumPublicKeyFromSecretKey,
+  ready,
+} from "./encryption.web.js";
+export { deriveKeyTree } from "./keys.js";
+export { decodeRecoveryCode, encodeRecoveryCode } from "./recovery.js";
+export * from "./types.js";

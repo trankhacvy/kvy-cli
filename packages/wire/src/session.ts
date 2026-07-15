@@ -1,8 +1,8 @@
-import { createId } from '@paralleldrive/cuid2';
-import { z } from 'zod';
-import { PermDecisionSchema, PermissionModeSchema } from './permissions';
+import { createId } from "@paralleldrive/cuid2";
+import { z } from "zod";
+import { PermDecisionSchema, PermissionModeSchema } from "./permissions";
 
-export const SessionRoleSchema = z.enum(['user', 'agent']);
+export const SessionRoleSchema = z.enum(["user", "agent"]);
 export type SessionRole = z.infer<typeof SessionRoleSchema>;
 
 /**
@@ -11,32 +11,32 @@ export type SessionRole = z.infer<typeof SessionRoleSchema>;
  * provider-native ids (`toolu_*`, Codex item ids) never cross the wire, only
  * adapter-minted `call`/`reqId` strings.
  */
-export const SessionEventSchema = z.discriminatedUnion('t', [
+export const SessionEventSchema = z.discriminatedUnion("t", [
   z.object({
-    t: z.literal('text'),
+    t: z.literal("text"),
     md: z.string(),
     thinking: z.boolean().optional(),
   }),
   z.object({
-    t: z.literal('service'),
+    t: z.literal("service"),
     text: z.string(),
   }),
   z.object({
-    t: z.literal('tool-start'),
+    t: z.literal("tool-start"),
     call: z.string(),
     name: z.string(),
     title: z.string().optional(),
     args: z.unknown(),
-    risk: z.enum(['read', 'write', 'exec', 'network']).optional(),
+    risk: z.enum(["read", "write", "exec", "network"]).optional(),
   }),
   z.object({
-    t: z.literal('tool-end'),
+    t: z.literal("tool-end"),
     call: z.string(),
     ok: z.boolean(),
     output: z.unknown().optional(),
   }),
   z.object({
-    t: z.literal('file'),
+    t: z.literal("file"),
     ref: z.string(),
     name: z.string(),
     size: z.number(),
@@ -49,14 +49,14 @@ export const SessionEventSchema = z.discriminatedUnion('t', [
       .optional(),
   }),
   z.object({
-    t: z.literal('turn-start'),
+    t: z.literal("turn-start"),
   }),
   z.object({
-    t: z.literal('turn-end'),
-    status: z.enum(['completed', 'failed', 'cancelled']),
+    t: z.literal("turn-end"),
+    status: z.enum(["completed", "failed", "cancelled"]),
   }),
   z.object({
-    t: z.literal('perm-request'),
+    t: z.literal("perm-request"),
     reqId: z.string(),
     call: z.string().optional(),
     name: z.string(),
@@ -64,20 +64,20 @@ export const SessionEventSchema = z.discriminatedUnion('t', [
     modes: z.array(PermissionModeSchema),
   }),
   z.object({
-    t: z.literal('perm-resolve'),
+    t: z.literal("perm-resolve"),
     reqId: z.string(),
     decision: PermDecisionSchema,
   }),
   z.object({
-    t: z.literal('mode-switch'),
-    control: z.enum(['local', 'remote']),
-    by: z.enum(['terminal', 'client']),
+    t: z.literal("mode-switch"),
+    control: z.enum(["local", "remote"]),
+    by: z.enum(["terminal", "client"]),
   }),
   z.object({
-    t: z.literal('sub-start'),
+    t: z.literal("sub-start"),
   }),
   z.object({
-    t: z.literal('sub-stop'),
+    t: z.literal("sub-stop"),
   }),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
@@ -111,7 +111,7 @@ export interface CreateEnvelopeOptions {
 export function createEnvelope(
   role: SessionRole,
   ev: SessionEvent,
-  opts: CreateEnvelopeOptions = {}
+  opts: CreateEnvelopeOptions = {},
 ): SessionEnvelope {
   return SessionEnvelopeSchema.parse({
     id: opts.id ?? createId(),

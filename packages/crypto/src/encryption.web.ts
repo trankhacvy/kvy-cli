@@ -15,8 +15,8 @@
  *     first: `await ready()` once at startup, then all sync calls below are
  *     safe. This matches libsodium-wrappers' own documented usage pattern.
  */
-import sodium from 'libsodium-wrappers';
-import { decodeBase64, encodeBase64, encodeBase64Url } from './base64.js';
+import sodium from "libsodium-wrappers";
+import { decodeBase64, encodeBase64, encodeBase64Url } from "./base64.js";
 
 export { decodeBase64, encodeBase64, encodeBase64Url };
 
@@ -34,13 +34,23 @@ export function libsodiumPublicKeyFromSecretKey(seed: Uint8Array): Uint8Array {
   return new Uint8Array(sodium.crypto_box_seed_keypair(seed).publicKey);
 }
 
-export function libsodiumEncryptForPublicKey(data: Uint8Array, recipientPublicKey: Uint8Array): Uint8Array {
+export function libsodiumEncryptForPublicKey(
+  data: Uint8Array,
+  recipientPublicKey: Uint8Array,
+): Uint8Array {
   const ephemeralKeyPair = sodium.crypto_box_keypair();
   const nonce = getRandomBytes(sodium.crypto_box_NONCEBYTES);
-  const encrypted = sodium.crypto_box_easy(data, nonce, recipientPublicKey, ephemeralKeyPair.privateKey);
+  const encrypted = sodium.crypto_box_easy(
+    data,
+    nonce,
+    recipientPublicKey,
+    ephemeralKeyPair.privateKey,
+  );
 
   // Bundle format: ephemeral public key (32 bytes) + nonce (24 bytes) + encrypted data
-  const result = new Uint8Array(ephemeralKeyPair.publicKey.length + nonce.length + encrypted.length);
+  const result = new Uint8Array(
+    ephemeralKeyPair.publicKey.length + nonce.length + encrypted.length,
+  );
   result.set(ephemeralKeyPair.publicKey, 0);
   result.set(nonce, ephemeralKeyPair.publicKey.length);
   result.set(encrypted, ephemeralKeyPair.publicKey.length + nonce.length);
@@ -48,7 +58,10 @@ export function libsodiumEncryptForPublicKey(data: Uint8Array, recipientPublicKe
 }
 
 /** Inverse of libsodiumEncryptForPublicKey — see encryption.ts for rationale. Never throws. */
-export function libsodiumDecryptWithSecretKey(bundle: Uint8Array, recipientSecretKey: Uint8Array): Uint8Array | null {
+export function libsodiumDecryptWithSecretKey(
+  bundle: Uint8Array,
+  recipientSecretKey: Uint8Array,
+): Uint8Array | null {
   const pubLen = sodium.crypto_box_PUBLICKEYBYTES;
   const nonceLen = sodium.crypto_box_NONCEBYTES;
   if (bundle.length < pubLen + nonceLen) {
@@ -69,7 +82,11 @@ export function libsodiumDecryptWithSecretKey(bundle: Uint8Array, recipientSecre
  */
 export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(sodium.crypto_secretbox_NONCEBYTES);
-  const encrypted = sodium.crypto_secretbox_easy(new TextEncoder().encode(JSON.stringify(data)), nonce, secret);
+  const encrypted = sodium.crypto_secretbox_easy(
+    new TextEncoder().encode(JSON.stringify(data)),
+    nonce,
+    secret,
+  );
   const result = new Uint8Array(nonce.length + encrypted.length);
   result.set(nonce);
   result.set(encrypted, nonce.length);
@@ -122,7 +139,10 @@ export function decryptBlob(bundle: Uint8Array, key: Uint8Array): Uint8Array | n
 }
 
 async function importAesGcmKey(dataKey: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey('raw', dataKey as BufferSource, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  return crypto.subtle.importKey("raw", dataKey as BufferSource, "AES-GCM", false, [
+    "encrypt",
+    "decrypt",
+  ]);
 }
 
 /**
@@ -135,7 +155,11 @@ export async function encryptWithDataKey(data: any, dataKey: Uint8Array): Promis
   const plaintext = new TextEncoder().encode(JSON.stringify(data));
   // WebCrypto's AES-GCM output is ciphertext||tag concatenated — same layout node produces.
   const encrypted = new Uint8Array(
-    await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce as BufferSource, tagLength: 128 }, key, plaintext as BufferSource),
+    await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv: nonce as BufferSource, tagLength: 128 },
+      key,
+      plaintext as BufferSource,
+    ),
   );
 
   const bundle = new Uint8Array(1 + nonce.length + encrypted.length);
@@ -150,7 +174,10 @@ export async function encryptWithDataKey(data: any, dataKey: Uint8Array): Promis
  * Async — see module header. Never rejects — resolves to null on any failure
  * (design principle #1: one corrupt record can't poison a sync batch).
  */
-export async function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array): Promise<any | null> {
+export async function decryptWithDataKey(
+  bundle: Uint8Array,
+  dataKey: Uint8Array,
+): Promise<any | null> {
   if (bundle.length < 1) {
     return null;
   }
@@ -166,7 +193,7 @@ export async function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array
   try {
     const key = await importAesGcmKey(dataKey);
     const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: nonce as BufferSource, tagLength: 128 },
+      { name: "AES-GCM", iv: nonce as BufferSource, tagLength: 128 },
       key,
       ciphertextAndTag as BufferSource,
     );
@@ -176,16 +203,24 @@ export async function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array
   }
 }
 
-export function encrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: any): Uint8Array | Promise<Uint8Array> {
-  if (variant === 'legacy') {
+export function encrypt(
+  key: Uint8Array,
+  variant: "legacy" | "dataKey",
+  data: any,
+): Uint8Array | Promise<Uint8Array> {
+  if (variant === "legacy") {
     return encryptLegacy(data, key);
   } else {
     return encryptWithDataKey(data, key);
   }
 }
 
-export function decrypt(key: Uint8Array, variant: 'legacy' | 'dataKey', data: Uint8Array): any | null | Promise<any | null> {
-  if (variant === 'legacy') {
+export function decrypt(
+  key: Uint8Array,
+  variant: "legacy" | "dataKey",
+  data: Uint8Array,
+): any | null | Promise<any | null> {
+  if (variant === "legacy") {
     return decryptLegacy(data, key);
   } else {
     return decryptWithDataKey(data, key);

@@ -5,13 +5,13 @@
  * for the cross-impl test vectors in `cross-impl.test.ts`).
  */
 
-const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const LOOKUP = (() => {
   const table = new Int16Array(128).fill(-1);
   for (let i = 0; i < ALPHABET.length; i++) {
     table[ALPHABET.charCodeAt(i)] = i;
   }
-  table['='.charCodeAt(0)] = -2; // padding sentinel
+  table["=".charCodeAt(0)] = -2; // padding sentinel
   return table;
 })();
 
@@ -20,8 +20,11 @@ const LOOKUP = (() => {
  * @param buffer - The buffer to encode
  * @param variant - The encoding variant ('base64' or 'base64url')
  */
-export function encodeBase64(buffer: Uint8Array, variant: 'base64' | 'base64url' = 'base64'): string {
-  let result = '';
+export function encodeBase64(
+  buffer: Uint8Array,
+  variant: "base64" | "base64url" = "base64",
+): string {
+  let result = "";
   for (let i = 0; i < buffer.length; i += 3) {
     const b0 = buffer[i]!;
     const b1 = i + 1 < buffer.length ? buffer[i + 1]! : undefined;
@@ -29,18 +32,19 @@ export function encodeBase64(buffer: Uint8Array, variant: 'base64' | 'base64url'
 
     result += ALPHABET[b0 >> 2];
     result += ALPHABET[((b0 & 0x03) << 4) | (b1 === undefined ? 0 : b1 >> 4)];
-    result += b1 === undefined ? '=' : ALPHABET[((b1 & 0x0f) << 2) | (b2 === undefined ? 0 : b2 >> 6)];
-    result += b2 === undefined ? '=' : ALPHABET[b2 & 0x3f];
+    result +=
+      b1 === undefined ? "=" : ALPHABET[((b1 & 0x0f) << 2) | (b2 === undefined ? 0 : b2 >> 6)];
+    result += b2 === undefined ? "=" : ALPHABET[b2 & 0x3f];
   }
-  if (variant === 'base64url') {
-    return result.replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+  if (variant === "base64url") {
+    return result.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
   }
   return result;
 }
 
 /** Encode a Uint8Array to base64url string (URL-safe base64, no padding). */
 export function encodeBase64Url(buffer: Uint8Array): string {
-  return encodeBase64(buffer, 'base64url');
+  return encodeBase64(buffer, "base64url");
 }
 
 /**
@@ -57,8 +61,11 @@ export function encodeBase64Url(buffer: Uint8Array): string {
  * @param base64 - The base64 string to decode
  * @param variant - The encoding variant ('base64' or 'base64url') — must match the encoder's variant
  */
-export function decodeBase64(base64: string, variant: 'base64' | 'base64url' = 'base64'): Uint8Array {
-  const input = variant === 'base64url' ? base64.replaceAll('-', '+').replaceAll('_', '/') : base64;
+export function decodeBase64(
+  base64: string,
+  variant: "base64" | "base64url" = "base64",
+): Uint8Array {
+  const input = variant === "base64url" ? base64.replaceAll("-", "+").replaceAll("_", "/") : base64;
 
   const bytes: number[] = [];
   let buffer = 0;

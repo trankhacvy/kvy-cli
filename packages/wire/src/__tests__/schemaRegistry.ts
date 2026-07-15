@@ -1,5 +1,5 @@
-import type { z } from 'zod';
-import * as wire from '../index';
+import type { z } from "zod";
+import * as wire from "../index";
 
 /**
  * Every wire schema covered by the additive-only compat check. Add new

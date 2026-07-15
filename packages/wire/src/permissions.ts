@@ -1,10 +1,10 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * The four Claude-Code-style permission modes a session can run under.
  * `setMode` RPC and `mode-switch`/`perm-request` events all reuse this.
  */
-export const PermissionModeSchema = z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions']);
+export const PermissionModeSchema = z.enum(["default", "acceptEdits", "plan", "bypassPermissions"]);
 export type PermissionMode = z.infer<typeof PermissionModeSchema>;
 
 /**
@@ -12,18 +12,18 @@ export type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * `perm-resolve` session event and the `perm.answer` session RPC (design
  * §4.2, §7.6).
  */
-export const PermDecisionSchema = z.discriminatedUnion('kind', [
+export const PermDecisionSchema = z.discriminatedUnion("kind", [
   z.object({
-    kind: z.literal('allow'),
-    scope: z.enum(['once', 'session']),
+    kind: z.literal("allow"),
+    scope: z.enum(["once", "session"]),
     updatedInput: z.unknown().optional(),
   }),
   z.object({
-    kind: z.literal('deny'),
+    kind: z.literal("deny"),
     message: z.string().optional(),
   }),
   z.object({
-    kind: z.literal('mode'),
+    kind: z.literal("mode"),
     mode: PermissionModeSchema,
   }),
 ]);

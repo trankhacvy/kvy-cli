@@ -16,8 +16,8 @@
  * Deliberately isomorphic and dependency-free of `./encryption(.web).ts` so
  * it needs no platform split — one file, one implementation, both targets.
  */
-import tweetnacl from 'tweetnacl';
-import type { KeyTree } from './types.js';
+import tweetnacl from "tweetnacl";
+import type { KeyTree } from "./types.js";
 
 const HMAC_BLOCK_SIZE = 128; // SHA-512 block size in bytes
 
@@ -60,9 +60,9 @@ function deriveDomainSeed(masterSecret: Uint8Array, label: string): Uint8Array {
 }
 
 function toHex(bytes: Uint8Array): string {
-  let hex = '';
+  let hex = "";
   for (const byte of bytes) {
-    hex += byte.toString(16).padStart(2, '0');
+    hex += byte.toString(16).padStart(2, "0");
   }
   return hex;
 }
@@ -72,10 +72,10 @@ function toHex(bytes: Uint8Array): string {
  * Deterministic: the same masterSecret always yields the same tree.
  */
 export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
-  const authSeed = deriveDomainSeed(masterSecret, 'falcon-auth');
-  const contentSeed = deriveDomainSeed(masterSecret, 'falcon-content');
-  const anonSeed = deriveDomainSeed(masterSecret, 'falcon-anon');
-  const blobMasterKey = deriveDomainSeed(masterSecret, 'falcon-blob-master');
+  const authSeed = deriveDomainSeed(masterSecret, "falcon-auth");
+  const contentSeed = deriveDomainSeed(masterSecret, "falcon-content");
+  const anonSeed = deriveDomainSeed(masterSecret, "falcon-anon");
+  const blobMasterKey = deriveDomainSeed(masterSecret, "falcon-blob-master");
 
   const signing = tweetnacl.sign.keyPair.fromSeed(authSeed);
 
@@ -87,8 +87,14 @@ export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
   const content = tweetnacl.box.keyPair.fromSecretKey(contentSecretKey);
 
   return {
-    signing: { publicKey: new Uint8Array(signing.publicKey), secretKey: new Uint8Array(signing.secretKey) },
-    content: { publicKey: new Uint8Array(content.publicKey), secretKey: new Uint8Array(contentSecretKey) },
+    signing: {
+      publicKey: new Uint8Array(signing.publicKey),
+      secretKey: new Uint8Array(signing.secretKey),
+    },
+    content: {
+      publicKey: new Uint8Array(content.publicKey),
+      secretKey: new Uint8Array(contentSecretKey),
+    },
     anonId: toHex(anonSeed).slice(0, 16),
     blobMasterKey,
   };

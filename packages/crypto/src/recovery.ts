@@ -12,12 +12,12 @@
  * Base32 alphabet (RFC 4648) minus the four characters normalization maps
  * away from (0, 1, 8, 9) — see `normalize` below.
  */
-const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 const GROUP_SIZE = 5;
 const MASTER_SECRET_LENGTH = 32;
 
 function bytesToBase32(bytes: Uint8Array): string {
-  let result = '';
+  let result = "";
   let buffer = 0;
   let bufferLength = 0;
 
@@ -44,12 +44,12 @@ function base32ToBytes(base32: string): Uint8Array | null {
   // 0 (zero) -> O, 1 (one) -> I, 8 -> B, 9 -> G (arbitrary but consistent).
   const normalized = base32
     .toUpperCase()
-    .replaceAll('0', 'O')
-    .replaceAll('1', 'I')
-    .replaceAll('8', 'B')
-    .replaceAll('9', 'G');
+    .replaceAll("0", "O")
+    .replaceAll("1", "I")
+    .replaceAll("8", "B")
+    .replaceAll("9", "G");
 
-  const cleaned = normalized.replace(/[^A-Z2-7]/g, '');
+  const cleaned = normalized.replace(/[^A-Z2-7]/g, "");
   if (cleaned.length === 0) {
     return null;
   }
@@ -85,7 +85,7 @@ export function encodeRecoveryCode(masterSecret: Uint8Array): string {
   for (let i = 0; i < base32.length; i += GROUP_SIZE) {
     groups.push(base32.slice(i, i + GROUP_SIZE));
   }
-  return groups.join('-');
+  return groups.join("-");
 }
 
 /**

@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { EncryptedBoxSchema, VersionedSchema } from './box';
+import { z } from "zod";
+import { EncryptedBoxSchema, VersionedSchema } from "./box";
 
 /**
  * Wire-visible row shapes for `session-new`/`machine-new`/`unmanaged-new`
@@ -8,7 +8,7 @@ import { EncryptedBoxSchema, VersionedSchema } from './box';
  * an opaque `EncryptedBox`, the server never sends plaintext.
  */
 
-export const SessionStatusSchema = z.enum(['active', 'archived', 'failed', 'compacted']);
+export const SessionStatusSchema = z.enum(["active", "archived", "failed", "compacted"]);
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 
 export const SessionRowSchema = z.object({
