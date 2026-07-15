@@ -2,7 +2,7 @@
 
 > **Status:** stub — outline + pointers only. Expand this doc as
 > `@falcon/crypto` and its consumers actually land. Full detail currently
-> lives in [`falcon-system-design.md` §5`](../falcon-system-design.md#5-encryption-design-falconcrypto).
+> lives in [`falcon-system-design.md` §5](../falcon-system-design.md#5-encryption-design-falconcrypto).
 >
 > **Rule:** this file is updated in the same PR as any crypto change
 > (`plan.md` cross-cutting note). If key handling, wrapping, or the trust
