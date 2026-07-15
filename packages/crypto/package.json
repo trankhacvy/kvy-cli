@@ -1,0 +1,34 @@
+{
+  "name": "@falcon/crypto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Falcon's E2E encryption primitives — ported from Happy (github.com/slopus/happy, MIT). Isomorphic: node build (tweetnacl + node:crypto) and browser build (libsodium-wrappers + WebCrypto AES-GCM).",
+  "exports": {
+    ".": {
+      "import": { "types": "./dist/index.d.mts", "default": "./dist/index.mjs" },
+      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+    },
+    "./web": {
+      "import": { "types": "./dist/index.web.d.mts", "default": "./dist/index.web.mjs" },
+      "require": { "types": "./dist/index.web.d.cts", "default": "./dist/index.web.cjs" }
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "pkgroll",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "libsodium-wrappers": "^0.8.2",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "pkgroll": "^2.14.2",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  }
+}
