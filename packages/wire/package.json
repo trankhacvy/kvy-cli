@@ -20,7 +20,8 @@
   "scripts": {
     "build": "shx rm -rf dist && tsc --noEmit && pkgroll",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint:additive": "tsx scripts/check-additive-vs-base.ts"
   },
   "dependencies": {
     "@paralleldrive/cuid2": "^2.2.2",
@@ -30,6 +31,7 @@
     "@types/node": ">=20",
     "pkgroll": "^2.14.2",
     "shx": "^0.3.4",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.4"
   }
