@@ -638,8 +638,8 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 **0.4 Server foundation** — §3.2, §4
 - [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
-- [ ] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
-- [ ] `drizzle-kit generate` initial migration; migration-on-boot runner
+- [x] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
+- [x] `drizzle-kit generate` initial migration; migration-on-boot runner
 - [ ] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
 - [ ] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
 - [ ] `POST /v1/auth` Ed25519 challenge/response → account upsert by `signPublicKey` **(V** from `authRoutes.ts`**)**

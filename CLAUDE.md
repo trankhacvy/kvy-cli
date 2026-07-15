@@ -31,12 +31,30 @@ packages/
 ├─ crypto/    @falcon/crypto  E2E encryption primitives, isomorphic (node + browser builds).
 ├─ cli/       falcon          [planned] CLI: falcon / falcon-claude / falcon-codex bins.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
-│                             logging). Drizzle/Socket.IO/auth routes still [planned].
+│                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
+│                             migrations (`drizzle/`), migration-on-boot runner.
+│                             Socket.IO/auth routes still [planned].
 └─ web/       @falcon/web     [planned] Next.js PWA.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
 `build` / `typecheck` / `test` scripts consumed by the root turbo pipeline.
+
+## Database (`packages/server`)
+
+Drizzle ORM + Postgres. Schema lives in `packages/server/src/db/schema.ts`; every
+encrypted column uses the shared `bytea` custom type (raw ciphertext bytes, never
+decrypted server-side — design §5.3/§6.1). `DATABASE_URL` config env var, defaults to
+`postgres://falcon:falcon@localhost:5432/falcon` for local dev.
+
+```bash
+pnpm --filter @falcon/server db:generate   # drizzle-kit generate — diff schema.ts, emit drizzle/*.sql
+pnpm --filter @falcon/server db:migrate    # apply pending migrations once, standalone
+```
+
+Migrations also run automatically on server boot (`src/db/migrate.ts`, called from
+`main.ts` before `app.listen` — design §6.5: "migrate runs on boot"). Idempotent: safe
+to run against an already-current database.
 
 ## Conventions
 
