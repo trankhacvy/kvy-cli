@@ -6,8 +6,9 @@
  * recognizing which OS processes are Falcon's — an env var isn't usable
  * here: reading *another* process's environment portably requires
  * platform-specific privileges/APIs, whereas `ps` gives every process's
- * command line for free. This is deliberately the same style Happy's
- * `daemon/doctor.ts` uses (`cmd.includes(...)` matching), kept as an
+ * command line for free. This is deliberately the same style Happy —
+ * https://github.com/slopus/happy (MIT) — uses in `happy-cli/src/daemon/doctor.ts`'s
+ * `findAllHappyProcesses` (`cmd.includes(...)` matching), kept as an
  * explicit convention so the daemon spawner/singleton-lock work (a
  * separate, in-flight task) can stay compatible with it:
  *
