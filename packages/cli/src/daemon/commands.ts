@@ -95,10 +95,20 @@ function defaultRegisterShutdownSignals(onShutdown: () => void): () => void {
  * and the `bin/falcon.mjs` shim alike) with `daemon start-sync`, detached
  * and with stdio ignored so it survives the parent `start` command exiting.
  * Mirrors Happy's `spawnHappyCLI(['daemon', 'start-sync'], {detached: true})`.
+ *
+ * Also re-passes `process.execArgv` ahead of the entry path. Without this,
+ * dev mode (`tsx src/index.ts daemon start`) spawns a plain `node
+ * src/index.ts` child with none of tsx's `--require`/`--import` loader
+ * hooks, which fails outright (`SyntaxError: Cannot use import statement
+ * outside a module`) since node can't parse raw TypeScript on its own — the
+ * spawned `start-sync` would then never write `daemon.state.json`, and
+ * `start` would just time out waiting for it. `execArgv` is empty for the
+ * plain `node dist/index.mjs` / `bin/falcon.mjs` cases, so this is a no-op
+ * there.
  */
 function defaultSpawnStartSync(): void {
   const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
-  const child = spawn(process.execPath, [entry, "daemon", "start-sync"], {
+  const child = spawn(process.execPath, [...process.execArgv, entry, "daemon", "start-sync"], {
     detached: true,
     stdio: "ignore",
   });
