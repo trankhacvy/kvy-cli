@@ -16,6 +16,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@falcon/wire": "workspace:*",
+    "@paralleldrive/cuid2": "^2.2.2",
     "zod": "^4.0.0"
   },
   "devDependencies": {

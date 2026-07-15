@@ -1,0 +1,650 @@
+/**
+ * Maps Claude Code transcript entries (`RawJSONLines`, from `types.ts`) onto
+ * `@falcon/wire`'s `SessionEnvelope` stream — the shape the HTTP outbox
+ * (plan.md §6.5) batches, encrypts, and POSTs.
+ *
+ * Ported from happy-cli/src/claude/utils/sessionProtocolMapper.ts (MIT),
+ * fidelity (P) — the mapping *rules* are preserved verbatim (plan.md §16
+ * "1.4 Transcript pipeline"):
+ *
+ *  - assistant text block      -> `text`
+ *  - thinking block            -> `text{thinking:true}`
+ *  - non-Task `tool_use`       -> `tool-start`
+ *  - Task `tool_use`           -> subagent registration, NO parent card;
+ *                                 children of a not-yet-registered Task are
+ *                                 buffered and replayed once it registers
+ *  - `tool_result`             -> `tool-end`
+ *  - sidechain `user` message  -> subagent-scoped text
+ *
+ * Deltas from Happy, driven by `@falcon/wire`'s actual (already-merged)
+ * contract rather than Happy's own `happy-wire`:
+ *
+ *  - **No provider ids on the wire.** `session.ts`: "provider-native ids
+ *    (`toolu_*`, Codex item ids) never cross the wire, only adapter-minted
+ *    `call`/`reqId` strings." So every provider id (`tool_use.id`,
+ *    `tool_result.tool_use_id`) is translated through a `Map<string,
+ *    string>` that mints a cuid2 the first time an id is seen and returns
+ *    the same cuid2 on every later reference — "provider-id -> cuid2 map"
+ *    per the task description, replacing Happy's own approach (a mix of a
+ *    random-mint map for tool calls and a deterministic sha256 hash for
+ *    subagents). One map is kept for tool `call` ids, a second for
+ *    `subagent` ids, since a Task's `tool_use.id` needs both a `call`
+ *    identity (defensively, see below) and a `subagent` identity.
+ *  - **No `usage` field.** `SessionEnvelope` carries no token-usage field at
+ *    all, so the usage-attachment logic from Happy's mapper has no
+ *    equivalent here and is dropped entirely.
+ *  - **No subagent title.** `sub-start` has no `title` field in
+ *    `SessionEventSchema` (unlike Happy's `{t:'start', title?}`), so
+ *    `pickTaskTitle`/`subagentTitles` has no equivalent here — the first
+ *    thing a client sees in a subagent's scope is its prompt text instead.
+ *  - **`text{md}` not `text{text}`.** `SessionEventSchema`'s text event
+ *    field is named `md`.
+ *  - **Only `Task` triggers subagent scope.** Happy also treated the older
+ *    `Agent` tool name as subagent-launching (visibly, with a shown parent
+ *    card); Claude Code's current tool set only uses `Task`, and the task
+ *    description calls out `Task` specifically, so that's the only trigger
+ *    ported.
+ *
+ * One piece of Happy's design is kept even though only `Task` triggers
+ * subagent scope: a `call`/`subagent` cuid2 is minted for *every* `tool_use`
+ * block, not only `Task`'s. This is what stops the orphan-buffer from
+ * deadlocking — a child message's `parent_tool_use_id` is resolved against
+ * this map on every message, and if the mapping doesn't exist yet the child
+ * is buffered forever waiting for a registration that will never come
+ * (e.g. a client resuming mid-session after the Task's own `tool_use` line
+ * already scrolled out of the reprocessed window). Minting eagerly for
+ * every tool call closes that gap at negligible cost — see maybeEmitSubagentStart.
+ */
+
+import { createEnvelope, type SessionEnvelope, type SessionEvent } from "@falcon/wire";
+import { createId } from "@paralleldrive/cuid2";
+import type { RawJSONLines } from "./types.js";
+
+/** `@falcon/wire` doesn't export this narrowed type on its own — derive it. */
+export type SessionTurnEndStatus = Extract<SessionEvent, { t: "turn-end" }>["status"];
+
+/**
+ * Mutable, per-session mapper state. Only `currentTurnId` is required —
+ * every other field is an internal, lazily-created map/set, following
+ * Happy's own state shape so tests can construct plain `{ currentTurnId:
+ * null }` literals without needing a factory.
+ */
+export interface ClaudeEnvelopeMapperState {
+  currentTurnId: string | null;
+  uuidToProviderSubagent?: Map<string, string>;
+  taskPromptToProviderSubagents?: Map<string, string[]>;
+  providerCallIds?: Map<string, string>;
+  providerSubagentIds?: Map<string, string>;
+  bufferedSubagentMessages?: Map<string, RawJSONLines[]>;
+  hiddenParentToolCalls?: Set<string>;
+  startedSubagents?: Set<string>;
+  activeSubagents?: Set<string>;
+}
+
+export function createClaudeEnvelopeMapperState(): ClaudeEnvelopeMapperState {
+  return { currentTurnId: null };
+}
+
+// --- lazy accessors for the optional state maps/sets ---
+
+function uuidToProviderSubagent(state: ClaudeEnvelopeMapperState): Map<string, string> {
+  if (!state.uuidToProviderSubagent) state.uuidToProviderSubagent = new Map();
+  return state.uuidToProviderSubagent;
+}
+
+function taskPromptToProviderSubagents(state: ClaudeEnvelopeMapperState): Map<string, string[]> {
+  if (!state.taskPromptToProviderSubagents) state.taskPromptToProviderSubagents = new Map();
+  return state.taskPromptToProviderSubagents;
+}
+
+function providerCallIds(state: ClaudeEnvelopeMapperState): Map<string, string> {
+  if (!state.providerCallIds) state.providerCallIds = new Map();
+  return state.providerCallIds;
+}
+
+function providerSubagentIds(state: ClaudeEnvelopeMapperState): Map<string, string> {
+  if (!state.providerSubagentIds) state.providerSubagentIds = new Map();
+  return state.providerSubagentIds;
+}
+
+function bufferedSubagentMessages(state: ClaudeEnvelopeMapperState): Map<string, RawJSONLines[]> {
+  if (!state.bufferedSubagentMessages) state.bufferedSubagentMessages = new Map();
+  return state.bufferedSubagentMessages;
+}
+
+function hiddenParentToolCalls(state: ClaudeEnvelopeMapperState): Set<string> {
+  if (!state.hiddenParentToolCalls) state.hiddenParentToolCalls = new Set();
+  return state.hiddenParentToolCalls;
+}
+
+function startedSubagents(state: ClaudeEnvelopeMapperState): Set<string> {
+  if (!state.startedSubagents) state.startedSubagents = new Set();
+  return state.startedSubagents;
+}
+
+function activeSubagents(state: ClaudeEnvelopeMapperState): Set<string> {
+  if (!state.activeSubagents) state.activeSubagents = new Set();
+  return state.activeSubagents;
+}
+
+// --- provider-id -> cuid2 mapping ---
+
+/** Mints a cuid2 for a provider id the first time it's seen; stable after. */
+function mintedId(map: Map<string, string>, providerId: string): string {
+  const existing = map.get(providerId);
+  if (existing) return existing;
+  const minted = createId();
+  map.set(providerId, minted);
+  return minted;
+}
+
+/** Looks up an already-minted subagent cuid2 without minting a new one. */
+function lookupSubagentId(
+  state: ClaudeEnvelopeMapperState,
+  providerSubagent: string,
+): string | undefined {
+  return providerSubagentIds(state).get(providerSubagent);
+}
+
+// --- narrow accessors onto the passthrough'd raw JSONL shape ---
+// `RawJSONLinesSchema` (types.ts) deliberately validates only the dedup-key
+// fields; everything else — `message.*`, `parentUuid`, `isSidechain`,
+// `parent_tool_use_id` — is real at runtime (Claude Code writes it) but
+// untyped, so these accessors cast narrowly, matching Happy's own
+// `pickUuid`/`pickParentUuid`-style helpers.
+
+interface RawTextBlock {
+  type: "text";
+  text?: unknown;
+}
+interface RawThinkingBlock {
+  type: "thinking";
+  thinking?: unknown;
+}
+interface RawToolUseBlock {
+  type: "tool_use";
+  id?: unknown;
+  name?: unknown;
+  input?: unknown;
+}
+interface RawToolResultBlock {
+  type: "tool_result";
+  tool_use_id?: unknown;
+  content?: unknown;
+  is_error?: unknown;
+}
+type RawContentBlock =
+  | RawTextBlock
+  | RawThinkingBlock
+  | RawToolUseBlock
+  | RawToolResultBlock
+  | { type: unknown };
+
+function pickUuid(message: RawJSONLines): string | undefined {
+  const raw = message as unknown as { uuid?: unknown };
+  return typeof raw.uuid === "string" && raw.uuid.length > 0 ? raw.uuid : undefined;
+}
+
+function pickParentUuid(message: RawJSONLines): string | undefined {
+  const raw = message as unknown as { parentUuid?: unknown; parentUUID?: unknown };
+  if (typeof raw.parentUuid === "string" && raw.parentUuid.length > 0) return raw.parentUuid;
+  if (typeof raw.parentUUID === "string" && raw.parentUUID.length > 0) return raw.parentUUID;
+  return undefined;
+}
+
+function isSidechainMessage(message: RawJSONLines): boolean {
+  return (message as unknown as { isSidechain?: unknown }).isSidechain === true;
+}
+
+function isMetaMessage(message: RawJSONLines): boolean {
+  return (message as unknown as { isMeta?: unknown }).isMeta === true;
+}
+
+function isCompactSummaryMessage(message: RawJSONLines): boolean {
+  return (message as unknown as { isCompactSummary?: unknown }).isCompactSummary === true;
+}
+
+function pickExplicitProviderSubagent(message: RawJSONLines): string | undefined {
+  const raw = message as unknown as { parent_tool_use_id?: unknown; parentToolUseId?: unknown };
+  if (typeof raw.parent_tool_use_id === "string" && raw.parent_tool_use_id.length > 0) {
+    return raw.parent_tool_use_id;
+  }
+  if (typeof raw.parentToolUseId === "string" && raw.parentToolUseId.length > 0) {
+    return raw.parentToolUseId;
+  }
+  return undefined;
+}
+
+function pickMessageContent(message: RawJSONLines): unknown {
+  return (message as unknown as { message?: { content?: unknown } }).message?.content;
+}
+
+function pickContentBlocks(message: RawJSONLines): RawContentBlock[] {
+  const content = pickMessageContent(message);
+  return Array.isArray(content) ? (content as RawContentBlock[]) : [];
+}
+
+function normalizePrompt(prompt: string): string {
+  return prompt.trim();
+}
+
+function pickSidechainRootPrompt(message: RawJSONLines): string | undefined {
+  if (message.type !== "user") return undefined;
+  const content = pickMessageContent(message);
+  if (typeof content !== "string") return undefined;
+  const normalized = normalizePrompt(content);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function pickTaskPrompt(input: unknown): string | undefined {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return undefined;
+  const prompt = (input as { prompt?: unknown }).prompt;
+  if (typeof prompt !== "string") return undefined;
+  const normalized = normalizePrompt(prompt);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function toToolArgs(input: unknown): Record<string, unknown> {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return input as Record<string, unknown>;
+  }
+  if (input === undefined) return {};
+  return { input };
+}
+
+function toolTitle(name: string, input: unknown): string {
+  if (input && typeof input === "object") {
+    const description = (input as { description?: unknown }).description;
+    if (typeof description === "string" && description.trim().length > 0) {
+      return description.length > 80 ? `${description.slice(0, 77)}...` : description;
+    }
+  }
+  return `${name} call`;
+}
+
+// --- Task-prompt -> subagent fallback matching ---
+// Some transcripts (see __fixtures__/task-non-sdk.jsonl) never set
+// `parent_tool_use_id` on a subagent's messages — the only link back to the
+// launching `Task` call is that the sidechain's root `user` message content
+// equals the `Task` tool_use's `prompt` input, verbatim.
+
+function queueTaskPromptSubagent(
+  state: ClaudeEnvelopeMapperState,
+  prompt: string,
+  providerSubagent: string,
+): void {
+  const normalized = normalizePrompt(prompt);
+  if (normalized.length === 0) return;
+  const map = taskPromptToProviderSubagents(state);
+  const queue = map.get(normalized) ?? [];
+  if (!queue.includes(providerSubagent)) queue.push(providerSubagent);
+  map.set(normalized, queue);
+}
+
+function consumeTaskPromptSubagent(
+  state: ClaudeEnvelopeMapperState,
+  prompt: string,
+): string | undefined {
+  const normalized = normalizePrompt(prompt);
+  if (normalized.length === 0) return undefined;
+  const map = taskPromptToProviderSubagents(state);
+  const queue = map.get(normalized);
+  if (!queue || queue.length === 0) return undefined;
+  const providerSubagent = queue.shift();
+  if (queue.length === 0) map.delete(normalized);
+  return providerSubagent;
+}
+
+/** Last-resort fallback: exactly one Task is pending with no better match. */
+function consumeSinglePendingTaskSubagent(state: ClaudeEnvelopeMapperState): string | undefined {
+  const map = taskPromptToProviderSubagents(state);
+  let candidateKey: string | null = null;
+  let candidateSubagent: string | null = null;
+
+  for (const [prompt, queue] of map.entries()) {
+    if (queue.length === 0) continue;
+    if (candidateKey !== null) return undefined; // more than one candidate: ambiguous
+    candidateKey = prompt;
+    candidateSubagent = queue[0] ?? null;
+  }
+  if (!candidateKey || !candidateSubagent) return undefined;
+
+  const queue = map.get(candidateKey);
+  if (!queue || queue.length === 0) return undefined;
+  queue.shift();
+  if (queue.length === 0) map.delete(candidateKey);
+  return candidateSubagent;
+}
+
+// --- subagent scope resolution ---
+
+function resolveProviderSubagent(
+  message: RawJSONLines,
+  state: ClaudeEnvelopeMapperState,
+): string | undefined {
+  const explicit = pickExplicitProviderSubagent(message);
+  if (explicit) return explicit;
+
+  const parentUuid = pickParentUuid(message);
+  if (parentUuid) {
+    const inherited = uuidToProviderSubagent(state).get(parentUuid);
+    if (inherited) return inherited;
+  }
+
+  if (!isSidechainMessage(message)) return undefined;
+
+  const prompt = pickSidechainRootPrompt(message);
+  if (prompt) {
+    const matched = consumeTaskPromptSubagent(state, prompt);
+    if (matched) return matched;
+  }
+
+  if (!parentUuid) return consumeSinglePendingTaskSubagent(state);
+  return undefined;
+}
+
+function rememberSubagentForMessage(
+  message: RawJSONLines,
+  state: ClaudeEnvelopeMapperState,
+  providerSubagent: string | undefined,
+): void {
+  if (!providerSubagent) return;
+  const uuid = pickUuid(message);
+  if (!uuid) return;
+  uuidToProviderSubagent(state).set(uuid, providerSubagent);
+}
+
+function bufferForSubagent(
+  state: ClaudeEnvelopeMapperState,
+  providerSubagent: string,
+  message: RawJSONLines,
+): void {
+  const buffer = bufferedSubagentMessages(state);
+  const queue = buffer.get(providerSubagent) ?? [];
+  queue.push(message);
+  buffer.set(providerSubagent, queue);
+}
+
+function consumeBufferedMessages(
+  state: ClaudeEnvelopeMapperState,
+  providerSubagent: string,
+): RawJSONLines[] {
+  const buffer = bufferedSubagentMessages(state);
+  const queue = buffer.get(providerSubagent) ?? [];
+  buffer.delete(providerSubagent);
+  return queue;
+}
+
+// --- turn lifecycle ---
+
+function ensureTurn(state: ClaudeEnvelopeMapperState, envelopes: SessionEnvelope[]): string {
+  if (state.currentTurnId) return state.currentTurnId;
+  const turnId = createId();
+  envelopes.push(createEnvelope("agent", { t: "turn-start" }, { turn: turnId }));
+  state.currentTurnId = turnId;
+  return turnId;
+}
+
+function maybeEmitSubagentStart(
+  state: ClaudeEnvelopeMapperState,
+  turn: string,
+  subagent: string | undefined,
+  envelopes: SessionEnvelope[],
+): void {
+  if (!subagent) return;
+  const started = startedSubagents(state);
+  if (started.has(subagent)) return;
+  envelopes.push(createEnvelope("agent", { t: "sub-start" }, { turn, subagent }));
+  started.add(subagent);
+  activeSubagents(state).add(subagent);
+}
+
+function maybeEmitSubagentStop(
+  state: ClaudeEnvelopeMapperState,
+  turn: string,
+  subagent: string,
+  envelopes: SessionEnvelope[],
+): void {
+  const active = activeSubagents(state);
+  if (!active.has(subagent)) return;
+  envelopes.push(createEnvelope("agent", { t: "sub-stop" }, { turn, subagent }));
+  active.delete(subagent);
+}
+
+function emitActiveSubagentStops(
+  state: ClaudeEnvelopeMapperState,
+  turn: string,
+  envelopes: SessionEnvelope[],
+): void {
+  const active = activeSubagents(state);
+  for (const subagent of active) {
+    envelopes.push(createEnvelope("agent", { t: "sub-stop" }, { turn, subagent }));
+  }
+  active.clear();
+}
+
+function clearSubagentTracking(state: ClaudeEnvelopeMapperState): void {
+  uuidToProviderSubagent(state).clear();
+  taskPromptToProviderSubagents(state).clear();
+  providerCallIds(state).clear();
+  providerSubagentIds(state).clear();
+  bufferedSubagentMessages(state).clear();
+  hiddenParentToolCalls(state).clear();
+  startedSubagents(state).clear();
+  activeSubagents(state).clear();
+}
+
+function closeTurn(
+  state: ClaudeEnvelopeMapperState,
+  status: SessionTurnEndStatus,
+  envelopes: SessionEnvelope[],
+): void {
+  if (!state.currentTurnId) return;
+  emitActiveSubagentStops(state, state.currentTurnId, envelopes);
+  envelopes.push(createEnvelope("agent", { t: "turn-end", status }, { turn: state.currentTurnId }));
+  state.currentTurnId = null;
+  clearSubagentTracking(state);
+}
+
+/** Force-closes the current turn (crash/cancel) — no transcript line drives this. */
+export function closeClaudeTurnWithStatus(
+  state: ClaudeEnvelopeMapperState,
+  status: SessionTurnEndStatus,
+): SessionEnvelope[] {
+  const envelopes: SessionEnvelope[] = [];
+  closeTurn(state, status, envelopes);
+  return envelopes;
+}
+
+/**
+ * Maps one parsed Claude Code transcript line to zero or more
+ * `SessionEnvelope`s, mutating `state` in place (turn id, id maps, subagent
+ * tracking) so the next call sees a consistent session.
+ */
+export function mapClaudeToEnvelopes(
+  message: RawJSONLines,
+  state: ClaudeEnvelopeMapperState,
+): SessionEnvelope[] {
+  const envelopes: SessionEnvelope[] = [];
+
+  const providerSubagent = resolveProviderSubagent(message, state);
+  const subagent = providerSubagent ? lookupSubagentId(state, providerSubagent) : undefined;
+  rememberSubagentForMessage(message, state, providerSubagent);
+
+  if (providerSubagent && !subagent) {
+    bufferForSubagent(state, providerSubagent, message);
+    return envelopes;
+  }
+
+  if (message.type === "summary" || message.type === "system") return envelopes;
+  if (message.type === "assistant" && isCompactSummaryMessage(message)) return envelopes;
+
+  if (message.type === "assistant") {
+    const turnId = ensureTurn(state, envelopes);
+    maybeEmitSubagentStart(state, turnId, subagent, envelopes);
+
+    for (const block of pickContentBlocks(message)) {
+      if (block.type === "text" && typeof (block as RawTextBlock).text === "string") {
+        envelopes.push(
+          createEnvelope(
+            "agent",
+            { t: "text", md: (block as RawTextBlock).text as string },
+            { turn: turnId, subagent },
+          ),
+        );
+        continue;
+      }
+
+      if (block.type === "thinking" && typeof (block as RawThinkingBlock).thinking === "string") {
+        envelopes.push(
+          createEnvelope(
+            "agent",
+            { t: "text", md: (block as RawThinkingBlock).thinking as string, thinking: true },
+            { turn: turnId, subagent },
+          ),
+        );
+        continue;
+      }
+
+      if (block.type === "tool_use") {
+        const toolUseBlock = block as RawToolUseBlock;
+        const providerCallId =
+          typeof toolUseBlock.id === "string" && toolUseBlock.id.length > 0
+            ? toolUseBlock.id
+            : createId();
+        const name =
+          typeof toolUseBlock.name === "string" && toolUseBlock.name.length > 0
+            ? toolUseBlock.name
+            : "unknown";
+
+        // Mint (or fetch) a subagent identity for every tool call, not just
+        // `Task` — see file header: this is what stops an orphaned child
+        // whose parent call turns out not to be `Task` from buffering
+        // forever.
+        mintedId(providerSubagentIds(state), providerCallId);
+
+        if (name === "Task") {
+          const prompt = pickTaskPrompt(toolUseBlock.input);
+          if (prompt) queueTaskPromptSubagent(state, prompt, providerCallId);
+          hiddenParentToolCalls(state).add(providerCallId);
+
+          for (const bufferedMessage of consumeBufferedMessages(state, providerCallId)) {
+            envelopes.push(...mapClaudeToEnvelopes(bufferedMessage, state));
+          }
+          continue;
+        }
+
+        const call = mintedId(providerCallIds(state), providerCallId);
+        const title = toolTitle(name, toolUseBlock.input);
+        envelopes.push(
+          createEnvelope(
+            "agent",
+            { t: "tool-start", call, name, title, args: toToolArgs(toolUseBlock.input) },
+            { turn: turnId, subagent },
+          ),
+        );
+
+        // Defensive flush: see the `mintedId` call above — a child could
+        // have buffered against this call id even though it isn't a `Task`.
+        for (const bufferedMessage of consumeBufferedMessages(state, providerCallId)) {
+          envelopes.push(...mapClaudeToEnvelopes(bufferedMessage, state));
+        }
+      }
+    }
+
+    return envelopes;
+  }
+
+  if (message.type === "user") {
+    // SDK-injected synthetic user messages (isMeta) feed a prompt back to
+    // Claude without a human ever seeing it — skip, or a 10-20k character
+    // wall of text lands in the chat as if the user typed it.
+    if (isMetaMessage(message)) return envelopes;
+
+    const content = pickMessageContent(message);
+
+    if (typeof content === "string") {
+      if (isSidechainMessage(message)) {
+        const turnId = ensureTurn(state, envelopes);
+        maybeEmitSubagentStart(state, turnId, subagent, envelopes);
+        envelopes.push(
+          createEnvelope("agent", { t: "text", md: content }, { turn: turnId, subagent }),
+        );
+      } else {
+        closeTurn(state, "completed", envelopes);
+        envelopes.push(createEnvelope("user", { t: "text", md: content }));
+      }
+      return envelopes;
+    }
+
+    const blocks = pickContentBlocks(message);
+    if (blocks.length === 0) return envelopes;
+
+    const hasToolResult = blocks.some((block) => block.type === "tool_result");
+    const sidechain = isSidechainMessage(message);
+
+    if (!sidechain && !hasToolResult) {
+      closeTurn(state, "completed", envelopes);
+      for (const block of blocks) {
+        if (block.type === "text" && typeof (block as RawTextBlock).text === "string") {
+          const text = (block as RawTextBlock).text as string;
+          if (text.trim().length > 0)
+            envelopes.push(createEnvelope("user", { t: "text", md: text }));
+        }
+      }
+      return envelopes;
+    }
+
+    const turnId = ensureTurn(state, envelopes);
+    if (sidechain) maybeEmitSubagentStart(state, turnId, subagent, envelopes);
+
+    for (const block of blocks) {
+      if (block.type === "tool_result") {
+        const resultBlock = block as RawToolResultBlock;
+        const providerCallId =
+          typeof resultBlock.tool_use_id === "string" ? resultBlock.tool_use_id : undefined;
+        if (!providerCallId) continue;
+
+        const subagentForResult = lookupSubagentId(state, providerCallId);
+        if (!sidechain) {
+          if (hiddenParentToolCalls(state).has(providerCallId)) {
+            if (subagentForResult)
+              maybeEmitSubagentStop(state, turnId, subagentForResult, envelopes);
+            hiddenParentToolCalls(state).delete(providerCallId);
+            continue; // Task's call was never shown — no tool-end for it.
+          }
+          if (subagentForResult) maybeEmitSubagentStop(state, turnId, subagentForResult, envelopes);
+        }
+
+        const call = mintedId(providerCallIds(state), providerCallId);
+        const ok = resultBlock.is_error !== true;
+        envelopes.push(
+          createEnvelope(
+            "agent",
+            {
+              t: "tool-end",
+              call,
+              ok,
+              ...(resultBlock.content !== undefined ? { output: resultBlock.content } : {}),
+            },
+            { turn: turnId, subagent },
+          ),
+        );
+        continue;
+      }
+
+      if (block.type === "text" && typeof (block as RawTextBlock).text === "string") {
+        const text = (block as RawTextBlock).text as string;
+        if (text.trim().length > 0) {
+          envelopes.push(
+            createEnvelope("agent", { t: "text", md: text }, { turn: turnId, subagent }),
+          );
+        }
+      }
+    }
+
+    return envelopes;
+  }
+
+  return envelopes;
+}
