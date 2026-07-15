@@ -1,0 +1,32 @@
+/**
+ * @falcon/crypto — browser entry point ("@falcon/crypto/web"). libsodium-wrappers
+ * + WebCrypto AES-GCM. Call `await ready` once before using anything else from
+ * this module (libsodium's WASM module needs to initialize) — see encryption.web.ts.
+ *
+ * Two functions differ in shape from the node build (`encryptWithDataKey`,
+ * `decryptWithDataKey`, and therefore `seal`/`open`) because they're async
+ * here — WebCrypto has no synchronous API. Wire formats are identical; a
+ * ciphertext produced by one platform decrypts fine on the other.
+ */
+export * from './types.js';
+export * from './base64.js';
+export {
+  ready,
+  getRandomBytes,
+  libsodiumPublicKeyFromSecretKey,
+  libsodiumEncryptForPublicKey,
+  libsodiumDecryptWithSecretKey,
+  encryptLegacy,
+  decryptLegacy,
+  encryptBlob,
+  decryptBlob,
+  encryptWithDataKey,
+  decryptWithDataKey,
+  encrypt,
+  decrypt,
+  authChallenge,
+} from './encryption.web.js';
+export { seal, open } from './box.web.js';
+export { deriveKeyTree } from './keys.js';
+export { wrapDek, unwrapDek } from './dek.web.js';
+export { encodeRecoveryCode, decodeRecoveryCode } from './recovery.js';
