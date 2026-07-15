@@ -1470,3 +1470,97 @@ roughly 28-29/135 (~21%), matching Cycle 11/12's projection.
    land-branch wins**, re-applying only its own new commits (route + test)
    per the standing caution since Cycle 10, to avoid double-applying
    shared prerequisite commits.
+
+## Cycle 14 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `4121603` "chore: cycle 13 — completed 1 task")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 4/4 packages clean (`@falcon/crypto`,
+  `@falcon/server`, `@falcon/wire`, `falcon`/`packages/cli`), all cache hits
+  (turbo, content-identical to last verified run).
+- `pnpm test` → **PASSED**: 8/8 turbo tasks green, 202/202 tests, 0
+  failures — `falcon`/`packages/cli` 58, `@falcon/wire` 61, `@falcon/crypto`
+  65, `@falcon/server` 18.
+
+### Task-summary files requested this cycle
+
+1. **`task-summary/P0-land-0.4-worktrees-onto-main.md`** — **does not exist
+   on `main`** (`/bin/ls task-summary/` → 15 files, this is not one of
+   them). Confirmed via `git merge-base --is-ancestor
+   P0-land-0.4-worktrees-onto-main main` → **not an ancestor** — the branch
+   exists as a worktree (`.worktrees/P0-land-0.4-worktrees-onto-main`, tip
+   `03ff892`) but was never merged into `main`. Live check:
+   `P0-0.4-auth-challenge-route` is also separately unmerged (`git
+   merge-base --is-ancestor` → not an ancestor). `packages/server/src/`
+   on `main` still only has `app/` (server.ts, health.ts) + `config.ts` +
+   `logger.ts` + `main.ts` — no `db/`, no auth route, no seq allocator. Zero
+   change from Cycle 11–13's assessment.
+2. **`task-summary/P1-land-cli-scaffold-onto-main.md`** — **exists on
+   `main`** and was read. Describes the (already-landed, per Cycle 13)
+   merge of `P1-land-cli-scaffold` onto `main`'s then-tip, plus a
+   reconciliation merge with `main`'s cycle-12 tip (`cc17a14`). Matches what
+   is live and green on `main` today: `packages/cli` present, 202/202 tests
+   passing. No new action needed — `plan.md` line 671 was already `[x]`
+   (dated by Cycle 13's re-verification stamp on the `1.3 CLI skeleton`
+   section header); this cycle's fresh `pnpm typecheck`/`pnpm test` run
+   reconfirms it still holds against current `main`.
+3. **`task-summary/P1-land-web-scaffold-onto-main.md`** — **does not exist
+   on `main`** (same 15-file check). Confirmed via `git merge-base
+   --is-ancestor P1-land-web-scaffold-onto-main main` → **not an ancestor**.
+   `packages/` on `main` still only has `cli`, `crypto`, `server`, `wire` —
+   no `web` directory. Zero change from Cycle 11–13's assessment.
+
+### Tasks completed this cycle
+
+**None newly landed.** Of the three task-summaries the orchestrator
+requested, only `P1-land-cli-scaffold-onto-main` corresponds to code
+actually merged into `main` — and that was already verified and checked off
+in Cycle 13, so no new checkbox flip was made this cycle (flipping an
+already-`[x]` line would be a no-op and risks losing Cycle 13's dated
+note). `P0-land-0.4-worktrees-onto-main` and `P1-land-web-scaffold-onto-main`
+remain unmerged worktrees with no corresponding task-summary file on `main`;
+no `plan.md` changes were made for either, consistent with the standing
+"only flip a checkbox when the summary file exists on `main` and the code is
+verified live" convention. `plan.md` checkbox count: **22/135** (`grep -c
+'^- \[x\]'` / `'^- \[ \]'` → 22 / 113), unchanged from Cycle 13.
+
+### Blockers / issues found
+
+1. **Two of three requested task-summaries still don't exist on `main`,
+   and their branches are still unmerged** — same gap flagged every cycle
+   since Cycle 9 (`0.4`) and Cycle 11 (`web`). Both now have `-onto-main`
+   land-attempt worktrees sitting alongside their originals
+   (`P0-land-0.4-worktrees-onto-main` tip `03ff892`,
+   `P1-land-web-scaffold-onto-main` tip `9b2c7bf`), still unlanded despite
+   their own task-summaries presumably claiming success inside those
+   worktrees. The CLI gap closed this way (Cycle 12→13); these two have not.
+2. `P0-0.4-auth-challenge-route` still needs the sequencing care flagged
+   since Cycle 10/11 (don't double-apply `drizzle-schema`/`auth-module` when
+   it eventually lands relative to `P0-land-0.4-worktrees`).
+3. No `pnpm lint` run this cycle (out of this role's required gate, per
+   instructions — only `typecheck`/`test`, both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **22 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (1/8), 1.3 (1/9) — unchanged from Cycle 13.
+**Completion: ~16.3%** (22/135), verified against a green `pnpm
+typecheck`/`pnpm test` run covering all 4 packages now on `main` (202 tests
+total). If `P0-land-0.4-worktrees`(-onto-main) and
+`P1-land-web-scaffold`(-onto-main) land next, completion would jump to
+roughly 28-29/135 (~21%), matching prior cycles' projection.
+
+### Next recommended tasks
+
+1. **Land `P0-land-0.4-worktrees-onto-main`** — same #1 recommendation
+   carried since Cycle 9, now the largest remaining gap: would close 4 of
+   `0.4`'s remaining 7 bullets in one merge (drizzle schema, docker-compose,
+   auth module, seq allocator).
+2. **Land `P1-land-web-scaffold-onto-main`** — brings `packages/web` onto
+   `main`, closing `1.6`'s lead bullet.
+3. **Sequence `P0-0.4-auth-challenge-route` on top of whichever `0.4`
+   land-branch wins**, re-applying only its own new commits (route + test)
+   per the standing caution since Cycle 10, to avoid double-applying shared
+   prerequisite commits.
