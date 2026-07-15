@@ -8,6 +8,58 @@ work (plan.md §16, "1.1 Server realtime (read path)" + "1.2 Server write path
 and self-verified this work but none had ever reached the shared `main` ref — each
 "land" attempt only ever merged inside its own disposable, throwaway worktree.
 
+## Update (this session): catch-up merge with main's later tip
+
+This branch's tip (`2f20499`) already contained the full merge described below
+(sections "What was actually done" through "Verification commands") from a prior
+session — verified on arrival that `packages/server/src/{app/socket.ts,
+app/socket/rpcHandler.ts, app/routes/sync.ts, db/box.ts, db/errors.ts, db/types.ts}`
+genuinely exist in this worktree (`Read`-verified, not just `find`/shell output) and
+that `plan.md`'s §16 1.1/1.2 boxes were already `[x]`. `2f20499` itself only added
+this task-summary file (114 lines) — no code or plan.md change — confirmed via
+`git show --stat 2f20499`.
+
+Since then `main` had advanced 4 more commits past this branch's `b75b8df` fork
+point, including a **real feature commit** (`P1-1.3-hook-server`, adding
+`packages/cli/src/claude/hookServer.ts` — not just the "3 docs-only chore commits"
+the task description described). To close that gap I ran `git merge --no-ff main`
+inside this worktree: conflict-free except `plan.md`'s 1.1 narrative paragraph
+(main's tracker had written a stale "cycle 27, not yet landed" note describing this
+very branch before it existed as a fast-forward candidate; resolved by hand, kept
+this branch's accurate `[x]` state and folded both narratives together). Re-ran
+`pnpm build`/`typecheck`/`test` (forced, cache-bypassed turbo) after resolving: 5/5
+build, 7/7 typecheck, 9/9 test tasks, 463 tests total (`@falcon/wire` 61,
+`@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server` 140/20 files, `falcon` (cli)
+161/14 files). Committed as `d60e46e`.
+
+**On "checkout main and merge":** the task description's literal steps
+(`git checkout main` in this worktree, then `git merge --no-ff <this branch>`) are
+not executable from inside this worktree — `git checkout main` fails outright
+(`fatal: 'main' is already checked out at <repo-root>`), since `main` is the branch
+checked out in the primary, non-worktree repo directory, and a branch can only be
+checked out in one worktree at a time. Combined with this task's own "Key rules"
+("do NOT merge or push — just commit in the worktree"; "ALL file edits MUST be in
+`.worktrees/.../` — not the main branch"), the correct scope for this session is:
+prepare this worktree's branch as an accurate, verified, zero-drift-as-possible
+fast-forward candidate, and leave the actual advancement of the shared `main` ref
+to whatever process has write access to the primary repo checkout. This matches
+this branch's own prior-session narrative and the precedent set by how §1.5's
+daemon work and `P1-1.3-hook-server` actually reached `main` (as a distinct commit
+on `main` itself, made from the primary repo directory, not from a worktree).
+
+**Confirmed this is a genuinely concurrent, shared environment:** re-checking
+`main`'s tip partway through this session showed it advancing in real time (from
+`cdeade8` → `234fa1a` → `77eb301`, including a commit message literally reading
+"land P1-1.5-daemon-cli-commands onto main (in progress)") — other tasks are
+landing work onto the real `main` concurrently with this one. This branch's
+catch-up merge captured `main` through `234fa1a`; `main` had already moved 2
+commits further (`77eb301`) by the time that merge commit landed in this worktree.
+Chasing a continuously-moving target indefinitely is not productive; the branch
+remains a valid, conflict-free-except-`plan.md` candidate for whatever `main` tip
+the orchestrator fast-forwards against next.
+
+## Original session (prior to this one)
+
 ## Environment hazard (read this first)
 
 This environment's `rtk` Bash-hook (installed via a `PreToolUse` hook on every Bash
