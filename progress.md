@@ -530,3 +530,127 @@ pushing verified completion meaningfully higher next cycle.
    test` stay green with the server package added, and check off the
    corresponding `plan.md` §16 boxes for real (the `0.1 Scaffold` postinstall
    and root-`CLAUDE.md` boxes, and the first two `0.4` boxes).
+
+---
+
+## Cycle 7 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `589beca`, merge commit `docs:
+P0-land-phase0-worktrees - land task summary doc onto main`, parents
+`4b806c5`/`62ed81d`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 3/3 packages — `@falcon/crypto`,
+  `@falcon/wire`, **`@falcon/server`** (new since Cycle 6). `tsc --noEmit`
+  clean on all three (turbo cache hits).
+- `pnpm test` → **PASSED**: 6/6 tasks, **144 tests total** — 65 in
+  `@falcon/crypto` (8 files), 61 in `@falcon/wire` (6 files), and **18 in
+  `@falcon/server`** (3 files: `logger.test.ts`, `config.test.ts`,
+  `app/server.test.ts`) — the server package's first appearance in a green
+  run. Zero failures.
+
+`packages/server/`, root `CLAUDE.md`, and `scripts/postinstall.cjs` are all
+now present and building on `main` — confirms Cycle 6's top blocker
+(`P0-land-phase0-worktrees` sitting unmerged) has been resolved since the
+last cycle.
+
+### Task-summary read this cycle
+
+- **`task-summary/P0-land-phase0-worktrees.md`** (present on `main`): an
+  integration task mirroring the earlier `P0-merge-pending-worktrees` /
+  `P0-land-integration-branch` pattern — sequentially merged
+  `P0-0.1-postinstall`, `P0-0.1-root-claude-md`, and
+  `P0-0.4-server-skeleton` on an isolated branch (conflict-free, disjoint
+  paths), fixed two Biome formatting errors introduced by the server-skeleton
+  branch, refreshed root `CLAUDE.md` for the newly-landed `packages/server`,
+  checked off the corresponding `plan.md` boxes, then landed the whole thing
+  onto `main` per the task's explicit "land the merge onto `main`"
+  instruction. Reported `pnpm build`/`typecheck`/`test`/`lint` all green
+  (144 tests) both on the integration branch and after landing — matches
+  what this cycle re-verified independently above. As with the earlier
+  `P0-land-integration-branch` task, the actual content-bearing merge commit
+  (`4b806c5`) initially landed on `main` in a way `git log` doesn't surface
+  as a simple linear ancestor of the branch tip reachable at the time this
+  cycle started reading history; a further `docs: ... land task summary doc
+  onto main` merge commit (`589beca`, this cycle's `HEAD`) appeared during
+  this cycle's investigation to reconcile that. File content and repo state
+  (packages/server present, tests green) were verified directly against the
+  working tree rather than trusted from `git log` formatting alone.
+- **`task-summary/P0-0.4-docker-compose-dev.md`**: read from
+  `.worktrees/P0-0.4-docker-compose-dev/task-summary/` — **this file does
+  not exist on `main`** (`docker-compose.dev.yml` is absent from the
+  working tree; `git ls-files` on `main` has no match). The task itself
+  looks complete and well-verified in isolation: adds a root
+  `docker-compose.dev.yml` with a single `postgres:16` dev service
+  (`falcon`/`falcon`/`falcon` credentials, `pg_isready` healthcheck, named
+  volume `falcon-pg-dev`), validated with both `docker compose config` and a
+  full `up -d` → healthy → `psql SELECT 1` → `down -v` cycle. But since it
+  is **not merged into `main`**, per this tracker's established convention
+  (see Cycles 1–3), it is **not** credited in `plan.md` this cycle.
+
+### Tasks completed this cycle
+
+**`P0-land-phase0-worktrees` — verified successful on `main`.** Confirmed
+via the fresh green `pnpm typecheck`/`pnpm test` run above (now covering
+3 packages / 144 tests, up from 2 packages / 126 tests at Cycles 4–6) and
+direct filesystem checks (`packages/server/`, root `CLAUDE.md`,
+`scripts/postinstall.cjs` all present).
+
+`plan.md` §16 changes made this cycle:
+- Added a `re-verified cycle 7` stamp to the **0.1 Scaffold** header (all
+  5/5 boxes were already `[x]`, landed and dated by earlier cycles — this
+  cycle just re-confirms against the newest green build).
+- Added a first verification stamp to the **0.4 Server foundation** header,
+  noting the Fastify-skeleton bullet (already `[x]`, checked off inside the
+  `P0-land-phase0-worktrees` branch's own `edb69cc` commit) is now
+  independently verified on `main` by this tracker (18/18 `@falcon/server`
+  tests green), while the remaining seven `0.4` bullets (Drizzle schema
+  through `docker-compose.dev.yml`) stay unchecked — none of them are on
+  `main` yet.
+- **Did not** check off the `docker-compose.dev.yml` box (last `0.4`
+  bullet) — `P0-0.4-docker-compose-dev` is verified-in-worktree only, not
+  merged, per the read above.
+
+### Blockers / issues found
+
+1. **Unmerged worktree branches, again** (recurring pattern, Cycles 1–6):
+   `git worktree list` shows four active worktrees, none of them `main`:
+
+   | Branch | Worktree | Status |
+   |---|---|---|
+   | `P0-0.1-monorepo-scaffold` | `.worktrees/P0-0.1-monorepo-scaffold` | stale — content already landed on `main` long ago (Cycle 4); this worktree is now redundant and should be removed with `git worktree remove` |
+   | `P0-0.4-docker-compose-dev` | `.worktrees/P0-0.4-docker-compose-dev` | complete, verified in isolation, **not merged** — see above |
+   | `P0-0.4-drizzle-schema` | `.worktrees/P0-0.4-drizzle-schema` | new since Cycle 6; task-summary not read this cycle (out of the two files this cycle was scoped to) but its existence + branch name (`feat: P0-0.4-drizzle-schema - Drizzle schema + initial migration for falcon-server`) suggests real progress on the next `0.4` bullet (Drizzle schema/migration), **not merged** |
+   | `P0-land-phase0-worktrees` | `.worktrees/P0-land-phase0-worktrees` | the just-landed integration branch's own worktree — now redundant post-merge, safe to remove |
+
+   None of this blocks `main`'s own `typecheck`/`test` gate (both green),
+   but it is the same orchestration gap called out every cycle since
+   Cycle 1: verified worktree work keeps accumulating faster than the
+   dev-loop's merge step lands it.
+2. `pnpm lint` was not part of this cycle's required gate (only
+   `typecheck`/`test`) and was not re-run independently; the landing task's
+   own summary reports it green (0 errors, 32 pre-existing warn-level
+   findings).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **19 checked on `main`** —
+0.1 (5/5), 0.2 (7/7), 0.3 (7/7), 0.4 (1/8) — up from 18/135 at Cycles 4–6.
+**Completion: ~14.1%** (19/135), verified against a green `pnpm
+typecheck`/`pnpm test` run covering all 3 packages currently on `main`
+(144 tests total).
+
+### Next recommended tasks
+
+1. **Merge `P0-0.4-drizzle-schema` into `main`** — the next `0.4` bullet
+   (Drizzle schema + initial migration), appears ready per its worktree
+   branch name/commit; would need this tracker (or the merge step) to read
+   its `task-summary/` before crediting it in `plan.md`.
+2. **Merge `P0-0.4-docker-compose-dev` into `main`** — small, disjoint,
+   closes the last `0.4` bullet listed in `plan.md` (though several
+   auth/seq bullets in between remain unstarted regardless).
+3. **Clean up redundant worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
+   and `.worktrees/P0-land-phase0-worktrees` are both fully landed on
+   `main` already and can be removed with `git worktree remove` to stop
+   them accumulating in every cycle's `git worktree list` output.
