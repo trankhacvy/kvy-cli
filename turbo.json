@@ -5,12 +5,34 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@falcon/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["out/**", ".next/**", "!.next/cache/**"]
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []
     },
     "test": {
       "dependsOn": ["build"],
+      "outputs": []
+    },
+    "@falcon/web#test": {
+      // The default `test` task depends on the *same-package* `build` task,
+      // which for @falcon/web means a full `next build` static export runs
+      // as a prerequisite of `vitest run` on every `pnpm test`. The web
+      // package's unit tests (src/lib/utils.test.ts, button.test.ts) import
+      // source modules directly — they exercise none of Next's build output
+      // — so that dependency is unnecessary. Beyond being wasted work, it's
+      // the root cause of intermittent `next build` failures ('<Html> should
+      // not be imported outside of pages/_document', 'Cannot find module
+      // ./NNN.js') seen under `pnpm test` at the repo root: `next build`
+      // competes for CPU/IO with other packages' concurrently-scheduled
+      // vitest tasks in Turborepo's parallel scheduler. Depending on `^build`
+      // (upstream workspace packages, same as `typecheck`) instead of `build`
+      // drops `next build` out of the `test` task graph entirely, so it no
+      // longer runs concurrently with sibling packages' tests.
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {
