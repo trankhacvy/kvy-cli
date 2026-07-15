@@ -138,9 +138,40 @@ export function buildMachinesRoutes(db: Database, eventRouter: EventRouter): Fas
                     lastSeenAt: new Date(),
                   },
             )
-            .where(and(eq(machines.id, machineId), eq(machines.accountId, accountId)))
+            .where(
+              and(
+                eq(machines.id, machineId),
+                eq(machines.accountId, accountId),
+                eq(machines.metadataVersion, metadata.expectedVersion),
+                ...(daemonState !== undefined
+                  ? [eq(machines.daemonStateVersion, daemonState.expectedVersion)]
+                  : []),
+              ),
+            )
             .returning();
-          if (!updated) throw new Error(`POST /v1/machines: update returned no row for ${machineId}`);
+
+          if (!updated) {
+            // Lost a race with a concurrent writer between the read above and
+            // this UPDATE (another request bumped metadataVersion and/or
+            // daemonStateVersion in between) — report the fresh current
+            // value/version, not the one we read a moment ago. Mirrors
+            // casUpdateSessionField's re-read-on-conflict pattern.
+            const fresh = await tx.query.machines.findFirst({
+              where: and(eq(machines.id, machineId), eq(machines.accountId, accountId)),
+            });
+            if (!fresh) {
+              throw new Error(`POST /v1/machines: machine ${machineId} vanished mid-transaction`);
+            }
+            return {
+              status: "conflict" as const,
+              current: {
+                metadata: { value: decodeBox(fresh.metadata), version: fresh.metadataVersion },
+                daemonState: fresh.daemonState
+                  ? { value: decodeBox(fresh.daemonState), version: fresh.daemonStateVersion }
+                  : null,
+              },
+            };
+          }
 
           const headerSeq = await allocHeaderSeq(tx, accountId);
           return { status: "ok" as const, row: updated, headerSeq };

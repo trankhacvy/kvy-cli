@@ -127,6 +127,25 @@ describe("POST/GET /v1/sessions/:id/messages", () => {
     expect(response.statusCode).toBe(404);
   });
 
+  it("404s GETing messages for a session that doesn't belong to the caller", async () => {
+    const { authHeader: otherHeader } = await createTestAccount(db);
+    const response = await app.inject({
+      method: "GET",
+      url: `/v1/sessions/${sessionId}/messages`,
+      headers: { authorization: otherHeader },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("404s GETing messages for an unknown session id", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/sessions/nonexistent-session-id/messages",
+      headers: { authorization: authHeader },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
   it("GET paginates with the before/limit msgSeq cursor, newest first", async () => {
     const { authHeader: pageHeader } = await createTestAccount(db);
     const createResponse = await app.inject({

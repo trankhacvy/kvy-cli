@@ -119,6 +119,51 @@ describe("POST /v1/machines", () => {
     expect(staleResponse.json().current.metadata.version).toBe(1);
   });
 
+  it("409s on a stale daemonState expectedVersion", async () => {
+    const registerResponse = await app.inject({
+      method: "POST",
+      url: "/v1/machines",
+      headers: { authorization: authHeader },
+      payload: {
+        dek: encodeBase64(getRandomBytes(32)),
+        metadata: { value: fakeBox(), expectedVersion: 0 },
+        daemonState: { value: fakeBox(), expectedVersion: 0 },
+      },
+    });
+    const machineId = registerResponse.json().id;
+
+    // Bump daemonStateVersion to 1 via a legitimate update.
+    await app.inject({
+      method: "POST",
+      url: "/v1/machines",
+      headers: { authorization: authHeader },
+      payload: {
+        machineId,
+        metadata: { value: fakeBox(), expectedVersion: 0 },
+        daemonState: { value: fakeBox(), expectedVersion: 0 },
+      },
+    });
+
+    // metadataVersion is now correctly 1, but we send a stale daemonState
+    // expectedVersion (0, when the current value is 1) — this must still
+    // 409 and must not silently overwrite the daemonState.
+    const staleResponse = await app.inject({
+      method: "POST",
+      url: "/v1/machines",
+      headers: { authorization: authHeader },
+      payload: {
+        machineId,
+        metadata: { value: fakeBox(), expectedVersion: 1 },
+        daemonState: { value: fakeBox(), expectedVersion: 0 },
+      },
+    });
+
+    expect(staleResponse.statusCode).toBe(409);
+    expect(staleResponse.json().current.daemonState.version).toBe(1);
+    // metadataVersion must not have been bumped by the rejected update either.
+    expect(staleResponse.json().current.metadata.version).toBe(1);
+  });
+
   it("404s updating a machine that doesn't belong to the caller", async () => {
     const registerResponse = await app.inject({
       method: "POST",
