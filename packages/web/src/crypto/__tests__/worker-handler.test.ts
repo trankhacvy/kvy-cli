@@ -1,4 +1,15 @@
-import { deriveKeyTree, type EncryptedBox, getRandomBytes, wrapDek } from "@falcon/crypto/web";
+import {
+  decodeBase64,
+  decodeRecoveryCode,
+  deriveKeyTree,
+  encodeBase64,
+  type EncryptedBox,
+  getRandomBytes,
+  libsodiumDecryptWithSecretKey,
+  ready,
+  verifyDetached,
+  wrapDek,
+} from "@falcon/crypto/web";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMemoryKeyStorage } from "../key-storage.js";
 import type { CryptoWorkerRequest, CryptoWorkerRequestPayload } from "../protocol.js";
@@ -129,4 +140,152 @@ describe("createCryptoWorkerHandler", () => {
 
     expect(await storage.load()).toEqual(otherSecret);
   });
+
+  it("getIdentity resolves null before any identity is provisioned", async () => {
+    const res = await handler.handle(req("1", { type: "getIdentity" }));
+    expect(res).toEqual({ id: "1", ok: true, result: null });
+  });
+
+  it("getIdentity resolves the public keys after init, matching the derived key tree", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    const res = await handler.handle(req("2", { type: "getIdentity" }));
+    expect(res).toEqual({
+      id: "2",
+      ok: true,
+      result: {
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      },
+    });
+  });
+
+  it("getIdentity loads a previously-provisioned identity from storage lazily", async () => {
+    const storage = createMemoryKeyStorage();
+    await storage.save(masterSecret);
+    const freshHandler = createCryptoWorkerHandler(storage);
+
+    const res = await freshHandler.handle(req("1", { type: "getIdentity" }));
+    expect(res).toEqual({
+      id: "1",
+      ok: true,
+      result: {
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      },
+    });
+  });
+
+  it("signInChallenge fails with not-initialized when no identity exists yet", async () => {
+    const res = await handler.handle(req("1", { type: "signInChallenge" }));
+    expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
+  });
+
+  it("signInChallenge mints a fresh challenge signed by the provisioned identity", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    const res = await handler.handle(req("2", { type: "signInChallenge" }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("unreachable");
+    const result = res.result as {
+      signPubKey: string;
+      contentPubKey: string;
+      challenge: string;
+      signature: string;
+    };
+    expect(result.signPubKey).toBe(encodeBase64(tree.signing.publicKey));
+    expect(result.contentPubKey).toBe(encodeBase64(tree.content.publicKey));
+    expect(
+      verifyDetached(
+        decodeBase64(result.challenge),
+        decodeBase64(result.signature),
+        tree.signing.publicKey,
+      ),
+    ).toBe(true);
+  });
+
+  it("signInChallenge mints a different challenge on each call", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    const a = await handler.handle(req("2", { type: "signInChallenge" }));
+    const b = await handler.handle(req("3", { type: "signInChallenge" }));
+    if (!a.ok || !b.ok) throw new Error("unreachable");
+    expect((a.result as { challenge: string }).challenge).not.toBe(
+      (b.result as { challenge: string }).challenge,
+    );
+  });
+
+  it("exportRecoveryCode fails with not-initialized when no identity exists yet", async () => {
+    const res = await handler.handle(req("1", { type: "exportRecoveryCode" }));
+    expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
+  });
+
+  it("exportRecoveryCode round-trips back to the exact provisioned master secret", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    const res = await handler.handle(req("2", { type: "exportRecoveryCode" }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("unreachable");
+    expect(decodeRecoveryCode(res.result as string)).toEqual(masterSecret);
+  });
+
+  it("sealForPeer fails with not-initialized when no identity exists yet", async () => {
+    const ephPub = getRandomBytes(32);
+    const res = await handler.handle(
+      req("1", { type: "sealForPeer", ephPub: encodeBase64(ephPub) }),
+    );
+    expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
+  });
+
+  it("sealForPeer rejects a malformed (wrong-length) ephemeral public key", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    const res = await handler.handle(
+      req("2", { type: "sealForPeer", ephPub: encodeBase64(new Uint8Array([1, 2, 3])) }),
+    );
+    expect(res).toEqual({ id: "2", ok: false, error: "invalid-eph-pub" });
+  });
+
+  it("sealForPeer produces a box that only the peer's matching secret key can open, revealing the master secret", async () => {
+    await ready;
+    await handler.handle(req("1", { type: "init", masterSecret }));
+
+    const peerKeyPair = tweetnaclBoxKeyPair();
+    const res = await handler.handle(
+      req("2", { type: "sealForPeer", ephPub: encodeBase64(peerKeyPair.publicKey) }),
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("unreachable");
+
+    const opened = libsodiumDecryptWithSecretKey(
+      decodeBase64(res.result as string),
+      peerKeyPair.secretKey,
+    );
+    expect(opened).not.toBeNull();
+    expect(opened?.[0]).toBe(0);
+    expect(opened?.slice(1)).toEqual(masterSecret);
+  });
+
+  it("sealForPeer is not openable by an unrelated secret key", async () => {
+    await ready;
+    await handler.handle(req("1", { type: "init", masterSecret }));
+
+    const peerKeyPair = tweetnaclBoxKeyPair();
+    const wrongKeyPair = tweetnaclBoxKeyPair();
+    const res = await handler.handle(
+      req("2", { type: "sealForPeer", ephPub: encodeBase64(peerKeyPair.publicKey) }),
+    );
+    if (!res.ok) throw new Error("unreachable");
+
+    const opened = libsodiumDecryptWithSecretKey(
+      decodeBase64(res.result as string),
+      wrongKeyPair.secretKey,
+    );
+    expect(opened).toBeNull();
+  });
 });
+
+/**
+ * A fresh X25519 keypair for the "peer" side of sealForPeer tests — reuses
+ * `deriveKeyTree`'s own content-keypair derivation (already proven mutually
+ * consistent with libsodium's sealed-box functions by dek.test.ts) rather
+ * than hand-rolling key generation here.
+ */
+function tweetnaclBoxKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array } {
+  return deriveKeyTree(getRandomBytes(32)).content;
+}

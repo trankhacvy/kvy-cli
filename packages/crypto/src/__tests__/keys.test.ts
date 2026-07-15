@@ -1,7 +1,7 @@
 import tweetnacl from "tweetnacl";
 import { describe, expect, it } from "vitest";
 import { getRandomBytes } from "../encryption.js";
-import { deriveKeyTree } from "../keys.js";
+import { deriveKeyTree, signDetached } from "../keys.js";
 
 describe("deriveKeyTree", () => {
   it("is deterministic for a given masterSecret", () => {
@@ -58,5 +58,24 @@ describe("deriveKeyTree", () => {
   it("blobMasterKey is 32 bytes (usable as a secretbox key)", () => {
     const tree = deriveKeyTree(getRandomBytes(32));
     expect(tree.blobMasterKey.length).toBe(32);
+  });
+});
+
+describe("signDetached", () => {
+  it("produces a signature verifiable with the matching public key", () => {
+    const tree = deriveKeyTree(getRandomBytes(32));
+    const challenge = getRandomBytes(32);
+    const signature = signDetached(challenge, tree.signing.secretKey);
+    expect(tweetnacl.sign.detached.verify(challenge, signature, tree.signing.publicKey)).toBe(true);
+  });
+
+  it("a signature does not verify against a different key tree's public key", () => {
+    const treeA = deriveKeyTree(getRandomBytes(32));
+    const treeB = deriveKeyTree(getRandomBytes(32));
+    const challenge = getRandomBytes(32);
+    const signature = signDetached(challenge, treeA.signing.secretKey);
+    expect(tweetnacl.sign.detached.verify(challenge, signature, treeB.signing.publicKey)).toBe(
+      false,
+    );
   });
 });

@@ -3,7 +3,12 @@ import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import tweetnacl from "tweetnacl";
 import { z } from "zod";
-import { defaultOAuthVerifier, type OAuthVerifier } from "../../auth/oauth.js";
+import {
+  defaultGithubCodeExchanger,
+  defaultOAuthVerifier,
+  type GithubCodeExchanger,
+  type OAuthVerifier,
+} from "../../auth/oauth.js";
 import { mintToken } from "../../auth/tokens.js";
 import { accounts } from "../../db/schema.js";
 import { toHex } from "./hex.js";
@@ -61,8 +66,43 @@ const RegisterErrorSchema = z.object({
 export function buildOAuthRoutes(
   db: Database,
   verifier: OAuthVerifier = defaultOAuthVerifier,
+  githubExchanger: GithubCodeExchanger = defaultGithubCodeExchanger,
 ): FastifyPluginAsyncZod {
   return async (app) => {
+    // `POST /v1/auth/oauth/github/exchange` — not present in Happy, and not part of
+    // the design doc's auth-flow diagram either: it exists purely as a plumbing detail
+    // of the web app being a static export with no server-held secret of its own.
+    // GitHub's authorization-code flow (unlike Google's OIDC implicit flow, which
+    // yields a usable ID token straight from a browser redirect) requires the app's
+    // client secret to exchange `code` for an access token, and GitHub's token
+    // endpoint has no CORS allowance for a direct browser fetch — so the browser
+    // hands the `code` here, and this server (which already holds `FALCON_MASTER_SECRET`
+    // and other real secrets) makes that one call on its behalf. The resulting access
+    // token is returned to the browser exactly as if it had obtained one itself, and is
+    // used the same way afterward: as `oauthProof` to `/v1/auth/register` (unaltered).
+    app.post(
+      "/v1/auth/oauth/github/exchange",
+      {
+        schema: {
+          body: z.object({ code: z.string().min(1), redirectUri: z.string().min(1) }),
+          response: {
+            200: z.object({ accessToken: z.string() }),
+            401: RegisterErrorSchema,
+          },
+        },
+      },
+      async (request, reply) => {
+        const accessToken = await githubExchanger.exchange(
+          request.body.code,
+          request.body.redirectUri,
+        );
+        if (!accessToken) {
+          return reply.code(401).send({ error: "GitHub code exchange failed" });
+        }
+        return reply.send({ accessToken });
+      },
+    );
+
     app.post(
       "/v1/auth/register",
       {

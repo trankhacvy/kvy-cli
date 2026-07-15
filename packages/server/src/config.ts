@@ -27,6 +27,14 @@ const EnvSchema = z
     // src/auth/oauth.ts for why an unset client id must never be treated as "skip the
     // audience check" rather than "reject everything".
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    // GitHub OAuth app credentials for `POST /v1/auth/oauth/github/exchange` — the web
+    // app (a static export, no server-held secret of its own) redirects the browser
+    // through GitHub's authorization-code flow and hands the resulting `code` to this
+    // server to exchange for an access token, since GitHub's token endpoint requires
+    // the app's client secret and has no browser-CORS path (src/auth/oauth.ts). Optional
+    // — GitHub sign-in simply refuses exchanges (401) until both are configured.
+    GITHUB_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   })
   // Belt-and-suspenders against shipping the dev-only secret to production: a silent
   // fallback there would let anyone who has read this source mint tokens for any

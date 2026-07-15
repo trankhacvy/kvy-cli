@@ -99,3 +99,29 @@ export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
     blobMasterKey,
   };
 }
+
+/**
+ * Sign `message` with an Ed25519 secret key from `KeyTree.signing` — the
+ * primitive the sign-in flow needs to turn a locally-generated challenge into
+ * the `signature` field of `POST /v1/auth` (design §5.2 "Sign-in": "sign 32B
+ * challenge with ed25519"). Colocated with `deriveKeyTree` (rather than
+ * `encryption(.web).ts`) because both operate on the same tweetnacl-native
+ * keypair format — `keys.test.ts` already proves `tweetnacl.sign.detached`
+ * round-trips correctly against it.
+ */
+export function signDetached(message: Uint8Array, secretKey: Uint8Array): Uint8Array {
+  return new Uint8Array(tweetnacl.sign.detached(message, secretKey));
+}
+
+/** Verify a `signDetached` signature against a `KeyTree.signing.publicKey`. Never throws. */
+export function verifyDetached(
+  message: Uint8Array,
+  signature: Uint8Array,
+  publicKey: Uint8Array,
+): boolean {
+  try {
+    return tweetnacl.sign.detached.verify(message, signature, publicKey);
+  } catch {
+    return false;
+  }
+}

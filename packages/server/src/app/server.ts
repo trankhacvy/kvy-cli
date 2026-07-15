@@ -4,7 +4,13 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
-import { authPlugin, defaultOAuthVerifier, type OAuthVerifier } from "../auth/index.js";
+import {
+  authPlugin,
+  defaultGithubCodeExchanger,
+  defaultOAuthVerifier,
+  type GithubCodeExchanger,
+  type OAuthVerifier,
+} from "../auth/index.js";
 import { db as defaultDb } from "../db/client.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
@@ -16,11 +22,15 @@ import { buildOAuthRoutes } from "./routes/oauth.js";
 // can build+inject() without opening a real port or a real pino transport.
 // `db` defaults to the module-level singleton (db/client.ts) but can be overridden —
 // auth.test.ts binds an in-memory Postgres instead of touching `DATABASE_URL`.
-// `oauthVerifier` similarly defaults to the real Google/GitHub verifier but can be
-// overridden — oauth.test.ts injects a fake one instead of touching the network.
+// `oauthVerifier`/`githubExchanger` similarly default to the real implementations but
+// can be overridden — oauth.test.ts injects fakes instead of touching the network.
 export async function buildServer(
   opts: FastifyServerOptions = {},
-  deps: { db?: Parameters<typeof buildAuthRoutes>[0]; oauthVerifier?: OAuthVerifier } = {},
+  deps: {
+    db?: Parameters<typeof buildAuthRoutes>[0];
+    oauthVerifier?: OAuthVerifier;
+    githubExchanger?: GithubCodeExchanger;
+  } = {},
 ) {
   const app = Fastify({
     logger: buildLoggerOptions(),
@@ -40,7 +50,11 @@ export async function buildServer(
   await app.register(healthRoutes);
   await app.register(buildAuthRoutes(deps.db ?? defaultDb));
   await app.register(
-    buildOAuthRoutes(deps.db ?? defaultDb, deps.oauthVerifier ?? defaultOAuthVerifier),
+    buildOAuthRoutes(
+      deps.db ?? defaultDb,
+      deps.oauthVerifier ?? defaultOAuthVerifier,
+      deps.githubExchanger ?? defaultGithubCodeExchanger,
+    ),
   );
   await app.register(pairRoutes);
 
