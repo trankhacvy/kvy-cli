@@ -2145,3 +2145,184 @@ cache-bypassed `pnpm typecheck`/`pnpm test` run covering all 5 packages on
 3. **Land `P1-1.5-daemon-singleton-lock`** (unchanged since Cycle 16,
    worktree unchanged) — `packages/cli/src/daemon/` still doesn't exist on
    `main`.
+
+---
+
+## Cycle 20 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `8ac4bdb`, "fix: P0-land-0.4-auth-routes-final - resolve test failures")
+
+### Environment note (read this before trusting any Bash output in this cycle)
+
+This cycle independently reproduced the `rtk` Bash-hook fabrication bug that
+`task-summary/P0-land-0.4-auth-routes-final.md`'s "Correction" section
+documents: plain `ls`/`find` invocations through the normal Bash tool (e.g.
+`ls packages/server/src/app/routes/`) reported the directory as **empty**,
+while the `Read` tool (which the `PreToolUse: rtk hook claude` hook does not
+intercept — only the `Bash` matcher is hooked) confirmed the same files
+genuinely exist. Absolute-path invocations (`/usr/bin/find`, `/usr/bin/grep`,
+`/opt/homebrew/bin/pnpm`) and `git`'s own ref files (`.git/HEAD`,
+`.git/refs/heads/main`, read directly) consistently agreed with `Read` and
+with each other. All verification below was cross-checked this way: file
+existence via `Read` or an absolute-path `find`/`grep`, and both gates run
+**forced** (`turbo run typecheck --force` / `turbo run test --force`) rather
+than trusting the plain, cacheable `pnpm typecheck`/`pnpm test` (which
+replayed a cache hit pointing at a stale `.worktrees/P0-land-0.4-auth-routes-final`
+path on the first, unforced attempt — same class of masking risk flagged in
+Cycles 18–19).
+
+### Verification run on `main`
+
+- `pnpm typecheck` (forced, `turbo run typecheck --force`, 0 cached) →
+  **PASSED**: 6/6 tasks — `@falcon/wire`, `@falcon/crypto` (+ its `build`),
+  `@falcon/server`, `@falcon/web`, `falcon` (cli). `tsc --noEmit` clean on
+  every package, resolved against `packages/*` directly (not a worktree
+  path).
+- `pnpm test` (forced, `turbo run test --force`, 0 cached) → **PASSED**: 9/9
+  tasks, **315 tests total, 0 failures** — `falcon` (cli) 66, `@falcon/crypto`
+  65, `@falcon/web` 36, `@falcon/wire` 61, `@falcon/server` 87.
+
+### Task-summary read this cycle
+
+This cycle's instructions named three files:
+`task-summary/P0-land-0.4-auth-routes-final.md`,
+`task-summary/P1-land-1.4-transcript-scanner-final.md`, and
+`task-summary/P1-land-1.6-crypto-worker-final.md`.
+
+- **`task-summary/P0-land-0.4-auth-routes-final.md`** — **present on `main`**
+  (unlike the other two below). Its own text is unusual: the bulk of the
+  file describes a landing that, by its own later "Correction" section,
+  *did not actually happen* when first attempted (the `rtk` hook fabricated
+  a successful fast-forward that never touched real `main`), followed by a
+  documented fix-up that *did* genuinely fast-forward `main` from `2dc3c63`
+  to `c1bb1e5`. Verified independently this cycle (not just trusting the
+  file's own narrative): `packages/server/src/app/routes/auth.ts` and
+  `oauth.ts` exist via `Read`; `pnpm-`-forced test run above includes 87/87
+  `@falcon/server` tests (`auth.test.ts`, `oauth.test.ts` among them). The
+  correction's account checks out.
+- **`task-summary/P1-land-1.4-transcript-scanner-final.md`** — **does not
+  exist in `main`'s `task-summary/` directory.** It exists only inside
+  `.worktrees/P1-land-1.4-transcript-scanner-final/task-summary/`, on a
+  branch that is itself **not** an ancestor of `main`
+  (`git merge-base --is-ancestor P1-land-1.4-transcript-scanner-final main`
+  → false). However, the underlying *code* is genuinely present on `main`
+  regardless — `packages/cli/src/claude/{types,fileWatcher,scanner}.ts` all
+  verified via `Read`, and `plan.md`'s own "1.4 Transcript pipeline" section
+  already documents (dated 2026-07-15) that a differently-named branch,
+  `P1-land-1.4-transcript-scanner-onto-main`, is what actually landed this
+  work onto `main`, with the `-final` worktree apparently a duplicate/
+  superseded landing attempt that was never itself merged. Net effect: the
+  work this task-summary describes is real and on `main`, just not via the
+  exact branch this cycle was pointed at.
+- **`task-summary/P1-land-1.6-crypto-worker-final.md`** — same shape as
+  above: **does not exist in `main`'s `task-summary/`**, only inside
+  `.worktrees/P1-land-1.6-crypto-worker-final/` (also not an ancestor of
+  `main`). The code is genuinely on `main` — `packages/web/src/crypto/{protocol,
+  key-storage,worker-handler,worker,client,factory,index}.ts` all verified via
+  `Read` — landed per `plan.md`'s own dated note via `P1-land-1.6-crypto-worker-final`
+  as the log message on `main`'s history (commit `2dc3c63`, "correct
+  @falcon/web test count in plan.md annotation"), even though the worktree
+  branch of that same name is a stale duplicate that was never fast-forwarded
+  itself.
+
+**Net conclusion:** unlike the recurring "requested file doesn't exist and
+neither does the code" pattern from Cycles 1–19, this cycle's three tasks
+are a mixed case — the file existence check alone would have wrongly
+flagged 2 of 3 as unlanded, but a code-level check (the standard this
+tracker has used since Cycle 1: credit only what's verifiably in `main`'s
+tree) confirms all three pieces of work are genuinely present and tested on
+`main` as of this cycle. This is the first cycle where all three of a given
+request's tasks check out.
+
+### Tasks completed this cycle
+
+All three requested tasks verified **already landed on `main`** (by commits
+made between the Cycle 19 tracker commit `6499c30` and this cycle's `HEAD`
+`8ac4bdb`, none of them a "chore: cycle N" tracker commit, so this is the
+first tracker cycle to record them):
+
+1. **Auth routes** (`P0-land-0.4-auth-routes-final`) — `POST /v1/auth`
+   Ed25519 challenge/response, OAuth sign-in routes, pairing endpoints.
+   `plan.md` lines 645–647 already `[x]`, Phase 0 exit criterion already
+   marked satisfied (dated 2026-07-15) from the prior fix-up commit; this
+   cycle added a "re-verified cycle 20" stamp confirming the files and
+   87/87 `@falcon/server` tests independently.
+2. **Transcript scanner** (`P1-land-1.4-transcript-scanner-final`) —
+   `sessionScanner`/`startFileWatcher` port. `plan.md` lines 682–683 already
+   `[x]`; this cycle added a "re-verified cycle 20" stamp confirming
+   `packages/cli/src/claude/*` and 66/66 `falcon` (cli) tests.
+3. **Crypto worker** (`P1-land-1.6-crypto-worker-final`) — worker-side
+   crypto bridge. `plan.md` line 701 already `[x]`; this cycle added a
+   "re-verified cycle 20" stamp confirming `packages/web/src/crypto/*` and
+   36/36 `@falcon/web` tests.
+
+No new checkbox transitions were needed (a prior, untracked cycle already
+flipped all three) — this cycle's contribution is independent re-
+verification plus closing the "cycle N" tracking gap for that work.
+`plan.md` §16 checkbox count: **34/135**, unchanged from whatever it was
+immediately before this cycle (the flips happened earlier), but this is the
+first "chore: cycle N" commit to record the number at 34.
+
+### Blockers / issues found
+
+1. **The `rtk` Bash-hook fabrication bug is real and reproduced independently
+   this cycle** (see "Environment note" above) — not just a claim in a
+   task-summary. Any cycle relying on plain `ls`/`find`/`cat` through the
+   Bash tool to check file existence, or on unforced `pnpm typecheck`/`pnpm
+   test` (cacheable, and observed replaying a stale `.worktrees/*` path's
+   logs on the very first invocation this cycle), risks a false negative
+   ("file doesn't exist" / "stale pass") or a false positive. Recommend
+   every future cycle: (a) verify file existence via `Read` or an
+   absolute-path binary (`/usr/bin/find`, `/usr/bin/grep`), never a bare
+   `ls`/`find`/`cat` through Bash alone, and (b) always force
+   `typecheck`/`test` (`turbo run <task> --force`) rather than the plain
+   `pnpm` scripts, to guarantee a fresh, non-replayed result.
+2. **Stranded/duplicate worktrees for already-landed work**: two of this
+   cycle's three requested task-summaries live only in worktree branches
+   (`P1-land-1.4-transcript-scanner-final`, `P1-land-1.6-crypto-worker-final`)
+   that are themselves *not* ancestors of `main`, even though equivalent
+   code already landed via differently-named branches. These two worktrees (plus
+   several other now-stale ones confirmed via `git merge-base --is-ancestor`:
+   `P0-0.1-monorepo-scaffold`, `P0-land-0.4-auth-routes-final`,
+   `P0-land-0.4-worktrees`, `P0-land-0.4-worktrees-final`,
+   `P0-land-0.4-worktrees-onto-main`, `P1-land-cli-scaffold-onto-main`,
+   `P1-land-web-scaffold-onto-main`) are candidates for `git worktree
+   remove` cleanup — not performed this cycle, as removing worktrees is an
+   orchestrator/operator action outside this tracker role's scope, per
+   convention since Cycle 3.
+3. **Not-yet-landed worktrees remain** (`git worktree list`, still
+   unmerged): `P0-land-phase0-worktrees`, `P1-1.1-server-realtime`,
+   `P1-1.2-server-write-http`, `P1-1.3-claude-launcher-script`,
+   `P1-1.3-falcon-home-persistence`, `P1-1.3-provider-detection`,
+   `P1-1.5-daemon-singleton-lock`. These represent the next real,
+   unlanded implementation work (Phase 1 realtime WS, write-HTTP, CLI
+   launcher/provider-detection/home-persistence pieces of `1.3`, and the
+   daemon singleton lock of `1.5`).
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **34 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (7/8 — the auth-routes bullets now
+independently re-verified), 1.3 (1/9), 1.4 (2/6), 1.6 (2/8 — scaffold +
+crypto worker). Up from 28/135 at Cycle 19.
+**Completion: ~25.2%** (34/135), verified against a forced, cache-bypassed
+`pnpm typecheck`/`pnpm test` run covering all 5 packages on `main` (315
+tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.1-server-realtime` and `P1-1.2-server-write-http`
+   together, deliberately** (carried over from Cycle 19 — still unlanded,
+   still share a pre-1.1 base with independently-implemented `eventRouter`,
+   so should be reconciled as one pass rather than two independent
+   fast-forwards).
+2. **Land the `1.3` CLI-scaffold follow-ups** —
+   `P1-1.3-claude-launcher-script`, `P1-1.3-falcon-home-persistence`,
+   `P1-1.3-provider-detection` — all still unmerged per `git worktree
+   list`/ancestry checks this cycle; `packages/cli` scaffold itself already
+   landed (`P1-land-cli-scaffold-onto-main`, ancestor of `main`), so these
+   three are incremental additions on top of a stable base.
+3. **Land `P1-1.5-daemon-singleton-lock`** — `packages/cli/src/daemon/`
+   still doesn't exist on `main`; unchanged blocker since Cycle 16.
