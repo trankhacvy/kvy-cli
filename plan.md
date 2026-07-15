@@ -636,16 +636,16 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Browser build: `.web.ts` split (libsodium-wrappers + WebCrypto AES-GCM); cross-impl test vectors (node encrypts → web decrypts, and vice versa)
 - [x] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
 
-**0.4 Server foundation** — §3.2, §4 *(2026-07-15, `P0-land-0.4-worktrees-final`: merged `P0-land-0.4-worktrees-onto-main` (base `main` tip `4121603`, a handful of commits behind current `main`) into a fresh integration branch rebased on current `main` tip `4ed02a4`; resolved two conflicts — `CLAUDE.md` package-layout table (kept `main`'s already-landed `@falcon/web` description, took the branch's `@falcon/server` description) and `pnpm-lock.yaml` (regenerated via `pnpm install` rather than hand-resolved). No `packages/server/src/` structural conflicts — main's server package hadn't changed since this branch's base, as expected. This branch (not yet fast-forwarded onto `main` — that is a separate integration step) now contains the Drizzle schema, initial migration, `seq.ts`, and auth module in `packages/server/src/`, plus `docker-compose.dev.yml` at the repo root, with `pnpm build`/`pnpm typecheck`/`pnpm test` all green (see task-summary for counts). Checkboxes below stay unchecked per the standing rule — flip only once this is actually merged into `main`. `P0-0.4-auth-challenge-route`, `P0-0.4-oauth-signin-routes`, and `P0-0.4-pairing-endpoints` remain correctly out of scope here and should be sequenced after this lands.)*
-- [ ] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
-- [ ] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
-- [ ] `drizzle-kit generate` initial migration; migration-on-boot runner
-- [ ] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
-- [ ] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
+**0.4 Server foundation** — §3.2, §4 *(2026-07-15, `P0-land-0.4-worktrees-final`: merged `P0-land-0.4-worktrees-onto-main` (base `main` tip `4121603`, a handful of commits behind current `main`) into a fresh integration branch rebased on current `main` tip `4ed02a4`; resolved two conflicts — `CLAUDE.md` package-layout table (kept `main`'s already-landed `@falcon/web` description, took the branch's `@falcon/server` description) and `pnpm-lock.yaml` (regenerated via `pnpm install` rather than hand-resolved). No `packages/server/src/` structural conflicts — main's server package hadn't changed since this branch's base, as expected. This branch now contains the Drizzle schema, initial migration, `seq.ts`, and auth module in `packages/server/src/`, plus `docker-compose.dev.yml` at the repo root, with `pnpm build`/`pnpm typecheck`/`pnpm test` all green (see task-summary for counts). Fast-forwarded onto `main` (main tip `4ed02a4` → `9ede082`) 2026-07-15; checkboxes below flipped for the pieces this merge actually lands. `P0-0.4-auth-challenge-route`, `P0-0.4-oauth-signin-routes`, and `P0-0.4-pairing-endpoints` remain correctly out of scope here (route-level work not yet merged) and should be sequenced/landed next.)*
+- [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
+- [x] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
+- [x] `drizzle-kit generate` initial migration; migration-on-boot runner
+- [x] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
+- [x] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
 - [ ] `POST /v1/auth` Ed25519 challenge/response → account upsert by `signPublicKey` **(V** from `authRoutes.ts`**)**
 - [ ] OAuth sign-in routes (Google/GitHub/email) binding `oauthProvider/oauthSubject` **(N — DELTA D5)**
 - [ ] Pairing endpoints: `POST /v1/auth/pair`, `GET /v1/auth/pair/status`, `POST /v1/auth/pair/approve` **(P** from Happy's `/v1/auth/request*` — add `expiresAt` TTL, one of the reported Happy vulns**)**
-- [ ] `docker-compose.dev.yml`: postgres:16 for local dev
+- [x] `docker-compose.dev.yml`: postgres:16 for local dev
 
 **Phase 0 exit:** `pnpm build && pnpm test` green; a script can register an account, pass the challenge, and get a JWT against a local server.
 
