@@ -1,6 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import fs from "fs";
-import path from "path";
 
 const MODULE_PATH = path.join(__dirname, "../falcon_claude_launcher.cjs");
 
@@ -87,7 +87,9 @@ describe("falcon_claude_launcher.cjs — fetch-patch fd3 signal", () => {
     );
 
     // The real fetch must still be invoked with the original arguments.
-    expect(mockFetch).toHaveBeenCalledWith("https://api.example.com/v1/messages", { method: "POST" });
+    expect(mockFetch).toHaveBeenCalledWith("https://api.example.com/v1/messages", {
+      method: "POST",
+    });
   });
 
   it("emits a matching fetch-end JSON line (same id) after the fetch resolves", async () => {

@@ -45,74 +45,74 @@
  * see plan.md §6.3. Don't duplicate that resolver here.
  */
 
-const fs = require('fs');
+const fs = require("node:fs");
 
 // Disable autoupdater (never works really)
-process.env.DISABLE_AUTOUPDATER = '1';
+process.env.DISABLE_AUTOUPDATER = "1";
 
 // Helper to write JSON messages to fd 3
 function writeMessage(message) {
-    try {
-        fs.writeSync(3, JSON.stringify(message) + '\n');
-    } catch (err) {
-        // fd 3 not available, ignore
-    }
+  try {
+    fs.writeSync(3, `${JSON.stringify(message)}\n`);
+  } catch (_err) {
+    // fd 3 not available, ignore
+  }
 }
 
 // Intercept fetch to track thinking state
 const originalFetch = global.fetch;
 let fetchCounter = 0;
 
-global.fetch = function (...args) {
-    const id = ++fetchCounter;
-    const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
-    const method = args[1]?.method || 'GET';
+global.fetch = (...args) => {
+  const id = ++fetchCounter;
+  const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
+  const method = args[1]?.method || "GET";
 
-    // Parse URL for privacy
-    let hostname = '';
-    let path = '';
-    try {
-        const urlObj = new URL(url, 'http://localhost');
-        hostname = urlObj.hostname;
-        path = urlObj.pathname;
-    } catch (e) {
-        // If URL parsing fails, use defaults
-        hostname = 'unknown';
-        path = url;
-    }
+  // Parse URL for privacy
+  let hostname = "";
+  let path = "";
+  try {
+    const urlObj = new URL(url, "http://localhost");
+    hostname = urlObj.hostname;
+    path = urlObj.pathname;
+  } catch (_e) {
+    // If URL parsing fails, use defaults
+    hostname = "unknown";
+    path = url;
+  }
 
-    // Send fetch start event
+  // Send fetch start event
+  writeMessage({
+    type: "fetch-start",
+    id,
+    hostname,
+    path,
+    method,
+    timestamp: Date.now(),
+  });
+
+  // Execute the original fetch immediately
+  const fetchPromise = originalFetch(...args);
+
+  // Attach handlers to send fetch end event
+  const sendEnd = () => {
     writeMessage({
-        type: 'fetch-start',
-        id,
-        hostname,
-        path,
-        method,
-        timestamp: Date.now()
+      type: "fetch-end",
+      id,
+      timestamp: Date.now(),
     });
+  };
 
-    // Execute the original fetch immediately
-    const fetchPromise = originalFetch(...args);
+  // Send end event on both success and failure
+  fetchPromise.then(sendEnd, sendEnd);
 
-    // Attach handlers to send fetch end event
-    const sendEnd = () => {
-        writeMessage({
-            type: 'fetch-end',
-            id,
-            timestamp: Date.now()
-        });
-    };
-
-    // Send end event on both success and failure
-    fetchPromise.then(sendEnd, sendEnd);
-
-    // Return the original promise unchanged
-    return fetchPromise;
+  // Return the original promise unchanged
+  return fetchPromise;
 };
 
 // Preserve fetch properties
-Object.defineProperty(global.fetch, 'name', { value: 'fetch' });
-Object.defineProperty(global.fetch, 'length', { value: originalFetch.length });
+Object.defineProperty(global.fetch, "name", { value: "fetch" });
+Object.defineProperty(global.fetch, "length", { value: originalFetch.length });
 
 /**
  * Resolve the Claude Code CLI entrypoint to launch. Local stub — see the
@@ -121,7 +121,7 @@ Object.defineProperty(global.fetch, 'length', { value: originalFetch.length });
  * @returns {string} Path (or bare command name) to the Claude CLI.
  */
 function getClaudeCliPath() {
-    return process.env.FALCON_CLAUDE_PATH || 'claude';
+  return process.env.FALCON_CLAUDE_PATH || "claude";
 }
 
 /**
@@ -133,23 +133,23 @@ function getClaudeCliPath() {
  * @param {string} cliPath - Path to the Claude CLI entrypoint.
  */
 function runClaudeCli(cliPath) {
-    const { pathToFileURL } = require('url');
-    const isJsFile = cliPath.endsWith('.js') || cliPath.endsWith('.cjs');
-    if (isJsFile) {
-        const importUrl = pathToFileURL(cliPath).href;
-        import(importUrl);
-        return;
-    }
-    throw new Error(
-        `falcon_claude_launcher: cannot launch non-JS CLI path "${cliPath}" yet ` +
-        '(binary spawn support lands with the full CLI-path resolver bullet).'
-    );
+  const { pathToFileURL } = require("node:url");
+  const isJsFile = cliPath.endsWith(".js") || cliPath.endsWith(".cjs");
+  if (isJsFile) {
+    const importUrl = pathToFileURL(cliPath).href;
+    import(importUrl);
+    return;
+  }
+  throw new Error(
+    `falcon_claude_launcher: cannot launch non-JS CLI path "${cliPath}" yet ` +
+      "(binary spawn support lands with the full CLI-path resolver bullet).",
+  );
 }
 
 // Only launch when run directly (`node falcon_claude_launcher.cjs`), not
 // when required by tests.
 if (require.main === module) {
-    runClaudeCli(getClaudeCliPath());
+  runClaudeCli(getClaudeCliPath());
 }
 
 module.exports = { getClaudeCliPath, runClaudeCli, writeMessage };
