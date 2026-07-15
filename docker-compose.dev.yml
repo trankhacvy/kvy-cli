@@ -11,6 +11,13 @@
 # Usage:
 #   docker compose -f docker-compose.dev.yml up -d
 #   DATABASE_URL=postgres://falcon:falcon@localhost:5432/falcon
+#
+# Port already taken? If you already run a local Postgres on 5432, override
+# the host port instead of editing this file:
+#   POSTGRES_PORT=5433 docker compose -f docker-compose.dev.yml up -d
+#   DATABASE_URL=postgres://falcon:falcon@localhost:5433/falcon
+# (or add POSTGRES_PORT=5433 to a .env file next to this compose file — it's
+# picked up automatically by `docker compose`).
 
 services:
   postgres:
@@ -21,7 +28,7 @@ services:
       POSTGRES_PASSWORD: falcon
       POSTGRES_DB: falcon
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - falcon-pg-dev:/var/lib/postgresql/data
     healthcheck:
