@@ -7,8 +7,8 @@ import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Logger } from "../logger.js";
 import type { OutboxHttpClient, OutboxPostResult } from "./httpClient.js";
-import { outboxQueuePath } from "./queue.js";
 import { DEFAULT_FLUSH_MS, DEFAULT_MAX_BATCH_SIZE, Outbox } from "./outbox.js";
+import { outboxQueuePath } from "./queue.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,7 +44,10 @@ function scriptedHttpClient(plan: PlanEntry[]): {
   };
 }
 
-function alwaysOkClient(): { client: OutboxHttpClient; calls: { sessionId: string; localId: string }[] } {
+function alwaysOkClient(): {
+  client: OutboxHttpClient;
+  calls: { sessionId: string; localId: string }[];
+} {
   return scriptedHttpClient([{ ok: true, status: 200 }]);
 }
 
@@ -64,7 +67,10 @@ describe("Outbox", () => {
   });
 
   function makeOutbox(
-    opts: Partial<ConstructorParameters<typeof Outbox>[0]> & { http: OutboxHttpClient; dek: Uint8Array },
+    opts: Partial<ConstructorParameters<typeof Outbox>[0]> & {
+      http: OutboxHttpClient;
+      dek: Uint8Array;
+    },
   ): Outbox {
     const ob = new Outbox({
       sessionId: "sess-1",
@@ -99,7 +105,12 @@ describe("Outbox", () => {
     it("flushes after flushMs elapses even when the count threshold is never reached", async () => {
       const dek = getRandomBytes(32);
       const { client, calls } = alwaysOkClient();
-      const ob = makeOutbox({ dek, http: client, maxBatchSize: DEFAULT_MAX_BATCH_SIZE, flushMs: 40 });
+      const ob = makeOutbox({
+        dek,
+        http: client,
+        maxBatchSize: DEFAULT_MAX_BATCH_SIZE,
+        flushMs: 40,
+      });
 
       ob.enqueue([textEnvelope("only one")]);
       expect(ob.bufferedCount).toBe(1);
@@ -217,6 +228,79 @@ describe("Outbox", () => {
 
       expect(calls.length).toBe(4);
       expect(ob.queuedBatchCount).toBe(0);
+    });
+  });
+
+  describe("disk queue byte cap (design §11: 10MB cap, oldest evicted first)", () => {
+    it("evicts the oldest queued batch(es) once the cap is exceeded, keeping the newest", async () => {
+      const dek = getRandomBytes(32);
+      // Never acks, so nothing dequeues — isolates the append-time eviction behavior
+      // from drain/ack timing.
+      const neverAcks = scriptedHttpClient([{ throws: true }]);
+
+      // Probe a single batch's on-disk size so the cap can be sized deterministically
+      // relative to real payload size, rather than guessing a byte count.
+      const probeSessionId = "sess-cap-probe";
+      const probe = new Outbox({
+        sessionId: probeSessionId,
+        homeDir,
+        dek,
+        http: neverAcks.client,
+        logger: silentLogger(),
+        maxBatchSize: 1,
+        backoffMs: () => 60_000,
+      });
+      outboxes.push(probe);
+      probe.enqueue([textEnvelope("probe")]);
+      expect(probe.queuedBatchCount).toBe(1);
+      const probeOnDisk = JSON.parse(
+        readFileSync(outboxQueuePath(homeDir, probeSessionId), "utf8").trim(),
+      ) as { bytes: number };
+      const perBatchBytes: number = probeOnDisk.bytes;
+      probe.dispose();
+
+      // Cap sized to hold ~2.5 batches: enqueue 4 same-sized batches and expect only
+      // the newest ~2 to survive, oldest evicted first.
+      const capSessionId = "sess-cap-evict";
+      const maxQueueBytes = Math.floor(perBatchBytes * 2.5);
+      const capped = new Outbox({
+        sessionId: capSessionId,
+        homeDir,
+        dek,
+        http: neverAcks.client,
+        logger: silentLogger(),
+        maxBatchSize: 1,
+        maxQueueBytes,
+        backoffMs: () => 60_000,
+      });
+      outboxes.push(capped);
+
+      capped.enqueue([textEnvelope("batch-1-oldest")]);
+      capped.enqueue([textEnvelope("batch-2")]);
+      capped.enqueue([textEnvelope("batch-3")]);
+      capped.enqueue([textEnvelope("batch-4-newest")]);
+
+      // Never given more than fits under the cap, and the newest entry is always kept
+      // even though only ~2.5 batches fit (appendWithCap keeps at least 1).
+      expect(capped.queuedBatchCount).toBeLessThan(4);
+      expect(capped.queuedBatchCount).toBeGreaterThanOrEqual(1);
+
+      const onDiskLines = readFileSync(outboxQueuePath(homeDir, capSessionId), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as { localId: string; content: EncryptedBox });
+      expect(onDiskLines).toHaveLength(capped.queuedBatchCount);
+
+      // The surviving batches must be a suffix of the 4 enqueued (oldest evicted first) —
+      // decrypt each to check which original envelope text survived.
+      const survivingTexts = onDiskLines.map((entry) => {
+        const decrypted = open<SessionEnvelope[]>(entry.content, dek);
+        const ev = decrypted?.[0]?.ev;
+        if (!ev) throw new Error("expected a decrypted envelope");
+        return (ev as { t: "text"; md: string }).md;
+      });
+      expect(survivingTexts.at(-1)).toBe("batch-4-newest"); // newest is never evicted
+      expect(survivingTexts).not.toContain("batch-1-oldest"); // oldest was evicted
     });
   });
 });
