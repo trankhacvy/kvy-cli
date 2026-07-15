@@ -45,8 +45,17 @@ export function encodeBase64Url(buffer: Uint8Array): string {
 
 /**
  * Decode a base64 (or base64url) string to a Uint8Array.
+ *
+ * WARNING: this never throws (package-wide "never throw" philosophy) — any
+ * character outside the selected variant's alphabet (e.g. '-'/'_' when
+ * decoding with the default 'base64' variant, or '+'/'/' when decoding with
+ * 'base64url') is silently dropped rather than rejected. Passing the wrong
+ * `variant` for the input string will NOT raise an error; it will silently
+ * produce the wrong bytes. Always pass the `variant` that matches how the
+ * string was encoded (see `encodeBase64`).
+ *
  * @param base64 - The base64 string to decode
- * @param variant - The encoding variant ('base64' or 'base64url')
+ * @param variant - The encoding variant ('base64' or 'base64url') — must match the encoder's variant
  */
 export function decodeBase64(base64: string, variant: 'base64' | 'base64url' = 'base64'): Uint8Array {
   const input = variant === 'base64url' ? base64.replaceAll('-', '+').replaceAll('_', '/') : base64;
