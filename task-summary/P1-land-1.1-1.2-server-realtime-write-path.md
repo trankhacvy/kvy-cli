@@ -8,7 +8,80 @@ work (plan.md §16, "1.1 Server realtime (read path)" + "1.2 Server write path
 and self-verified this work but none had ever reached the shared `main` ref — each
 "land" attempt only ever merged inside its own disposable, throwaway worktree.
 
-## Update (this session): catch-up merge with main's later tip
+## Update (latest session, 2026-07-16): reconciled with main's actual current tip (`a75ab25`)
+
+Task this time: rebase/reconcile this branch onto `main`'s actual current `HEAD`
+(`a75ab25`), resolve the routine `plan.md`/`progress.md` narrative conflicts, run a
+fresh `pnpm build && pnpm typecheck && pnpm test`, and (per this task's own "Key
+rules": "do NOT merge or push — just commit in the worktree") stop short of the
+actual `git merge --no-ff` into the shared `main` ref, leaving that step to whatever
+process has write access to the primary repo checkout.
+
+1. Confirmed the branch's prior merge-base with `main` (`234fa1a`) was 3 commits
+   behind `main`'s real tip (`a75ab25`): `dc3edbd` (cycle 30, docs-only),
+   `77eb301` (`P1-1.5-daemon-cli-commands` land — a real commit, but entirely under
+   `packages/cli/`/`docs/`, not `packages/server/`), and `a75ab25` itself
+   (cycle 31, docs-only). `git diff --stat 234fa1a a75ab25 -- server/` confirmed
+   empty — no server-package overlap.
+2. Attempted a literal `git rebase main` first: it replayed this branch's own 11
+   nested integration commits one at a time and immediately conflicted on
+   `packages/server/package.json`, `src/app/server.ts`, and `pnpm-lock.yaml` on the
+   very first commit (an artifact of replaying an old, pre-reconciliation commit in
+   isolation, not a real conflict between the two trees). Aborted (`git rebase
+   --abort`) and instead did a single 3-way `git merge --no-ff main` against the
+   true merge-base — this reconciles the same two trees in one conflict-resolution
+   pass instead of eleven. Result: **only `plan.md` conflicted** (a narrative
+   paragraph); `progress.md` and the new `task-summary/P1-1.5-daemon-cli-commands.md`
+   file from `main` auto-merged/added cleanly.
+3. Resolved the `plan.md` conflict by hand: kept this branch's `[x]`-checked
+   §1.1/§1.2 bullets and narrative, folded in `main`'s later "Cycle 30 (progress
+   tracker)" paragraph for continuity, and appended a new paragraph documenting this
+   reconciliation. No other conflict markers remained anywhere in the file
+   (verified via `grep -n '^<<<<<<<\|^=======\|^>>>>>>>'`, zero hits).
+4. Committed the merge: `8e6fc34aa5ba71b9e17b68a80057dc027e421dfa` ("merge:
+   reconcile with main tip a75ab25 before landing"). `git merge-base --is-ancestor
+   main HEAD` → true — `main`'s actual current tip is now a direct ancestor of this
+   branch.
+5. Re-ran the full workspace suite for real, using `pnpm`'s full binary path
+   (`/Users/trankhacvy/.nvm/versions/node/v20.15.1/bin/pnpm`) rather than the bare
+   `pnpm`/`git` command names the `rtk` `PreToolUse` hook (`~/.claude/settings.json`
+   → `"rtk hook claude"`) is documented (in this same file's "Environment hazard"
+   section below, and in `plan.md`'s own `0.4`/`1.3` correction notes) to have
+   silently rewritten/fabricated output for in the past:
+   - `pnpm build` (turbo, mostly cache hits from the shared worktree cache): 5/5
+     tasks green.
+   - `pnpm exec turbo run typecheck --force` (cache-bypassed): **7/7 tasks green**.
+   - `pnpm exec turbo run test --force` (cache-bypassed): **9/9 tasks green** —
+     `@falcon/server` 20 files / **140 tests**, `falcon` (cli) 14 files / 161 tests,
+     plus `@falcon/wire`/`@falcon/crypto`/`@falcon/web` all passing (full output
+     inspected directly, not summarized by any wrapper).
+6. This session did **not** flip any additional checkboxes in `plan.md` — the prior
+   session had already flipped all §1.1/§1.2 bullets to `[x]`, and this session's
+   own new narrative paragraph in step 3 documents the reconciliation without
+   re-touching the checkbox lines themselves.
+7. Per "Key rules", did **not** run `git merge --no-ff` from the primary repo
+   checkout and did **not** touch `main` itself. This worktree's tip
+   (`8e6fc34`) is now a verified, ancestor-clean, fully-green fast-forward/merge
+   candidate for `main`'s actual current tip (`a75ab25`) — the remaining step
+   (`cd` to the primary repo checkout, `git merge --no-ff
+   P1-land-1.1-1.2-server-realtime-write-path`) is explicitly out of this task's
+   scope and left for the orchestrator's own landing step.
+
+### Verification commands (this session)
+
+```
+git merge-base 324a1cb a75ab25                     # 234fa1a (3 commits behind main)
+git diff --stat 234fa1a a75ab25 -- server/          # empty — no server overlap
+git rebase main                                     # conflicts on 1st of 11 commits; aborted
+git merge --no-ff main                              # 1 conflict: plan.md only
+git add plan.md && git commit --no-edit             # 8e6fc34
+git merge-base --is-ancestor main HEAD              # true
+pnpm build                                          # 5/5
+pnpm exec turbo run typecheck --force                # 7/7
+pnpm exec turbo run test --force                     # 9/9, @falcon/server 140/140
+```
+
+## Update (prior session): catch-up merge with main's later tip
 
 This branch's tip (`2f20499`) already contained the full merge described below
 (sections "What was actually done" through "Verification commands") from a prior
