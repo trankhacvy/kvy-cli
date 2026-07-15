@@ -117,8 +117,22 @@ async function readSessionEntries(
   let contents: string;
   try {
     contents = await readFile(file, "utf-8");
-  } catch {
-    logger.debug("[SESSION_SCANNER] session file not found", { file });
+  } catch (error) {
+    const isMissing = (error as NodeJS.ErrnoException)?.code === "ENOENT";
+    if (isMissing) {
+      // Expected: the session may not have started writing yet.
+      logger.debug("[SESSION_SCANNER] session file not found", { file });
+    } else {
+      // Anything other than "not there yet" (permission denied, I/O error,
+      // path is a directory, etc.) is a real fault, not the expected
+      // not-yet-started case — surface it at `warn` so it's visible without
+      // FALCON_DEBUG, even though we still degrade to "no entries" rather
+      // than throwing (a transcript read must never crash the scanner).
+      logger.warn("[SESSION_SCANNER] error reading session file", {
+        file,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
     return [];
   }
 
