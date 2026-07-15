@@ -68,6 +68,17 @@ describe("classifyFalconCommand", () => {
     }
   });
 
+  it("classifies a session started via the dev/prod node entrypoint the same as a bare `falcon` invocation", () => {
+    expect(
+      classifyFalconCommand(
+        "node /Users/dev/falcon/packages/cli/dist/index.mjs claude --resume abc123",
+      ),
+    ).toEqual({ kind: "session", spawnedByDaemon: false });
+    expect(
+      classifyFalconCommand("node /Users/dev/falcon/packages/cli/src/index.ts codex"),
+    ).toEqual({ kind: "session", spawnedByDaemon: false });
+  });
+
   it("returns null for processes unrelated to Falcon", () => {
     expect(classifyFalconCommand("/sbin/launchd")).toBeNull();
     expect(classifyFalconCommand("node /Users/dev/some-other-app/server.js")).toBeNull();

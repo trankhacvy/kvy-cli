@@ -71,8 +71,14 @@ function defaultIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // ESRCH: no such process — genuinely dead. EPERM (and anything else):
+    // the signal was rejected/unclear, not confirmed as delivered to a dead
+    // process — assume it's still alive rather than skipping the SIGKILL
+    // escalation (e.g. a daemon spawned under a different user, where a
+    // liveness probe can hit EPERM while the process is very much running).
+    if ((error as NodeJS.ErrnoException)?.code === "ESRCH") return false;
+    return true;
   }
 }
 
@@ -99,19 +105,27 @@ async function waitForExit(pids: number[], deps: KillDeps, timeoutMs: number): P
   return alive;
 }
 
+function buildOutcome(
+  target: ClassifiedProcess,
+  signal: KillSignal | "none",
+  error?: string,
+): KillOutcome {
+  return {
+    pid: target.pid,
+    command: target.command,
+    kind: target.kind,
+    signal,
+    ...(error !== undefined ? { error } : {}),
+  };
+}
+
 function recordOutcome(
   outcomes: KillOutcome[],
   target: ClassifiedProcess,
   signal: KillSignal | "none",
   error?: string,
 ): void {
-  outcomes.push({
-    pid: target.pid,
-    command: target.command,
-    kind: target.kind,
-    signal,
-    ...(error !== undefined ? { error } : {}),
-  });
+  outcomes.push(buildOutcome(target, signal, error));
 }
 
 async function killForce(targets: ClassifiedProcess[], deps: KillDeps): Promise<KillOutcome[]> {
@@ -137,7 +151,11 @@ async function killGraceful(
   gracefulTimeoutMs: number,
 ): Promise<KillOutcome[]> {
   const logger = deps.logger ?? noopLogger;
-  const outcomes: KillOutcome[] = [];
+  // Keyed by pid rather than pushed in completion order, so the final
+  // return can be re-assembled index-aligned with `targets` regardless of
+  // which pass (initial SIGTERM failure vs. post-wait resolution) produced
+  // each outcome.
+  const outcomeByPid = new Map<number, KillOutcome>();
   const terminated: ClassifiedProcess[] = [];
 
   for (const target of targets) {
@@ -147,7 +165,7 @@ async function killGraceful(
       logger.info("[KILL] SIGTERM sent", { pid: target.pid, kind: target.kind });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      recordOutcome(outcomes, target, "none", message);
+      outcomeByPid.set(target.pid, buildOutcome(target, "none", message));
       logger.warn("[KILL] SIGTERM failed", { pid: target.pid, message });
     }
   }
@@ -160,21 +178,27 @@ async function killGraceful(
 
   for (const target of terminated) {
     if (!stillAlive.has(target.pid)) {
-      recordOutcome(outcomes, target, "SIGTERM");
+      outcomeByPid.set(target.pid, buildOutcome(target, "SIGTERM"));
       continue;
     }
     try {
       deps.killPid(target.pid, "SIGKILL");
-      recordOutcome(outcomes, target, "SIGKILL");
+      outcomeByPid.set(target.pid, buildOutcome(target, "SIGKILL"));
       logger.warn("[KILL] ignored SIGTERM, sent SIGKILL", { pid: target.pid, kind: target.kind });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      recordOutcome(outcomes, target, "SIGTERM", message);
+      outcomeByPid.set(target.pid, buildOutcome(target, "SIGTERM", message));
       logger.warn("[KILL] SIGKILL escalation failed", { pid: target.pid, message });
     }
   }
 
-  return outcomes;
+  return targets.map((target) => {
+    const outcome = outcomeByPid.get(target.pid);
+    if (!outcome) {
+      throw new Error(`kill.ts: missing outcome for pid ${target.pid} — this is a bug`);
+    }
+    return outcome;
+  });
 }
 
 async function findTargets(deps: KillDeps, kinds: FalconProcessKind[]): Promise<ClassifiedProcess[]> {

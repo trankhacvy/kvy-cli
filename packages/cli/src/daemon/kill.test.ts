@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createKillDeps,
   describeKillSummary,
   killAll,
   killAllForce,
@@ -120,6 +121,55 @@ describe("killAllForce", () => {
       expect(call[1]).toBe("SIGKILL");
     }
     expect(summary.outcomes.every((o) => o.signal === "SIGKILL")).toBe(true);
+  });
+});
+
+describe("killAll outcome ordering", () => {
+  it("preserves target order in outcomes even when some SIGTERMs fail and others succeed", async () => {
+    // pid 200 is the *middle* target (targeted order is [100, 200, 300]);
+    // making its SIGTERM fail while 100 and 300 succeed proves outcomes stay
+    // index-aligned with `targeted` rather than being grouped by which pass
+    // (immediate SIGTERM failure vs. post-graceful-wait resolution) produced
+    // them.
+    const deps = makeDeps({
+      killPid: vi.fn((pid: number, signal) => {
+        if (pid === 200 && signal === "SIGTERM") throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+      }),
+    });
+    const summary = await killAll(deps);
+
+    expect(summary.targeted.map((t) => t.pid)).toEqual([100, 200, 300]);
+    // outcomes[i] corresponds to targeted[i], regardless of which target's
+    // SIGTERM failed.
+    expect(summary.outcomes.map((o) => o.pid)).toEqual([100, 200, 300]);
+    expect(summary.outcomes[1]).toMatchObject({ pid: 200, signal: "none", error: "EPERM" });
+  });
+});
+
+describe("createKillDeps default isAlive", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("treats ESRCH as dead", () => {
+    vi.spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error("no such process"), { code: "ESRCH" });
+    });
+    expect(createKillDeps().isAlive(12345)).toBe(false);
+  });
+
+  it("treats EPERM (permission denied on the liveness probe) as alive, not dead", () => {
+    vi.spyOn(process, "kill").mockImplementation(() => {
+      throw Object.assign(new Error("operation not permitted"), { code: "EPERM" });
+    });
+    expect(createKillDeps().isAlive(12345)).toBe(true);
+  });
+
+  it("treats an unrecognized error as alive (fail safe, don't skip SIGKILL escalation)", () => {
+    vi.spyOn(process, "kill").mockImplementation(() => {
+      throw new Error("something unexpected");
+    });
+    expect(createKillDeps().isAlive(12345)).toBe(true);
   });
 });
 
