@@ -32,8 +32,10 @@ packages/
 ├─ cli/       falcon          [planned] CLI: falcon / falcon-claude / falcon-codex bins.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
-│                             migrations (`drizzle/`), migration-on-boot runner.
-│                             Socket.IO/auth routes still [planned].
+│                             migrations (`drizzle/`), migration-on-boot runner + auth
+│                             module (src/auth/: JWT HS256 mint/verify, in-memory token
+│                             cache, app.authenticate preHandler).
+│                             Socket.IO/auth *routes* still [planned].
 └─ web/       @falcon/web     [planned] Next.js PWA.
 ```
 
