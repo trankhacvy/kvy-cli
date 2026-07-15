@@ -22,7 +22,7 @@ export type FalconCommand =
   | { type: "version" }
   | { type: "start"; provider: Provider; providerArgs: string[]; branch?: string }
   | { type: "auth"; action: "login" | "logout" | "status" }
-  | { type: "daemon"; action: "start" | "stop" | "status"; noWait: boolean }
+  | { type: "daemon"; action: "start" | "start-sync" | "stop" | "status"; noWait: boolean }
   | { type: "kill"; target: "daemon" | "sessions" | "all" | "all-force" }
   | { type: "sessions"; action: "list" }
   | { type: "resume"; sessionId: string }
@@ -136,12 +136,16 @@ function parseDaemon(rest: string[]): FalconCommand {
   if (action === "start") {
     return { type: "daemon", action: "start", noWait: rest.slice(1).includes("--no-wait") };
   }
-  if (action === "stop" || action === "status") {
+  // `start-sync` is the daemon's own long-running process body (see
+  // daemon/commands.ts) — normally spawned detached by `start` itself, but
+  // also directly invocable (e.g. to run the daemon attached to a terminal
+  // for debugging).
+  if (action === "start-sync" || action === "stop" || action === "status") {
     return { type: "daemon", action, noWait: false };
   }
   throw new ArgParseError(
     `Unknown "falcon daemon" action: ${action ?? "(none)"}`,
-    "falcon daemon start [--no-wait] | stop | status",
+    "falcon daemon start [--no-wait] | start-sync | stop | status",
   );
 }
 
