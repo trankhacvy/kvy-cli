@@ -43,8 +43,14 @@ packages/
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
 │                             module (src/auth/: JWT HS256 mint/verify, in-memory token
-│                             cache, app.authenticate preHandler).
-│                             Socket.IO/auth *routes* still [planned].
+│                             cache, app.authenticate preHandler) + the HTTP write path
+│                             (src/app/routes/: POST /v1/sessions, POST/GET .../messages,
+│                             PUT .../metadata|state CAS, GET /v1/sync, GET /v1/sessions,
+│                             POST /v1/machines — all idempotent/rate-limited, design §4.3
+│                             DELTA D1) fanning out through an in-process `eventRouter`
+│                             seam (src/app/eventRouter.ts) that task 1.1's Socket.IO layer
+│                             will subscribe to. Auth challenge/OAuth/pairing *routes* and
+│                             Socket.IO (read path) still [planned].
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme, one placeholder route. Auth,
                               sync engine, crypto bridge, and API calls still [planned].

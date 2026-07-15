@@ -16,6 +16,9 @@
     "db:migrate": "tsx -e \"import('./src/db/migrate.ts').then(m => m.runMigrations())\""
   },
   "dependencies": {
+    "@falcon/crypto": "workspace:*",
+    "@falcon/wire": "workspace:*",
+    "@fastify/rate-limit": "^10.2.0",
     "@paralleldrive/cuid2": "^2.2.2",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.10.0",
@@ -27,6 +30,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@types/node": "^22.10.0",
     "drizzle-kit": "^0.31.10",
     "pino-pretty": "^13.1.3",
