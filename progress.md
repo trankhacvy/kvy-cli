@@ -2579,3 +2579,121 @@ unmerged worktrees — effectively ~27.4% (37/135) "done, pending merge."
    server/web/crypto/cli/wire) in `.worktrees/P1-1.6-auth-pages`; depends on
    the already-landed crypto worker (`P1-land-1.6-crypto-worker-final`), no
    other unmerged prerequisites noted.
+
+## Cycle 23 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `d40eb0d`, "chore: cycle 22 — completed 0 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 6/6 tasks — `@falcon/wire`, `@falcon/crypto`
+  (+ its `build`), `@falcon/server`, `@falcon/web`, `falcon` (cli). `tsc
+  --noEmit` clean on every package (turbo full cache hit, no source changes
+  since Cycle 22).
+- `pnpm test` → **PASSED**: 9/9 tasks, **315 tests total, 0 failures** —
+  `falcon` (cli) 66, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/wire` 61,
+  `@falcon/server` 87. Same totals as Cycles 20–22 — `main` remains stable,
+  no regressions.
+
+### Task-summary read this cycle
+
+This cycle's instructions named three files as "successful tasks":
+`task-summary/P1-1.5-control-server.md`, `task-summary/P1-1.6-reducer-port.md`,
+`task-summary/P1-1.5-kill-commands.md`. **None exist on `main`** — confirmed
+via directory listing of the working tree's `task-summary/` (no matches for
+any of the three names) and independently via
+`git merge-base --is-ancestor <branch> main` for all three matching branch
+names, which all returned **not an ancestor**. Corroborated by absence of
+the underlying code on `main`: `packages/cli/src/daemon/` does not exist,
+`packages/web/src/sync/` does not exist, and `packages/cli/src/index.ts`'s
+`kill` subcommand still prints "not implemented yet".
+
+- **`task-summary/P1-1.5-control-server.md`** — exists in
+  `.worktrees/P1-1.5-control-server` (tip `609c568`, feat+refactor):
+  `packages/cli/src/daemon/{types,controlServer}.ts` — a Fastify server
+  bound to an ephemeral `127.0.0.1:0` port exposing `/session-started`,
+  `/list`, `/stop-session`, `/spawn-session`, `/stop`, ported from Happy's
+  `daemon/controlServer.ts`. Its own task-summary reports 78/78 `falcon`
+  tests green (19 new `controlServer.test.ts` cases using real `fetch()`
+  against the ephemeral port). Genuinely complete, self-verified — but
+  **not merged onto `main`**.
+- **`task-summary/P1-1.6-reducer-port.md`** — exists in
+  `.worktrees/P1-1.6-reducer-port` (tip `71abb43`, feat only):
+  `packages/web/src/sync/reducer/{reduce,types}.ts` — a port of happy-app's
+  `reducer.ts` (`SessionEnvelope[]` → render items). Its own task-summary
+  reports 55/55 `@falcon/web` tests green (12 `reduce.test.ts` plus other
+  suites). Genuinely complete, self-verified — but **not merged onto
+  `main`**.
+- **`task-summary/P1-1.5-kill-commands.md`** — exists in
+  `.worktrees/P1-1.5-kill-commands` (tip `6027341`, feat+fix):
+  `packages/cli/src/daemon/processScan.ts` plus `falcon kill
+  daemon/sessions/all/all-force` wired into `index.ts` (process-scan based,
+  works even when the daemon is wedged). Its own task-summary reports 91/91
+  `falcon` tests green (including 3 new `index.test.ts` cases). Genuinely
+  complete, self-verified — but **not merged onto `main`**.
+
+Per this tracker's established convention (Cycles 1–3, 7–9, 16–22): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked, regardless of how
+complete or well-verified the underlying work is. All three requested files
+fall in this bucket this cycle. `plan.md` was updated only with narrative
+cycle-23 annotations on the `1.5 Daemon v1` and `1.6 Web app v1` section
+headers, documenting these findings so future cycles/humans don't have to
+re-derive them.
+
+### Tasks completed this cycle
+
+None merged into `main`. `main` remains green (315/315 tests, clean
+typecheck) but unchanged in scope from Cycle 22 — `plan.md` checkbox count
+stays **34/135**.
+
+### Blockers / issues found
+
+1. **All three requested tasks are unmerged** (dominant recurring pattern
+   since Cycle 1, now spanning 16+ cycles): real, complete, self-verified
+   work for `P1-1.5-control-server`, `P1-1.6-reducer-port`, and
+   `P1-1.5-kill-commands` all sit in `.worktrees/`, none landed on `main`.
+   This tracker's role is verify-and-record on `main`, not merge — merging
+   is an orchestrator/operator action outside this role's scope.
+2. **§1.5 Daemon v1 now has two independently complete, unmerged pieces**
+   (`control-server`, `kill-commands`) plus a third from Cycle 16
+   (`daemon-singleton-lock`) — all three would need to land together (or in
+   dependency order) before any 1.5 checkbox can flip, since none of them
+   individually constitutes the full daemon.
+3. Unmerged worktrees per `git worktree list`, unchanged from Cycle 22 plus
+   the three above: `P0-land-phase0-worktrees`, `P1-1.1-server-realtime`,
+   `P1-1.2-server-write-http`, `P1-1.3-claude-launcher-script`,
+   `P1-1.3-cli-locator`, `P1-1.3-falcon-home-persistence`,
+   `P1-1.3-provider-detection`, `P1-1.4-envelope-mapper`,
+   `P1-1.4-http-outbox`, `P1-1.5-daemon-singleton-lock`, `P1-1.6-api-socket`,
+   `P1-1.6-auth-pages`. All confirmed still unmerged via `git merge-base
+   --is-ancestor` this cycle (spot-checked; full re-verification not
+   re-run for names not requested this cycle).
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **34 checked on `main`**,
+unchanged from Cycles 20–22 (0.1 5/5, 0.2 8/8, 0.3 7/7, 0.4 7/8, 1.3 1/9, 1.4
+2/6, 1.6 2/8). **Completion: ~25.2%** (34/135), verified against a green
+`pnpm typecheck`/`pnpm test` run covering all 5 packages on `main` (315
+tests total, 0 failures, identical to Cycles 20–22 — confirming no silent
+regression since). Note: at least 6 additional bullets (HTTP outbox, CLI
+locator, auth pages, control server, kill commands, reducer port) are
+implementation-complete and self-verified in unmerged worktrees —
+effectively ~29.6% (40/135) "done, pending merge."
+
+### Next recommended tasks
+
+1. **Land the three §1.5 daemon pieces together** —
+   `P1-1.5-daemon-singleton-lock` (Cycle 16), `P1-1.5-control-server`, and
+   `P1-1.5-kill-commands` are all independently complete and self-verified;
+   landing them as a set would flip most of the 1.5 checkboxes at once and
+   is lower-risk than landing them one at a time against a moving `main`.
+2. **Land `P1-1.6-reducer-port`** — complete (55/55 `@falcon/web` tests) in
+   `.worktrees/P1-1.6-reducer-port`; no unmerged prerequisites noted beyond
+   the already-landed crypto worker.
+3. **Land `P1-1.4-http-outbox`** — carried over from Cycle 22, still
+   genuinely complete (72/72 `falcon` tests) in
+   `.worktrees/P1-1.4-http-outbox`; just needs an actual merge onto `main`.
