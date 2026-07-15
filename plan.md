@@ -611,30 +611,30 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 ### Phase 0 — Repo & contracts (M0, week 1)
 
 **0.1 Scaffold**
-- [ ] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
-- [ ] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
+- [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
+- [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
 - [ ] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
-- [ ] `docs/` seeded with `protocol.md`, `encryption.md` stubs that link to the design doc (institutional-memory habit from Happy)
+- [x] `docs/` seeded with `protocol.md`, `encryption.md` stubs that link to the design doc (institutional-memory habit from Happy)
 - [ ] Root `CLAUDE.md` once the scaffold exists (last task of 0.1): build/test/typecheck commands, package layout, monorepo conventions, pointers to `plan.md` + `falcon-system-design.md` + `falcon-prd.md` — keep it minimal (commands + conventions, not a duplicate of the plan); update it as each phase lands new packages
 
 **0.2 `@falcon/wire`** — §2
-- [ ] Package skeleton with pkgroll dual CJS/ESM build, `zod` + `cuid2` only
-- [ ] `EncryptedBoxSchema` + versioned-value helpers (`Versioned<T>`)
-- [ ] `SessionEventSchema` (11 event types) + `SessionEnvelopeSchema` + `createEnvelope()` helper with cuid2 minting
-- [ ] `UpdateSchema` (structural w/ optional `seq`; `message-new` w/ `msgSeq`) + `EphemeralSchema` (`activity`, `machine-presence`, `attention`)
-- [ ] RPC contracts: `RpcCallSchema`, machine RPC param/result schemas (`SpawnParams` incl. `idempotencyKey`, `adopt.*`, `git.*`, `fs.read`), session RPC schemas (`message`, `perm.answer`, `interrupt`, `takeControl`, `setMode`)
-- [ ] `PermissionModeSchema` + `PermDecisionSchema`
-- [ ] Snapshot tests freezing every schema (additive-only lint: CI fails if a field is removed/retyped) — design §5.3 policy
-- [ ] Reserved namespaces documented in-file: `checkpoint:*`, `preview:*`, `voice:*` (deferred features)
+- [x] Package skeleton with pkgroll dual CJS/ESM build, `zod` + `cuid2` only
+- [x] `EncryptedBoxSchema` + versioned-value helpers (`Versioned<T>`)
+- [x] `SessionEventSchema` (11 event types) + `SessionEnvelopeSchema` + `createEnvelope()` helper with cuid2 minting
+- [x] `UpdateSchema` (structural w/ optional `seq`; `message-new` w/ `msgSeq`) + `EphemeralSchema` (`activity`, `machine-presence`, `attention`)
+- [x] RPC contracts: `RpcCallSchema`, machine RPC param/result schemas (`SpawnParams` incl. `idempotencyKey`, `adopt.*`, `git.*`, `fs.read`), session RPC schemas (`message`, `perm.answer`, `interrupt`, `takeControl`, `setMode`)
+- [x] `PermissionModeSchema` + `PermDecisionSchema`
+- [x] Snapshot tests freezing every schema (additive-only lint: CI fails if a field is removed/retyped) — design §5.3 policy
+- [x] Reserved namespaces documented in-file: `checkpoint:*`, `preview:*`, `voice:*` (deferred features)
 
 **0.3 `@falcon/crypto`** — §3.1
-- [ ] Port `encryption.ts` from Happy **(V)**: base64/base64url, `getRandomBytes`, `libsodiumPublicKeyFromSecretKey`, `libsodiumEncryptForPublicKey`, `encryptLegacy/decryptLegacy`, `encryptBlob/decryptBlob`, `encryptWithDataKey/decryptWithDataKey`, `authChallenge` — preserve MIT attribution header
-- [ ] `seal()/open()` EncryptedBox wrappers; `open()` returns `null`, never throws **(N)**
-- [ ] Key hierarchy: `deriveKeyTree(masterSecret)` → auth signing keypair, content keypair, anonId, blob master (HKDF/HMAC-SHA512 with domain separation) **(N)** — design §5.1
-- [ ] Sealed-box DEK wrap/unwrap (`wrapDek`, `unwrapDek` with version byte `0x00`) **(N)**
-- [ ] Recovery code: masterSecret ↔ grouped Base32 (11×5) with error-tolerant normalization (0→O, 1→I, 8→B, 9→G) **(P** from happy-app`secretKeyBackup.ts`**)**
-- [ ] Browser build: `.web.ts` split (libsodium-wrappers + WebCrypto AES-GCM); cross-impl test vectors (node encrypts → web decrypts, and vice versa)
-- [ ] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
+- [x] Port `encryption.ts` from Happy **(V)**: base64/base64url, `getRandomBytes`, `libsodiumPublicKeyFromSecretKey`, `libsodiumEncryptForPublicKey`, `encryptLegacy/decryptLegacy`, `encryptBlob/decryptBlob`, `encryptWithDataKey/decryptWithDataKey`, `authChallenge` — preserve MIT attribution header
+- [x] `seal()/open()` EncryptedBox wrappers; `open()` returns `null`, never throws **(N)**
+- [x] Key hierarchy: `deriveKeyTree(masterSecret)` → auth signing keypair, content keypair, anonId, blob master (HKDF/HMAC-SHA512 with domain separation) **(N)** — design §5.1
+- [x] Sealed-box DEK wrap/unwrap (`wrapDek`, `unwrapDek` with version byte `0x00`) **(N)**
+- [x] Recovery code: masterSecret ↔ grouped Base32 (11×5) with error-tolerant normalization (0→O, 1→I, 8→B, 9→G) **(P** from happy-app`secretKeyBackup.ts`**)**
+- [x] Browser build: `.web.ts` split (libsodium-wrappers + WebCrypto AES-GCM); cross-impl test vectors (node encrypts → web decrypts, and vice versa)
+- [x] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
 
 **0.4 Server foundation** — §3.2, §4
 - [ ] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
