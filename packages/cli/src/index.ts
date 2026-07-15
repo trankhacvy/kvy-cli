@@ -3,6 +3,14 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
+import {
+  describeKillSummary,
+  type KillTarget,
+  killAll,
+  killAllForce,
+  killDaemon,
+  killSessions,
+} from "./daemon/kill.js";
 import { createLogger } from "./logger.js";
 
 // Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): this
@@ -59,7 +67,27 @@ function describeStart(command: Extract<FalconCommand, { type: "start" }>): stri
   return `${parts.join(" ")}\n`;
 }
 
-function run(command: FalconCommand): number {
+/**
+ * `falcon kill *` is process-scan based (plan.md §7.2/§7.4) and therefore
+ * inherently async (it shells out to `ps`, then waits out a graceful-stop
+ * timeout) — the only subcommand so far that can't return its exit code
+ * synchronously. See the `main()`/bottom-of-file guard for how that's
+ * reconciled with every other subcommand staying synchronous.
+ */
+async function runKill(target: KillTarget): Promise<number> {
+  const summary = await (target === "daemon"
+    ? killDaemon()
+    : target === "sessions"
+      ? killSessions()
+      : target === "all"
+        ? killAll()
+        : killAllForce());
+  process.stdout.write(describeKillSummary(target, summary));
+  const hasFailures = summary.outcomes.some((o) => o.error !== undefined);
+  return hasFailures ? 1 : 0;
+}
+
+function run(command: FalconCommand): number | Promise<number> {
   switch (command.type) {
     case "help":
       process.stdout.write(HELP_TEXT);
@@ -77,8 +105,7 @@ function run(command: FalconCommand): number {
       process.stdout.write(`falcon daemon ${command.action}: not implemented yet\n`);
       return 0;
     case "kill":
-      process.stdout.write(`falcon kill ${command.target}: not implemented yet\n`);
-      return 0;
+      return runKill(command.target);
     case "sessions":
       process.stdout.write(`falcon sessions ${command.action}: not implemented yet\n`);
       return 0;
@@ -97,28 +124,43 @@ function run(command: FalconCommand): number {
   }
 }
 
-export function main(argv: string[] = process.argv.slice(2)): number {
+function handleUnexpectedError(error: unknown): number {
+  if (error instanceof ArgParseError) {
+    logger.warn("arg parse error", { message: error.message });
+    process.stderr.write(`falcon: ${error.message}\n`);
+    if (error.usage) process.stderr.write(`usage: ${error.usage}\n`);
+    return 1;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  logger.error("unhandled error", { message });
+  process.stderr.write("falcon: unexpected error — see ~/.falcon/logs for details\n");
+  return 1;
+}
+
+// `run()` is synchronous for every subcommand except `kill` (process-scan
+// based, so inherently async — see `runKill` above). `main()` stays
+// synchronous-by-default so every existing subcommand (and its tests) is
+// unaffected, only widening to `Promise<number>` for the one command that
+// needs it; the bottom-of-file guard below handles both shapes.
+export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   logger.debug("cli invoked", { argv });
   try {
     const command = parseArgs(argv);
     logger.debug("parsed command", { command });
-    return run(command);
+    const result = run(command);
+    return result instanceof Promise ? result.catch(handleUnexpectedError) : result;
   } catch (error) {
-    if (error instanceof ArgParseError) {
-      logger.warn("arg parse error", { message: error.message });
-      process.stderr.write(`falcon: ${error.message}\n`);
-      if (error.usage) process.stderr.write(`usage: ${error.usage}\n`);
-      return 1;
-    }
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error("unhandled error", { message });
-    process.stderr.write("falcon: unexpected error — see ~/.falcon/logs for details\n");
-    return 1;
+    return handleUnexpectedError(error);
   }
 }
 
 // Guard so `main()` can be imported and unit-tested (src/index.test.ts)
 // without also running the CLI as a side effect of the import.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  process.exit(main());
+  const result = main();
+  if (result instanceof Promise) {
+    result.then((code) => process.exit(code));
+  } else {
+    process.exit(result);
+  }
 }

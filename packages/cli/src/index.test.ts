@@ -72,6 +72,98 @@ describe("main()", () => {
     stderr.mockRestore();
   });
 
+  it("wires the `kill` subcommand to daemon/kill.js and awaits the async result", async () => {
+    vi.doMock("./daemon/kill.js", () => ({
+      killDaemon: vi.fn(),
+      killSessions: vi.fn(),
+      killAll: vi.fn(async () => ({
+        targeted: [
+          {
+            pid: 100,
+            ppid: 1,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            spawnedByDaemon: false,
+          },
+        ],
+        outcomes: [
+          { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
+        ],
+      })),
+      killAllForce: vi.fn(),
+      describeKillSummary: vi.fn(() => "falcon kill all: 1/1 process(es) terminated\n"),
+    }));
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const result = main(["kill", "all"]);
+    expect(result).toBeInstanceOf(Promise);
+    const code = await result;
+
+    expect(code).toBe(0);
+    expect(stdout).toHaveBeenCalledWith("falcon kill all: 1/1 process(es) terminated\n");
+    stdout.mockRestore();
+    vi.doUnmock("./daemon/kill.js");
+  });
+
+  it("exits 1 when `kill` reports a per-pid failure", async () => {
+    vi.doMock("./daemon/kill.js", () => ({
+      killDaemon: vi.fn(async () => ({
+        targeted: [
+          {
+            pid: 100,
+            ppid: 1,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            spawnedByDaemon: false,
+          },
+        ],
+        outcomes: [
+          {
+            pid: 100,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            signal: "none",
+            error: "EPERM",
+          },
+        ],
+      })),
+      killSessions: vi.fn(),
+      killAll: vi.fn(),
+      killAllForce: vi.fn(),
+      describeKillSummary: vi.fn(() => "falcon kill daemon: 0/1 process(es) terminated\n"),
+    }));
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const code = await main(["kill", "daemon"]);
+
+    expect(code).toBe(1);
+    stdout.mockRestore();
+    vi.doUnmock("./daemon/kill.js");
+  });
+
+  it("falls back to the error handler if the kill promise rejects", async () => {
+    vi.doMock("./daemon/kill.js", () => ({
+      killDaemon: vi.fn(),
+      killSessions: vi.fn(async () => {
+        throw new Error("ps exploded");
+      }),
+      killAll: vi.fn(),
+      killAllForce: vi.fn(),
+      describeKillSummary: vi.fn(),
+    }));
+    const main = await importMain();
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const code = await main(["kill", "sessions"]);
+
+    expect(code).toBe(1);
+    expect(stderr.mock.calls[0]?.[0]).toContain("unexpected error");
+    stderr.mockRestore();
+    vi.doUnmock("./daemon/kill.js");
+  });
+
   it("never writes CLI-level output through the file logger's channel", async () => {
     // Help/version/errors are direct stdout/stderr writes from index.ts
     // itself (legitimate CLI UX) — distinct from the logger, which this
