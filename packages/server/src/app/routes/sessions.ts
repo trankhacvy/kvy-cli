@@ -1,0 +1,154 @@
+import { decodeBase64 } from "@falcon/crypto";
+import { EncryptedBoxSchema, SessionRowSchema } from "@falcon/wire";
+import { and, desc, eq, lt, or } from "drizzle-orm";
+import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { z } from "zod";
+import { encodeBox } from "../../db/box.js";
+import { sessions } from "../../db/schema.js";
+import { allocHeaderSeq } from "../../db/seq.js";
+import type { Database } from "../../db/types.js";
+import type { EventRouterPort } from "../events/eventRouter.js";
+import { toSessionRow } from "./mappers.js";
+import { decodeSessionCursor, encodeSessionCursor } from "./shared.js";
+
+const CreateSessionBodySchema = z.object({
+  tag: z.string().min(1),
+  provider: z.enum(["claude-code", "codex"]),
+  workspaceId: z.string().min(1).nullable().optional(),
+  machineId: z.string().min(1).nullable().optional(),
+  executionTarget: z.string().min(1).optional(),
+  metadata: EncryptedBoxSchema,
+  dek: z.string().min(1), // base64
+});
+
+const ListSessionsQuerySchema = z.object({
+  cursor: z.string().optional(),
+  limit: z.coerce.number().int().positive().max(200).default(50),
+});
+
+const ListSessionsResponseSchema = z.object({
+  sessions: z.array(SessionRowSchema),
+  nextCursor: z.string().nullable(),
+});
+
+/**
+ * `POST /v1/sessions` + `GET /v1/sessions` (design §4.3/§6.2, plan.md §16
+ * "1.2 Server write path").
+ *
+ * `db`/`eventRouter` are injected (not the module singletons) so tests can
+ * bind an in-memory Postgres and assert on fan-out without a real socket —
+ * same pattern as `buildAuthRoutes` (task 0.4).
+ */
+export function buildSessionsRoutes(db: Database, eventRouter: EventRouterPort): FastifyPluginAsyncZod {
+  return async (app) => {
+    app.post(
+      "/v1/sessions",
+      {
+        preHandler: app.authenticate,
+        config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+        schema: {
+          body: CreateSessionBodySchema,
+          response: { 200: SessionRowSchema, 201: SessionRowSchema },
+        },
+      },
+      async (req, reply) => {
+        const accountId = req.accountId;
+        const { tag, provider, workspaceId, machineId, executionTarget, metadata, dek } = req.body;
+
+        // Create-or-get by (accountId, tag) — idempotent (design §4.3). The
+        // unique index on (account_id, tag) is the actual dedup mechanism
+        // under concurrency; `onConflictDoNothing` + re-select turns a lost
+        // race into the same 200-replay a sequential retry would get.
+        const outcome = await db.transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(sessions)
+            .values({
+              accountId,
+              tag,
+              provider,
+              workspaceId: workspaceId ?? null,
+              machineId: machineId ?? null,
+              ...(executionTarget ? { executionTarget } : {}),
+              metadata: encodeBox(metadata),
+              dek: decodeBase64(dek),
+            })
+            .onConflictDoNothing({ target: [sessions.accountId, sessions.tag] })
+            .returning();
+
+          if (inserted) {
+            const headerSeq = await allocHeaderSeq(tx, accountId);
+            return { row: inserted, created: true as const, headerSeq };
+          }
+
+          const existing = await tx.query.sessions.findFirst({
+            where: and(eq(sessions.accountId, accountId), eq(sessions.tag, tag)),
+          });
+          if (!existing) {
+            // Unreachable in practice: onConflictDoNothing only returns
+            // nothing when the unique index already has a matching row.
+            throw new Error(
+              `POST /v1/sessions: conflict on (accountId, tag=${tag}) but no existing row found`,
+            );
+          }
+          return { row: existing, created: false as const };
+        });
+
+        if (outcome.created) {
+          reply.raw.once("finish", () => {
+            eventRouter.emitUpdate({
+              accountId,
+              payload: {
+                seq: outcome.headerSeq,
+                ts: Date.now(),
+                body: { t: "session-new", session: toSessionRow(outcome.row) },
+              },
+            });
+          });
+          reply.code(201);
+        }
+        return toSessionRow(outcome.row);
+      },
+    );
+
+    app.get(
+      "/v1/sessions",
+      {
+        preHandler: app.authenticate,
+        schema: {
+          querystring: ListSessionsQuerySchema,
+          response: { 200: ListSessionsResponseSchema, 400: z.object({ error: z.string() }) },
+        },
+      },
+      async (req, reply) => {
+        const { cursor, limit } = req.query;
+        const accountId = req.accountId;
+
+        let cursorCond: ReturnType<typeof and> | undefined;
+        if (cursor) {
+          try {
+            const { updatedAt, id } = decodeSessionCursor(cursor);
+            cursorCond = or(
+              lt(sessions.updatedAt, updatedAt),
+              and(eq(sessions.updatedAt, updatedAt), lt(sessions.id, id)),
+            );
+          } catch {
+            return reply.code(400).send({ error: "invalid cursor" });
+          }
+        }
+
+        const rows = await db.query.sessions.findMany({
+          where: cursorCond ? and(eq(sessions.accountId, accountId), cursorCond) : eq(sessions.accountId, accountId),
+          orderBy: [desc(sessions.updatedAt), desc(sessions.id)],
+          limit: limit + 1,
+        });
+
+        const hasMore = rows.length > limit;
+        const page = hasMore ? rows.slice(0, limit) : rows;
+        const last = page[page.length - 1];
+        const nextCursor = hasMore && last ? encodeSessionCursor(last.updatedAt, last.id) : null;
+
+        return { sessions: page.map(toSessionRow), nextCursor };
+      },
+    );
+  };
+}

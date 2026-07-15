@@ -59,6 +59,20 @@ export interface EmitEphemeralParams {
   skipSenderConnection?: ClientConnection;
 }
 
+/**
+ * The fan-out seam the HTTP write path (task 1.2, `app/routes/*`) depends
+ * on: every write route calls `emitUpdate`/`emitEphemeral` post-commit
+ * (never from inside a transaction — design §6.1) instead of talking to
+ * Socket.IO rooms directly. Narrowed to just the two emit methods (not the
+ * full `EventRouter` surface below, which also owns connection/room
+ * bookkeeping that only `socket.ts` needs) so route tests can inject a
+ * lightweight recording fake instead of a real Socket.IO server.
+ */
+export interface EventRouterPort {
+  emitUpdate(params: EmitUpdateParams): void;
+  emitEphemeral(params: EmitEphemeralParams): void;
+}
+
 // === EPHEMERAL BACKPRESSURE (design §4.3, plan.md 1.1 item 5 — marked (N)) ===
 //
 // Persistent `update`s are never dropped (a slow client falls back to the HTTP
