@@ -1,0 +1,82 @@
+import { appendFileSync, mkdirSync } from "node:fs";
+import path from "node:path";
+import { resolveHomeDir } from "./home.js";
+
+/**
+ * File-only logger.
+ *
+ * This module MUST NEVER write to stdout/stderr. Once local-mode session
+ * spawning lands (plan.md §6.3), the falcon process inherits its stdio
+ * (`stdio: ['inherit','inherit','inherit','pipe']`) into the real Claude
+ * Code / Codex child process — any stray write from Falcon on those file
+ * descriptors would land inside the provider's TUI and corrupt its
+ * rendering. So all internal diagnostics go to `~/.falcon/logs/` instead.
+ *
+ * This is distinct from ordinary CLI output (help text, `--version`, error
+ * messages) — those are legitimate user-facing writes to stdout/stderr made
+ * directly by command handlers, not logging, and are unaffected by this
+ * rule (design §7.2: "logs/ … file-only logging; NEVER stdout").
+ */
+
+export type LogLevel = "debug" | "info" | "warn" | "error";
+
+const LEVEL_ORDER: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 };
+
+export interface Logger {
+  debug(message: string, meta?: Record<string, unknown>): void;
+  info(message: string, meta?: Record<string, unknown>): void;
+  warn(message: string, meta?: Record<string, unknown>): void;
+  error(message: string, meta?: Record<string, unknown>): void;
+}
+
+export interface CreateLoggerOptions {
+  /** Overrides the resolved `~/.falcon` (or `FALCON_HOME_DIR`) directory. */
+  homeDir?: string;
+  /** Overrides FALCON_DEBUG-derived level gating. */
+  debug?: boolean;
+  env?: NodeJS.ProcessEnv;
+}
+
+function logFilePath(homeDir: string, now: Date): string {
+  const stamp = now.toISOString().slice(0, 10); // YYYY-MM-DD — one file per day
+  return path.join(homeDir, "logs", `falcon-${stamp}.log`);
+}
+
+function formatLine(level: LogLevel, message: string, meta?: Record<string, unknown>): string {
+  const entry = {
+    time: new Date().toISOString(),
+    level,
+    message,
+    ...(meta !== undefined ? { meta } : {}),
+  };
+  return `${JSON.stringify(entry)}\n`;
+}
+
+export function createLogger(options: CreateLoggerOptions = {}): Logger {
+  const env = options.env ?? process.env;
+  const homeDir = options.homeDir ?? resolveHomeDir(env);
+  const minLevel: LogLevel = (options.debug ?? env.FALCON_DEBUG === "1") ? "debug" : "info";
+  let logsDirEnsured = false;
+
+  function write(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
+    if (LEVEL_ORDER[level] < LEVEL_ORDER[minLevel]) return;
+
+    const logsDir = path.join(homeDir, "logs");
+    if (!logsDirEnsured) {
+      mkdirSync(logsDir, { recursive: true });
+      logsDirEnsured = true;
+    }
+
+    // Synchronous, blocking append: CLI invocations are short-lived and log
+    // volume is low, so a blocking write is simpler and safer than buffering
+    // lines that could be lost on an abrupt exit (e.g. SIGTERM mid-handoff).
+    appendFileSync(logFilePath(homeDir, new Date()), formatLine(level, message, meta));
+  }
+
+  return {
+    debug: (message, meta) => write("debug", message, meta),
+    info: (message, meta) => write("info", message, meta),
+    warn: (message, meta) => write("warn", message, meta),
+    error: (message, meta) => write("error", message, meta),
+  };
+}
