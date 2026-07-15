@@ -18,12 +18,22 @@
  * are injected by the caller, which owns that state and those side effects
  * (§7.2/§7.3/§7.4, separate plan bullets).
  */
-import fastify from "fastify";
-import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
+
 import { PermissionModeSchema, StopSessionParamsSchema } from "@falcon/wire";
+import fastify from "fastify";
+import {
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { Logger } from "../logger.js";
-import type { SessionEncryptionData, SpawnSessionOptions, SpawnSessionResult, TrackedSession } from "./types.js";
+import type {
+  SessionEncryptionData,
+  SpawnSessionOptions,
+  SpawnSessionResult,
+  TrackedSession,
+} from "./types.js";
 
 const SessionStartedBodySchema = z.object({
   sessionId: z.string(),
@@ -92,7 +102,11 @@ export interface ControlServerDeps {
   /** Called once `/stop` is hit; the caller decides how the daemon process actually exits. */
   requestShutdown: () => void;
   /** Invoked when a spawned session self-reports via `/session-started`. */
-  onSessionStarted: (sessionId: string, metadata: unknown, encryption?: SessionEncryptionData) => void;
+  onSessionStarted: (
+    sessionId: string,
+    metadata: unknown,
+    encryption?: SessionEncryptionData,
+  ) => void;
   logger?: Logger;
 }
 
@@ -102,7 +116,8 @@ export interface ControlServerHandle {
 }
 
 export function startControlServer(deps: ControlServerDeps): Promise<ControlServerHandle> {
-  const { getSessions, stopSession, spawnSession, requestShutdown, onSessionStarted, logger } = deps;
+  const { getSessions, stopSession, spawnSession, requestShutdown, onSessionStarted, logger } =
+    deps;
 
   return new Promise((resolve, reject) => {
     const app = fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -112,7 +127,9 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
     // Session reports itself after creation — the resume-durability contract (§7.4).
     app.post(
       "/session-started",
-      { schema: { body: SessionStartedBodySchema, response: { 200: SessionStartedResponseSchema } } },
+      {
+        schema: { body: SessionStartedBodySchema, response: { 200: SessionStartedResponseSchema } },
+      },
       async (request) => {
         const { sessionId, metadata, encryption } = request.body;
         logger?.debug("[control-server] session-started", { sessionId });
@@ -157,9 +174,17 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
         },
       },
       async (request, reply) => {
-        const { directory, sessionId, provider, permissionMode, model, environmentVariables } = request.body;
+        const { directory, sessionId, provider, permissionMode, model, environmentVariables } =
+          request.body;
         logger?.debug("[control-server] spawn-session request", { directory, sessionId, provider });
-        const result = await spawnSession({ directory, sessionId, provider, permissionMode, model, environmentVariables });
+        const result = await spawnSession({
+          directory,
+          sessionId,
+          provider,
+          permissionMode,
+          model,
+          environmentVariables,
+        });
 
         switch (result.type) {
           case "success":
@@ -192,7 +217,9 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
 
     app.listen({ port: 0, host: "127.0.0.1" }, (err, address) => {
       if (err) {
-        logger?.debug("[control-server] failed to start", { error: err instanceof Error ? err.message : String(err) });
+        logger?.debug("[control-server] failed to start", {
+          error: err instanceof Error ? err.message : String(err),
+        });
         reject(err);
         return;
       }

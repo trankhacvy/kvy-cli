@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import {
   describeKillSummary,
+  type KillTarget,
   killAll,
   killAllForce,
   killDaemon,
   killSessions,
-  type KillTarget,
 } from "./daemon/kill.js";
 import { createLogger } from "./logger.js";
 

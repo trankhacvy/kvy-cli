@@ -95,7 +95,11 @@ export function createKillDeps(overrides: Partial<KillDeps> = {}): KillDeps {
   };
 }
 
-async function waitForExit(pids: number[], deps: KillDeps, timeoutMs: number): Promise<Set<number>> {
+async function waitForExit(
+  pids: number[],
+  deps: KillDeps,
+  timeoutMs: number,
+): Promise<Set<number>> {
   let alive = new Set(pids.filter((pid) => deps.isAlive(pid)));
   const deadline = deps.now() + timeoutMs;
   while (alive.size > 0 && deps.now() < deadline) {
@@ -201,7 +205,10 @@ async function killGraceful(
   });
 }
 
-async function findTargets(deps: KillDeps, kinds: FalconProcessKind[]): Promise<ClassifiedProcess[]> {
+async function findTargets(
+  deps: KillDeps,
+  kinds: FalconProcessKind[],
+): Promise<ClassifiedProcess[]> {
   const processes = await deps.listProcesses();
   return classifyProcesses(processes, deps.currentPid).filter((p) => kinds.includes(p.kind));
 }

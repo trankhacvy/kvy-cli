@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createKillDeps,
   describeKillSummary,
+  type KillDeps,
   killAll,
   killAllForce,
   killDaemon,
   killSessions,
-  type KillDeps,
 } from "./kill.js";
 import type { ProcessEntry } from "./processScan.js";
 
@@ -96,7 +96,8 @@ describe("killAll", () => {
   it("records a failure outcome instead of throwing when killPid errors", async () => {
     const deps = makeDeps({
       killPid: vi.fn((pid: number, signal) => {
-        if (pid === 100 && signal === "SIGTERM") throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+        if (pid === 100 && signal === "SIGTERM")
+          throw Object.assign(new Error("EPERM"), { code: "EPERM" });
       }),
     });
     const summary = await killAll(deps);
@@ -133,7 +134,8 @@ describe("killAll outcome ordering", () => {
     // them.
     const deps = makeDeps({
       killPid: vi.fn((pid: number, signal) => {
-        if (pid === 200 && signal === "SIGTERM") throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+        if (pid === 200 && signal === "SIGTERM")
+          throw Object.assign(new Error("EPERM"), { code: "EPERM" });
       }),
     });
     const summary = await killAll(deps);
@@ -182,7 +184,15 @@ describe("describeKillSummary", () => {
 
   it("summarizes success and failure counts with per-pid detail", () => {
     const text = describeKillSummary("daemon", {
-      targeted: [{ pid: 100, ppid: 1, command: "falcon daemon start-sync", kind: "daemon", spawnedByDaemon: false }],
+      targeted: [
+        {
+          pid: 100,
+          ppid: 1,
+          command: "falcon daemon start-sync",
+          kind: "daemon",
+          spawnedByDaemon: false,
+        },
+      ],
       outcomes: [
         { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
       ],

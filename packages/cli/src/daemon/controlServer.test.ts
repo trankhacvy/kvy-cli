@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { startControlServer } from "./controlServer.js";
 import type { ControlServerDeps } from "./controlServer.js";
+import { startControlServer } from "./controlServer.js";
 import type { SessionEncryptionData, SpawnSessionResult, TrackedSession } from "./types.js";
 
 function baseUrl(port: number, path: string): string {
@@ -19,7 +19,8 @@ function buildDeps(overrides: Partial<ControlServerDeps> = {}): ControlServerDep
   return {
     getSessions: () => [],
     stopSession: () => false,
-    spawnSession: async () => ({ type: "error", errorMessage: "not configured" }) as SpawnSessionResult,
+    spawnSession: async () =>
+      ({ type: "error", errorMessage: "not configured" }) as SpawnSessionResult,
     requestShutdown: () => {},
     onSessionStarted: () => {},
     ...overrides,
@@ -54,7 +55,11 @@ describe("startControlServer", () => {
       });
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ status: "ok" });
-      expect(onSessionStarted).toHaveBeenCalledExactlyOnceWith("sess_123", { title: "hello" }, encryption);
+      expect(onSessionStarted).toHaveBeenCalledExactlyOnceWith(
+        "sess_123",
+        { title: "hello" },
+        encryption,
+      );
     } finally {
       await server.stop();
     }
@@ -113,7 +118,9 @@ describe("startControlServer", () => {
   });
 
   it("POST /spawn-session returns 200 on success", async () => {
-    const spawnSession = vi.fn().mockResolvedValue({ type: "success", sessionId: "sess_new" } satisfies SpawnSessionResult);
+    const spawnSession = vi
+      .fn()
+      .mockResolvedValue({ type: "success", sessionId: "sess_new" } satisfies SpawnSessionResult);
     const server = await startControlServer(buildDeps({ spawnSession }));
     try {
       const res = await post(server.port, "/spawn-session", { directory: "/tmp/work" });
@@ -217,7 +224,9 @@ describe("startControlServer", () => {
   });
 
   it("POST /spawn-session forwards every optional field verbatim", async () => {
-    const spawnSession = vi.fn().mockResolvedValue({ type: "success", sessionId: "sess_full" } satisfies SpawnSessionResult);
+    const spawnSession = vi
+      .fn()
+      .mockResolvedValue({ type: "success", sessionId: "sess_full" } satisfies SpawnSessionResult);
     const server = await startControlServer(buildDeps({ spawnSession }));
     try {
       const body = {
@@ -286,7 +295,10 @@ describe("startControlServer", () => {
   });
 
   it("two concurrently started servers each get their own distinct ephemeral port", async () => {
-    const [a, b] = await Promise.all([startControlServer(buildDeps()), startControlServer(buildDeps())]);
+    const [a, b] = await Promise.all([
+      startControlServer(buildDeps()),
+      startControlServer(buildDeps()),
+    ]);
     try {
       expect(a.port).not.toBe(b.port);
     } finally {

@@ -56,7 +56,10 @@ const ADMIN_SUBCOMMANDS = new Set([
 ]);
 
 function tokenize(command: string): string[] {
-  return command.trim().split(/\s+/).filter((token) => token.length > 0);
+  return command
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
 }
 
 /** Recognizes the Falcon CLI entrypoint token itself (`falcon`, `bin/falcon.mjs`, or the built/dev entry under `packages/cli`). */
@@ -80,9 +83,7 @@ export function classifyFalconCommand(command: string): FalconClassification | n
 
   const args = tokens.slice(entrypointIndex + 1);
   const sub = args[0];
-  const spawnedByDaemon = args.some(
-    (arg, i) => arg === "--started-by" && args[i + 1] === "daemon",
-  );
+  const spawnedByDaemon = args.some((arg, i) => arg === "--started-by" && args[i + 1] === "daemon");
 
   if (sub === "daemon" && (args[1] === "start-sync" || args[1] === "start")) {
     return { kind: "daemon", spawnedByDaemon: false };

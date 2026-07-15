@@ -5,9 +5,7 @@ import type { ProcessEntry } from "./processScan.js";
 describe("classifyFalconCommand", () => {
   it("classifies the built daemon process (production entrypoint)", () => {
     expect(
-      classifyFalconCommand(
-        "node /Users/dev/falcon/packages/cli/dist/index.mjs daemon start-sync",
-      ),
+      classifyFalconCommand("node /Users/dev/falcon/packages/cli/dist/index.mjs daemon start-sync"),
     ).toEqual({ kind: "daemon", spawnedByDaemon: false });
   });
 
@@ -74,9 +72,9 @@ describe("classifyFalconCommand", () => {
         "node /Users/dev/falcon/packages/cli/dist/index.mjs claude --resume abc123",
       ),
     ).toEqual({ kind: "session", spawnedByDaemon: false });
-    expect(
-      classifyFalconCommand("node /Users/dev/falcon/packages/cli/src/index.ts codex"),
-    ).toEqual({ kind: "session", spawnedByDaemon: false });
+    expect(classifyFalconCommand("node /Users/dev/falcon/packages/cli/src/index.ts codex")).toEqual(
+      { kind: "session", spawnedByDaemon: false },
+    );
   });
 
   it("returns null for processes unrelated to Falcon", () => {

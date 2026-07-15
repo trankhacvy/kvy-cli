@@ -77,8 +77,18 @@ describe("main()", () => {
       killDaemon: vi.fn(),
       killSessions: vi.fn(),
       killAll: vi.fn(async () => ({
-        targeted: [{ pid: 100, ppid: 1, command: "falcon daemon start-sync", kind: "daemon", spawnedByDaemon: false }],
-        outcomes: [{ pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" }],
+        targeted: [
+          {
+            pid: 100,
+            ppid: 1,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            spawnedByDaemon: false,
+          },
+        ],
+        outcomes: [
+          { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
+        ],
       })),
       killAllForce: vi.fn(),
       describeKillSummary: vi.fn(() => "falcon kill all: 1/1 process(es) terminated\n"),
@@ -99,8 +109,24 @@ describe("main()", () => {
   it("exits 1 when `kill` reports a per-pid failure", async () => {
     vi.doMock("./daemon/kill.js", () => ({
       killDaemon: vi.fn(async () => ({
-        targeted: [{ pid: 100, ppid: 1, command: "falcon daemon start-sync", kind: "daemon", spawnedByDaemon: false }],
-        outcomes: [{ pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "none", error: "EPERM" }],
+        targeted: [
+          {
+            pid: 100,
+            ppid: 1,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            spawnedByDaemon: false,
+          },
+        ],
+        outcomes: [
+          {
+            pid: 100,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            signal: "none",
+            error: "EPERM",
+          },
+        ],
       })),
       killSessions: vi.fn(),
       killAll: vi.fn(),
