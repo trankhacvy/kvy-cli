@@ -4,6 +4,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import {
+  createDaemonCommandDeps,
+  runDaemonStart,
+  runDaemonStartSync,
+  runDaemonStatus,
+  runDaemonStop,
+} from "./daemon/commands.js";
+import {
   describeKillSummary,
   type KillTarget,
   killAll,
@@ -44,7 +51,8 @@ Usage:
   falcon codex [args...]            Start a Codex session (flags pass through)
   falcon -b <branch>                Start a session on a new git worktree/branch
   falcon auth login|logout|status   Manage Falcon account auth
-  falcon daemon start|stop|status   Manage the background daemon
+  falcon daemon start [--no-wait] | start-sync | stop | status
+                                     Manage the background daemon
   falcon kill daemon|sessions|all|all-force
                                      Process management escape hatches
   falcon sessions list              List active/recent sessions on this machine
@@ -87,6 +95,42 @@ async function runKill(target: KillTarget): Promise<number> {
   return hasFailures ? 1 : 0;
 }
 
+/**
+ * `falcon daemon start|start-sync|stop|status` (plan.md §7.2, design §8) —
+ * wires the singleton lock + control server + `daemon.state.json` helpers
+ * together; see `daemon/commands.ts` for the actual logic. `start-sync` is
+ * the one branch that can block indefinitely (it's the daemon's own
+ * long-running process body), same as `kill`'s async-by-necessity shape.
+ */
+async function runDaemon(command: Extract<FalconCommand, { type: "daemon" }>): Promise<number> {
+  // Pass this process's own version through explicitly rather than relying on
+  // daemon/commands.ts's default (which locates package.json relative to its
+  // own source file — correct in dev via `tsx`, but not once pkgroll bundles
+  // every module into a single `dist/index.mjs` and that relative path no
+  // longer lines up). `readVersion()` above is already bundle-path-correct
+  // since `--version` depends on it working in both modes.
+  const deps = createDaemonCommandDeps({ version: readVersion() });
+  switch (command.action) {
+    case "start": {
+      const { code, message } = await runDaemonStart(deps, { noWait: command.noWait });
+      process.stdout.write(message);
+      return code;
+    }
+    case "start-sync":
+      return runDaemonStartSync(deps);
+    case "stop": {
+      const { code, message } = await runDaemonStop(deps);
+      process.stdout.write(message);
+      return code;
+    }
+    case "status": {
+      const { code, message } = await runDaemonStatus(deps);
+      process.stdout.write(message);
+      return code;
+    }
+  }
+}
+
 function run(command: FalconCommand): number | Promise<number> {
   switch (command.type) {
     case "help":
@@ -102,8 +146,7 @@ function run(command: FalconCommand): number | Promise<number> {
       process.stdout.write(`falcon auth ${command.action}: not implemented yet\n`);
       return 0;
     case "daemon":
-      process.stdout.write(`falcon daemon ${command.action}: not implemented yet\n`);
-      return 0;
+      return runDaemon(command);
     case "kill":
       return runKill(command.target);
     case "sessions":

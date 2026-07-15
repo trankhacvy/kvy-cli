@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
@@ -54,4 +54,17 @@ export async function readDaemonState(homeDir: string): Promise<DaemonState | nu
   } catch {
     return null;
   }
+}
+
+/**
+ * Removes `daemon.state.json`, if present. Used by `falcon daemon stop` (and
+ * by the daemon's own shutdown path) once the daemon is confirmed gone —
+ * a missing file is treated as already-cleared, matching every other
+ * "safe to call more than once" cleanup helper in this package (see
+ * `lock.ts`'s `release()`).
+ */
+export async function clearDaemonState(homeDir: string): Promise<void> {
+  await unlink(daemonStatePath(homeDir)).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== "ENOENT") throw error;
+  });
 }
