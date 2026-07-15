@@ -10,8 +10,9 @@
  * the whole point of this module: the main thread can ask the worker to
  * seal/open data, but it can never read the keys back out.
  */
-import { deriveKeyTree, open, ready, seal, unwrapDek } from "@falcon/crypto/web";
+
 import type { KeyTree } from "@falcon/crypto/web";
+import { deriveKeyTree, open, ready, seal, unwrapDek } from "@falcon/crypto/web";
 import type { KeyStorage } from "./key-storage.js";
 import type { CryptoWorkerRequest, CryptoWorkerResponse } from "./protocol.js";
 

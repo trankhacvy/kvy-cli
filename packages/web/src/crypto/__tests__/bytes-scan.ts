@@ -19,7 +19,11 @@ function bytesInclude(haystack: Uint8Array, needle: Uint8Array): boolean {
   return false;
 }
 
-export function containsSecretBytes(value: unknown, secret: Uint8Array, seen = new Set<unknown>()): boolean {
+export function containsSecretBytes(
+  value: unknown,
+  secret: Uint8Array,
+  seen = new Set<unknown>(),
+): boolean {
   if (value == null) {
     return false;
   }

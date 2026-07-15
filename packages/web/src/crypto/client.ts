@@ -10,7 +10,11 @@
  * `__tests__/loopback.ts`) instead of spinning up a real Worker thread.
  */
 import type { EncryptedBox } from "@falcon/crypto/web";
-import type { CryptoWorkerRequest, CryptoWorkerRequestPayload, CryptoWorkerResponse } from "./protocol.js";
+import type {
+  CryptoWorkerRequest,
+  CryptoWorkerRequestPayload,
+  CryptoWorkerResponse,
+} from "./protocol.js";
 
 export interface WorkerLike {
   postMessage(message: CryptoWorkerRequest): void;

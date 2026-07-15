@@ -74,9 +74,7 @@ export interface CryptoWorkerErrResponse {
   error: string;
 }
 
-export type CryptoWorkerResponse<T = unknown> =
-  | CryptoWorkerOkResponse<T>
-  | CryptoWorkerErrResponse;
+export type CryptoWorkerResponse<T = unknown> = CryptoWorkerOkResponse<T> | CryptoWorkerErrResponse;
 
 /**
  * `Omit<CryptoWorkerRequest, "id">` is NOT distributive over the request

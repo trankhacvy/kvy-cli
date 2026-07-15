@@ -37,7 +37,9 @@ describe("createCryptoWorkerHandler", () => {
     if (!sealRes.ok) throw new Error("unreachable");
     expect(sealRes.result).toMatchObject({ t: "enc", v: 1, c: expect.any(String) });
 
-    const openRes = await handler.handle(req("4", { type: "open", box: sealRes.result as EncryptedBox }));
+    const openRes = await handler.handle(
+      req("4", { type: "open", box: sealRes.result as EncryptedBox }),
+    );
     expect(openRes).toEqual({ id: "4", ok: true, result: payload });
   });
 
@@ -46,7 +48,9 @@ describe("createCryptoWorkerHandler", () => {
     const otherTree = deriveKeyTree(getRandomBytes(32));
     const foreignWrappedDek = wrapDek(getRandomBytes(32), otherTree.content.publicKey);
 
-    const res = await handler.handle(req("2", { type: "setSessionKey", wrappedDek: foreignWrappedDek }));
+    const res = await handler.handle(
+      req("2", { type: "setSessionKey", wrappedDek: foreignWrappedDek }),
+    );
     expect(res).toEqual({ id: "2", ok: true, result: false });
   });
 
@@ -72,7 +76,9 @@ describe("createCryptoWorkerHandler", () => {
     const otherWrapped = wrapDek(otherDek, tree.content.publicKey);
     await handler.handle(req("4", { type: "setSessionKey", wrappedDek: otherWrapped }));
 
-    const openRes = await handler.handle(req("5", { type: "open", box: sealRes.result as EncryptedBox }));
+    const openRes = await handler.handle(
+      req("5", { type: "open", box: sealRes.result as EncryptedBox }),
+    );
     expect(openRes).toEqual({ id: "5", ok: true, result: null });
   });
 
@@ -96,5 +102,31 @@ describe("createCryptoWorkerHandler", () => {
     const freshHandler = createCryptoWorkerHandler(storage);
     const res = await freshHandler.handle(req("1", { type: "setSessionKey", wrappedDek }));
     expect(res).toEqual({ id: "1", ok: true, result: true });
+  });
+
+  it("re-init drops the previously active session DEK — seal fails until setSessionKey is called again", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
+    const sealed = await handler.handle(req("3", { type: "seal", data: { a: 1 } }));
+    expect(sealed.ok).toBe(true);
+
+    // Re-init (e.g. re-authenticating) with a *different* master secret must
+    // clear the previously active DEK, not just swap the key tree underneath it.
+    const otherSecret = getRandomBytes(32);
+    await handler.handle(req("4", { type: "init", masterSecret: otherSecret }));
+
+    const res = await handler.handle(req("5", { type: "seal", data: { a: 2 } }));
+    expect(res).toEqual({ id: "5", ok: false, error: "no-active-session-key" });
+  });
+
+  it("init persists the new master secret to storage, overwriting whatever was there before", async () => {
+    const storage = createMemoryKeyStorage();
+    handler = createCryptoWorkerHandler(storage);
+    await handler.handle(req("1", { type: "init", masterSecret }));
+
+    const otherSecret = getRandomBytes(32);
+    await handler.handle(req("2", { type: "init", masterSecret: otherSecret }));
+
+    expect(await storage.load()).toEqual(otherSecret);
   });
 });
