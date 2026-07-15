@@ -79,11 +79,17 @@ export interface SessionScanner {
    * the entire existing transcript as "new" entries. Used on reconnect,
    * when the caller already has this history from a prior turn.
    */
-  onNewSession: (sessionId: string, options?: { treatExistingAsProcessed?: boolean }) => Promise<void>;
+  onNewSession: (
+    sessionId: string,
+    options?: { treatExistingAsProcessed?: boolean },
+  ) => Promise<void>;
 }
 
 /** Resolves the Claude Code project transcript directory for a working directory. */
-export function getProjectPath(workingDirectory: string, env: NodeJS.ProcessEnv = process.env): string {
+export function getProjectPath(
+  workingDirectory: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
   const projectId = resolve(workingDirectory).replace(/[^a-zA-Z0-9-]/g, "-");
   const claudeConfigDir = env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
   return join(claudeConfigDir, "projects", projectId);
@@ -173,7 +179,11 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
     for (const id of pendingSessions) {
       if (!deadSessions.has(id)) sessions.push(id);
     }
-    if (currentSessionId && !pendingSessions.has(currentSessionId) && !deadSessions.has(currentSessionId)) {
+    if (
+      currentSessionId &&
+      !pendingSessions.has(currentSessionId) &&
+      !deadSessions.has(currentSessionId)
+    ) {
       sessions.push(currentSessionId);
     }
     for (const id of watchers.keys()) {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Logger } from "../logger.js";
-import { type SessionScanner, createSessionScanner, getProjectPath } from "./scanner.js";
+import { createSessionScanner, getProjectPath, type SessionScanner } from "./scanner.js";
 import type { RawJSONLines } from "./types.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -163,7 +163,9 @@ describe("createSessionScanner", () => {
     await sleep(2500);
 
     const forPhantom = debugRecords.filter((r) => r.meta?.sessionId === "sess-phantom");
-    const startedWatcher = forPhantom.filter((r) => r.message === "[SESSION_SCANNER] starting watcher");
+    const startedWatcher = forPhantom.filter(
+      (r) => r.message === "[SESSION_SCANNER] starting watcher",
+    );
     const gaveUp = forPhantom.filter((r) =>
       r.message.includes("session transcript never appeared — dropping"),
     );
