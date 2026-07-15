@@ -37,8 +37,15 @@ packages/
 ├─ crypto/    @falcon/crypto  E2E encryption primitives, isomorphic (node + browser builds).
 ├─ cli/       falcon          CLI skeleton: hand-rolled arg parsing (`falcon` / `falcon claude
 │                             [args...]` / `falcon codex [args...]` with full flag passthrough),
-│                             file-only logger (`~/.falcon/logs/`, never stdout/stderr). Auth,
-│                             daemon, and provider spawning still [planned].
+│                             file-only logger (`~/.falcon/logs/`, never stdout/stderr).
+│                             `src/daemon/`: singleton lock (atomic hard-link + stale-PID
+│                             detection), `daemon.state.json` read/write helpers, a Fastify
+│                             control server (`/session-started`, `/list`, `/stop-session`,
+│                             `/spawn-session`, `/stop`), and process-scan-based `falcon kill
+│                             daemon/sessions/all/all-force`. `falcon daemon
+│                             start/start-sync/stop/status`, `ensureDaemonRunning()`, the
+│                             machine-scoped WS client, and Auth/provider spawning still
+│                             [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
