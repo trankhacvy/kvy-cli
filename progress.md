@@ -3272,3 +3272,126 @@ landing per the blocker above.
    `P1-1.3-cli-locator`/`P1-1.3-provider-detection` duplicate-locator
    reconciliation, `P1-1.4-envelope-mapper`, `P1-1.4-http-outbox`) and can
    now build on a real server write-path instead of stubs.
+
+## Cycle 28 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `19776b4` — "chore: cycle 27 — 0 tasks
+merged by this tracker, §1.5 daemon landing reconfirmed").
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (all cache hits, replaying prior green logs for `@falcon/wire`,
+  `@falcon/crypto`, `falcon` (cli), `@falcon/server`, `@falcon/web`).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green, 382 tests
+  total, 0 failures: `falcon` (cli) 133, `@falcon/server` 87, `@falcon/web`
+  36, plus `@falcon/wire`/`@falcon/crypto` cached from the same green run
+  chain. Matches Cycle 27's count exactly — no regression, no new landings
+  since.
+- Confirmed the `rtk` Bash-hook is still active in this environment
+  (`.claude/settings.json`'s `PreToolUse` hook on `Bash` runs `rtk hook
+  claude`, rewriting every shell command before execution) and, per this
+  repo's own running log (Cycles 16–27) plus this task-summary's own
+  in-band warning (`.worktrees/P0-cross-cutting-mit-attribution-headers/
+  task-summary/P0-cross-cutting-mit-attribution-headers.md`: "not through
+  the `rtk` shell hook — see plan.md's own notes about that hook
+  fabricating `git`/`ls`/`grep` output"), plain `ls`/`ls -la` in this
+  session did return empty for non-empty directories (`ls task-summary/`,
+  `ls -la` on repo root) while `/bin/ls` on the identical path returned
+  correct listings. Every load-bearing check below was cross-verified via
+  at least two of: `/usr/bin/git`, `rtk proxy <cmd>` (raw/unfiltered per
+  `RTK.md`'s own documented debugging escape hatch), and the `Read` tool
+  directly against files — never trusting a single plain shell invocation
+  alone.
+
+### Tasks completed this cycle
+
+**Neither requested task-summary is credited — both describe real,
+complete, self-verified work that is still unmerged into `main`.**
+
+- `task-summary/P1-1.5-daemon-cli-commands.md` — **does not exist on
+  `main`.** Confirmed via `/usr/bin/git ls-tree main --
+  task-summary/P1-1.5-daemon-cli-commands.md` (empty) and independently via
+  `rtk proxy ls task-summary/` (also absent). The file exists in worktree
+  `.worktrees/P1-1.5-daemon-cli-commands` (tip `e6f31c8`) and describes
+  wiring `falcon daemon start/start-sync/stop/status` (new
+  `packages/cli/src/daemon/commands.ts`, `clearDaemonState`, a `start-sync`
+  args case) on top of the already-merged lock/state/control-server pieces
+  — own task-summary reports 150/150 `falcon` tests green plus a manual
+  end-to-end smoke test (real build, real spawned daemon subprocess).
+  `/usr/bin/git merge-base --is-ancestor P1-1.5-daemon-cli-commands main` →
+  **not an ancestor**; `git cat-file -e
+  main:packages/cli/src/daemon/commands.ts` → does not exist. `plan.md`
+  line 693's checkbox correctly stays unchecked; added a Cycle 28
+  annotation to the §1.5 narrative recording this.
+- `task-summary/P0-cross-cutting-mit-attribution-headers.md` — **does not
+  exist on `main`.** Same double-check (`/usr/bin/git ls-tree` empty,
+  `rtk proxy ls task-summary/` absent). The file exists in worktree
+  `.worktrees/P0-cross-cutting-mit-attribution-headers` (tip `b67ad71`) and
+  describes a comment-only diff adding/upgrading MIT attribution headers on
+  8 files (`packages/crypto/{box,box.web,dek,dek.web,keys}.ts`,
+  `packages/cli/src/daemon/{lock,markers,kill,state}.ts`,
+  `packages/server/src/app/routes/{auth,oauth}.ts`) — own task-summary
+  reports 9/9 build/typecheck/test tasks green (no logic changed).
+  `/usr/bin/git merge-base --is-ancestor
+  P0-cross-cutting-mit-attribution-headers main` → **not an ancestor**.
+  `plan.md` line 813's checkbox correctly stays unchecked; added a Cycle 28
+  annotation to the Cross-cutting section recording this.
+
+### Blockers / issues found
+
+1. **Both tasks requested for credit this cycle are unmerged worktree work,
+   not `main` state** — same recurring pattern flagged every cycle since
+   16: a task branch/worktree completes real, tested work and writes a
+   task-summary describing it, but nothing actually lands the branch onto
+   the shared `main` ref. This tracker's role is to verify `main`, not
+   worktrees, so per established convention (Cycles 1–3, 7–9, 16–27) these
+   are not credited and no checkboxes were flipped. Recommend an explicit
+   "land" task for each: `P1-1.5-daemon-cli-commands` (small — depends only
+   on already-merged §1.5 pieces) and
+   `P0-cross-cutting-mit-attribution-headers` (trivial — comment-only,
+   zero logic risk, should be a fast merge).
+2. **§1.1/1.2 server realtime + write path remains unlanded** —
+   `P1-land-1.1-1.2-server-realtime-write-path` (tip `2f20499`, flagged as
+   the top next-task in Cycle 27) is still not an ancestor of `main`
+   (`/usr/bin/git merge-base --is-ancestor` → false;
+   `packages/server/src/app/socket.ts` still absent from `main`'s tree).
+   No change since Cycle 27 — still the single highest-value pending land.
+3. **`rtk` Bash-hook continues to mangle plain filesystem output** in this
+   environment (see Verification section) — same long-running issue
+   flagged every cycle since discovery. No functional impact this cycle:
+   every load-bearing claim was cross-verified via `/usr/bin/git`,
+   `rtk proxy`, and/or the `Read` tool.
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **38 checked on `main`**,
+unchanged from Cycle 27 (neither task requested this cycle actually landed
+onto `main`, so the checked count cannot move). **Completion: ~28.1%**
+(38/135), verified against a green `pnpm typecheck`/`pnpm test` run
+covering all 5 packages on `main` (382 tests total, 0 failures, identical
+to Cycle 27 — confirming no silent regression). Two more complete,
+self-verified pieces of work (§1.5's CLI wiring, the cross-cutting MIT
+header sweep) are sitting ready in worktrees pending a land step, on top
+of the §1.1/1.2 server realtime/write-path work already queued since
+Cycle 27.
+
+### Next recommended tasks
+
+1. **Land `P1-1.5-daemon-cli-commands` onto `main`** — small, self-verified
+   (150/150 `falcon` tests, manual e2e smoke test), depends only on
+   already-merged §1.5 pieces (`lock.ts`/`state.ts`/`controlServer.ts`);
+   checkout `main` in a non-throwaway working copy, `git merge --no-ff
+   P1-1.5-daemon-cli-commands`, re-verify `pnpm typecheck`/`pnpm test`
+   green, confirm via `git merge-base --is-ancestor ... main` → true.
+2. **Land `P0-cross-cutting-mit-attribution-headers` onto `main`** —
+   trivial, comment-only, zero logic risk (9/9 tasks green per its own
+   task-summary); same merge procedure as above.
+3. **Actually land `P1-land-1.1-1.2-server-realtime-write-path` onto
+   `main`** — carried over from Cycle 27, still the highest-value pending
+   item: the branch forks with zero drift from `main`'s current tip and is
+   fully self-verified (35 files, 4156 insertions, own green build/
+   typecheck/test); only the final `git checkout main && git merge --no-ff
+   P1-land-1.1-1.2-server-realtime-write-path` step is missing.
