@@ -27,6 +27,7 @@ describe("config env parsing", () => {
     delete process.env.PORT;
     delete process.env.HOST;
     delete process.env.LOG_LEVEL;
+    delete process.env.DATABASE_URL;
 
     const { env } = await importFreshConfig();
 
@@ -34,6 +35,7 @@ describe("config env parsing", () => {
     expect(env.PORT).toBe(3005);
     expect(env.HOST).toBe("0.0.0.0");
     expect(env.LOG_LEVEL).toBe("info");
+    expect(env.DATABASE_URL).toBe("postgres://falcon:falcon@localhost:5432/falcon");
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -50,6 +52,7 @@ describe("config env parsing", () => {
     process.env.PORT = "4321";
     process.env.HOST = "127.0.0.1";
     process.env.LOG_LEVEL = "warn";
+    process.env.DATABASE_URL = "postgres://user:pass@db.internal:5432/falcon_prod";
 
     const { env } = await importFreshConfig();
 
@@ -58,7 +61,14 @@ describe("config env parsing", () => {
       PORT: 4321,
       HOST: "127.0.0.1",
       LOG_LEVEL: "warn",
+      DATABASE_URL: "postgres://user:pass@db.internal:5432/falcon_prod",
     });
+  });
+
+  it("throws when DATABASE_URL is an empty string", async () => {
+    process.env.DATABASE_URL = "";
+
+    await expect(importFreshConfig()).rejects.toThrow();
   });
 
   it("throws when NODE_ENV is an invalid enum value", async () => {

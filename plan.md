@@ -638,8 +638,8 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 **0.4 Server foundation** — §3.2, §4 *(Fastify skeleton bullet verified on `main` 2026-07-15, cycle 7, re-verified cycle 8, re-verified cycle 9, re-verified cycle 10 — `pnpm typecheck`/`pnpm test` green, 18/18 `@falcon/server` tests; remaining bullets not started/not merged — `P0-0.4-drizzle-schema`, `P0-0.4-docker-compose-dev`, `P0-0.4-auth-module`, `P0-0.4-seq-allocator`, and `P0-0.4-auth-challenge-route` all exist complete in unmerged worktrees per cycle 10's check, not yet credited)*
 - [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
-- [ ] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
-- [ ] `drizzle-kit generate` initial migration; migration-on-boot runner
+- [x] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
+- [x] `drizzle-kit generate` initial migration; migration-on-boot runner
 - [ ] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
 - [ ] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
 - [ ] `POST /v1/auth` Ed25519 challenge/response → account upsert by `signPublicKey` **(V** from `authRoutes.ts`**)**

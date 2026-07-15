@@ -8,6 +8,10 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3005),
   HOST: z.string().min(1).default("0.0.0.0"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
+  DATABASE_URL: z
+    .string()
+    .min(1)
+    .default("postgres://falcon:falcon@localhost:5432/falcon"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
