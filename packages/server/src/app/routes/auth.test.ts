@@ -9,6 +9,7 @@ import type { FastifyInstance } from "fastify";
 import tweetnacl from "tweetnacl";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { verifyToken } from "../../auth/index.js";
+import * as schema from "../../db/schema.js";
 import { accounts } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 
@@ -48,7 +49,7 @@ describe("POST /v1/auth", () => {
 
   beforeAll(async () => {
     pglite = new PGlite();
-    const db = drizzle(pglite, { schema: { accounts } });
+    const db = drizzle(pglite, { schema });
     await migrate(db, { migrationsFolder });
 
     app = await buildServer({ logger: false }, { db });
@@ -107,7 +108,7 @@ describe("POST /v1/auth", () => {
     expect(firstVerified?.accountId).toBeTruthy();
     expect(firstVerified?.accountId).toBe(secondVerified?.accountId);
 
-    const db = drizzle(pglite, { schema: { accounts } });
+    const db = drizzle(pglite, { schema });
     const rows = await db
       .select()
       .from(accounts)
