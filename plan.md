@@ -613,9 +613,9 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 **0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5 — `pnpm typecheck`/`pnpm test` green)*
 - [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
 - [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
-- [ ] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
+- [x] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
 - [x] `docs/` seeded with `protocol.md`, `encryption.md` stubs that link to the design doc (institutional-memory habit from Happy)
-- [ ] Root `CLAUDE.md` once the scaffold exists (last task of 0.1): build/test/typecheck commands, package layout, monorepo conventions, pointers to `plan.md` + `falcon-system-design.md` + `falcon-prd.md` — keep it minimal (commands + conventions, not a duplicate of the plan); update it as each phase lands new packages
+- [x] Root `CLAUDE.md` once the scaffold exists (last task of 0.1): build/test/typecheck commands, package layout, monorepo conventions, pointers to `plan.md` + `falcon-system-design.md` + `falcon-prd.md` — keep it minimal (commands + conventions, not a duplicate of the plan); update it as each phase lands new packages
 
 **0.2 `@falcon/wire`** — §2 *(verified on `main` 2026-07-15, cycle 4 — 61/61 tests green)*
 - [x] Package skeleton with pkgroll dual CJS/ESM build, `zod` + `cuid2` only
@@ -637,7 +637,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
 
 **0.4 Server foundation** — §3.2, §4
-- [ ] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
+- [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
 - [ ] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
 - [ ] `drizzle-kit generate` initial migration; migration-on-boot runner
 - [ ] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
