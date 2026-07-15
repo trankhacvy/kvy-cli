@@ -667,8 +667,8 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Rate limits on auth + ingest; request-size caps
 - [ ] Integration test: POST message twice with same localId → one row, one fan-out
 
-**1.3 CLI skeleton + local mode** — §6.1–§6.3 *(cycle 9 note: `packages/cli` scaffold work exists complete in two unmerged worktrees — `P1-1.3-cli-skeleton` and `P1-1.3-cli-package-scaffold` — with task-summary docs; neither is merged into `main`, so this section stays unchecked and uncredited pending a merge + re-verification cycle. Cycle 10: re-confirmed still unmerged — `git merge-base --is-ancestor P1-1.3-cli-package-scaffold main` fails; `P1-1.3-cli-package-scaffold` (2 commits, incl. a code-review-fix pass) is the more complete of the two duplicates per its task-summary)*
-- [ ] `packages/cli` scaffold: hand-rolled arg parse, `falcon`/`falcon claude [args]` with full flag passthrough; file-only logger (never stdout)
+**1.3 CLI skeleton + local mode** — §6.1–§6.3 *(P1-land-cli-scaffold: merged `P1-1.3-cli-package-scaffold` — the more complete of the two duplicate worktrees (2 commits incl. a code-review-fix pass) — into `main`; `pnpm build`/`typecheck`/`test` all green (8/8 tasks, cli package 58 tests). Sibling duplicate `P1-1.3-cli-skeleton` worktree/branch removed.)*
+- [x] `packages/cli` scaffold: hand-rolled arg parse, `falcon`/`falcon claude [args]` with full flag passthrough; file-only logger (never stdout)
 - [ ] `~/.falcon/` persistence: `settings.json` (atomic lock-file writes), `access.key` (0600) **(P** from happy `persistence.ts`**)**
 - [ ] `falcon auth login/logout/status`: OAuth browser flow + pairing fallback (QR/URL) — §5
 - [ ] Provider detection: locate Claude Code install + auth state; actionable error copy (PRD FR-2.7)
