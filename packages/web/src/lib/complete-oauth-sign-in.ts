@@ -11,14 +11,16 @@
  * upsert-by-`signPubKey` semantics make this a safe rebind. Only the
  * genuinely-new-identity path has a recovery code to show — there is
  * nothing new to back up when reusing an existing one.
+ *
+ * Deriving the key tree itself is left entirely to the worker (`bridge.init`
+ * + `bridge.getIdentity` / `bridge.exportRecoveryCode`) rather than calling
+ * `deriveKeyTree` here on the main thread — the crypto-bridge's whole premise
+ * (protocol.ts, worker-handler.ts) is that secret key material never exists
+ * outside worker memory; computing the tree here would briefly hold both
+ * derived secret keys in the page's JS heap for no benefit, since the worker
+ * already exposes exactly the two public-facing views this flow needs.
  */
-import {
-  deriveKeyTree,
-  encodeBase64,
-  encodeRecoveryCode,
-  getRandomBytes,
-  ready,
-} from "@falcon/crypto/web";
+import { getRandomBytes, ready } from "@falcon/crypto/web";
 import type { CryptoBridgeClient } from "@/crypto";
 import { register } from "./api.js";
 import { consumePendingPair } from "./pending-pair.js";
@@ -33,30 +35,29 @@ export async function completeOAuthSignIn(
   provider: "google" | "github",
   oauthProof: string,
 ): Promise<OAuthSignInOutcome> {
-  const existing = await bridge.getIdentity();
-
-  let signPubKey: string;
-  let contentPubKey: string;
+  let identity = await bridge.getIdentity();
   let recoveryCode: string | null = null;
 
-  if (existing) {
-    signPubKey = existing.signPubKey;
-    contentPubKey = existing.contentPubKey;
-  } else {
+  if (!identity) {
     await ready;
     const masterSecret = getRandomBytes(32);
-    const tree = deriveKeyTree(masterSecret);
-    signPubKey = encodeBase64(tree.signing.publicKey);
-    contentPubKey = encodeBase64(tree.content.publicKey);
-    recoveryCode = encodeRecoveryCode(masterSecret);
     await bridge.init(masterSecret);
+    recoveryCode = await bridge.exportRecoveryCode();
+    identity = await bridge.getIdentity();
+  }
+
+  if (!identity) {
+    // Unreachable in practice — `bridge.init` above always leaves the worker
+    // with a keyTree set, so the re-check can only fail to find one if the
+    // worker itself is broken. Guarded anyway per "no silent failures".
+    throw new Error("crypto bridge failed to provision an identity");
   }
 
   const { token } = await register({
     oauthProvider: provider,
     oauthProof,
-    signPubKey,
-    contentPubKey,
+    signPubKey: identity.signPubKey,
+    contentPubKey: identity.contentPubKey,
   });
   setToken(token);
 
