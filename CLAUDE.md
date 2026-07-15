@@ -29,7 +29,10 @@ packages/
 ├─ wire/      @falcon/wire    zod schemas — the shared wire protocol contract.
 │                             Built first (everything else depends on it).
 ├─ crypto/    @falcon/crypto  E2E encryption primitives, isomorphic (node + browser builds).
-├─ cli/       falcon          [planned] CLI: falcon / falcon-claude / falcon-codex bins.
+├─ cli/       falcon          CLI skeleton: hand-rolled arg parsing (`falcon` / `falcon claude
+│                             [args...]` / `falcon codex [args...]` with full flag passthrough),
+│                             file-only logger (`~/.falcon/logs/`, never stdout/stderr). Auth,
+│                             daemon, and provider spawning still [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
