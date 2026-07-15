@@ -21,6 +21,12 @@ const EnvSchema = z
       .string()
       .min(32, "FALCON_MASTER_SECRET must be at least 32 characters")
       .default(DEV_ONLY_MASTER_SECRET),
+    // OAuth client ids for `POST /v1/auth/register` (design §5.2, falcon-plan.md §1.2:
+    // "OAuth binding … stored on account for recovery only"). Optional — Google/GitHub
+    // sign-in simply refuses proofs (401, fail closed) until configured; see
+    // src/auth/oauth.ts for why an unset client id must never be treated as "skip the
+    // audience check" rather than "reject everything".
+    GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   })
   // Belt-and-suspenders against shipping the dev-only secret to production: a silent
   // fallback there would let anyone who has read this source mint tokens for any

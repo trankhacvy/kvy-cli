@@ -5,6 +5,7 @@ import tweetnacl from "tweetnacl";
 import { z } from "zod";
 import { mintToken } from "../../auth/index.js";
 import { accounts } from "../../db/schema.js";
+import { toHex } from "./hex.js";
 
 // Both generic slots are erased to `any` on purpose: they're the two places
 // `PostgresJsDatabase` (production, db/client.ts) and `PgliteDatabase` (tests, see
@@ -38,12 +39,6 @@ const AuthResponseSchema = z.object({
 const AuthErrorSchema = z.object({
   error: z.string(),
 });
-
-function toHex(bytes: Uint8Array): string {
-  let hex = "";
-  for (const byte of bytes) hex += byte.toString(16).padStart(2, "0");
-  return hex;
-}
 
 /**
  * Ported (near-verbatim) from Happy's `POST /v1/auth` —
