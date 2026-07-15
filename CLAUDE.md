@@ -31,7 +31,9 @@ packages/
 ├─ crypto/    @falcon/crypto  E2E encryption primitives, isomorphic (node + browser builds).
 ├─ cli/       falcon          [planned] CLI: falcon / falcon-claude / falcon-codex bins.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
-│                             logging). Drizzle/Socket.IO/auth routes still [planned].
+│                             logging) + auth module (src/auth/: JWT HS256 mint/verify,
+│                             in-memory token cache, app.authenticate preHandler).
+│                             Drizzle/Socket.IO/auth *routes* still [planned].
 └─ web/       @falcon/web     [planned] Next.js PWA.
 ```
 
