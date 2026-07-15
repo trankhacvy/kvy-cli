@@ -204,4 +204,93 @@ describe("startControlServer", () => {
     await server.stop();
     await expect(post(server.port, "/list")).rejects.toThrow();
   });
+
+  it("POST /list returns an empty array when nothing is tracked", async () => {
+    const server = await startControlServer(buildDeps({ getSessions: () => [] }));
+    try {
+      const res = await post(server.port, "/list");
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({ sessions: [] });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /spawn-session forwards every optional field verbatim", async () => {
+    const spawnSession = vi.fn().mockResolvedValue({ type: "success", sessionId: "sess_full" } satisfies SpawnSessionResult);
+    const server = await startControlServer(buildDeps({ spawnSession }));
+    try {
+      const body = {
+        directory: "/tmp/work",
+        sessionId: "client-picked-id",
+        provider: "codex",
+        permissionMode: "acceptEdits",
+        model: "o1",
+        environmentVariables: { FOO: "bar" },
+      };
+      const res = await post(server.port, "/spawn-session", body);
+      expect(res.status).toBe(200);
+      expect(spawnSession).toHaveBeenCalledExactlyOnceWith(body);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /spawn-session 400s when the required directory field is missing", async () => {
+    const spawnSession = vi.fn();
+    const server = await startControlServer(buildDeps({ spawnSession }));
+    try {
+      const res = await post(server.port, "/spawn-session", { provider: "codex" });
+      expect(res.status).toBe(400);
+      expect(spawnSession).not.toHaveBeenCalled();
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /spawn-session rejects an invalid provider before reaching spawnSession", async () => {
+    const spawnSession = vi.fn();
+    const server = await startControlServer(buildDeps({ spawnSession }));
+    try {
+      const res = await post(server.port, "/spawn-session", {
+        directory: "/tmp/work",
+        provider: "not-a-real-provider",
+      });
+      expect(res.status).toBe(400);
+      expect(spawnSession).not.toHaveBeenCalled();
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /stop-session 400s when sessionId is missing", async () => {
+    const stopSession = vi.fn();
+    const server = await startControlServer(buildDeps({ stopSession }));
+    try {
+      const res = await post(server.port, "/stop-session", {});
+      expect(res.status).toBe(400);
+      expect(stopSession).not.toHaveBeenCalled();
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("returns 404 for an unregistered route", async () => {
+    const server = await startControlServer(buildDeps());
+    try {
+      const res = await post(server.port, "/not-a-real-route");
+      expect(res.status).toBe(404);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("two concurrently started servers each get their own distinct ephemeral port", async () => {
+    const [a, b] = await Promise.all([startControlServer(buildDeps()), startControlServer(buildDeps())]);
+    try {
+      expect(a.port).not.toBe(b.port);
+    } finally {
+      await Promise.all([a.stop(), b.stop()]);
+    }
+  });
 });
