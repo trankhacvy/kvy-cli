@@ -1,5 +1,9 @@
 import Fastify, { type FastifyServerOptions } from "fastify";
-import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from "fastify-type-provider-zod";
+import {
+  serializerCompiler,
+  validatorCompiler,
+  type ZodTypeProvider,
+} from "fastify-type-provider-zod";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
 
