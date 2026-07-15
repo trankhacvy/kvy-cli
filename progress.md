@@ -2820,3 +2820,167 @@ and self-verified in unmerged worktrees — effectively ~31.1% (42/135)
    `P1-1.5-kill-commands` are all independently complete and self-verified;
    landing them as a set would flip most of the 1.5 checkboxes at once and
    is lower-risk than landing them one at a time against a moving `main`.
+
+## Cycle 25 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `d9bfcb3`, "chore: cycle 24 — completed 0 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 6/6 tasks (`@falcon/crypto` + its `build`,
+  `@falcon/wire`, `falcon` (cli), `@falcon/server`, `@falcon/web`) — `tsc
+  --noEmit` clean on every package (full turbo cache hit, no source changes
+  since Cycle 24).
+- `pnpm test` → **PASSED**: 9/9 tasks, **315 tests total, 0 failures** —
+  `@falcon/wire` 61, `falcon` (cli) 66, `@falcon/crypto` 65, `@falcon/web`
+  36, `@falcon/server` 87. Identical totals to Cycles 20–24 — `main`
+  remains stable, no regressions.
+
+### Task-summary read this cycle
+
+This cycle's instructions named three files as "successful tasks":
+`task-summary/P1-land-1.5-daemon-worktrees.md`,
+`task-summary/P1-land-1.1-1.2-server-realtime-and-write-path.md`, and
+`task-summary/P0-land-cross-wire-schema-lint.md`. **None of the three
+exist on `main`** — confirmed via a direct `/bin/ls` of the working tree's
+`task-summary/` directory (35 files present, none matching these three
+names) and independently via `git merge-base --is-ancestor <branch> main`
+for all three matching branch names, which all returned **not an
+ancestor**. (Note: this cycle's initial plain `ls task-summary/` and
+`grep -n` invocations via the Bash tool returned empty/garbled output for
+a directory that plainly has 35 files in it and for a file that plainly
+has matching lines — the same `rtk` Bash-hook mangling documented in prior
+cycles' correction notes and in several task-summaries. Routed around it
+this cycle via `/bin/ls`, `command ls`, and the `Read` tool for anything
+load-bearing.)
+
+- **`task-summary/P1-land-1.5-daemon-worktrees.md`** — exists only in
+  `.worktrees/P1-land-1.5-daemon-worktrees` (tip `76cccff`). Its own
+  task-summary is unusually explicit that this is a pure integration step:
+  it `--no-ff` merges the three already-complete §1.5 branches
+  (`P1-1.5-daemon-singleton-lock`, `P1-1.5-control-server`,
+  `P1-1.5-kill-commands`) into one worktree, conflict-free, and states in
+  its own "Assumptions" section that it "did **not** merge or push onto
+  `main` itself... `main` is untouched." Reports `falcon` (cli) 133/133
+  tests green, workspace-wide build/typecheck/test green. Genuinely
+  complete, self-verified integration work — but by its own account, and
+  confirmed by `git merge-base --is-ancestor`, **not merged onto `main`**.
+- **`task-summary/P1-land-1.1-1.2-server-realtime-and-write-path.md`** —
+  exists only in `.worktrees/P1-land-1.1-1.2-server-realtime-and-write-path`
+  (tip `10413af`). A 3-way integration of `P1-1.1-server-realtime` +
+  `P1-1.2-server-write-http` against `main`'s already-landed 0.4 auth
+  routes: reconciles the two branches' independently-built `eventRouter`
+  seams (kept 1.1's real Socket.IO-backed router, deleted 1.2's
+  `EventEmitter` placeholder, added a narrow `EventRouterPort` interface
+  for the HTTP routes to depend on), fixes two pre-existing auth/OAuth test
+  files that used a partial in-memory-DB schema incompatible with the new
+  routes' stricter `Database` type. Reports `pnpm build`/`typecheck` green
+  and `pnpm test` 9/9 tasks (`@falcon/server` 20 files / 139 tests). Unlike
+  the daemon task-summary, this one's own narrative frames itself as
+  landing "onto this integration branch" (not `main`) but doesn't flag the
+  main-vs-worktree distinction as explicitly — `git merge-base
+  --is-ancestor` nonetheless confirms it is **not an ancestor of `main`**,
+  and `main`'s `packages/server/src/` is unchanged (no `socket.ts`,
+  `events/eventRouter.ts`, or write-path routes).
+- **`task-summary/P0-land-cross-wire-schema-lint.md`** — exists only in
+  `.worktrees/P0-land-cross-wire-schema-lint` (tip `003a75c`). Its title
+  ("Landed the wire-schema additive-only CI lint... onto `main`") and body
+  both narrate a merge into `main`, and it even claims to have updated
+  `plan.md`'s cross-cutting checkbox — but this narrative describes actions
+  taken inside the task's own fresh worktree/branch, not the shared `main`
+  ref. `git merge-base --is-ancestor P0-land-cross-wire-schema-lint main`
+  → **not an ancestor**, and `main`'s `packages/wire/` has no
+  `scripts/check-additive-vs-base.ts` and no `tsx` devDependency (the real
+  gap this task found and fixed while landing: the lint script's `tsx`
+  dependency was resolving only via a global npm install on the task's
+  machine, which a clean CI runner would not have). Genuinely complete,
+  self-verified — but not merged onto `main`.
+
+Per this tracker's established convention (Cycles 1–3, 7–9, 16–24): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked, regardless of how
+complete, well-verified, or confidently-narrated as "landed" the
+underlying work is. All three requested files fall in this bucket this
+cycle, and one (`P0-land-cross-wire-schema-lint`) is a new instance of a
+recurring failure mode: a "land" task's own task-summary asserting main
+was updated when in fact only a worktree-local branch was touched. `plan.md`
+was updated only with narrative cycle-25 annotations on the relevant 1.1,
+1.2, 1.5, and Cross-cutting sections, documenting these findings.
+
+### Tasks completed this cycle
+
+None merged into `main`. `main` remains green (315/315 tests, clean
+typecheck) but unchanged in scope from Cycle 24 — `plan.md` checkbox count
+stays **34/135**.
+
+### Blockers / issues found
+
+1. **All three requested tasks are unmerged** (dominant recurring pattern
+   since Cycle 1, now spanning 18+ cycles): real, complete, self-verified
+   integration work for all three requested branches sits in `.worktrees/`,
+   none landed on `main`. This tracker's role is verify-and-record on
+   `main`, not merge — merging is an orchestrator/operator action outside
+   this role's scope.
+2. **New pattern to flag for the orchestrator:** at least one "land" task
+   (`P0-land-cross-wire-schema-lint`) produced a task-summary whose own
+   narrative claims `main` was updated ("Landed ... onto `main`", "Updated
+   `plan.md`'s cross-cutting section... checked off...") when independent
+   verification (`git merge-base --is-ancestor`, direct file check) shows
+   the shared `main` ref was never touched — only a fresh worktree/branch
+   created for the task. If a future cycle's progress tracker (or a human)
+   trusted the task-summary's narrative without independently checking
+   ancestry against `main`, it would wrongly mark work as landed. This
+   tracker continues to require independent ancestry verification for
+   every task-summary before granting `plan.md` credit, precisely because
+   of cases like this.
+3. Unmerged worktrees per `git worktree list`, largely unchanged from
+   Cycle 24 plus the three above: `P0-land-phase0-worktrees`,
+   `P1-1.3-claude-launcher-script`, `P1-1.3-cli-locator`,
+   `P1-1.3-falcon-home-persistence`, `P1-1.3-provider-detection`,
+   `P1-1.4-envelope-mapper`, `P1-1.4-http-outbox`, `P1-1.5-control-server`,
+   `P1-1.5-daemon-singleton-lock`, `P1-1.5-kill-commands`,
+   `P1-1.6-api-socket`, `P1-1.6-auth-pages`, `P1-1.6-reducer-port`,
+   `P1-1.3-cli-auth-login`, `P0-cross-wire-schema-lint`,
+   `P1-1.1-server-realtime`, `P1-1.2-server-write-http`. Not re-verified
+   individually this cycle (only the three requested branches were
+   re-checked); listed here for continuity.
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+5. The `rtk` Bash-hook continues to intermittently mangle plain
+   `ls`/`grep` output inside this working directory (empty/garbled results
+   for directories and lines that plainly have content, per `/bin/ls` and
+   `Read` cross-checks) — same issue prior cycles' task-summaries have
+   flagged. Worked around this cycle via `/bin/ls`, `command ls`, and the
+   `Read` tool; no impact on the findings above since everything
+   load-bearing was cross-checked with an unaffected tool.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **34 checked on `main`**,
+unchanged from Cycles 20–24 (0.1 5/5, 0.2 8/8, 0.3 7/7, 0.4 7/8, 1.3 1/9,
+1.4 2/6, 1.6 2/8). **Completion: ~25.2%** (34/135), verified against a
+green `pnpm typecheck`/`pnpm test` run covering all 5 packages on `main`
+(315 tests total, 0 failures, identical to Cycles 20–24 — confirming no
+silent regression since). Note: at least 11 additional bullets across the
+three requested integration branches (Socket.IO read path, HTTP write
+path, daemon singleton lock, control server, kill commands) plus the
+previously-noted CLI auth login, cross-wire schema lint, HTTP outbox, CLI
+locator, auth pages, and reducer port are implementation-complete and
+self-verified in unmerged worktrees — effectively a large fraction of
+Phase 1 is "done, pending merge," but the actual `main` completion
+percentage is unchanged at 25.2%.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.1-1.2-server-realtime-and-write-path`** — the most
+   valuable single merge available: brings the entire Socket.IO read path
+   and HTTP write path onto `main` together, already reconciled against
+   each other and against `main`'s 0.4 auth routes, with the eventRouter
+   duplication already resolved. No known unmerged prerequisites.
+2. **Land `P1-land-1.5-daemon-worktrees`** — brings singleton lock, control
+   server, and kill commands onto `main` as a conflict-free set; the
+   groundwork (three-way merge already done and tested) removes most of
+   the risk from landing 1.5 piecemeal.
+3. **Land `P0-land-cross-wire-schema-lint`** — small, standalone CI-only
+   addition (plus the discovered `tsx` devDependency fix); no dependency on
+   any other unmerged work.
