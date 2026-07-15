@@ -61,12 +61,26 @@ factories to depend on).
    the re-verification results, and that fast-forwarding `main` is the remaining
    step.
 6. Committed the `plan.md` update and this task-summary on top of the merge commit.
+7. **Drift check**: while step 6 was in progress, `main` moved out from under this
+   worktree — another concurrent task (`P0-land-cross-wire-schema-lint-final`) landed
+   and fast-forwarded `refs/heads/main` from `10c73ef` to a new merge commit
+   `0226396` (adding `packages/wire/scripts/check-additive-vs-base.ts` + CI wiring —
+   no overlap with `packages/server`). Ran `git merge main` to pick up the drift
+   before finishing: clean auto-merge (only `plan.md`/`pnpm-lock.yaml` touched, both
+   auto-resolved, no conflict markers). Re-ran `pnpm install` (no lockfile drift),
+   `pnpm build`/`pnpm typecheck` (both green), and `npx turbo run test --force` (9/9
+   tasks, `@falcon/server` 20 files/140 tests) against the re-merged tree — all still
+   green.
 
 ## Verification
 
 - `git merge-base --is-ancestor 10413af HEAD` (this worktree's tip) → **true** —
   confirms the integration branch's tip is now an ancestor of this landing commit.
-- `pnpm build` / `pnpm typecheck` / `pnpm test` all green post-merge (see above).
+- `git merge-base --is-ancestor <main's post-drift tip> HEAD` → **true** — confirms
+  this landing commit is a proper descendant of `main`'s current tip too, so no drift
+  was left unreconciled.
+- `pnpm build` / `pnpm typecheck` / `pnpm test` all green post-merge, both before and
+  after the drift-reconciliation merge (see above).
 
 ## Assumptions
 
