@@ -3156,3 +3156,119 @@ since Cycle 20.
    actually moves the shared ref. Worth a explicit instruction/template fix
    for future land-tasks rather than relying on each one to independently
    discover the right final step.
+
+## Cycle 27 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `b75b8df` — "feat: P1-land-1.5-daemon-worktrees -
+Actually land the daemon (singleton-lock + control-server + kill-commands)
+integration branch onto main")
+
+### Verification run on `main`
+
+- `pnpm exec turbo run typecheck --force` (forced, no cache — this repo's
+  documented mitigation for the `rtk` Bash-hook's cache/stale-log risk) →
+  **PASSED**, 7/7 tasks green.
+- `pnpm exec turbo run test --force` (forced, no cache) → **PASSED**, 9/9
+  tasks green, 382 tests total, 0 failures: `falcon` (cli) 133, `@falcon/server`
+  87, `@falcon/web` 36, `@falcon/wire` 61, `@falcon/crypto` 65.
+- The `rtk` Bash-hook again mangled plain filesystem/git output this cycle
+  (`git status --short` on a clean tree printed the literal string `ok`;
+  `git log --oneline -5` disagreed with `git rev-parse HEAD`, itself
+  disagreeing with what a subsequent `git log` via the same alias then
+  reported — classic non-deterministic mangling, not a real divergent
+  history). Worked around by invoking `/usr/bin/git` directly for every
+  load-bearing check and cross-confirming file existence with the `Read`
+  tool rather than shell `cat`/`ls`. All findings below are based on the
+  unmangled `/usr/bin/git` + `Read`-tool evidence.
+
+### Tasks completed this cycle
+
+**§1.5 Daemon v1 — genuinely landed onto `main` since Cycle 26.** Between
+Cycle 26 (`daeae81`) and this cycle, `main`'s HEAD advanced to `b75b8df`, a
+real `--no-ff` merge (not performed by this tracker; found already landed
+when this cycle started) of `P1-land-1.5-daemon-worktrees-final` directly
+onto the shared `main` ref — the step every prior `P1-1.5`/`-final` attempt
+(Cycles 16, 23, 25, 26) stopped short of. Independently re-confirmed via
+`/usr/bin/git cat-file -e`/`ls-tree` and the `Read` tool: `main`'s
+`packages/cli/src/daemon/{lock,state,types,controlServer,kill,markers,
+processScan}.ts` all genuinely exist, `task-summary/P1-land-1.5-daemon-worktrees-final.md`
+is present in `main`'s `task-summary/` directory, and the forced
+typecheck/test run above is green including all six daemon test files
+(64 daemon-specific tests). `plan.md`'s three §1.5 bullets (singleton lock,
+control server, `falcon kill *`) were already checked by the landing task
+itself and are confirmed accurate; added a Cycle 27 re-verification
+annotation to `plan.md`'s §1.5 narrative (no checkbox changes needed — they
+were already correct).
+
+**Read for credit this cycle:**
+- `task-summary/P1-land-1.5-daemon-worktrees.md` — exists on `main`,
+  describes the original three-branch integration-branch build (the
+  precursor to the actual-landing step above). Credited; underlying claims
+  independently verified per above.
+- `task-summary/P1-land-1.1-1.2-server-realtime-write-path.md` — **requested
+  but does not exist on `main`.** See Blockers below; not credited, per this
+  tracker's established convention (Cycles 1–3, 7–9, 16–26).
+
+### Blockers / issues found
+
+1. **§1.1/1.2 server realtime + write path is still not merged onto `main`,
+   despite being one commit away.** The requested branch
+   `P1-land-1.1-1.2-server-realtime-write-path` (tip `2f20499`, commit
+   message "Actually land the server realtime (Socket.IO) + HTTP write-path
+   integration branch onto main") forks directly from `main`'s own current
+   HEAD (`b75b8df`) — zero drift, a trivial fast-forward/`--no-ff` merge
+   away — and carries real, substantial, self-verified work: `packages/server/src/app/socket.ts`
+   + `socket.test.ts`, `app/socket/rpcHandler.ts` + tests, `app/routes/sync.ts`
+   + tests, `db/{box,errors,types}.ts`, updated `server.ts` (35 files, 4156
+   insertions, own task-summary reporting green build/typecheck/test). But
+   `git merge-base --is-ancestor P1-land-1.1-1.2-server-realtime-write-path main`
+   → **not an ancestor** — the one remaining step (checking out `main` in
+   the primary working copy and actually merging) was never taken, the same
+   gap §1.5 took three attempts to close. Added a Cycle 27 annotation to
+   `plan.md`'s §1.1 narrative; checkboxes remain unchecked.
+2. **`rtk` Bash-hook continues to mangle plain filesystem/git commands** in
+   this working directory (see Verification section above) — same
+   long-running issue flagged every cycle since it was first discovered.
+   No functional impact this cycle since every load-bearing check was
+   cross-verified via `/usr/bin/git` and the `Read` tool.
+3. Remaining unmerged worktrees largely unchanged from Cycle 26 (still ~32
+   entries per `git worktree list`); not re-verified individually this
+   cycle beyond the two requested tasks above.
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **38 checked on `main`**, up
+from 35 at Cycle 26 (+3: §1.5 singleton lock, control server, `falcon kill
+*` — genuinely landed onto `main` between Cycles 26 and 27, as detailed
+above). **Completion: ~28.1%** (38/135), verified against a green forced
+`pnpm exec turbo run typecheck --force`/`run test --force` covering all 5
+packages on `main` (382 tests total, 0 failures). Phase 0 (§§0.1–0.4) and
+the Cross-cutting section remain fully/mostly landed as of prior cycles;
+Phase 1 now has §1.5 as its first section with any landed bullets (3/7);
+§§1.1, 1.2, 1.3 (1/9), 1.4 (2/6), 1.6 (2/8) remain the largest unlanded
+surface, with §1.1/1.2 in particular sitting a single merge step away from
+landing per the blocker above.
+
+### Next recommended tasks
+
+1. **Actually land `P1-land-1.1-1.2-server-realtime-write-path` onto `main`**
+   — the highest-value, lowest-effort remaining item: the branch already
+   forks from `main`'s current tip with zero drift and is fully
+   self-verified; the only missing step is checking out `main` in a
+   non-throwaway working copy and running `git merge --no-ff
+   P1-land-1.1-1.2-server-realtime-write-path` directly against the shared
+   ref (mirroring exactly how §1.5 finally landed this cycle), then
+   re-verifying green.
+2. **Wire up the remaining §1.5 bullets** now that the daemon module exists
+   on `main`: `daemon.state.json` + `falcon daemon start/start-sync/stop/status`
+   CLI subcommand (the state read/write helpers already exist; only the
+   command wiring in `index.ts` is missing), `ensureDaemonRunning()`
+   auto-start, and the machine-scoped WS client / `notifyDaemonSessionStarted`
+   webhook.
+3. **Once §1.1/1.2 lands, resume §1.3/§1.4 CLI-side landing** — several
+   complete, self-verified worktrees are waiting (`P1-1.3-cli-auth-login`,
+   `P1-1.3-cli-locator`/`P1-1.3-provider-detection` duplicate-locator
+   reconciliation, `P1-1.4-envelope-mapper`, `P1-1.4-http-outbox`) and can
+   now build on a real server write-path instead of stubs.
