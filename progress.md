@@ -346,3 +346,99 @@ merge) at Cycle 3.
    `.claude/workflows/falcon-dev-workflow.js` Phase 6, so future
    verified-worktree → `main` landings don't require an ad hoc task like
    `P0-land-integration-branch` to unstick them.
+
+---
+
+## Cycle 5 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `ac68041`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 2/2 packages (`@falcon/crypto`, `@falcon/wire`) — `tsc --noEmit` clean on both (turbo full cache hit).
+- `pnpm test` → **PASSED**: 4/4 tasks, **126 tests total** — 65 in `@falcon/crypto` (8 files), 61 in `@falcon/wire` (6 files). Zero failures. Same green result as Cycle 4, confirming `main` is still stable.
+
+One commit landed on `main` since Cycle 4's `HEAD` (`645d040`): `ac68041
+fix: P0-0.1-docs-stubs - resolve test failures` — a one-line fix removing a
+stray trailing backtick (unterminated inline code span) in
+`docs/encryption.md`'s link to `falcon-system-design.md` §5. Applied
+directly to `main` (the originating `P0-0.1-docs-stubs` worktree no longer
+exists, already merged and cleaned up in an earlier cycle). Docs-only change;
+does not affect `pnpm typecheck`/`pnpm test`, which don't cover `docs/`.
+
+### Task-summary read this cycle
+
+Per this cycle's scope, read the two specified files directly from `main`:
+
+- `task-summary/P0-0.1-monorepo-scaffold.md` — describes the original
+  monorepo scaffold work (`pnpm-workspace.yaml`, `turbo.json`, four task
+  pipelines, `tsconfig.base.json` with the `@/` path-alias convention, root
+  `package.json`). Matches what's on `main` today (confirmed via
+  `pnpm typecheck`/`pnpm test` passing, and `packages/wire`/`packages/crypto`
+  building under the pipelines it defined).
+- `task-summary/P0-0.1-docs-stubs.md` — describes `docs/protocol.md` and
+  `docs/encryption.md` as pointer/outline stubs cross-linking to
+  `falcon-system-design.md` §4/§5. Both files present on `main`, and the
+  `ac68041` fix commit (above) confirms they're still being actively
+  maintained/corrected in place.
+
+Both tasks were already merged into `main` and already checked off in
+`plan.md` §16 as of Cycle 4 (with a `verified on main 2026-07-15, cycle 4`
+stamp on the `0.1 Scaffold` section header). No new checkbox state change
+was needed — this cycle's read simply re-confirms the summaries match
+`main`'s actual content, so the `0.1 Scaffold` header stamp was updated to
+note the Cycle 5 re-verification (`... cycle 4, re-verified cycle 5 ...`).
+
+### Tasks completed this cycle
+
+None newly merged. The only change to `main` since Cycle 4 was the direct
+`ac68041` docs fix (not a task-branch merge — applied straight to `main` per
+its own commit message, since the originating worktree was already gone).
+`plan.md` §16 checkbox count is unchanged from Cycle 4: **18/135** checked.
+
+### Blockers / issues found
+
+1. **Unmerged worktree branches, again** (recurring pattern from Cycles
+   1–3): `git worktree list` shows three active worktrees with completed,
+   task-summary-backed work that has **not** been merged into `main`:
+
+   | Branch | Worktree | `task-summary/` present |
+   |---|---|---|
+   | `P0-0.1-postinstall` | `.worktrees/P0-0.1-postinstall` | yes (`P0-0.1-postinstall.md`) |
+   | `P0-0.1-root-claude-md` | `.worktrees/P0-0.1-root-claude-md` | yes (`P0-0.1-root-claude-md.md`) |
+   | `P0-0.4-server-skeleton` | `.worktrees/P0-0.4-server-skeleton` | yes (`P0-0.4-server-skeleton.md`) |
+
+   These correspond exactly to the two remaining unchecked `0.1 Scaffold`
+   boxes (root `postinstall`, root `CLAUDE.md`) plus the first `0.4 Server
+   foundation` item (Fastify skeleton) — i.e. real, further progress exists
+   but is sitting unlanded, same orchestration gap flagged in Cycles 1–3.
+   This progress-tracker role is scoped to verifying `main` and did not read
+   these three worktrees' task-summaries in depth (out of this cycle's
+   explicit scope) or merge them (merging is an orchestrator/operator
+   action, not this role's job) — noting their existence only as an
+   observed blocker via `git worktree list`.
+2. The orchestrator's Phase 6 merge step (flagged as a stub in Cycle 4) still
+   appears to not be landing verified worktrees onto `main` automatically —
+   three more have now accumulated since Cycle 4's cleanup left the tree
+   worktree-free.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **18 checked on `main`**
+(unchanged from Cycle 4 — no new task-branch merges landed this cycle).
+**Completion: ~13.3%** (18/135) verified on `main`. If the three pending
+worktrees above are merged, that would bring 0.1 to fully closed (5/5) and
+add the first 0.4 item, pushing verified completion higher next cycle.
+
+### Next recommended tasks
+
+1. **Merge `P0-0.1-postinstall` and `P0-0.1-root-claude-md` into `main`**
+   (orchestrator/operator action) — both are small, disjoint from each
+   other and from `P0-0.4-server-skeleton`, and would close out `0.1
+   Scaffold` completely (5/5 boxes).
+2. **Merge `P0-0.4-server-skeleton` into `main`** — starts Phase 0.4 (server
+   foundation), the next substantial unstarted block per Cycle 4's
+   recommendation.
+3. Re-run this cycle after those land to confirm `pnpm typecheck`/`pnpm
+   test` stay green with the server package added, and check off the
+   corresponding `plan.md` §16 boxes for real.

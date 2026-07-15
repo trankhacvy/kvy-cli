@@ -610,7 +610,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 ### Phase 0 — Repo & contracts (M0, week 1)
 
-**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4 — `pnpm typecheck`/`pnpm test` green)*
+**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5 — `pnpm typecheck`/`pnpm test` green)*
 - [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
 - [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
 - [ ] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
