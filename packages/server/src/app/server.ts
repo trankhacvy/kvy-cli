@@ -61,11 +61,18 @@ export async function buildServer(
   // authenticated account when available (set by `app.authenticate` below)
   // so one account can't starve another sharing an IP/NAT; falls back to IP
   // for routes that run before/without authentication (health checks, and
-  // the auth routes themselves).
+  // the auth routes themselves). `hook: "preHandler"` (rather than the
+  // plugin's default `onRequest`) is required for that account-keying to
+  // ever take effect: `app.authenticate` itself runs as a route `preHandler`
+  // and only sets `req.accountId` there, which is *after* `onRequest` fires —
+  // an `onRequest`-hooked key generator would see `req.accountId` unset on
+  // every request and silently degrade to IP-only keying for authenticated
+  // routes too.
   await app.register(rateLimit, {
     global: true,
     max: 300,
     timeWindow: "1 minute",
+    hook: "preHandler",
     keyGenerator: (req) => req.accountId || req.ip,
   });
 
