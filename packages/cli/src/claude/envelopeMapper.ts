@@ -605,16 +605,22 @@ export function mapClaudeToEnvelopes(
           typeof resultBlock.tool_use_id === "string" ? resultBlock.tool_use_id : undefined;
         if (!providerCallId) continue;
 
+        // Not gated on `!sidechain`: a Task launched *from inside* another
+        // subagent's own scope (nested Task) reports its own tool_result in
+        // a message that is itself isSidechain — hiddenParentToolCalls and
+        // maybeEmitSubagentStop must still fire for it, or it leaks a
+        // dangling tool-end with no matching tool-start. `maybeEmitSubagentStop`
+        // is separately guarded by `activeSubagents`, so running this
+        // unconditionally is safe for ordinary (non-Task) nested tool calls
+        // too — their defensively-minted subagent id was never started, so
+        // the stop is a no-op for them either way.
         const subagentForResult = lookupSubagentId(state, providerCallId);
-        if (!sidechain) {
-          if (hiddenParentToolCalls(state).has(providerCallId)) {
-            if (subagentForResult)
-              maybeEmitSubagentStop(state, turnId, subagentForResult, envelopes);
-            hiddenParentToolCalls(state).delete(providerCallId);
-            continue; // Task's call was never shown — no tool-end for it.
-          }
+        if (hiddenParentToolCalls(state).has(providerCallId)) {
           if (subagentForResult) maybeEmitSubagentStop(state, turnId, subagentForResult, envelopes);
+          hiddenParentToolCalls(state).delete(providerCallId);
+          continue; // Task's call was never shown — no tool-end for it.
         }
+        if (subagentForResult) maybeEmitSubagentStop(state, turnId, subagentForResult, envelopes);
 
         const call = mintedId(providerCallIds(state), providerCallId);
         const ok = resultBlock.is_error !== true;

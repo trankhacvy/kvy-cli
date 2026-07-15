@@ -96,6 +96,65 @@ describe("mapClaudeToEnvelopes — nested ordinary tool call inside a subagent s
     expect(taskEnd.some((e) => e.ev.t === "sub-stop")).toBe(true);
     expect(taskEnd.some((e) => e.ev.t === "tool-end")).toBe(false);
   });
+
+  it("hides a nested Task's own tool_result even when reported inside a sidechain message", () => {
+    // A Task launched *from inside* another subagent's own scope (subagent
+    // calling Task itself) reports its own tool_result in a message that is
+    // itself isSidechain — this must stay hidden exactly like a top-level
+    // Task's tool_result, not leak a dangling tool-end with no tool-start.
+    const state = createClaudeEnvelopeMapperState();
+
+    mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "outer-task",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_outer_task", name: "Task", input: { prompt: "outer" } },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    // Subagent A (outer Task) itself launches a nested Task (subagent B).
+    mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "inner-task-launch",
+        isSidechain: true,
+        parent_tool_use_id: "toolu_outer_task",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_inner_task", name: "Task", input: { prompt: "inner" } },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    // The nested Task's own tool_result arrives inside a sidechain message
+    // (subagent A's own transcript scope).
+    const nestedTaskResult = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "inner-task-result",
+        isSidechain: true,
+        parent_tool_use_id: "toolu_outer_task",
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "toolu_inner_task", content: "inner done" },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    expect(nestedTaskResult.some((e) => e.ev.t === "tool-end")).toBe(false);
+  });
 });
 
 describe("mapClaudeToEnvelopes — turn lifecycle across multiple exchanges", () => {
