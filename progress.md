@@ -158,3 +158,100 @@ and self-verified but sitting unmerged in worktrees — effectively ~3.7%
    fully-verified worktrees sitting un-merged, which suggests a gap in the
    orchestration pipeline (`.claude/workflows/falcon-dev-workflow.js`)
    rather than a one-off.
+
+---
+
+## Cycle 3 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `869cb31`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **FAILED**: `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND — No package.json (or package.yaml, or package.json5) was found in "/Users/trankhacvy/Desktop/MyCave/vibecode/misc/vibe-ide"`
+- `pnpm test` → **FAILED**: identical `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND` error.
+
+**Root cause:** unchanged from Cycles 1–2. `main` still has no
+`package.json`/`pnpm-workspace.yaml`/`turbo.json` and no `task-summary/`
+directory at all.
+
+### Task-summary read this cycle
+
+`task-summary/P0-merge-pending-worktrees.md` was requested, but **it does
+not exist on `main`** — it exists only inside
+`.worktrees/P0-merge-pending-worktrees/task-summary/P0-merge-pending-worktrees.md`.
+Reading it there shows real progress on the blocker identified in Cycles 1
+and 2: a new integration branch, `P0-merge-pending-worktrees` (branched
+from `main` at `869cb31`), sequentially merged all five previously-stuck
+branches in dependency order (`P0-0.1-monorepo-scaffold` →
+`P0-0.1-docs-stubs` → `P0-0.1-ci-tooling` → `P0-0.2-wire-package` →
+`P0-0.3-crypto-package`), resolved two lockfile conflicts and one
+`package.json` conflict, regenerated `pnpm-lock.yaml`, and per its own
+summary got `pnpm build`/`typecheck`/`test`/`lint` all green (126 tests
+passing) **on that branch**. It also already checked off the corresponding
+`plan.md` §16 boxes (0.1 minus the `postinstall` bullet, all of 0.2, all of
+0.3) — but only in its own worktree's copy of `plan.md`, not on `main`.
+
+By this task's own explicit "what was intentionally not done" section, it
+deliberately did **not** merge itself into `main`, per its worktree's
+standing rule ("do NOT merge or push — just commit in the worktree"). That
+step is left for an orchestrator/operator, using
+`git merge --ff-only P0-merge-pending-worktrees` from `main`.
+
+### Tasks completed this cycle
+
+None. This progress-tracker role verifies and records the state of `main`
+only — merging branches into `main` is explicitly out of scope for this
+role (it belongs to the falcon-dev-loop orchestrator step), so no merge was
+performed here. Because none of the five underlying implementation tasks
+(nor the integration task itself) is present on `main`, `plan.md` was
+**not** updated this cycle — checking boxes now would credit `main` with
+code it does not contain, repeating the mistake Cycles 1–2 explicitly
+avoided.
+
+### Blockers / issues found
+
+1. **Unmerged integration branch** (blocking, now a *ready-to-land* form of
+   the Cycle 1/2 blocker): `P0-merge-pending-worktrees` sits fully built,
+   verified, and lint-clean in `.worktrees/P0-merge-pending-worktrees`,
+   linear on top of `main`'s current tip (`869cb31`). A single
+   fast-forward merge (`git merge --ff-only P0-merge-pending-worktrees`
+   from `main`) is all that is needed to unblock every subsequent cycle —
+   this is now a pure orchestration action with no remaining conflict-
+   resolution or verification work attached.
+2. Three cycles in a row have now ended with `pnpm typecheck`/`pnpm test`
+   failing on `main` for the identical `ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND`
+   reason. The root cause has never been a code defect in any task — it is
+   purely that the orchestrator's "verify task, merge worktree" step has
+   not run against `main` for any of the six now-ready branches
+   (`P0-0.1-monorepo-scaffold`, `P0-0.1-docs-stubs`, `P0-0.1-ci-tooling`,
+   `P0-0.2-wire-package`, `P0-0.3-crypto-package`, and now the integration
+   branch `P0-merge-pending-worktrees` that supersedes merging all five
+   individually).
+3. Once `P0-merge-pending-worktrees` lands on `main`, the five original
+   source worktrees (`.worktrees/P0-0.1-monorepo-scaffold`,
+   `.worktrees/P0-0.1-docs-stubs`, `.worktrees/P0-0.1-ci-tooling`,
+   `.worktrees/P0-0.2-wire-package`, `.worktrees/P0-0.3-crypto-package`)
+   become redundant and should be removed with `git worktree remove` to
+   keep the workspace clean.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; 0 checked on `main`.
+**Completion: 0%** on `main` (16 of 135 items — 0.1 minus postinstall, all
+of 0.2, all of 0.3 — are implementation-complete, self-verified, and
+already checked off in the pending integration branch's own `plan.md`,
+i.e. effectively ~11.9% "done, pending one fast-forward merge").
+
+### Next recommended tasks
+
+1. **Fast-forward `main` to `P0-merge-pending-worktrees`**
+   (`git merge --ff-only P0-merge-pending-worktrees` from `main`) —
+   orchestrator/operator action; this is now a zero-conflict, pre-verified
+   merge, not a new dev task.
+2. After landing it, remove the five now-redundant source worktrees and
+   re-run this cycle to confirm `pnpm typecheck`/`pnpm test` pass on `main`
+   and to check off the 16 corresponding `plan.md` §16 boxes for real.
+3. Once 0.1–0.3 are confirmed on `main`, the next unstarted items are the
+   root `postinstall` build-wire-first bullet (plan.md line 616, flagged as
+   a real gap by the integration task-summary), root `CLAUDE.md` (line
+   618), and the `0.4` server skeleton work (lines 640+).
