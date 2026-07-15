@@ -69,6 +69,18 @@ describe("POST /v1/auth", () => {
     expect(response.json()).toEqual({ error: "Invalid signature" });
   });
 
+  it("returns 401 (not 500) for a malformed/wrong-length public key rather than throwing", async () => {
+    const { body } = signedChallenge();
+    // 4 bytes, not a valid Ed25519 public key length — tweetnacl.verify throws on this,
+    // which the route's try/catch must collapse to a 401, not an unhandled 500.
+    body.publicKey = encodeBase64(new Uint8Array([1, 2, 3, 4]));
+
+    const response = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "Invalid signature" });
+  });
+
   it("mints a valid JWT for a fresh signPublicKey", async () => {
     const { body } = signedChallenge();
     const response = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
