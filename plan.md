@@ -610,7 +610,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 ### Phase 0 — Repo & contracts (M0, week 1)
 
-**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5, re-verified cycle 6, re-verified cycle 7, re-verified cycle 8, re-verified cycle 9, re-verified cycle 10 — `pnpm typecheck`/`pnpm test` green)*
+**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5, re-verified cycle 6, re-verified cycle 7, re-verified cycle 8, re-verified cycle 9, re-verified cycle 10, re-verified cycle 15 (docs/encryption.md stray-backtick fix from `P0-0.1-docs-stubs` follow-up now included) — `pnpm typecheck`/`pnpm test` green)*
 - [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
 - [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
 - [x] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
@@ -695,7 +695,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Session self-report: `notifyDaemonSessionStarted` webhook incl. encryption material — §7.1
 - [ ] `falcon kill daemon/sessions/all/all-force` (process-scan based, works when daemon wedged)
 
-**1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)** *(`packages/web` scaffold verified on `main` 2026-07-15 — `pnpm build` / `pnpm --filter @falcon/web typecheck` green; landed via `P1-land-web-scaffold-onto-main`, superseding the earlier unmerged `P1-1.6-web-app-scaffold` / `P1-land-web-scaffold` worktrees. Remaining 1.6 bullets — auth pages, crypto worker, sync engine, reducer, etc. — still not started)*
+**1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)** *(`packages/web` scaffold verified on `main` 2026-07-15 — `pnpm build` / `pnpm --filter @falcon/web typecheck` green; landed via `P1-land-web-scaffold-onto-main`, superseding the earlier unmerged `P1-1.6-web-app-scaffold` / `P1-land-web-scaffold` worktrees. Re-verified cycle 15 — `pnpm typecheck`/`pnpm test` green (14/14 `@falcon/web` tests). Remaining 1.6 bullets — auth pages, crypto worker, sync engine, reducer, etc. — still not started)*
 - [x] Next.js App Router scaffold, static export config, Tailwind + shadcn/ui init, dark default theme
 - [ ] Auth pages: OAuth sign-in; key generation on signup; recovery-code export flow; pairing-approve page (`/pair#<ephPub>`)
 - [ ] Crypto worker (`crypto-bridge`): keys in worker memory from IndexedDB; seal/open message API **(N)**

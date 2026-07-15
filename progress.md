@@ -1564,3 +1564,124 @@ roughly 28-29/135 (~21%), matching prior cycles' projection.
    land-branch wins**, re-applying only its own new commits (route + test)
    per the standing caution since Cycle 10, to avoid double-applying shared
    prerequisite commits.
+
+## Cycle 15 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `ac68041` "fix: P0-0.1-docs-stubs - resolve
+test failures")
+
+### Verification run on `main`
+
+- `pnpm typecheck --force` → **PASSED**: 5/5 packages clean (`@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `@falcon/wire`, `falcon`/`packages/cli`),
+  cache bypassed to force a fresh run rather than trust replayed logs.
+- `pnpm test --force` → **PASSED**: 9/9 turbo tasks green, 156/156 tests, 0
+  failures — `falcon`/`packages/cli` 58, `@falcon/wire` 61, `@falcon/crypto`
+  65, `@falcon/server` 18, `@falcon/web` 14.
+
+(Note: Cycle 14 reported 202/202 tests without `@falcon/web`, since
+`packages/web` had not yet landed on `main` at that point. With `web`'s 14
+tests now included, the headline total is 58+61+65+18+14 = **216/216 tests
+green** across 5 packages.)
+
+### Task-summary files requested this cycle
+
+1. **`task-summary/P0-0.1-monorepo-scaffold.md`** — exists on `main`, read.
+   Describes creation of `pnpm-workspace.yaml`, `turbo.json` (four task
+   pipelines), `tsconfig.base.json` (strict compiler options + `@/` path
+   alias convention), and the root `package.json` (turbo-delegating scripts,
+   pinned `packageManager`). Explicitly scoped narrow — Biome/CI, postinstall
+   ordering, docs stubs, root `CLAUDE.md`, and the actual `packages/*`
+   directories were left to their own tasks. Verification section reports
+   `pnpm build`/`typecheck`/`test` all exit 0 in the worktree at the time.
+   Matches what's live on `main` today (`pnpm-workspace.yaml`, `turbo.json`,
+   `tsconfig.base.json` all present, `plan.md` line 614 already `[x]`).
+2. **`task-summary/P0-0.1-docs-stubs.md`** — exists on `main`, read.
+   Describes creation of `docs/protocol.md` and `docs/encryption.md` as
+   pointer/outline stubs cross-linking each other and `falcon-system-design.md`
+   §4/§5, each with a `Status: stub` marker and a TODO list gated on their
+   corresponding packages (`@falcon/wire`, `@falcon/crypto`) landing.
+   Independent of the monorepo-scaffold task by design (no root manifest
+   touched). Matches what's live on `main` (`docs/protocol.md`,
+   `docs/encryption.md` present; `plan.md` line 617 already `[x]`). Separately
+   noted: `main` HEAD (`ac68041`) is itself a small fix commit against this
+   same docs work — a stray trailing backtick after "§5" in
+   `docs/encryption.md`'s link to `falcon-system-design.md` was corrected
+   directly on `main` (the original `P0-0.1-docs-stubs` worktree no longer
+   exists, already merged and cleaned up in an earlier cycle per that
+   commit's own message) — consistent with, not contradicting, the
+   task-summary's description of the original stub content.
+
+### Tasks completed this cycle
+
+**Both requested task-summaries correspond to work already fully landed and
+already checked off in `plan.md`** (`0.1 Scaffold` line 614 and line 617,
+both `[x]` since Cycle 4). No new checkbox flips were needed for them. Added
+a **cycle 15 re-verification stamp** to the `0.1 Scaffold` section header
+(noting the `docs/encryption.md` stray-backtick fix is now folded in) since
+this cycle's fresh, cache-bypassed `pnpm typecheck`/`pnpm test` run
+reconfirms the section still holds.
+
+Separately, since Cycle 14's tracker commit, `P1-land-web-scaffold-onto-main`
+finished landing on `main` (commits `e643891`/`ad1e292`, outside this
+tracker's own commits) — `packages/web` is now present and green
+(14/14 tests), and `plan.md`'s `1.6 Web app v1` lead bullet was already
+flipped to `[x]` with a landing note as part of that merge. This cycle added
+a **cycle 15 re-verification stamp** to that section header too (confirming
+`pnpm typecheck`/`pnpm test` still green post-land), since it's now
+independently verifiable from a `main`-only checkout and directly affects
+the headline test count this tracker reports.
+
+`plan.md` checkbox count: **23/135** (`grep -c '^- \[x\]'` / `'^- \[ \]'` →
+23 / 112), up from 22/135 in Cycle 14 (the `+1` being the `1.6` web-scaffold
+bullet that landed between Cycle 14 and now — not a change made by this
+tracker, only re-verified and stamped by it).
+
+### Blockers / issues found
+
+1. **`P0-land-0.4-worktrees-onto-main` still unmerged** — same gap flagged
+   every cycle since Cycle 9. `packages/server/src/` on `main` still only has
+   `app/`+`api/`, no `db/` — no auth route, no drizzle schema, no seq
+   allocator. Zero change from Cycle 11–14's assessment; this remains the
+   largest single closeable gap (would land 4 of `0.4`'s remaining 7
+   bullets in one merge).
+2. `P0-0.4-auth-challenge-route` still needs the sequencing care flagged
+   since Cycle 10/11 (don't double-apply `drizzle-schema`/`auth-module` when
+   it eventually lands relative to whichever `0.4` land-branch wins).
+3. No `pnpm lint` run this cycle (out of this role's required gate, per
+   instructions — only `typecheck`/`test`, both green, and both run with
+   `--force` to bypass turbo cache and get a real signal rather than replayed
+   logs).
+4. Environment note (not a repo issue): this session's shell has an `rtk`
+   (Rust Token Killer) command-rewriting hook installed per the user's global
+   `CLAUDE.md`; a couple of read-only commands (`ls`, `grep`) needed
+   `rtk proxy <cmd>` or a direct binary invocation to get unfiltered output
+   during investigation. `pnpm`/`git` invocations were unaffected and used
+   normally. No repo files or config were touched to work around this — purely
+   a local invocation detail.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **23 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (1/8), 1.3 (1/9), 1.6 (1/8) — up from 22/135
+in Cycle 14 (the web-scaffold bullet landed independently between cycles).
+**Completion: ~17.0%** (23/135), verified against a fresh, cache-bypassed
+`pnpm typecheck`/`pnpm test` run covering all 5 packages now on `main`
+(216 tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P0-land-0.4-worktrees-onto-main`** (or re-verify/merge whichever
+   `0.4` land-branch is current) — same #1 recommendation carried since
+   Cycle 9, now the largest remaining gap: would close 4 of `0.4`'s
+   remaining 7 bullets in one merge (drizzle schema, docker-compose, auth
+   module, seq allocator).
+2. **Sequence `P0-0.4-auth-challenge-route` on top of whichever `0.4`
+   land-branch wins**, re-applying only its own new commits (route + test)
+   per the standing caution since Cycle 10, to avoid double-applying shared
+   prerequisite commits.
+3. **Begin closing out `1.6`'s remaining bullets** now that the web scaffold
+   lead bullet is landed and re-verified — auth pages (OAuth sign-in, key
+   generation on signup, recovery-code export) is the natural next slice
+   since it's the first bullet after the scaffold and has no `0.4`-side
+   server dependency beyond the already-scaffolded `@falcon/server` app.
