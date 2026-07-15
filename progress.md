@@ -1914,3 +1914,126 @@ packages on `main` (253 tests total, 0 failures).
 3. **Land `P1-1.5-daemon-singleton-lock`** (not requested this cycle but
    still outstanding since Cycle 16, worktree unchanged) — `packages/cli/src/daemon/`
    still doesn't exist on `main`.
+
+## Cycle 18 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `dcc787e`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → initial run showed a **false green** via turbo's cache:
+  `@falcon/server:typecheck` replayed a cached log from a stale hash whose
+  output path pointed at `.worktrees/P0-land-0.4-worktrees-final`, not the
+  current `main` checkout. Forcing a real run (`turbo run typecheck --force`)
+  surfaced 27 genuine `TS2307`/`TS7006` errors in `packages/server` —
+  `drizzle-orm`, `postgres`, `jose`, `fastify-plugin`, `@paralleldrive/cuid2`
+  all unresolvable. Root cause: `packages/server/node_modules` had no
+  symlinks for those five packages even though they were present in the
+  pnpm content store and `pnpm-lock.yaml` — a stale/incomplete
+  `node_modules` link state (plausibly from worktree add/remove churn
+  sharing the same store), not a code defect. Running `pnpm install`
+  re-linked all five packages in ~3s (`Already up to date` — lockfile
+  didn't move) and a subsequent forced `turbo run typecheck --force`
+  reran clean: **5/5 packages pass, 0 errors.**
+- `pnpm test` → forced (`turbo run test --force`, no cache) run: **9/9 tasks
+  green, 253/253 tests passing** — `@falcon/web` 14, `@falcon/crypto` 65,
+  `falcon` (cli) 58, `@falcon/wire` 61, `@falcon/server` 55 (incl. the two
+  Postgres-backed `seq.test.ts` concurrency tests, which connected fine —
+  local `docker-compose.dev.yml` Postgres is up).
+- Both gates are green on `main` as of `dcc787e`. Flagging the cache-masking
+  incident so future cycles default to `--force` (or at minimum re-run
+  `pnpm install` first) rather than trusting a bare `pnpm typecheck`/`pnpm test`,
+  since turbo's cache can replay a stale pass from a different worktree's
+  hash and hide a genuinely broken `main`.
+
+### Tasks completed this cycle
+
+**None.** This cycle's instructions named three task-summaries to read and
+check off — `task-summary/P1-1.1-server-realtime.md`,
+`task-summary/P1-1.2-server-write-http.md`, and
+`task-summary/P1-1.3-claude-launcher-script.md` — but **none of the three
+exist on `main`**. Confirmed three ways for each: (1) `main`'s
+`task-summary/` directory listing (still the same 25 files as Cycle 17, no
+new entries), (2) `git merge-base --is-ancestor <branch> main` for all three
+branches → none is an ancestor, (3) direct filesystem check —
+`packages/server/src/` on `main` has only `app/`, `auth/`, `db/`,
+`config.ts`, `logger.ts`, `main.ts` (no socket/stream/eventRouter/rpcHandler,
+no HTTP session/message routes), and `packages/cli` has no
+`scripts/falcon_claude_launcher.cjs`. All three files exist, complete and
+self-reporting green `pnpm build`/`typecheck`/`test`, but only inside their
+own worktrees:
+
+| Task | Worktree/branch | Tip | Merged into `main`? |
+|---|---|---|---|
+| `P1-1.1-server-realtime` | `.worktrees/P1-1.1-server-realtime` | `d491fb5` | No — not an ancestor |
+| `P1-1.2-server-write-http` | `.worktrees/P1-1.2-server-write-http` | `714c5d6` | No — not an ancestor |
+| `P1-1.3-claude-launcher-script` | `.worktrees/P1-1.3-claude-launcher-script` | `c5cd819` | No — not an ancestor |
+
+Per the standing rule (Cycle 1 onward), a task is only checked off once its
+code is actually present and verified on `main`, never on an in-worktree
+self-report — so **no `plan.md` checkboxes were flipped this cycle.**
+`plan.md` §16 was annotated (not checked) at the `1.1` header, the `1.2`
+header, and within the existing `1.3` note, each recording: the requested
+task-summary is missing from `main`, the worktree/tip where the work
+actually lives, and that `main`'s corresponding source is absent. Also noted
+in the `1.2` annotation: that branch and `1.1` each built their own
+independent `eventRouter` seam from a shared pre-1.1 base — landing both
+will need reconciliation, not a straight double-merge.
+
+`plan.md` checkbox count: **28/135** — unchanged from Cycle 17, since
+nothing new landed on `main` this cycle.
+
+### Blockers / issues found
+
+1. **Turbo cache can mask a broken `main`.** The first, non-forced
+   `pnpm typecheck` this cycle reported all-green by replaying a cached log
+   whose command path referenced a `.worktrees/*` directory rather than
+   `main`'s own tree, while `packages/server`'s actual `node_modules` on
+   `main` was missing five real dependency symlinks. Only a `--force` rerun
+   caught it. Recommend future cycles always force-bypass the turbo cache
+   (or run `pnpm install` first) for this verification gate.
+2. **Three more unlanded task worktrees**, same recurring class of gap
+   flagged every cycle since Cycle 9: `P1-1.1-server-realtime` (tip
+   `d491fb5`), `P1-1.2-server-write-http` (tip `714c5d6`), and
+   `P1-1.3-claude-launcher-script` (tip `c5cd819`) are each complete and
+   self-verified in isolation but were never merged onto `main`. Landing
+   them is out of this tracker's scope, but `1.1` and `1.2` in particular
+   branched from a shared pre-1.1 base and each built its own `eventRouter`
+   — they'll conflict with each other on land, not just need independent
+   fast-forwards.
+3. **Task-summary files requested by this cycle's instructions that don't
+   exist on `main`** — same mismatch pattern as Cycles 16/17, now for
+   `P1-1.1-server-realtime.md`, `P1-1.2-server-write-http.md`, and
+   `P1-1.3-claude-launcher-script.md`. Flagging again so the orchestrator's
+   landing step gets pointed at these three ready branches (mindful of the
+   `eventRouter` overlap between `1.1`/`1.2` noted above).
+4. **`P1-land-1.4-transcript-scanner` (tip `521b743`) and
+   `P1-land-1.6-crypto-worker` (tip `1be84b9`) remain unlanded** — unchanged
+   since Cycle 17, still the single highest-value close-out available
+   (disjoint directories, no conflict risk).
+5. No `pnpm lint` run this cycle (out of this role's required verification
+   gate — only `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **28 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (6/8), 1.3 (1/9), 1.6 (1/8) — **unchanged
+from Cycle 17.** **Completion: ~20.7%** (28/135), verified against a forced,
+cache-bypassed `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (253 tests total, 0 failures) after fixing the `packages/server`
+`node_modules` link gap.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.4-transcript-scanner` (tip `521b743`) and
+   `P1-land-1.6-crypto-worker` (tip `1be84b9`)** — still the cleanest,
+   lowest-risk close-out: disjoint directories, both self-verified with
+   fix-up commits already applied, unchanged and ready since Cycle 17.
+2. **Land `P1-1.1-server-realtime` (tip `d491fb5`) and
+   `P1-1.2-server-write-http` (tip `714c5d6`) together, deliberately** —
+   both are complete and self-verified, but they share a pre-1.1 base and
+   each independently implemented `eventRouter`; land as one reconciliation
+   pass (not two independent fast-forwards) to avoid a broken merge.
+3. **Sequence `P0-0.4-auth-challenge-route`, `P0-0.4-oauth-signin-routes`,
+   and `P0-0.4-pairing-endpoints`** on top of the now-landed `0.4`
+   foundation (unchanged from Cycle 17 — still not started).
