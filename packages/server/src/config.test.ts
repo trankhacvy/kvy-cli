@@ -27,6 +27,8 @@ describe("config env parsing", () => {
     delete process.env.PORT;
     delete process.env.HOST;
     delete process.env.LOG_LEVEL;
+    delete process.env.DATABASE_URL;
+    delete process.env.FALCON_MASTER_SECRET;
 
     const { env } = await importFreshConfig();
 
@@ -34,6 +36,8 @@ describe("config env parsing", () => {
     expect(env.PORT).toBe(3005);
     expect(env.HOST).toBe("0.0.0.0");
     expect(env.LOG_LEVEL).toBe("info");
+    expect(env.DATABASE_URL).toBe("postgres://falcon:falcon@localhost:5432/falcon");
+    expect(env.FALCON_MASTER_SECRET).toBe("dev-only-insecure-master-secret-change-me!!");
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -50,6 +54,8 @@ describe("config env parsing", () => {
     process.env.PORT = "4321";
     process.env.HOST = "127.0.0.1";
     process.env.LOG_LEVEL = "warn";
+    process.env.DATABASE_URL = "postgres://user:pass@db.internal:5432/falcon_prod";
+    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
 
     const { env } = await importFreshConfig();
 
@@ -58,7 +64,21 @@ describe("config env parsing", () => {
       PORT: 4321,
       HOST: "127.0.0.1",
       LOG_LEVEL: "warn",
+      DATABASE_URL: "postgres://user:pass@db.internal:5432/falcon_prod",
+      FALCON_MASTER_SECRET: "a".repeat(32),
     });
+  });
+
+  it("throws when DATABASE_URL is an empty string", async () => {
+    process.env.DATABASE_URL = "";
+
+    await expect(importFreshConfig()).rejects.toThrow();
+  });
+
+  it("throws when FALCON_MASTER_SECRET is shorter than 32 characters", async () => {
+    process.env.FALCON_MASTER_SECRET = "too-short";
+
+    await expect(importFreshConfig()).rejects.toThrow();
   });
 
   it("throws when NODE_ENV is an invalid enum value", async () => {
@@ -89,5 +109,21 @@ describe("config env parsing", () => {
     process.env.HOST = "";
 
     await expect(importFreshConfig()).rejects.toThrow();
+  });
+
+  it("throws when NODE_ENV=production and FALCON_MASTER_SECRET is left at its dev-only default", async () => {
+    process.env.NODE_ENV = "production";
+    delete process.env.FALCON_MASTER_SECRET;
+
+    await expect(importFreshConfig()).rejects.toThrow(/FALCON_MASTER_SECRET/);
+  });
+
+  it("allows NODE_ENV=production when FALCON_MASTER_SECRET is overridden", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+
+    const { env } = await importFreshConfig();
+
+    expect(env.NODE_ENV).toBe("production");
   });
 });

@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.dev/schema.v2.json",
+  "globalPassThroughEnv": ["SKIP_FALCON_WIRE_BUILD"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
