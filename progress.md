@@ -3639,3 +3639,106 @@ against a green `pnpm typecheck`/`pnpm test` run covering all 5 packages on
    pieces (`cli-locator`, `cli-auth-login`, `envelope-mapper`,
    `http-outbox`) — all self-contained, all report green in their own
    worktrees, all still waiting for an actual land step.
+
+## Cycle 31 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `dc3edbd` — "chore: cycle 30 — completed 0
+tasks (2 already-landed tasks re-verified)"). Confirmed via `/usr/bin/git
+log -1` / `/usr/bin/git status --short` (clean tree) against the primary
+repo checkout, per the standing discipline of cross-checking this
+environment's `rtk` Bash-hook (which earlier cycles document as capable of
+mangling plain `ls`/`git`/`grep` output) with absolute-path binaries and the
+`Read` tool.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (all cache hits — `@falcon/crypto`, `@falcon/wire`, `@falcon/server`,
+  `@falcon/web`, `falcon` (cli)).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server` 87, `falcon`
+  (cli) 161. Total **410 tests, 0 failures** — identical to Cycle 30,
+  confirming no regression since then (no content commits landed on `main`
+  between Cycle 30's tracker commit and this cycle's start).
+
+### Task-summary read this cycle
+
+- **`task-summary/P1-1.5-ensure-daemon-running.md`** — **does not exist on
+  `main`** (`/usr/bin/git ls-tree main -- task-summary/P1-1.5-ensure-daemon-running.md`
+  empty; `/usr/bin/find . -iname "*ensure-daemon*"` only turns up the file
+  inside `.worktrees/P1-1.5-ensure-daemon-running/task-summary/`). Read
+  there for context (not credited): implements `ensureDaemonRunning()` in a
+  new `packages/cli/src/daemon/ensureDaemonRunning.ts` — a thin wrapper
+  around the already-merged `state.ts`/`lock.ts` liveness check
+  (`isProcessAlive`) and `commands.ts`'s `runDaemonStart`, respecting
+  `FALCON_NO_SERVICE=1` as an explicit opt-out (returns `{ok:false,
+  reason:"disabled"}`, treated as success by callers). Wires it into
+  `index.ts`'s `start`/`auth`/`sessions`/`resume` subcommands (now `async`,
+  each calling a new `ensureDaemon()` helper before proceeding). Own
+  task-summary reports 5 new unit tests for `ensureDaemonRunning` (no
+  daemon → spawns one; stale/dead-pid state → respawns; already-healthy →
+  no-op; spawn timeout → `start-failed`; `FALCON_NO_SERVICE=1` → `disabled`
+  without touching the filesystem) plus 3 new `index.test.ts` cases, and a
+  full-workspace `pnpm build` (5/5) / `pnpm typecheck` (7/7) / `pnpm
+  --filter falcon test` (169/169, up from 161) all green. Independently
+  confirmed via `/usr/bin/git merge-base --is-ancestor
+  P1-1.5-ensure-daemon-running main` → **not an ancestor**, and
+  `/usr/bin/git cat-file -e main:packages/cli/src/daemon/ensureDaemonRunning.ts`
+  → fails (path doesn't exist on `main`). Per this tracker's established
+  convention (every cycle since Cycle 1), this is real, complete,
+  self-verified work that has simply never been merged onto the shared
+  `main` ref — not credited in `plan.md`, and the "`ensureDaemonRunning()`
+  auto-start" bullet (plan.md §1.5) stays unchecked. Added a Cycle 31
+  annotation to plan.md's §1.5 narrative recording this finding (see
+  plan.md itself for the full detail already captured there).
+
+### Tasks completed this cycle
+
+None. No branches were merged onto `main` this cycle (merging worktrees is
+out of scope for this tracker role). `plan.md` §16 checkbox count is
+unchanged from Cycle 30: **40/135** checked (`grep -c '^\- \[x\]'` → 40,
+`grep -c '^\- \[ \]'` → 95).
+
+### Blockers / issues found
+
+1. **`P1-1.5-ensure-daemon-running` sits complete and unlanded** — same
+   recurring pattern flagged every cycle since Cycle 1: real, green,
+   self-verified work in a worktree that nobody with primary-checkout write
+   access has actually merged onto `main`. This is a small, disjoint,
+   low-risk merge (touches only `daemon/ensureDaemonRunning.ts` +
+   `ensureDaemonRunning.test.ts` + `index.ts`/`index.test.ts`, all built on
+   top of already-merged §1.5 primitives) — a good candidate for the next
+   land pass.
+2. **§1.1/1.2 server realtime + write path remains unlanded** — fifth
+   consecutive cycle (27→31) flagging `P1-land-1.1-1.2-server-realtime-write-path`
+   as the single highest-value pending item (real Socket.IO read path +
+   idempotent HTTP write path, fully self-verified, zero-drift fork point).
+   Not re-investigated in depth this cycle (not part of the requested task
+   list), but still visibly unmerged via `git worktree list`.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **40/135 checked, unchanged from Cycle 30**
+(the one task requested this cycle was verified real but unlanded, so
+nothing new could be credited). **Completion: ~29.6%** (40/135), verified
+against a green `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (410 tests total, 0 failures, identical to Cycle 30 — confirming
+`main` is stable).
+
+### Next recommended tasks
+
+1. **Land `P1-1.5-ensure-daemon-running`** onto `main` — small, self-
+   contained, depends only on already-merged §1.5 primitives
+   (`lock.ts`/`state.ts`/`controlServer.ts`/`commands.ts`); this cycle's
+   verified-but-unlanded finding.
+2. **Actually land `P1-land-1.1-1.2-server-realtime-write-path` onto
+   `main`** — still the single highest-value pending item, unchanged for
+   five cycles: real Socket.IO read path + idempotent HTTP write path,
+   fully self-verified, zero-drift fork point from `main`'s current tip.
+3. **Pick up `P1-1.5-notify-daemon-session-started`** (flagged ready at
+   Cycle 29, tip `3864766`) or one of the several unmerged `1.3`/`1.4`
+   pieces (`cli-locator`, `cli-auth-login`, `envelope-mapper`,
+   `http-outbox`) — all self-contained, all report green in their own
+   worktrees, all still waiting for an actual land step.
