@@ -39,7 +39,9 @@ export async function buildServer(
 
   await app.register(healthRoutes);
   await app.register(buildAuthRoutes(deps.db ?? defaultDb));
-  await app.register(buildOAuthRoutes(deps.db ?? defaultDb, deps.oauthVerifier ?? defaultOAuthVerifier));
+  await app.register(
+    buildOAuthRoutes(deps.db ?? defaultDb, deps.oauthVerifier ?? defaultOAuthVerifier),
+  );
   await app.register(pairRoutes);
 
   return app;

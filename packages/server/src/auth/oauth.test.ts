@@ -1,7 +1,7 @@
-import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from "jose";
+import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { verifyGithubAccessToken } from "./oauth.js";
 import type { verifyGoogleIdToken as VerifyGoogleIdToken } from "./oauth.js";
+import { verifyGithubAccessToken } from "./oauth.js";
 
 const ORIGINAL_ENV = { ...process.env };
 const CLIENT_ID = "test-google-client-id";
@@ -34,7 +34,9 @@ describe("verifyGoogleIdToken", () => {
     process.env = { ...ORIGINAL_ENV };
   });
 
-  async function signIdToken(overrides: { issuer?: string; audience?: string; subject?: string; ttlSeconds?: number } = {}) {
+  async function signIdToken(
+    overrides: { issuer?: string; audience?: string; subject?: string; ttlSeconds?: number } = {},
+  ) {
     const now = Math.floor(Date.now() / 1000);
     return new SignJWT({})
       .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
@@ -106,7 +108,8 @@ describe("verifyGoogleIdToken", () => {
 
 describe("verifyGithubAccessToken", () => {
   it("returns the identity for a 200 response with a numeric id", async () => {
-    const fetchUser = async () => new Response(JSON.stringify({ id: 42, login: "octocat" }), { status: 200 });
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ id: 42, login: "octocat" }), { status: 200 });
 
     const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser);
 
@@ -114,7 +117,8 @@ describe("verifyGithubAccessToken", () => {
   });
 
   it("returns null for a non-2xx response (invalid/expired token)", async () => {
-    const fetchUser = async () => new Response(JSON.stringify({ message: "Bad credentials" }), { status: 401 });
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ message: "Bad credentials" }), { status: 401 });
 
     const identity = await verifyGithubAccessToken("gho_badtoken", fetchUser);
 
@@ -122,7 +126,8 @@ describe("verifyGithubAccessToken", () => {
   });
 
   it("returns null when the response body has no id", async () => {
-    const fetchUser = async () => new Response(JSON.stringify({ login: "octocat" }), { status: 200 });
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ login: "octocat" }), { status: 200 });
 
     const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser);
 

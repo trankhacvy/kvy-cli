@@ -81,10 +81,7 @@ export function buildOAuthRoutes(
           return reply.code(400).send({ error: "Malformed signPubKey" });
         }
 
-        const identity = await verifier.verify(
-          request.body.oauthProvider,
-          request.body.oauthProof,
-        );
+        const identity = await verifier.verify(request.body.oauthProvider, request.body.oauthProof);
         if (!identity) {
           return reply.code(401).send({ error: "Invalid OAuth proof" });
         }
@@ -102,7 +99,11 @@ export function buildOAuthRoutes(
           })
           .onConflictDoUpdate({
             target: accounts.signPublicKey,
-            set: { contentPubKey, oauthProvider: identity.provider, oauthSubject: identity.subject },
+            set: {
+              contentPubKey,
+              oauthProvider: identity.provider,
+              oauthSubject: identity.subject,
+            },
           })
           .returning();
 

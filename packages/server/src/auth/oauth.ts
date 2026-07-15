@@ -1,4 +1,4 @@
-import { type JWTVerifyGetKey, createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
 import { env } from "../config.js";
 
 /**

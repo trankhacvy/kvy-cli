@@ -108,7 +108,10 @@ describe("POST /v1/auth", () => {
     expect(firstVerified?.accountId).toBe(secondVerified?.accountId);
 
     const db = drizzle(pglite, { schema: { accounts } });
-    const rows = await db.select().from(accounts).where(eq(accounts.signPublicKey, signPublicKeyHex));
+    const rows = await db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.signPublicKey, signPublicKeyHex));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe(firstVerified?.accountId);
   });

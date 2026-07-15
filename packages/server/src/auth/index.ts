@@ -1,4 +1,3 @@
-export { authPlugin } from "./plugin.js";
 export {
   defaultOAuthVerifier,
   type OAuthIdentity,
@@ -7,6 +6,7 @@ export {
   verifyGithubAccessToken,
   verifyGoogleIdToken,
 } from "./oauth.js";
+export { authPlugin } from "./plugin.js";
 export { TokenCache, type TokenCacheOptions } from "./token-cache.js";
 export {
   ACCESS_TOKEN_TTL_SECONDS,

@@ -32,7 +32,9 @@ function fakeVerifier(): OAuthVerifier {
   };
 }
 
-function registerBody(overrides: Partial<{ oauthProvider: OAuthProvider; oauthProof: string }> = {}) {
+function registerBody(
+  overrides: Partial<{ oauthProvider: OAuthProvider; oauthProof: string }> = {},
+) {
   const keypair = tweetnacl.sign.keyPair();
   return {
     body: {
@@ -131,10 +133,7 @@ describe("POST /v1/auth/register", () => {
     expect(firstVerified?.accountId).toBe(secondVerified?.accountId);
 
     const db = drizzle(pglite, { schema: { accounts } });
-    const rows = await db
-      .select()
-      .from(accounts)
-      .where(eq(accounts.id, firstVerified!.accountId));
+    const rows = await db.select().from(accounts).where(eq(accounts.id, firstVerified!.accountId));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.oauthProvider).toBe("github");
     expect(rows[0]?.oauthSubject).toBe("bob-github-sub");
