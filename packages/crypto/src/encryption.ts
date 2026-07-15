@@ -84,11 +84,17 @@ export function libsodiumDecryptWithSecretKey(bundle: Uint8Array, recipientSecre
   const ephemeralPublicKey = bundle.slice(0, pubLen);
   const nonce = bundle.slice(pubLen, pubLen + nonceLen);
   const ciphertext = bundle.slice(pubLen + nonceLen);
-  const decrypted = tweetnacl.box.open(ciphertext, nonce, ephemeralPublicKey, recipientSecretKey);
-  if (!decrypted) {
+  try {
+    const decrypted = tweetnacl.box.open(ciphertext, nonce, ephemeralPublicKey, recipientSecretKey);
+    if (!decrypted) {
+      return null;
+    }
+    return new Uint8Array(decrypted);
+  } catch {
+    // tweetnacl throws on malformed inputs (e.g. wrong-length recipientSecretKey)
+    // instead of returning null — normalize to this module's never-throw contract.
     return null;
   }
-  return new Uint8Array(decrypted);
 }
 
 /**
@@ -113,15 +119,24 @@ export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
  * @returns The decrypted data
  */
 export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null {
-  const nonce = data.slice(0, tweetnacl.secretbox.nonceLength);
-  const encrypted = data.slice(tweetnacl.secretbox.nonceLength);
-  const decrypted = tweetnacl.secretbox.open(encrypted, nonce, secret);
-  if (!decrypted) {
-    // Decryption failed - returning null is sufficient for error handling
-    // Callers should handle the null case appropriately
+  if (data.length < tweetnacl.secretbox.nonceLength) {
     return null;
   }
-  return JSON.parse(new TextDecoder().decode(decrypted));
+  const nonce = data.slice(0, tweetnacl.secretbox.nonceLength);
+  const encrypted = data.slice(tweetnacl.secretbox.nonceLength);
+  try {
+    const decrypted = tweetnacl.secretbox.open(encrypted, nonce, secret);
+    if (!decrypted) {
+      // Decryption failed - returning null is sufficient for error handling
+      // Callers should handle the null case appropriately
+      return null;
+    }
+    return JSON.parse(new TextDecoder().decode(decrypted));
+  } catch {
+    // tweetnacl throws on malformed inputs (e.g. wrong-length secret) and
+    // JSON.parse throws on non-JSON plaintext — normalize both to null.
+    return null;
+  }
 }
 
 /**
@@ -151,11 +166,17 @@ export function decryptBlob(bundle: Uint8Array, key: Uint8Array): Uint8Array | n
   }
   const nonce = bundle.slice(0, tweetnacl.secretbox.nonceLength);
   const ciphertext = bundle.slice(tweetnacl.secretbox.nonceLength);
-  const decrypted = tweetnacl.secretbox.open(ciphertext, nonce, key);
-  if (!decrypted) {
+  try {
+    const decrypted = tweetnacl.secretbox.open(ciphertext, nonce, key);
+    if (!decrypted) {
+      return null;
+    }
+    return new Uint8Array(decrypted);
+  } catch {
+    // tweetnacl throws on malformed inputs (e.g. wrong-length key) instead of
+    // returning null — normalize to this module's never-throw contract.
     return null;
   }
-  return new Uint8Array(decrypted);
 }
 
 /**

@@ -38,4 +38,14 @@ describe('wrapDek / unwrapDek', () => {
     expect(unwrapDek(new Uint8Array(0), tree.content.secretKey)).toBeNull();
     expect(unwrapDek(new Uint8Array([0x00]), tree.content.secretKey)).toBeNull();
   });
+
+  it('unwrapDek returns null (never throws) on a wrong-length content secret key', () => {
+    // Regression: tweetnacl.box.open throws "bad secret key size" for a key
+    // that isn't exactly 32 bytes; unwrapDek must catch this to honor its own
+    // documented never-throw contract.
+    const tree = deriveKeyTree(getRandomBytes(32));
+    const wrapped = wrapDek(getRandomBytes(32), tree.content.publicKey);
+    expect(() => unwrapDek(wrapped, getRandomBytes(16))).not.toThrow();
+    expect(unwrapDek(wrapped, getRandomBytes(16))).toBeNull();
+  });
 });

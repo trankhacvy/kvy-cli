@@ -78,6 +78,21 @@ describe('encryption.ts (node)', () => {
 
       expect(decryptLegacy(bundle, getRandomBytes(32))).toBeNull();
     });
+
+    it('never throws (returns null) on inputs too short to contain a nonce, or a wrong-length key', () => {
+      // Regression: tweetnacl.secretbox.open throws "bad nonce size" / "bad key
+      // size" instead of returning falsy for malformed input lengths — decryptLegacy
+      // must catch this itself to honor the package's never-throw contract.
+      expect(() => decryptLegacy(new Uint8Array(0), getRandomBytes(32))).not.toThrow();
+      expect(decryptLegacy(new Uint8Array(0), getRandomBytes(32))).toBeNull();
+      expect(() => decryptLegacy(new Uint8Array(5), getRandomBytes(32))).not.toThrow();
+      expect(decryptLegacy(new Uint8Array(5), getRandomBytes(32))).toBeNull();
+
+      const secret = getRandomBytes(32);
+      const bundle = encryptLegacy({ hello: 'world' }, secret);
+      expect(() => decryptLegacy(bundle, getRandomBytes(16))).not.toThrow();
+      expect(decryptLegacy(bundle, getRandomBytes(16))).toBeNull();
+    });
   });
 
   describe('encryptBlob / decryptBlob (NaCl secretbox, raw bytes)', () => {
@@ -92,6 +107,15 @@ describe('encryption.ts (node)', () => {
       const tampered = new Uint8Array(bundle);
       tampered[0]! ^= 0xff;
       expect(decryptBlob(tampered, key)).toBeNull();
+    });
+
+    it('never throws (returns null) on a wrong-length key', () => {
+      // Regression: tweetnacl.secretbox.open throws "bad key size" for a key
+      // that isn't exactly 32 bytes instead of returning falsy.
+      const key = getRandomBytes(32);
+      const bundle = encryptBlob(getRandomBytes(16), key);
+      expect(() => decryptBlob(bundle, getRandomBytes(16))).not.toThrow();
+      expect(decryptBlob(bundle, getRandomBytes(16))).toBeNull();
     });
   });
 
@@ -112,6 +136,16 @@ describe('encryption.ts (node)', () => {
       const tampered = new Uint8Array(bundle);
       tampered[tampered.length - 1]! ^= 0xff;
       expect(libsodiumDecryptWithSecretKey(tampered, recipient.secretKey)).toBeNull();
+    });
+
+    it('never throws (returns null) on a wrong-length recipient secret key', () => {
+      // Regression: tweetnacl.box.open throws "bad secret key size" instead of
+      // returning falsy — this previously escaped as an uncaught exception all
+      // the way up through unwrapDek(), which is documented to never throw.
+      const recipient = tweetnacl.box.keyPair();
+      const bundle = libsodiumEncryptForPublicKey(new TextEncoder().encode('x'), recipient.publicKey);
+      expect(() => libsodiumDecryptWithSecretKey(bundle, getRandomBytes(16))).not.toThrow();
+      expect(libsodiumDecryptWithSecretKey(bundle, getRandomBytes(16))).toBeNull();
     });
   });
 
