@@ -3535,3 +3535,210 @@ realtime/write-path work queued since Cycle 27.
    `writeHookSettingsFile`, no dependencies on other unmerged work),
    144/144 `falcon` tests green in its own worktree; a good third
    candidate for the next land pass.
+
+## Cycle 30 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `77eb301` — "feat: P1-1.5-daemon-cli-commands
+- Land `falcon daemon start/start-sync/stop/status` CLI subcommand").
+Confirmed via `git rev-parse HEAD` / `git rev-parse main` (identical) and
+`git branch --show-current` → `main`; cross-checked with `/bin/ls` / full
+binary paths throughout, since this environment's `rtk` Bash-hook has been
+independently documented (Cycles 27–29) to occasionally mangle plain
+`ls`/`git status` output.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (all cache hits — `@falcon/crypto`, `@falcon/wire`, `@falcon/server`,
+  `@falcon/web`, `falcon` (cli)).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/crypto`
+  65, `@falcon/wire` 61, `@falcon/web` 36, `@falcon/server` 87, `falcon` (cli)
+  161 (up from 133 at Cycle 29 — the two tasks below landed since then).
+  Total 410 tests, 0 failures.
+
+### Tasks completed this cycle
+
+Since Cycle 29, two of the three pieces flagged as ready-to-land have
+actually reached `main` (via commits made directly against the primary
+repo checkout, not throwaway worktrees) — verified independently, not just
+trusted from their own task-summaries:
+
+- **`P1-1.5-daemon-cli-commands`** (merge commit `570da8b`, doc follow-up
+  `77eb301`) — `packages/cli/src/daemon/commands.ts` (`runDaemonStart`/
+  `runDaemonStartSync`/`runDaemonStop`/`runDaemonStatus`, `clearDaemonState`)
+  and a `start-sync` args case genuinely exist on `main` (confirmed via
+  `Read` and `git cat-file -e HEAD:packages/cli/src/daemon/commands.ts`).
+  Wires the CLI's previously-stub `daemon` subcommand onto the
+  already-merged `lock.ts`/`state.ts`/`controlServer.ts` primitives.
+  `plan.md` line 693 was already flipped to `[x]` by the landing commit
+  itself, with an accurate narrative (merge commit hash, re-verification
+  numbers) — left as-is, re-confirmed accurate against current `main`.
+- **`P1-1.3-hook-server`** (feat commit `a756eec`, doc follow-up `234fa1a`)
+  — `packages/cli/src/claude/hookServer.ts` (`startHookServer`,
+  `writeHookSettingsFile`) and `hookServer.test.ts` genuinely exist on
+  `main` (confirmed via `Read` and `git cat-file -e`). `plan.md` line 680
+  was already flipped to `[x]` by the landing commit itself — re-confirmed
+  accurate.
+- **`P1-land-1.1-1.2-server-realtime-write-path`** (the third task-summary
+  named for this cycle) — **does not exist on `main`**; the file itself
+  isn't even present in `main`'s `task-summary/` directory (confirmed via
+  `test -f task-summary/P1-land-1.1-1.2-server-realtime-write-path.md` →
+  missing). The branch of the same name exists only in
+  `.worktrees/P1-land-1.1-1.2-server-realtime-write-path` (tip now
+  `324a1cb`, having done a catch-up merge with `main` plus a test-failure
+  fix since Cycle 27). `git merge-base --is-ancestor
+  P1-land-1.1-1.2-server-realtime-write-path main` → **not an ancestor**;
+  `main`'s `packages/server/src/app/` still has no `socket.ts`/`socket/`/
+  `events/` (only `api/`, `routes/`, `server.ts`, `server.test.ts`). Not
+  credited; added a Cycle 30 annotation to `plan.md`'s §1.1 narrative
+  recording this. This branch's own task-summary explicitly defers the
+  final fast-forward of the shared `main` ref to "whatever process has
+  write access to the primary repo checkout" — that step still hasn't
+  happened, now for four cycles running.
+
+### Blockers / issues found
+
+1. **§1.1/1.2 server realtime + write path remains unlanded** — fourth
+   consecutive cycle (27→30) flagging the same branch
+   (`P1-land-1.1-1.2-server-realtime-write-path`, now at tip `324a1cb`) as
+   a fully self-verified, zero-conflict-except-`plan.md` candidate that
+   nobody with primary-checkout write access has actually fast-forwarded
+   `main` onto. Still the single highest-value pending land.
+2. **`P0-cross-cutting-mit-attribution-headers`** (flagged unlanded at
+   Cycle 28) also still appears unmerged — `git log --all` shows its feat
+   commit (`b67ad71`) only inside `.worktrees/P0-cross-cutting-mit-attribution-headers`,
+   not on `main`. Not part of this cycle's requested task list, so not
+   deep-dived, but noted for visibility.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: `grep -c '^\- \[x\]' plan.md` → **40**,
+`grep -c '^\- \[ \]' plan.md` → **95** (40 + 95 = 135 total, unchanged from
+Cycle 29). **Completion: ~29.6%** (40/135) — up from Cycle 29's 28.1%
+(38/135), reflecting the two tasks that landed since then. Verified
+against a green `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (410 tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Actually land `P1-land-1.1-1.2-server-realtime-write-path` onto
+   `main`** — still the single highest-value pending item, unchanged for
+   four cycles: the branch is fully self-verified (real Socket.IO read
+   path + idempotent HTTP write path, `socket.ts`/`eventRouter.ts`/
+   `rpcHandler.ts`/write routes) and its own task-summary reports this
+   task's scope does not include performing the final merge itself — needs
+   an actual `git merge --no-ff` against `main` from the primary repo
+   checkout.
+2. **Land `P0-cross-cutting-mit-attribution-headers`** — trivial,
+   comment-only, zero logic risk per its own task-summary; same merge
+   procedure as above.
+3. **Pick up `P1-1.5-notify-daemon-session-started`** (flagged ready at
+   Cycle 29, tip `3864766`) or one of the several unmerged `1.3`/`1.4`
+   pieces (`cli-locator`, `cli-auth-login`, `envelope-mapper`,
+   `http-outbox`) — all self-contained, all report green in their own
+   worktrees, all still waiting for an actual land step.
+
+## Cycle 31 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `dc3edbd` — "chore: cycle 30 — completed 0
+tasks (2 already-landed tasks re-verified)"). Confirmed via `/usr/bin/git
+log -1` / `/usr/bin/git status --short` (clean tree) against the primary
+repo checkout, per the standing discipline of cross-checking this
+environment's `rtk` Bash-hook (which earlier cycles document as capable of
+mangling plain `ls`/`git`/`grep` output) with absolute-path binaries and the
+`Read` tool.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (all cache hits — `@falcon/crypto`, `@falcon/wire`, `@falcon/server`,
+  `@falcon/web`, `falcon` (cli)).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server` 87, `falcon`
+  (cli) 161. Total **410 tests, 0 failures** — identical to Cycle 30,
+  confirming no regression since then (no content commits landed on `main`
+  between Cycle 30's tracker commit and this cycle's start).
+
+### Task-summary read this cycle
+
+- **`task-summary/P1-1.5-ensure-daemon-running.md`** — **does not exist on
+  `main`** (`/usr/bin/git ls-tree main -- task-summary/P1-1.5-ensure-daemon-running.md`
+  empty; `/usr/bin/find . -iname "*ensure-daemon*"` only turns up the file
+  inside `.worktrees/P1-1.5-ensure-daemon-running/task-summary/`). Read
+  there for context (not credited): implements `ensureDaemonRunning()` in a
+  new `packages/cli/src/daemon/ensureDaemonRunning.ts` — a thin wrapper
+  around the already-merged `state.ts`/`lock.ts` liveness check
+  (`isProcessAlive`) and `commands.ts`'s `runDaemonStart`, respecting
+  `FALCON_NO_SERVICE=1` as an explicit opt-out (returns `{ok:false,
+  reason:"disabled"}`, treated as success by callers). Wires it into
+  `index.ts`'s `start`/`auth`/`sessions`/`resume` subcommands (now `async`,
+  each calling a new `ensureDaemon()` helper before proceeding). Own
+  task-summary reports 5 new unit tests for `ensureDaemonRunning` (no
+  daemon → spawns one; stale/dead-pid state → respawns; already-healthy →
+  no-op; spawn timeout → `start-failed`; `FALCON_NO_SERVICE=1` → `disabled`
+  without touching the filesystem) plus 3 new `index.test.ts` cases, and a
+  full-workspace `pnpm build` (5/5) / `pnpm typecheck` (7/7) / `pnpm
+  --filter falcon test` (169/169, up from 161) all green. Independently
+  confirmed via `/usr/bin/git merge-base --is-ancestor
+  P1-1.5-ensure-daemon-running main` → **not an ancestor**, and
+  `/usr/bin/git cat-file -e main:packages/cli/src/daemon/ensureDaemonRunning.ts`
+  → fails (path doesn't exist on `main`). Per this tracker's established
+  convention (every cycle since Cycle 1), this is real, complete,
+  self-verified work that has simply never been merged onto the shared
+  `main` ref — not credited in `plan.md`, and the "`ensureDaemonRunning()`
+  auto-start" bullet (plan.md §1.5) stays unchecked. Added a Cycle 31
+  annotation to plan.md's §1.5 narrative recording this finding (see
+  plan.md itself for the full detail already captured there).
+
+### Tasks completed this cycle
+
+None. No branches were merged onto `main` this cycle (merging worktrees is
+out of scope for this tracker role). `plan.md` §16 checkbox count is
+unchanged from Cycle 30: **40/135** checked (`grep -c '^\- \[x\]'` → 40,
+`grep -c '^\- \[ \]'` → 95).
+
+### Blockers / issues found
+
+1. **`P1-1.5-ensure-daemon-running` sits complete and unlanded** — same
+   recurring pattern flagged every cycle since Cycle 1: real, green,
+   self-verified work in a worktree that nobody with primary-checkout write
+   access has actually merged onto `main`. This is a small, disjoint,
+   low-risk merge (touches only `daemon/ensureDaemonRunning.ts` +
+   `ensureDaemonRunning.test.ts` + `index.ts`/`index.test.ts`, all built on
+   top of already-merged §1.5 primitives) — a good candidate for the next
+   land pass.
+2. **§1.1/1.2 server realtime + write path remains unlanded** — fifth
+   consecutive cycle (27→31) flagging `P1-land-1.1-1.2-server-realtime-write-path`
+   as the single highest-value pending item (real Socket.IO read path +
+   idempotent HTTP write path, fully self-verified, zero-drift fork point).
+   Not re-investigated in depth this cycle (not part of the requested task
+   list), but still visibly unmerged via `git worktree list`.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **40/135 checked, unchanged from Cycle 30**
+(the one task requested this cycle was verified real but unlanded, so
+nothing new could be credited). **Completion: ~29.6%** (40/135), verified
+against a green `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (410 tests total, 0 failures, identical to Cycle 30 — confirming
+`main` is stable).
+
+### Next recommended tasks
+
+1. **Land `P1-1.5-ensure-daemon-running`** onto `main` — small, self-
+   contained, depends only on already-merged §1.5 primitives
+   (`lock.ts`/`state.ts`/`controlServer.ts`/`commands.ts`); this cycle's
+   verified-but-unlanded finding.
+2. **Actually land `P1-land-1.1-1.2-server-realtime-write-path` onto
+   `main`** — still the single highest-value pending item, unchanged for
+   five cycles: real Socket.IO read path + idempotent HTTP write path,
+   fully self-verified, zero-drift fork point from `main`'s current tip.
+3. **Pick up `P1-1.5-notify-daemon-session-started`** (flagged ready at
+   Cycle 29, tip `3864766`) or one of the several unmerged `1.3`/`1.4`
+   pieces (`cli-locator`, `cli-auth-login`, `envelope-mapper`,
+   `http-outbox`) — all self-contained, all report green in their own
+   worktrees, all still waiting for an actual land step.
