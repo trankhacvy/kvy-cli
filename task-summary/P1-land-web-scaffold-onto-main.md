@@ -56,11 +56,21 @@ Landed the `P1-land-web-scaffold` integration branch (which itself merges
 - Did not touch any of the other 1.6 bullets (auth pages, crypto worker, `apiSocket`, sync
   engine, reducer port, session-list/timeline screens) — those remain `[ ]` and are
   separate, later tasks per this task's explicit scope.
-- Did not run `pnpm lint` (biome) as a landing gate — confirmed the `[warn] Linter process
-  terminated abnormally (possibly out of memory)` failure is a pre-existing sandbox/host
-  resource limitation reproducible on plain `main` before this merge, unrelated to this
-  change, and not part of this task's stated verification bar (`pnpm build` +
-  `pnpm --filter @falcon/web typecheck`).
-- Removed the now-redundant worktrees `P1-1.6-web-app-scaffold` and `P1-land-web-scaffold`
-  (and their branches) after landing, per the task description, since their content is now
-  fully captured on `main`.
+- **Follow-up fix (this pass):** the `[warn] Linter process terminated abnormally
+  (possibly out of memory)` failure was **not** just a pre-existing sandbox/host
+  limitation — root cause was `biome.json`'s `files.includes` ignore list missing
+  `.next`/`out`, the Next.js build-artifact directories `packages/web` produces. Once
+  `pnpm build` had run, `biome check .` walked ~59 MB of generated webpack chunks/trace
+  files under `packages/web/.next`, producing 40,000+ diagnostics (`Found 18924 errors`),
+  which reliably failed the gate (exit 1) and could exhaust memory under load. Fixed by
+  adding `"!**/.next"` and `"!**/out"` to `biome.json`'s ignore list. `pnpm lint` now
+  scopes to the intended 74 source files, exits 0, and reports only the 32 pre-existing
+  style warnings (`noExplicitAny`, `noNonNullAssertion`, `noUndeclaredEnvVars`) — verified
+  clean across repeated runs, including after a fresh `pnpm build --force`.
+- **Follow-up fix (this pass):** the worktree-cleanup step described below only removed
+  `P1-1.6-web-app-scaffold`; `P1-land-web-scaffold` (worktree + branch) was left behind
+  (`git worktree list` still showed it from the main repo). Confirmed its tip commit
+  (`effecdf`, the payload commit) is an ancestor of this branch (`P1-land-web-scaffold-onto-main`)
+  before removing, so no content was lost; then ran `git worktree remove
+  .worktrees/P1-land-web-scaffold --force` and `git branch -D P1-land-web-scaffold` from
+  the main repo. Both redundant worktrees/branches are now actually gone.
