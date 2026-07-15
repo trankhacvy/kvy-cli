@@ -13,9 +13,15 @@ pnpm install       # installs deps; postinstall builds @falcon/wire first
 pnpm build         # turbo run build     — dual CJS/ESM builds via pkgroll (web: `next build` → static out/)
 pnpm typecheck     # turbo run typecheck — tsc --noEmit, depends on ^build
 pnpm test          # turbo run test      — vitest run, depends on build
-pnpm lint          # biome check .
+pnpm lint          # biome check . (auto-retries once on failure — see note below)
 pnpm lint:fix       # biome check --write .
 ```
+
+`pnpm lint` retries once automatically: running it immediately after `pnpm build`/`pnpm test`
+can occasionally hit `[warn] Linter process terminated abnormally (possibly out of memory)`
+from transient resource contention (biome daemon warm-up racing the tail end of `next build`/
+vitest CPU usage), not a config problem — `.next`/`out` are already excluded in `biome.json`.
+The retry absorbs that transient failure; a lint run that fails twice in a row is a real issue.
 
 Scope to one package with `--filter`, e.g. `pnpm --filter @falcon/wire build`.
 
