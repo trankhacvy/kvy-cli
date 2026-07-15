@@ -695,8 +695,8 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Session self-report: `notifyDaemonSessionStarted` webhook incl. encryption material — §7.1
 - [ ] `falcon kill daemon/sessions/all/all-force` (process-scan based, works when daemon wedged)
 
-**1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)** *(cycle 9 note: `packages/web` Next.js App Router scaffold work exists complete in the unmerged `P1-1.6-web-app-scaffold` worktree, with task-summary doc; not merged into `main`, so this section stays unchecked and uncredited pending a merge + re-verification cycle. Cycle 10: re-confirmed still unmerged — `git merge-base --is-ancestor P1-1.6-web-app-scaffold main` fails)*
-- [ ] Next.js App Router scaffold, static export config, Tailwind + shadcn/ui init, dark default theme
+**1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)**
+- [x] Next.js App Router scaffold, static export config, Tailwind + shadcn/ui init, dark default theme
 - [ ] Auth pages: OAuth sign-in; key generation on signup; recovery-code export flow; pairing-approve page (`/pair#<ephPub>`)
 - [ ] Crypto worker (`crypto-bridge`): keys in worker memory from IndexedDB; seal/open message API **(N)**
 - [ ] `apiSocket`: user-scoped WS w/ infinite reconnect, `app-state` reporting on visibility change **(P** from happy-app `apiSocket.ts`**)**
