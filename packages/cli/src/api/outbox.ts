@@ -146,8 +146,14 @@ export class Outbox {
     return this.queue.length;
   }
 
-  /** Stops the pending flush timer and any retry loop. Does not drop queued/buffered data. */
+  /**
+   * Stops the pending flush timer and any retry loop. Does not drop queued/buffered
+   * data: any envelopes still sitting unsealed in `buf` are flushed (sealed + persisted
+   * to disk) first, so a graceful dispose() never silently drops messages the way a
+   * hard crash would — only the disk queue, not the retry loop, is guaranteed to survive.
+   */
   dispose(): void {
+    if (this.buf.length > 0) this.flush();
     this.disposed = true;
     if (this.timer) {
       clearTimeout(this.timer);

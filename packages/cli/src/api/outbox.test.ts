@@ -131,6 +131,28 @@ describe("Outbox", () => {
       expect(DEFAULT_FLUSH_MS).toBe(300);
       expect(DEFAULT_MAX_BATCH_SIZE).toBe(20);
     });
+
+    it("dispose() flushes whatever's still buffered so it survives on disk instead of being silently dropped", () => {
+      const dek = getRandomBytes(32);
+      const { client } = alwaysOkClient();
+      const sessionId = "sess-dispose-flush";
+      const ob = makeOutbox({
+        sessionId,
+        dek,
+        http: client,
+        maxBatchSize: DEFAULT_MAX_BATCH_SIZE, // never hit by count
+        flushMs: 60_000, // never hit by timer within this test
+      });
+
+      ob.enqueue([textEnvelope("still buffered")]);
+      expect(ob.bufferedCount).toBe(1);
+
+      ob.dispose();
+
+      expect(ob.bufferedCount).toBe(0);
+      expect(ob.queuedBatchCount).toBe(1); // sealed + persisted, not dropped
+      expect(existsSync(outboxQueuePath(homeDir, sessionId))).toBe(true);
+    });
   });
 
   describe("disk persistence / replay across a simulated restart", () => {
