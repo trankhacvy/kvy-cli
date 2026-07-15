@@ -1215,3 +1215,140 @@ re-sequenced on top, `0.4` would close 5 of its 7 remaining bullets and
    and `.worktrees/P0-land-phase0-worktrees` (pre-existing, flagged since
    Cycle 6/7), plus whichever of the newly-landed worktrees become stale
    once merged.
+
+## Cycle 12 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `b7a6f85`, "chore: cycle 11 — completed 0
+tasks, re-verified main green" — advanced by exactly one tracker commit
+since Cycle 11's own check; no content commits landed in between).
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** (turbo, 3 packages: `@falcon/crypto`,
+  `@falcon/server`, `@falcon/wire`, all cache hits, 3/3 successful).
+- `pnpm test` → **PASSED** (turbo, 6 tasks, all cache hits): `@falcon/wire`
+  61/61, `@falcon/server` 18/18, `@falcon/crypto` 65/65 — **144/144 tests
+  green**, identical count to Cycles 9–11 (no code change on `main` since
+  then).
+
+Both gates green — `cycle_passed: true`.
+
+### Task-summaries requested this cycle
+
+This cycle's instructions asked to read three files as "successful tasks":
+
+- `task-summary/P0-land-0.4-worktrees.md`
+- `task-summary/P1-land-cli-scaffold.md`
+- `task-summary/P1-land-web-scaffold.md`
+
+**None of the three exist in `main`'s `task-summary/` directory** (still
+only the same 11 files present since Cycle 1; confirmed via `/bin/ls
+task-summary/` — the `rtk`-hook `ls` interception flagged as broken in
+Cycle 11 is still broken this session, worked around the same way). Cross-checked
+with `git merge-base --is-ancestor <branch> main` for all three branch
+names — all three report **not an ancestor**, i.e. not merged.
+
+All three exist only inside their respective worktrees, exactly the "three
+ready, fast-forwardable integration branches" Cycle 11 discovered and
+flagged as its #1 recommendation to land. They are each still sitting
+unlanded, one cycle later, still built on `main`'s pre-Cycle-11 tip
+(`2dcbde4`) rather than current `main` (`b7a6f85` — though the only diff
+between those two commits is Cycle 11's own `plan.md`/`progress.md` tracker
+edit, so all three should still apply cleanly). Read each in place, for
+context only, per this tracker's established convention (not credited):
+
+- **`P0-land-0.4-worktrees`** (`b391b89`): merges, in dependency order,
+  `P0-0.4-drizzle-schema` → `P0-0.4-docker-compose-dev` →
+  `P0-0.4-auth-module` (3-way conflict in `config.ts`/`config.test.ts`/
+  `CLAUDE.md`, hand-resolved to keep both branches' `EnvSchema` fields and
+  tests) → `P0-0.4-seq-allocator`. Explicitly excludes
+  `P0-0.4-auth-challenge-route` (deemed to contain no route code of its
+  own yet, just the two merged prerequisite commits) as a deliberate scope
+  decision, not an oversight. Self-reports a post-merge Biome formatting
+  fix (4 files), then `pnpm build`/`typecheck` 3/3 green, `pnpm test` 6/6
+  green (`@falcon/server` 50/55, 5 skipped — live-Postgres concurrency
+  tests), `pnpm lint` 0 errors (32 pre-existing warnings unchanged).
+- **`P1-land-cli-scaffold`** (`1a03488`): merges `P1-1.3-cli-package-scaffold`
+  cleanly (no conflicts), then **retires the duplicate** —
+  `git worktree remove --force` + `git branch -D` on both the losing
+  `P1-1.3-cli-skeleton` branch and the now-merged `P1-1.3-cli-package-scaffold`
+  source branch itself. Self-reports 8/8 turbo tasks green including the
+  new `falcon` CLI package's 58/58 tests (`home`/`args`/`logger`/`index`
+  test files). This resolves the CLI-duplicate issue this tracker has
+  flagged every cycle since Cycle 9 — assuming it actually lands.
+- **`P1-land-web-scaffold`** (`effecdf`): merges `P1-1.6-web-app-scaffold`
+  cleanly (no conflicts — merge base already an ancestor of `main`, no
+  overlapping edits). Lands `packages/web` (`@falcon/web`): Next.js App
+  Router static export, Tailwind v4 + shadcn/ui (`@theme inline`,
+  `components.json`), dark-default theme, one ported `Button` primitive,
+  a placeholder route, PWA manifest stub, Vitest setup, plus monorepo
+  wiring (`turbo.json`, `.gitignore`, `CLAUDE.md`). Self-reports
+  `pnpm build` (4/4 packages) + `pnpm --filter @falcon/web typecheck`
+  green, `pnpm test` 158/158 (65+18+61+14) across all four packages. Did
+  not run `pnpm lint` (notes the same pre-existing sandbox OOM flagged by
+  other branches' summaries).
+
+**All three self-report full verification, but none is credited on
+`main`.** `main`'s `packages/` directory still only contains `crypto`,
+`server`, and `wire` — no `cli`, no `web`, and `packages/server` still has
+no `src/db/`. Checking off their `plan.md` boxes would misstate what
+`main` actually contains, so — consistent with every prior cycle — no
+boxes were checked for any of the three. `plan.md`'s existing inline
+annotations on the `**0.4 Server foundation**`, `**1.3 CLI skeleton + local
+mode**`, and `**1.6 Web app v1 (read-only)**` section headers were each
+extended with a cycle-12 note summarizing the corresponding land-branch's
+contents and self-reported verification — documentation-only edits, no
+checkbox changes. `plan.md` checkbox count re-verified via `grep -c` before
+and after editing: **21/135 unchanged**.
+
+### Tasks completed this cycle
+
+None merged into `main`. Landing branches remain out of this tracker's
+scope (consistent with Cycles 1–11) — this role verifies and records, it
+does not merge.
+
+### Blockers / issues found
+
+1. **The landing pass Cycle 11 called "cheapest it has ever been to
+   execute" still has not run**, one full cycle later. All three
+   fast-forwardable `*-land-*` branches identified in Cycle 11 are
+   unchanged and still sitting ready. This is now the single largest gap
+   between "verified work done" and "work reflected on `main`" this
+   tracker has recorded across 12 cycles — landing all three in one pass
+   would take `plan.md` from 21/135 to roughly 28-29/135 (~21%) with zero
+   new engineering, only integration-branch merges that are already done
+   and self-verified.
+2. Same sequencing caution as Cycle 11 still applies:
+   `P0-0.4-auth-challenge-route` is not included in `P0-land-0.4-worktrees`
+   and would need its own new commits (not its whole branch) re-applied on
+   top after `P0-land-0.4-worktrees` lands, to avoid double-applying
+   `drizzle-schema`/`auth-module`.
+3. Tooling note, still present this session: `rtk`-hook interception of
+   `ls`/`grep` returns empty/malformed output (first flagged Cycle 11);
+   `git`/`pnpm` unaffected. Worked around with `/bin/ls` and the `Read`
+   tool again this cycle.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **21 checked on `main`**
+(unchanged from Cycles 9–11). **Completion: ~15.6%** (21/135), verified
+against a green `pnpm typecheck`/`pnpm test` run (144 tests). Unchanged
+from Cycle 11's projection: landing the three ready branches would push
+completion to roughly 28-29/135 (~21%) immediately.
+
+### Next recommended tasks
+
+1. **Run the landing pass** — same #1 recommendation as Cycle 11, now two
+   cycles running with zero action despite all three branches being
+   fast-forward-ready: land `P0-land-0.4-worktrees` → `P1-land-cli-scaffold`
+   → `P1-land-web-scaffold` (order doesn't matter between the three,
+   they're disjoint), then re-apply `P0-0.4-auth-challenge-route`'s own new
+   commits on top per the sequencing note above.
+2. Once landed, re-run this tracker to check off the newly-merged
+   `plan.md` boxes (0.4 drizzle-schema/docker-compose/seq-allocator/
+   auth-module bullets, 1.3 and 1.6 lead bullets) with dates, and to
+   confirm the CLI-duplicate cleanup actually took effect on `main`.
+3. **Clean up stale worktrees** post-landing (flagged since Cycle 6/7):
+   `.worktrees/P0-0.1-monorepo-scaffold` and
+   `.worktrees/P0-land-phase0-worktrees`, plus whichever newly-landed
+   worktrees become redundant once merged.
