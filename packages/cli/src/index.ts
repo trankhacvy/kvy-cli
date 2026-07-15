@@ -3,12 +3,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
+import { runAuthCommand } from "./auth/index.js";
 import { createLogger } from "./logger.js";
 
-// Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): this
-// module wires up arg parsing + a stub dispatcher only. Daemon control,
-// provider spawning, and network calls are later 1.3/1.5 work — every
-// branch below is an honest placeholder, not a half-implementation.
+// Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
+// this module still wires up arg parsing + a stub dispatcher. `auth` is now
+// a real implementation (`./auth/`, falcon-plan.md §2.2); daemon control,
+// provider spawning, and the rest of the network calls are later 1.3/1.5
+// work — every other branch below is an honest placeholder, not a
+// half-implementation.
 //
 // Help text, `--version`, and error messages are ordinary CLI output and go
 // straight to stdout/stderr, same as any CLI. That's unrelated to the
@@ -59,7 +62,7 @@ function describeStart(command: Extract<FalconCommand, { type: "start" }>): stri
   return `${parts.join(" ")}\n`;
 }
 
-function run(command: FalconCommand): number {
+async function run(command: FalconCommand): Promise<number> {
   switch (command.type) {
     case "help":
       process.stdout.write(HELP_TEXT);
@@ -71,8 +74,7 @@ function run(command: FalconCommand): number {
       process.stdout.write(describeStart(command));
       return 0;
     case "auth":
-      process.stdout.write(`falcon auth ${command.action}: not implemented yet\n`);
-      return 0;
+      return runAuthCommand(command.action, logger);
     case "daemon":
       process.stdout.write(`falcon daemon ${command.action}: not implemented yet\n`);
       return 0;
@@ -97,12 +99,12 @@ function run(command: FalconCommand): number {
   }
 }
 
-export function main(argv: string[] = process.argv.slice(2)): number {
+export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
   logger.debug("cli invoked", { argv });
   try {
     const command = parseArgs(argv);
     logger.debug("parsed command", { command });
-    return run(command);
+    return await run(command);
   } catch (error) {
     if (error instanceof ArgParseError) {
       logger.warn("arg parse error", { message: error.message });
@@ -120,5 +122,5 @@ export function main(argv: string[] = process.argv.slice(2)): number {
 // Guard so `main()` can be imported and unit-tested (src/index.test.ts)
 // without also running the CLI as a side effect of the import.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  process.exit(main());
+  main().then((code) => process.exit(code));
 }

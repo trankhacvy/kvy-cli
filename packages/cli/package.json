@@ -16,10 +16,15 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@falcon/crypto": "workspace:*",
+    "open": "^10.2.0",
+    "qrcode-terminal": "^0.12.0",
+    "tweetnacl": "^1.0.3",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/qrcode-terminal": "^0.12.2",
     "pkgroll": "^2.14.2",
     "shx": "^0.3.4",
     "tsx": "^4.20.0",

@@ -29,7 +29,7 @@ describe("main()", () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-    const code = main(["--help"]);
+    const code = await main(["--help"]);
 
     expect(code).toBe(0);
     expect(stdout).toHaveBeenCalledTimes(1);
@@ -41,7 +41,7 @@ describe("main()", () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-    const code = main(["--version"]);
+    const code = await main(["--version"]);
 
     expect(code).toBe(0);
     expect(stdout.mock.calls[0]?.[0]).toMatch(/^falcon \d+\.\d+\.\d+\n$/);
@@ -52,7 +52,7 @@ describe("main()", () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-    const code = main(["claude", "--resume", "abc123"]);
+    const code = await main(["claude", "--resume", "abc123"]);
 
     expect(code).toBe(0);
     expect(stdout.mock.calls[0]?.[0]).toContain("would start a claude session");
@@ -64,7 +64,7 @@ describe("main()", () => {
     const main = await importMain();
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
-    const code = main(["resume"]);
+    const code = await main(["resume"]);
 
     expect(code).toBe(1);
     expect(stderr.mock.calls[0]?.[0]).toContain("falcon: ");
@@ -75,17 +75,22 @@ describe("main()", () => {
   it("never writes CLI-level output through the file logger's channel", async () => {
     // Help/version/errors are direct stdout/stderr writes from index.ts
     // itself (legitimate CLI UX) — distinct from the logger, which this
-    // test isn't exercising directly. Assert only that main() never throws
-    // for any of the top-level command shapes.
+    // test isn't exercising directly. Assert only that main() never rejects
+    // for any of the top-level command shapes. `auth login` is included:
+    // with no reachable server it fails fast (request-failed) and resolves
+    // with exit code 1 rather than hanging or throwing; `process.stdout.isTTY`
+    // is false under the test runner, so it never tries to open a browser.
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    process.env.FALCON_BACKEND_URL = "http://127.0.0.1:1";
 
-    expect(() => main(["auth", "login"])).not.toThrow();
-    expect(() => main(["daemon", "status"])).not.toThrow();
-    expect(() => main(["sessions", "list"])).not.toThrow();
-    expect(() => main(["workspace", "sync"])).not.toThrow();
+    await expect(main(["auth", "login"])).resolves.toBe(1);
+    await expect(main(["daemon", "status"])).resolves.not.toBeUndefined();
+    await expect(main(["sessions", "list"])).resolves.not.toBeUndefined();
+    await expect(main(["workspace", "sync"])).resolves.not.toBeUndefined();
 
+    delete process.env.FALCON_BACKEND_URL;
     stdout.mockRestore();
     stderr.mockRestore();
   });
