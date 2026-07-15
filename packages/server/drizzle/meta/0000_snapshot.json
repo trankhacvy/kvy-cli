@@ -66,9 +66,7 @@
         "accounts_sign_public_key_unique": {
           "name": "accounts_sign_public_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "sign_public_key"
-          ]
+          "columns": ["sign_public_key"]
         }
       },
       "policies": {},
@@ -139,12 +137,8 @@
           "name": "blobs_account_id_accounts_id_fk",
           "tableFrom": "blobs",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -232,12 +226,8 @@
           "name": "machines_account_id_accounts_id_fk",
           "tableFrom": "machines",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -304,9 +294,7 @@
         "pair_requests_eph_pub_unique": {
           "name": "pair_requests_eph_pub_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "eph_pub"
-          ]
+          "columns": ["eph_pub"]
         }
       },
       "policies": {},
@@ -377,12 +365,8 @@
           "name": "push_subscriptions_account_id_accounts_id_fk",
           "tableFrom": "push_subscriptions",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -392,9 +376,7 @@
         "push_subscriptions_endpoint_unique": {
           "name": "push_subscriptions_endpoint_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "endpoint"
-          ]
+          "columns": ["endpoint"]
         }
       },
       "policies": {},
@@ -492,12 +474,8 @@
           "name": "session_messages_session_id_sessions_id_fk",
           "tableFrom": "session_messages",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -665,12 +643,8 @@
           "name": "sessions_account_id_accounts_id_fk",
           "tableFrom": "sessions",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -820,12 +794,8 @@
           "name": "workspaces_account_id_accounts_id_fk",
           "tableFrom": "workspaces",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

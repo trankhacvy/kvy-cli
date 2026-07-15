@@ -636,16 +636,16 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Browser build: `.web.ts` split (libsodium-wrappers + WebCrypto AES-GCM); cross-impl test vectors (node encrypts → web decrypts, and vice versa)
 - [x] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
 
-**0.4 Server foundation** — §3.2, §4 *(Fastify skeleton bullet verified on `main` 2026-07-15, cycle 7, re-verified cycle 8, re-verified cycle 9, re-verified cycle 10 — `pnpm typecheck`/`pnpm test` green, 18/18 `@falcon/server` tests; remaining bullets not started/not merged — `P0-0.4-drizzle-schema`, `P0-0.4-docker-compose-dev`, `P0-0.4-auth-module`, `P0-0.4-seq-allocator`, and `P0-0.4-auth-challenge-route` all exist complete in unmerged worktrees per cycle 10's check, not yet credited)*
+**0.4 Server foundation** — §3.2, §4 *(cycle 11: `P0-0.4-drizzle-schema`, `P0-0.4-docker-compose-dev`, `P0-0.4-auth-module`, and `P0-0.4-seq-allocator` merged into `main` via `P0-land-0.4-worktrees` — `pnpm build`/`pnpm typecheck`/`pnpm test` green, 50/55 `@falcon/server` tests passing (5 `seq.test.ts` skipped — need a live Postgres). `P0-0.4-auth-challenge-route` intentionally NOT landed here: it only contains the merged prerequisite commits, no actual `POST /v1/auth` route implementation yet — that remains a follow-up task)*
 - [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
 - [x] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
 - [x] `drizzle-kit generate` initial migration; migration-on-boot runner
-- [ ] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
-- [ ] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
+- [x] `seq.ts`: `allocMsgSeq` (per-session) + `allocHeaderSeq` (per-account) with atomic `UPDATE … RETURNING` **(N — DELTA D2)**; concurrency test proving two parallel sessions don't contend
+- [x] Auth module: token mint/verify (JWT, RS256 or HMAC — decide), token cache
 - [ ] `POST /v1/auth` Ed25519 challenge/response → account upsert by `signPublicKey` **(V** from `authRoutes.ts`**)**
 - [ ] OAuth sign-in routes (Google/GitHub/email) binding `oauthProvider/oauthSubject` **(N — DELTA D5)**
 - [ ] Pairing endpoints: `POST /v1/auth/pair`, `GET /v1/auth/pair/status`, `POST /v1/auth/pair/approve` **(P** from Happy's `/v1/auth/request*` — add `expiresAt` TTL, one of the reported Happy vulns**)**
-- [ ] `docker-compose.dev.yml`: postgres:16 for local dev
+- [x] `docker-compose.dev.yml`: postgres:16 for local dev
 
 **Phase 0 exit:** `pnpm build && pnpm test` green; a script can register an account, pass the challenge, and get a JWT against a local server.
 

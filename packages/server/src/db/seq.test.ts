@@ -164,7 +164,11 @@ describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)"
   });
 
   it("throws for an unknown session/account id instead of silently returning undefined", async () => {
-    await expect(db.transaction((tx) => allocMsgSeq(tx, "nonexistent-session-id"))).rejects.toThrow();
-    await expect(db.transaction((tx) => allocHeaderSeq(tx, "nonexistent-account-id"))).rejects.toThrow();
+    await expect(
+      db.transaction((tx) => allocMsgSeq(tx, "nonexistent-session-id")),
+    ).rejects.toThrow();
+    await expect(
+      db.transaction((tx) => allocHeaderSeq(tx, "nonexistent-account-id")),
+    ).rejects.toThrow();
   });
 });
