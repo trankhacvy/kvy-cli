@@ -654,3 +654,123 @@ typecheck`/`pnpm test` run covering all 3 packages currently on `main`
    and `.worktrees/P0-land-phase0-worktrees` are both fully landed on
    `main` already and can be removed with `git worktree remove` to stop
    them accumulating in every cycle's `git worktree list` output.
+
+---
+
+## Cycle 8 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `2c520bb`, "chore: cycle 7 — completed 1 task")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 3/3 packages (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`) — `tsc --noEmit` clean on all three (turbo full cache hit).
+- `pnpm test` → **PASSED**: 6/6 tasks, **144 tests total** — 65 in
+  `@falcon/crypto` (8 files), 61 in `@falcon/wire` (6 files), 18 in
+  `@falcon/server` (3 files). Zero failures. Same green result as Cycle 7,
+  confirming `main` is still stable.
+
+No content commits landed on `main` since Cycle 7's `HEAD` — `2c520bb` is
+itself the Cycle 7 tracker commit, so `main` is unchanged content-wise from
+Cycle 7.
+
+### Task-summary read this cycle
+
+Per this cycle's scope, three files were requested:
+
+- **`task-summary/P0-0.1-postinstall.md`** — present on `main`. Describes
+  `scripts/postinstall.cjs` (CJS, `execSync`'d `pnpm --filter @falcon/wire
+  build`, `SKIP_FALCON_WIRE_BUILD=1` escape hatch) wired into root
+  `package.json`'s `postinstall` script, deliberately dropping Happy's
+  Falcon-irrelevant node_modules patch requires. Verified in-worktree via a
+  from-scratch `pnpm install` producing `packages/wire/dist/*` before any
+  other script ran, plus green `pnpm build`/`typecheck`/`test`. Matches
+  `main`: `scripts/postinstall.cjs` and the root `postinstall` script both
+  exist in the working tree today (landed via `P0-land-phase0-worktrees` in
+  Cycle 7).
+- **`task-summary/P0-0.1-root-claude-md.md`** — present on `main`. Describes
+  the root `CLAUDE.md` (commands, package layout incl. `[planned]` tags for
+  `cli`/`server`/`web` at authoring time, monorepo conventions, doc
+  pointers), sourced directly from `plan.md`/`package.json`/`turbo.json`/etc.
+  rather than guessed. Matches `main`: root `CLAUDE.md` exists (later
+  refreshed for the landed `packages/server` per `P0-land-phase0-worktrees`,
+  per Cycle 7's notes).
+- **`task-summary/P0-0.4-drizzle-schema.md`** — **does not exist on `main`**
+  (`python3 -c "os.path.exists(...)"` → `False`; confirmed no such path under
+  `task-summary/` in the working tree). It exists only inside
+  `.worktrees/P0-0.4-drizzle-schema/task-summary/P0-0.4-drizzle-schema.md`,
+  on branch `P0-0.4-drizzle-schema` (tip `9c66020 feat: P0-0.4-drizzle-schema
+  - Drizzle schema + initial migration for falcon-server`), which is **not**
+  merged into `main` (`git log main..P0-0.4-drizzle-schema --oneline` shows
+  one unmerged commit). Per this tracker's established convention (Cycles
+  1–3, 7), a task-summary that only exists in an unmerged worktree is not
+  read for credit and its `plan.md` boxes are not checked — doing so would
+  attribute code to `main` that isn't there. Flagging as an issue below
+  rather than silently skipping.
+
+Both of the two readable summaries correspond to `plan.md` §16 boxes that
+were **already** `[x]` on `main` as of Cycle 4/7 (all four `0.1 Scaffold`
+items, including postinstall and root `CLAUDE.md`) — no new checkbox
+transitions were needed for them this cycle. `plan.md` was updated only to
+add a `re-verified cycle 8` stamp to the `0.1 Scaffold` header and the
+`0.4 Server foundation` header (Fastify-skeleton bullet re-confirmed green),
+plus a note on the `0.4` header that `P0-0.4-drizzle-schema` and
+`P0-0.4-docker-compose-dev` exist complete in unmerged worktrees but aren't
+yet credited.
+
+### Tasks completed this cycle
+
+None newly merged onto `main`. `plan.md` §16 checkbox count is unchanged
+from Cycle 7: **19/135** checked (0.1: 5/5, 0.2: 7/7, 0.3: 7/7, 0.4: 1/8).
+
+### Blockers / issues found
+
+1. **Requested task-summary not present on `main`**: this cycle's
+   instructions asked to read `task-summary/P0-0.4-drizzle-schema.md`
+   directly (not conditioned on it being merged), but the file does not
+   exist on `main` — only in the unmerged `.worktrees/P0-0.4-drizzle-schema`
+   worktree. Read there for context only (not credited): it appears to add a
+   Drizzle schema (`accounts`, `sessions`, `sessionMessages`, etc. per
+   plan.md §3.2) and an initial `drizzle-kit generate` migration for
+   `@falcon/server`, matching the next unstarted `0.4` bullet. This is a
+   process note for whoever schedules tracker cycles — the requested file
+   list should be drawn from what's actually on `main`, or the tracker
+   should explicitly flag (as done here) rather than fabricate a read.
+2. **Unmerged worktrees continue to accumulate** (recurring pattern, Cycles
+   1–7): `git worktree list` shows six worktrees besides the main checkout:
+
+   | Branch | Worktree | Status |
+   |---|---|---|
+   | `P0-0.1-monorepo-scaffold` | `.worktrees/P0-0.1-monorepo-scaffold` | stale — already landed on `main` (Cycle 4); safe to remove |
+   | `P0-land-phase0-worktrees` | `.worktrees/P0-land-phase0-worktrees` | stale — already landed on `main` (Cycle 7); safe to remove |
+   | `P0-0.4-drizzle-schema` | `.worktrees/P0-0.4-drizzle-schema` | 1 commit ahead of `main`, has task-summary, **not merged** — see above |
+   | `P0-0.4-docker-compose-dev` | `.worktrees/P0-0.4-docker-compose-dev` | 3 commits ahead of `main` (`feat`+`fix`+`refactor`), **not merged**; unchanged since Cycle 7's observation |
+   | `P0-0.4-auth-module` | `.worktrees/P0-0.4-auth-module` | at `main`'s tip (`2c520bb`), **0 commits ahead** — freshly created, no work done yet |
+   | `P1-1.6-web-app-scaffold` | `.worktrees/P1-1.6-web-app-scaffold` | at `main`'s tip (`2c520bb`), **0 commits ahead** — freshly created, no work done yet |
+
+   Same orchestration gap flagged every cycle since Cycle 1: verified
+   worktree work (`P0-0.4-drizzle-schema`, `P0-0.4-docker-compose-dev`) sits
+   ready but unlanded. Does not block `main`'s own gate (both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **19 checked on `main`**
+(unchanged from Cycle 7 — no new task-branch merges landed this cycle).
+**Completion: ~14.1%** (19/135), verified against a green `pnpm
+typecheck`/`pnpm test` run covering all 3 packages currently on `main`
+(144 tests total). If `P0-0.4-drizzle-schema` and
+`P0-0.4-docker-compose-dev` were merged, that would bring `0.4` to 3/8,
+raising overall completion to ~15.6% (21/135).
+
+### Next recommended tasks
+
+1. **Merge `P0-0.4-drizzle-schema` into `main`** — next `0.4` bullet
+   (Drizzle schema + initial migration), one commit, verified in-worktree
+   per its task-summary; would need a tracker cycle to read the summary from
+   `main` post-merge before crediting `plan.md`.
+2. **Merge `P0-0.4-docker-compose-dev` into `main`** — small, disjoint from
+   the schema work, closes the last `0.4` bullet listed in `plan.md` (though
+   several auth/seq bullets in between remain unstarted regardless).
+3. **Clean up redundant worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
+   and `.worktrees/P0-land-phase0-worktrees` are both fully landed on `main`
+   already and can be removed with `git worktree remove`.

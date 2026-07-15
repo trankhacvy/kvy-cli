@@ -610,7 +610,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 ### Phase 0 — Repo & contracts (M0, week 1)
 
-**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5, re-verified cycle 6, re-verified cycle 7 — `pnpm typecheck`/`pnpm test` green)*
+**0.1 Scaffold** *(verified on `main` 2026-07-15, cycle 4, re-verified cycle 5, re-verified cycle 6, re-verified cycle 7, re-verified cycle 8 — `pnpm typecheck`/`pnpm test` green)*
 - [x] Init monorepo: `pnpm-workspace.yaml`, `turbo.json` (build/test/typecheck/lint pipelines), root `tsconfig.base.json` (strict, `@/` path alias per package) — §1
 - [x] Biome (or ESLint+Prettier — pick one) at root; CI workflow: install → build wire → typecheck → test on PR
 - [x] Root `postinstall` builds `@falcon/wire` first (Happy's pattern) — §1
@@ -636,7 +636,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Browser build: `.web.ts` split (libsodium-wrappers + WebCrypto AES-GCM); cross-impl test vectors (node encrypts → web decrypts, and vice versa)
 - [x] Unit tests: round-trips, tamper detection, null-on-corrupt, fixture vectors checked into repo
 
-**0.4 Server foundation** — §3.2, §4 *(Fastify skeleton bullet verified on `main` 2026-07-15, cycle 7 — `pnpm typecheck`/`pnpm test` green, 18/18 `@falcon/server` tests; remaining bullets not started/not merged)*
+**0.4 Server foundation** — §3.2, §4 *(Fastify skeleton bullet verified on `main` 2026-07-15, cycle 7, re-verified cycle 8 — `pnpm typecheck`/`pnpm test` green, 18/18 `@falcon/server` tests; remaining bullets not started/not merged — `P0-0.4-drizzle-schema` and `P0-0.4-docker-compose-dev` exist complete in unmerged worktrees per cycle 8's check, not yet credited)*
 - [x] Fastify 5 app skeleton + zod type-provider + `/health` + pino logging
 - [ ] Drizzle schema: `accounts`, `machines`, `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type — §3.2
 - [ ] `drizzle-kit generate` initial migration; migration-on-boot runner
