@@ -1,0 +1,26 @@
+{
+  "name": "falcon",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "falcon — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework, matching Happy's approach), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
+  "bin": {
+    "falcon": "./bin/falcon.mjs"
+  },
+  "main": "./dist/index.mjs",
+  "scripts": {
+    "build": "shx rm -rf dist && tsc --noEmit && pkgroll",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "pkgroll": "^2.14.2",
+    "shx": "^0.3.4",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  }
+}
