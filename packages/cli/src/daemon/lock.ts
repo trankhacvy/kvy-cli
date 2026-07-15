@@ -33,7 +33,13 @@ const MAX_RECLAIM_ATTEMPTS = 5;
 export type DaemonLockPayload = DaemonState;
 
 export interface DaemonLockHandle {
-  /** Releases the lock. Safe to call more than once; safe if already gone. */
+  /**
+   * Releases the lock. Safe to call more than once; safe if already gone.
+   * Only unlinks the lock file if it still names *this* acquisition (pid +
+   * startedAt) — if the lock was reclaimed as stale by another process in
+   * the meantime, release() leaves that new owner's lock alone instead of
+   * deleting it out from under them.
+   */
   release(): Promise<void>;
 }
 
@@ -91,6 +97,25 @@ async function writeTempPayload(homeDir: string, payload: DaemonLockPayload): Pr
   return tmpPath;
 }
 
+/**
+ * Unlinks `lockPath` only if it still holds the payload this acquisition
+ * wrote (identified by pid + startedAt, which together are unique per
+ * process lifetime). Guards against the case where this lock was
+ * misclassified as stale and reclaimed by another process: blindly
+ * unlinking would delete the new owner's lock instead of releasing our
+ * own. A missing/unreadable file is treated as "already released" — a
+ * no-op, matching the existing "safe to call twice" contract.
+ */
+async function releaseIfOwnedByThisProcess(
+  lockPath: string,
+  ownPayload: DaemonLockPayload,
+): Promise<void> {
+  const current = await readLockPayload(lockPath);
+  if (current === null) return;
+  if (current.pid !== ownPayload.pid || current.startedAt !== ownPayload.startedAt) return;
+  await unlink(lockPath).catch(() => undefined);
+}
+
 export async function acquireDaemonLock(
   homeDir: string,
   payload: DaemonLockPayload,
@@ -105,7 +130,7 @@ export async function acquireDaemonLock(
       return {
         ok: true,
         handle: {
-          release: () => unlink(lockPath).catch(() => undefined),
+          release: () => releaseIfOwnedByThisProcess(lockPath, payload),
         },
       };
     } catch (error) {
