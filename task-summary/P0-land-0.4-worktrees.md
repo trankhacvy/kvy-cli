@@ -1,113 +1,80 @@
-# P0-land-0.4-worktrees — Land the four ready Phase-0.4 worktrees into main
+# P0-land-0.4-worktrees — Land the ready P0-land-0.4-worktrees-onto-main integration branch onto main
 
-## What this task was
+**Section:** Phase 0 — Repo & contracts (M0) / §0.4 Server foundation
+**Type:** Integration landing task (no new product code)
 
-An orchestration/integration task, not a new feature. Four sibling task
-worktrees held complete, self-verified, committed work for plan.md §16
-"0.4 Server foundation" that had never been merged anywhere:
+> Note on naming: an earlier, different task in this repo's history was also
+> named `P0-land-0.4-worktrees` (it merged four Phase-0.4 worktrees into an
+> integration branch — see `task-summary/P0-land-0.4-worktrees-onto-main.md`
+> and `git log --oneline b391b89` for that work). This file now documents the
+> **current** task with that same name: taking the already-built,
+> already-verified `P0-land-0.4-worktrees-onto-main` branch (tip `03ff892`,
+> merge commit `efc08db`) and landing it onto a fresh `main`-based worktree so
+> it's ready for the orchestrator to fast-forward `main` itself.
 
-- `P0-0.4-drizzle-schema` (`9c66020`) — Drizzle ORM schema (`accounts`,
-  `machines`, `workspaces`, `sessions`, `sessionMessages`,
-  `unmanagedSessions`, `pairRequests`, `pushSubscriptions`, `blobs` + custom
-  `bytea` type), initial `drizzle-kit generate` migration, migration-on-boot
-  runner, `DATABASE_URL` config env var.
-- `P0-0.4-docker-compose-dev` (`04d4e94`) — `docker-compose.dev.yml`
-  (postgres:16 for local dev). Disjoint from everything else.
-- `P0-0.4-auth-module` (`c9823c4`) — `src/auth/`: JWT HS256 mint/verify
-  (`tokens.ts`), in-memory token cache (`token-cache.ts`), Fastify plugin
-  decorating `app.authenticate` (`plugin.ts`), `FALCON_MASTER_SECRET` config
-  env var. Built on top of `drizzle-schema`'s config.ts.
-- `P0-0.4-seq-allocator` (`8280d8b`) — `src/db/seq.ts`: `allocMsgSeq`
-  (per-session) and `allocHeaderSeq` (per-account) atomic `UPDATE …
-  RETURNING` allocators, plus a concurrency test (requires a live Postgres,
-  skipped without one). Built directly on top of `drizzle-schema`.
+## What this did
 
-This mirrors the `P0-merge-pending-worktrees` / `P0-land-phase0-worktrees`
-pattern already used successfully in this repo's history: build and verify
-the integration on an isolated branch first.
+1. Confirmed `.worktrees/P0-land-0.4-worktrees-onto-main` (branch
+   `P0-land-0.4-worktrees-onto-main`) already contains a clean merge of the
+   four completed Phase-0.4 worktrees, built essentially on top of `main`'s
+   tip:
+   - `P0-0.4-drizzle-schema` — Drizzle schema (`accounts`, `machines`,
+     `workspaces`, `sessions`, `sessionMessages`, `unmanagedSessions`,
+     `pairRequests`, `pushSubscriptions`, `blobs` + custom `bytea` type) +
+     initial `drizzle-kit generate` migration + migration-on-boot runner.
+   - `P0-0.4-docker-compose-dev` — `docker-compose.dev.yml` (Postgres 16 for
+     local dev).
+   - `P0-0.4-auth-module` — JWT mint/verify (HS256) + in-memory token cache +
+     Fastify `app.authenticate` preHandler plugin.
+   - `P0-0.4-seq-allocator` — `seq.ts`: `allocMsgSeq` (per-session) /
+     `allocHeaderSeq` (per-account), atomic `UPDATE … RETURNING`, with a
+     concurrency test (skipped without a live Postgres).
+2. `git merge-base main P0-land-0.4-worktrees-onto-main` == `main`'s own tip
+   (`cc17a14`) — i.e. the integration branch's base *is* current `main`, no
+   divergence to reconcile. Created this fresh worktree off `main`
+   (`git worktree add .worktrees/P0-land-0.4-worktrees -b P0-land-0.4-worktrees main`)
+   and ran `git merge --no-ff P0-land-0.4-worktrees-onto-main`.
+3. Merge was completely clean — **zero conflicts** (33 files changed, 3539
+   insertions(+), 15 deletions(-)); confirms the branch really was built
+   directly on `main`'s current tip as described in the task.
+4. Independently re-verified from scratch in the new worktree (`pnpm install`
+   then forced, non-cached runs):
+   - `pnpm build --force` — 3/3 packages succeed (`@falcon/wire`,
+     `@falcon/crypto`, `@falcon/server`).
+   - `pnpm typecheck --force` — 3/3 packages succeed.
+   - `pnpm test --force` — 6/6 package test runs succeed:
+     `@falcon/wire` 61/61, `@falcon/crypto` 65/65, `@falcon/server` 50/55 (5
+     `seq.test.ts` concurrency tests skipped — they require a live Postgres
+     via `DATABASE_URL`, unavailable in this sandbox, consistent with every
+     prior task-summary for this lineage).
+5. Checked `plan.md` §16 "0.4 Server foundation" — already correctly reflects
+   the landed state from the upstream branch: Drizzle schema, migration,
+   `seq.ts`, auth module, and `docker-compose.dev.yml` bullets are all `[x]`,
+   with `POST /v1/auth` challenge/response, OAuth routes, and pairing
+   endpoints correctly left `[ ]` (not part of this scope). No further edits
+   needed.
 
-**Explicitly out of scope** (per task instructions): `P0-0.4-auth-challenge-route`
-was NOT merged here. That branch currently contains only the two merged
-prerequisite commits (`drizzle-schema` + `auth-module`) with no task-summary
-and no actual `POST /v1/auth` route implementation of its own — landing it
-would credit unwritten work. The real challenge/response route remains a
-separate follow-up task.
+## Result
 
-## Merge order and outcome
+`main` (`cc17a14`) plus this merge now contains the full, working Phase-0.4
+server foundation: Drizzle schema + migration, `docker-compose.dev.yml`, the
+auth module (mint/verify + cache), and `seq.ts`. This worktree's branch
+(`P0-land-0.4-worktrees`) is a direct, conflict-free superset of `main` and is
+ready to be fast-forwarded/merged into `main` by the orchestrator's landing
+cycle.
 
-Worked in `.worktrees/P0-land-0.4-worktrees`, branched from `main`'s tip at
-the time (`2dcbde4`), per the dependency order specified in the task
-(`drizzle-schema` first since both `seq-allocator` and `auth-module` build on
-its `config.ts`/schema; `docker-compose-dev` is disjoint and merged in
-between for convenience).
+## Explicitly NOT included
 
-1. **`P0-0.4-drizzle-schema`** (`7fa2fcb`) — clean, no conflicts.
-2. **`P0-0.4-docker-compose-dev`** (`aae2e02`) — clean, no conflicts
-   (touches only `docker-compose.dev.yml` + its own task-summary).
-3. **`P0-0.4-auth-module`** (`75bfefd`) — **3-way conflicts**, all expected
-   (both branches independently extended the same `EnvSchema` in
-   `config.ts`/`config.test.ts`, and both touched the `packages/server`
-   bullet in root `CLAUDE.md`). Resolved by hand:
-   - `packages/server/src/config.ts`: merged into one `EnvSchema` object
-     carrying both `DATABASE_URL` (drizzle-schema) and
-     `FALCON_MASTER_SECRET` + the production-secret `.refine()` guard
-     (auth-module).
-   - `packages/server/src/config.test.ts`: kept every test from both
-     branches (defaults test now asserts both new fields; production test
-     sets/asserts both; both new "throws when empty/short" tests kept).
-   - `CLAUDE.md`: merged both one-line descriptions of `packages/server`
-     into a single paragraph mentioning Drizzle, migrations, and the auth
-     module together.
-   - `pnpm-lock.yaml` / `packages/server/package.json` / `server.ts` /
-     `logger.test.ts`: auto-merged cleanly by git (disjoint hunks), verified
-     by inspection afterward — dependency lists carry both branches' new
-     deps (`drizzle-orm`, `postgres`, `jose`, `@paralleldrive/cuid2`, etc.).
-4. **`P0-0.4-seq-allocator`** (`a1dd84d`) — clean, no conflicts (its only
-   overlap, `drizzle-schema`, was already on this branch).
-
-## Fixes applied on the integration branch
-
-- **Biome formatting** (post-merge, same commit): merging introduced 4 real
-  `pnpm lint` **errors** — two drizzle-kit-generated JSON files
-  (`drizzle/meta/0000_snapshot.json`, `drizzle/meta/_journal.json`) missing
-  a trailing newline, `packages/server/src/db/seq.test.ts` (never
-  biome-formatted before being committed on its source branch), and
-  `packages/server/src/config.ts` (my conflict-resolution merge produced a
-  line the formatter wanted wrapped differently). Fixed with
-  `biome check --write` on exactly those four files — pure reformatting,
-  re-ran `pnpm build`/`typecheck`/`test` afterward to confirm no behavior
-  changed. The remaining 32 `pnpm lint` warnings (in `@falcon/crypto` and
-  `scripts/postinstall.cjs`) are pre-existing on `main` and out of scope.
-- **`plan.md` §16 checkboxes**: checked off the `seq.ts` bullet, the "Auth
-  module: token mint/verify … token cache" bullet, and the
-  `docker-compose.dev.yml` bullet under "0.4 Server foundation" (the
-  Drizzle-schema and migration bullets were already checked from a prior
-  cycle). Left unchecked, per task instructions: the `POST /v1/auth`
-  challenge/response route, OAuth sign-in routes, and pairing endpoints —
-  none of those exist yet. Updated the section's status note to record the
-  merge and explain why `auth-challenge-route` was deliberately excluded.
-
-## Verification
-
-From the integration branch root, after all four merges + the formatting
-fix:
-
-- `pnpm install` — lockfile unchanged, no conflicts, resolves cleanly.
-- `pnpm build` — 3/3 packages succeed (`@falcon/wire`, `@falcon/crypto`,
-  `@falcon/server`).
-- `pnpm typecheck` — 3/3 packages succeed.
-- `pnpm test` — 6/6 package test runs succeed: `@falcon/wire` 61/61,
-  `@falcon/crypto` 65/65, `@falcon/server` 50/55 (5 skipped — `seq.test.ts`'s
-  concurrency tests need a live Postgres connection via `DATABASE_URL`, by
-  design; they're not run in this sandbox).
-- `pnpm lint` — 0 errors (down from 4 after the formatting fix), same 32
-  pre-existing warnings as `main`.
+`P0-0.4-auth-challenge-route` (the `POST /v1/auth` route implementation) was
+**not** part of `P0-land-0.4-worktrees-onto-main` and is **not** landed here —
+per the upstream task-summary, it still needs its two route-implementing
+commits rebased/cherry-picked onto the new `main` tip as a follow-up task.
 
 ## Assumptions
 
-- Did not attempt to spin up Postgres to un-skip `seq.test.ts`'s concurrency
-  tests — out of scope for a merge/integration task, and the task
-  instructions only require `build`/`typecheck`/`test` to be green, which
-  they are (skipped tests aren't failures).
-- Did not merge or push this branch onto `main` — per task instructions,
-  landing the integration branch itself is a separate follow-up step.
+- Did not merge this worktree's branch into the real `main` branch and did
+  not push — per task instructions, this is a commit-in-worktree landing step;
+  the orchestrator's cycle process performs the actual fast-forward onto
+  `main`.
+- No live Postgres was available in this sandbox, so `seq.test.ts`'s 5
+  concurrency tests remain skipped (not failures).

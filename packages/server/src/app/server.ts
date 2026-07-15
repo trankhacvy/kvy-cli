@@ -8,6 +8,7 @@ import { authPlugin, defaultOAuthVerifier, type OAuthVerifier } from "../auth/in
 import { db as defaultDb } from "../db/client.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
+import { pairRoutes } from "./api/pair.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
 
@@ -39,6 +40,7 @@ export async function buildServer(
   await app.register(healthRoutes);
   await app.register(buildAuthRoutes(deps.db ?? defaultDb));
   await app.register(buildOAuthRoutes(deps.db ?? defaultDb, deps.oauthVerifier ?? defaultOAuthVerifier));
+  await app.register(pairRoutes);
 
   return app;
 }
