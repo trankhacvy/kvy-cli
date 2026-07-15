@@ -5,12 +5,19 @@ import {
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
 import { authPlugin } from "../auth/index.js";
+import { db as defaultDb } from "../db/client.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
+import { buildAuthRoutes } from "./routes/auth.js";
 
 // App factory (kept separate from process startup in src/main.ts) so tests
 // can build+inject() without opening a real port or a real pino transport.
-export async function buildServer(opts: FastifyServerOptions = {}) {
+// `db` defaults to the module-level singleton (db/client.ts) but can be overridden —
+// auth.test.ts binds an in-memory Postgres instead of touching `DATABASE_URL`.
+export async function buildServer(
+  opts: FastifyServerOptions = {},
+  deps: { db?: Parameters<typeof buildAuthRoutes>[0] } = {},
+) {
   const app = Fastify({
     logger: buildLoggerOptions(),
     ...opts,
@@ -27,6 +34,7 @@ export async function buildServer(opts: FastifyServerOptions = {}) {
   await app.register(authPlugin);
 
   await app.register(healthRoutes);
+  await app.register(buildAuthRoutes(deps.db ?? defaultDb));
 
   return app;
 }
