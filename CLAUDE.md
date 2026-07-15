@@ -9,7 +9,7 @@ for the "why", read `plan.md` (build plan + phase-by-phase TODO), `falcon-system
 Run from repo root (Turborepo resolves per-package task graphs via `dependsOn`):
 
 ```bash
-pnpm install       # installs deps; postinstall builds @falcon/wire first (once configured)
+pnpm install       # installs deps; postinstall builds @falcon/wire first
 pnpm build         # turbo run build     — dual CJS/ESM builds via pkgroll
 pnpm typecheck     # turbo run typecheck — tsc --noEmit, depends on ^build
 pnpm test          # turbo run test      — vitest run, depends on build
@@ -30,7 +30,8 @@ packages/
 │                             Built first (everything else depends on it).
 ├─ crypto/    @falcon/crypto  E2E encryption primitives, isomorphic (node + browser builds).
 ├─ cli/       falcon          [planned] CLI: falcon / falcon-claude / falcon-codex bins.
-├─ server/    @falcon/server  [planned] Fastify + Socket.IO + Drizzle.
+├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
+│                             logging). Drizzle/Socket.IO/auth routes still [planned].
 └─ web/       @falcon/web     [planned] Next.js PWA.
 ```
 
@@ -49,8 +50,8 @@ Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
 - **Biome** — single formatter + linter at the root (`biome.json`), not per-package. Run
   `pnpm lint` / `pnpm lint:fix` before committing.
 - **`@falcon/wire` builds first** — it has no workspace dependencies and everything else
-  depends on its compiled output; this is why CI and (once configured) `postinstall`
-  build it explicitly ahead of the general build.
+  depends on its compiled output; this is why CI and `postinstall` (`scripts/postinstall.cjs`,
+  skippable via `SKIP_FALCON_WIRE_BUILD=1`) build it explicitly ahead of the general build.
 
 ## Docs
 
