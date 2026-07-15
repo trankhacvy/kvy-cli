@@ -56,7 +56,9 @@ describe("mintToken / verifyToken", () => {
   it("rejects a token signed under a different secret", async () => {
     const token = await mintToken("acct_123", { secret });
 
-    const result = await verifyToken(token, { secret: "a-completely-different-secret-bbbbbbbbbbbb" });
+    const result = await verifyToken(token, {
+      secret: "a-completely-different-secret-bbbbbbbbbbbb",
+    });
 
     expect(result).toBeNull();
   });

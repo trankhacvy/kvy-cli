@@ -63,7 +63,10 @@ export async function mintToken(accountId: string, opts: TokenOptions = {}): Pro
  * token is an expected, routine outcome (expiry, a stale client), not an exceptional
  * one, so callers branch on the return value instead of catching.
  */
-export async function verifyToken(token: string, opts: TokenOptions = {}): Promise<VerifiedToken | null> {
+export async function verifyToken(
+  token: string,
+  opts: TokenOptions = {},
+): Promise<VerifiedToken | null> {
   if (!token) return null;
 
   try {

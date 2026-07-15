@@ -23,7 +23,7 @@ declare module "fastify" {
 const BEARER_PREFIX = "Bearer ";
 
 function extractBearerToken(header: string | undefined): string | null {
-  if (!header || !header.startsWith(BEARER_PREFIX)) return null;
+  if (!header?.startsWith(BEARER_PREFIX)) return null;
   const token = header.slice(BEARER_PREFIX.length).trim();
   return token.length > 0 ? token : null;
 }

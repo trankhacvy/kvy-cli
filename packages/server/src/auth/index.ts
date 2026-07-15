@@ -5,6 +5,6 @@ export {
   mintToken,
   type TokenOptions,
   type TokenPayload,
-  verifyToken,
   type VerifiedToken,
+  verifyToken,
 } from "./tokens.js";
