@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "node ./scripts/postinstall.cjs",
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",

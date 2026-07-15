@@ -1,0 +1,93 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// config.ts parses process.env once at import time, so each test that needs
+// a different env combination must mutate process.env *before* a fresh
+// dynamic import. vi.resetModules() clears vitest's module registry so the
+// next import re-runs the top-level `EnvSchema.parse(process.env)` instead
+// of returning the cached module from a previous test.
+const ORIGINAL_ENV = { ...process.env };
+
+async function importFreshConfig() {
+  vi.resetModules();
+  const mod = await import("./config.js");
+  return mod;
+}
+
+describe("config env parsing", () => {
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("applies defaults when no env vars are set", async () => {
+    delete process.env.NODE_ENV;
+    delete process.env.PORT;
+    delete process.env.HOST;
+    delete process.env.LOG_LEVEL;
+
+    const { env } = await importFreshConfig();
+
+    expect(env.NODE_ENV).toBe("development");
+    expect(env.PORT).toBe(3005);
+    expect(env.HOST).toBe("0.0.0.0");
+    expect(env.LOG_LEVEL).toBe("info");
+  });
+
+  it("coerces PORT from a numeric string", async () => {
+    process.env.PORT = "8080";
+
+    const { env } = await importFreshConfig();
+
+    expect(env.PORT).toBe(8080);
+    expect(typeof env.PORT).toBe("number");
+  });
+
+  it("accepts a fully-specified valid env", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.PORT = "4321";
+    process.env.HOST = "127.0.0.1";
+    process.env.LOG_LEVEL = "warn";
+
+    const { env } = await importFreshConfig();
+
+    expect(env).toEqual({
+      NODE_ENV: "production",
+      PORT: 4321,
+      HOST: "127.0.0.1",
+      LOG_LEVEL: "warn",
+    });
+  });
+
+  it("throws when NODE_ENV is an invalid enum value", async () => {
+    process.env.NODE_ENV = "staging";
+
+    await expect(importFreshConfig()).rejects.toThrow();
+  });
+
+  it("throws when PORT is not a positive integer", async () => {
+    process.env.PORT = "-1";
+
+    await expect(importFreshConfig()).rejects.toThrow();
+  });
+
+  it("throws when PORT is not numeric at all", async () => {
+    process.env.PORT = "not-a-port";
+
+    await expect(importFreshConfig()).rejects.toThrow();
+  });
+
+  it("throws when LOG_LEVEL is not one of the allowed levels", async () => {
+    process.env.LOG_LEVEL = "verbose";
+
+    await expect(importFreshConfig()).rejects.toThrow();
+  });
+
+  it("throws when HOST is an empty string", async () => {
+    process.env.HOST = "";
+
+    await expect(importFreshConfig()).rejects.toThrow();
+  });
+});
