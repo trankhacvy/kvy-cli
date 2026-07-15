@@ -678,7 +678,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Hook server: loopback HTTP receiving `SessionStart` → learn provider session UUID → metadata CAS update **(P)**
 - [ ] Session bootstrap: mint DEK, wrap to content key, `POST /v1/sessions` (tag = machineId+path+nonce)
 
-**1.4 Transcript pipeline** — §6.4, §6.5
+**1.4 Transcript pipeline** — §6.4, §6.5 *(cycle 16, 2026-07-15: `task-summary/P1-1.4-transcript-scanner.md` requested for this cycle does not exist on `main` — confirmed `git merge-base --is-ancestor P1-1.4-transcript-scanner main` → not an ancestor. The work (sessionScanner + startFileWatcher port, `packages/cli/src/claude/{types,fileWatcher,scanner}.ts`) exists complete and self-verified only in worktree `.worktrees/P1-1.4-transcript-scanner` (its own task-summary reports `pnpm build`/`typecheck`/`test` all green). `main`'s `packages/cli/src/claude/` does not exist yet, so the checkbox below stays unchecked until an actual merge lands — landing is out of this tracker's scope.)*
 - [ ] `sessionScanner` port: JSONL watcher, `processedEntryKeys` dedupe, `deadSessions` phantom guard, `onNewSession(treatExistingAsProcessed)` **(V)**
 - [ ] `startFileWatcher` util with missing-file timeout + `onGaveUp` **(V)**
 - [ ] `mapClaudeToEnvelopes`: assistant text→`text`, thinking→`text{thinking}`, non-Task tool_use→`tool-start`, **Task→subagent registration + orphan buffering**, tool_result→`tool-end`, sidechain user→subagent text; provider-id→cuid2 maps **(P** from `sessionProtocolMapper.ts`**)** — golden-fixture tests from real transcripts
@@ -686,7 +686,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] `alive` keepalive emits (working flag from fd3 thinking state) over WS
 - [ ] Exit semantics: Ctrl-C keeps session `active`/resumable; crash → `failed` via best-effort archive POST (PRD FR-3.7)
 
-**1.5 Daemon v1** — §7.1, §7.2
+**1.5 Daemon v1** — §7.1, §7.2 *(cycle 16, 2026-07-15: `task-summary/P1-1.5-daemon-singleton-lock.md` requested for this cycle does not exist on `main` — confirmed via `git merge-base --is-ancestor`. The singleton lock (`packages/cli/src/daemon/lock.ts`, atomic hard-link + stale-PID detection via `kill(pid,0)`) exists complete and self-verified only in worktree `.worktrees/P1-1.5-daemon-singleton-lock` (its own task-summary reports 73/73 `falcon` tests green, 202+ monorepo-wide). `main`'s `packages/cli/src/daemon/` does not exist yet — checkbox stays unchecked pending merge.)*
 - [ ] Singleton: atomic hard-link lock file with PID payload + stale detection **(V)**
 - [ ] `daemon.state.json` (pid, port, version, startedAt) + `falcon daemon start/start-sync/stop/status` **(P)**
 - [ ] Control server: `/session-started`, `/list`, `/stop-session`, `/spawn-session`, `/stop` **(V** from `controlServer.ts`**)**
@@ -698,7 +698,7 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 **1.6 Web app v1 (read-only)** — §8.1–§8.4 **(DELTA D4)** *(`packages/web` scaffold verified on `main` 2026-07-15 — `pnpm build` / `pnpm --filter @falcon/web typecheck` green; landed via `P1-land-web-scaffold-onto-main`, superseding the earlier unmerged `P1-1.6-web-app-scaffold` / `P1-land-web-scaffold` worktrees. Re-verified cycle 15 — `pnpm typecheck`/`pnpm test` green (14/14 `@falcon/web` tests). Remaining 1.6 bullets — auth pages, crypto worker, sync engine, reducer, etc. — still not started)*
 - [x] Next.js App Router scaffold, static export config, Tailwind + shadcn/ui init, dark default theme
 - [ ] Auth pages: OAuth sign-in; key generation on signup; recovery-code export flow; pairing-approve page (`/pair#<ephPub>`)
-- [ ] Crypto worker (`crypto-bridge`): keys in worker memory from IndexedDB; seal/open message API **(N)**
+- [ ] Crypto worker (`crypto-bridge`): keys in worker memory from IndexedDB; seal/open message API **(N)** *(cycle 16, 2026-07-15: `task-summary/P1-1.6-crypto-worker.md` requested for this cycle does not exist on `main` — confirmed via `git merge-base --is-ancestor`. The worker (`packages/web/src/crypto/{protocol,key-storage,worker-handler,worker}.ts`) exists complete and self-verified only in worktree `.worktrees/P1-1.6-crypto-worker` (its own task-summary reports 26/26 `@falcon/web` tests, 9/9 monorepo tasks green). `main`'s `packages/web/src/crypto/` does not exist yet — checkbox stays unchecked pending merge.)*
 - [ ] `apiSocket`: user-scoped WS w/ infinite reconnect, `app-state` reporting on visibility change **(P** from happy-app `apiSocket.ts`**)**
 - [ ] Sync engine: headerSeq fast-path + gap→`/v1/sync` invalidate; per-session msgSeq fast-path + gap→message-page invalidate; reconnect→invalidate all (TanStack Query) **(P — DELTA D2)**
 - [ ] Reducer port: multi-phase pipeline (perm placeholders, text, tool matching by name+args, tool results, sidechain linking, dedupe) + golden-trace test harness **(P** from happy-app `reducer.ts` — biggest single port**)**

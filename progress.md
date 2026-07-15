@@ -1685,3 +1685,104 @@ in Cycle 14 (the web-scaffold bullet landed independently between cycles).
    generation on signup, recovery-code export) is the natural next slice
    since it's the first bullet after the scaffold and has no `0.4`-side
    server dependency beyond the already-scaffolded `@falcon/server` app.
+
+## Cycle 16 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `9ff3c4a`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` — **PASSED** (5/5 packages: `@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon`; turbo full-cache replay, all
+  green).
+- `pnpm test` — **PASSED** (9/9 turbo tasks green): `@falcon/wire` 61/61,
+  `@falcon/crypto` 65/65, `@falcon/server` 18/18, `falcon` (cli) 58/58,
+  `@falcon/web` 14/14 — **216/216 tests, 0 failures.**
+
+### Task-summaries requested this cycle
+
+This cycle's instructions asked to read three task-summary files as
+"successful tasks":
+
+- `task-summary/P1-1.4-transcript-scanner.md`
+- `task-summary/P1-1.5-daemon-singleton-lock.md`
+- `task-summary/P1-1.6-crypto-worker.md`
+
+**None of the three exist on `main`.** `main`'s `task-summary/` directory
+has the same 17 files it had at Cycle 15 (confirmed by listing). All three
+files exist, complete and self-reporting green `pnpm build`/`typecheck`/`test`,
+but only inside their own isolated task worktrees:
+
+| Task | Worktree | Branch merged into `main`? |
+|---|---|---|
+| `P1-1.4-transcript-scanner` | `.worktrees/P1-1.4-transcript-scanner` | No — `git merge-base --is-ancestor P1-1.4-transcript-scanner main` → not an ancestor |
+| `P1-1.5-daemon-singleton-lock` | `.worktrees/P1-1.5-daemon-singleton-lock` | No — same check → not an ancestor |
+| `P1-1.6-crypto-worker` | `.worktrees/P1-1.6-crypto-worker` | No — same check → not an ancestor |
+
+Corroborated on the filesystem: `main`'s `packages/cli/src/claude/`,
+`packages/cli/src/daemon/`, and `packages/web/src/crypto/` **do not exist**
+— exactly the directories each of these three tasks' summaries say they
+created. This is the same "verified-in-isolation, unlanded-on-main" pattern
+flagged for the `0.4` worktrees every cycle since Cycle 9 — the
+falcon-dev-loop's landing step did not run (or did not complete) for these
+three branches before this tracking cycle started.
+
+### Tasks completed this cycle
+
+**None merged into `main`.** Per this tracker's standing rule (established
+Cycle 1, upheld every cycle since): a task is only checked off in `plan.md`
+once its code is actually present and verified on `main`, never on the
+strength of an in-worktree self-report alone. Since none of the three
+requested task-summaries exist on `main`, no `plan.md` checkboxes were
+flipped from `[ ]` to `[x]` this cycle.
+
+Instead, `plan.md` §16 was annotated (not checked) at the `1.4`, `1.5`, and
+`1.6` section headers/bullets with a dated note recording: the task-summary
+file is missing from `main`, which worktree/branch actually contains the
+work, and that `main`'s corresponding source directory doesn't exist yet —
+mirroring the annotation style already used for the `0.4` worktree gap.
+
+`plan.md` checkbox count: **23/135** (`grep -c '^\s*- \[x\]'` /
+`'^\s*- \[ \]'` → 23 checked / 112 unchecked), **unchanged from Cycle 15** —
+no new work actually landed on `main` this cycle, only re-verification and
+annotation.
+
+### Blockers / issues found
+
+1. **Three more unlanded task worktrees** (new this cycle, same recurring
+   class of issue as the `0.4` worktrees): `P1-1.4-transcript-scanner`,
+   `P1-1.5-daemon-singleton-lock`, `P1-1.6-crypto-worker` all have complete,
+   self-verified work sitting in worktrees with no merge into `main` and no
+   land-branch yet attempted for them (unlike `0.4`, which at least has
+   `P0-land-0.4-worktrees-onto-main` in flight). Landing them is out of this
+   tracker's scope, but each is a real, ready-to-merge unit of work.
+2. **`P0-land-0.4-worktrees-onto-main` still unmerged** — same gap flagged
+   every cycle since Cycle 9, unchanged this cycle. `packages/server/src/`
+   on `main` still only has `app/`+`api/`, no `db/`.
+3. No `pnpm lint` run this cycle (out of this role's required verification
+   gate — only `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **23 checked on `main`** — 0.1
+(5/5), 0.2 (8/8), 0.3 (7/7), 0.4 (1/8), 1.3 (1/9), 1.6 (1/8) —
+**unchanged from Cycle 15**. **Completion: ~17.0%** (23/135), verified
+against a fresh `pnpm typecheck`/`pnpm test` run covering all 5 packages on
+`main` (216 tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Land the three ready `1.4`/`1.5`/`1.6` worktrees** — `P1-1.4-transcript-scanner`,
+   `P1-1.5-daemon-singleton-lock`, and `P1-1.6-crypto-worker` are each
+   complete and self-verified in isolation with no reported overlap (they
+   touch `packages/cli/src/claude/`, `packages/cli/src/daemon/`, and
+   `packages/web/src/crypto/` respectively — three disjoint directories);
+   this is the single highest-value close-out available right now and would
+   land 3 of `main`'s currently-unchecked bullets in `1.4`/`1.5`/`1.6`.
+2. **Land `P0-land-0.4-worktrees-onto-main`** (or re-verify/merge whichever
+   `0.4` land-branch is current) — same recommendation carried since Cycle
+   9: would close 4 of `0.4`'s remaining 7 bullets in one merge (drizzle
+   schema, docker-compose, auth module, seq allocator).
+3. **Sequence `P0-0.4-auth-challenge-route` on top of whichever `0.4`
+   land-branch wins**, re-applying only its own new commits, per the
+   standing caution since Cycle 10.
