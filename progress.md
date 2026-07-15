@@ -2435,3 +2435,147 @@ silent regression since).
 3. **Land `P1-1.1-server-realtime` and `P1-1.2-server-write-http` together**
    (carried over from Cycles 19–20 — still unlanded, share a pre-1.1 base
    with independently-implemented `eventRouter`).
+
+## Cycle 22 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `562312e`, "chore: cycle 21 — completed 0 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 6/6 tasks — `@falcon/wire`, `@falcon/crypto`
+  (+ its `build`), `@falcon/server`, `@falcon/web`, `falcon` (cli). `tsc
+  --noEmit` clean on every package (turbo full cache hit, no source changes
+  since Cycle 21).
+- `pnpm test` → **PASSED**: 9/9 tasks, **315 tests total, 0 failures** —
+  `falcon` (cli) 66, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/wire` 61,
+  `@falcon/server` 87. Same totals as Cycles 20–21 — `main` remains stable,
+  no regressions.
+
+### Task-summary read this cycle
+
+This cycle's instructions named three files as "successful tasks":
+`task-summary/P1-1.4-http-outbox.md`, `task-summary/P1-1.3-cli-locator.md`,
+`task-summary/P1-1.6-auth-pages.md`. **None exist on `main`** — confirmed via
+`find`/`grep` against the working tree's `task-summary/` directory (empty
+result for all three names) and independently via
+`git merge-base --is-ancestor <branch> main` for all three branch names,
+which all returned **not an ancestor**:
+
+- **`task-summary/P1-1.4-http-outbox.md`** — exists in
+  `.worktrees/P1-1.4-http-outbox` (tip `c35d0d1`, feat+fix+refactor). This is
+  a materially different state than Cycle 21, which found this exact branch
+  name had **zero** commits past `main` ("no work started"). Since then, real
+  work landed on the branch: `packages/cli/src/api/outbox.ts` (the `Outbox`
+  class — 300ms/20-event coalescing, disk-backed 10MB-capped JSONL retry
+  queue, blind retry-until-2xx with exponential 1s→30s backoff, built on
+  pre-existing untracked `httpClient.ts`/`queue.ts` support modules) plus 6
+  new tests in `outbox.test.ts` (immediate-flush-at-threshold,
+  flush-after-timer, documented defaults, disk-persistence/replay across a
+  simulated restart including a full crypto round-trip, retry-until-success
+  across 500→429→network-error→404→200, and a dedicated
+  persistent-4xx-still-retried case). Its own task-summary reports `falcon`
+  (cli) now at 72/72 tests (up from 66/66), all 5 packages green on
+  build/typecheck/test. Genuinely complete, self-verified — but **not merged
+  onto `main`**.
+- **`task-summary/P1-1.3-cli-locator.md`** — exists in
+  `.worktrees/P1-1.3-cli-locator` (tip `fac6f57`, feat+fix+refactor):
+  `packages/cli/src/claude/cliLocator.ts` + 12 tests, a port of Happy's
+  `claude_version_utils.cjs` path-resolution half (`findClaudeCliPath`
+  across `FALCON_CLAUDE_PATH` override → PATH → npm global → bun global →
+  Homebrew → native-installer, in priority order; `getClaudeCliVersion`;
+  `compareVersions`; `ClaudeCliNotFoundError`/`resolveClaudeCliPath` for
+  actionable one-line install errors per PRD FR-1.3). Its own task-summary
+  reports 78/78 `falcon` tests green and explicitly flags a **duplicate-work
+  collision**: `.worktrees/P1-1.3-provider-detection` independently built a
+  near-identical locator (`src/provider/claudeCliLocator.ts`) as a dependency
+  of its own `detect()`/auth-state work — whoever lands Phase 1 §1.3 needs to
+  pick one implementation and re-point the other's import. Genuinely
+  complete, self-verified — but **not merged onto `main`**.
+- **`task-summary/P1-1.6-auth-pages.md`** — exists in
+  `.worktrees/P1-1.6-auth-pages` (tip `170ca00`, feat+fix+refactor): web auth
+  pages (`/signin`, `/auth/callback/{google,github}`, `/settings/recovery`,
+  `/pair`), four new crypto-bridge worker RPCs (`getIdentity`,
+  `signInChallenge`, `exportRecoveryCode`, `sealForPeer`), a new
+  `@falcon/crypto` `signDetached`/`verifyDetached`, and a server-side GitHub
+  OAuth code-exchange proxy route (`packages/server/src/auth/oauth.ts` +
+  `app/routes/oauth.ts`) since GitHub's code→token exchange needs a client
+  secret a static-export SPA can't hold. Its own task-summary reports 96
+  server / 53 web / 67 crypto / 66 cli / 61 wire tests all green, all 5
+  packages building including 7 static-export web routes. Genuinely
+  complete, self-verified — but **not merged onto `main`**.
+
+Per this tracker's established convention (Cycles 1–3, 7–9, 16–21): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked, regardless of how
+complete or well-verified the underlying work is — crediting `main` with
+code that isn't actually there would misrepresent the branch this tracker
+is scoped to track. All three requested files fall in this bucket this
+cycle. `plan.md` was updated only with narrative cycle-22 annotations on the
+`1.3 CLI skeleton`, `1.4 Transcript pipeline`, and `1.6 Web app v1` section
+headers, documenting these findings (including the http-outbox status
+change since Cycle 21) so future cycles/humans don't have to re-derive them.
+
+### Tasks completed this cycle
+
+None merged into `main`. `main` remains green (315/315 tests, clean
+typecheck) but unchanged in scope from Cycle 21 — `plan.md` checkbox count
+stays **34/135**.
+
+### Blockers / issues found
+
+1. **All three requested tasks are unmerged** (dominant recurring pattern
+   since Cycle 1, now spanning 15+ cycles): real, complete, self-verified
+   work for `P1-1.4-http-outbox`, `P1-1.3-cli-locator`, and
+   `P1-1.6-auth-pages` all sit in `.worktrees/`, none landed on `main`. This
+   tracker's role is verify-and-record on `main`, not merge — merging is an
+   orchestrator/operator action outside this role's scope.
+2. **Duplicate work flagged by `P1-1.3-cli-locator`'s own task-summary**:
+   `P1-1.3-cli-locator` and `P1-1.3-provider-detection` both independently
+   implement a Claude-CLI-path locator — the same class of "two worktrees,
+   same plan bullet, in parallel" collision first seen at Cycle 9
+   (`P1-1.3-cli-skeleton` vs `P1-1.3-cli-package-scaffold`). Whoever lands
+   `1.3` needs to reconcile these, not fast-forward both.
+3. **`P1-1.4-http-outbox`'s status changed materially since Cycle 21**:
+   Cycle 21 found this branch name had *zero* commits past `main` ("task not
+   started despite being named a successful task"). This cycle finds the
+   same branch name now has real, complete, tested work. This confirms
+   Cycle 21's finding was accurate for its point in time, and that
+   worktree-branch names can gain real commits between tracker cycles — a
+   detail worth remembering before assuming an "empty branch" verdict is
+   permanent.
+4. Unmerged worktrees per `git worktree list`, unchanged from Cycle 21 plus
+   the three above: `P0-land-phase0-worktrees`, `P1-1.1-server-realtime`,
+   `P1-1.2-server-write-http`, `P1-1.3-claude-launcher-script`,
+   `P1-1.3-falcon-home-persistence`, `P1-1.3-provider-detection`,
+   `P1-1.4-envelope-mapper`, `P1-1.5-daemon-singleton-lock`,
+   `P1-1.6-api-socket`. All confirmed still unmerged via
+   `git merge-base --is-ancestor` this cycle.
+5. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **34 checked on `main`**,
+unchanged from Cycles 20–21 (0.1 5/5, 0.2 8/8, 0.3 7/7, 0.4 7/8, 1.3 1/9, 1.4
+2/6, 1.6 2/8). **Completion: ~25.2%** (34/135), verified against a green
+`pnpm typecheck`/`pnpm test` run covering all 5 packages on `main` (315
+tests total, 0 failures, identical to Cycles 20–21 — confirming no silent
+regression since). Note: at least 3 additional bullets (HTTP outbox, CLI
+locator, auth pages) are implementation-complete and self-verified in
+unmerged worktrees — effectively ~27.4% (37/135) "done, pending merge."
+
+### Next recommended tasks
+
+1. **Land `P1-1.4-http-outbox`** — now genuinely complete (72/72 `falcon`
+   tests, `Outbox` class fully implemented) in `.worktrees/P1-1.4-http-outbox`;
+   just needs an actual merge onto `main` to flip `plan.md` line 685. Note it
+   still needs wiring into the transcript tailer (`onMessage: outbox.enqueue`)
+   — that's explicitly out of scope for this task per its own task-summary.
+2. **Land `P1-1.3-cli-locator`** — but first reconcile with
+   `P1-1.3-provider-detection`'s independent, near-identical locator
+   implementation (pick one, re-point the other's import) before merging
+   either, per `P1-1.3-cli-locator`'s own task-summary recommendation.
+3. **Land `P1-1.6-auth-pages`** — complete (96/53/67/66/61 tests across
+   server/web/crypto/cli/wire) in `.worktrees/P1-1.6-auth-pages`; depends on
+   the already-landed crypto worker (`P1-land-1.6-crypto-worker-final`), no
+   other unmerged prerequisites noted.
