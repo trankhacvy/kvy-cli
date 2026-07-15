@@ -39,7 +39,10 @@ const ListSessionsResponseSchema = z.object({
  * bind an in-memory Postgres and assert on fan-out without a real socket —
  * same pattern as `buildAuthRoutes` (task 0.4).
  */
-export function buildSessionsRoutes(db: Database, eventRouter: EventRouterPort): FastifyPluginAsyncZod {
+export function buildSessionsRoutes(
+  db: Database,
+  eventRouter: EventRouterPort,
+): FastifyPluginAsyncZod {
   return async (app) => {
     app.post(
       "/v1/sessions",
@@ -137,7 +140,9 @@ export function buildSessionsRoutes(db: Database, eventRouter: EventRouterPort):
         }
 
         const rows = await db.query.sessions.findMany({
-          where: cursorCond ? and(eq(sessions.accountId, accountId), cursorCond) : eq(sessions.accountId, accountId),
+          where: cursorCond
+            ? and(eq(sessions.accountId, accountId), cursorCond)
+            : eq(sessions.accountId, accountId),
           orderBy: [desc(sessions.updatedAt), desc(sessions.id)],
           limit: limit + 1,
         });

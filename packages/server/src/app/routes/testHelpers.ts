@@ -1,5 +1,5 @@
-import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";

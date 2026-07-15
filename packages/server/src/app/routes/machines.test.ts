@@ -1,6 +1,6 @@
+import type { PGlite } from "@electric-sql/pglite";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
-import type { PGlite } from "@electric-sql/pglite";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EmitUpdateParams } from "../events/eventRouter.js";
@@ -71,7 +71,10 @@ describe("POST /v1/machines", () => {
       method: "POST",
       url: "/v1/machines",
       headers: { authorization: authHeader },
-      payload: { dek: encodeBase64(getRandomBytes(32)), metadata: { value: fakeBox(), expectedVersion: 0 } },
+      payload: {
+        dek: encodeBase64(getRandomBytes(32)),
+        metadata: { value: fakeBox(), expectedVersion: 0 },
+      },
     });
     const machineId = registerResponse.json().id;
 
@@ -97,7 +100,10 @@ describe("POST /v1/machines", () => {
       method: "POST",
       url: "/v1/machines",
       headers: { authorization: authHeader },
-      payload: { dek: encodeBase64(getRandomBytes(32)), metadata: { value: fakeBox(), expectedVersion: 0 } },
+      payload: {
+        dek: encodeBase64(getRandomBytes(32)),
+        metadata: { value: fakeBox(), expectedVersion: 0 },
+      },
     });
     const machineId = registerResponse.json().id;
 
@@ -169,7 +175,10 @@ describe("POST /v1/machines", () => {
       method: "POST",
       url: "/v1/machines",
       headers: { authorization: authHeader },
-      payload: { dek: encodeBase64(getRandomBytes(32)), metadata: { value: fakeBox(), expectedVersion: 0 } },
+      payload: {
+        dek: encodeBase64(getRandomBytes(32)),
+        metadata: { value: fakeBox(), expectedVersion: 0 },
+      },
     });
     const machineId = registerResponse.json().id;
 

@@ -43,7 +43,10 @@ const MachineConflictSchema = z.object({
  * the session metadata/state routes, applied independently to `metadata`
  * and — if included in the request — `daemonState`.
  */
-export function buildMachinesRoutes(db: Database, eventRouter: EventRouterPort): FastifyPluginAsyncZod {
+export function buildMachinesRoutes(
+  db: Database,
+  eventRouter: EventRouterPort,
+): FastifyPluginAsyncZod {
   return async (app) => {
     app.post(
       "/v1/machines",
@@ -67,7 +70,9 @@ export function buildMachinesRoutes(db: Database, eventRouter: EventRouterPort):
 
         if (!machineId) {
           if (!dek) {
-            return reply.code(400).send({ error: "dek is required when registering a new machine" });
+            return reply
+              .code(400)
+              .send({ error: "dek is required when registering a new machine" });
           }
 
           const outcome = await db.transaction(async (tx) => {
@@ -108,12 +113,16 @@ export function buildMachinesRoutes(db: Database, eventRouter: EventRouterPort):
 
           const metadataMismatch = existing.metadataVersion !== metadata.expectedVersion;
           const daemonStateMismatch =
-            daemonState !== undefined && existing.daemonStateVersion !== daemonState.expectedVersion;
+            daemonState !== undefined &&
+            existing.daemonStateVersion !== daemonState.expectedVersion;
           if (metadataMismatch || daemonStateMismatch) {
             return {
               status: "conflict" as const,
               current: {
-                metadata: { value: decodeBox(existing.metadata), version: existing.metadataVersion },
+                metadata: {
+                  value: decodeBox(existing.metadata),
+                  version: existing.metadataVersion,
+                },
                 daemonState: existing.daemonState
                   ? { value: decodeBox(existing.daemonState), version: existing.daemonStateVersion }
                   : null,
@@ -178,7 +187,8 @@ export function buildMachinesRoutes(db: Database, eventRouter: EventRouterPort):
         });
 
         if (outcome.status === "not-found") return reply.code(404).send({});
-        if (outcome.status === "conflict") return reply.code(409).send({ current: outcome.current });
+        if (outcome.status === "conflict")
+          return reply.code(409).send({ current: outcome.current });
 
         reply.raw.once("finish", () => {
           eventRouter.emitUpdate({

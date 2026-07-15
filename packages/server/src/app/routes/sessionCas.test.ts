@@ -1,6 +1,6 @@
+import type { PGlite } from "@electric-sql/pglite";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
-import type { PGlite } from "@electric-sql/pglite";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EmitUpdateParams } from "../events/eventRouter.js";
@@ -33,7 +33,12 @@ describe("PUT /v1/sessions/:id/metadata and /state", () => {
       method: "POST",
       url: "/v1/sessions",
       headers: { authorization: authHeader },
-      payload: { tag: "cas-session", provider: "claude-code", metadata: fakeBox(), dek: encodeBase64(getRandomBytes(32)) },
+      payload: {
+        tag: "cas-session",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
     });
     sessionId = createResponse.json().id;
   });

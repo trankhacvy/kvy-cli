@@ -45,7 +45,10 @@ type InsertOutcome = { seq: number; fanOut: boolean } | null;
  * in `sessionUpdateHandler.ts`'s WS `message` handler there; here it's an
  * idempotent HTTP route so a retry has unambiguous delivery semantics).
  */
-export function buildMessagesRoutes(db: Database, eventRouter: EventRouterPort): FastifyPluginAsyncZod {
+export function buildMessagesRoutes(
+  db: Database,
+  eventRouter: EventRouterPort,
+): FastifyPluginAsyncZod {
   /**
    * Looks up `(sessionId, localId)` first (the fast, uncontended path); on a
    * genuine miss, allocates a `msgSeq` and inserts. If two requests for the
@@ -68,7 +71,10 @@ export function buildMessagesRoutes(db: Database, eventRouter: EventRouterPort):
         if (!session) return null;
 
         const existing = await tx.query.sessionMessages.findFirst({
-          where: and(eq(sessionMessages.sessionId, sessionId), eq(sessionMessages.localId, localId)),
+          where: and(
+            eq(sessionMessages.sessionId, sessionId),
+            eq(sessionMessages.localId, localId),
+          ),
         });
         if (existing) return { seq: existing.seq, fanOut: false };
 

@@ -1,6 +1,6 @@
+import type { PGlite } from "@electric-sql/pglite";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
-import type { PGlite } from "@electric-sql/pglite";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EmitUpdateParams } from "../events/eventRouter.js";
@@ -122,7 +122,9 @@ describe("POST/GET /v1/sessions", () => {
     const body2 = page2.json();
     expect(body2.sessions).toHaveLength(1);
 
-    const allTags = [...body1.sessions, ...body2.sessions].map((s: { tag: string }) => s.tag).sort();
+    const allTags = [...body1.sessions, ...body2.sessions]
+      .map((s: { tag: string }) => s.tag)
+      .sort();
     expect(allTags).toEqual(["list-0", "list-1", "list-2"]);
   });
 

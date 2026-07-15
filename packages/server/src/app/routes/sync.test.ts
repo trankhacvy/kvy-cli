@@ -1,6 +1,6 @@
+import type { PGlite } from "@electric-sql/pglite";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
-import type { PGlite } from "@electric-sql/pglite";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildServer } from "../server.js";
@@ -51,13 +51,21 @@ describe("GET /v1/sync", () => {
       method: "POST",
       url: "/v1/sessions",
       headers: { authorization: authHeader },
-      payload: { tag: "sync-session", provider: "claude-code", metadata: fakeBox(), dek: encodeBase64(getRandomBytes(32)) },
+      payload: {
+        tag: "sync-session",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
     });
     await app.inject({
       method: "POST",
       url: "/v1/machines",
       headers: { authorization: authHeader },
-      payload: { dek: encodeBase64(getRandomBytes(32)), metadata: { value: fakeBox(), expectedVersion: 0 } },
+      payload: {
+        dek: encodeBase64(getRandomBytes(32)),
+        metadata: { value: fakeBox(), expectedVersion: 0 },
+      },
     });
 
     const response = await app.inject({

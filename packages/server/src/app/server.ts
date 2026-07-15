@@ -12,13 +12,13 @@ import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
 import { pairRoutes } from "./api/pair.js";
 import { eventRouter as defaultEventRouter, type EventRouterPort } from "./events/eventRouter.js";
+import { buildAuthRoutes } from "./routes/auth.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
 import { buildSessionCasRoutes } from "./routes/sessionCas.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
 import { buildSyncRoutes } from "./routes/sync.js";
-import { buildAuthRoutes } from "./routes/auth.js";
 import { startSocket } from "./socket.js";
 
 // Default request-size cap (design §4.3: "request-size caps"). The message

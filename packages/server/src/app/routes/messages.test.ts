@@ -1,6 +1,6 @@
+import type { PGlite } from "@electric-sql/pglite";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
-import type { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -152,7 +152,12 @@ describe("POST/GET /v1/sessions/:id/messages", () => {
       method: "POST",
       url: "/v1/sessions",
       headers: { authorization: pageHeader },
-      payload: { tag: "paging-session", provider: "claude-code", metadata: fakeBox(), dek: encodeBase64(getRandomBytes(32)) },
+      payload: {
+        tag: "paging-session",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
     });
     const pagingSessionId = createResponse.json().id;
 

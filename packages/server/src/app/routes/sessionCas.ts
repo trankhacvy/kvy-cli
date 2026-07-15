@@ -58,14 +58,23 @@ async function casUpdateSessionField(
     }
 
     const encoded = encodeBox(params.value);
-    const versionColumn = params.field === "metadata" ? sessions.metadataVersion : sessions.agentStateVersion;
+    const versionColumn =
+      params.field === "metadata" ? sessions.metadataVersion : sessions.agentStateVersion;
 
     const [updated] = await tx
       .update(sessions)
       .set(
         params.field === "metadata"
-          ? { metadata: encoded, metadataVersion: sql`${sessions.metadataVersion} + 1`, updatedAt: new Date() }
-          : { agentState: encoded, agentStateVersion: sql`${sessions.agentStateVersion} + 1`, updatedAt: new Date() },
+          ? {
+              metadata: encoded,
+              metadataVersion: sql`${sessions.metadataVersion} + 1`,
+              updatedAt: new Date(),
+            }
+          : {
+              agentState: encoded,
+              agentStateVersion: sql`${sessions.agentStateVersion} + 1`,
+              updatedAt: new Date(),
+            },
       )
       .where(
         and(
@@ -82,9 +91,12 @@ async function casUpdateSessionField(
       // fresh current value/version, not the one we read a moment ago.
       const fresh = await tx.query.sessions.findFirst({ where: eq(sessions.id, params.sessionId) });
       if (!fresh) {
-        throw new Error(`casUpdateSessionField: session ${params.sessionId} vanished mid-transaction`);
+        throw new Error(
+          `casUpdateSessionField: session ${params.sessionId} vanished mid-transaction`,
+        );
       }
-      const freshVersion = params.field === "metadata" ? fresh.metadataVersion : fresh.agentStateVersion;
+      const freshVersion =
+        params.field === "metadata" ? fresh.metadataVersion : fresh.agentStateVersion;
       const freshRaw = params.field === "metadata" ? fresh.metadata : fresh.agentState;
       return {
         status: "conflict" as const,
@@ -93,7 +105,8 @@ async function casUpdateSessionField(
     }
 
     const headerSeq = await allocHeaderSeq(tx, params.accountId);
-    const newVersion = params.field === "metadata" ? updated.metadataVersion : updated.agentStateVersion;
+    const newVersion =
+      params.field === "metadata" ? updated.metadataVersion : updated.agentStateVersion;
     return { status: "ok" as const, version: newVersion, headerSeq, row: updated };
   });
 }
@@ -103,7 +116,10 @@ async function casUpdateSessionField(
  * §4.3 — ported from Happy's WS `update-metadata`/`update-state` handlers,
  * `sessionUpdateHandler.ts:13,75`, as HTTP CAS).
  */
-export function buildSessionCasRoutes(db: Database, eventRouter: EventRouterPort): FastifyPluginAsyncZod {
+export function buildSessionCasRoutes(
+  db: Database,
+  eventRouter: EventRouterPort,
+): FastifyPluginAsyncZod {
   return async (app) => {
     for (const [path, field] of [
       ["/v1/sessions/:id/metadata", "metadata"],
@@ -132,7 +148,8 @@ export function buildSessionCasRoutes(db: Database, eventRouter: EventRouterPort
           });
 
           if (outcome.status === "not-found") return reply.code(404).send({});
-          if (outcome.status === "conflict") return reply.code(409).send({ current: outcome.current });
+          if (outcome.status === "conflict")
+            return reply.code(409).send({ current: outcome.current });
 
           reply.raw.once("finish", () => {
             eventRouter.emitUpdate({

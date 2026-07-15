@@ -40,7 +40,9 @@ export function buildSyncRoutes(db: Database): FastifyPluginAsyncZod {
           db.query.accounts.findFirst({ where: eq(accounts.id, accountId) }),
           db.query.sessions.findMany({ where: eq(sessions.accountId, accountId) }),
           db.query.machines.findMany({ where: eq(machines.accountId, accountId) }),
-          db.query.unmanagedSessions.findMany({ where: eq(unmanagedSessions.accountId, accountId) }),
+          db.query.unmanagedSessions.findMany({
+            where: eq(unmanagedSessions.accountId, accountId),
+          }),
         ]);
 
         if (!account) {
