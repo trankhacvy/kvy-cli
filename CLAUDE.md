@@ -10,7 +10,7 @@ Run from repo root (Turborepo resolves per-package task graphs via `dependsOn`):
 
 ```bash
 pnpm install       # installs deps; postinstall builds @falcon/wire first
-pnpm build         # turbo run build     — dual CJS/ESM builds via pkgroll
+pnpm build         # turbo run build     — dual CJS/ESM builds via pkgroll (web: `next build` → static out/)
 pnpm typecheck     # turbo run typecheck — tsc --noEmit, depends on ^build
 pnpm test          # turbo run test      — vitest run, depends on build
 pnpm lint          # biome check .
@@ -32,7 +32,9 @@ packages/
 ├─ cli/       falcon          [planned] CLI: falcon / falcon-claude / falcon-codex bins.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging). Drizzle/Socket.IO/auth routes still [planned].
-└─ web/       @falcon/web     [planned] Next.js PWA.
+└─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
+                              wired up, dark default theme, one placeholder route. Auth,
+                              sync engine, crypto bridge, and API calls still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

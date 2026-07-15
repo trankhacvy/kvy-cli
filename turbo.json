@@ -5,6 +5,10 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "@falcon/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["out/**", ".next/**", "!.next/cache/**"]
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []
