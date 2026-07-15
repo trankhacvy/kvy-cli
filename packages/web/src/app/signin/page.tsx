@@ -25,10 +25,15 @@ export default function SignInPage() {
   const router = useRouter();
   const bridge = useCryptoBridge();
   const [status, setStatus] = useState<Status>({ kind: "checking" });
+  // Bumped by the error state's "Try again" button to re-run the identity
+  // check / challenge sign-in below without a full page reload.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!bridge) return;
     let cancelled = false;
+
+    setStatus({ kind: "checking" });
 
     (async () => {
       const identity = await bridge.getIdentity();
@@ -53,7 +58,7 @@ export default function SignInPage() {
     return () => {
       cancelled = true;
     };
-  }, [bridge, router]);
+  }, [bridge, router, attempt]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8 text-center">
@@ -73,7 +78,7 @@ export default function SignInPage() {
       {status.kind === "error" && (
         <div className="flex max-w-sm flex-col items-center gap-3">
           <p className="text-sm text-destructive">{status.message}</p>
-          <Button variant="outline" onClick={() => setStatus({ kind: "needs-signup" })}>
+          <Button variant="outline" onClick={() => setAttempt((n) => n + 1)}>
             Try again
           </Button>
         </div>
