@@ -1,0 +1,24 @@
+# Reference-only codebases (not part of Falcon's own history)
+happy/
+superset/
+
+# OS
+.DS_Store
+
+# Node / package managers
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+
+# Worktrees used by falcon-dev-loop
+.worktrees/
