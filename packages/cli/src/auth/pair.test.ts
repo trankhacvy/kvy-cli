@@ -164,6 +164,32 @@ describe("pairDevice", () => {
     expect(posts).toBe(1);
   });
 
+  it("returns expired immediately when the follow-up POST reports expired after status said authorized", async () => {
+    // Server-side expiry racing the last poll tick: GET /status says
+    // "authorized", but by the time the follow-up POST /v1/auth/pair lands
+    // to fetch the token + sealed box, the request has expired server-side.
+    let posts = 0;
+    global.fetch = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
+      const url = String(input);
+      if (url.includes("/v1/auth/pair/status")) {
+        return jsonResponse({ status: "authorized" });
+      }
+      posts++;
+      if (posts === 1) return jsonResponse({ state: "pending" });
+      return jsonResponse({ state: "expired" });
+    });
+
+    const outcome = await pairDevice({
+      backendUrl: "http://example.invalid",
+      frontendUrl: "http://web.invalid",
+      pollIntervalMs: 0,
+      onPairingUrlReady: () => {},
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: "expired" });
+    expect(posts).toBe(2);
+  });
+
   it("returns cancelled when the abort signal fires mid-poll", async () => {
     const controller = new AbortController();
     global.fetch = vi.fn(async (input: Parameters<typeof fetch>[0]) => {

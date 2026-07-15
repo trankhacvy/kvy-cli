@@ -148,7 +148,12 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
     // status.status === "authorized": /status never returns secret material
     // (see the server route), so fetch the token + sealed box via one more POST.
     const authorized = await postPair(backendUrl, ephPub);
-    if (authorized?.state !== "authorized") continue; // lost a race — retry next tick
+    // Server-side expiry can race the last poll tick: GET /status said
+    // "authorized" but by the time this POST lands the request has expired.
+    // Surface that immediately rather than silently retrying until the
+    // 15-minute PAIRING_TIMEOUT_MS deadline.
+    if (authorized?.state === "expired") return { ok: false, reason: "expired" };
+    if (authorized?.state !== "authorized") continue; // lost a race (e.g. request-failed) — retry next tick
     state = authorized;
   }
 
