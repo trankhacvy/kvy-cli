@@ -442,3 +442,91 @@ add the first 0.4 item, pushing verified completion higher next cycle.
 3. Re-run this cycle after those land to confirm `pnpm typecheck`/`pnpm
    test` stay green with the server package added, and check off the
    corresponding `plan.md` §16 boxes for real.
+
+## Cycle 6 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `dc3bc81`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 2/2 packages (`@falcon/crypto`, `@falcon/wire`) — `tsc --noEmit` clean on both (turbo full cache hit).
+- `pnpm test` → **PASSED**: 4/4 tasks, **126 tests total** — 65 in `@falcon/crypto` (8 files), 61 in `@falcon/wire` (6 files). Zero failures. Same green result as Cycles 4–5, confirming `main` is still stable.
+
+No commits landed on `main` since Cycle 5's `HEAD` (`dc3bc81` is itself the
+Cycle 5 tracker commit) — `main` is unchanged content-wise from Cycle 5.
+
+### Task-summary read this cycle
+
+Per this cycle's scope, read the two specified files directly from `main`:
+
+- `task-summary/P0-0.1-monorepo-scaffold.md` — describes the original
+  monorepo scaffold work (`pnpm-workspace.yaml`, `turbo.json`, four task
+  pipelines, `tsconfig.base.json` with the `@/` path-alias convention, root
+  `package.json`). Matches what's on `main` today (confirmed via
+  `pnpm typecheck`/`pnpm test` passing, and `packages/wire`/`packages/crypto`
+  building under the pipelines it defined).
+- `task-summary/P0-0.1-docs-stubs.md` — describes `docs/protocol.md` and
+  `docs/encryption.md` as pointer/outline stubs cross-linking to
+  `falcon-system-design.md` §4/§5. Both files present on `main`, content
+  unchanged since the `ac68041` fix landed (Cycle 5).
+
+Both tasks were already merged into `main` and already checked off in
+`plan.md` §16 as of Cycle 4 (re-verified Cycle 5). No new checkbox state
+change was needed — this cycle's read simply re-confirms the summaries still
+match `main`'s actual content, so the `0.1 Scaffold` header stamp was
+updated to add the Cycle 6 re-verification
+(`... cycle 4, re-verified cycle 5, re-verified cycle 6 ...`).
+
+### Tasks completed this cycle
+
+None newly merged onto `main`. `plan.md` §16 checkbox count is unchanged
+from Cycle 5: **18/135** checked.
+
+### Blockers / issues found
+
+1. **Unmerged worktree branches keep accumulating** (recurring pattern from
+   Cycles 1–5, now worse): `git worktree list` shows **six** active
+   worktrees, up from three at Cycle 5:
+
+   | Branch | Worktree | `task-summary/` present |
+   |---|---|---|
+   | `P0-0.1-monorepo-scaffold` | `.worktrees/P0-0.1-monorepo-scaffold` | yes |
+   | `P0-0.1-postinstall` | `.worktrees/P0-0.1-postinstall` | yes (fix commits on top) |
+   | `P0-0.1-root-claude-md` | `.worktrees/P0-0.1-root-claude-md` | yes |
+   | `P0-0.4-docker-compose-dev` | `.worktrees/P0-0.4-docker-compose-dev` | present in worktree |
+   | `P0-0.4-server-skeleton` | `.worktrees/P0-0.4-server-skeleton` | yes (review-fix commits on top) |
+   | `P0-land-phase0-worktrees` | `.worktrees/P0-land-phase0-worktrees` | yes — appears to be an integration branch combining `P0-0.1-postinstall`, `P0-0.1-root-claude-md`, and `P0-0.4-server-skeleton` (`git log main..P0-land-phase0-worktrees` shows all six of their commits), i.e. work already exists to land these three cleanly.
+   None of these six branches' commits are reachable from `main` (confirmed:
+   `main`'s HEAD is still the Cycle 5 tracker commit, `dc3bc81`). This
+   progress-tracker role is scoped to verifying `main` and the two named
+   task-summaries — it does not merge branches (an orchestrator/operator
+   action) — noting their existence only as an observed blocker.
+2. The orchestrator's merge step continues to not land verified,
+   integration-ready branches onto `main` automatically. A branch
+   (`P0-land-phase0-worktrees`) that appears purpose-built to close this gap
+   already exists but is itself unlanded — same shape as the Cycle 3
+   `P0-merge-pending-worktrees` situation that eventually did land in Cycle 4.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **18 checked on `main`**
+(unchanged from Cycles 4–5 — no new task-branch merges landed this cycle).
+**Completion: ~13.3%** (18/135) verified on `main`. If
+`P0-land-phase0-worktrees` (or its three constituent branches) merges, that
+would close `0.1 Scaffold` completely (5/5) and land the first `0.4 Server
+foundation` item (Fastify skeleton), plus the `docker-compose.dev.yml` item —
+pushing verified completion meaningfully higher next cycle.
+
+### Next recommended tasks
+
+1. **Merge `P0-land-phase0-worktrees` into `main`** (orchestrator/operator
+   action) — it already bundles `P0-0.1-postinstall`, `P0-0.1-root-claude-md`,
+   and `P0-0.4-server-skeleton` in dependency order; landing it in one shot
+   would close out `0.1 Scaffold` (5/5) and start `0.4 Server foundation`.
+2. **Merge `P0-0.4-docker-compose-dev`** — small, disjoint from the above,
+   closes another `0.4 Server foundation` checkbox
+   (`docker-compose.dev.yml`).
+3. Re-run this cycle after those land to confirm `pnpm typecheck`/`pnpm
+   test` stay green with the server package added, and check off the
+   corresponding `plan.md` §16 boxes for real (the `0.1 Scaffold` postinstall
+   and root-`CLAUDE.md` boxes, and the first two `0.4` boxes).
