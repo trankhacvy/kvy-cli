@@ -11,6 +11,7 @@ import { healthRoutes } from "./api/health.js";
 import { pairRoutes } from "./api/pair.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
+import { startSocket } from "./socket.js";
 
 // App factory (kept separate from process startup in src/main.ts) so tests
 // can build+inject() without opening a real port or a real pino transport.
@@ -43,6 +44,12 @@ export async function buildServer(
     buildOAuthRoutes(deps.db ?? defaultDb, deps.oauthVerifier ?? defaultOAuthVerifier),
   );
   await app.register(pairRoutes);
+
+  // Socket.IO attaches to the underlying HTTP server (design §4.1 "/v1/stream" —
+  // read-only updates/ephemerals + RPC transport). Started here rather than in
+  // `main.ts` so `buildServer()` remains the single place a real server (or a test)
+  // assembles the whole app.
+  startSocket(app);
 
   return app;
 }
