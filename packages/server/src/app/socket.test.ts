@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mintToken } from "../auth/tokens.js";
+import { eventRouter } from "./events/eventRouter.js";
 import { buildServer } from "./server.js";
 
 // Integration tests for the `/v1/stream` handshake + connection lifecycle (plan.md §4.1).
@@ -102,5 +103,31 @@ describe("startSocket (/v1/stream handshake)", () => {
     await new Promise<void>((resolve) => machineClient.once("connect", () => resolve()));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(gotEcho).toBe(false);
+  });
+
+  it("defaults app-state to background when omitted from the handshake, then updates it on the app-state event", async () => {
+    const token = await mintToken("acct_appstate_1");
+    const client = connect({ token });
+    await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+    // No `appState` was sent in the handshake auth, so socket.ts's default applies:
+    // treated as backgrounded until the client explicitly reports otherwise.
+    expect(await eventRouter.hasActiveNonMachineSocket("acct_appstate_1")).toBe(false);
+
+    client.emit("app-state", { state: "active" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await eventRouter.hasActiveNonMachineSocket("acct_appstate_1")).toBe(true);
+
+    client.emit("app-state", { state: "background" });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(await eventRouter.hasActiveNonMachineSocket("acct_appstate_1")).toBe(false);
+  });
+
+  it("honors an initial app-state: active sent in the handshake auth", async () => {
+    const token = await mintToken("acct_appstate_2");
+    const client = connect({ token, appState: "active" });
+    await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+    expect(await eventRouter.hasActiveNonMachineSocket("acct_appstate_2")).toBe(true);
   });
 });

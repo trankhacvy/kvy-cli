@@ -174,10 +174,7 @@ class EventRouter {
       case "user-scoped-only":
         return [`user:${accountId}:user-scoped`];
       case "all-interested-in-session":
-        return [
-          `user:${accountId}:session:${filter.sessionId}`,
-          `user:${accountId}:user-scoped`,
-        ];
+        return [`user:${accountId}:session:${filter.sessionId}`, `user:${accountId}:user-scoped`];
       case "machine-scoped-only":
         return [`user:${accountId}:machine:${filter.machineId}`, `user:${accountId}:user-scoped`];
     }

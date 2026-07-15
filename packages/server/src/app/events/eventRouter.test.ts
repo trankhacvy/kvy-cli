@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { Server } from "socket.io";
+import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildMachinePresenceEphemeral, eventRouter } from "./eventRouter.js";
 
@@ -162,5 +162,90 @@ describe("eventRouter", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(receivedEvents).toEqual([{ t: "activity", sessionId: "sess_5", working: false }]);
+  });
+
+  describe("hasActiveNonMachineSocket", () => {
+    // addConnection only joins rooms — it never touches socket.data (that's socket.ts's
+    // job, via the auth middleware + app-state handler). Set clientType/appState directly
+    // here to isolate the presence-query semantics from that wiring.
+
+    it("treats a connected socket that never reported app-state as active", async () => {
+      const client = await connectClient();
+      const [serverSocket] = await io.fetchSockets();
+      if (!serverSocket) throw new Error("expected a connected server socket");
+      eventRouter.addConnection("acct_10", {
+        connectionType: "user-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: serverSocket as any,
+        accountId: "acct_10",
+      });
+
+      expect(await eventRouter.hasActiveNonMachineSocket("acct_10")).toBe(true);
+      client.close();
+    });
+
+    it("returns false once the only connected socket reports app-state: background", async () => {
+      await connectClient();
+      const [serverSocket] = await io.fetchSockets();
+      if (!serverSocket) throw new Error("expected a connected server socket");
+      serverSocket.data.appState = "background";
+      eventRouter.addConnection("acct_11", {
+        connectionType: "user-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: serverSocket as any,
+        accountId: "acct_11",
+      });
+
+      expect(await eventRouter.hasActiveNonMachineSocket("acct_11")).toBe(false);
+    });
+
+    it("returns true if at least one of several sockets is active", async () => {
+      await connectClient();
+      await connectClient();
+      const [backgroundSocket, activeSocket] = await io.fetchSockets();
+      if (!backgroundSocket || !activeSocket) throw new Error("expected 2 connected sockets");
+      backgroundSocket.data.appState = "background";
+      activeSocket.data.appState = "active";
+
+      eventRouter.addConnection("acct_12", {
+        connectionType: "user-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: backgroundSocket as any,
+        accountId: "acct_12",
+      });
+      eventRouter.addConnection("acct_12", {
+        connectionType: "session-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: activeSocket as any,
+        accountId: "acct_12",
+        sessionId: "sess_9",
+      });
+
+      expect(await eventRouter.hasActiveNonMachineSocket("acct_12")).toBe(true);
+    });
+
+    it("ignores machine-scoped sockets even when they report app-state: active", async () => {
+      await connectClient();
+      const [machineSocket] = await io.fetchSockets();
+      if (!machineSocket) throw new Error("expected a connected server socket");
+      machineSocket.data.clientType = "machine-scoped";
+      machineSocket.data.appState = "active";
+
+      eventRouter.addConnection("acct_13", {
+        connectionType: "machine-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: machineSocket as any,
+        accountId: "acct_13",
+        machineId: "mach_active",
+      });
+
+      // The only connection for this account is machine-scoped, so despite reporting
+      // app-state: active, it must not count as an "active non-machine socket".
+      expect(await eventRouter.hasActiveNonMachineSocket("acct_13")).toBe(false);
+    });
+
+    it("returns false when the account has no connected sockets at all", async () => {
+      expect(await eventRouter.hasActiveNonMachineSocket("acct_never_connected")).toBe(false);
+    });
   });
 });

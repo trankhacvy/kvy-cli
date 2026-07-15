@@ -1,7 +1,7 @@
 import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mintToken } from "../../auth/tokens.js";
 import { buildServer } from "../server.js";
 
@@ -105,36 +105,140 @@ describe("rpcHandler", () => {
     expect(response).toEqual({ ok: false, error: "Cannot call RPC on the same socket" });
   });
 
-  it(
-    "detects a dead target via the presence poll and fails the call within ~2 poll intervals",
-    async () => {
-      const token = await mintToken("acct_5");
-      const target = await connect({ token, clientType: "machine-scoped", machineId: "m5" });
+  it("detects a dead target via the presence poll and fails the call within ~2 poll intervals", async () => {
+    const token = await mintToken("acct_5");
+    const target = await connect({ token, clientType: "machine-scoped", machineId: "m5" });
+    const caller = await connect({ token });
+
+    // Target never acks — simulates a process that died after the socket technically
+    // stayed open just long enough for the room lookup to succeed.
+    target.on("rpc-request", () => {
+      /* never calls back */
+    });
+
+    await new Promise<void>((resolve) => {
+      target.emit("rpc-register", { target: "m:m5:hang" });
+      target.once("rpc-registered", () => resolve());
+    });
+
+    const responsePromise = new Promise((resolve) => {
+      caller.emit("rpc-call", { target: "m:m5:hang", method: "hang", params: {} }, resolve);
+    });
+
+    // Disconnect the target shortly after the call starts so the presence poll (every
+    // 2s) sees it missing twice and aborts the call fast instead of waiting the full
+    // 30s ack timeout.
+    setTimeout(() => target.close(), 100);
+
+    const response = await responsePromise;
+    expect(response).toEqual({ ok: false, error: "RPC target disconnected" });
+  }, 10_000);
+
+  it("rejects rpc-register with a missing/non-string target", async () => {
+    const token = await mintToken("acct_6");
+    const client = await connect({ token });
+
+    const response = await new Promise((resolve) => {
+      client.once("rpc-error", resolve);
+      client.emit("rpc-register", {});
+    });
+
+    expect(response).toEqual({ type: "register", error: "Invalid target" });
+  });
+
+  it("rejects rpc-unregister with a missing/non-string target", async () => {
+    const token = await mintToken("acct_7");
+    const client = await connect({ token });
+
+    const response = await new Promise((resolve) => {
+      client.once("rpc-error", resolve);
+      client.emit("rpc-unregister", { target: 42 });
+    });
+
+    expect(response).toEqual({ type: "unregister", error: "Invalid target" });
+  });
+
+  it("rpc-unregister removes the socket from the room so later calls no longer reach it", async () => {
+    const token = await mintToken("acct_8");
+    const staleTarget = await connect({ token, clientType: "machine-scoped", machineId: "m8a" });
+    const caller = await connect({ token });
+
+    staleTarget.on("rpc-request", () => {
+      throw new Error("stale target should never receive an rpc-request after unregistering");
+    });
+
+    await new Promise<void>((resolve) => {
+      staleTarget.emit("rpc-register", { target: "m:m8:ping" });
+      staleTarget.once("rpc-registered", () => resolve());
+    });
+
+    await new Promise<void>((resolve) => {
+      staleTarget.emit("rpc-unregister", { target: "m:m8:ping" });
+      staleTarget.once("rpc-unregistered", (data) => {
+        expect(data).toEqual({ target: "m:m8:ping" });
+        resolve();
+      });
+    });
+
+    // A fresh socket registers for the same target after the stale one unregistered.
+    // If unregister had not actually removed staleTarget from the room, the call below
+    // would either hit staleTarget's throwing handler or trip the "multiple sockets"
+    // warning path — neither of which should happen here.
+    const freshTarget = await connect({ token, clientType: "machine-scoped", machineId: "m8b" });
+    freshTarget.on("rpc-request", (data: { method: string; params: unknown }, cb) => {
+      cb({ from: "fresh", params: data.params });
+    });
+    await new Promise<void>((resolve) => {
+      freshTarget.emit("rpc-register", { target: "m:m8:ping" });
+      freshTarget.once("rpc-registered", () => resolve());
+    });
+
+    const response = await new Promise((resolve) => {
+      caller.emit("rpc-call", { target: "m:m8:ping", method: "ping", params: { n: 1 } }, resolve);
+    });
+
+    expect(response).toEqual({ ok: true, result: { from: "fresh", params: { n: 1 } } });
+  });
+
+  it("warns and uses the first socket when multiple sockets are registered for the same target", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const token = await mintToken("acct_9");
+      const firstTarget = await connect({ token, clientType: "machine-scoped", machineId: "m9a" });
+      const secondTarget = await connect({
+        token,
+        clientType: "machine-scoped",
+        machineId: "m9b",
+      });
       const caller = await connect({ token });
 
-      // Target never acks — simulates a process that died after the socket technically
-      // stayed open just long enough for the room lookup to succeed.
-      target.on("rpc-request", () => {
-        /* never calls back */
+      firstTarget.on("rpc-request", (data: { method: string; params: unknown }, cb) => {
+        cb({ from: "first", params: data.params });
+      });
+      secondTarget.on("rpc-request", () => {
+        throw new Error("second target should not receive the call when a first is registered");
       });
 
       await new Promise<void>((resolve) => {
-        target.emit("rpc-register", { target: "m:m5:hang" });
-        target.once("rpc-registered", () => resolve());
+        firstTarget.emit("rpc-register", { target: "m:m9:ping" });
+        firstTarget.once("rpc-registered", () => resolve());
+      });
+      await new Promise<void>((resolve) => {
+        secondTarget.emit("rpc-register", { target: "m:m9:ping" });
+        secondTarget.once("rpc-registered", () => resolve());
       });
 
-      const responsePromise = new Promise((resolve) => {
-        caller.emit("rpc-call", { target: "m:m5:hang", method: "hang", params: {} }, resolve);
+      const response = await new Promise((resolve) => {
+        caller.emit("rpc-call", { target: "m:m9:ping", method: "ping", params: { n: 2 } }, resolve);
       });
 
-      // Disconnect the target shortly after the call starts so the presence poll (every
-      // 2s) sees it missing twice and aborts the call fast instead of waiting the full
-      // 30s ack timeout.
-      setTimeout(() => target.close(), 100);
-
-      const response = await responsePromise;
-      expect(response).toEqual({ ok: false, error: "RPC target disconnected" });
-    },
-    10_000,
-  );
+      expect(response).toEqual({ ok: true, result: { from: "first", params: { n: 2 } } });
+      expect(warnSpy).toHaveBeenCalledWith(
+        { module: "websocket", level: "warn" },
+        expect.stringContaining("Multiple sockets in"),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
 });

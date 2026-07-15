@@ -90,7 +90,10 @@ async function fetchRoomSockets(
     return await io.in(room).timeout(timeoutMs).fetchSockets();
   } catch (error) {
     rpcFetchSocketsTimeouts.inc({ context });
-    console.error({ module: "websocket" }, `fetchSockets failed for ${room} (timeout=${timeoutMs}ms): ${error}`);
+    console.error(
+      { module: "websocket" },
+      `fetchSockets failed for ${room} (timeout=${timeoutMs}ms): ${error}`,
+    );
     return [];
   }
 }
@@ -233,7 +236,12 @@ export function rpcHandler(accountId: string, socket: Socket, io: Server): void 
         while (presenceAlive) {
           await sleep(RPC_PRESENCE_POLL_MS);
           if (!presenceAlive) return;
-          const stillThere = await fetchRoomSockets(io, room, RPC_PRESENCE_FETCH_TIMEOUT_MS, "presence");
+          const stillThere = await fetchRoomSockets(
+            io,
+            room,
+            RPC_PRESENCE_FETCH_TIMEOUT_MS,
+            "presence",
+          );
           if (!stillThere.some((s) => s.id === rpcTarget.id)) {
             consecutiveMisses++;
             if (consecutiveMisses >= 2) {
