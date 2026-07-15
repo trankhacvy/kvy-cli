@@ -19,6 +19,11 @@ import type {
 export interface WorkerLike {
   postMessage(message: CryptoWorkerRequest): void;
   onmessage: ((event: MessageEvent<CryptoWorkerResponse>) => void) | null;
+  /** Fired when the worker thread itself crashes (e.g. a script/module load
+   * error) — as opposed to an RPC-level error, which comes back through
+   * `onmessage` as `{ ok: false }` and is handled there. Optional so existing
+   * `WorkerLike` doubles that never crash don't need to implement it. */
+  onerror?: ((event: ErrorEvent) => void) | null;
   terminate?(): void;
 }
 
@@ -63,6 +68,24 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     }
   };
 
+  /**
+   * Without this, a worker that fails to load (or crashes outside the
+   * request/response cycle handled in `onmessage`) would leave every
+   * in-flight caller awaiting a promise that never settles — a silent hang
+   * rather than a visible error.
+   */
+  function rejectAllPending(reason: Error): void {
+    for (const [id, entry] of pending) {
+      pending.delete(id);
+      entry.reject(reason);
+    }
+  }
+
+  worker.onerror = (event) => {
+    const message = event?.message || "crypto worker crashed";
+    rejectAllPending(new Error(`crypto-bridge worker error: ${message}`));
+  };
+
   function call<T>(request: CryptoWorkerRequestPayload): Promise<T> {
     const id = nextRequestId();
     return new Promise<T>((resolve, reject) => {
@@ -77,6 +100,9 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     seal: (data) => call<EncryptedBox>({ type: "seal", data }),
     open: <T>(box: EncryptedBox) => call<T | null>({ type: "open", box }),
     clear: () => call<null>({ type: "clear" }).then(() => undefined),
-    terminate: () => worker.terminate?.(),
+    terminate: () => {
+      rejectAllPending(new Error("crypto-bridge worker terminated"));
+      worker.terminate?.();
+    },
   };
 }

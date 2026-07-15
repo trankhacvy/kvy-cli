@@ -123,4 +123,29 @@ describe("createCryptoBridgeClient — request/response matching", () => {
     const client = createCryptoBridgeClient(worker);
     expect(() => client.terminate()).not.toThrow();
   });
+
+  it("rejects all in-flight calls (instead of hanging forever) when the worker itself errors", async () => {
+    const worker = createManualWorker();
+    const client = createCryptoBridgeClient(worker);
+
+    const p1 = client.seal({ n: 1 });
+    const p2 = client.seal({ n: 2 });
+
+    expect(worker.onerror).toBeTypeOf("function");
+    worker.onerror?.({ message: "module load failed" } as ErrorEvent);
+
+    await expect(p1).rejects.toThrow(/module load failed/);
+    await expect(p2).rejects.toThrow(/module load failed/);
+  });
+
+  it("terminate() rejects any still-pending calls instead of leaving them hanging", async () => {
+    const worker = createManualWorker();
+    const client = createCryptoBridgeClient(worker);
+
+    const pending = client.seal({ n: 1 });
+    client.terminate();
+
+    await expect(pending).rejects.toThrow(/terminated/);
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
 });
