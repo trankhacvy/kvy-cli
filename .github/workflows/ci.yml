@@ -36,6 +36,18 @@ jobs:
       - name: Build @falcon/wire
         run: pnpm --filter @falcon/wire build
 
+      - name: Fetch base branch (for wire additive-only lint)
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: git fetch --no-tags --depth=1 origin "$GITHUB_BASE_REF"
+
+      - name: Wire schema additive-only lint (vs base branch)
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: pnpm --filter @falcon/wire exec tsx scripts/check-additive-vs-base.ts
+
       - name: Typecheck
         run: pnpm typecheck
 

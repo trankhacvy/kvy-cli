@@ -26,3 +26,6 @@ out/
 
 # Worktrees used by falcon-dev-loop
 .worktrees/
+
+# Throwaway extraction dir used by packages/wire/scripts/check-additive-vs-base.ts
+packages/wire/.wire-lint-*/
