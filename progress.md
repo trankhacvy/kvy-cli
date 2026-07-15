@@ -2697,3 +2697,126 @@ effectively ~29.6% (40/135) "done, pending merge."
 3. **Land `P1-1.4-http-outbox`** — carried over from Cycle 22, still
    genuinely complete (72/72 `falcon` tests) in
    `.worktrees/P1-1.4-http-outbox`; just needs an actual merge onto `main`.
+
+## Cycle 24 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `f7e74f4`, "chore: cycle 23 — completed 0 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED**: 6/6 tasks — `@falcon/wire`, `@falcon/crypto`
+  (+ its `build`), `@falcon/server`, `@falcon/web`, `falcon` (cli). `tsc
+  --noEmit` clean on every package (turbo full cache hit, no source changes
+  since Cycle 23).
+- `pnpm test` → **PASSED**: 9/9 tasks, **315 tests total, 0 failures** —
+  `falcon` (cli) 66, `@falcon/wire` 61, `@falcon/server` 87, `@falcon/web`
+  36, `@falcon/crypto` 65. Same totals as Cycles 20–23 — `main` remains
+  stable, no regressions.
+
+### Task-summary read this cycle
+
+This cycle's instructions named two files as "successful tasks":
+`task-summary/P1-1.3-cli-auth-login.md` and
+`task-summary/P0-cross-wire-schema-lint.md`. **Neither exists on `main`** —
+confirmed via directory listing of the working tree's `task-summary/` (no
+matches for either name) and independently via `git merge-base
+--is-ancestor <branch> main` for both matching branch names, which both
+returned **not an ancestor**. Corroborated by absence of the underlying
+code on `main`: `packages/cli/src/auth/` does not exist (the `auth` case in
+`packages/cli/src/index.ts` remains the pre-existing stub) and
+`packages/wire/scripts/check-additive-vs-base.ts` does not exist.
+
+- **`task-summary/P1-1.3-cli-auth-login.md`** — exists in
+  `.worktrees/P1-1.3-cli-auth-login` (tip `e9b1c86`, feat+fix+refactor):
+  `packages/cli/src/auth/{config,credentials,pair,browser,qrcode,jwt,login,logout,status,index}.ts`
+  — the full `falcon auth login/logout/status` command surface built on
+  the already-merged crypto primitives and `POST /v1/auth/pair*` server
+  routes: ephemeral X25519 keypair, 2s-interval pairing-status poll with a
+  15-minute deadline, libsodium unseal to recover the master secret,
+  `~/.falcon/access.key` (0600, re-chmod'd on every write) persistence,
+  terminal QR + best-effort browser launch, unverified-JWT decode for
+  `status` display. `main()`/`run()` had to become `async` to support this.
+  Its own task-summary reports the full workspace build/typecheck/test
+  green. Genuinely complete, self-verified — but **not merged onto
+  `main`**.
+- **`task-summary/P0-cross-wire-schema-lint.md`** — exists in
+  `.worktrees/P0-cross-wire-schema-lint` (tip `6a31f5d`,
+  feat+fix+refactor): `packages/wire/scripts/check-additive-vs-base.ts`, a
+  CI-only lint that re-derives the pre-change wire schemas from git history
+  (resolves a base ref, `git archive`-extracts `packages/wire/src` at that
+  ref into a throwaway dir under the repo root so `node_modules`
+  resolution still works, dynamically imports the base's
+  `schemaRegistry.ts`) and re-runs the current branch's own
+  `describeShape`/`isCompatible` logic against it — closing a real gap in
+  the existing 0.2 snapshot lint (`additiveOnly.test.ts`), which only
+  fails if a PR *doesn't* also regenerate the frozen `wire-shapes.json`
+  fixture to match a breaking change. The task-summary verified the hole
+  is real before building the fix (deleted `EncryptedBoxSchema.c`,
+  regenerated the fixture, reran `additiveOnly.test.ts` — still 38/38
+  green). Genuinely complete, self-verified — but **not merged onto
+  `main`**.
+
+Per this tracker's established convention (Cycles 1–3, 7–9, 16–23): a
+task-summary that only exists in an unmerged worktree is **not** read for
+credit and its `plan.md` boxes are **not** checked, regardless of how
+complete or well-verified the underlying work is. Both requested files
+fall in this bucket this cycle. `plan.md` was updated only with narrative
+cycle-24 annotations on the relevant `1.3 CLI skeleton + local mode` bullet
+and the `Cross-cutting` section header, documenting these findings so
+future cycles/humans don't have to re-derive them.
+
+### Tasks completed this cycle
+
+None merged into `main`. `main` remains green (315/315 tests, clean
+typecheck) but unchanged in scope from Cycle 23 — `plan.md` checkbox count
+stays **34/135**.
+
+### Blockers / issues found
+
+1. **Both requested tasks are unmerged** (dominant recurring pattern since
+   Cycle 1, now spanning 17+ cycles): real, complete, self-verified work
+   for `P1-1.3-cli-auth-login` and `P0-cross-wire-schema-lint` both sit in
+   `.worktrees/`, neither landed on `main`. This tracker's role is
+   verify-and-record on `main`, not merge — merging is an
+   orchestrator/operator action outside this role's scope.
+2. Unmerged worktrees per `git worktree list`, unchanged from Cycle 23 plus
+   the two above: `P0-land-phase0-worktrees`, `P1-1.1-server-realtime`,
+   `P1-1.2-server-write-http`, `P1-1.3-claude-launcher-script`,
+   `P1-1.3-cli-locator`, `P1-1.3-falcon-home-persistence`,
+   `P1-1.3-provider-detection`, `P1-1.4-envelope-mapper`,
+   `P1-1.4-http-outbox`, `P1-1.5-control-server`,
+   `P1-1.5-daemon-singleton-lock`, `P1-1.5-kill-commands`,
+   `P1-1.6-api-socket`, `P1-1.6-auth-pages`, `P1-1.6-reducer-port`. All
+   confirmed still unmerged via `git merge-base --is-ancestor` this cycle
+   (spot-checked; full re-verification not re-run for names not requested
+   this cycle).
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test`, both required and both green).
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **34 checked on `main`**,
+unchanged from Cycles 20–23 (0.1 5/5, 0.2 8/8, 0.3 7/7, 0.4 7/8, 1.3 1/9,
+1.4 2/6, 1.6 2/8). **Completion: ~25.2%** (34/135), verified against a
+green `pnpm typecheck`/`pnpm test` run covering all 5 packages on `main`
+(315 tests total, 0 failures, identical to Cycles 20–23 — confirming no
+silent regression since). Note: at least 8 additional bullets (CLI auth
+login, cross-wire schema lint, HTTP outbox, CLI locator, auth pages,
+control server, kill commands, reducer port) are implementation-complete
+and self-verified in unmerged worktrees — effectively ~31.1% (42/135)
+"done, pending merge."
+
+### Next recommended tasks
+
+1. **Land `P1-1.3-cli-auth-login`** — complete (full workspace
+   build/typecheck/test green) in `.worktrees/P1-1.3-cli-auth-login`; no
+   unmerged prerequisites (the crypto primitives and pairing routes it
+   depends on are already merged on `main`).
+2. **Land `P0-cross-wire-schema-lint`** — complete, self-verified CI-only
+   script in `.worktrees/P0-cross-wire-schema-lint`; standalone addition
+   (a new script + CI wiring), no dependency on any other unmerged work.
+3. **Land the three §1.5 daemon pieces together** —
+   `P1-1.5-daemon-singleton-lock`, `P1-1.5-control-server`, and
+   `P1-1.5-kill-commands` are all independently complete and self-verified;
+   landing them as a set would flip most of the 1.5 checkboxes at once and
+   is lower-risk than landing them one at a time against a moving `main`.
