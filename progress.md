@@ -1077,3 +1077,141 @@ immediately.
 3. **Clean up fully-landed stale worktrees**: `.worktrees/P0-0.1-monorepo-scaffold`
    and `.worktrees/P0-land-phase0-worktrees` remain safe to `git worktree
    remove` — flagged every cycle since Cycle 6/7 with no action taken yet.
+
+## Cycle 11 — 2026-07-15
+
+**Branch checked:** `main` (HEAD `2dcbde4`, unchanged since Cycle 10 — no
+content commits landed in the intervening cycle)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** (turbo, 3 packages: `@falcon/crypto`,
+  `@falcon/server`, `@falcon/wire`, all cache hits, 3/3 successful).
+- `pnpm test` → **PASSED** (turbo, 6 tasks — build+test per package, all
+  cache hits): `@falcon/server` 18/18, `@falcon/wire` 61/61, `@falcon/crypto`
+  65/65 — **144/144 tests green**, matching Cycle 10's count exactly (no
+  code change on `main` since then).
+
+Both gates green — `cycle_passed: true`.
+
+### Task-summaries reviewed this cycle
+
+Per this cycle's instructions, read:
+
+- `task-summary/P0-0.4-seq-allocator.md`
+- `task-summary/P0-0.4-auth-challenge-route.md`
+
+**Neither file exists in `main`'s `task-summary/` directory** — both only
+exist inside their respective worktrees
+(`.worktrees/P0-0.4-seq-allocator/task-summary/…`,
+`.worktrees/P0-0.4-auth-challenge-route/task-summary/…`), consistent with
+every unmerged task this tracker has flagged since Cycle 1. Read them there:
+
+- **`P0-0.4-seq-allocator`**: implements `packages/server/src/db/seq.ts`
+  (`allocMsgSeq`/`allocHeaderSeq`, atomic `UPDATE … RETURNING`). Branched
+  from `P0-0.4-drizzle-schema`'s tip (not `main`), per its own task
+  instructions. Self-reports 5 new concurrency/integration tests (28/28
+  total against a live Postgres container) plus a self-skip path with no
+  DB available (23 unaffected + 5 skipped), `typecheck`/`build` green,
+  `lint` failing with an OOM the summary attributes to a pre-existing
+  sandbox issue (also noted in the `P0-0.4-drizzle-schema` summary).
+- **`P0-0.4-auth-challenge-route`**: implements `POST /v1/auth` (Ed25519
+  challenge/response, account upsert, JWT mint) in
+  `packages/server/src/app/routes/auth.ts`. Branched from
+  `P0-0.4-drizzle-schema`, then merged `P0-0.4-auth-module` in on top
+  (merge commit `c86161a`, 3 mechanical conflicts resolved). Self-reports
+  3 new integration tests against an in-memory Postgres (`@electric-sql/
+  pglite`), `@falcon/server` 53/53 after the merge + this task's tests,
+  `typecheck`/`build` green, same pre-existing `lint` OOM noted.
+
+**Both self-report full verification, but neither is credited on `main`.**
+`main`'s `packages/server` still has no `src/db/` directory at all (the
+Fastify-skeleton-only 18 tests confirm this — no schema/seq/auth tests ran
+in this cycle's `pnpm test`). Checking off their `plan.md` boxes would
+misstate what `main` actually contains, so — as in every prior cycle — no
+boxes were checked for either task. `plan.md`'s existing inline annotation
+on the `**0.4 Server foundation**` line was extended with a cycle-11
+re-verification stamp and a note summarizing both task-summaries' contents
+and the new integration branch discovered below (see next section) — this
+is a documentation-only edit, not a checkbox change.
+
+### New discovery this cycle: three ready, fast-forwardable integration branches
+
+Unlike prior cycles (which only ever found individual task worktrees),
+`.worktrees/` now also contains three `*-land-*` branches, each built
+**directly on `main`'s current tip (`2dcbde4`)** — i.e. fast-forwardable,
+no rebase needed:
+
+| Branch | Built on | Bundles | Task-summary |
+|---|---|---|---|
+| `P0-land-0.4-worktrees` | `main` tip | `P0-0.4-drizzle-schema` + `P0-0.4-docker-compose-dev` + `P0-0.4-auth-module` + `P0-0.4-seq-allocator` (4 branches, in that dependency order) | present |
+| `P1-land-cli-scaffold` | `main` tip | `P1-1.3-cli-package-scaffold` (and appears to retire the duplicate `P1-1.3-cli-skeleton` branch per its own commit message — the long-flagged duplicate-work issue looks resolved) | (not read this cycle — out of this cycle's scope) |
+| `P1-land-web-scaffold` | `main` tip | `P1-1.6-web-app-scaffold` | (not read this cycle) |
+
+Note: `P0-land-0.4-worktrees` does **not** include `P0-0.4-auth-challenge-route`
+(which itself merges `P0-0.4-drizzle-schema` + `P0-0.4-auth-module` on a
+separate branch) — landing both `P0-land-0.4-worktrees` and
+`P0-0.4-auth-challenge-route` in sequence would need care to avoid
+double-applying the shared `drizzle-schema`/`auth-module` commits (same
+caution flagged for `auth-challenge-route` alone since Cycle 10).
+
+This tracker did not perform any merge — landing `main` is explicitly a
+separate `P0-land-*`-style task, out of this role's scope (consistent with
+Cycles 1–10). Flagging it here because, unlike previous cycles, the ready
+branches are now fast-forward-only (no worktree divergence to reconcile),
+which should make the landing pass mechanically simple whenever it runs.
+
+### Tasks completed this cycle
+
+None merged into `main`. `plan.md` checkbox count unchanged: **21/135**
+checked (re-verified via `awk` against `^- \[x\]`/`^- \[ \]` markers).
+
+### Blockers / issues found
+
+1. **Landing gap persists, now with a ready-made fast-forward path** — same
+   root cause as every prior cycle (verified work piles up in worktrees,
+   nothing lands), but this cycle found the fix has effectively already
+   been staged (`P0-land-0.4-worktrees`, `P1-land-cli-scaffold`,
+   `P1-land-web-scaffold` are all sitting ready on top of `main`'s tip).
+   Recommend running the landing pass immediately — it should be
+   low-friction this time.
+2. **`P0-0.4-auth-challenge-route` needs explicit sequencing** relative to
+   `P0-land-0.4-worktrees` — see table note above. Whoever lands should
+   land `P0-land-0.4-worktrees` first, then rebase/reapply just
+   `auth-challenge-route`'s own new commits (route + test) on top, not its
+   whole branch (which would reintroduce `drizzle-schema`/`auth-module` via
+   a second, divergent copy).
+3. Tooling note (unrelated to `main`'s correctness): this session's shell
+   has a broken `rtk`-hook interception for at least `ls` and `grep`
+   (silently returns empty/malformed output for both; `git`/`pnpm` were
+   unaffected). Worked around with `/bin/ls` and the `Read` tool for
+   directory/file inspection this cycle; flagging in case it affects other
+   concurrent sessions relying on the hook.
+
+### Overall completion
+
+135 checkbox items tracked in `plan.md` §16; **21 checked on `main`**
+(unchanged from Cycle 10). **Completion: ~15.6%** (21/135), verified
+against a green `pnpm typecheck`/`pnpm test` run (144 tests). If the three
+ready fast-forward branches land (`P0-land-0.4-worktrees`,
+`P1-land-cli-scaffold`, `P1-land-web-scaffold`), plus `auth-challenge-route`
+re-sequenced on top, `0.4` would close 5 of its 7 remaining bullets and
+`1.3`/`1.6` would each close their lead bullet — a jump to roughly 28-29/135
+(~21%) in one landing pass.
+
+### Next recommended tasks
+
+1. **Run the landing pass now** — all three `*-land-*` branches are
+   fast-forwardable from `main`'s current tip with no reconciliation
+   needed; land `P0-land-0.4-worktrees` → `P1-land-cli-scaffold` →
+   `P1-land-web-scaffold` (order doesn't matter between the three, they're
+   disjoint), then handle `auth-challenge-route` per the sequencing note
+   above. This has been the #1 recommendation since Cycle 9 and is now the
+   cheapest it has ever been to execute.
+2. Once landed, re-run this tracker to check off the newly-merged `plan.md`
+   boxes (0.4 drizzle-schema/docker-compose/seq-allocator/auth-module/
+   auth-challenge-route bullets, 1.3 and 1.6 lead bullets) with dates.
+3. **Clean up stale worktrees** post-landing: `.worktrees/P0-0.1-monorepo-scaffold`
+   and `.worktrees/P0-land-phase0-worktrees` (pre-existing, flagged since
+   Cycle 6/7), plus whichever of the newly-landed worktrees become stale
+   once merged.
