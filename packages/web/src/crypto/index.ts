@@ -1,0 +1,16 @@
+/**
+ * crypto-bridge — public surface for `packages/web/src/crypto/`.
+ *
+ * `createCryptoBridge()` is what app code calls: it spins up the actual
+ * Worker and returns a typed client. Key material never leaves the worker —
+ * see worker-handler.ts for the closure-based guarantee, and
+ * `__tests__/trust-boundary.test.ts` for a test asserting no response ever
+ * carries the raw secret bytes.
+ */
+export type { CryptoBridgeClient } from "./client.js";
+export { createCryptoBridgeClient, type WorkerLike } from "./client.js";
+export { createCryptoBridge } from "./factory.js";
+export type {
+  CryptoWorkerRequest,
+  CryptoWorkerResponse,
+} from "./protocol.js";
