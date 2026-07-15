@@ -74,3 +74,42 @@ Landed the `P1-land-web-scaffold` integration branch (which itself merges
   before removing, so no content was lost; then ran `git worktree remove
   .worktrees/P1-land-web-scaffold --force` and `git branch -D P1-land-web-scaffold` from
   the main repo. Both redundant worktrees/branches are now actually gone.
+
+## Re-verification / re-merge pass (2026-07-15, this task)
+
+`main` had moved on again since the previous pass above: `P1-land-cli-scaffold-onto-main`
+landed `packages/cli` (`falcon` CLI package) onto `main` via commits `5925f58`, `e6de528`,
+`b9fafde`, and cycle-tracker commits (`cc17a14` … `4121603`) had piled up on top. This
+branch's own tip (`9b2c7bf`) was still built on the older `cc17a14` base and had no
+`packages/cli` — it needed a fresh merge from current `main` to stay landable and to pick
+up the CLI package alongside the web scaffold.
+
+- Ran `git merge main --no-edit` from this branch. Result: clean auto-merge of
+  `CLAUDE.md`, `pnpm-lock.yaml`, `progress.md`, and all of `packages/cli/**` (new on
+  `main`, no overlap with this branch's `packages/web/**`) — confirming the task
+  description's "disjoint package" framing. **One conflict**, in `plan.md`: both sides had
+  independently edited the "1.6 Web app v1" section header — this branch's `HEAD` side
+  already had it checked off (`[x]`) with a "landed" note from the prior pass; `main`'s
+  side still had the older cycle-9/10/12/13 "unmerged"/"still unchecked" note (written by
+  the tracker role, which — per its own scope — never lands anything, only reports
+  status). Resolved by keeping this branch's already-landed framing (`[x]` checked,
+  "verified on `main` 2026-07-15 … landed via `P1-land-web-scaffold-onto-main`" note),
+  since that's the accurate, current state once this merge completes. Merge commit:
+  `b3e42783` (parents `9b2c7bf` and `4121603`, `main`'s tip at merge time).
+- `pnpm install` reported a broken lockfile entry for `pkgroll`/`vitest` peer resolutions
+  (missing the `jiti`/`lightningcss` peer hashes that `@falcon/web`'s Tailwind v4 toolchain
+  pulls in) — pnpm auto-repaired it during install; committed the resulting 2-line
+  `pnpm-lock.yaml` diff (peer-hash strings only, no dependency additions/removals).
+- Re-ran the full gate on the merged tree: `pnpm build` (5/5 tasks — `wire`, `crypto`,
+  `server`, `web`, `cli` — all cache-hit green, `@falcon/web` compiles/prerenders
+  `/`+`/_not-found`/exports to `out/`), `pnpm typecheck` (5/5 clean `tsc --noEmit`),
+  `pnpm test` (9/9 task nodes, 65+14+61 = at least 140 tests across crypto/web/wire alone,
+  plus server + cli suites, 0 failures), `pnpm lint` (exit 0, 32 pre-existing style
+  warnings only — same warnings noted in the previous pass, none new).
+- Noted a `chore: cycle 14` commit landed on `main` (progress.md-only, no code) while this
+  merge was in flight; diffed it and confirmed zero overlap with anything this branch
+  touches, so no re-merge was needed.
+- No `packages/web` source changes in this pass — only the merge-forward, the `plan.md`
+  conflict resolution, and the lockfile repair. This branch is now current with `main`
+  (including the CLI package) and ready to be fast-forwarded/merged onto `main` by the
+  landing/integration step.
