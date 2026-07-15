@@ -4,6 +4,7 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
+import { authPlugin } from "../auth/index.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
 
@@ -19,6 +20,11 @@ export async function buildServer(opts: FastifyServerOptions = {}) {
   // typed route registered below (design §3: "Typed routes").
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // Decorates `app.authenticate` (design §16 "0.4 Server foundation") so routes
+  // registered below or in later phases can require a valid bearer JWT via
+  // `{ preHandler: app.authenticate }`.
+  await app.register(authPlugin);
 
   await app.register(healthRoutes);
 
