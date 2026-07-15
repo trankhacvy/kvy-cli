@@ -61,16 +61,26 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
   function write(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
     if (LEVEL_ORDER[level] < LEVEL_ORDER[minLevel]) return;
 
-    const logsDir = path.join(homeDir, "logs");
-    if (!logsDirEnsured) {
-      mkdirSync(logsDir, { recursive: true });
-      logsDirEnsured = true;
-    }
+    // Best-effort: logging is a diagnostic side channel, never load-bearing
+    // for the CLI's actual behavior. A permission error, read-only/missing
+    // home dir, full disk, or non-serializable `meta` must never crash the
+    // primary command (e.g. `falcon --help`) — swallow and move on instead
+    // of throwing out of `main()`.
+    try {
+      const logsDir = path.join(homeDir, "logs");
+      if (!logsDirEnsured) {
+        mkdirSync(logsDir, { recursive: true });
+        logsDirEnsured = true;
+      }
 
-    // Synchronous, blocking append: CLI invocations are short-lived and log
-    // volume is low, so a blocking write is simpler and safer than buffering
-    // lines that could be lost on an abrupt exit (e.g. SIGTERM mid-handoff).
-    appendFileSync(logFilePath(homeDir, new Date()), formatLine(level, message, meta));
+      // Synchronous, blocking append: CLI invocations are short-lived and log
+      // volume is low, so a blocking write is simpler and safer than buffering
+      // lines that could be lost on an abrupt exit (e.g. SIGTERM mid-handoff).
+      appendFileSync(logFilePath(homeDir, new Date()), formatLine(level, message, meta));
+    } catch {
+      // Nothing we can safely do with a broken diagnostics channel — the
+      // whole point of this module is that it must never surface upward.
+    }
   }
 
   return {

@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -92,5 +92,27 @@ describe("createLogger", () => {
 
     const lines = readLogLines(homeDir) as Array<Record<string, unknown>>;
     expect(lines[0]).not.toHaveProperty("meta");
+  });
+
+  it("never throws when the logs directory cannot be created (e.g. a file blocking the path)", () => {
+    // A file sitting where the `logs/` directory should go makes mkdirSync
+    // throw ENOTDIR. Logging is a diagnostic side channel — it must never
+    // crash the CLI's actual command handling over a broken home dir.
+    const blockedHome = mkdtempSync(path.join(tmpdir(), "falcon-logger-test-blocked-"));
+    writeFileSync(path.join(blockedHome, "logs"), "not a directory");
+
+    const logger = createLogger({ homeDir: blockedHome, debug: true });
+    expect(() => logger.debug("should not throw")).not.toThrow();
+    expect(() => logger.error("should not throw either")).not.toThrow();
+
+    rmSync(blockedHome, { recursive: true, force: true });
+  });
+
+  it("never throws when meta is not JSON-serializable (e.g. a circular reference)", () => {
+    const logger = createLogger({ homeDir, debug: true });
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+
+    expect(() => logger.info("circular meta", circular)).not.toThrow();
   });
 });
