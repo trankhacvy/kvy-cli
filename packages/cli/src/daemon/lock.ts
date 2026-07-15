@@ -116,6 +116,34 @@ async function releaseIfOwnedByThisProcess(
   await unlink(lockPath).catch(() => undefined);
 }
 
+/**
+ * Reclaims `lockPath` only if it still names the exact stale/corrupt payload
+ * we just diagnosed (`observed`, or `null` for "was unparseable"). Without
+ * this re-check, a second process could win the same race — e.g. two
+ * processes both see the same dead-pid lock, both decide to reclaim it, but
+ * between one's diagnosis and its `unlink` call, the other has already
+ * unlinked and re-linked a fresh, live lock; blindly unlinking again would
+ * delete that new owner's lock instead of leaving it alone, letting a third
+ * caller wrongly believe it also owns the singleton. Re-reading immediately
+ * before unlinking narrows that window to the same irreducible race
+ * `releaseIfOwnedByThisProcess` already accepts.
+ */
+async function reclaimIfStillStale(
+  lockPath: string,
+  observed: DaemonLockPayload | null,
+): Promise<void> {
+  const current = await readLockPayload(lockPath);
+  if (observed === null) {
+    // We couldn't parse the lock before; only remove it if it's still
+    // unparseable — a valid lock may have replaced it since.
+    if (current !== null) return;
+  } else {
+    if (current === null) return;
+    if (current.pid !== observed.pid || current.startedAt !== observed.startedAt) return;
+  }
+  await unlink(lockPath).catch(() => undefined);
+}
+
 export async function acquireDaemonLock(
   homeDir: string,
   payload: DaemonLockPayload,
@@ -145,7 +173,7 @@ export async function acquireDaemonLock(
       // reclaim it. Another process may be reclaiming the same stale lock
       // concurrently; if our unlink loses that race, the next loop
       // iteration's link attempt will simply fail again and we re-evaluate.
-      await unlink(lockPath).catch(() => undefined);
+      await reclaimIfStillStale(lockPath, existing);
     } finally {
       await unlink(tmpPath).catch(() => undefined);
     }
