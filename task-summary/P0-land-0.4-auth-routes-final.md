@@ -68,3 +68,57 @@ are now reachable from `main` via the merge commit.
 - The `plan.md` narrative-paragraph conflict was resolved by combining rather than picking one
   side, to preserve the full audit trail both branches had built up (consistent with how prior
   cycles in this file have handled analogous conflicts).
+
+## Correction (2026-07-15, fix-up pass)
+
+**Everything above this section describes what was *intended*, not what actually happened.**
+Independent verification (raw `git`, bypassing this environment's `rtk` Bash-hook via
+`rtk proxy` / a non-intercepted `git` invocation) found that step 5 never actually updated
+`main`:
+
+- `git merge-base --is-ancestor P0-land-0.4-auth-routes main` returned `false`.
+- `main:packages/server/src/app/routes/auth.ts` did not exist, and `main:packages/server/src/app/server.ts`
+  had no `authRoutes`/`oauth`/`pair` references.
+- The merge commit `8d1cb4e` was real and correct, but it only ever lived on the
+  `P0-land-0.4-auth-routes-final` branch itself — `main` was never fast-forwarded or merged
+  onto it. The commit actually made on `main`'s history at the time (`bef6286`) only added this
+  task-summary file; it did not touch `main`'s tip.
+
+**Root cause:** the `rtk` Bash-command hook installed in this environment (see the user's
+global `~/.claude/RTK.md`) intercepts and rewrites `git`/`pnpm`/etc. invocations, and was
+returning fabricated/stale results — e.g. reporting a different `HEAD` than the one just
+committed, and failing to find `8d1cb4e` via `git log --all` even though it was fully
+reachable. This made it impossible to detect from inside a normal shell that `main` had not
+moved. The original implementer most likely believed the fast-forward had succeeded because
+the hook told them so.
+
+**Fix applied (this pass):**
+1. In `.worktrees/P0-land-0.4-auth-routes-final`, merged current `main` (tip `2dc3c63`) into
+   the branch (new merge commit) to bring it up to date — auto-merged cleanly (`plan.md`,
+   `pnpm-lock.yaml`).
+2. Ran `pnpm --filter @falcon/server test`: 87/87 tests green, including `auth.test.ts` and
+   `oauth.test.ts`. Ran `pnpm test` (full turbo): 9/9 tasks green.
+3. From the primary worktree (real `main`), ran `git merge P0-land-0.4-auth-routes-final`,
+   commands issued via `rtk proxy` / a verified-non-intercepted path — fast-forwarded `main`
+   from `2dc3c63` to `c1bb1e5`.
+4. Re-verified on `main` itself: `git merge-base --is-ancestor P0-land-0.4-auth-routes-final main`
+   → `true`; `main:packages/server/src/app/routes/auth.ts` exists;
+   `main:packages/server/src/app/server.ts` references `authRoutes`/`buildOAuthRoutes`/`pairRoutes`.
+5. `main`'s root `node_modules` was missing the newly-added `@electric-sql/pglite`/`tweetnacl`/
+   `@falcon/crypto` dependencies (package.json changed but hadn't been installed at the root).
+   Ran `pnpm install` (via `rtk proxy`, since the un-proxied hook silently no-op'd the install
+   and printed a fake "ok"), then re-ran `pnpm test` at the root: 9/9 tasks green, 87/87
+   `@falcon/server` tests green.
+6. Verified the three cleanup worktrees (`P0-0.4-auth-challenge-route`,
+   `P0-0.4-oauth-signin-routes`, `P0-0.4-pairing-endpoints`, `P0-land-0.4-auth-routes`) are in
+   fact absent from `git worktree list` — that cleanup claim held up.
+
+**Phase 0 exit criterion is now genuinely satisfied on `main`** (tip `c1bb1e5`): the auth
+routes exist and are tested on `main` itself, not just on a side branch.
+
+**Process recommendation:** the `rtk` hook's silent command interception/rewriting is an
+environment-level correctness bug. Any "land onto main" task run through it cannot trust its
+own verification of `git`/`pnpm` state. It should be fixed or disabled (or every such task
+should route through `rtk proxy`/a verified raw binary) before further landing tasks are
+attempted, since this same failure mode likely explains other "self-reports green but never
+actually fast-forwarded" land-tasks referenced in `plan.md`'s history.
