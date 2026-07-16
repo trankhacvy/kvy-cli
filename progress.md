@@ -5894,3 +5894,118 @@ with their code present in `main`'s tree and their tests passing in-place.
    `.worktrees/P1-1.6-timeline-screen`) — both build on the already-landed
    reducer port and are reported green in their own task-summaries; landing
    either would close out the last unchecked §1.6 UI bullets.
+
+## Cycle 50 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `b08aa92`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 65/65
+  (8 files), `@falcon/wire` 61/61 (6 files), `@falcon/server` 148/148
+  (21 files), `falcon` cli 425/425 (43 files, incl. the newly-landed
+  `auth/*`, `provider/*`, and `scripts/__tests__/falcon_claude_launcher.test.ts`
+  suites). 699 tests total, 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested branches were deleted after merging (normal post-land
+cleanup — confirmed via `git branch -a`/`git worktree list`, none of the
+three refs exist any more), so the literal `git merge-base --is-ancestor
+<task_id> main` command can't be run against the branch name itself.
+Reconstructed each branch's real tip/land commit from `git log --oneline`
+and ran the ancestor check against that SHA instead — the same
+verification the instruction calls for, just against the branch's last
+real commit rather than a now-gone ref name. Also cross-checked by
+confirming the expected files actually resolve on `main`'s tree via
+`git cat-file -e`.
+
+1. **`task-summary/P1-1.3-cli-auth-login.md`** (`falcon auth
+   login/logout/status` — pairing client, `~/.falcon/access.key` storage,
+   terminal QR + browser open). Land commit `7faeca8` ("feat:
+   P1-1.3-cli-auth-login - Land existing branch P1-1.3-cli-auth-login onto
+   main") → `git merge-base --is-ancestor 7faeca8 main` = **true**. Merge
+   commit `b939120` sits directly in `main`'s history.
+   `git cat-file -e main:packages/cli/src/auth/login.ts` succeeds, along
+   with the rest of the `auth/` module (`config`, `credentials`, `pair`,
+   `browser`, `qrcode`, `jwt`, `logout`, `status`, `index`). `plan.md` line
+   675 was still `[ ]` despite the confirmed merge — **flipped to `[x]`
+   this cycle** with a dated confirmation note.
+2. **`task-summary/P1-1.3-provider-detection.md`** (Claude Code provider
+   detection + `claudeCliLocator` port; this cycle's task-summary is a
+   fix-up pass, not a new implementation). Land commit `81952a5` plus a
+   follow-up `d460d2b` ("fix: P1-1.3-provider-detection - resolve test
+   failures") which is `main`'s current tip →
+   `git merge-base --is-ancestor d460d2b main` = **true** (trivially, it
+   *is* `main`'s HEAD). `git cat-file -e
+   main:packages/cli/src/provider/claudeProviderAdapter.ts` succeeds.
+   `plan.md` lines 676/678 were already `[x]` from a prior cycle's landing
+   pass — **no checkbox change needed**, appended a dated confirmation note
+   only. The fix-up pass itself root-caused an "`pnpm lint` OOMs" report to
+   this sandbox's own `rtk` CLI wrapper (not a repo defect — `rtk proxy
+   pnpm lint` runs clean, 0 diagnostics in `packages/cli/src/provider/`)
+   and reconfirmed the landing-order decision against the sibling
+   `P1-1.3-cli-locator` worktree (superseded, should not be separately
+   landed — its duplicate `packages/cli/src/claude/cliLocator.ts` is
+   confirmed absent from `main`).
+3. **`task-summary/P1-1.3-claude-launcher-script.md`** (port of
+   `falcon_claude_launcher.cjs`, fd3 fetch-patch thinking signal). Land
+   commit `e6f6ca6` ("feat: P1-1.3-claude-launcher-script - Land existing
+   branch P1-1.3-claude-launcher-script onto main") is `main`'s merge tip
+   (`b08aa92` merges `0f41478` + `e6f6ca6`) →
+   `git merge-base --is-ancestor e6f6ca6 main` = **true**.
+   `git cat-file -e main:packages/cli/scripts/falcon_claude_launcher.cjs`
+   succeeds. `plan.md` line 677 was already `[x]` from the land task's own
+   pass — **no checkbox change needed**, appended a dated confirmation note
+   only.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped**: `falcon auth login/logout/status` (`plan.md`
+line 675, `[ ]` → `[x]`) — genuinely merged onto `main` (`7faeca8`
+/ `b939120`) but the checkbox had not yet been updated to reflect it. The
+other two requested tasks (`P1-1.3-provider-detection`,
+`P1-1.3-claude-launcher-script`) were already checked off by their own
+land-pass commits before this cycle ran; independently re-verified rather
+than newly credited, plus a fix-up pass on provider-detection was recorded
+(no code change, environment-only lint-wrapper issue root-caused).
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 699 total tests: 65 crypto + 61 wire + 148 server + 425 cli —
+0 failures), and all
+three requested deliverables are confirmed genuine ancestors of `main`
+(via their real land-commit SHAs, since the branch refs themselves were
+cleaned up post-merge), with their code present in `main`'s tree and their
+tests passing in-place. One non-blocking housekeeping item carried
+forward from provider-detection's fix-up pass: the superseded
+`.worktrees/P1-1.3-cli-locator` worktree/branch (near-duplicate, smaller
+Claude CLI locator) should eventually be deleted/retired now that
+`P1-1.3-provider-detection` has landed as the canonical implementation —
+it was never landed itself, so `main` has no duplicate code, but the stale
+worktree still exists.
+
+### Overall completion
+
+`plan.md` checkbox count: **69/135 checked (~51.1%)** — up from 68/135
+(~50.4%) before this cycle's `falcon auth login/logout/status` flip.
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-sync-engine`** (worktree `.worktrees/P1-1.6-sync-engine`) —
+   `createSyncEngine(queryClient, socket)`: headerSeq/msgSeq fast-paths +
+   reconnect-invalidate-all. Now that `P1-1.6-api-socket` is on `main`, this
+   is the piece that actually wires a real socket into the sync engine
+   (previously blocked on both landing).
+2. **Land `P1-1.6-auth-pages`** (worktree `.worktrees/P1-1.6-auth-pages`) —
+   OAuth sign-in, key generation on signup, recovery-code export, pairing-
+   approve page; unblocks exercising the rest of §1.6 end-to-end (nothing
+   currently gates a session into the web app without it).
+3. **Retire the superseded `P1-1.3-cli-locator` worktree** (near-duplicate
+   of the now-landed `P1-1.3-provider-detection`'s `claudeCliLocator.ts`) —
+   pure cleanup, no code to land; frees up the duplicate-work flag noted
+   above and removes a stale worktree from future cycles' scans.
