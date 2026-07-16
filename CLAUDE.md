@@ -125,11 +125,24 @@ packages/
                               worker — `push` shows a generic kind-keyed notification,
                               `notificationclick` deep-links to `/session/<id>/`) is wired
                               up behind `src/app/settings/notifications/`, a minimal
-                              enable/disable toggle. Wiring the sync engine into the Home
-                              screen and timeline (gap detection, TanStack Query
-                              invalidation, FR-7.2 live session timeline), the composer,
-                              permission actions, the control bar (Phase 2), and
-                              auth-gating the Home route are still [planned].
+                              enable/disable toggle. The Phase 2 web control surface
+                              (`src/features/session-control/`) is also landed: `Composer`
+                              (TanStack `useMutation` → the `message` session RPC, optimistic
+                              insert reconciled by echo), `PermCard` (Allow/Deny/
+                              Allow-for-session/mode-switch + edit-preview diff,
+                              "answered on another device" first-wins-loser state),
+                              `ControlBar` (interrupt, permission-mode selector, take-control),
+                              derived attention (perm∨question∨done-unseen vs per-device
+                              last-seen) driving tab-title/favicon badges, and
+                              `sync/sessionRpc.ts`, the typed caller-side client for the five
+                              session RPC methods over `apiSocket`'s new `rpcCall()`. All of it
+                              still runs off the timeline's existing demo fixture via an
+                              injectable `SessionControlActions`/`UseSessionControl` seam
+                              (mirrors `features/session-list`'s own mock-source pattern) —
+                              wiring the sync engine into the Home screen and timeline (gap
+                              detection, TanStack Query invalidation, FR-7.2 live session
+                              timeline) plus the real per-session crypto client, and
+                              auth-gating the Home route, are still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
