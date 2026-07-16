@@ -70,16 +70,17 @@ function hasCredentialsFile(homeDir: string): boolean {
 function hasMacKeychainCredentials(): boolean {
   if (process.platform !== "darwin") return false;
   try {
-    const output = execFileSync(
-      "security",
-      ["find-generic-password", "-s", MACOS_KEYCHAIN_SERVICE, "-w"],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-        timeout: 3000,
-      },
-    );
-    return output.trim().length > 0;
+    // Deliberately omit `-w`: that flag extracts the actual secret value
+    // from the Keychain, which this presence-only check doesn't need.
+    // `security` exits non-zero when no matching entry exists, which is
+    // sufficient to detect presence without ever reading the credential
+    // into this process.
+    execFileSync("security", ["find-generic-password", "-s", MACOS_KEYCHAIN_SERVICE], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3000,
+    });
+    return true;
   } catch {
     // Not found, keychain locked, or `security` unavailable.
     return false;
