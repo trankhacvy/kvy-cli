@@ -1,0 +1,111 @@
+/**
+ * Typed caller-side client for the daemon's machine-scoped RPCs (design
+ * §4.4 "Machine RPCs — registered by the daemon"; plan.md §16 "3.1 Remote
+ * spawn"): `spawn`, and the New Session directory picker's `fs.list`/
+ * `fs.mkdir`. This is the web's counterpart to
+ * `packages/cli/src/daemon/machineRpc.ts` (the daemon-side registration),
+ * mirroring `sessionRpc.ts`'s shape exactly (seal params under the crypto
+ * client's active key, `apiSocket.rpcCall` to `m:<machineId>:<method>`,
+ * open + validate the sealed result) but targeting a *machine* instead of a
+ * *session*.
+ *
+ * `MachineRow.dek` (an opaque sealed-box wrap, same convention as
+ * `SessionRow.dek`) is unwrapped the same way a session DEK is — see
+ * `features/new-session/`'s composition notes for how a caller obtains a
+ * `MachineRpcCrypto` scoped to the chosen machine.
+ */
+import {
+  type FsListParams,
+  FsListResultSchema,
+  type FsMkdirParams,
+  FsMkdirResultSchema,
+  type SpawnParams,
+  SpawnResultSchema,
+} from "@falcon/wire";
+import type { ZodType } from "zod";
+import type { ApiSocket } from "./apiSocket.js";
+
+export type { FsListParams, FsMkdirParams, SpawnParams };
+
+/** Params shape per method. */
+export interface MachineRpcParams {
+  spawn: SpawnParams;
+  "fs.list": FsListParams;
+  "fs.mkdir": FsMkdirParams;
+}
+
+/** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
+export interface MachineRpcResults {
+  spawn: import("@falcon/wire").SpawnResult;
+  "fs.list": import("@falcon/wire").FsListResult;
+  "fs.mkdir": import("@falcon/wire").FsMkdirResult;
+}
+
+export type MachineRpcMethod = keyof MachineRpcParams;
+
+const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> } = {
+  spawn: SpawnResultSchema,
+  "fs.list": FsListResultSchema,
+  "fs.mkdir": FsMkdirResultSchema,
+};
+
+/** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */
+export class MachineRpcError extends Error {
+  constructor(
+    message: string,
+    public readonly code: string,
+  ) {
+    super(message);
+    this.name = "MachineRpcError";
+  }
+}
+
+/** The narrow slice of a crypto-bridge client this needs — real `CryptoBridgeClient` (`@/crypto`) satisfies this structurally once it holds the target machine's unwrapped DEK (loaded the same way a session DEK is, via `setSessionKey(machineRow.dek)` — the wrap format is identical, only the row it came from differs). Declared locally so this module has no compile-time dependency on `@/crypto`, mirroring `sessionRpc.ts`'s `SessionRpcCrypto` seam. */
+export interface MachineRpcCrypto {
+  seal(data: unknown): Promise<import("@falcon/wire").EncryptedBox>;
+  open<T = unknown>(box: import("@falcon/wire").EncryptedBox): Promise<T | null>;
+}
+
+export interface MachineRpcDeps {
+  socket: Pick<ApiSocket, "rpcCall">;
+  crypto: MachineRpcCrypto;
+  machineId: string;
+}
+
+export interface MachineRpcClient {
+  call<M extends MachineRpcMethod>(
+    method: M,
+    params: MachineRpcParams[M],
+  ): Promise<MachineRpcResults[M]>;
+}
+
+function rpcTarget(machineId: string, method: MachineRpcMethod): string {
+  return `m:${machineId}:${method}`;
+}
+
+export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
+  return {
+    async call(method, params) {
+      const box = await deps.crypto.seal(params);
+      const response = await deps.socket.rpcCall(rpcTarget(deps.machineId, method), method, box);
+
+      if (!response.ok) {
+        throw new MachineRpcError(response.error, "rpc-failed");
+      }
+
+      const opened = await deps.crypto.open<unknown>(response.result);
+      if (opened === null) {
+        throw new MachineRpcError(`failed to decrypt the '${method}' RPC result`, "decrypt-failed");
+      }
+
+      const parsed = RESULT_SCHEMAS[method].safeParse(opened);
+      if (!parsed.success) {
+        throw new MachineRpcError(
+          `'${method}' RPC result failed schema validation`,
+          "invalid-result",
+        );
+      }
+      return parsed.data;
+    },
+  };
+}

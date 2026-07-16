@@ -16,11 +16,25 @@
  * Idempotency-key replay (design: "an RPC retry must NEVER double-spawn") is
  * the caller's responsibility (`machineRpc.ts`) — this function always
  * performs a real spawn attempt when called; it never caches results itself.
+ *
+ * When the target directory doesn't exist yet, this resolves with a
+ * `requiresApproval` result (`@falcon/wire`'s `SpawnResult`, plan.md §16
+ * "3.1 Remote spawn" — "409 directory-creation approval loop") instead of
+ * throwing — the web New Session flow offers to create it (`fs.mkdir`) and
+ * retries `spawn` with the same `idempotencyKey`. Every other validation
+ * failure (unregistered workspace, outside-root escape, ...) still throws
+ * `SpawnError`: those are real rejections, not "please create this for me".
+ *
+ * `params.branch` (P1, falcon-prd.md FR-1.2 "`falcon -b <branch>`") is
+ * resolved via `gitWorktree.ts` after workspace validation succeeds: the
+ * provider process launches in the branch's worktree directory instead of
+ * the workspace root when `createWorktree` is set.
  */
 import { fileURLToPath } from "node:url";
 import type { SpawnParams, SpawnResult } from "@falcon/wire";
 import type { Logger } from "../logger.js";
 import { expandEnvVars } from "./envExpand.js";
+import { ensureBranchWorkspace, type GitWorktreeDeps } from "./gitWorktree.js";
 import {
   type LaunchProcessDeps,
   launchProviderProcess as launchProviderProcessDefault,
@@ -53,6 +67,8 @@ export interface SpawnEngineDeps {
   /** Injectable for tests; defaults to the real `launchProviderProcess`. */
   launchProcess?: typeof launchProviderProcessDefault;
   launchDeps?: LaunchProcessDeps;
+  /** Injectable for tests; defaults to the real `git` binary (`gitWorktree.ts`). */
+  gitWorktreeDeps?: GitWorktreeDeps;
   /** Returns the argv that re-invokes this same falcon binary, e.g. `[process.execPath, ...process.execArgv, entry]`. Injectable for tests. */
   falconEntrypoint?: () => string[];
   logger?: Logger;
@@ -88,7 +104,30 @@ export async function spawnSession(
 
   const validation = await validateSpawnWorkspace(params, deps.resolveWorkspaceRoot);
   if (!validation.ok) {
+    if (validation.reason === "not-found") {
+      logger.info("[spawn-engine] target directory does not exist, requesting approval", {
+        directory: params.directory,
+      });
+      return {
+        requiresApproval: { action: "create-directory", directory: params.directory },
+      };
+    }
     throw new SpawnError(`workspace path rejected (${validation.reason}): ${params.directory}`);
+  }
+
+  let spawnDirectory = validation.realDirectory;
+  if (params.branch) {
+    try {
+      const branchResult = await ensureBranchWorkspace(
+        { repoDirectory: validation.realDirectory, branch: params.branch },
+        deps.gitWorktreeDeps,
+      );
+      spawnDirectory = branchResult.directory;
+    } catch (error) {
+      throw new SpawnError(
+        `branch/worktree setup failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 
   const expanded = expandEnvVars(deps.envTemplate ?? {}, baseEnv);
@@ -112,7 +151,7 @@ export async function spawnSession(
         sessionLabel: params.idempotencyKey,
         command,
         args,
-        cwd: validation.realDirectory,
+        cwd: spawnDirectory,
         env: { ...baseEnv, ...expanded.env },
       },
       deps.launchDeps,
@@ -126,7 +165,7 @@ export async function spawnSession(
   logger.info("[spawn-engine] launched provider process", {
     method: launched.method,
     pid: launched.pid,
-    directory: validation.realDirectory,
+    directory: spawnDirectory,
   });
 
   try {

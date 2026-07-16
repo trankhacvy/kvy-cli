@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { WorkspaceSection } from "./components/workspace-section";
 import { groupSessionsByWorkspace } from "./group";
 import { useMockSessionListData } from "./mock-source";
@@ -29,19 +31,27 @@ export function SessionListScreen({
 
   if (groups.length === 0) {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-2 p-8 text-center">
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
           Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on any
-          paired machine to start one — it shows up here automatically.
+          paired machine to start one — it shows up here automatically. Or spawn one remotely:
         </p>
+        <Button asChild>
+          <Link href="/session/new/">New session</Link>
+        </Button>
       </div>
     );
   }
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
-      <h1 className="text-lg font-semibold tracking-tight">Sessions</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold tracking-tight">Sessions</h1>
+        <Button asChild size="sm">
+          <Link href="/session/new/">New session</Link>
+        </Button>
+      </div>
       {groups.map((group) => (
         <WorkspaceSection key={group.workspace.id} group={group} machinesById={machinesById} />
       ))}

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { SpawnParams } from "@falcon/wire";
@@ -153,5 +153,66 @@ describe("spawnSession", () => {
     await expect(spawnSession(baseParams({ directory: root }), deps)).rejects.toThrow(
       /spawn launched \(pid 4242, detached\) but timed out/,
     );
+  });
+
+  it("returns a requiresApproval result (not a throw) when the directory doesn't exist yet", async () => {
+    const missing = path.join(root, "brand-new-project");
+    const deps = baseDeps();
+
+    const result = await spawnSession(baseParams({ directory: missing }), deps);
+
+    expect(result).toEqual({
+      requiresApproval: { action: "create-directory", directory: missing },
+    });
+    expect(deps.launchProcess).not.toHaveBeenCalled();
+  });
+
+  it("still throws for a directory that exists but is outside the workspace root (not a requiresApproval case)", async () => {
+    const outside = await mkdtemp(path.join(tmpdir(), "falcon-outside-2-"));
+    try {
+      const deps = baseDeps();
+      await expect(spawnSession(baseParams({ directory: outside }), deps)).rejects.toThrow(
+        SpawnError,
+      );
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves params.branch via gitWorktree and launches in the returned directory", async () => {
+    const git = vi.fn(async (args: string[]) => {
+      if (args[0] === "show-ref") throw new Error("not found");
+      return "";
+    });
+    const deps = baseDeps({ gitWorktreeDeps: { git } });
+
+    await spawnSession(
+      baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+      deps,
+    );
+
+    // realpath'd for comparison — on macOS `mkdtemp` under `/tmp` resolves
+    // through a `/private` symlink, and the engine launches in the
+    // *resolved* workspace directory's `.worktrees/<branch>`.
+    const expectedDir = path.join(await realpath(root), ".worktrees", "task-1");
+    expect(deps.launchProcess).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ cwd: expectedDir }),
+      undefined,
+    );
+  });
+
+  it("wraps a gitWorktree failure in SpawnError and never launches", async () => {
+    const git = vi.fn(async () => {
+      throw new Error("fatal: not a git repository");
+    });
+    const deps = baseDeps({ gitWorktreeDeps: { git } });
+
+    await expect(
+      spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: false } }),
+        deps,
+      ),
+    ).rejects.toThrow(/branch\/worktree setup failed/);
+    expect(deps.launchProcess).not.toHaveBeenCalled();
   });
 });

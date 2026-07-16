@@ -938,6 +938,10 @@
         "kind": "leaf",
         "type": "number"
       },
+      "notificationsMuted": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
       "provider": {
         "kind": "leaf",
         "type": "string"
@@ -1215,6 +1219,10 @@
                     "kind": "leaf",
                     "type": "number"
                   },
+                  "notificationsMuted": {
+                    "kind": "leaf",
+                    "type": "boolean"
+                  },
                   "provider": {
                     "kind": "leaf",
                     "type": "string"
@@ -1324,6 +1332,13 @@
                       "type": "number"
                     }
                   }
+                }
+              },
+              "notificationsMuted": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "boolean"
                 }
               },
               "status": {
@@ -1953,9 +1968,30 @@
   "SpawnResultSchema": {
     "kind": "object",
     "fields": {
+      "requiresApproval": {
+        "kind": "optional",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "action": {
+              "kind": "literal",
+              "values": [
+                "create-directory"
+              ]
+            },
+            "directory": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
       "sessionId": {
-        "kind": "leaf",
-        "type": "string"
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
       }
     }
   },
@@ -2205,6 +2241,76 @@
         }
       },
       "truncated": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "FsListParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "path": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "FsListResultSchema": {
+    "kind": "object",
+    "fields": {
+      "entries": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "isDirectory": {
+              "kind": "leaf",
+              "type": "boolean"
+            },
+            "name": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "parent": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "path": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "FsMkdirParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "path": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "FsMkdirResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
         "kind": "leaf",
         "type": "boolean"
       }

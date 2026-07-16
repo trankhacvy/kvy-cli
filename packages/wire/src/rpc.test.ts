@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   AdoptListParamsSchema,
   AdoptTakeParamsSchema,
+  FsListParamsSchema,
+  FsListResultSchema,
+  FsMkdirParamsSchema,
+  FsMkdirResultSchema,
   FsReadParamsSchema,
   GitDiffParamsSchema,
   GitStatusParamsSchema,
@@ -9,6 +13,7 @@ import {
   PermAnswerResultSchema,
   RpcCallSchema,
   SpawnParamsSchema,
+  SpawnResultSchema,
 } from "./rpc";
 
 const box = { t: "enc" as const, v: 1 as const, c: "x" };
@@ -71,6 +76,51 @@ describe("idempotencyKey on caller-retriable machine RPCs", () => {
       FsReadParamsSchema.safeParse({ idempotencyKey: "idem-6", worktree: "/repo", path: "a.ts" })
         .success,
     ).toBe(true);
+  });
+});
+
+describe("SpawnResultSchema", () => {
+  it("accepts a plain success result", () => {
+    expect(SpawnResultSchema.safeParse({ sessionId: "sess-1" }).success).toBe(true);
+  });
+
+  it("accepts a directory-creation-approval result with no sessionId", () => {
+    expect(
+      SpawnResultSchema.safeParse({
+        requiresApproval: { action: "create-directory", directory: "/tmp/new-project" },
+      }).success,
+    ).toBe(true);
+  });
+});
+
+describe("fs.list / fs.mkdir schemas (directory picker)", () => {
+  it("fs.list requires idempotencyKey; `path` is optional", () => {
+    expect(FsListParamsSchema.safeParse({}).success).toBe(false);
+    expect(FsListParamsSchema.safeParse({ idempotencyKey: "idem-7" }).success).toBe(true);
+    expect(
+      FsListParamsSchema.safeParse({ idempotencyKey: "idem-7", path: "/home/me" }).success,
+    ).toBe(true);
+  });
+
+  it("fs.list result carries a resolved path, nullable parent, and directory entries", () => {
+    expect(
+      FsListResultSchema.safeParse({
+        path: "/home/me/projects",
+        parent: "/home/me",
+        entries: [{ name: "falcon", isDirectory: true }],
+      }).success,
+    ).toBe(true);
+    expect(FsListResultSchema.safeParse({ path: "/", parent: null, entries: [] }).success).toBe(
+      true,
+    );
+  });
+
+  it("fs.mkdir requires idempotencyKey and an absolute-ish path string", () => {
+    expect(FsMkdirParamsSchema.safeParse({ path: "/tmp/new" }).success).toBe(false);
+    expect(
+      FsMkdirParamsSchema.safeParse({ idempotencyKey: "idem-8", path: "/tmp/new" }).success,
+    ).toBe(true);
+    expect(FsMkdirResultSchema.safeParse({ ok: true }).success).toBe(true);
   });
 });
 

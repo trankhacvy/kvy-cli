@@ -41,6 +41,14 @@ export type {
 export { createApiSocket } from "./apiSocket.js";
 export type { SyncEngine, SyncSocketSource } from "./engine.js";
 export { createSyncEngine } from "./engine.js";
+export type {
+  MachineRpcClient,
+  MachineRpcCrypto,
+  MachineRpcMethod,
+  MachineRpcParams,
+  MachineRpcResults,
+} from "./machineRpc.js";
+export { createMachineRpcClient, MachineRpcError } from "./machineRpc.js";
 export {
   isSyncQueryKey,
   messagesQueryKey,
