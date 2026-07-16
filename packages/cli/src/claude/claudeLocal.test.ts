@@ -15,6 +15,7 @@ interface FakeChild {
   child: ChildProcess;
   fd3: PassThrough;
   emitExit: (code: number | null, signal: NodeJS.Signals | null) => void;
+  emitError: (error: Error) => void;
 }
 
 /** Minimal EventEmitter-based stand-in for a `cross-spawn` `ChildProcess`. */
@@ -31,6 +32,7 @@ function createFakeChild(withFd3 = true): FakeChild {
     child: emitter,
     fd3,
     emitExit: (code, signal) => emitter.emit("exit", code, signal),
+    emitError: (error) => emitter.emit("error", error),
   };
 }
 
@@ -425,6 +427,25 @@ describe("claudeLocal", () => {
       const promise = claudeLocal(baseOptions(), buildDeps(spawnImpl));
       emitExit(null, "SIGINT");
       await expect(promise).rejects.toThrow(/SIGINT/);
+    });
+
+    it("rejects with the spawn error when the child emits 'error' and never exits (e.g. ENOENT)", async () => {
+      const { child, emitError } = createFakeChild(false);
+      const spawnImpl = vi.fn(() => child);
+      const promise = claudeLocal(baseOptions(), buildDeps(spawnImpl));
+      const spawnError = Object.assign(new Error("spawn node ENOENT"), { code: "ENOENT" });
+      emitError(spawnError);
+      await expect(promise).rejects.toBe(spawnError);
+    });
+
+    it("does not double-settle when both 'error' and 'exit' fire", async () => {
+      const { child, emitError, emitExit } = createFakeChild(false);
+      const spawnImpl = vi.fn(() => child);
+      const promise = claudeLocal(baseOptions(), buildDeps(spawnImpl));
+      const spawnError = Object.assign(new Error("spawn node ENOENT"), { code: "ENOENT" });
+      emitError(spawnError);
+      emitExit(null, null);
+      await expect(promise).rejects.toBe(spawnError);
     });
   });
 

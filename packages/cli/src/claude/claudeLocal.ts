@@ -502,13 +502,25 @@ export async function claudeLocal(
         });
       }
 
+      // Guards against a spawn failure (e.g. ENOENT on the launcher/node
+      // binary) leaving the promise unsettled forever: 'error' may fire
+      // without a following 'exit' (or alongside one, depending on
+      // platform/Node version), so only the first of the two settles the
+      // promise.
+      let settled = false;
+
       child.on("error", (error) => {
         logger.debug("[claudeLocal] child process error", {
           error: error instanceof Error ? error.message : String(error),
         });
+        if (settled) return;
+        settled = true;
+        reject(error);
       });
 
       child.on("exit", (code, signal) => {
+        if (settled) return;
+        settled = true;
         if (signal === "SIGTERM" && opts.abort.aborted) {
           resolvePromise();
         } else if (signal) {
