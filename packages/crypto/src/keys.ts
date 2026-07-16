@@ -8,10 +8,11 @@
  *  └─ HKDF("falcon-blob-master") → legacy/global blob key           (rarely used)
  *
  * New code (not present in Happy), but the derivation primitive is adapted
- * verbatim from Happy's own `happy-app/sources/encryption/deriveKey.ts`
- * (HMAC-SHA512 master-seed expansion, the same construction BIP32 uses for
- * its root key) — flattened to Falcon's single-level domain list instead of
- * a full child-key path tree, and made synchronous (Node's `tweetnacl.hash`
+ * verbatim from Happy — https://github.com/slopus/happy (MIT) —
+ * `happy-app/sources/encryption/deriveKey.ts` (HMAC-SHA512 master-seed
+ * expansion, the same construction BIP32 uses for its root key) — flattened
+ * to Falcon's single-level domain list instead of a full child-key path
+ * tree, and made synchronous (Node's `tweetnacl.hash`
  * SHA-512 is pure JS, so there's no async WASM/native boundary to cross).
  * Deliberately isomorphic and dependency-free of `./encryption(.web).ts` so
  * it needs no platform split — one file, one implementation, both targets.

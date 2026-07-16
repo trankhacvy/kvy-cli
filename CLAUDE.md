@@ -43,10 +43,18 @@ packages/
 │                             control server (`/session-started`, `/list`, `/stop-session`,
 │                             `/spawn-session`, `/stop`), process-scan-based `falcon kill
 │                             daemon/sessions/all/all-force`, `falcon daemon
-│                             start/start-sync/stop/status`, and `ensureDaemonRunning()`
+│                             start/start-sync/stop/status`, `ensureDaemonRunning()`
 │                             (auto-start wiring called from `start`/`auth`/`sessions`/`resume`,
-│                             respects `FALCON_NO_SERVICE=1`). The machine-scoped WS client and
-│                             Auth/provider spawning still [planned].
+│                             respects `FALCON_NO_SERVICE=1`), and the machine-scoped WS client
+│                             (`daemon/machineClient.ts`: `registerOrResumeMachine`/CAS-retry
+│                             sync against `POST /v1/machines`, `startMachineClient` opening
+│                             `/v1/stream` as `clientType: "machine-scoped"` with a 60s
+│                             heartbeat). `src/persistence.ts`: `~/.falcon/`
+│                             local state — schema-versioned `settings.json` (atomic
+│                             lock-file-guarded read-modify-write) and 0600-permissioned
+│                             `access.key` credentials, both tmp-write + rename so readers
+│                             never observe a partial write. RPC handler registration, Auth, and
+│                             provider spawning still [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -64,21 +72,24 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme. `src/sync/reducer/`: the sync
-                              reducer (design §9.1) — folds `SessionEnvelope[]` into ordered
-                              `RenderItem[]`. `src/crypto/`: the crypto worker bridge.
-                              `src/features/session-list/`: the Home screen (design §9.2
-                              "Home" row, FR-7.1) — sessions grouped by workspace, a derived
-                              status dot per session (`status.ts`'s `deriveSessionStatus`,
-                              computed from each session's `RenderItem[]` plus live
-                              presence/attention signals, never stored — design principle #3)
-                              and machine online/offline badges. Takes an injectable
-                              `UseSessionListSnapshot` hook (defaults to a static mock
-                              snapshot, `mock-source.ts`) so it composes with the real
-                              sync-engine-backed hook once `apiSocket`/the sync engine land,
-                              same seam as the (unlanded) sync-engine work's
-                              `SyncSocketSource`. Auth, the sync engine, `apiSocket`, and the
-                              session timeline (FR-7.2) still [planned].
+                              wired up, dark default theme. Crypto worker bridge
+                              (src/crypto/), the transcript reducer (src/sync/reducer/) —
+                              folds `SessionEnvelope[]` into ordered `RenderItem[]` (design
+                              §9.1) — and apiSocket, the user-scoped Socket.IO client with
+                              infinite reconnect + app-state reporting (src/sync/), are
+                              wired up. `src/features/session-list/`: the Home screen
+                              (design §9.2 "Home" row, FR-7.1) — sessions grouped by
+                              workspace, a derived status dot per session (`status.ts`'s
+                              `deriveSessionStatus`, computed from each session's
+                              `RenderItem[]` plus live presence/attention signals, never
+                              stored — design principle #3) and machine online/offline
+                              badges. Takes an injectable `UseSessionListSnapshot` hook
+                              (defaults to a static mock snapshot, `mock-source.ts`) so it
+                              composes with the real sync-engine-backed hook once the two
+                              are wired together, same seam as the sync engine's
+                              `SyncSocketSource`. Auth pages and wiring the sync engine into
+                              the Home screen (gap detection, TanStack Query invalidation,
+                              FR-7.2 session timeline) still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

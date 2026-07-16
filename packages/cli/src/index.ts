@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
+import { runAuthCommand } from "./auth/index.js";
 import {
   createDaemonCommandDeps,
   runDaemonStart,
@@ -24,10 +25,12 @@ import {
 } from "./daemon/kill.js";
 import { createLogger } from "./logger.js";
 
-// Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): this
-// module wires up arg parsing + a stub dispatcher only. Daemon control,
-// provider spawning, and network calls are later 1.3/1.5 work — every
-// branch below is an honest placeholder, not a half-implementation.
+// Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
+// this module still wires up arg parsing + a stub dispatcher. `auth` is now
+// a real implementation (`./auth/`, falcon-plan.md §2.2); daemon control is
+// real too (`./daemon/`); provider spawning and the rest of the network
+// calls are later 1.3/1.5 work — every other branch below is an honest
+// placeholder, not a half-implementation.
 //
 // Help text, `--version`, and error messages are ordinary CLI output and go
 // straight to stdout/stderr, same as any CLI. That's unrelated to the
@@ -168,14 +171,22 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
   return 0;
 }
 
+/**
+ * `falcon auth login|logout|status` (plan.md §5, design §5) — the real
+ * OAuth browser flow + pairing fallback lives in `./auth/`. `ensureDaemon()`
+ * runs first for consistency with every other agent-adjacent subcommand
+ * (PRD FR-1.2) — a fresh install's very first command is commonly `falcon
+ * auth login`, and that should still trigger the daemon auto-start — even
+ * though the auth flow itself talks to the backend/browser directly and
+ * doesn't otherwise depend on the daemon being up.
+ */
 async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promise<number> {
   const daemon = await ensureDaemon();
   if (!daemon.ok) {
     process.stderr.write(daemon.message);
     return 1;
   }
-  process.stdout.write(`falcon auth ${command.action}: not implemented yet\n`);
-  return 0;
+  return runAuthCommand(command.action, logger);
 }
 
 async function runSessions(command: Extract<FalconCommand, { type: "sessions" }>): Promise<number> {
