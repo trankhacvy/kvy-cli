@@ -29,6 +29,9 @@ describe("config env parsing", () => {
     delete process.env.LOG_LEVEL;
     delete process.env.DATABASE_URL;
     delete process.env.FALCON_MASTER_SECRET;
+    delete process.env.VAPID_PUBLIC_KEY;
+    delete process.env.VAPID_PRIVATE_KEY;
+    delete process.env.VAPID_SUBJECT;
 
     const { env } = await importFreshConfig();
 
@@ -38,6 +41,9 @@ describe("config env parsing", () => {
     expect(env.LOG_LEVEL).toBe("info");
     expect(env.DATABASE_URL).toBe("postgres://falcon:falcon@localhost:5432/falcon");
     expect(env.FALCON_MASTER_SECRET).toBe("dev-only-insecure-master-secret-change-me!!");
+    expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(env.VAPID_PRIVATE_KEY).toBeUndefined();
+    expect(env.VAPID_SUBJECT).toBe("mailto:support@falcon.dev");
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -56,6 +62,9 @@ describe("config env parsing", () => {
     process.env.LOG_LEVEL = "warn";
     process.env.DATABASE_URL = "postgres://user:pass@db.internal:5432/falcon_prod";
     process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+    process.env.VAPID_PUBLIC_KEY = "test-vapid-public-key";
+    process.env.VAPID_PRIVATE_KEY = "test-vapid-private-key";
+    process.env.VAPID_SUBJECT = "mailto:ops@falcon.dev";
 
     const { env } = await importFreshConfig();
 
@@ -66,6 +75,9 @@ describe("config env parsing", () => {
       LOG_LEVEL: "warn",
       DATABASE_URL: "postgres://user:pass@db.internal:5432/falcon_prod",
       FALCON_MASTER_SECRET: "a".repeat(32),
+      VAPID_PUBLIC_KEY: "test-vapid-public-key",
+      VAPID_PRIVATE_KEY: "test-vapid-private-key",
+      VAPID_SUBJECT: "mailto:ops@falcon.dev",
     });
   });
 

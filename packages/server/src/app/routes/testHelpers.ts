@@ -13,6 +13,7 @@ import type {
   EmitUpdateParams,
   EventRouterPort,
 } from "../events/eventRouter.js";
+import type { LifecycleKind, PushDispatcherPort } from "../push/types.js";
 
 // In-memory Postgres (WASM, `@electric-sql/pglite`) migrated with the same
 // SQL `drizzle-kit generate` produced for production (`packages/server/
@@ -73,5 +74,24 @@ export class RecordingEventRouter implements EventRouterPort {
   onEphemeral(listener: (params: EmitEphemeralParams) => void): () => void {
     this.emitter.on("ephemeral", listener);
     return () => this.emitter.off("ephemeral", listener);
+  }
+}
+
+/**
+ * Test double for `PushDispatcherPort` (the real implementation is
+ * `app/push/dispatch.ts`'s `buildPushDispatcher`, which hits the database
+ * and real push channels). Route tests inject this so they can assert
+ * "a dispatch was requested for this session/kind" without a real presence
+ * check, subscription lookup, or Web Push send.
+ */
+export class RecordingPushDispatcher implements PushDispatcherPort {
+  readonly calls: Array<{ accountId: string; sessionId: string; kind: LifecycleKind }> = [];
+
+  async dispatch(params: {
+    accountId: string;
+    sessionId: string;
+    kind: LifecycleKind;
+  }): Promise<void> {
+    this.calls.push(params);
   }
 }

@@ -44,4 +44,9 @@ export const schemaRegistry: Record<string, z.ZodTypeAny> = {
   TakeControlResultSchema: wire.TakeControlResultSchema,
   SetModeParamsSchema: wire.SetModeParamsSchema,
   SetModeResultSchema: wire.SetModeResultSchema,
+  LifecycleKindSchema: wire.LifecycleKindSchema,
+  PushChannelSchema: wire.PushChannelSchema,
+  PushSubscribeBodySchema: wire.PushSubscribeBodySchema,
+  PushUnsubscribeBodySchema: wire.PushUnsubscribeBodySchema,
+  PushPayloadSchema: wire.PushPayloadSchema,
 };

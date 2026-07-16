@@ -24,3 +24,12 @@ export const GOOGLE_OAUTH_CLIENT_ID: string | undefined =
 /** GitHub OAuth app client id (authorization-code flow) — unset disables the GitHub button. */
 export const GITHUB_OAUTH_CLIENT_ID: string | undefined =
   process.env.NEXT_PUBLIC_GITHUB_OAUTH_CLIENT_ID || undefined;
+
+/**
+ * Web Push VAPID public key (design §3/§6.4), base64url-encoded — the
+ * `applicationServerKey` `PushManager.subscribe` needs. Safe to ship in a
+ * public bundle (it's the *public* half of the server's VAPID key pair);
+ * unset disables the notifications settings page's subscribe button.
+ */
+export const VAPID_PUBLIC_KEY: string | undefined =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || undefined;

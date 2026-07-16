@@ -5,6 +5,7 @@
  * pulled in for this: the shapes are small and fixed, and a malformed
  * response surfaces as a thrown `ApiError` either way.
  */
+import type { PushSubscribeBody } from "@falcon/wire";
 import { API_URL } from "./config.js";
 
 export class ApiError extends Error {
@@ -17,11 +18,16 @@ export class ApiError extends Error {
   }
 }
 
-async function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
+async function sendJson<T>(
+  method: "POST" | "DELETE",
+  path: string,
+  body: unknown,
+  token?: string,
+): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
-      method: "POST",
+      method,
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -48,6 +54,10 @@ async function postJson<T>(path: string, body: unknown, token?: string): Promise
   }
 
   return json as T;
+}
+
+function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
+  return sendJson<T>("POST", path, body, token);
 }
 
 /** `POST /v1/auth/register` — sign-up: binds a freshly-generated identity to an OAuth proof. */
@@ -84,4 +94,14 @@ export function approvePairing(
   body: { ephPub: string; response: string },
 ): Promise<{ success: true }> {
   return postJson("/v1/auth/pair/approve", body, token);
+}
+
+/** `POST /v1/push/subscribe` — register (or update) a push subscription (design §6.2, FR-7.6). */
+export function subscribePush(token: string, body: PushSubscribeBody): Promise<{ id: string }> {
+  return postJson("/v1/push/subscribe", body, token);
+}
+
+/** `DELETE /v1/push/subscribe` — remove a push subscription by endpoint. */
+export function unsubscribePush(token: string, endpoint: string): Promise<{ ok: true }> {
+  return sendJson("DELETE", "/v1/push/subscribe", { endpoint }, token);
 }

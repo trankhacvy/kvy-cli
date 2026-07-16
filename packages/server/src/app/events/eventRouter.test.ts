@@ -272,4 +272,64 @@ describe("eventRouter", () => {
       expect(await eventRouter.hasActiveNonMachineSocket("acct_never_connected")).toBe(false);
     });
   });
+
+  describe("hasActiveVisibleClient", () => {
+    // Same data-setting caveat as hasActiveNonMachineSocket above: addConnection only
+    // joins rooms, so clientType/appState are set directly on socket.data here.
+
+    it("returns true when a user-scoped socket is active (session room membership isn't required yet — see the method's doc comment)", async () => {
+      await connectClient();
+      const [serverSocket] = await io.fetchSockets();
+      if (!serverSocket) throw new Error("expected a connected server socket");
+      serverSocket.data.clientType = "user-scoped";
+      serverSocket.data.appState = "active";
+      eventRouter.addConnection("acct_20", {
+        connectionType: "user-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: serverSocket as any,
+        accountId: "acct_20",
+      });
+
+      expect(await eventRouter.hasActiveVisibleClient("acct_20", "sess_any")).toBe(true);
+    });
+
+    it("returns false when the only user-scoped socket reports app-state: background", async () => {
+      await connectClient();
+      const [serverSocket] = await io.fetchSockets();
+      if (!serverSocket) throw new Error("expected a connected server socket");
+      serverSocket.data.clientType = "user-scoped";
+      serverSocket.data.appState = "background";
+      eventRouter.addConnection("acct_21", {
+        connectionType: "user-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: serverSocket as any,
+        accountId: "acct_21",
+      });
+
+      expect(await eventRouter.hasActiveVisibleClient("acct_21", "sess_1")).toBe(false);
+    });
+
+    it("ignores an active session-scoped socket (CLI processes aren't 'visible clients')", async () => {
+      await connectClient();
+      const [serverSocket] = await io.fetchSockets();
+      if (!serverSocket) throw new Error("expected a connected server socket");
+      serverSocket.data.clientType = "session-scoped";
+      serverSocket.data.appState = "active";
+      eventRouter.addConnection("acct_22", {
+        connectionType: "session-scoped",
+        // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+        socket: serverSocket as any,
+        accountId: "acct_22",
+        sessionId: "sess_1",
+      });
+
+      expect(await eventRouter.hasActiveVisibleClient("acct_22", "sess_1")).toBe(false);
+    });
+
+    it("returns false when the account has no connected sockets at all", async () => {
+      expect(await eventRouter.hasActiveVisibleClient("acct_never_connected", "sess_x")).toBe(
+        false,
+      );
+    });
+  });
 });

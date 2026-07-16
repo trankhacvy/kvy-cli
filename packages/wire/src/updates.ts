@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { EncryptedBoxSchema, VersionedSchema } from "./box";
+import { LifecycleKindSchema } from "./push";
 import {
   MachineRowSchema,
   SessionRowSchema,
@@ -88,7 +89,7 @@ export const EphemeralSchema = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("attention"),
     sessionId: z.string(),
-    kind: z.enum(["perm", "question", "done", "failed"]),
+    kind: LifecycleKindSchema,
   }),
 ]);
 export type Ephemeral = z.infer<typeof EphemeralSchema>;
