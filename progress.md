@@ -4635,3 +4635,155 @@ tasks, 9/9 test tasks, 483 tests, 0 failures).
    sync/{queryKeys,types,engine,index}.ts`, injectable socket interface so it
    doesn't need `P1-1.6-api-socket` to land first), 49/49 `@falcon/web`
    tests self-reported green, flagged since Cycle 37.
+
+## Cycle 39 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `fde5e02` — "feat: P1-land-1.6-reducer-port -
+Land the session-envelope reducer onto main"). Confirmed via repeated
+`/opt/homebrew/bin/git rev-parse HEAD` (consistent across calls) on the
+primary (non-worktree) checkout; `git status --short` clean at cycle start.
+
+**Note on this cycle's starting state:** `main`'s tip had moved past the
+Cycle 38 chore commit (`025c216`) by one further merge commit, `fde5e02`,
+which fast-forwards `P1-land-1.6-reducer-port` (branch tip `ba70c7e`) directly
+onto `main` (parents `025c216` + `ba70c7e`, one `plan.md` conflict resolved).
+This finally lands the reducer port for real — `packages/web/src/sync/
+reducer/{reduce,types,index}.ts` + golden-trace harness now exist on `main`
+(`git cat-file -e HEAD:packages/web/src/sync/reducer/reduce.ts` succeeds), and
+`plan.md`'s "Reducer port" bullet is `[x]`. This ends the 15+-cycle unlanded
+streak flagged every cycle since Cycle 23 — **no action needed from this
+tracker**, it was already landed and checked before this cycle's checks ran.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`@falcon/wire`, `@falcon/crypto`, `falcon` cli, `@falcon/server`,
+  `@falcon/web` — cache hits, replayed clean logs).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61/61, `@falcon/crypto` 65/65, `@falcon/web` 56/56 (incl. 13
+  `reduce.test.ts` + 7 `golden.test.ts` reducer tests), `falcon` (cli)
+  181/181, `@falcon/server` 140/140 (incl. the two real-Postgres
+  `seq.test.ts` concurrency cases). **503 tests total, 0 failures.**
+
+### Task-summaries read this cycle
+
+Three requested, per this cycle's brief:
+
+- **`task-summary/P1-1.3-falcon-home-persistence.md`** — does **not** exist
+  on `main` (`/bin/ls task-summary/` confirms absence; only
+  `P1-land-1.3-*` land-summaries for other 1.3 bullets are present). Read
+  from `.worktrees/P1-1.3-falcon-home-persistence/task-summary/
+  P1-1.3-falcon-home-persistence.md` instead: reports a "reconciliation
+  pass" (2026-07-16) that merged `main`'s current tip (`025c216`) into the
+  branch (`git merge main`, merge commit `93d0f13`, two trivial
+  `packages/cli/package.json`/`pnpm-lock.yaml` conflicts resolved by taking
+  `main`'s side, zero overlap with `persistence.ts` itself), then re-verified
+  in the worktree: `pnpm build` 5/5, `pnpm typecheck` 7/7, `pnpm test` 9/9
+  (`falcon` cli 197/197 incl. 16 `persistence.test.ts` tests, workspace-wide
+  357 tests). Its own "Scope note" states explicitly that no merge/push
+  against the primary checkout was performed and the checkbox was left
+  unchecked in its own copy. Confirmed independently on the primary
+  checkout: `git merge-base --is-ancestor P1-1.3-falcon-home-persistence
+  HEAD` → not an ancestor; `git cat-file -e
+  HEAD:packages/cli/src/persistence.ts` fails. **Not credited** — added a
+  Cycle 39 annotation to the §1.3 narrative in `plan.md`. Unlanded for 6
+  consecutive cycles now (since Cycle 34).
+- **`task-summary/P1-1.6-sync-engine.md`** — does **not** exist on `main`.
+  Read from `.worktrees/P1-1.6-sync-engine/task-summary/
+  P1-1.6-sync-engine.md` instead: reports a "Landing pass" (2026-07-16) that
+  reconciled the branch with `main`'s cycle-38 tip (`025c216` — merge-base
+  had been `2c721e9`, cycle 36; the two intervening `main` commits touched
+  only `plan.md`/`progress.md` narrative, no overlap with `packages/web/
+  src/sync/`), merged clean with zero conflicts, and re-verified forced
+  (`--force`, no cache): `pnpm build` 5/5, `turbo run typecheck --force`
+  7/7, `turbo run test --force` 9/9 (`@falcon/web` 56/56, `sync/
+  engine.test.ts` 20/20 — note this count is inflated relative to its
+  original 49/49 report by other, unrelated web work that had accumulated
+  on `main` since). Its own "Scope boundary" section explicitly states the
+  merge lives only inside the worktree and has **not** been fast-forwarded
+  or `--no-ff`-merged onto the real shared `main` ref — despite that
+  section, the task-summary's own worktree-local `plan.md` copy had its
+  "Sync engine" checkbox flipped, which does not reflect `main`'s actual
+  state. Confirmed independently on the primary checkout:
+  `git merge-base --is-ancestor P1-1.6-sync-engine HEAD` → not an ancestor;
+  `git cat-file -e HEAD:packages/web/src/sync/engine.ts` fails;
+  `git ls-tree HEAD -- packages/web/src/sync/` shows only the already-landed
+  `reducer/` subdirectory, no `queryKeys.ts`/`engine.ts`/`types.ts`. **Not
+  credited** — added a Cycle 39 annotation to the §1.6 narrative in
+  `plan.md`. Unlanded for 3 consecutive cycles now (since Cycle 37).
+- **`task-summary/P1-land-1.6-reducer-port.md`** — **exists on `main`** as
+  of this cycle (added by the `fde5e02` merge commit noted above). Its
+  content documents the branch's own prior reconciliation (merge commit
+  `821d110` reconciling with `main`'s cycle-37 tip `a7bbceb`), and its own
+  "Scope / non-goals" section states no `git checkout main && git merge`
+  was performed inside that task — consistent with the fact that the actual
+  landing onto the shared `main` ref happened via the separate `fde5e02`
+  merge commit, outside of and prior to this tracking cycle. Verified
+  present and green on `main`: `packages/web/src/sync/reducer/reduce.ts`
+  exists, `plan.md`'s "Reducer port" bullet is `[x]`, and this cycle's own
+  `pnpm typecheck`/`pnpm test` runs (above) confirm the reducer tests pass
+  as part of `@falcon/web`'s 56/56. **Already landed and credited before
+  this cycle began — no further action needed.**
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main` by this tracker.** The reducer port (item 3
+above) was already landed by a separate merge commit (`fde5e02`) that
+predates this cycle's checks — it is not double-counted as "completed this
+cycle" since this tracker did not perform that merge. The other two
+requested task-summaries (`P1-1.3-falcon-home-persistence`,
+`P1-1.6-sync-engine`) remain genuine, complete, self-verified work sitting
+only in their own worktree branches — neither qualifies for a `plan.md`
+checkbox flip. `plan.md` §16 checkbox count: **55/135**, up from 54/135 at
+Cycle 38 (the +1 reflects the reducer-port land that happened via `fde5e02`,
+not any action by this cycle).
+
+### Blockers / issues found
+
+1. **Same systemic "landed only in worktree" pattern continues** for
+   `P1-1.3-falcon-home-persistence` (6 cycles unlanded) and
+   `P1-1.6-sync-engine` (3 cycles unlanded) — both are reported clean,
+   green, and disjoint from other in-flight work by their own task-summaries,
+   but neither has been fast-forwarded/`--no-ff`-merged onto the primary,
+   non-worktree `main` checkout. This tracker has no write access to perform
+   that merge itself (per its own role boundaries — verify and record, not
+   land); a task with explicit permission to merge from the primary checkout
+   is needed for both, same as the now-resolved `P1-land-1.6-reducer-port`
+   case.
+2. **Confirmed the repo is being modified concurrently by another process
+   during this tracking cycle**: `main`'s HEAD advanced from `025c216`
+   (Cycle 38's recorded tip) to `fde5e02` between the start of this session
+   and its first verification commands, landing the reducer port for real.
+   All checks in this entry were re-run against the final `fde5e02` tip to
+   avoid reporting stale state; no other files besides `plan.md` (this
+   tracker's own edits) were locally modified at any point.
+3. The recurring `rtk` hook shell-mangling issue (flagged every cycle since
+   27) was again observed this cycle on a couple of `git rev-parse`/`git log`
+   calls returning inconsistent output across back-to-back invocations of
+   the identical command; resolved by re-running with the explicit binary
+   path (`/opt/homebrew/bin/git`) until results were consistent, which they
+   then were.
+4. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **55/135 checked (~40.7%)**. `pnpm typecheck`/
+`pnpm test` both green on `main` (7/7 typecheck tasks, 9/9 test tasks, 503
+tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.3-falcon-home-persistence`** — small, self-contained
+   (`persistence.ts` + `persistence.test.ts` only), reconciled against a
+   recent `main` tip (`025c216`) in its own worktree with zero real
+   conflicts, flagged unlanded since Cycle 34 (now 6 cycles).
+2. **Land `P1-1.6-sync-engine`** — self-contained (new `packages/web/src/
+   sync/{queryKeys,types,engine,index}.ts`, injectable socket interface so
+   it doesn't need `P1-1.6-api-socket` to land first), reconciled against
+   `main` tip `025c216` with zero conflicts, 56/56 `@falcon/web` tests
+   green in its own worktree, flagged unlanded since Cycle 37 (now 3
+   cycles).
+3. **Land `P1-1.6-auth-pages`** — the next-longest-flagged unlanded 1.6
+   item (since Cycle 22), `/signin`/OAuth callback/recovery/pair pages plus
+   supporting crypto-bridge RPCs, reported green in its own worktree.
