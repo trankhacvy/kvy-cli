@@ -1,5 +1,81 @@
 # Falcon — Progress Log
 
+## Cycle 54 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `a6e5e19` — "fix: P1-land-1.3-session-bootstrap - resolve
+test failures")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon` cli, plus their `build` dependency tasks). No
+  errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/wire` 66/66 (6 files),
+  `@falcon/crypto` 67/67 (8 files), `@falcon/web` 195/195 (22 files), `@falcon/server`
+  205/205 (28 files), `falcon` cli 517/517 (53 files). 0 failures across the whole
+  workspace.
+
+### Task reviewed this cycle (verified against `main` via `git merge-base --is-ancestor`)
+
+1. **`task-summary/P1-land-1.3-session-bootstrap.md`** (lands `packages/cli/src/session/
+   bootstrap.ts` — `bootstrapSession`: mints a fresh DEK, wraps it to the account's content
+   public key, seals `{title,path,providerSessionId}`, POSTs to `POST /v1/sessions` with a
+   deterministic idempotency tag, unwraps and returns the existing row's DEK on idempotent
+   replay). The task's own source branch ref (`P1-land-1.3-session-bootstrap`) no longer
+   exists (deleted post-merge, confirmed via `git show-ref` / `git branch -a` / `git
+   worktree list` — none show it), so `git merge-base --is-ancestor
+   P1-land-1.3-session-bootstrap main` fails with "Not a valid object name" against the
+   branch name itself, as expected for a cleaned-up branch. Fell back to the merge-commit
+   SHAs recorded in `git reflog show main`, which independently confirms two real merges
+   onto `refs/heads/main` (not a worktree-local branch): `main@{31}: merge
+   P1-land-1.3-session-bootstrap: Fast-forward` (→ `343491f`) and `main@{28}: merge
+   P1-land-1.3-session-bootstrap: Merge made by the 'ort' strategy` (→ `04efda8`).
+   `git merge-base --is-ancestor 343491f main` = **true**; `git merge-base --is-ancestor
+   04efda8 main` = **true**. `main`'s own current tip, `a6e5e19` ("fix:
+   P1-land-1.3-session-bootstrap - resolve test failures"), *is itself* this task's own
+   follow-up commit — trivially confirms landing. `git cat-file -e
+   main:packages/cli/src/session/bootstrap.ts` succeeds. `plan.md` line 681 ("Session
+   bootstrap: mint DEK, wrap to content key, `POST /v1/sessions`") was already `[x]` from a
+   prior cycle's "fifth/final pass" note (correctly landed and credited then) —
+   **no checkbox change needed this cycle**; re-verified only, no new flip.
+
+### Tasks completed this cycle
+
+**0 new checkboxes flipped.** The single requested task-summary
+(`P1-land-1.3-session-bootstrap.md`) was already confirmed merged and its `plan.md`
+checkbox already flipped to `[x]` in a previous cycle. This cycle independently
+re-verified that claim against `main`'s real ref (not just the task-summary's own
+narrative) and found it accurate.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each,
+1050 total tests: 66 wire + 67 crypto + 195 web + 205 server + 517 cli — 0 failures
+anywhere).
+
+### Overall completion
+
+`plan.md` checkbox count: **84/135 checked (~62.2%)** — unchanged from Cycle 53 (no new
+flips this cycle; the requested task was already correctly credited).
+
+### Next recommended tasks
+
+1. **Land `P2-2.3-permission-pipeline`** (worktree `.worktrees/P2-2.3-permission-pipeline`,
+   tip `3c35cbb`) — `PermissionHandler`/`getToolDescriptor` port (auto-rules,
+   AskUserQuestion/ExitPlanMode always-prompt, Bash allowlists, pending-promise map,
+   agentState CAS writes), replacing remote mode's permission stub with real first-wins
+   logic. No `task-summary/` file exists for it yet. Closes most of §2.3 and unblocks
+   §2.4's web control surface.
+2. **§2.4 Web control surface** (§8.4) — composer TanStack mutation wired to the `message`
+   RPC, `PermCard` (Allow/Deny/Allow-for-session/mode-switch + diff preview), `ControlBar`
+   (interrupt/mode selector/take-control). Depends on §2.3's real permission envelopes.
+3. **Retire superseded/stale worktrees** — `.worktrees/P1-1.3-cli-locator` (duplicate of
+   already-landed `P1-1.3-provider-detection`), `.worktrees/P1-1.5-daemon-singleton-lock`
+   (already landed via `P1-land-1.5-daemon-worktrees`), and `.worktrees/P1-1.3-session-
+   bootstrap`/`P1-1.3-falcon-home-persistence`/`P1-1.3-claudelocal-spawn` (source branches
+   whose content is already on `main` via their respective `P1-land-*` tasks) — pure
+   cleanup, not pending work.
+
 ## Cycle 53 — 2026-07-16
 
 **Branch checked:** `main` (HEAD `08f5b3f9dd6cbdf8225c7b651d4f26ed603df336`)
