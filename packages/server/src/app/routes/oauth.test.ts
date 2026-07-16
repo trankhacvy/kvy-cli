@@ -10,6 +10,7 @@ import tweetnacl from "tweetnacl";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OAuthIdentity, OAuthProvider, OAuthVerifier } from "../../auth/oauth.js";
 import { verifyToken } from "../../auth/tokens.js";
+import * as schema from "../../db/schema.js";
 import { accounts } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 
@@ -52,7 +53,7 @@ describe("POST /v1/auth/register", () => {
 
   beforeAll(async () => {
     pglite = new PGlite();
-    const db = drizzle(pglite, { schema: { accounts } });
+    const db = drizzle(pglite, { schema });
     await migrate(db, { migrationsFolder });
 
     app = await buildServer({ logger: false }, { db, oauthVerifier: fakeVerifier() });
@@ -75,7 +76,7 @@ describe("POST /v1/auth/register", () => {
     const verified = await verifyToken(responseBody.token);
     expect(verified?.accountId).toEqual(expect.any(String));
 
-    const db = drizzle(pglite, { schema: { accounts } });
+    const db = drizzle(pglite, { schema });
     const [row] = await db.select().from(accounts).where(eq(accounts.id, verified!.accountId));
     expect(row?.oauthProvider).toBe("google");
     expect(row?.oauthSubject).toBe("alice-sub");
@@ -132,7 +133,7 @@ describe("POST /v1/auth/register", () => {
     const secondVerified = await verifyToken(second.json().token);
     expect(firstVerified?.accountId).toBe(secondVerified?.accountId);
 
-    const db = drizzle(pglite, { schema: { accounts } });
+    const db = drizzle(pglite, { schema });
     const rows = await db.select().from(accounts).where(eq(accounts.id, firstVerified!.accountId));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.oauthProvider).toBe("github");
