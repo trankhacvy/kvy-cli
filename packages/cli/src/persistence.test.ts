@@ -123,10 +123,13 @@ describe("updateSettings", () => {
 
     await Promise.all(
       Array.from({ length: concurrency }, () =>
-        updateSettings((current) => {
-          const next = Number(current.machineId ?? "0") + 1;
-          return { ...current, machineId: String(next) };
-        }, { homeDir }),
+        updateSettings(
+          (current) => {
+            const next = Number(current.machineId ?? "0") + 1;
+            return { ...current, machineId: String(next) };
+          },
+          { homeDir },
+        ),
       ),
     );
 

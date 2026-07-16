@@ -39,10 +39,10 @@
  * Happy's legacy-vs-dataKey split) only ever derives from one masterSecret.
  */
 
-import { constants as fsConstants, existsSync } from "node:fs";
+import { existsSync, constants as fsConstants } from "node:fs";
 import {
-  type FileHandle,
   chmod,
+  type FileHandle,
   mkdir,
   open,
   readFile,
