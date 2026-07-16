@@ -3962,3 +3962,113 @@ Socket.IO read-path + HTTP write-path).
 3. **Wire the call-site for `notifyDaemonSessionStarted`** into session
    bootstrap — now unblocked, since `POST /v1/sessions` (§1.1/1.2) has
    landed on `main` this cycle.
+
+## Cycle 34 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `7a92a0ad79ee2b607bb692474f5d1b8ca82c24dd` —
+"fix: P1-land-1.5-ensure-daemon-running - resolve test failures"). Since
+Cycle 33's tracker commit, the long-flagged `ensureDaemonRunning()` blocker
+finally cleared for real: `84e8296` ("Land ensureDaemonRunning() auto-start
+onto main", a fast-forward from the primary non-worktree checkout) plus a
+follow-up fix commit `7a92a0a` both landed on the shared `main` ref —
+confirmed via `/usr/bin/git rev-parse HEAD`, `/usr/bin/git merge-base
+--is-ancestor 84e8296 HEAD` → true, and `/usr/bin/git cat-file -e
+main:packages/cli/src/daemon/ensureDaemonRunning.ts` → succeeds.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (all cache hits, `FULL TURBO`; cache validity is content-hash based so
+  this reflects `main`'s actual current tree, not a stale replay).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server` 140, `falcon`
+  (cli) **176** (incl. `daemon/ensureDaemonRunning.test.ts` 5,
+  `daemon/notify.test.ts` 5, `daemon/notify.integration.test.ts` 2,
+  `index.test.ts` 11). Total **478 tests, 0 failures** — unchanged from
+  Cycle 33's count (the `ensureDaemonRunning` land added no new tests beyond
+  what its worktree already carried; `falcon` was already counted at 176 in
+  Cycle 33 too since that count came from the worktree-local run — this
+  cycle confirms the same 176 for real on the shared `main` ref).
+
+### Task-summaries read this cycle
+
+- **`task-summary/P1-land-1.5-ensure-daemon-running.md`** — **exists on
+  `main`**. Its content documents three successive catch-up merges inside
+  the worktree (Cycle 33 and a same-cycle second pass) followed by a final
+  "Actually landed... via a fast-forward" note. Independently re-verified
+  rather than trusting the narrative at face value: `main` HEAD is a
+  descendant of `84e8296`, `ensureDaemonRunning.ts`/`ensureDaemonRunning.test.ts`
+  are present in `git ls-tree main`, and a fresh `pnpm typecheck`/`pnpm test`
+  on `main` itself is green. **Credited** — checkbox was already `[x]` from
+  the landing task's own commit (`7a92a0a`, working tree clean at session
+  start); this cycle only added a confirmation note to plan.md's §1.5
+  narrative, no new toggle.
+- **`task-summary/P1-land-1.6-reducer-port.md`** — **does not exist** on
+  `main`'s `task-summary/` directory (confirmed via directory listing).
+  `git merge-base --is-ancestor P1-land-1.6-reducer-port main` /
+  `P1-1.6-reducer-port main` both → **not an ancestor**; `main`'s
+  `packages/web/src/sync/` directory still does not exist (`git cat-file -e
+  main:packages/web/src/sync/reducer/reduce.ts` fails). Identical unlanded
+  state to Cycle 33 — no progress since then. **Not credited.**
+- **`task-summary/P1-land-1.3-falcon-home-persistence.md`** — **does not
+  exist** anywhere on `main` (first time this task has been requested of
+  this tracker; no prior plan.md/progress.md mention of it either).
+  `git merge-base --is-ancestor` → not an ancestor for both
+  `P1-1.3-falcon-home-persistence` and `P1-land-1.3-falcon-home-persistence`;
+  `main`'s `packages/cli/src/` has no `persistence.ts` (`git cat-file -e`
+  fails). Real, complete-looking work (274-line `persistence.ts` + 185-line
+  test file implementing `~/.falcon/settings.json` atomic writes +
+  `access.key` 0600 storage) sits only in worktrees
+  `.worktrees/P1-1.3-falcon-home-persistence` (tip `77a2533`) and
+  `.worktrees/P1-land-1.3-falcon-home-persistence` (tip `9bc3b6f`, itself
+  claiming a "resolve test failures" fix that never reached the shared
+  ref). **Not credited.**
+
+### Tasks completed this cycle
+
+**0 new tasks landed this cycle.** 1 previously-unconfirmed task
+(`P1-land-1.5-ensure-daemon-running`) is now confirmed to have actually
+landed on the shared `main` ref (via a fast-forward + fix commit performed
+outside this tracker's own session, between Cycle 33 and now) — this
+cycle's contribution is independent re-verification and a plan.md
+confirmation note, not a new checkbox toggle (it was already `[x]`).
+`plan.md` §16 checkbox count: **54/135** (`grep -c '^\- \[x\]' plan.md`),
+up from 53/135 at Cycle 33 — the +1 is the `ensureDaemonRunning()` bullet,
+flipped by the landing task's own commit, not by this tracker.
+
+### Blockers / issues found
+
+1. **Two of the three task-summary files requested this cycle do not exist
+   on `main` and their underlying work has not landed** —
+   `task-summary/P1-land-1.6-reducer-port.md` (flagged unlanded since Cycle
+   23/33, no change) and `task-summary/P1-land-1.3-falcon-home-persistence.md`
+   (new this cycle — real work exists only in throwaway `.worktrees/`
+   checkouts, never merged onto the shared `main` ref, and no prior tracker
+   cycle had even seen this task-summary requested before). Recommend the
+   orchestrator double-check task completion status against `main` (e.g.
+   `git merge-base --is-ancestor <branch> main`) before crediting a
+   task-summary as "successful" to the progress tracker — this is the same
+   gap flagged every cycle since 27.
+2. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **54/135 checked (~40.0%)**. `pnpm
+typecheck`/`pnpm test` both green on `main` (478 tests total, 0 failures,
+same count as Cycle 33 — no new test-bearing work landed on the shared ref
+this cycle beyond the already-in-flight `ensureDaemonRunning` land being
+confirmed).
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-reducer-port` (or its `P1-land-1.6-reducer-port` worktree)
+   onto `main`** — self-verified green (55/55 `@falcon/web` tests per its
+   own task-summary), disjoint from everything else in `packages/web/src/`,
+   now the longest-standing unlanded item (flagged since Cycle 23).
+2. **Land `P1-1.3-falcon-home-persistence` (or its `P1-land-...` worktree)
+   onto `main`** — small, self-contained (`persistence.ts` + tests only,
+   274+185 lines), no apparent overlap with anything already on `main`.
+3. **Wire the call-site for `notifyDaemonSessionStarted`** into session
+   bootstrap — still unblocked since `POST /v1/sessions` (§1.1/1.2) landed;
+   no task has picked this up yet across two cycles.
