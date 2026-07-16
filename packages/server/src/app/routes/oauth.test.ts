@@ -195,7 +195,7 @@ describe("POST /v1/auth/oauth/github/exchange", () => {
 
   beforeAll(async () => {
     pglite = new PGlite();
-    const db = drizzle(pglite, { schema: { accounts } });
+    const db = drizzle(pglite, { schema });
     await migrate(db, { migrationsFolder });
 
     app = await buildServer(
