@@ -25,7 +25,11 @@
  * A still-live process for the same session is stopped first: two
  * processes must never share ownership of one session's persisted DEK/seq
  * counters (a resumed session's provider process would otherwise race the
- * old one's writes).
+ * old one's writes). "Stopped" means *confirmed dead*, not just signalled —
+ * `stopSession` only sends SIGTERM, so this module polls `isAlive` on the
+ * old pid (reusing `kill.ts`'s SIGTERM-then-wait-then-SIGKILL escalation
+ * pattern) before proceeding to launch the replacement process, closing the
+ * window where both could otherwise be alive at once.
  */
 import { fileURLToPath } from "node:url";
 import type { Logger } from "../logger.js";
@@ -52,6 +56,8 @@ const PROVIDER_CLI_NAME: Record<"claude-code" | "codex", string> = {
 export interface ResumeSessionRegistry {
   findResumable(sessionId: string): PersistedSession | null;
   stopSession(sessionId: string): boolean;
+  /** The pid currently tracked live for `sessionId`, or `null` if none — used to poll for exit after `stopSession`. */
+  getLivePid(sessionId: string): number | null;
   trackSpawned(pid: number): void;
 }
 
@@ -74,6 +80,14 @@ export interface ResumeSessionDeps {
   /** Returns the argv that re-invokes this same falcon binary. Injectable for tests. */
   falconEntrypoint?: () => string[];
   logger?: Logger;
+  /** Liveness probe for the old process's pid while waiting for it to exit. Injectable for tests; defaults to `kill(pid, 0)`. */
+  isAlive?: (pid: number) => boolean;
+  /** Sends `signal` to a pid, swallowing ESRCH. Injectable for tests; defaults to `process.kill`. */
+  killPid?: (pid: number, signal: NodeJS.Signals) => void;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+  /** How long to wait for the old process to exit (after SIGTERM) before escalating to SIGKILL. Default 5s, matching `kill.ts`'s grace period. */
+  stopTimeoutMs?: number;
 }
 
 export interface ResumeSessionResult {
@@ -90,6 +104,72 @@ const noopLogger: Logger = {
 function defaultFalconEntrypoint(): string[] {
   const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
   return [process.execPath, ...process.execArgv, entry];
+}
+
+const DEFAULT_STOP_TIMEOUT_MS = 5000;
+const STOP_POLL_INTERVAL_MS = 200;
+
+function defaultIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // ESRCH: genuinely dead. Anything else (e.g. EPERM): treat as still
+    // alive rather than risk launching a second owner of this session's
+    // DEK/seq — see kill.ts's `defaultIsAlive` for the same reasoning.
+    if ((error as NodeJS.ErrnoException)?.code === "ESRCH") return false;
+    return true;
+  }
+}
+
+function defaultKillPid(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(pid, signal);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== "ESRCH") throw error;
+  }
+}
+
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Confirms `pid` has actually exited before returning, escalating to
+ * SIGKILL if it's still alive after `timeoutMs` — the same
+ * SIGTERM-then-wait-then-SIGKILL pattern `kill.ts`'s `killGraceful` uses.
+ * `stopSession` has already sent the SIGTERM by the time this is called;
+ * this only polls (and, if needed, escalates).
+ */
+async function waitForOldProcessToExit(
+  pid: number,
+  sessionId: string,
+  deps: {
+    isAlive: (pid: number) => boolean;
+    killPid: (pid: number, signal: NodeJS.Signals) => void;
+    sleep: (ms: number) => Promise<void>;
+    now: () => number;
+    logger: Logger;
+  },
+  timeoutMs: number,
+): Promise<void> {
+  const deadline = deps.now() + timeoutMs;
+  while (deps.isAlive(pid) && deps.now() < deadline) {
+    await deps.sleep(STOP_POLL_INTERVAL_MS);
+  }
+
+  if (!deps.isAlive(pid)) return;
+
+  deps.logger.warn(
+    "[resume-session] old process ignored SIGTERM within timeout, sending SIGKILL",
+    { sessionId, pid },
+  );
+  deps.killPid(pid, "SIGKILL");
+
+  if (deps.isAlive(pid)) {
+    throw new ResumeSessionError(
+      `old process (pid ${pid}) for session ${sessionId} would not exit even after SIGKILL; refusing to launch a replacement to avoid two processes sharing the same session's DEK/seq`,
+    );
+  }
 }
 
 /** The `FALCON_RECONNECT_*` env contract a resumed session process reads to re-attach to its existing server-side session row instead of bootstrapping a new one. */
@@ -125,8 +205,26 @@ export async function resumeSession(
   }
 
   // Stop any still-live process for this session BEFORE relaunching — two
-  // processes must never share ownership of one session's DEK/seq.
-  deps.registry.stopSession(sessionId);
+  // processes must never share ownership of one session's DEK/seq. Capture
+  // the pid before stopping: `stopSession` only sends SIGTERM and doesn't
+  // remove the pid from the live map, so it stays resolvable, but we still
+  // want the identity fixed ahead of the call for clarity.
+  const livePid = deps.registry.getLivePid(sessionId);
+  const wasLive = deps.registry.stopSession(sessionId);
+  if (wasLive && livePid != null) {
+    await waitForOldProcessToExit(
+      livePid,
+      sessionId,
+      {
+        isAlive: deps.isAlive ?? defaultIsAlive,
+        killPid: deps.killPid ?? defaultKillPid,
+        sleep: deps.sleep ?? defaultSleep,
+        now: deps.now ?? Date.now,
+        logger,
+      },
+      deps.stopTimeoutMs ?? DEFAULT_STOP_TIMEOUT_MS,
+    );
+  }
 
   const [command, ...prefixArgs] = deps.falconEntrypoint?.() ?? defaultFalconEntrypoint();
   if (!command) {

@@ -57,6 +57,15 @@ export interface SessionRegistry {
   getSessions(): TrackedSession[];
   /** `ControlServerDeps.stopSession` — SIGTERM by sessionId; `true` iff a live match was found and signalled. */
   stopSession(sessionId: string): boolean;
+  /**
+   * The pid currently tracked live for `sessionId`, or `null` if none.
+   * `resumeSession.ts` uses this ahead of (and to poll after) `stopSession`
+   * to confirm the old process has actually exited before relaunching —
+   * `stopSession` only sends SIGTERM and doesn't remove the pid from the
+   * live map until the next `pruneDeadSessions` sweep, so the pid stays
+   * resolvable for polling in the meantime.
+   */
+  getLivePid(sessionId: string): number | null;
   /** A session resumable right now — live-tracked (if it still carries encryption data) or from the durable set — or `null` if this daemon has no record of it at all. */
   findResumable(sessionId: string): PersistedSession | null;
   /**
@@ -159,6 +168,13 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
         return true;
       }
       return false;
+    },
+
+    getLivePid(sessionId) {
+      for (const [pid, session] of pidToSession) {
+        if (session.sessionId === sessionId) return pid;
+      }
+      return null;
     },
 
     findResumable(sessionId) {

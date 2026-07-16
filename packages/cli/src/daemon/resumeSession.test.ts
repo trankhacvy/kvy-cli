@@ -23,6 +23,7 @@ function fakeRegistry(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     findResumable: vi.fn(() => PERSISTED),
     stopSession: vi.fn(() => false),
+    getLivePid: vi.fn(() => null),
     trackSpawned: vi.fn(),
     ...overrides,
   };
@@ -89,7 +90,7 @@ describe("resumeSession", () => {
   });
 
   it("stops any still-live process for the session before relaunching", async () => {
-    const registry = fakeRegistry({ stopSession: vi.fn(() => true) });
+    const registry = fakeRegistry({ stopSession: vi.fn(() => true), getLivePid: vi.fn(() => 999) });
 
     await resumeSession("sess_1", {
       registry,
@@ -97,9 +98,94 @@ describe("resumeSession", () => {
       resolveDirectory: () => "/tmp/proj",
       launchProcess: vi.fn(async () => ({ method: "detached" as const, pid: 1 })),
       falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      isAlive: () => false,
     });
 
     expect(registry.stopSession).toHaveBeenCalledExactlyOnceWith("sess_1");
+  });
+
+  it("waits for the old process to be confirmed dead before launching the replacement", async () => {
+    const registry = fakeRegistry({ stopSession: vi.fn(() => true), getLivePid: vi.fn(() => 999) });
+    const sleep = vi.fn(async () => {});
+    let now = 0;
+    const callOrder: string[] = [];
+    let calls = 0;
+    const isAlive = vi.fn(() => {
+      calls += 1;
+      const alive = calls <= 2; // alive for the first two polls, dead from the third on
+      callOrder.push(alive ? "alive" : "dead");
+      return alive;
+    });
+    const launchProcess = vi.fn(async () => {
+      callOrder.push("launch");
+      return { method: "detached" as const, pid: 1 };
+    });
+
+    await resumeSession("sess_1", {
+      registry,
+      awaiter: fakeAwaiter(),
+      resolveDirectory: () => "/tmp/proj",
+      launchProcess,
+      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      isAlive,
+      sleep,
+      now: () => now++,
+    });
+
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(launchProcess).toHaveBeenCalledTimes(1);
+    expect(callOrder.indexOf("launch")).toBeGreaterThan(callOrder.lastIndexOf("alive"));
+  });
+
+  it("escalates to SIGKILL if the old process ignores SIGTERM within the timeout", async () => {
+    const registry = fakeRegistry({ stopSession: vi.fn(() => true), getLivePid: vi.fn(() => 999) });
+    const killPid = vi.fn();
+    let now = 0;
+    // Always alive until killPid(SIGKILL) is called, then dead.
+    let killed = false;
+    const isAlive = vi.fn(() => !killed);
+    killPid.mockImplementation((_pid: number, signal: string) => {
+      if (signal === "SIGKILL") killed = true;
+    });
+
+    const result = await resumeSession("sess_1", {
+      registry,
+      awaiter: fakeAwaiter(),
+      resolveDirectory: () => "/tmp/proj",
+      launchProcess: vi.fn(async () => ({ method: "detached" as const, pid: 1 })),
+      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      isAlive,
+      killPid,
+      sleep: vi.fn(async () => {}),
+      now: () => now++,
+      stopTimeoutMs: 3,
+    });
+
+    expect(result).toEqual({ sessionId: "sess_1" });
+    expect(killPid).toHaveBeenCalledWith(999, "SIGKILL");
+  });
+
+  it("throws ResumeSessionError and never launches a replacement if the old process survives SIGKILL", async () => {
+    const registry = fakeRegistry({ stopSession: vi.fn(() => true), getLivePid: vi.fn(() => 999) });
+    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 1 }));
+    let now = 0;
+
+    await expect(
+      resumeSession("sess_1", {
+        registry,
+        awaiter: fakeAwaiter(),
+        resolveDirectory: () => "/tmp/proj",
+        launchProcess,
+        falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+        isAlive: () => true, // never dies, even after SIGKILL
+        killPid: vi.fn(),
+        sleep: vi.fn(async () => {}),
+        now: () => now++,
+        stopTimeoutMs: 3,
+      }),
+    ).rejects.toThrow(/would not exit even after SIGKILL/);
+
+    expect(launchProcess).not.toHaveBeenCalled();
   });
 
   it("throws ResumeSessionError when the daemon has no record of the session at all", async () => {
