@@ -1,0 +1,67 @@
+{
+  "description": "A perm-request that already knows its call id (adapter pre-associated the request) — no placeholder is ever rendered, it attaches straight onto the tool-start.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 3000,
+      "role": "agent",
+      "ev": {
+        "t": "perm-request",
+        "reqId": "req-5",
+        "call": "call-77",
+        "name": "Edit",
+        "args": { "path": "a.ts" },
+        "modes": ["default"]
+      }
+    },
+    {
+      "id": "e2",
+      "time": 3001,
+      "role": "agent",
+      "ev": {
+        "t": "tool-start",
+        "call": "call-77",
+        "name": "Edit",
+        "title": "Edit a.ts",
+        "args": { "path": "a.ts" },
+        "risk": "write"
+      }
+    },
+    {
+      "id": "e3",
+      "time": 3002,
+      "role": "agent",
+      "ev": {
+        "t": "perm-resolve",
+        "reqId": "req-5",
+        "decision": { "kind": "deny", "message": "not now" }
+      }
+    },
+    {
+      "id": "e4",
+      "time": 3003,
+      "role": "agent",
+      "ev": { "t": "tool-end", "call": "call-77", "ok": false }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e2",
+      "time": 3001,
+      "role": "agent",
+      "kind": "tool",
+      "call": "call-77",
+      "name": "Edit",
+      "title": "Edit a.ts",
+      "args": { "path": "a.ts" },
+      "risk": "write",
+      "status": "done",
+      "ok": false,
+      "permission": {
+        "reqId": "req-5",
+        "modes": ["default"],
+        "decision": { "kind": "deny", "message": "not now" }
+      }
+    }
+  ]
+}

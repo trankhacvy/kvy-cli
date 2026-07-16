@@ -4,6 +4,48 @@
 worktree `.worktrees/P1-1.3-session-bootstrap` (tip `fd673bd`) onto this task's own
 `main`-derived worktree, `.worktrees/P1-land-1.3-session-bootstrap`.
 
+## Second pass (2026-07-16): reconcile with main's advanced tip
+
+This branch (`P1-land-1.3-session-bootstrap`, tip `3c5f7d9`) was originally cut from
+`main`'s then-tip `a7bbceb`. By this pass, `main` had moved on to `237202d` (14 commits:
+`P1-1.6-reducer-port`'s land plus several progress-tracker `chore: cycle N` commits) —
+confirmed independently that `3c5f7d9` is still not an ancestor of `main` and that
+`main:packages/cli/src/session/bootstrap.ts` still fails to resolve, exactly as plan.md's
+own Cycle 38/40 notes describe.
+
+Reconciled by running `git merge main --no-edit` inside this worktree:
+
+- **`plan.md`** — the only real conflict, in the §1.3 "Session bootstrap" narrative
+  paragraph. Resolved by hand, preserving every prior cycle's note from both sides
+  (this branch's own Cycle 36/"Landed"/Cycle 37 notes plus `main`'s Cycle 38/40 notes
+  documenting that the "Landed" claim wasn't yet real) and appending a new note
+  describing this reconciliation itself.
+- **`pnpm-lock.yaml`** — auto-merged cleanly by git; ran `pnpm install` afterwards to
+  confirm the lockfile is consistent (no changes needed beyond the auto-merge).
+- Everything else `main` had gained since `a7bbceb` (the `P1-1.6-reducer-port` land:
+  `packages/web/src/sync/reducer/*`, its task-summaries, `progress.md`) merged in
+  without conflict — fully disjoint from `packages/cli/src/session/`.
+
+Re-verified after reconciling:
+
+- `pnpm build` (`--force`, no cache): 5/5 tasks green.
+- `pnpm exec turbo run typecheck` (`--force`, no cache): 8/8 tasks green.
+- `pnpm exec turbo run test --force`: first run showed the same pre-existing
+  `@falcon/server` `beforeAll` hook-timeout flakiness under turbo's parallel task
+  scheduling (6 of 20 server test files timed out waiting on concurrent in-memory
+  `PGlite` instances); ran `@falcon/server` and `falcon` (cli) each in isolation via
+  `npx vitest run` — 140/140 and 196/196 respectively, 0 failures (including
+  `session/bootstrap.test.ts` 13/13 and `session/bootstrap.integration.test.ts` 2/2).
+  A second full `pnpm exec turbo run test --force` run (no `--concurrency` override)
+  then passed clean, 9/9 tasks green — confirming this is turbo-parallelism/PGlite
+  resource contention, not a regression from the merge.
+
+This branch's tip is now current with `main` (`237202d` is an ancestor of this branch's
+new merge commit) and ready to be fast-forwarded or `--no-ff` merged onto the shared
+`main` ref from a primary, non-worktree checkout. That actual git-ref update remains
+outside this subagent's worktree-scoped write access — see the "Sandboxing caveat"
+section below, which still applies.
+
 ## What was done
 
 1. Created the landing worktree (`git worktree add .worktrees/P1-land-1.3-session-bootstrap
