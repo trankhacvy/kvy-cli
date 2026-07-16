@@ -1,5 +1,97 @@
 # Falcon — Progress Log
 
+## Cycle 55 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `0eb8362` — "merge: land P2-2.5-notification-fallback-and-mute
+onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon` cli, plus their `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 67/67 (8 files), `@falcon/wire`
+  66/66 (6 files), `@falcon/web` 196/196 (22 files), `@falcon/server` 230/230 (32 files), `falcon`
+  cli 540/540 (55 files). 1099 tests total, 0 failures across the whole workspace.
+
+### Tasks reviewed this cycle (verified against `main` via `git merge-base --is-ancestor`)
+
+Neither task-summary's branch ref exists any more (both deleted post-merge, confirmed via
+`git branch -a` / `git for-each-ref` — no `P2-2.3-permission-pipeline` or
+`P2-2.5-notification-fallback-and-mute` ref anywhere), so the literal `git merge-base
+--is-ancestor <task_id> main` command fails with "Not a valid object name" against the branch
+name itself, exactly as expected for a cleaned-up branch (same pattern documented in every prior
+cycle for other landed-and-cleaned-up branches). Fell back to checking each branch's own feature
+commits and merge commit (named explicitly in the task-summary's own text) directly against
+`main`'s history:
+
+1. **`task-summary/P2-2.3-permission-pipeline.md`** (`PermissionHandler`/`getToolDescriptor` port,
+   first-wins resolution, wired into `claudeRemote.ts` replacing the fail-closed
+   `permissionStub.ts`). Merge commit `e979d6e` ("merge: land P2-2.3-permission-pipeline onto
+   main") → `git merge-base --is-ancestor e979d6e main` = **true**. Feature commits `a9caadb`
+   (port), `30f1c01` (code-review fixes), `a28ebae` (test-failure fix), `83188e6`/`4e1937a` (land
+   commits) all individually confirmed ancestors of `main` too. `git cat-file -e
+   main:packages/cli/src/claude/permissionHandler.ts` and `...getToolDescriptor.ts` both succeed.
+   `plan.md` §2.3's three satisfied bullets (lines 728-730: `PermissionHandler` port,
+   `getToolDescriptor` port, first-wins resolution) were **already `[x]`** from this same task's
+   own land-pass edit to `plan.md` in a prior cycle — no checkbox change needed this cycle,
+   re-verified only. The section's two remaining bullets (perm envelopes live-wired into the web
+   timeline; local-mode hook-driven attention events) are genuinely out of this task's scope per
+   its own documented gap analysis and correctly remain unchecked.
+
+2. **`task-summary/P2-2.5-notification-fallback-and-mute.md`** (real Telegram/ntfy senders +
+   Telegram `/start` pairing flow; per-account mute-all + per-session mute settings + routes +
+   UI). Merge commit `0eb8362` ("merge: land P2-2.5-notification-fallback-and-mute onto main") is
+   `main`'s current HEAD itself — `git merge-base --is-ancestor 0eb8362 main` = **true**,
+   trivially. Feature commits `9f20867` (feat), `2c13313` (test-failure fix), `3f95239`
+   (code-review fixes) all individually confirmed ancestors of `main` too. `git cat-file -e
+   main:packages/server/src/app/push/channels/telegram.ts`,
+   `main:packages/server/src/app/routes/telegramLink.ts`, and
+   `main:packages/server/src/app/routes/notificationSettings.ts` all succeed. `plan.md`'s §2.5
+   "Fallback channels" (line 744) and "Per-session mute + mute-all settings" (line 745) bullets
+   were still `[ ]` despite the confirmed merge, per the task-summary's own closing note ("the
+   orchestrator/reviewer should flip … once this lands") — **both flipped to `[x]` this cycle**
+   with dated confirmation notes; the §2.5 section header's summary note was also rewritten from
+   "Partially landed" to "Fully landed" to match.
+
+### Tasks completed this cycle
+
+**2 checkboxes newly flipped**: "Fallback channels" and "Per-session mute + mute-all settings"
+(`plan.md` lines 744-745), both `[ ]` → `[x]` — genuinely merged onto `main`
+(`P2-2.5-notification-fallback-and-mute`, merge `0eb8362`) but the checkboxes had not yet been
+updated to reflect it, as flagged by the task-summary's own note. `P2-2.3-permission-pipeline`'s
+three in-scope bullets were already correctly flipped in a prior cycle; independently re-verified
+rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each, 1099 total
+tests: 67 crypto + 66 wire + 196 web + 230 server + 540 cli — 0 failures anywhere).
+
+### Overall completion
+
+`plan.md` checkbox count: **89/135 checked (~65.9%)** — up from 87/135 (~64.4%) before this
+cycle's two flips (Fallback channels, Per-session mute + mute-all settings). Note: Cycle 54's own
+recorded tally (84/135) undercounts against a fresh grep of the current file by 3 checkboxes
+unrelated to this cycle's work — not re-litigated here, since this cycle's before/after delta (a
+clean +2 from the two flips above) is independently verifiable via `git diff`.
+
+### Next recommended tasks
+
+1. **§2.4 Web control surface** (§8.4) — composer TanStack mutation wired to the `message` RPC,
+   `PermCard` (Allow/Deny/Allow-for-session/mode-switch + diff preview), `ControlBar`
+   (interrupt/mode selector/take-control), live `activity`/attention derivation, tab-title/favicon
+   badges. Now unblocked by §2.3's real permission envelopes landing; the only remaining Phase 2
+   checklist section with zero checked bullets.
+2. **Live-wire `perm-request`/`perm-resolve` envelopes into the web timeline** — the CLI already
+   emits these `SessionEnvelope`s (`permissionHandler.ts`), and the reducer/`PermPlaceholder`
+   support already exists, but the timeline route still renders off a hand-built demo fixture
+   (`packages/web/src/components/timeline/demo-items.ts`) instead of the live sync engine/socket.
+   Closes one of §2.3's two remaining gaps and likely overlaps significantly with §2.4's work.
+3. **Retire superseded/stale worktrees** flagged in prior cycles (`.worktrees/P1-1.3-cli-locator`,
+   `.worktrees/P1-1.5-daemon-singleton-lock`, and any now-landed `P2-2.3-permission-pipeline` /
+   `P2-2.5-notification-fallback-and-mute` worktree directories still on disk) — pure cleanup, not
+   pending work.
+
 ## Cycle 54 — 2026-07-16
 
 **Branch checked:** `main` (HEAD `a6e5e19` — "fix: P1-land-1.3-session-bootstrap - resolve
