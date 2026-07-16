@@ -5803,3 +5803,94 @@ tasks, 9/9 test tasks, 623 tests, 0 failures).
    `task-summary/P1-1.5-daemon-singleton-lock.md`) — needed before the
    daemon-dependent §1.5/§1.6 items (session-list, sync engine) can be
    meaningfully exercised end-to-end.
+
+## Cycle 49 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `416f2ea`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks).
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 65/65
+  (8 files), `@falcon/wire` 61/61 (6 files), `@falcon/web` 68/68 (8 files,
+  incl. `sync/__tests__/apiSocket.test.ts` 12), `@falcon/server` 148/148
+  (21 files), `falcon` cli 314/314 (30 files). 0 failures across the whole
+  workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested branches were deleted after merging (normal post-land
+cleanup — confirmed via `git branch -a`/`git worktree list`, neither ref
+exists any more), so the literal `git merge-base --is-ancestor <task_id>
+main` command can't be run against the branch name itself. Reconstructed
+each branch's real tip commit from `git reflog show --all` (which still
+records the pre-deletion ref updates) and ran the ancestor check against
+that SHA instead — the same verification the instruction calls for, just
+against the branch's last real commit rather than a now-gone ref name:
+
+1. **`task-summary/P1-1.4-http-outbox.md`** (HTTP outbox: coalescing +
+   disk-backed retry queue). Branch tip `6e6f3c2` →
+   `git merge-base --is-ancestor 6e6f3c2 main` = **true**. Merge commit
+   `6b0021f` ("merge: land P1-1.4-http-outbox onto main") sits directly in
+   `main`'s history; `git cat-file -e main:packages/cli/src/api/outbox.ts`
+   succeeds. **This task-summary's own final section still says the land
+   is "outside this subagent's reach" / not yet on the shared ref — that
+   note is now stale; the merge commit landed after the summary was last
+   edited.** `plan.md` line 687 was still `[ ]` despite the confirmed
+   merge — flipped to `[x]` this cycle with a dated confirmation note.
+2. **`task-summary/P1-1.4-session-ws-alive.md`** (session-scoped WS client +
+   `alive` keepalive). Branch tip `d28fe15` (post test-fix commit) →
+   `git merge-base --is-ancestor d28fe15 main` = **true**. Merge commit
+   `072c83f` ("merge: land P1-1.4-session-ws-alive onto main") sits directly
+   in `main`'s history; `git cat-file -e
+   main:packages/cli/src/session/sessionClient.ts` succeeds. `plan.md` line
+   688 was already `[x]` (flipped by the land task itself, with its own
+   dated note) — no change needed, confirmation only.
+3. **`task-summary/P1-1.6-api-socket.md`** (`apiSocket`: user-scoped WS
+   client, infinite reconnect, `app-state` reporting). Branch tip `74ddf07`
+   → `git merge-base --is-ancestor 74ddf07 main` = **true**. Merge commit
+   `416f2ea` ("merge: land P1-1.6-api-socket onto main") is `main`'s current
+   HEAD; `git cat-file -e main:packages/web/src/sync/apiSocket.ts` succeeds.
+   `plan.md` line 704 was already `[x]` — no change needed, confirmation
+   only.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped**: HTTP outbox (`plan.md` line 687, `[ ]` →
+`[x]`) — genuinely merged onto `main` (`6b0021f`) but the checkbox had not
+yet been updated to reflect it. The other two requested tasks
+(`P1-1.4-session-ws-alive`, `P1-1.6-api-socket`) were already checked off by
+their own land-pass commits before this cycle ran; independently
+re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 656/656 tests, 0 failures — `65+61+68+148+314`), and all three
+requested deliverables are confirmed genuine ancestors of `main` (via their
+real tip SHAs, since the branch refs themselves were cleaned up post-merge),
+with their code present in `main`'s tree and their tests passing in-place.
+
+### Overall completion
+
+`plan.md` checkbox count: **65/135 checked (~48.1%)** — up from 64/135
+(~47.4%) before this cycle's HTTP-outbox flip.
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-sync-engine`** (worktree `.worktrees/P1-1.6-sync-engine`) —
+   `createSyncEngine(queryClient, socket)`: headerSeq/msgSeq fast-paths +
+   reconnect-invalidate-all. Now that `P1-1.6-api-socket` is on `main`, this
+   is the piece that actually wires a real socket into the sync engine
+   (previously blocked on both landing).
+2. **Land `P1-1.6-auth-pages`** (worktree `.worktrees/P1-1.6-auth-pages`) —
+   OAuth sign-in, key generation on signup, recovery-code export, pairing-
+   approve page; unblocks exercising the rest of §1.6 end-to-end (nothing
+   currently gates a session into the web app without it).
+3. **Land `P1-1.6-session-list-screen`** and/or **`P1-1.6-timeline-screen`**
+   (worktrees `.worktrees/P1-1.6-session-list-screen`,
+   `.worktrees/P1-1.6-timeline-screen`) — both build on the already-landed
+   reducer port and are reported green in their own task-summaries; landing
+   either would close out the last unchecked §1.6 UI bullets.
