@@ -72,19 +72,34 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme, one placeholder route. Crypto
-                              worker bridge (src/crypto/), the transcript reducer
-                              (src/sync/reducer/), apiSocket — the user-scoped Socket.IO
-                              client with infinite reconnect + app-state reporting — and
+                              wired up, dark default theme. Auth pages (OAuth sign-in, key
+                              generation, recovery-code export, pairing-approve —
+                              src/app/signin, src/app/auth, src/app/pair,
+                              src/app/settings/recovery) are landed. Crypto worker bridge
+                              (src/crypto/), the transcript reducer (src/sync/reducer/) —
+                              folds `SessionEnvelope[]` into ordered `RenderItem[]` (design
+                              §9.1) — apiSocket, the user-scoped Socket.IO client with
+                              infinite reconnect + app-state reporting, and
                               `src/sync/engine.ts`, the sync engine (design §8.1/§9.1, DELTA
                               D2: headerSeq structural fast-path + per-session msgSeq
                               message fast-path against a TanStack Query cache, gap ⇒
-                              `invalidateQueries`, WS reconnect ⇒ invalidate everything),
-                              are all wired up (src/sync/). The engine takes an injectable
+                              `invalidateQueries`, WS reconnect ⇒ invalidate everything), are
+                              all wired up (src/sync/). The engine takes an injectable
                               `SyncSocketSource` (`on('update'|'reconnect', ...)`), which the
                               real `apiSocket` satisfies structurally — no adapter needed.
-                              Auth pages still [planned].
-                              [planned].
+                              `src/features/session-list/`: the Home screen (design §9.2
+                              "Home" row, FR-7.1) — sessions grouped by workspace, a derived
+                              status dot per session (`status.ts`'s `deriveSessionStatus`,
+                              computed from each session's `RenderItem[]` plus live
+                              presence/attention signals, never stored — design principle
+                              #3) and machine online/offline badges. Takes an injectable
+                              `UseSessionListSnapshot` hook (defaults to a static mock
+                              snapshot, `mock-source.ts`) so it composes with the real
+                              sync-engine-backed hook once the two are wired together, same
+                              seam as the sync engine's `SyncSocketSource`. Wiring the sync
+                              engine into the Home screen (gap detection, TanStack Query
+                              invalidation, FR-7.2 session timeline) and auth-gating the Home
+                              route still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

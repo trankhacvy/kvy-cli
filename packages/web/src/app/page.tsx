@@ -1,20 +1,13 @@
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { SessionListScreen } from "@/features/session-list";
 
-// Placeholder route — scaffold stage only (plan.md §1.6). The session-list
-// home screen (design §9.2) lands in a later 1.6 bullet once the sync engine
-// is wired up; auth (this bullet) now has real pages under /signin.
+// The Home screen (design §9.2 "Home" row, falcon-prd.md FR-7.1). Backed by
+// a mock data source for now — the sync engine (`src/sync/engine.ts`) is
+// landed on `main` but not yet wired into this screen; see
+// `SessionListScreen`'s doc comment for the injectable seam that swaps in
+// the real hook later. Auth pages exist under /signin, /auth, /pair, and
+// /settings/recovery, but this route isn't auth-gated yet, so it's reachable
+// unauthenticated for now — both are tracked as still [planned] in
+// CLAUDE.md.
 export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
-      <h1 className="text-2xl font-semibold tracking-tight">Falcon</h1>
-      <p className="max-w-md text-sm text-muted-foreground">
-        Web app scaffold — Next.js App Router, static export, Tailwind + shadcn/ui, dark default
-        theme. The session timeline is not wired up yet.
-      </p>
-      <Button asChild variant="outline">
-        <Link href="/signin/">Sign in</Link>
-      </Button>
-    </main>
-  );
+  return <SessionListScreen />;
 }

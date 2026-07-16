@@ -35,12 +35,14 @@ const nextConfig = (phase: string): NextConfig => ({
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   webpack(config) {
     // `src/crypto/*` (the crypto-bridge worker bridge, shared with the
-    // isomorphic @falcon/crypto package) uses NodeNext-style relative imports
-    // with explicit `.js` extensions pointing at `.ts` sources — required for
-    // its own dual CJS/ESM builds (pkgroll) and already how `tsconfig.base.json`'s
-    // `moduleResolution: "bundler"` and Vitest resolve it. Webpack's default
-    // resolver has no such alias, so without this it 404s on every one of
-    // those imports as soon as a page actually pulls the crypto bridge in.
+    // isomorphic @falcon/crypto package), the reducer (`src/sync/reducer/`),
+    // and other `tsconfig.base.json` "moduleResolution": "bundler" code all
+    // use explicit `.js`-suffixed relative imports against `.ts`/`.tsx`
+    // source files — the standard pattern for that resolution mode, which
+    // `tsc`/`vitest` already resolve fine. Webpack's default resolver has no
+    // such alias, so without this it 404s on every one of those imports as
+    // soon as a page actually pulls in the crypto bridge, the reducer, or
+    // anything else under `packages/web/src` bundled this way.
     config.resolve.extensionAlias = {
       ...config.resolve.extensionAlias,
       ".js": [".ts", ".tsx", ".js"],

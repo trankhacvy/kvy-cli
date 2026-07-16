@@ -1,0 +1,71 @@
+import type { Ephemeral, SessionRow } from "@falcon/wire";
+import type { RenderItem } from "@/sync/reducer";
+
+/**
+ * View-model types for the Home / session-list screen (design §9.2 "Home"
+ * row, falcon-prd.md FR-7.1). Field values here are already decrypted where
+ * the underlying wire row carries an `EncryptedBox` (`SessionRow.metadata`,
+ * `MachineRow.metadata`) — the crypto bridge that produces that plaintext is
+ * a separate, not-yet-landed concern (design §5.3). Everything else
+ * (`id`, `workspaceId`, `machineId`, `status`, `lastSeenAt`, ...) is a
+ * pass-through of the plaintext routing metadata the server is allowed to
+ * see (design §5.3 "what the server can see").
+ */
+
+/** The server-computed, never-persisted signal for a session (design §4.3
+ * `Ephemeral` union, `t: "attention"`) — the one status input that isn't
+ * recoverable by replaying `RenderItem[]` alone, since the wire's
+ * `SessionEvent` union has no "agent asked a question" variant yet
+ * (falcon-prd.md FR-8.1/FR-8.2 leave that inference to the session process).
+ * `null` means "no outstanding attention signal for this session". */
+export type AttentionKind = Extract<Ephemeral, { t: "attention" }>["kind"];
+
+export interface SessionListWorkspace {
+  id: string;
+  /** Decrypted workspace name (e.g. the directory basename). */
+  name: string;
+}
+
+export interface SessionListMachine {
+  id: string;
+  /** Decrypted machine name (e.g. hostname). */
+  name: string;
+  /** Live presence (design §4.3 `machine-presence` ephemeral / `lastSeenAt`
+   * heartbeat) — never persisted as a flag, always a snapshot of "right now". */
+  online: boolean;
+}
+
+export interface SessionListSession {
+  id: string;
+  workspaceId: string | null;
+  machineId: string | null;
+  /** Decrypted session title (falls back to the session `tag` upstream if
+   * metadata hasn't decrypted yet — that fallback is the mock/source's job,
+   * not this screen's). */
+  title: string;
+  provider: string;
+  status: SessionRow["status"];
+  updatedAt: number;
+  /** This session's reduced transcript (`@falcon/web`'s sync reducer output)
+   * — the event-stream input `deriveSessionStatus` walks to find an open
+   * turn or an unresolved permission (design principle #3: derived, never
+   * stored). Empty for a session with no messages yet. */
+  items: RenderItem[];
+  /** See `AttentionKind` — `null` when nothing is outstanding. */
+  attention: AttentionKind | null;
+}
+
+export interface SessionListSnapshot {
+  workspaces: SessionListWorkspace[];
+  machines: SessionListMachine[];
+  sessions: SessionListSession[];
+}
+
+/**
+ * Injectable data source for the screen — mirrors the pattern the (unlanded)
+ * sync-engine work uses for `SyncSocketSource`: a narrow, structurally-typed
+ * seam so the screen is buildable and testable before `apiSocket`/the sync
+ * engine land on `main`. A real hook backed by TanStack Query + the sync
+ * engine satisfies this signature with no adapter needed once it exists.
+ */
+export type UseSessionListSnapshot = () => SessionListSnapshot;
