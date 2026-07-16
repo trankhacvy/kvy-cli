@@ -5710,3 +5710,96 @@ failures).
    has its own `task-summary/P1-1.5-daemon-singleton-lock.md`) — needed
    before the daemon-dependent §1.5/§1.6 items (session-list, sync engine)
    can be meaningfully exercised end-to-end.
+
+## Cycle 48 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `3aff9e5`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — **9/9 tasks green** (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks).
+- `pnpm test` → **PASSED** — **9/9 tasks green, 623 tests total, 0
+  failures** — `@falcon/wire` 61 (6 files), `@falcon/crypto` 65 (8 files),
+  `@falcon/web` 56 (7 files), `@falcon/server` 145 (21 files), `falcon` cli
+  296 (27 files, incl. `envelopeMapper.test.ts` 21,
+  `envelopeMapper.extra.test.ts` 5, `daemon/machineClient.test.ts` 18,
+  `daemon/machineClient.integration.test.ts` 1).
+
+### Task-summaries reviewed this cycle (with independent git verification)
+
+All three requested task-summaries were checked with `git merge-base
+--is-ancestor <tip> main` against the **original feature branch's real tip
+commit** (the transient `P1-land-*`/reconciliation branches themselves no
+longer exist as refs — they were worktree-local and have since been
+retired/deleted, same pattern noted in Cycle 47's report):
+
+1. **`task-summary/P0-cross-cutting-mit-attribution-headers.md`** (MIT/Happy
+   attribution headers on 11 files). Branch tip `b67ad71` →
+   `git merge-base --is-ancestor b67ad71 main` = **true**. Merge commit
+   `ddf374b` ("merge: land P0-cross-cutting-mit-attribution-headers onto
+   main") sits directly in `main`'s history. Spot-checked
+   `packages/crypto/src/keys.ts` on `main`'s tree for the `slopus/happy`
+   (MIT) marker — present. `plan.md`'s checkbox (line 813) was already
+   `[x]` from the prior (reconciliation) pass; appended a Cycle 48
+   confirmation note recording the actual land commit and closing out the
+   "separate land step" caveat that note had left open.
+2. **`task-summary/P1-land-1.5-machine-ws-client.md`** (machine-scoped WS
+   client: register/heartbeat/CAS sync). Original branch tip `8e884c5` →
+   `git merge-base --is-ancestor 8e884c5 main` = **true**. Merge commit
+   `69f61fa` ("merge: land P1-land-1.5-machine-ws-client onto main") sits
+   directly in `main`'s history. `git cat-file -e
+   main:packages/cli/src/daemon/machineClient.ts` succeeds;
+   `machineClient.test.ts` (18) + `machineClient.integration.test.ts` (1)
+   both pass in this cycle's run. `plan.md`'s checkbox (line 696) was
+   already `[x]`; appended a Cycle 48 confirmation note.
+3. **`task-summary/P1-1.4-envelope-mapper.md`** (`mapClaudeToEnvelopes` port).
+   Branch tip `60d8c69` → `git merge-base --is-ancestor 60d8c69 main` =
+   **true** — in fact `main`'s current HEAD (`3aff9e5`) *is* this task's own
+   landing merge commit. `git cat-file -e
+   main:packages/cli/src/claude/envelopeMapper.ts` succeeds;
+   `envelopeMapper.test.ts` (21) + `envelopeMapper.extra.test.ts` (5) both
+   pass. `plan.md`'s checkbox (line 686) was already `[x]`; appended a Cycle
+   48 confirmation note.
+
+All three were already flipped to `[x]` by the land tasks' own commits before
+this cycle ran (visible in `git log` as `e476e5e`/`9f381d4` "Land ... onto
+main" plan.md edits, then fast-forwarded to `main` as `ddf374b`/`69f61fa`/
+`3aff9e5`). This cycle's job was independent re-verification, not the
+initial flip — done, per instructions, by checking the ancestor relationship
+before trusting the task-summary narratives alone.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 623/623 tests, 0 failures), and all three requested deliverables
+are confirmed as genuine git ancestors of `main` (not just file-copies), with
+their tests passing in-place.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **62/135 checked (~45.9%)** — up from 59/135
+(~43.7%) at the start of Cycle 47; this cycle's three tasks were the ones
+that closed that gap (credited across Cycles 47→48 as their land steps
+completed), no new flips originated in this cycle beyond the confirmation
+notes. `pnpm typecheck`/`pnpm test` both green on `main` (9/9 typecheck
+tasks, 9/9 test tasks, 623 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.4-http-outbox`** (worktree `.worktrees/P1-1.4-http-outbox`,
+   tip `c35d0d1`, code-review-fixed) — 300ms/20-event coalescing, disk-backed
+   10MB-capped JSONL queue, blind retry-until-2xx with backoff. Combined with
+   the now-landed `mapClaudeToEnvelopes`, this is the last major piece
+   needed to close out §1.4's transcript pipeline.
+2. **Land `P1-1.4-session-ws-alive`** (worktree
+   `.worktrees/P1-1.4-session-ws-alive`, tip `e818a46`) — `alive` keepalive
+   emits over WS driven by the fd3 thinking-state signal; small, isolated,
+   and unblocks the "working indicator" bullets in §2 (Control).
+3. **Land `P1-1.5-daemon-singleton-lock`** (worktree
+   `.worktrees/P1-1.5-daemon-singleton-lock`, tip `b3d5350`,
+   code-review-fixed, has its own
+   `task-summary/P1-1.5-daemon-singleton-lock.md`) — needed before the
+   daemon-dependent §1.5/§1.6 items (session-list, sync engine) can be
+   meaningfully exercised end-to-end.
