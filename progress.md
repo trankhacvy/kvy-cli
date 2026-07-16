@@ -4787,3 +4787,148 @@ tests, 0 failures).
 3. **Land `P1-1.6-auth-pages`** — the next-longest-flagged unlanded 1.6
    item (since Cycle 22), `/signin`/OAuth callback/recovery/pair pages plus
    supporting crypto-bridge RPCs, reported green in its own worktree.
+
+## Cycle 40 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `60ec35e` — "chore: cycle 39 — completed 0
+tasks (reducer-port already landed; 2 unlanded)"). Confirmed via
+`/opt/homebrew/bin/git rev-parse HEAD`; `git status --short` clean at cycle
+start, no concurrent-modification drift observed this time.
+
+### A tooling-integrity issue found before verification could start
+
+Before running any of the required checks, a plain `ls -la` in the repo
+root (via the normal Bash tool, which — per this environment's global
+`~/.claude/settings.json` `PreToolUse` hook `rtk hook claude` — silently
+rewrites every Bash invocation through the `rtk` CLI) returned the literal
+string `(empty)` instead of a directory listing, for a non-empty, clean,
+tracked git repo. `rtk proxy ls -la` (the documented raw-passthrough
+escape hatch) returned the real listing immediately. `git status` through
+the same hook returned a plausible-looking but reformatted summary
+(`* main` / `clean — nothing to commit`) rather than fabricated content,
+so the hook's behavior is inconsistent: sometimes lossy reformatting,
+at least once outright fabrication of empty output for non-empty input.
+This matches blocker #3 recorded in Cycles 27 through 39 ("recurring `rtk`
+hook shell-mangling issue") — it is a long-running, unresolved problem
+with the global hook itself, not a one-off. To keep this cycle's
+typecheck/test/git results trustworthy, every result-sensitive command
+this cycle was run via `rtk proxy <cmd>` or an explicit `/opt/homebrew/bin/`
+binary path rather than the plain (hook-intercepted) form. **Recommend
+this be escalated and fixed/removed at the global config level** — a hook
+that can silently substitute fabricated output for real command results is
+a correctness risk for any agent (this tracker included) that relies on
+Bash output to decide what to report or commit.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`rtk proxy pnpm typecheck` → `turbo run typecheck`) →
+  **PASSED**, 7/7 tasks green (`@falcon/wire`, `@falcon/crypto`, `falcon`
+  cli, `@falcon/server`, `@falcon/web` — cache hits, replayed clean logs).
+- `pnpm test` (`rtk proxy pnpm test` → `turbo run test`) → **PASSED**, 9/9
+  tasks green: `@falcon/wire` 61/61, `@falcon/crypto` 65/65, `@falcon/web`
+  56/56, `falcon` (cli) 181/181, `@falcon/server` 140/140 (incl. the two
+  real-Postgres `seq.test.ts` concurrency cases). **503 tests total, 0
+  failures** — same totals as Cycle 39, consistent with no source changes
+  landing on `main` between cycles.
+
+### Task-summaries read this cycle
+
+Three requested, per this cycle's brief — **none exist on `main`**:
+
+- **`task-summary/P1-1.3-falcon-home-persistence.md`** — absent from
+  `main`'s `task-summary/` (confirmed by directory listing: only
+  `P1-1.3-cli-package-scaffold.md` and `P1-1.3-hook-server.md` carry that
+  prefix). `git merge-base --is-ancestor P1-1.3-falcon-home-persistence
+  HEAD` → not an ancestor; `git cat-file -e
+  HEAD:packages/cli/src/persistence.ts` fails. Read instead from
+  `.worktrees/P1-1.3-falcon-home-persistence/task-summary/
+  P1-1.3-falcon-home-persistence.md` — no new reconciliation pass since
+  Cycle 39's read (still the `93d0f13` merge-with-main state). **Not
+  credited**; bullet stays unchecked. Unlanded for **7 consecutive cycles**
+  now (since Cycle 34).
+- **`task-summary/P1-1.3-provider-detection.md`** — absent from `main`'s
+  `task-summary/`. `git merge-base --is-ancestor P1-1.3-provider-detection
+  HEAD` → not an ancestor; `main`'s `packages/cli/src/` has no `provider/`
+  directory. Read instead from `.worktrees/P1-1.3-provider-detection/
+  task-summary/P1-1.3-provider-detection.md`: adds
+  `packages/cli/src/provider/{claudeCliLocator,claudeAuth,
+  claudeProviderAdapter}.ts` + tests (50 tests total), implementing both
+  the "Provider detection" bullet and the `claude_version_utils.cjs`
+  equivalent bullet. Own task-summary reports 252/252 tests green (8/8
+  turbo tasks) and explicitly flags a duplicate-work overlap with
+  `.worktrees/P1-1.3-cli-locator` (a second, independently-built,
+  near-identical CLI locator at `packages/cli/src/claude/cliLocator.ts`),
+  recommending this branch's locator be kept as canonical since it's a
+  strict superset (adds `getVersion`/`compareVersions` +
+  `claudeAuth.ts`/`claudeProviderAdapter.ts` on top). This is the first
+  cycle this specific task-summary was requested; first time flagged
+  unlanded. **Not credited**; bullet stays unchecked pending both an
+  actual land step and a resolution of the duplicate-locator situation.
+- **`task-summary/P1-1.3-session-bootstrap.md`** — absent from `main`'s
+  `task-summary/`. `git merge-base --is-ancestor P1-1.3-session-bootstrap
+  HEAD` → not an ancestor; `git cat-file -e
+  HEAD:packages/cli/src/session/bootstrap.ts` fails. Read instead from
+  `.worktrees/P1-1.3-session-bootstrap/task-summary/
+  P1-1.3-session-bootstrap.md` — same content as Cycle 36's read
+  (`bootstrapSession`, `packages/cli/src/session/bootstrap.ts`, 13 unit +
+  2 real-server integration tests). **Not credited**; bullet stays
+  unchecked. Unlanded for **5 consecutive cycles** now (since Cycle 36).
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** All three requested task-summaries
+describe genuine, complete, self-verified work that exists only inside
+its own isolated worktree branch — none is an ancestor of `main`, none
+has a corresponding `task-summary/*.md` in `main`'s tree. This tracker's
+role is to verify and record, not to perform the land/merge itself, so
+none qualifies for a `plan.md` checkbox flip this cycle. `plan.md` §16
+checkbox count: **55/135 — unchanged from Cycle 39.**
+
+### Blockers / issues found
+
+1. **`rtk` PreToolUse hook can fabricate Bash output** (new, elevated
+   severity vs. prior cycles' "shell-mangling" framing) — see the
+   dedicated section above. Worked around this cycle via `rtk proxy`
+   passthrough and explicit binary paths for every result-sensitive
+   command; flagging for someone with access to the global
+   `~/.claude/settings.json` hook config to investigate/fix, since it
+   affects every Bash call in every session on this machine, not just
+   this tracker.
+2. **Same systemic "landed only in worktree" pattern continues**, now for
+   three separate 1.3 bullets simultaneously: `P1-1.3-falcon-home-persistence`
+   (7 cycles unlanded), `P1-1.3-session-bootstrap` (5 cycles unlanded), and
+   `P1-1.3-provider-detection` (newly flagged this cycle, also overlaps
+   with the still-unlanded `P1-1.3-cli-locator` duplicate-work situation
+   flagged since Cycle 22). All are reported clean, green, and
+   self-verified by their own task-summaries; none has been
+   fast-forwarded/`--no-ff`-merged onto the primary, non-worktree `main`
+   checkout. This tracker has no write access to perform that merge
+   itself — a task with explicit permission to land from the primary
+   checkout is needed for all three, same as the now-resolved
+   `P1-land-1.6-reducer-port` case.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **55/135 checked (~40.7%)**. `pnpm typecheck`/
+`pnpm test` both green on `main` (7/7 typecheck tasks, 9/9 test tasks, 503
+tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.3-falcon-home-persistence`** — small, self-contained
+   (`persistence.ts` + `persistence.test.ts` only), reconciled against a
+   recent `main` tip in its own worktree with zero real conflicts,
+   flagged unlanded since Cycle 34 (now 7 cycles) — the longest-standing
+   unlanded item in the tracker.
+2. **Land `P1-1.3-provider-detection`** — self-contained under
+   `packages/cli/src/provider/`, 252/252 tests green in its own worktree,
+   but landing should first resolve the duplicate-locator overlap with
+   `P1-1.3-cli-locator` (task's own recommendation: keep this branch's
+   `claudeCliLocator.ts` as canonical, delete/re-point the other).
+3. **Land `P1-1.3-session-bootstrap`** — self-contained under
+   `packages/cli/src/session/`, depends only on already-merged
+   `@falcon/crypto` + `POST /v1/sessions`, 13 unit + 2 real-server
+   integration tests green in its own worktree, flagged unlanded since
+   Cycle 36 (now 5 cycles).
