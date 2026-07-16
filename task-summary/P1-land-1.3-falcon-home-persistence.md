@@ -186,3 +186,72 @@ this worktree to make it mergeable — the only remaining step is for the
 orchestrator to actually fast-forward or `--no-ff` merge this branch onto
 the primary, non-worktree `main` checkout (this invocation's own rules
 explicitly scope that step out).
+
+---
+
+## Update 2026-07-16 (this invocation): third reconciliation pass, main tip 78f22af
+
+Re-entered the worktree fresh. Note: the branch tip found at the start of
+this pass was `aaac61d` ("fix: resolve test failures", on top of
+`d826116`/`185ebc9`) rather than the `1cfe723` merge commit recorded above —
+the worktree's branch state had reverted/reset to a pre-merge point between
+invocations (outside this task's control; the merge commit objects
+(`7bdca3c`, `1cfe723`) still exist loose in the object store but were no
+longer reachable from any ref). Re-derived the same facts independently
+before doing anything:
+
+- `git merge-base --is-ancestor P1-land-1.3-falcon-home-persistence main` →
+  **not an ancestor**.
+- `git cat-file -e main:packages/cli/src/persistence.ts` → **fails** (still
+  absent from `main`'s tree, now at tip `78f22af`).
+- `git diff --stat 185ebc9 78f22af` → only `plan.md` (8 lines) and
+  `progress.md` (210 lines) changed on `main` since this branch's last
+  reconciled base — confirmed doc-only, no source overlap, matching the
+  task description.
+
+### What was done this pass
+
+1. `git merge main --no-edit` into this worktree's branch (`aaac61d` +
+   `78f22af`) — clean auto-merge, `plan.md` merged line-based with no
+   conflict markers (verified via `grep -n '^<<<<<<<\|^=======\|^>>>>>>>'`
+   over `plan.md`/`progress.md`/`CLAUDE.md` — the one hit was a quoted
+   mention of that same grep pattern inside an existing log entry's prose,
+   not an actual conflict marker).
+2. Re-ran the full workspace suite post-merge:
+   - `pnpm build` — **5/5 tasks green**.
+   - `pnpm typecheck` — **8/8 packages green**.
+   - `pnpm test` — **9/9 tasks green, 544/544 tests** (wire 61, web 56,
+     crypto 65, falcon cli 222 incl. `persistence.test.ts`'s 16, server 140).
+3. Updated `plan.md` §1.3's `~/.falcon/` persistence annotation with a fresh
+   dated entry recording this pass. Left the checkbox **unchecked** (`[ ]`),
+   consistent with every prior reconciliation pass on this same task: the
+   disqualifying fact — `persistence.ts` absent from the primary, non-worktree
+   `main` checkout — is unchanged, and flipping the box here would misreport
+   ground truth to the progress tracker for a 13th-plus consecutive cycle.
+4. Committed the merge + doc updates in this worktree only.
+
+### What was NOT done (unchanged constraint)
+
+Per this invocation's explicit operating rules — *"Do NOT merge or push —
+just commit in the worktree"* and *"ALL file edits MUST be in
+.worktrees/P1-land-1.3-falcon-home-persistence/ (not the main branch)"* —
+no push, fetch-into, or merge against the primary, non-worktree `main`
+checkout was performed. The task description frames this task's job as
+"fast-forward main"; the fixed operating rules given to this invocation
+explicitly forbid exactly that action. Given the direct conflict, the
+explicit, absolute "Key rules" constraint was treated as authoritative over
+the narrative task description, and this pass was scoped to: reconcile
+against `main`'s real current tip, re-verify green, and commit only inside
+the worktree — leaving the actual fast-forward/merge of the primary `main`
+ref as the one remaining step, for whatever process in this pipeline has
+that permission (this subagent does not).
+
+### Current state (end of this pass)
+
+Branch `P1-land-1.3-falcon-home-persistence` is a clean, fully green merge
+of `persistence.ts`/`persistence.test.ts` onto `main`'s real current tip
+(`78f22af`) — `git merge-base --is-ancestor HEAD P1-land-1.3-falcon-home-persistence`
+holds true in the sense that this branch now contains `main`'s tip as an
+ancestor (i.e. it is fast-forwardable *from* `main`, ready to fast-forward
+*onto* `main`). No further reconciliation work is needed; only the actual
+land step onto the primary checkout remains outstanding.
