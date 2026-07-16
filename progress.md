@@ -6009,3 +6009,103 @@ worktree still exists.
    of the now-landed `P1-1.3-provider-detection`'s `claudeCliLocator.ts`) —
    pure cleanup, no code to land; frees up the duplicate-work flag noted
    above and removes a stale worktree from future cycles' scans.
+
+## Cycle 51 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `70dd006`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 67/67
+  (8 files), `@falcon/web` 148/148 (15 files), `@falcon/server` 157/157
+  (21 files), `falcon` cli 425/425 (43 files). 0 failures across the whole
+  workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested branches (`P1-1.6-sync-engine`, `P1-1.6-auth-pages`,
+`P1-1.6-session-list-screen`) were deleted after merging (normal post-land
+cleanup — confirmed via `git branch -a`/`git worktree list`/`git for-each-ref`,
+none of the three refs exist any more), so the literal `git merge-base
+--is-ancestor <task_id> main` command fails with "Not a valid object name"
+against the branch name itself (reproduced explicitly this cycle). Fell back
+to the same check against each branch's actual merge commit on `main` — which
+is exactly what the instruction's ancestor check is meant to protect against
+false claims of, and is unambiguous here since `git log --oneline main` shows
+all three merge commits directly in `main`'s own line of history (`main`'s
+current HEAD, `70dd006`, *is* the session-list-screen merge commit; its parent
+is the auth-pages merge `b843f7a`; whose parent is the sync-engine merge
+`2113baa`). Cross-checked via `git reflog show --all`, which independently
+confirms each as a real merge onto `refs/heads/main` (not a worktree-local
+branch): `refs/heads/main@{2}: merge P1-1.6-sync-engine`,
+`refs/heads/main@{1}: merge P1-1.6-auth-pages`, and `refs/heads/main@{0}:
+commit (merge): merge: land P1-1.6-session-list-screen onto main`.
+
+1. **`task-summary/P1-1.6-sync-engine.md`** (`createSyncEngine`: headerSeq
+   structural fast-path + per-session msgSeq fast-path against a TanStack
+   Query cache, reconnect→invalidate-all, DELTA D2). Merge commit `2113baa`
+   → `git merge-base --is-ancestor 2113baa main` = **true**. `git cat-file -e
+   main:packages/web/src/sync/engine.ts` (+ `queryKeys.ts`/`types.ts`)
+   succeeds. `plan.md` line 705 was already `[x]` from the land task's own
+   pass — **no checkbox change needed**, appended a dated confirmation note
+   only.
+2. **`task-summary/P1-1.6-auth-pages.md`** (`/signin`, OAuth callback pages,
+   `/settings/recovery`, `/pair` approve page; four new crypto-bridge worker
+   RPCs; GitHub OAuth code-exchange proxy route). Merge commit `b843f7a` →
+   `git merge-base --is-ancestor b843f7a main` = **true**. `git cat-file -e
+   main:packages/web/src/app/signin/page.tsx` and the callback/recovery/pair
+   routes all succeed. `plan.md` line 702 was still `[ ]` despite the
+   confirmed merge — **flipped to `[x]` this cycle** with a dated
+   confirmation note.
+3. **`task-summary/P1-1.6-session-list-screen.md`** (grouped session cards,
+   `deriveSessionStatus` off the reducer's `RenderItem[]`, machine presence
+   badges). Merge commit `70dd006` (= `main`'s current HEAD) →
+   `git merge-base --is-ancestor 70dd006 main` = **true**, trivially.
+   `git cat-file -e main:packages/web/src/features/session-list/session-list-screen.tsx`
+   succeeds. `plan.md` line 707 was still `[ ]` despite the confirmed merge
+   — **flipped to `[x]` this cycle** with a dated confirmation note.
+
+### Tasks completed this cycle
+
+**2 checkboxes newly flipped**: "Auth pages" (`plan.md` line 702) and
+"Session list screen" (`plan.md` line 707), both `[ ]` → `[x]` — genuinely
+merged onto `main` but the checkboxes had not yet been updated to reflect
+it. The third requested task (`P1-1.6-sync-engine`) was already checked off
+by its own land-pass commit before this cycle ran; independently
+re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 797 total tests: 67 crypto + 61 wire + 157 server + 148 web +
+425 cli — wire's own suite wasn't re-run standalone this cycle but is
+covered transitively via the `@falcon/wire` typecheck/build cache-hit tasks
+— 0 failures anywhere they ran fresh). All three requested deliverables are
+confirmed genuine ancestors of `main` via their real merge-commit SHAs
+(since the branch refs themselves were cleaned up post-merge), with their
+code present in `main`'s tree.
+
+### Overall completion
+
+`plan.md` checkbox count: **72/135 checked (~53.3%)** — up from 70/135
+(~51.9%) before this cycle's two flips (Auth pages, Session list screen).
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-timeline-screen`** (worktree
+   `.worktrees/P1-1.6-timeline-screen`, tip `3983744`) — the last remaining
+   §1.6 checklist item: virtualized session timeline, `ToolCard` registry
+   (Bash/Edit+diff/Read/Grep/Todo/Task-group/MCP-generic), markdown via
+   unified+shiki, collapsible thinking. Landing this closes out Phase 1
+   §1.6 "Web app v1 (read-only)" entirely.
+2. **Retire the superseded `P1-1.3-cli-locator` worktree** (near-duplicate
+   of the already-landed `P1-1.3-provider-detection`'s `claudeCliLocator.ts`)
+   — pure cleanup, no code to land; still flagged since Cycle 50.
+3. **Retire the stale `P1-1.5-daemon-singleton-lock` worktree** — all of
+   §1.5 "Daemon v1" is already checked off on `main` (singleton lock landed
+   long ago via `P1-land-1.5-daemon-worktrees`); this worktree is superseded
+   leftover, same cleanup category as `P1-1.3-cli-locator` above, not a
+   pending landing task.
