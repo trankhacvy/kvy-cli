@@ -141,6 +141,14 @@ describe("parseArgs — daemon", () => {
     });
   });
 
+  it("parses daemon start-sync", () => {
+    expect(parseArgs(["daemon", "start-sync"])).toEqual({
+      type: "daemon",
+      action: "start-sync",
+      noWait: false,
+    });
+  });
+
   it("throws on an unknown daemon action", () => {
     expect(() => parseArgs(["daemon", "bogus"])).toThrow(ArgParseError);
   });
