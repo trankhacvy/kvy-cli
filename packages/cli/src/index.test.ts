@@ -197,6 +197,60 @@ describe("main()", () => {
     vi.doUnmock("./daemon/kill.js");
   });
 
+  it("wires `doctor` (no subcommand) to a report, without a `clean` side effect", async () => {
+    vi.doMock("./daemon/doctor.js", () => ({
+      createDoctorDeps: vi.fn((overrides) => overrides),
+      runDoctor: vi.fn(async () => ({
+        daemon: { running: false },
+        resumableSessionCount: 0,
+        processes: [],
+      })),
+      runDoctorClean: vi.fn(),
+      describeDoctorReport: vi.fn(() => "daemon: not running\n"),
+      describeDoctorCleanSummary: vi.fn(),
+    }));
+    const doctorModule = await import("./daemon/doctor.js");
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const code = await main(["doctor"]);
+
+    expect(code).toBe(0);
+    expect(doctorModule.runDoctor).toHaveBeenCalledOnce();
+    expect(doctorModule.runDoctorClean).not.toHaveBeenCalled();
+    expect(stdout).toHaveBeenCalledWith("daemon: not running\n");
+    stdout.mockRestore();
+    vi.doUnmock("./daemon/doctor.js");
+  });
+
+  it("wires `doctor clean` to the runaway-kill path and exits 1 on a per-pid failure", async () => {
+    vi.doMock("./daemon/doctor.js", () => ({
+      createDoctorDeps: vi.fn((overrides) => overrides),
+      runDoctor: vi.fn(),
+      runDoctorClean: vi.fn(async () => ({
+        targeted: [
+          { pid: 100, ppid: 1, command: "falcon daemon start-sync", kind: "daemon", spawnedByDaemon: false },
+        ],
+        outcomes: [
+          { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "none", error: "EPERM" },
+        ],
+      })),
+      describeDoctorReport: vi.fn(),
+      describeDoctorCleanSummary: vi.fn(() => "falcon doctor clean: 0/1 runaway process(es) terminated\n"),
+    }));
+    const doctorModule = await import("./daemon/doctor.js");
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const code = await main(["doctor", "clean"]);
+
+    expect(code).toBe(1);
+    expect(doctorModule.runDoctorClean).toHaveBeenCalledOnce();
+    expect(stdout).toHaveBeenCalledWith("falcon doctor clean: 0/1 runaway process(es) terminated\n");
+    stdout.mockRestore();
+    vi.doUnmock("./daemon/doctor.js");
+  });
+
   it("never writes CLI-level output through the file logger's channel", async () => {
     // Help/version/errors are direct stdout/stderr writes from index.ts
     // itself (legitimate CLI UX) — distinct from the logger, which this

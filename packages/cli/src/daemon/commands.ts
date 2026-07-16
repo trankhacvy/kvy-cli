@@ -6,21 +6,38 @@ import { resolveHomeDir } from "../home.js";
 import { createLogger, type Logger } from "../logger.js";
 import { startControlServer } from "./controlServer.js";
 import { acquireDaemonLock, isProcessAlive } from "./lock.js";
+import {
+  captureBundleMtimeMs as captureBundleMtimeMsDefault,
+  hasBundleBeenReplaced as hasBundleBeenReplacedDefault,
+} from "./selfUpdate.js";
+import { createSessionRegistry } from "./sessionRegistry.js";
 import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState } from "./state.js";
 
 /**
  * Wires the singleton lock (`lock.ts`), the control server (`controlServer.ts`),
- * and `daemon.state.json` (`state.ts`) into the four `falcon daemon` verbs
- * (design §8, plan.md §7.2):
+ * the session registry (`sessionRegistry.ts`), and `daemon.state.json`
+ * (`state.ts`) into the four `falcon daemon` verbs (design §8, plan.md
+ * §7.2/§7.4):
  *
  *  - `start`      — short-lived: spawns `start-sync` detached, then (unless
  *                   `--no-wait`) polls until it reports ready.
  *  - `start-sync` — the daemon's own long-running process body (see
  *                   `markers.ts` — this is the exact argv `falcon kill`
- *                   recognizes as the daemon). Acquires the lock, boots the
+ *                   recognizes as the daemon). Acquires the lock, restores
+ *                   `sessions.json` into the session registry, boots the
  *                   control server, writes state, then blocks until shutdown
- *                   is requested (SIGINT/SIGTERM or the control server's own
- *                   `/stop`), then cleans up.
+ *                   is requested (SIGINT/SIGTERM, the control server's own
+ *                   `/stop`, or its own heartbeat's self-update handoff —
+ *                   see below), then cleans up. A 60s heartbeat runs
+ *                   throughout: it prunes dead session pids
+ *                   (`SessionRegistry.pruneDeadSessions`, design §8: "prunes
+ *                   stale session pids via `kill(pid,0)`") and checks
+ *                   whether the installed CLI bundle has been replaced on
+ *                   disk (`selfUpdate.ts`) — once replaced *and* the
+ *                   registry reports no live sessions, it triggers the same
+ *                   shutdown path, then (post-cleanup) spawns a fresh
+ *                   `start-sync` to take over, mirroring Happy's "release
+ *                   ownership BEFORE spawning the new daemon" ordering.
  *  - `stop`       — prefers a graceful HTTP `/stop` through the control
  *                   server; falls back to SIGTERM-then-SIGKILL via the pid
  *                   `daemon.state.json` advertises.
@@ -28,11 +45,11 @@ import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState }
  *                   and probes the control server for extra confidence
  *                   (a reused pid after reboot would otherwise look "alive").
  *
- * Session tracking/spawning (`getSessions`/`stopSession`/`spawnSession`) is
- * out of scope here — that's the daemon's session-registry/spawner work
- * (§7.3/§8, separate plan bullets) — so `start-sync` wires the control
- * server with honest stand-ins (no sessions tracked yet, spawn always
- * reports "not implemented").
+ * `spawnSession` (the HTTP loopback `/spawn-session` path) stays an honest
+ * stand-in here — actual tmux/detached spawning-from-a-remote-RPC
+ * (`spawnEngine.ts`) needs a registered-workspace lookup
+ * (`workspacePath.ts`'s `WorkspaceRootLookup`) that doesn't exist yet
+ * either; wiring that end-to-end is separate, later integration work.
  */
 
 export interface DaemonCommandDeps {
@@ -54,6 +71,25 @@ export interface DaemonCommandDeps {
   readyTimeoutMs: number;
   /** How long `stop` waits for the pid to exit after each stop attempt (HTTP, then SIGTERM, then SIGKILL). */
   stopWaitTimeoutMs: number;
+  /**
+   * Absolute path to the built CLI bundle (`dist/index.mjs`) whose mtime
+   * `start-sync`'s heartbeat watches for self-update detection
+   * (`selfUpdate.ts`). The default here (computed relative to *this*
+   * module's own location) is only correct when this file runs unbundled
+   * from its real source path (dev/`tsx`, and `vitest`, which both execute
+   * it directly) — once pkgroll bundles every module into a single
+   * `dist/index.mjs`, that relative computation no longer lines up (the
+   * same caveat `readCliVersion()` above has for `package.json`). `index.ts`
+   * passes an explicit, bundle-aware override, exactly like it already does
+   * for `version`.
+   */
+  bundlePath: string;
+  /** How often `start-sync`'s heartbeat prunes dead sessions and checks for a self-update. */
+  heartbeatIntervalMs: number;
+  /** Injectable for tests; defaults to `selfUpdate.ts`'s real, `fs`-backed implementation. */
+  captureBundleMtimeMs: (entryPath: string) => number | null;
+  /** Injectable for tests; defaults to `selfUpdate.ts`'s real, `fs`-backed implementation. */
+  hasBundleBeenReplaced: (entryPath: string, initialMtimeMs: number | null) => boolean;
 }
 
 function readCliVersion(): string {
@@ -77,6 +113,16 @@ function defaultKillPid(pid: number, signal: NodeJS.Signals): void {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
   }
+}
+
+/**
+ * Mirrors `readCliVersion()`'s directory computation exactly (correct in
+ * dev/`vitest`, override required in prod — see `bundlePath`'s doc comment
+ * above and `index.ts`'s `resolveBundlePath()`).
+ */
+function defaultBundlePath(): string {
+  const pkgRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+  return path.join(pkgRoot, "dist", "index.mjs");
 }
 
 function defaultRegisterShutdownSignals(onShutdown: () => void): () => void {
@@ -131,6 +177,10 @@ export function createDaemonCommandDeps(
     registerShutdownSignals: defaultRegisterShutdownSignals,
     readyTimeoutMs: 5000,
     stopWaitTimeoutMs: 3000,
+    bundlePath: defaultBundlePath(),
+    heartbeatIntervalMs: 60_000,
+    captureBundleMtimeMs: captureBundleMtimeMsDefault,
+    hasBundleBeenReplaced: hasBundleBeenReplacedDefault,
     ...overrides,
   };
 }
@@ -182,15 +232,24 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     triggerShutdown = resolve;
   });
 
+  // Restore sessions.json BEFORE serving any request (design §7.4/§8): a
+  // resume that races the daemon's own boot must always see whatever was
+  // durable before the crash/restart, never a still-empty registry.
+  const registry = createSessionRegistry({ homeDir, now: deps.now, logger });
+  const restoredCount = await registry.restore();
+  if (restoredCount > 0) {
+    logger.info("daemon start-sync: restored persisted sessions", { count: restoredCount });
+  }
+
   const controlServer = await startControlServer({
-    getSessions: () => [],
-    stopSession: () => false,
+    getSessions: registry.getSessions,
+    stopSession: registry.stopSession,
     spawnSession: async () => ({
       type: "error",
       errorMessage: "falcon daemon: session spawning is not implemented yet",
     }),
     requestShutdown: () => triggerShutdown(),
-    onSessionStarted: () => {},
+    onSessionStarted: registry.onSessionStarted,
     logger,
   });
 
@@ -218,13 +277,48 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   await writeDaemonState(homeDir, payload);
   logger.info("daemon start-sync: ready", { pid: payload.pid, port: payload.port });
 
+  // Self-update detection (§8: "watch installed artifact mtime ... restart
+  // when idle") shares this same heartbeat with dead-session pruning (§8:
+  // "prunes stale session pids via kill(pid,0)") — one interval, two
+  // unrelated but equally periodic jobs, same as Happy's own heartbeat.
+  const initialBundleMtimeMs = deps.captureBundleMtimeMs(deps.bundlePath);
+  let restartHandoffTriggered = false;
+
+  const heartbeat = setInterval(() => {
+    registry.pruneDeadSessions(deps.isProcessAlive);
+
+    if (restartHandoffTriggered) return;
+    if (!deps.hasBundleBeenReplaced(deps.bundlePath, initialBundleMtimeMs)) return;
+    if (registry.hasLiveSessions()) {
+      logger.debug(
+        "daemon start-sync: bundle replaced on disk but sessions are still active, deferring restart",
+      );
+      return;
+    }
+
+    logger.info("daemon start-sync: bundle replaced and idle, handing off to a fresh daemon");
+    restartHandoffTriggered = true;
+    triggerShutdown();
+  }, deps.heartbeatIntervalMs);
+  heartbeat.unref?.();
+
   const unregisterSignals = deps.registerShutdownSignals(triggerShutdown);
   await shutdownRequested;
+  clearInterval(heartbeat);
   unregisterSignals();
 
   await controlServer.stop();
   await lockResult.handle.release();
   await clearDaemonState(homeDir);
+
+  if (restartHandoffTriggered) {
+    // Ownership released BEFORE spawning the replacement — otherwise its own
+    // "already running" check (`runDaemonStart`) would see our still-present
+    // state/lock and refuse to start, leaving nothing running once we exit.
+    deps.spawnStartSync();
+    logger.info("daemon start-sync: spawned replacement daemon");
+  }
+
   logger.info("daemon start-sync: stopped");
   return 0;
 }

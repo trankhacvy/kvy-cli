@@ -25,10 +25,12 @@
  *    `--started-by daemon` flag only distinguishes *how* it was started
  *    (`spawnedByDaemon`), not whether it's killable as a session.
  *  - **Other**: Falcon's own short-lived administrative subcommands
- *    (`daemon stop/status`, `kill`, `auth`, `sessions`, `resume`,
+ *    (`daemon stop/status`, `kill`, `doctor`, `auth`, `sessions`, `resume`,
  *    `workspace`, `notify`, `--help`/`--version`) are neither a daemon nor
  *    a session — they exit almost immediately and must never be treated
- *    as a kill target.
+ *    as a kill target. `doctor` matters in particular here: it scans the
+ *    same `ps` output it's itself a line of, and must classify its own
+ *    invocation as "other", not "session" (plan.md §16 "3.2 Durability").
  */
 
 import type { ProcessEntry } from "./processScan.js";
@@ -44,6 +46,7 @@ export interface ClassifiedProcess extends ProcessEntry {
 const ADMIN_SUBCOMMANDS = new Set([
   "daemon",
   "kill",
+  "doctor",
   "auth",
   "sessions",
   "resume",

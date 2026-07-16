@@ -58,13 +58,14 @@ async function callAndAwaitAck(
 }
 
 describe("registerMachineRpcHandlers", () => {
-  it("registers the spawn target on connect", () => {
+  it("registers the spawn and resumeSession targets on connect", () => {
     const socket = new FakeSocket();
     registerMachineRpcHandlers({
       machineId: "mach_1",
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
     socket.trigger("connect");
@@ -72,6 +73,10 @@ describe("registerMachineRpcHandlers", () => {
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
       payload: { target: "m:mach_1:spawn" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:resumeSession" },
     });
   });
 
@@ -83,9 +88,10 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
-    expect(socket.emitted).toHaveLength(1);
+    expect(socket.emitted).toHaveLength(2);
   });
 
   it("decrypts params, calls spawnSession, and seals the result", async () => {
@@ -96,6 +102,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession,
+      resumeSession: vi.fn(),
     });
 
     const params = spawnParams();
@@ -113,6 +120,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession,
+      resumeSession: vi.fn(),
     });
 
     const params = spawnParams();
@@ -135,6 +143,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession,
+      resumeSession: vi.fn(),
     });
 
     const params = spawnParams();
@@ -157,6 +166,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession,
+      resumeSession: vi.fn(),
     });
 
     const a = await callAndAwaitAck(
@@ -182,6 +192,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
     const response = await callAndAwaitAck(socket, "nonsense", seal({}, DEK));
@@ -195,6 +206,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
     const response = await callAndAwaitAck(socket, "spawn", { not: "a box" });
@@ -208,6 +220,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
     const wrongDek = new Uint8Array(32).fill(9);
@@ -222,6 +235,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
     const response = await callAndAwaitAck(
@@ -241,6 +255,7 @@ describe("registerMachineRpcHandlers", () => {
       spawnSession: vi.fn(async () => {
         throw new Error("boom");
       }),
+      resumeSession: vi.fn(),
     });
 
     const response = await callAndAwaitAck(socket, "spawn", seal(spawnParams(), DEK));
@@ -254,6 +269,7 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(async () => ({ notSessionId: "oops" }) as unknown as SpawnResult),
+      resumeSession: vi.fn(),
     });
 
     const response = await callAndAwaitAck(socket, "spawn", seal(spawnParams(), DEK));
@@ -267,11 +283,86 @@ describe("registerMachineRpcHandlers", () => {
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
       spawnSession: vi.fn(),
+      resumeSession: vi.fn(),
     });
 
     expect(socket.handlers.get("rpc-request")?.length).toBe(1);
     handle.stop();
     expect(socket.handlers.get("rpc-request")?.length).toBe(0);
     expect(socket.handlers.get("connect")?.length).toBe(0);
+  });
+
+  describe("resumeSession method", () => {
+    it("decrypts params, calls resumeSession, and seals a bare {ok:true}", async () => {
+      const socket = new FakeSocket();
+      const resumeSession = vi.fn(async () => undefined);
+      registerMachineRpcHandlers({
+        machineId: "mach_1",
+        dek: DEK,
+        socket: socket as unknown as import("socket.io-client").Socket,
+        spawnSession: vi.fn(),
+        resumeSession,
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "resumeSession",
+        seal({ sessionId: "sess_1" }, DEK),
+      );
+
+      expect(resumeSession).toHaveBeenCalledExactlyOnceWith("sess_1");
+      expect(open(response, DEK)).toEqual({ ok: true });
+    });
+
+    it("has no idempotency-key replay — a second call always calls resumeSession again", async () => {
+      const socket = new FakeSocket();
+      const resumeSession = vi.fn(async () => undefined);
+      registerMachineRpcHandlers({
+        machineId: "mach_1",
+        dek: DEK,
+        socket: socket as unknown as import("socket.io-client").Socket,
+        spawnSession: vi.fn(),
+        resumeSession,
+      });
+
+      await callAndAwaitAck(socket, "resumeSession", seal({ sessionId: "sess_1" }, DEK));
+      await callAndAwaitAck(socket, "resumeSession", seal({ sessionId: "sess_1" }, DEK));
+
+      expect(resumeSession).toHaveBeenCalledTimes(2);
+    });
+
+    it("replies with a sealed error when decrypted params fail ResumeSessionParamsSchema", async () => {
+      const socket = new FakeSocket();
+      registerMachineRpcHandlers({
+        machineId: "mach_1",
+        dek: DEK,
+        socket: socket as unknown as import("socket.io-client").Socket,
+        spawnSession: vi.fn(),
+        resumeSession: vi.fn(),
+      });
+
+      const response = await callAndAwaitAck(socket, "resumeSession", seal({}, DEK));
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("replies with a sealed error when resumeSession throws", async () => {
+      const socket = new FakeSocket();
+      registerMachineRpcHandlers({
+        machineId: "mach_1",
+        dek: DEK,
+        socket: socket as unknown as import("socket.io-client").Socket,
+        spawnSession: vi.fn(),
+        resumeSession: vi.fn(async () => {
+          throw new Error("no such session");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "resumeSession",
+        seal({ sessionId: "sess_1" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+    });
   });
 });

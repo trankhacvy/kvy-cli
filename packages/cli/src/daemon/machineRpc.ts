@@ -5,11 +5,11 @@
  * Mirrors `rpc/sessionRpc.ts`'s registration/decrypt/validate/seal shape
  * (same `rpc-register`/`rpc-request` wire contract, same `EncryptedBox`
  * params/results sealed under the owning DEK), adapted to the
- * machine-scoped `m:<machineId>:<method>` target namespace. Only `spawn` is
- * in this task's scope — `stopSession`/`resumeSession`/`listSessions`/
- * `git.*`/`fs.read`/`adopt.*` are separate, later plan bullets (§3.2/§3.3/
- * §4.1) and can be added to `MACHINE_RPC_METHODS`/the method table the same
- * way without touching this module's shape.
+ * machine-scoped `m:<machineId>:<method>` target namespace. `spawn` and
+ * `resumeSession` are in scope so far — `stopSession`/`listSessions`/
+ * `git.*`/`fs.read`/`adopt.*` are separate, later plan bullets (§3.3/§4.1)
+ * and can be added to `MACHINE_RPC_METHODS`/the method table the same way
+ * without touching this module's shape.
  *
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
  * double-spawn"): wraps `deps.spawnSession` in a `Map<idempotencyKey,
@@ -18,12 +18,19 @@
  * cached: the actual non-idempotent side effect is the process spawn
  * itself, so only a result that means a spawn genuinely happened is worth
  * replaying — a validation or timeout failure is safe, and correct, to
- * retry from scratch.
+ * retry from scratch. `resumeSession`'s wire contract (design §4.4:
+ * `'resumeSession'({sessionId}) → {ok}`) carries no `idempotencyKey` at
+ * all — unlike `spawn`, a retried resume of the same session is not a
+ * "double spawn" risk: `resumeSession.ts` itself always stops any still-live
+ * process for that session before relaunching, so a second call just
+ * relaunches again rather than creating a duplicate.
  */
 import { open, seal } from "@falcon/crypto";
 import {
   type EncryptedBox,
   EncryptedBoxSchema,
+  ResumeSessionParamsSchema,
+  ResumeSessionResultSchema,
   type SpawnParams,
   SpawnParamsSchema,
   type SpawnResult,
@@ -32,7 +39,7 @@ import {
 import type { Socket } from "socket.io-client";
 import type { Logger } from "../logger.js";
 
-export const MACHINE_RPC_METHODS = ["spawn"] as const;
+export const MACHINE_RPC_METHODS = ["spawn", "resumeSession"] as const;
 export type MachineRpcMethod = (typeof MACHINE_RPC_METHODS)[number];
 
 export interface MachineRpcDeps {
@@ -42,6 +49,8 @@ export interface MachineRpcDeps {
   socket: Socket;
   /** Performs the actual spawn (`spawnEngine.ts`'s `spawnSession`, typically) — throws (any `Error`) on failure. */
   spawnSession: (params: SpawnParams) => Promise<SpawnResult>;
+  /** Performs the actual resume (`resumeSession.ts`'s `resumeSession`, typically) — throws (any `Error`) on failure; the wire result is always a bare `{ok:true}`, so only success/failure matters here. */
+  resumeSession: (sessionId: string) => Promise<unknown>;
   logger?: Logger;
 }
 
@@ -105,12 +114,18 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
     return result;
   }
 
+  /** No idempotency-key replay here — see this module's header comment for why `resumeSession` doesn't need one. */
+  async function handleResumeSession(sessionId: string): Promise<{ ok: true }> {
+    await deps.resumeSession(sessionId);
+    return { ok: true };
+  }
+
   async function onRpcRequest(
     data: RpcRequestData,
     callback?: (response: EncryptedBox) => void,
   ): Promise<void> {
     const method = data.method;
-    if (method !== "spawn") {
+    if (method !== "spawn" && method !== "resumeSession") {
       logger.warn("[machine-rpc] unknown method", { method });
       callback?.(errorBox(deps.dek, "unknown-method"));
       return;
@@ -130,7 +145,36 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       return;
     }
 
-    const parsedParams = SpawnParamsSchema.safeParse(opened);
+    if (method === "spawn") {
+      const parsedParams = SpawnParamsSchema.safeParse(opened);
+      if (!parsedParams.success) {
+        logger.warn("[machine-rpc] params failed schema validation", { method });
+        callback?.(errorBox(deps.dek, "invalid-params"));
+        return;
+      }
+
+      try {
+        const result = await handleSpawn(parsedParams.data);
+        const parsedResult = SpawnResultSchema.safeParse(result);
+        if (!parsedResult.success) {
+          logger.error("[machine-rpc] spawnSession returned a result that fails its own schema", {
+            method,
+          });
+          callback?.(errorBox(deps.dek, "invalid-result"));
+          return;
+        }
+        callback?.(seal(parsedResult.data, deps.dek));
+      } catch (error) {
+        logger.error("[machine-rpc] spawnSession threw", {
+          method,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        callback?.(errorBox(deps.dek, "handler-error"));
+      }
+      return;
+    }
+
+    const parsedParams = ResumeSessionParamsSchema.safeParse(opened);
     if (!parsedParams.success) {
       logger.warn("[machine-rpc] params failed schema validation", { method });
       callback?.(errorBox(deps.dek, "invalid-params"));
@@ -138,10 +182,10 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
     }
 
     try {
-      const result = await handleSpawn(parsedParams.data);
-      const parsedResult = SpawnResultSchema.safeParse(result);
+      const result = await handleResumeSession(parsedParams.data.sessionId);
+      const parsedResult = ResumeSessionResultSchema.safeParse(result);
       if (!parsedResult.success) {
-        logger.error("[machine-rpc] spawnSession returned a result that fails its own schema", {
+        logger.error("[machine-rpc] resumeSession returned a result that fails its own schema", {
           method,
         });
         callback?.(errorBox(deps.dek, "invalid-result"));
@@ -149,7 +193,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       }
       callback?.(seal(parsedResult.data, deps.dek));
     } catch (error) {
-      logger.error("[machine-rpc] spawnSession threw", {
+      logger.error("[machine-rpc] resumeSession threw", {
         method,
         error: error instanceof Error ? error.message : String(error),
       });

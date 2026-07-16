@@ -42,7 +42,8 @@ packages/
 │                             detection), `daemon.state.json` read/write helpers, a Fastify
 │                             control server (`/session-started`, `/list`, `/stop-session`,
 │                             `/spawn-session`, `/stop`), process-scan-based `falcon kill
-│                             daemon/sessions/all/all-force`, `falcon daemon
+│                             daemon/sessions/all/all-force` and `falcon doctor [clean]`
+│                             (process discovery/categorization, runaway-kill), `falcon daemon
 │                             start/start-sync/stop/status`, `ensureDaemonRunning()`
 │                             (auto-start wiring called from `start`/`auth`/`sessions`/`resume`,
 │                             respects `FALCON_NO_SERVICE=1`), and the machine-scoped WS client
@@ -61,7 +62,37 @@ packages/
 │                             `POST /v1/unmanaged-sessions`, design §8/§11 UC9 Tier 1;
 │                             `listWorkspaces`/`isManaged` are injectable seams with no
 │                             real default yet — workspace registration and managed-session
-│                             lineage are separate, later tasks). `src/persistence.ts`:
+│                             lineage are separate, later tasks). Durability (design §7.4/§8,
+│                             plan.md §16 "3.2 Durability"): `daemon/sessionsStore.ts`
+│                             (`~/.falcon/sessions.json` — wrapped DEK + seq + versions,
+│                             tmp-write + rename, in-process write-queue serialized per
+│                             homeDir, 14-day expiry) and `daemon/sessionRegistry.ts` (the
+│                             `pid → TrackedSession` + durable-by-sessionId bookkeeping,
+│                             restored from `sessions.json` on `daemon start-sync` boot and
+│                             wired straight into `controlServer.ts`'s `getSessions`/
+│                             `stopSession`/`onSessionStarted`) are both landed and wired.
+│                             `daemon/resumeSession.ts` re-spawns a persisted/tracked session
+│                             with `FALCON_RECONNECT_*` env (reusing `processLauncher.ts`/
+│                             `spawnAwaiter.ts` exactly like the `spawn` RPC), and
+│                             `machineRpc.ts` now also registers `resumeSession` alongside
+│                             `spawn` — both real and unit-tested, but (matching `spawn`'s own
+│                             precedent from the prior spawn-RPC task) not yet wired to a live
+│                             machine WS connection, since `machineClient.ts`'s socket is
+│                             itself not yet started from `commands.ts`. `daemon/selfUpdate.ts`
+│                             (installed-bundle mtime capture/diff) and `start-sync`'s own
+│                             heartbeat (dead-session pruning + "replaced and idle → hand off
+│                             to a fresh daemon" restart, mirroring Happy's #1107
+│                             mtime-not-version lesson) are wired end-to-end. `daemon/doctor.ts`
+│                             backs the new
+│                             `falcon doctor` (process discovery/categorization report) and
+│                             `falcon doctor clean` (SIGTERM→SIGKILL of runaway daemon +
+│                             daemon-spawned processes only, reusing `kill.ts`'s escalation
+│                             logic) subcommands. A chaos test suite
+│                             (`daemon/durability.chaos.test.ts`) exercises the design's
+│                             failure matrix (daemon crash mid-turn, session-process kill,
+│                             sleep/wake heartbeat gaps, and — since none of this touches a
+│                             server at all — "server restart") against the real registry/
+│                             store/resume modules with injected process fakes. `src/persistence.ts`:
 │                             `~/.falcon/` local state — schema-versioned `settings.json`
 │                             (atomic lock-file-guarded read-modify-write) and
 │                             0600-permissioned `access.key` credentials, both tmp-write +

@@ -13,6 +13,13 @@ import {
   runDaemonStop,
 } from "./daemon/commands.js";
 import {
+  createDoctorDeps,
+  describeDoctorCleanSummary,
+  describeDoctorReport,
+  runDoctor,
+  runDoctorClean,
+} from "./daemon/doctor.js";
+import {
   createEnsureDaemonRunningDeps,
   ensureDaemonRunning,
 } from "./daemon/ensureDaemonRunning.js";
@@ -24,6 +31,7 @@ import {
   killDaemon,
   killSessions,
 } from "./daemon/kill.js";
+import { resolveHomeDir } from "./home.js";
 import { createLogger } from "./logger.js";
 
 // Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
@@ -41,14 +49,30 @@ import { createLogger } from "./logger.js";
 
 const logger = createLogger();
 
+/** One level below the package root in both dev (`src/index.ts`) and prod (`dist/index.mjs`, pkgroll's single-file bundle) — this is why `path.join(dirname(entry), "..", ...)` resolves correctly either way, unlike a nested module's own `import.meta.url` (see `daemon/commands.ts`'s `readCliVersion()`/`defaultBundlePath()` doc comments). */
+function packageRootDir(): string {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
 function readVersion(): string {
-  const pkgPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "package.json");
+  const pkgPath = path.join(packageRootDir(), "package.json");
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };
     return pkg.version ?? "0.0.0";
   } catch {
     return "0.0.0";
   }
+}
+
+/**
+ * The built CLI bundle's own path — `daemon/commands.ts`'s self-update
+ * heartbeat (`selfUpdate.ts`) watches this file's mtime to detect an
+ * `npm i -g falcon` (or similar) replacing the installed CLI on disk.
+ * Passed explicitly (mirroring `version` above) since `commands.ts`'s own
+ * default computation is only dev-correct, not bundle-correct.
+ */
+function resolveBundlePath(): string {
+  return path.join(packageRootDir(), "dist", "index.mjs");
 }
 
 const HELP_TEXT = `falcon — wrapper CLI for Claude Code / Codex agent sessions
@@ -63,6 +87,7 @@ Usage:
                                      Manage the background daemon
   falcon kill daemon|sessions|all|all-force
                                      Process management escape hatches
+  falcon doctor [clean]              Discover/categorize Falcon processes (clean: kill runaways)
   falcon sessions list              List active/recent sessions on this machine
   falcon resume <session-id>        Reattach a terminal to an existing session
   falcon workspace config [--base-ref <ref>] [--remote <name>] [--directory <path>]
@@ -129,6 +154,29 @@ async function runKill(target: KillTarget): Promise<number> {
 }
 
 /**
+ * `falcon doctor` (+ `falcon doctor clean`) — process discovery/
+ * categorization (`doctor.ts`) and, for `clean`, the runaway-kill escape
+ * hatch (plan.md §16 "3.2 Durability"). Deliberately does **not** call
+ * `ensureDaemon()` first, unlike every other subcommand above — `doctor`
+ * exists specifically to be useful when the daemon is wedged or gone
+ * entirely (same rationale as `falcon kill`'s process-scan-only discovery).
+ */
+async function runDoctorCommand(
+  command: Extract<FalconCommand, { type: "doctor" }>,
+): Promise<number> {
+  if (command.action === "report") {
+    const report = await runDoctor(createDoctorDeps({ homeDir: resolveHomeDir() }));
+    process.stdout.write(describeDoctorReport(report));
+    return 0;
+  }
+
+  const summary = await runDoctorClean();
+  process.stdout.write(describeDoctorCleanSummary(summary));
+  const hasFailures = summary.outcomes.some((o) => o.error !== undefined);
+  return hasFailures ? 1 : 0;
+}
+
+/**
  * `falcon daemon start|start-sync|stop|status` (plan.md §7.2, design §8) —
  * wires the singleton lock + control server + `daemon.state.json` helpers
  * together; see `daemon/commands.ts` for the actual logic. `start-sync` is
@@ -142,7 +190,7 @@ async function runDaemon(command: Extract<FalconCommand, { type: "daemon" }>): P
   // every module into a single `dist/index.mjs` and that relative path no
   // longer lines up). `readVersion()` above is already bundle-path-correct
   // since `--version` depends on it working in both modes.
-  const deps = createDaemonCommandDeps({ version: readVersion() });
+  const deps = createDaemonCommandDeps({ version: readVersion(), bundlePath: resolveBundlePath() });
   switch (command.action) {
     case "start": {
       const { code, message } = await runDaemonStart(deps, { noWait: command.noWait });
@@ -235,6 +283,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runDaemon(command);
     case "kill":
       return runKill(command.target);
+    case "doctor":
+      return runDoctorCommand(command);
     case "sessions":
       return runSessions(command);
     case "resume":
