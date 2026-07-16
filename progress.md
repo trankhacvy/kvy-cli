@@ -4319,3 +4319,166 @@ cache — 7/7 typecheck tasks, 9/9 test tasks, 0 failures).
 3. **Land `P1-1.3-falcon-home-persistence`** — small, self-contained
    (`persistence.ts` + tests only), no apparent overlap with anything
    already on `main`.
+
+## Cycle 37 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `2c721e9` — "chore: cycle 36 — completed 0
+tasks (verified 2 requested tasks unlanded)"). Confirmed via `/usr/bin/git
+rev-parse HEAD` on the primary (non-worktree) checkout; `git status --short`
+clean.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`@falcon/wire`, `@falcon/crypto`, `falcon` cli, `@falcon/server`,
+  `@falcon/web` — all cache hits, replayed clean logs).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61/61, `@falcon/crypto` 65/65, `@falcon/web` 36/36, `falcon` (cli) 181/181,
+  `@falcon/server` 140/140 (incl. the two real-Postgres `seq.test.ts`
+  concurrency cases). 483 tests total, 0 failures. No regressions since
+  Cycle 36.
+- Note on tooling: this environment's `rtk` Bash-hook again mangled the very
+  first plain `ls`/`git status`/`grep` calls of the session (empty output
+  for a non-empty directory, a bare `ok` in place of real `git status`
+  output, and a numeric-count summary instead of `grep`'s matching lines) —
+  the same intermittent-mangling pattern flagged every cycle since 27.
+  `/bin/ls`, `/usr/bin/git`, and the `Read` tool were used for every
+  load-bearing check below; no claim in this entry relies on unfiltered
+  `rtk`-mediated shell output.
+
+### Task-summaries read this cycle
+
+Both requested task-summaries describe real, complete, self-verified work
+that is **still unmerged into `main`** — neither is credited, continuing the
+exact pattern flagged every cycle since 16.
+
+- **`task-summary/P1-1.3-claudelocal-spawn.md`** — does not exist on `main`
+  (`/usr/bin/git ls-tree main -- task-summary/P1-1.3-claudelocal-spawn.md`
+  empty). `git merge-base --is-ancestor P1-1.3-claudelocal-spawn main` →
+  **not an ancestor**; `main`'s `packages/cli/src/claude/` has no
+  `claudeLocal.ts` (`git cat-file -e
+  main:packages/cli/src/claude/claudeLocal.ts` fails). The work exists only
+  in worktree `.worktrees/P1-1.3-claudelocal-spawn`: a port of Happy's
+  `claudeLocal.ts` local-mode spawn wrapper — `claudeLocal(opts, deps)`
+  covering all five falcon-plan.md §3.2 items (verbatim stdin
+  `_handle.setBlocking(true)` fix immediately before spawn; `cross-spawn`
+  with `stdio ['inherit','inherit','inherit','pipe']` + `cwd`/merged `env`/
+  `AbortSignal` wired through; session-flag interception — a ported
+  `extractFlag` pulls `--session-id`/`--resume`/`-r`/`--continue`/`-c` out of
+  a *copy* of the caller's args and re-injects the flag Claude Code actually
+  understands, resolving "last session" via `findLastLocalSession` against
+  Claude Code's own on-disk transcript directory, reusing the already-merged
+  `getProjectPath`; always-on `--append-system-prompt`, optional `--settings
+  <path>` wired to the already-merged `hookServer.ts`'s output; an fd3
+  `readline`-based thinking state machine — immediate-on/500ms-debounced-off
+  over an `activeFetches` set). 23 new tests, all mocking the spawned child
+  (no real Claude CLI needed). The task-summary explicitly flags one
+  behavioral judgment call worth double-checking against product intent: a
+  *bare* trailing `--resume`/`-r` (no id) is left untouched and passed
+  through to Claude Code's own interactive picker rather than auto-resolving
+  to the last session — matching Happy's actual `extractFlag` code path
+  (verified by tracing it) rather than that file's more ambiguous comment.
+  Also documents real integration gaps as explicitly out of scope: the
+  launcher path is caller-supplied (still-unmerged `P1-1.3-claude-launcher-
+  script` owns resolving it), and there's no `cliLocator.ts` dependency
+  (still-unmerged `P1-1.3-cli-locator` resolves the real Claude binary
+  inside the launcher, not here) — full local-mode integration testing needs
+  both landed first. Adds `cross-spawn`/`@types/cross-spawn` as new
+  dependencies. Own task-summary reports `falcon` (cli) 204/204 tests green
+  (181 pre-existing + 23 new), workspace-wide `pnpm build` 5/5, `pnpm
+  typecheck` 7/7, `pnpm test` 9/9 all green; `pnpm lint` inconclusive
+  (documented pre-existing biome OOM issue in this sandbox, reproduced on an
+  untouched file). Not credited; added a Cycle 37 annotation to the §1.3
+  narrative recording this.
+- **`task-summary/P1-1.6-sync-engine.md`** — does not exist on `main`
+  (`/usr/bin/git ls-tree main -- task-summary/P1-1.6-sync-engine.md` empty).
+  `git merge-base --is-ancestor P1-1.6-sync-engine main` → **not an
+  ancestor**; `main`'s `packages/web/src/` has no `sync/` directory (`git
+  cat-file -e main:packages/web/src/sync/engine.ts` fails). The work exists
+  only in worktree `.worktrees/P1-1.6-sync-engine`: `packages/web/src/sync/
+  {queryKeys,types,engine,index}.ts` — `createSyncEngine(queryClient,
+  socket)`, a port of Happy's `sync.ts` model split for DELTA D1/D2
+  (reads-over-WS, two independent seq counters). Implements a structural
+  `headerSeq` fast-path against a TanStack Query `['sync']` cache entry
+  (direct `setQueryData` upsert/patch on contiguous `seq`, full
+  `invalidateQueries` on any gap or missing baseline) and an independent
+  per-open-session `msgSeq` fast-path for `message-new` updates (prepend on
+  contiguous delivery, scoped `invalidateQueries(['messages', sessionId])`
+  on gap, ignores stale/duplicate deliveries, never seeded for sessions that
+  haven't been opened so it can't grow unbounded), plus reconnect →
+  invalidate-everything per design §9.1. Deliberately does not import the
+  still-unmerged sibling worktree `P1-1.6-api-socket`'s real `apiSocket.ts`
+  — instead declares a narrow local `SyncSocketSource` interface
+  (`on('update'|'reconnect', ...)`) so the engine builds and is tested
+  standalone against `main` as-is; the task-summary's own claim that the
+  real `ApiSocket` will be structurally compatible with no adapter needed is
+  untested here (by construction — that pairing can only be verified once
+  `P1-1.6-api-socket` also lands). Adds new dependencies
+  `@tanstack/react-query` and an explicit `@falcon/wire` entry to
+  `packages/web/package.json`. 13 new unit tests against a fake socket
+  source (`__tests__/fakes.ts`), covering contiguous apply, gap
+  invalidation (header and per-session), missing-baseline, duplicate/stale
+  message handling, unopened-session messages ignored, and reconnect. Own
+  task-summary reports `@falcon/web` 49/49 tests green (13 new + 36
+  pre-existing), workspace-wide `pnpm build` (incl. `next build` static
+  export) and `pnpm typecheck` 7/7 green, `pnpm test` 9/9 green; `pnpm lint`
+  not verifiable in-sandbox (same documented pre-existing biome OOM issue,
+  reproduced with `dangerouslyDisableSandbox` and on a bare `biome
+  --version` too). Not credited; added a Cycle 37 annotation to the §1.6
+  narrative recording this — noting the real land order needs
+  `P1-1.6-api-socket` too, since nothing on `main` yet provides the
+  `apiSocket` this engine is meant to be wired to.
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** Both requested task-summaries correspond to
+genuine, complete, unmerged work — no checkbox in `plan.md` was flipped this
+cycle. `plan.md` §16 checkbox count: **54/135** (`grep -c '^\- \[x\]'
+plan.md`), unchanged from Cycle 36.
+
+### Blockers / issues found
+
+1. **Both tasks requested for credit this cycle are unmerged worktree work,
+   not `main` state** — same recurring pattern flagged every cycle since 16.
+   Neither depends on the other, and neither is a trivial land: 
+   `P1-1.3-claudelocal-spawn` is self-contained (new file, one new
+   dependency) but its task-summary itself flags a behavioral ambiguity
+   (bare `--resume` semantics) worth a product-intent sanity check before or
+   just after landing; `P1-1.6-sync-engine` is also self-contained today but
+   its real value is only realized once its sibling `P1-1.6-api-socket`
+   lands too — landing it alone is safe (additive, new directory) but
+   incomplete.
+2. The longer-standing unlanded backlog is unchanged in substance from
+   Cycle 36, now with two more names added: `P1-1.6-reducer-port` (flagged
+   since Cycle 23, still the longest-standing item), `P1-1.3-session-
+   bootstrap` and `P1-1.5-machine-ws-client` (since Cycle 36),
+   `P1-1.3-falcon-home-persistence` (since Cycle 34), `P1-1.4-envelope-
+   mapper`, `P1-1.4-http-outbox`, `P1-1.6-auth-pages`, `P1-1.6-api-socket`,
+   `P1-1.3-cli-auth-login`, `P1-1.3-cli-locator` / `P1-1.3-provider-
+   detection` (duplicate-work situation, per that task's own task-summary),
+   `P1-1.3-claude-launcher-script`, and
+   `P0-cross-cutting-mit-attribution-headers`.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **54/135 checked (~40.0%)**, unchanged from
+Cycle 36. `pnpm typecheck`/`pnpm test` both green on `main` (7/7 typecheck
+tasks, 9/9 test tasks, 483 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.3-claudelocal-spawn`** — self-contained, new files only
+   (`packages/cli/src/claude/claudeLocal.ts` + test), 204/204 `falcon`
+   tests self-reported green; worth a quick product-intent check on the
+   bare-`--resume`-passthrough behavior the task-summary flags before/after
+   landing, but not a blocker to landing itself.
+2. **Land `P1-1.3-session-bootstrap` and `P1-1.5-machine-ws-client` onto
+   `main`** — both requested last cycle, both self-verified green, both
+   small and disjoint from each other and from everything else currently
+   on `main`.
+3. **Land `P1-1.6-reducer-port`** — still the longest-standing unlanded
+   item (flagged since Cycle 23, 14 cycles now with no progress),
+   self-verified green (55/55 `@falcon/web` tests), disjoint from
+   everything else in `packages/web/src/`.
