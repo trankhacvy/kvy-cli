@@ -13,6 +13,14 @@ function userLine(uuid: string): string {
   return `${JSON.stringify({ type: "user", uuid })}\n`;
 }
 
+function summaryLine(leafUuid: string, summary: string): string {
+  return `${JSON.stringify({ type: "summary", leafUuid, summary })}\n`;
+}
+
+function internalLine(type: string): string {
+  return `${JSON.stringify({ type })}\n`;
+}
+
 function uuids(messages: RawJSONLines[]): string[] {
   return messages.map((m) => (m as { uuid: string }).uuid);
 }
@@ -36,6 +44,19 @@ function collectingLogger(): { logger: Logger; debugRecords: DebugRecord[] } {
     },
   };
 }
+
+describe("getProjectPath", () => {
+  it("sanitizes the resolved working directory into a flat project id under CLAUDE_CONFIG_DIR", () => {
+    const env = { CLAUDE_CONFIG_DIR: "/home/user/.claude" };
+    const result = getProjectPath("/home/user/my project", env);
+    expect(result).toBe(join("/home/user/.claude", "projects", "-home-user-my-project"));
+  });
+
+  it("falls back to ~/.claude when CLAUDE_CONFIG_DIR is unset", () => {
+    const result = getProjectPath("/tmp/proj", {});
+    expect(result).toContain(join(".claude", "projects"));
+  });
+});
 
 describe("createSessionScanner", () => {
   let baseDir: string;
@@ -210,5 +231,97 @@ describe("createSessionScanner", () => {
     );
     expect(revivedAfter.length).toBe(1);
     expect(uuids(seen)).toEqual(["u1"]);
+  });
+
+  it("dedupes summary lines by leafUuid+summary and skips internal/malformed lines", async () => {
+    const seen: RawJSONLines[] = [];
+    const file = join(projectDir, "sess-mixed.jsonl");
+    await writeFile(file, userLine("u1"));
+
+    scanner = await createSessionScanner({
+      sessionId: "sess-mixed",
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60,
+      env,
+    });
+    await sleep(150);
+    expect(seen).toEqual([]);
+
+    // Append: a duplicate-content summary (should only ever be counted once
+    // even though it's appended twice with the same identity), an internal
+    // event type that must be silently skipped, and an unparsable line that
+    // must not crash the scanner or block subsequent valid entries.
+    await appendFile(file, summaryLine("leaf-1", "does a thing"));
+    await appendFile(file, internalLine("file-history-snapshot"));
+    await appendFile(file, internalLine("queue-operation"));
+    await appendFile(file, "not json at all {{{\n");
+    await appendFile(file, userLine("u2"));
+    await sleep(300);
+
+    expect(seen.map((m) => m.type)).toEqual(["summary", "user"]);
+    expect((seen[0] as { leafUuid: string }).leafUuid).toBe("leaf-1");
+    expect(uuids(seen.filter((m) => m.type === "user"))).toEqual(["u2"]);
+
+    // Re-appending the identical summary content must not re-emit it (same
+    // dedup key: `summary:leafUuid:summary`).
+    await appendFile(file, summaryLine("leaf-1", "does a thing"));
+    await sleep(300);
+    expect(seen.filter((m) => m.type === "summary").length).toBe(1);
+  });
+
+  it("treatExistingAsProcessed pre-marks on-disk entries so they are not replayed as new", async () => {
+    const seen: RawJSONLines[] = [];
+    const file = join(projectDir, "sess-reconnect.jsonl");
+    await writeFile(file, userLine("u1") + userLine("u2"));
+
+    scanner = await createSessionScanner({
+      sessionId: null,
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60,
+      env,
+    });
+
+    await scanner.onNewSession("sess-reconnect", { treatExistingAsProcessed: true });
+    await sleep(200);
+    // u1/u2 were already on disk and pre-marked processed: must not surface.
+    expect(seen).toEqual([]);
+
+    await appendFile(file, userLine("u3"));
+    await sleep(250);
+    expect(uuids(seen)).toEqual(["u3"]);
+  });
+
+  it("keeps scanning the previous session after onNewSession moves it to pending", async () => {
+    const seen: RawJSONLines[] = [];
+    const oldFile = join(projectDir, "sess-old.jsonl");
+    const newFile = join(projectDir, "sess-new.jsonl");
+    await writeFile(oldFile, userLine("old-1"));
+
+    scanner = await createSessionScanner({
+      sessionId: "sess-old",
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60,
+      env,
+    });
+    await sleep(150);
+
+    // Simulate a `--resume` into a new session id: the old session must
+    // keep being watched (agent tasks can still append to it) rather than
+    // being dropped outright.
+    await scanner.onNewSession("sess-new");
+    await writeFile(newFile, "");
+    await sleep(150);
+
+    await appendFile(oldFile, userLine("old-2"));
+    await appendFile(newFile, userLine("new-1"));
+    await sleep(300);
+
+    expect(uuids(seen).sort()).toEqual(["new-1", "old-2"]);
   });
 });

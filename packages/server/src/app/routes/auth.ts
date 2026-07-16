@@ -1,3 +1,9 @@
+/**
+ * Ported (near-verbatim) from Happy — https://github.com/slopus/happy (MIT)
+ * Original: happy/packages/happy-server/sources/app/api/routes/authRoutes.ts
+ * (`POST /v1/auth`). See the docblock on `buildAuthRoutes` below for what
+ * changed and why.
+ */
 import { decodeBase64 } from "@falcon/crypto";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";

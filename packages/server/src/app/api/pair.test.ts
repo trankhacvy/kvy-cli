@@ -1,28 +1,19 @@
 import { randomBytes } from "node:crypto";
 import { decodeBase64, encodeBase64 } from "@falcon/crypto";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mintToken } from "../../auth/index.js";
 import { db } from "../../db/client.js";
 import { runMigrations } from "../../db/migrate.js";
 import { pairRequests } from "../../db/schema.js";
+import { isDatabaseAvailable } from "../../db/testDbAvailable.js";
 import { buildServer } from "../server.js";
 
 // Integration test: exercises the real pairing dance against Postgres (the routes are
 // nothing but DB reads/writes). Skips itself — rather than failing the suite — when no
 // reachable Postgres is configured via DATABASE_URL, matching seq.test.ts's pattern.
-async function isDatabaseAvailable(): Promise<boolean> {
-  try {
-    await db.execute(sql`select 1`);
-    return true;
-  } catch {
-    await db.$client.end({ timeout: 1 }).catch(() => {});
-    return false;
-  }
-}
-
-const dbAvailable = await isDatabaseAvailable();
+const dbAvailable = await isDatabaseAvailable(db);
 if (dbAvailable) {
   await runMigrations();
 }

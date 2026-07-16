@@ -1,0 +1,117 @@
+{
+  "description": "A Task tool call spawns a subagent scope (subagent id == the Task call's id); its envelopes nest under the parent tool item instead of appearing at the top level.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 4000,
+      "role": "agent",
+      "turn": "turn-3",
+      "ev": {
+        "t": "tool-start",
+        "call": "task-42",
+        "name": "Task",
+        "title": "Investigate flaky test",
+        "args": { "prompt": "why does test X flake" }
+      }
+    },
+    {
+      "id": "e2",
+      "time": 4001,
+      "role": "agent",
+      "turn": "turn-3",
+      "subagent": "task-42",
+      "ev": { "t": "sub-start" }
+    },
+    {
+      "id": "e3",
+      "time": 4002,
+      "role": "agent",
+      "turn": "turn-3",
+      "subagent": "task-42",
+      "ev": { "t": "text", "md": "Checking test logs..." }
+    },
+    {
+      "id": "e4",
+      "time": 4003,
+      "role": "agent",
+      "turn": "turn-3",
+      "subagent": "task-42",
+      "ev": {
+        "t": "tool-start",
+        "call": "call-100",
+        "name": "Grep",
+        "args": { "pattern": "flake" }
+      }
+    },
+    {
+      "id": "e5",
+      "time": 4004,
+      "role": "agent",
+      "turn": "turn-3",
+      "subagent": "task-42",
+      "ev": { "t": "tool-end", "call": "call-100", "ok": true, "output": { "matches": 2 } }
+    },
+    {
+      "id": "e6",
+      "time": 4005,
+      "role": "agent",
+      "turn": "turn-3",
+      "subagent": "task-42",
+      "ev": { "t": "sub-stop" }
+    },
+    {
+      "id": "e7",
+      "time": 4006,
+      "role": "agent",
+      "turn": "turn-3",
+      "ev": {
+        "t": "tool-end",
+        "call": "task-42",
+        "ok": true,
+        "output": { "summary": "race condition in setup" }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e1",
+      "time": 4000,
+      "role": "agent",
+      "turn": "turn-3",
+      "kind": "tool",
+      "call": "task-42",
+      "name": "Task",
+      "title": "Investigate flaky test",
+      "args": { "prompt": "why does test X flake" },
+      "status": "done",
+      "ok": true,
+      "output": { "summary": "race condition in setup" },
+      "subagent": [
+        { "id": "e2", "time": 4001, "role": "agent", "turn": "turn-3", "kind": "sub-start" },
+        {
+          "id": "e3",
+          "time": 4002,
+          "role": "agent",
+          "turn": "turn-3",
+          "kind": "text",
+          "md": "Checking test logs...",
+          "thinking": false
+        },
+        {
+          "id": "e4",
+          "time": 4003,
+          "role": "agent",
+          "turn": "turn-3",
+          "kind": "tool",
+          "call": "call-100",
+          "name": "Grep",
+          "args": { "pattern": "flake" },
+          "status": "done",
+          "ok": true,
+          "output": { "matches": 2 }
+        },
+        { "id": "e6", "time": 4005, "role": "agent", "turn": "turn-3", "kind": "sub-stop" }
+      ]
+    }
+  ]
+}

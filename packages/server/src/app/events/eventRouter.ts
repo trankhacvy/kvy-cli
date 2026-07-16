@@ -1,0 +1,256 @@
+import type { Ephemeral, Update } from "@falcon/wire";
+import type { Server, Socket } from "socket.io";
+
+// Ported from Happy's `happy-server/sources/app/events/eventRouter.ts` (room scheme,
+// recipient filters, emitUpdate/emitEphemeral) — plan.md §4.1 "port verbatim". Adapted:
+// `userId` -> `accountId` (Falcon's identity anchor), and payload shapes come from
+// `@falcon/wire`'s `Update`/`Ephemeral` (design §4.3) instead of Happy's Prisma-shaped
+// event unions. Ephemeral backpressure coalescing (§4.3, marked (N) in plan.md) is new —
+// Happy has no equivalent.
+
+// === CONNECTION TYPES ===
+
+export interface SessionScopedConnection {
+  connectionType: "session-scoped";
+  socket: Socket;
+  accountId: string;
+  sessionId: string;
+}
+
+export interface UserScopedConnection {
+  connectionType: "user-scoped";
+  socket: Socket;
+  accountId: string;
+}
+
+export interface MachineScopedConnection {
+  connectionType: "machine-scoped";
+  socket: Socket;
+  accountId: string;
+  machineId: string;
+}
+
+export type ClientConnection =
+  | SessionScopedConnection
+  | UserScopedConnection
+  | MachineScopedConnection;
+
+// === RECIPIENT FILTER TYPES ===
+
+export type RecipientFilter =
+  | { type: "all-interested-in-session"; sessionId: string }
+  | { type: "user-scoped-only" }
+  | { type: "machine-scoped-only"; machineId: string }
+  | { type: "all-user-authenticated-connections" };
+
+// === EVENT EMISSION PARAMS ===
+
+export interface EmitUpdateParams {
+  accountId: string;
+  payload: Update;
+  recipientFilter?: RecipientFilter;
+  skipSenderConnection?: ClientConnection;
+}
+
+export interface EmitEphemeralParams {
+  accountId: string;
+  payload: Ephemeral;
+  recipientFilter?: RecipientFilter;
+  skipSenderConnection?: ClientConnection;
+}
+
+/**
+ * The fan-out seam the HTTP write path (task 1.2, `app/routes/*`) depends
+ * on: every write route calls `emitUpdate`/`emitEphemeral` post-commit
+ * (never from inside a transaction — design §6.1) instead of talking to
+ * Socket.IO rooms directly. Narrowed to just the two emit methods (not the
+ * full `EventRouter` surface below, which also owns connection/room
+ * bookkeeping that only `socket.ts` needs) so route tests can inject a
+ * lightweight recording fake instead of a real Socket.IO server.
+ */
+export interface EventRouterPort {
+  emitUpdate(params: EmitUpdateParams): void;
+  emitEphemeral(params: EmitEphemeralParams): void;
+}
+
+// === EPHEMERAL BACKPRESSURE (design §4.3, plan.md 1.1 item 5 — marked (N)) ===
+//
+// Persistent `update`s are never dropped (a slow client falls back to the HTTP
+// refetch path). Ephemeral `activity`/`attention` events are droppable by design,
+// so once a socket's outbound write buffer backs up past a threshold, we stop
+// piling on: keep only the latest payload per (type, sessionId) key and flush it
+// once the socket drains, discarding everything superseded in between.
+const BACKPRESSURE_WRITE_BUFFER_THRESHOLD = 16;
+
+type CoalesceKey = string;
+
+function coalesceKeyFor(payload: Ephemeral): CoalesceKey | undefined {
+  if (payload.t === "activity" || payload.t === "attention") {
+    return `${payload.t}:${payload.sessionId}`;
+  }
+  return undefined;
+}
+
+// engine.io's Socket exposes `writeBuffer` (packets queued but not yet flushed to the
+// transport) — the standard signal for "this connection can't keep up". Untyped in
+// socket.io's public API surface, so accessed defensively.
+function writeBufferLength(socket: Socket): number {
+  const conn = socket.conn as unknown as { writeBuffer?: unknown[] } | undefined;
+  return conn?.writeBuffer?.length ?? 0;
+}
+
+// === EVENT ROUTER CLASS ===
+
+class EventRouter {
+  private io!: Server;
+  private pendingBySocket = new Map<string, Map<CoalesceKey, Ephemeral>>();
+
+  // === INITIALIZATION ===
+
+  init(io: Server): void {
+    this.io = io;
+  }
+
+  // === CONNECTION MANAGEMENT (via Socket.IO rooms) ===
+
+  addConnection(accountId: string, connection: ClientConnection): void {
+    const socket = connection.socket;
+    socket.join(`user:${accountId}`);
+
+    switch (connection.connectionType) {
+      case "user-scoped":
+        socket.join(`user:${accountId}:user-scoped`);
+        break;
+      case "session-scoped":
+        socket.join(`user:${accountId}:session:${connection.sessionId}`);
+        break;
+      case "machine-scoped":
+        socket.join(`user:${accountId}:machine:${connection.machineId}`);
+        break;
+    }
+  }
+
+  removeConnection(_accountId: string, connection: ClientConnection): void {
+    // Socket.IO removes the socket from all rooms on disconnect automatically;
+    // also drop any coalesced-but-unflushed ephemeral state for this socket.
+    this.pendingBySocket.delete(connection.socket.id);
+  }
+
+  // === EVENT EMISSION METHODS ===
+
+  emitUpdate(params: EmitUpdateParams): void {
+    const rooms = this.getRoomsForFilter(
+      params.accountId,
+      params.recipientFilter ?? { type: "all-user-authenticated-connections" },
+    );
+    if (params.skipSenderConnection) {
+      params.skipSenderConnection.socket.broadcast.to(rooms).emit("update", params.payload);
+    } else {
+      this.io.to(rooms).emit("update", params.payload);
+    }
+  }
+
+  emitEphemeral(params: EmitEphemeralParams): void {
+    const rooms = this.getRoomsForFilter(
+      params.accountId,
+      params.recipientFilter ?? { type: "all-user-authenticated-connections" },
+    );
+    const skipSocketId = params.skipSenderConnection?.socket.id;
+
+    for (const socket of this.socketsInRooms(rooms)) {
+      if (socket.id === skipSocketId) continue;
+      this.emitEphemeralToSocket(socket, params.payload);
+    }
+  }
+
+  // === PRESENCE QUERIES ===
+
+  /**
+   * Returns true if the account has any non-machine socket that hasn't reported
+   * `app-state: background`. Clients that never sent `app-state` are treated as
+   * active (connected = present).
+   */
+  async hasActiveNonMachineSocket(accountId: string): Promise<boolean> {
+    const sockets = await this.io.in(`user:${accountId}`).fetchSockets();
+    return sockets.some((s) => {
+      if (s.data.clientType === "machine-scoped") return false;
+      const appState = s.data.appState as string | undefined;
+      return appState !== "background";
+    });
+  }
+
+  // === PRIVATE ROUTING LOGIC ===
+
+  private getRoomsForFilter(accountId: string, filter: RecipientFilter): string[] {
+    switch (filter.type) {
+      case "all-user-authenticated-connections":
+        return [`user:${accountId}`];
+      case "user-scoped-only":
+        return [`user:${accountId}:user-scoped`];
+      case "all-interested-in-session":
+        return [`user:${accountId}:session:${filter.sessionId}`, `user:${accountId}:user-scoped`];
+      case "machine-scoped-only":
+        return [`user:${accountId}:machine:${filter.machineId}`, `user:${accountId}:user-scoped`];
+    }
+  }
+
+  // Local socket lookup for the ephemeral backpressure path (single-process at MVP —
+  // design falcon-system-design.md §6.4: "Redis cluster adapter reserved behind an env
+  // flag"; cross-replica delivery for these events is deferred alongside that flag).
+  private socketsInRooms(rooms: string[]): Socket[] {
+    const ids = new Set<string>();
+    for (const room of rooms) {
+      const roomMembers = this.io.sockets.adapter.rooms.get(room);
+      if (roomMembers) {
+        for (const id of roomMembers) ids.add(id);
+      }
+    }
+    const sockets: Socket[] = [];
+    for (const id of ids) {
+      const socket = this.io.sockets.sockets.get(id);
+      if (socket) sockets.push(socket);
+    }
+    return sockets;
+  }
+
+  private emitEphemeralToSocket(socket: Socket, payload: Ephemeral): void {
+    const key = coalesceKeyFor(payload);
+    if (!key || writeBufferLength(socket) <= BACKPRESSURE_WRITE_BUFFER_THRESHOLD) {
+      socket.emit("ephemeral", payload);
+      return;
+    }
+
+    let pending = this.pendingBySocket.get(socket.id);
+    if (!pending) {
+      pending = new Map();
+      this.pendingBySocket.set(socket.id, pending);
+      this.scheduleFlush(socket, pending);
+    }
+    // Latest-wins: overwrite whatever was pending for this key.
+    pending.set(key, payload);
+  }
+
+  private scheduleFlush(socket: Socket, pending: Map<CoalesceKey, Ephemeral>): void {
+    const conn = socket.conn;
+
+    const flush = () => {
+      for (const payload of pending.values()) socket.emit("ephemeral", payload);
+      pending.clear();
+      this.pendingBySocket.delete(socket.id);
+    };
+
+    conn.once("drain", flush);
+    socket.once("disconnect", () => {
+      conn.off("drain", flush);
+      this.pendingBySocket.delete(socket.id);
+    });
+  }
+}
+
+export const eventRouter = new EventRouter();
+
+// === EVENT BUILDER FUNCTIONS ===
+
+export function buildMachinePresenceEphemeral(machineId: string, online: boolean): Ephemeral {
+  return { t: "machine-presence", machineId, online };
+}
