@@ -4,6 +4,58 @@
 worktree `.worktrees/P1-1.3-session-bootstrap` (tip `fd673bd`) onto this task's own
 `main`-derived worktree, `.worktrees/P1-land-1.3-session-bootstrap`.
 
+## Third pass (2026-07-16): reconcile again with main's further-advanced tip
+
+By this pass, this branch's own tip (`78b6c54`, the second pass above) had `56189dc`
+(`P1-land-1.3-claudelocal-spawn`'s land) as its merge-base with `main`, but `main` had
+moved two commits further ahead in the interim — `78ece02` and `185ebc9`, both
+progress-tracker `chore: cycle N` commits that only touch `plan.md`/`progress.md`
+narrative text (confirmed via `git show --stat` on each: no code, no `packages/cli/src/session/`
+overlap). Confirmed independently, again, that this branch is genuinely not an ancestor
+of `main` and that `main:packages/cli/src/session/bootstrap.ts` still fails to resolve.
+
+Reconciled the same way as the prior pass: `git merge main --no-edit` inside this
+worktree.
+
+- **`plan.md`** — the only conflict, in the same §1.3 "Session bootstrap" narrative
+  paragraph as last time (both sides had appended more progress-tracker notes to it
+  since the last reconciliation). Resolved by hand: kept every prior cycle's note from
+  both sides (this branch's existing "Reconciled … second pass" note, plus `main`'s new
+  Cycle 43 skepticism note) and appended a new "Reconciled again … third pass" note
+  describing this pass. Also had to manually strip a stray leftover `<<<<<<< HEAD`
+  conflict-marker line that the hand-resolution left behind on the first attempt —
+  caught by grepping the file for conflict markers before proceeding, fixed, and
+  re-verified zero markers remain anywhere in `plan.md`.
+- **`progress.md`** — auto-merged cleanly by git (both sides only appended new cycle
+  entries at the end; no overlapping lines).
+- **`pnpm-lock.yaml`**, **`packages/web/src/crypto/worker.ts`** — untouched by this
+  merge (neither branch's diverging commits since the last reconciliation touched
+  either file); ran `pnpm install` afterwards anyway to confirm the lockfile is still
+  consistent against `main`'s current dependency graph (no changes — "Lockfile is up
+  to date, resolution step is skipped").
+
+Re-verified after reconciling (forced, no turbo cache):
+
+- `pnpm build` — 5/5 tasks green.
+- `pnpm exec turbo run typecheck --force` — 9/9 tasks green.
+- `pnpm exec turbo run test --force`: first run reproduced the same pre-existing
+  `@falcon/server` `beforeAll` hook-timeout flakiness under turbo's parallel task
+  scheduling (`auth.test.ts` and `machines.test.ts` timed out waiting on concurrent
+  in-memory `PGlite` instances; 130/140 server tests still passed, 7/9 tasks green).
+  Re-ran with `--concurrency=1`: 9/9 tasks green — `@falcon/server` 20/20 test files
+  (140 tests) and `falcon` (cli) 20/20 test files (221 tests, incl.
+  `session/bootstrap.test.ts` 13/13 and `session/bootstrap.integration.test.ts` 2/2)
+  all pass. Confirms this is turbo-parallelism/PGlite resource contention, not a
+  regression from the merge.
+- `pnpm lint` — exits clean (0); pre-existing warnings elsewhere in the repo (e.g.
+  `packages/crypto/src/keys.ts` non-null-assertion warnings) are unrelated to this
+  task's files and were already present before this reconciliation.
+
+This branch's tip is now current with `main`'s real tip (`185ebc9`) and remains a ready
+fast-forward/`--no-ff` merge candidate onto the shared `main` ref. That actual git-ref
+update stays outside this subagent's worktree-scoped write access — see the
+"Sandboxing caveat" section below, which still applies.
+
 ## Second pass (2026-07-16): reconcile with main's advanced tip
 
 This branch (`P1-land-1.3-session-bootstrap`, tip `3c5f7d9`) was originally cut from
