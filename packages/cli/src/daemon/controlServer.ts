@@ -13,6 +13,13 @@
  * a separate task) persists exactly what this handler receives so resume
  * survives a daemon restart. Keep its shape stable.
  *
+ * It also carries the spawned session's own `pid` (optional — a session
+ * started straight from a terminal, not by the daemon, doesn't know one),
+ * which is how the `spawn` RPC's pid↔webhook awaiter (`spawnAwaiter.ts`,
+ * plan.md §16 "3.1 Remote spawn") matches this webhook back to the spawn
+ * call that launched the process: the daemon knows the pid it launched
+ * immediately, but not the `sessionId` until the session reports it here.
+ *
  * This module never spawns processes, locks a singleton, or opens a WS to
  * the machine — `getSessions`/`stopSession`/`spawnSession`/`requestShutdown`
  * are injected by the caller, which owns that state and those side effects
@@ -46,6 +53,8 @@ const SessionStartedBodySchema = z.object({
       agentStateVersion: z.number(),
     })
     .optional(),
+  /** This session process's own pid — present when it was daemon-spawned (see module header). */
+  pid: z.number().optional(),
 });
 
 const SessionStartedResponseSchema = z.object({ status: z.literal("ok") });
@@ -106,6 +115,7 @@ export interface ControlServerDeps {
     sessionId: string,
     metadata: unknown,
     encryption?: SessionEncryptionData,
+    pid?: number,
   ) => void;
   logger?: Logger;
 }
@@ -131,9 +141,9 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
         schema: { body: SessionStartedBodySchema, response: { 200: SessionStartedResponseSchema } },
       },
       async (request) => {
-        const { sessionId, metadata, encryption } = request.body;
-        logger?.debug("[control-server] session-started", { sessionId });
-        onSessionStarted(sessionId, metadata, encryption);
+        const { sessionId, metadata, encryption, pid } = request.body;
+        logger?.debug("[control-server] session-started", { sessionId, pid });
+        onSessionStarted(sessionId, metadata, encryption, pid);
         return { status: "ok" as const };
       },
     );

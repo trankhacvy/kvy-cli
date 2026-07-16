@@ -13,6 +13,14 @@
  * The server-side contract (`SessionStartedBodySchema` in `controlServer.ts`)
  * is load-bearing and out of scope to change here — this module only shapes
  * its request to match that schema.
+ *
+ * `pid` defaults to this process's own pid (`process.pid`) when not given
+ * explicitly — it's how a daemon-spawned session's webhook gets matched back
+ * to the `spawn` RPC call that launched it (`spawnAwaiter.ts`, plan.md §16
+ * "3.1 Remote spawn"). Sending it unconditionally (not just when
+ * daemon-spawned) is harmless: a terminal-started session has no pending
+ * spawn awaiter for its pid, so `resolve()` on the daemon side is simply a
+ * no-op for it.
  */
 
 import { resolveHomeDir } from "../home.js";
@@ -25,6 +33,8 @@ export interface NotifyDaemonSessionStartedParams {
   sessionId: string;
   metadata?: unknown;
   encryption?: SessionEncryptionData;
+  /** Defaults to `process.pid`. */
+  pid?: number;
 }
 
 export interface NotifyDaemonSessionStartedDeps {
@@ -83,10 +93,11 @@ export async function notifyDaemonSessionStarted(
   }
 
   try {
+    const body: NotifyDaemonSessionStartedParams = { pid: process.pid, ...params };
     const res = await fetchImpl(`http://127.0.0.1:${state.port}/session-started`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(params),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
 

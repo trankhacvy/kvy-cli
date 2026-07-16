@@ -61,6 +61,7 @@ describe("notifyDaemonSessionStarted (integration against a real control server)
       "sess_real",
       { cwd: "/tmp/proj" },
       encryption,
+      process.pid,
     );
   });
 

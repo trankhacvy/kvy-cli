@@ -79,7 +79,28 @@ describe("notifyDaemonSessionStarted", () => {
       "http://127.0.0.1:4567/session-started",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ sessionId: "sess_1", metadata: { title: "hi" }, encryption }),
+        body: JSON.stringify({
+          pid: process.pid,
+          sessionId: "sess_1",
+          metadata: { title: "hi" },
+          encryption,
+        }),
+      }),
+    );
+  });
+
+  it("defaults pid to process.pid but lets an explicit pid override it", async () => {
+    await writeDaemonState(homeDir, { pid: 111, port: 4567, version: "0.1.0", startedAt: 0 });
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+
+    await notifyDaemonSessionStarted(buildDeps({ fetchImpl }), { sessionId: "sess_1", pid: 555 });
+
+    expect(fetchImpl).toHaveBeenCalledExactlyOnceWith(
+      "http://127.0.0.1:4567/session-started",
+      expect.objectContaining({
+        body: JSON.stringify({ pid: 555, sessionId: "sess_1" }),
       }),
     );
   });

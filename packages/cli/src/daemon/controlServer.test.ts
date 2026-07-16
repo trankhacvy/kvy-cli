@@ -52,6 +52,7 @@ describe("startControlServer", () => {
         sessionId: "sess_123",
         metadata: { title: "hello" },
         encryption,
+        pid: 4242,
       });
       expect(res.status).toBe(200);
       await expect(res.json()).resolves.toEqual({ status: "ok" });
@@ -59,6 +60,7 @@ describe("startControlServer", () => {
         "sess_123",
         { title: "hello" },
         encryption,
+        4242,
       );
     } finally {
       await server.stop();
@@ -71,7 +73,12 @@ describe("startControlServer", () => {
     try {
       const res = await post(server.port, "/session-started", { sessionId: "sess_456" });
       expect(res.status).toBe(200);
-      expect(onSessionStarted).toHaveBeenCalledExactlyOnceWith("sess_456", undefined, undefined);
+      expect(onSessionStarted).toHaveBeenCalledExactlyOnceWith(
+        "sess_456",
+        undefined,
+        undefined,
+        undefined,
+      );
     } finally {
       await server.stop();
     }
