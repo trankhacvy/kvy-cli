@@ -148,6 +148,21 @@ describe("startHookServer", () => {
     }
   });
 
+  it("POST /hook/notification with an explicit null message falls back to onAttention('question')", async () => {
+    const onAttention = vi.fn();
+    const server = await startHookServer({ onSessionId: () => {}, onAttention });
+    try {
+      const res = await post(server.port, "/hook/notification", {
+        session_id: "sess_123",
+        message: null,
+      });
+      expect(res.status).toBe(200);
+      expect(onAttention).toHaveBeenCalledExactlyOnceWith("question");
+    } finally {
+      await server.stop();
+    }
+  });
+
   it("POST /hook/notification is a no-op when onAttention isn't supplied", async () => {
     const server = await startHookServer({ onSessionId: () => {} });
     try {
@@ -202,6 +217,10 @@ describe("attentionKindFromNotificationMessage", () => {
 
   it("returns 'question' when the message is undefined", () => {
     expect(attentionKindFromNotificationMessage(undefined)).toBe("question");
+  });
+
+  it("returns 'question' when the message is explicitly null", () => {
+    expect(attentionKindFromNotificationMessage(null)).toBe("question");
   });
 });
 

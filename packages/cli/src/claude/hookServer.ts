@@ -115,11 +115,13 @@ const SessionStartHookBodySchema = z
 
 // Claude Code's `Notification` hook payload. `message` is the only signal
 // available for distinguishing a permission prompt from a plain idle-wait
-// nudge (see the module doc above) — optional + passthrough so a missing or
-// renamed field never breaks the handler, just falls back to `question`.
+// nudge (see the module doc above) — nullish (absent, `undefined`, *or*
+// explicit `null`) + passthrough so a missing/renamed/null-valued field
+// never breaks the handler (never a 400 that silently drops the hook), just
+// falls back to `question`.
 const NotificationHookBodySchema = z
   .object({
-    message: z.string().optional(),
+    message: z.string().nullish(),
   })
   .passthrough();
 
@@ -136,8 +138,10 @@ const HookOkResponseSchema = z.object({ status: z.literal("ok") });
  * `Notification` cases this is (see the module doc's "`Notification`/`Stop`"
  * section). Exported for direct unit testing of the heuristic in isolation.
  */
-export function attentionKindFromNotificationMessage(message: string | undefined): AttentionKind {
-  return message !== undefined && /permission/i.test(message) ? "perm" : "question";
+export function attentionKindFromNotificationMessage(
+  message: string | null | undefined,
+): AttentionKind {
+  return message != null && /permission/i.test(message) ? "perm" : "question";
 }
 
 export interface HookServerDeps {
