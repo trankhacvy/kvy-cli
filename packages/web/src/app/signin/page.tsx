@@ -29,6 +29,7 @@ export default function SignInPage() {
   // check / challenge sign-in below without a full page reload.
   const [attempt, setAttempt] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is intentionally over-specified to re-trigger this effect from the "Try again" button
   useEffect(() => {
     if (!bridge) return;
     let cancelled = false;

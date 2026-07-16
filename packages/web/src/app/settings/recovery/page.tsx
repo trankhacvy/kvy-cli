@@ -49,8 +49,8 @@ export default function RecoverySettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Recovery code</h1>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          Anyone with this code can restore your account's key material on another device. Keep
-          it as secret as a password.
+          Anyone with this code can restore your account's key material on another device. Keep it
+          as secret as a password.
         </p>
       </div>
 

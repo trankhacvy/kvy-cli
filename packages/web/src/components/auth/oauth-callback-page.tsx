@@ -31,6 +31,7 @@ export function OAuthCallbackPage({
   const bridge = useCryptoBridge();
   const [status, setStatus] = useState<Status>({ kind: "working" });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resolveProof is stable per page mount (constructed fresh by the caller from the immutable initial URL), including it would refire this effect on every render for no reason
   useEffect(() => {
     if (!bridge) return;
     let cancelled = false;
@@ -57,8 +58,7 @@ export function OAuthCallbackPage({
         }
       } catch (err) {
         if (cancelled) return;
-        const message =
-          err instanceof ApiError ? err.message : "Sign-in failed. Please try again.";
+        const message = err instanceof ApiError ? err.message : "Sign-in failed. Please try again.";
         setStatus({ kind: "error", message });
       }
     })();
@@ -66,10 +66,6 @@ export function OAuthCallbackPage({
     return () => {
       cancelled = true;
     };
-    // `resolveProof` is stable per page mount (constructed fresh by the caller,
-    // depends only on the immutable initial URL) — including it would refire
-    // this effect on every render for no reason.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bridge, provider, router]);
 
   return (
@@ -91,9 +87,8 @@ export function OAuthCallbackPage({
         <div className="flex max-w-md flex-col items-center gap-4">
           <h1 className="text-xl font-semibold tracking-tight">Save your recovery code</h1>
           <p className="text-sm text-muted-foreground">
-            This is the only way to recover your account on a new device if you lose access to
-            this one. Falcon cannot recover it for you — write it down or store it in a password
-            manager.
+            This is the only way to recover your account on a new device if you lose access to this
+            one. Falcon cannot recover it for you — write it down or store it in a password manager.
           </p>
           <RecoveryCodeCard code={status.recoveryCode} />
           <Button type="button" onClick={() => router.replace(status.nextUrl)}>

@@ -1,7 +1,9 @@
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { exchangeGithubCode as ExchangeGithubCode } from "./oauth.js";
-import type { verifyGoogleIdToken as VerifyGoogleIdToken } from "./oauth.js";
+import type {
+  exchangeGithubCode as ExchangeGithubCode,
+  verifyGoogleIdToken as VerifyGoogleIdToken,
+} from "./oauth.js";
 import { verifyGithubAccessToken } from "./oauth.js";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -169,7 +171,11 @@ describe("exchangeGithubCode", () => {
     const fetchToken = async () =>
       new Response(JSON.stringify({ access_token: "gho_realtoken" }), { status: 200 });
 
-    const token = await exchangeGithubCode("a-code", "https://app.falcon.dev/auth/callback/github", fetchToken);
+    const token = await exchangeGithubCode(
+      "a-code",
+      "https://app.falcon.dev/auth/callback/github",
+      fetchToken,
+    );
 
     expect(token).toBe("gho_realtoken");
   });
@@ -195,7 +201,11 @@ describe("exchangeGithubCode", () => {
     const fetchToken = async () =>
       new Response(JSON.stringify({ error: "bad_verification_code" }), { status: 401 });
 
-    const token = await exchangeGithubCode("bad-code", "https://app.falcon.dev/auth/callback/github", fetchToken);
+    const token = await exchangeGithubCode(
+      "bad-code",
+      "https://app.falcon.dev/auth/callback/github",
+      fetchToken,
+    );
 
     expect(token).toBeNull();
   });
@@ -204,7 +214,11 @@ describe("exchangeGithubCode", () => {
     const fetchToken = async () =>
       new Response(JSON.stringify({ error: "incorrect_client_credentials" }), { status: 200 });
 
-    const token = await exchangeGithubCode("a-code", "https://app.falcon.dev/auth/callback/github", fetchToken);
+    const token = await exchangeGithubCode(
+      "a-code",
+      "https://app.falcon.dev/auth/callback/github",
+      fetchToken,
+    );
 
     expect(token).toBeNull();
   });
@@ -214,7 +228,11 @@ describe("exchangeGithubCode", () => {
       throw new Error("network down");
     };
 
-    const token = await exchangeGithubCode("a-code", "https://app.falcon.dev/auth/callback/github", fetchToken);
+    const token = await exchangeGithubCode(
+      "a-code",
+      "https://app.falcon.dev/auth/callback/github",
+      fetchToken,
+    );
 
     expect(token).toBeNull();
   });
@@ -228,7 +246,11 @@ describe("exchangeGithubCode", () => {
     const fetchToken = async () =>
       new Response(JSON.stringify({ access_token: "gho_realtoken" }), { status: 200 });
 
-    const token = await freshExchange("a-code", "https://app.falcon.dev/auth/callback/github", fetchToken);
+    const token = await freshExchange(
+      "a-code",
+      "https://app.falcon.dev/auth/callback/github",
+      fetchToken,
+    );
 
     expect(token).toBeNull();
   });

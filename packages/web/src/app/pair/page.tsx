@@ -59,7 +59,11 @@ export default function PairPage() {
     setStatus({ kind: "approving", ephPub });
     const token = getToken();
     if (!token) {
-      setStatus({ kind: "error", message: "You've been signed out. Please sign in again.", ephPub });
+      setStatus({
+        kind: "error",
+        message: "You've been signed out. Please sign in again.",
+        ephPub,
+      });
       return;
     }
     try {
@@ -105,9 +109,7 @@ export default function PairPage() {
         </div>
       )}
 
-      {status.kind === "approving" && (
-        <p className="text-sm text-muted-foreground">Approving…</p>
-      )}
+      {status.kind === "approving" && <p className="text-sm text-muted-foreground">Approving…</p>}
 
       {status.kind === "approved" && (
         <p className="max-w-sm text-sm text-muted-foreground">
