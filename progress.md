@@ -4932,3 +4932,129 @@ tests, 0 failures).
    `@falcon/crypto` + `POST /v1/sessions`, 13 unit + 2 real-server
    integration tests green in its own worktree, flagged unlanded since
    Cycle 36 (now 5 cycles).
+
+## Cycle 41 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `d0aa4b0` — "chore: cycle 40 — completed 0
+tasks (3 requested tasks confirmed unlanded)"). Confirmed via
+`git rev-parse HEAD`; `git status --short` clean at cycle start.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`@falcon/wire`, `@falcon/crypto`, `falcon` cli, `@falcon/server`,
+  `@falcon/web` — cache hits, replayed clean logs).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green:
+  `@falcon/wire` 61/61, `@falcon/crypto` 65/65, `@falcon/web` 56/56,
+  `falcon` (cli) 181/181, `@falcon/server` 140/140 (incl. the two
+  real-Postgres `seq.test.ts` concurrency cases). **503 tests total, 0
+  failures** — same totals as Cycle 40, consistent with no source changes
+  landing on `main` between cycles.
+
+### Task-summaries read this cycle
+
+Three requested, per this cycle's brief — **none exist on `main`**, same
+tasks requested (and confirmed unlanded) in Cycle 40:
+
+- **`task-summary/P1-1.3-falcon-home-persistence.md`** — absent from
+  `main`'s `task-summary/` (`/bin/ls task-summary/` confirms; `git
+  ls-tree HEAD -- task-summary/P1-1.3-falcon-home-persistence.md` empty).
+  `git merge-base --is-ancestor P1-1.3-falcon-home-persistence HEAD` →
+  not an ancestor (branch tip `5c023e6`); `git merge-base --is-ancestor
+  P1-land-1.3-falcon-home-persistence HEAD` → also not an ancestor
+  (integration-branch tip `9bc3b6f`, includes a "resolve test failures"
+  fixup commit on top of the land commit — never merged to `main`); `git
+  cat-file -e HEAD:packages/cli/src/persistence.ts` fails. Read instead
+  from `.worktrees/P1-1.3-falcon-home-persistence/task-summary/
+  P1-1.3-falcon-home-persistence.md` — same content as Cycle 40's read
+  (settings.json + access.key persistence, atomic lock-file writes, 0600
+  perms on the key file, 16 `persistence.test.ts` tests). **Not
+  credited**; bullet stays unchecked. Unlanded for **8 consecutive
+  cycles** now (since Cycle 34).
+- **`task-summary/P1-1.3-session-bootstrap.md`** — absent from `main`'s
+  `task-summary/`. `git merge-base --is-ancestor P1-1.3-session-bootstrap
+  HEAD` → not an ancestor (branch tip `66a4ecb`); `git merge-base
+  --is-ancestor P1-land-1.3-session-bootstrap HEAD` → also not an
+  ancestor (integration-branch tip `3c5f7d9`, same "land" +
+  "resolve test failures" pair pattern as the persistence branch, never
+  merged to `main`); `git cat-file -e
+  HEAD:packages/cli/src/session/bootstrap.ts` fails. Read instead from
+  `.worktrees/P1-1.3-session-bootstrap/task-summary/
+  P1-1.3-session-bootstrap.md` — same content as prior cycles'
+  reads (`bootstrapSession`, mints DEK, wraps to content pubkey, POSTs
+  to `POST /v1/sessions` with idempotency tag, unwraps existing DEK on
+  replay rather than the freshly-minted one; 13 unit + 2 real-server
+  integration tests). **Not credited**; bullet stays unchecked. Unlanded
+  for **6 consecutive cycles** now (since Cycle 36).
+- **`task-summary/P1-1.5-machine-ws-client.md`** — absent from `main`'s
+  `task-summary/`. `git merge-base --is-ancestor P1-1.5-machine-ws-client
+  HEAD` → not an ancestor (branch tip `8e884c5`, three commits: land +
+  "resolve test failures" + "code review fixes"); `git cat-file -e
+  HEAD:packages/cli/src/daemon/machineClient.ts` fails. Read instead from
+  `.worktrees/P1-1.5-machine-ws-client/task-summary/
+  P1-1.5-machine-ws-client.md` — same content as Cycle 36's read
+  (`registerOrResumeMachine`/`casUpdateMachine` HTTP-only CAS-retry sync
+  against `POST /v1/machines`, `startMachineClient` opens `/v1/stream`
+  with `clientType: "machine-scoped"`, 60s heartbeat, re-pushes
+  `daemonState` on reconnect, explicit `socket.connect()` since
+  socket.io-client doesn't auto-reconnect from server-initiated
+  disconnects; adds a backward-compatible optional `machineId` field to
+  the already-merged `daemon/state.ts`). Own task-summary reports its
+  full workspace suite green post code-review-fixes pass. **Not
+  credited**; bullet stays unchecked. Flagged unlanded since Cycle 36,
+  same as session-bootstrap (not requested every intervening cycle, but
+  no land step has occurred in the meantime — branch tip has moved since
+  Cycle 36's read, now includes an additional code-review-fixes commit not
+  yet reconciled with `main`).
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** All three requested task-summaries
+describe genuine, complete, self-verified work that exists only inside
+its own isolated worktree/branch — none is an ancestor of `main`, none
+has a corresponding `task-summary/*.md` in `main`'s tree, and none of the
+`P1-land-*` integration branches for these three has itself been merged
+to `main` either. This tracker's role is to verify and record, not to
+perform the land/merge itself, so none qualifies for a `plan.md` checkbox
+flip this cycle. `plan.md` §16 checkbox count: **55/135 — unchanged from
+Cycle 40.**
+
+### Blockers / issues found
+
+1. **Same systemic "landed only in worktree" pattern continues**, now
+   spanning 8 (persistence) and 6 (session-bootstrap, machine-ws-client)
+   consecutive cycles for these three bullets specifically, and going back
+   to Cycle 16 for the pattern in general. All three are reported clean,
+   green, and self-verified by their own task-summaries; two of the three
+   (`falcon-home-persistence`, `session-bootstrap`) even have a
+   `P1-land-*` integration branch already prepared (commits present,
+   never merged to `main`) — the remaining step is a fast-forward/
+   `--no-ff` merge of an already-reconciled branch, not fresh integration
+   work. This tracker has no write access to perform that merge itself —
+   a task with explicit permission to land from the primary checkout is
+   needed for all three, same as the now-resolved `P1-land-1.6-reducer-port`
+   and `P1-land-1.5-ensure-daemon-running` cases.
+2. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **55/135 checked (~40.7%)**. `pnpm typecheck`/
+`pnpm test` both green on `main` (7/7 typecheck tasks, 9/9 test tasks, 503
+tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** — an integration branch
+   for this already exists (tip `9bc3b6f`, land commit + test-failure
+   fixup already applied) and just needs fast-forwarding onto `main`; the
+   longest-standing unlanded item in the tracker (flagged since Cycle 34,
+   now 8 cycles).
+2. **Land `P1-land-1.3-session-bootstrap`** — same situation, integration
+   branch already prepared (tip `3c5f7d9`), just needs merging onto
+   `main`; flagged unlanded since Cycle 36 (now 6 cycles).
+3. **Land `P1-1.5-machine-ws-client`** — no integration branch exists yet
+   for this one (only the feature branch, tip `8e884c5` with a
+   code-review-fixes commit on top), so landing it needs a fresh
+   reconciliation-and-merge pass first; self-contained under
+   `packages/cli/src/daemon/machineClient.ts`, disjoint from the other two.
