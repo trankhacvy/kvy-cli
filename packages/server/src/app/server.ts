@@ -5,7 +5,13 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from "fastify-type-provider-zod";
-import { authPlugin, defaultOAuthVerifier, type OAuthVerifier } from "../auth/index.js";
+import {
+  authPlugin,
+  defaultGithubCodeExchanger,
+  defaultOAuthVerifier,
+  type GithubCodeExchanger,
+  type OAuthVerifier,
+} from "../auth/index.js";
 import { db as defaultDb } from "../db/client.js";
 import type { Database } from "../db/types.js";
 import { buildLoggerOptions } from "../logger.js";
@@ -34,14 +40,19 @@ const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
 // can build+inject() without opening a real port or a real pino transport.
 // `db` defaults to the module-level singleton (db/client.ts) but can be overridden —
 // auth.test.ts/route tests bind an in-memory Postgres instead of touching
-// `DATABASE_URL`. `oauthVerifier` similarly defaults to the real Google/GitHub
-// verifier but can be overridden — oauth.test.ts injects a fake one instead of
+// `DATABASE_URL`. `oauthVerifier`/`githubExchanger` similarly default to the real
+// implementations but can be overridden — oauth.test.ts injects fakes instead of
 // touching the network. `eventRouter` defaults to the process-wide Socket.IO-backed
 // singleton (events/eventRouter.ts) but route tests inject a recording fake so they
 // can assert on fan-out without a real socket connection.
 export async function buildServer(
   opts: FastifyServerOptions = {},
-  deps: { db?: Database; oauthVerifier?: OAuthVerifier; eventRouter?: EventRouterPort } = {},
+  deps: {
+    db?: Database;
+    oauthVerifier?: OAuthVerifier;
+    githubExchanger?: GithubCodeExchanger;
+    eventRouter?: EventRouterPort;
+  } = {},
 ) {
   const db = deps.db ?? defaultDb;
   const eventRouter = deps.eventRouter ?? defaultEventRouter;
@@ -84,7 +95,13 @@ export async function buildServer(
 
   await app.register(healthRoutes);
   await app.register(buildAuthRoutes(db));
-  await app.register(buildOAuthRoutes(db, deps.oauthVerifier ?? defaultOAuthVerifier));
+  await app.register(
+    buildOAuthRoutes(
+      db,
+      deps.oauthVerifier ?? defaultOAuthVerifier,
+      deps.githubExchanger ?? defaultGithubCodeExchanger,
+    ),
+  );
   await app.register(pairRoutes);
   await app.register(buildSessionsRoutes(db, eventRouter));
   await app.register(buildMessagesRoutes(db, eventRouter));

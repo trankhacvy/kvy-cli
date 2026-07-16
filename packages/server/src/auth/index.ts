@@ -1,5 +1,8 @@
 export {
+  defaultGithubCodeExchanger,
   defaultOAuthVerifier,
+  exchangeGithubCode,
+  type GithubCodeExchanger,
   type OAuthIdentity,
   type OAuthProvider,
   type OAuthVerifier,

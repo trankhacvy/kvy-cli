@@ -12,9 +12,29 @@
  */
 
 import type { KeyTree } from "@falcon/crypto/web";
-import { deriveKeyTree, open, ready, seal, unwrapDek } from "@falcon/crypto/web";
+import {
+  decodeBase64,
+  deriveKeyTree,
+  encodeBase64,
+  encodeRecoveryCode,
+  getRandomBytes,
+  libsodiumEncryptForPublicKey,
+  open,
+  ready,
+  seal,
+  signDetached,
+  unwrapDek,
+} from "@falcon/crypto/web";
 import type { KeyStorage } from "./key-storage.js";
 import type { CryptoWorkerRequest, CryptoWorkerResponse } from "./protocol.js";
+
+// X25519 public keys are 32 raw bytes (falcon-system-design.md §5.1/§5.2) — same
+// convention the server's pair.ts enforces on the other end of this handshake.
+const X25519_PUBLIC_KEY_BYTES = 32;
+// Payload version byte for the sealed pairing box (design §5.2: "box(ephPub,
+// [0x00|masterSecret…])") — reserved so a future pairing payload shape (e.g. a
+// content-key bundle instead of the raw master secret) can be told apart on read.
+const PAIR_PAYLOAD_VERSION = 0x00;
 
 export interface CryptoWorkerHandler {
   handle(request: CryptoWorkerRequest): Promise<CryptoWorkerResponse>;
@@ -87,6 +107,81 @@ export function createCryptoWorkerHandler(storage: KeyStorage): CryptoWorkerHand
           activeDek = null;
           startupLoad = null;
           return { id: request.id, ok: true, result: null };
+        }
+
+        case "getIdentity": {
+          await ensureStartupLoaded();
+          if (!keyTree) {
+            return { id: request.id, ok: true, result: null };
+          }
+          return {
+            id: request.id,
+            ok: true,
+            result: {
+              signPubKey: encodeBase64(keyTree.signing.publicKey),
+              contentPubKey: encodeBase64(keyTree.content.publicKey),
+            },
+          };
+        }
+
+        case "signInChallenge": {
+          await ensureStartupLoaded();
+          if (!keyTree) {
+            return { id: request.id, ok: false, error: "not-initialized" };
+          }
+          await ready;
+          const challenge = getRandomBytes(32);
+          const signature = signDetached(challenge, keyTree.signing.secretKey);
+          return {
+            id: request.id,
+            ok: true,
+            result: {
+              signPubKey: encodeBase64(keyTree.signing.publicKey),
+              contentPubKey: encodeBase64(keyTree.content.publicKey),
+              challenge: encodeBase64(challenge),
+              signature: encodeBase64(signature),
+            },
+          };
+        }
+
+        case "exportRecoveryCode": {
+          await ensureStartupLoaded();
+          if (!keyTree) {
+            return { id: request.id, ok: false, error: "not-initialized" };
+          }
+          // The recovery code is the master secret's export form, not the derived
+          // keyTree — reload the raw bytes from storage rather than keeping a
+          // second long-lived copy of the secret around in a closure variable.
+          const masterSecret = await storage.load();
+          if (!masterSecret) {
+            // Unreachable in practice — `keyTree` is only ever set alongside a
+            // successful `storage.save()` (init) or a successful `storage.load()`
+            // (ensureStartupLoaded) — guarded anyway per the "no silent failures"
+            // principle.
+            return { id: request.id, ok: false, error: "not-initialized" };
+          }
+          return { id: request.id, ok: true, result: encodeRecoveryCode(masterSecret) };
+        }
+
+        case "sealForPeer": {
+          await ensureStartupLoaded();
+          if (!keyTree) {
+            return { id: request.id, ok: false, error: "not-initialized" };
+          }
+          const ephPub = decodeBase64(request.ephPub);
+          if (ephPub.length !== X25519_PUBLIC_KEY_BYTES) {
+            return { id: request.id, ok: false, error: "invalid-eph-pub" };
+          }
+          const masterSecret = await storage.load();
+          if (!masterSecret) {
+            return { id: request.id, ok: false, error: "not-initialized" };
+          }
+          await ready;
+          const payload = new Uint8Array(1 + masterSecret.length);
+          payload[0] = PAIR_PAYLOAD_VERSION;
+          payload.set(masterSecret, 1);
+          const sealedBox = libsodiumEncryptForPublicKey(payload, ephPub);
+          return { id: request.id, ok: true, result: encodeBase64(sealedBox) };
         }
 
         default: {

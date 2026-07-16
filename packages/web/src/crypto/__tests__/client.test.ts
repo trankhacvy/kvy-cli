@@ -1,4 +1,13 @@
-import { deriveKeyTree, getRandomBytes, wrapDek } from "@falcon/crypto/web";
+import {
+  decodeBase64,
+  decodeRecoveryCode,
+  deriveKeyTree,
+  encodeBase64,
+  getRandomBytes,
+  libsodiumDecryptWithSecretKey,
+  verifyDetached,
+  wrapDek,
+} from "@falcon/crypto/web";
 import { describe, expect, it } from "vitest";
 import { createCryptoBridgeClient } from "../client.js";
 import { createMemoryKeyStorage } from "../key-storage.js";
@@ -72,5 +81,75 @@ describe("crypto-bridge client <-> worker RPC", () => {
         expect(containsSecretBytes(response, secret)).toBe(false);
       }
     }
+  });
+
+  it("getIdentity resolves null, then the provisioned public keys after init", async () => {
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    expect(await client.getIdentity()).toBeNull();
+
+    const masterSecret = getRandomBytes(32);
+    const tree = deriveKeyTree(masterSecret);
+    await client.init(masterSecret);
+
+    expect(await client.getIdentity()).toEqual({
+      signPubKey: expect.any(String),
+      contentPubKey: expect.any(String),
+    });
+    const identity = await client.getIdentity();
+    expect(decodeBase64(identity!.signPubKey)).toEqual(tree.signing.publicKey);
+    expect(decodeBase64(identity!.contentPubKey)).toEqual(tree.content.publicKey);
+  });
+
+  it("signInChallenge produces a challenge/signature that verifies against the provisioned identity", async () => {
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    const masterSecret = getRandomBytes(32);
+    const tree = deriveKeyTree(masterSecret);
+    await client.init(masterSecret);
+
+    const result = await client.signInChallenge();
+    expect(
+      verifyDetached(
+        decodeBase64(result.challenge),
+        decodeBase64(result.signature),
+        tree.signing.publicKey,
+      ),
+    ).toBe(true);
+  });
+
+  it("signInChallenge rejects when no identity has been provisioned", async () => {
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    await expect(client.signInChallenge()).rejects.toThrow("not-initialized");
+  });
+
+  it("exportRecoveryCode round-trips to the provisioned master secret", async () => {
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    const masterSecret = getRandomBytes(32);
+    await client.init(masterSecret);
+
+    const code = await client.exportRecoveryCode();
+    expect(decodeRecoveryCode(code)).toEqual(masterSecret);
+  });
+
+  it("sealForPeer seals the master secret so only the peer's matching secret key can open it", async () => {
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    const masterSecret = getRandomBytes(32);
+    await client.init(masterSecret);
+
+    const peer = deriveKeyTree(getRandomBytes(32)).content;
+    const sealed = await client.sealForPeer(encodeBase64(peer.publicKey));
+
+    const opened = libsodiumDecryptWithSecretKey(decodeBase64(sealed), peer.secretKey);
+    expect(opened).not.toBeNull();
+    expect(opened?.slice(1)).toEqual(masterSecret);
   });
 });
