@@ -6,6 +6,12 @@
  *
  * New code. `unwrapDek` never throws — returns `null` on any failure (wrong
  * key, corrupt bytes, unknown version byte), same contract as `box.open()`.
+ *
+ * Not itself a Happy port — this wrap/unwrap scheme is Falcon's DEK-column
+ * design (falcon-system-design.md §5.1), built on `libsodiumEncryptForPublicKey`/
+ * `libsodiumDecryptWithSecretKey`, which are adapted from Happy —
+ * https://github.com/slopus/happy (MIT); see `encryption.ts`'s header for the
+ * full license text those primitives carry.
  */
 import { libsodiumDecryptWithSecretKey, libsodiumEncryptForPublicKey } from "./encryption.js";
 

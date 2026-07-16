@@ -12,6 +12,11 @@ import path from "node:path";
  * deliberately dumb: no locking, no staleness logic — `lock.ts` is the
  * source of truth for "is a daemon actually running", this is just its
  * advertised metadata.
+ *
+ * Port of Happy's daemon state file — https://github.com/slopus/happy (MIT);
+ * mirrors `happy-cli/src/daemon/run.ts`'s published pid/port/version state
+ * (plan.md §7.4: "Happy persists finished sessions ... daemon/run.ts,
+ * sessions.json"), split out here into its own small read/write module.
  */
 export interface DaemonState {
   pid: number;
