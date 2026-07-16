@@ -4,9 +4,9 @@ import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import {
-  claudeLocal,
   type ClaudeLocalDeps,
   type ClaudeLocalOptions,
+  claudeLocal,
   ExitCodeError,
   FALCON_SYSTEM_PROMPT,
 } from "./claudeLocal.js";
@@ -22,12 +22,7 @@ interface FakeChild {
 function createFakeChild(withFd3 = true): FakeChild {
   const emitter = new EventEmitter() as unknown as ChildProcess;
   const fd3 = new PassThrough();
-  (emitter as unknown as { stdio: unknown[] }).stdio = [
-    null,
-    null,
-    null,
-    withFd3 ? fd3 : null,
-  ];
+  (emitter as unknown as { stdio: unknown[] }).stdio = [null, null, null, withFd3 ? fd3 : null];
   return {
     child: emitter,
     fd3,
@@ -127,7 +122,11 @@ describe("claudeLocal", () => {
       });
 
       const promise = claudeLocal(
-        baseOptions({ workingDirectory: "/work/dir", abort: abort.signal, claudeEnvVars: { FOO: "bar" } }),
+        baseOptions({
+          workingDirectory: "/work/dir",
+          abort: abort.signal,
+          claudeEnvVars: { FOO: "bar" },
+        }),
         buildDeps(spawnImpl, { env: { BASE: "1" } }),
       );
       emitExit(0, null);
@@ -174,7 +173,10 @@ describe("claudeLocal", () => {
       const onSessionFound = vi.fn();
 
       const promise = claudeLocal(
-        baseOptions({ claudeArgs: ["--session-id", "11111111-1111-1111-1111-111111111111"], onSessionFound }),
+        baseOptions({
+          claudeArgs: ["--session-id", "11111111-1111-1111-1111-111111111111"],
+          onSessionFound,
+        }),
         buildDeps(spawnImpl),
       );
       emitExit(0, null);
@@ -349,7 +351,11 @@ describe("claudeLocal", () => {
       const onSessionFound = vi.fn();
 
       const promise = claudeLocal(
-        baseOptions({ sessionId: "resume-me", hookSettingsPath: "/tmp/hooks/settings.json", onSessionFound }),
+        baseOptions({
+          sessionId: "resume-me",
+          hookSettingsPath: "/tmp/hooks/settings.json",
+          onSessionFound,
+        }),
         buildDeps(spawnImpl),
       );
       emitExit(0, null);
@@ -458,7 +464,9 @@ describe("claudeLocal", () => {
 
       const promise = claudeLocal(baseOptions({ onThinkingChange }), buildDeps(spawnImpl));
 
-      fd3.write(`${JSON.stringify({ type: "fetch-start", id: 1, hostname: "x", path: "/y", timestamp: 1 })}\n`);
+      fd3.write(
+        `${JSON.stringify({ type: "fetch-start", id: 1, hostname: "x", path: "/y", timestamp: 1 })}\n`,
+      );
       await vi.advanceTimersByTimeAsync(0);
       expect(onThinkingChange).toHaveBeenCalledWith(true);
 
@@ -483,12 +491,16 @@ describe("claudeLocal", () => {
 
       const promise = claudeLocal(baseOptions({ onThinkingChange }), buildDeps(spawnImpl));
 
-      fd3.write(`${JSON.stringify({ type: "fetch-start", id: 1, hostname: "x", path: "/y", timestamp: 1 })}\n`);
+      fd3.write(
+        `${JSON.stringify({ type: "fetch-start", id: 1, hostname: "x", path: "/y", timestamp: 1 })}\n`,
+      );
       await vi.advanceTimersByTimeAsync(0);
       fd3.write(`${JSON.stringify({ type: "fetch-end", id: 1, timestamp: 2 })}\n`);
       await vi.advanceTimersByTimeAsync(200);
       // New fetch arrives before the 500ms debounce elapses.
-      fd3.write(`${JSON.stringify({ type: "fetch-start", id: 2, hostname: "x", path: "/z", timestamp: 3 })}\n`);
+      fd3.write(
+        `${JSON.stringify({ type: "fetch-start", id: 2, hostname: "x", path: "/z", timestamp: 3 })}\n`,
+      );
       await vi.advanceTimersByTimeAsync(400);
 
       expect(onThinkingChange).toHaveBeenCalledTimes(1);
@@ -511,7 +523,9 @@ describe("claudeLocal", () => {
 
       const promise = claudeLocal(baseOptions({ onThinkingChange }), buildDeps(spawnImpl));
 
-      fd3.write(`${JSON.stringify({ type: "fetch-start", id: 1, hostname: "x", path: "/y", timestamp: 1 })}\n`);
+      fd3.write(
+        `${JSON.stringify({ type: "fetch-start", id: 1, hostname: "x", path: "/y", timestamp: 1 })}\n`,
+      );
       await vi.advanceTimersByTimeAsync(0);
       expect(onThinkingChange).toHaveBeenLastCalledWith(true);
 

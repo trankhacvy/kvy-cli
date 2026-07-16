@@ -68,7 +68,7 @@
 
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import crossSpawn from "cross-spawn";
@@ -95,8 +95,7 @@ export class ExitCodeError extends Error {
 export const FALCON_SYSTEM_PROMPT =
   "You are running inside Falcon, a terminal + web session wrapper around Claude Code.";
 
-const SESSION_ID_UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_ID_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Best-effort check that a session's transcript actually contains a real message entry. */
 function hasValidSessionEntries(projectDir: string, sessionId: string): boolean {
