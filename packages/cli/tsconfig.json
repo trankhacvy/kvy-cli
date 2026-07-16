@@ -2,11 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
+    "jsx": "react-jsx",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   // `bootstrap.integration.test.ts` imports `@falcon/server`'s TS source
   // directly (a private, unpublished app package with no subpath `exports`
   // for its test utilities — see that file's own comment) purely so vitest
