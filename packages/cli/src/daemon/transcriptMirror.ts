@@ -82,6 +82,22 @@ export async function handleAdoptMirror(
   const projectDir = getProjectPath(resolved.directory, deps.env ?? process.env);
   const file = path.join(projectDir, `${params.providerSessionId}.jsonl`);
 
+  // `providerSessionId` arrives as an unvalidated string over the wire
+  // (`AdoptMirrorParamsSchema` only requires `z.string()`) and is
+  // interpolated straight into a filesystem path above — without this
+  // check, a value like `../../../../tmp/evil` would resolve outside
+  // `projectDir` entirely (path traversal, CWE-22) and let a caller read
+  // arbitrary `*.jsonl` files reachable from the daemon's working
+  // directory. Every legitimate id is a bare filename inside `projectDir`
+  // (it comes from a `readdir()` of that directory elsewhere in this
+  // codebase — `adopt/listSessions.ts`, `transcriptIndexer.ts`), so the
+  // resolved path must stay contained.
+  const resolvedFile = path.resolve(file);
+  const resolvedProjectDir = path.resolve(projectDir) + path.sep;
+  if (!resolvedFile.startsWith(resolvedProjectDir)) {
+    throw new Error(`adopt.mirror: invalid provider session id "${params.providerSessionId}"`);
+  }
+
   let buf: Buffer;
   try {
     buf = await readFile(file);

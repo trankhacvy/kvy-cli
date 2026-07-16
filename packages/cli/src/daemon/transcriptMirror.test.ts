@@ -87,6 +87,17 @@ describe("handleAdoptMirror", () => {
     await expect(handleAdoptMirror(params(), deps())).rejects.toThrow(/failed to read transcript/);
   });
 
+  it("rejects a providerSessionId that path-traverses outside the project dir", async () => {
+    // A malicious/buggy caller could otherwise read arbitrary `*.jsonl`
+    // files reachable from the daemon's filesystem (CWE-22).
+    const outside = join(baseDir, "outside.jsonl");
+    await writeFile(outside, "secret\n");
+
+    await expect(
+      handleAdoptMirror(params({ providerSessionId: "../../outside" }), deps()),
+    ).rejects.toThrow(/invalid provider session id/);
+  });
+
   it("returns the whole transcript in one done chunk when it's small", async () => {
     await writeFile(join(projectDir, "prov_1.jsonl"), "line one\nline two\n");
 
