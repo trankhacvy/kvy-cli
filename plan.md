@@ -748,10 +748,10 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 
 ### Phase 3 — Fleet: spawn, durability, adoption, Codex (M3, weeks 9–11)
 
-**3.1 Remote spawn** — §7.3
-- [ ] Daemon `spawn` RPC with **idempotency-key replay map** **(N)**; workspace-path validation (no arbitrary-dir execution)
-- [ ] tmux-preferred spawner (`tmux new-session -d -s falcon-<sid>`), detached fallback; env `${VAR}` expansion fail-fast **(P)**
-- [ ] Spawn↔webhook matching by PID with 15s awaiter **(P)**
+**3.1 Remote spawn** — §7.3 *(landed 2026-07-16 via `P3-3.1-daemon-spawn-rpc`: this branch was rebased onto `main`'s current tip — merge-base `de66b62` confirmed identical to `main`'s tip pre-land, clean rebase, zero conflicts (the branch's only payload is 12 new/modified files entirely under `packages/cli/src/daemon/`, disjoint from everything `main` had landed since this branch's original fork point, incl. `P2-2.3-local-mode-hook-honesty`/`P2-2.4-web-control-surface`). Confirmed pre-land via direct `Read` (bypassing the shell) that none of `envExpand.ts`/`workspacePath.ts`/`processLauncher.ts`/`spawnAwaiter.ts`/`spawnEngine.ts`/`machineRpc.ts` existed on `main`. Forced (`--force`, no turbo cache) `pnpm build` (5/5 packages), `pnpm typecheck` (9/9 tasks), `pnpm test` (9/9 tasks — 602 `falcon` cli tests incl. the 48 new ones + 230 `@falcon/server`) all green. `pnpm lint` hit the environment-only `rtk` lint-wrapper OOM (twice) documented elsewhere in this file; ran `biome check` directly instead — zero errors in any changed file (only pre-existing `noTemplateCurlyInString` warnings inherent to testing a literal `${VAR}` string-template DSL, and 12 repo-wide errors confirmed identical on `main` itself, i.e. pre-existing and unrelated). First three bullets below are genuinely implemented and landed; the last two are explicitly out of this branch's scope and stay unchecked.)*
+- [x] Daemon `spawn` RPC with **idempotency-key replay map** **(N)**; workspace-path validation (no arbitrary-dir execution)
+- [x] tmux-preferred spawner (`tmux new-session -d -s falcon-<sid>`), detached fallback; env `${VAR}` expansion fail-fast **(P)**
+- [x] Spawn↔webhook matching by PID with 15s awaiter **(P)**
 - [ ] Web "New Session" flow: machine → directory picker (daemon `fs` RPC) → provider/mode/model → spawn; 409 directory-creation approval loop **(P** of controlServer contract**)**
 - [ ] Branch/worktree option (`-b`): `git worktree add` via daemon **(N, P1)**
 
