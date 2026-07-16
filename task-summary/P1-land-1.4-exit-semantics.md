@@ -65,11 +65,37 @@ false-claim callout under §1.5).
    task-summary to reflect the true, current state instead of the prior false
    "already landed" claim.
 
+## Second reconciliation pass (main moved again mid-task)
+
+`main` is a concurrently-moving target in this environment (multiple other
+`P1-land-*` tasks run in parallel worktrees). After the first reconciliation
+above, `main` advanced again — from `fba3ae0` to `343491f` — via the
+unrelated `P1-land-1.3-session-bootstrap` land (adds
+`packages/cli/src/session/bootstrap.ts` + tests, touches
+`packages/cli/{package.json,tsconfig.json}`, `packages/web/src/crypto/worker.ts`,
+`pnpm-lock.yaml`, `plan.md`; zero overlap with this branch's own files other
+than `plan.md`'s shared narrative section). Reconciled again via `git merge
+--no-ff main` — clean, one auto-merged file (`plan.md`), confirmed zero
+conflict markers via `grep -rn '^<<<<<<<\|^=======$\|^>>>>>>>'`. Re-ran
+`pnpm install --frozen-lockfile` (picked up the new `pnpm-lock.yaml` entries)
+then the full suite again, forced:
+
+- `pnpm build`: **5/5** tasks green.
+- `pnpm exec turbo run typecheck --force`: **9/9** tasks green (one more task
+  than the first pass — the incoming `session-bootstrap` work adds its own
+  typecheck target).
+- `pnpm exec turbo run test --force`: **9/9** tasks green, **578 tests total**,
+  0 failures — `@falcon/wire` 61/61, `@falcon/crypto` 65/65, `@falcon/web`
+  56/56, `falcon` (cli) **251/251** (23 test files, incl.
+  `api/sessionStatus.test.ts`, `claude/sessionExit.test.ts`,
+  `persistence.test.ts`, and the newly-merged-in `session/bootstrap*.test.ts`),
+  `@falcon/server` **145/145**.
+
 ## Current state / what remains
 
-- `git merge-base --is-ancestor main HEAD` → **true** (post-reconciliation).
-  This branch (tip after this pass) is a genuine, zero-drift, conflict-free
-  fast-forward/merge candidate for `main`'s current tip.
+- `git merge-base --is-ancestor main HEAD` → **true** (post-reconciliation,
+  both passes). This branch (tip after this task) is a genuine, conflict-free
+  fast-forward/merge candidate for `main`'s tip as of this task's completion.
 - `git cat-file -e main:packages/cli/src/claude/sessionExit.ts` /
   `main:packages/server/src/app/routes/sessionStatus.ts` still both **fail** —
   the actual fast-forward onto the shared `main` ref has **not** happened as
@@ -77,7 +103,9 @@ false-claim callout under §1.5).
   shared `main` ref (fast-forward or `--no-ff` merge performed from the
   primary, non-worktree checkout) is a follow-up step outside this worktree
   session's write access — the same constraint every other genuine
-  `P1-land-*` task in this repo's `plan.md` history has flagged.
+  `P1-land-*` task in this repo's `plan.md` history has flagged. Given `main`
+  is moving concurrently, whatever process performs that final step should
+  re-check drift once more immediately before fast-forwarding.
 - Once that fast-forward happens, `plan.md`'s "Exit semantics" bullet should be
   flipped back to `[x]` with a note pointing at the real merge commit on
   `main` (mirroring the `P1-land-1.5-daemon-worktrees`/`P1-land-1.3-cli-scaffold`
