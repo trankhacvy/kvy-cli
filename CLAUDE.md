@@ -72,8 +72,13 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme, one placeholder route. Auth,
-                              sync engine, crypto bridge, and API calls still [planned].
+                              wired up, dark default theme, one placeholder route. Crypto
+                              worker bridge (src/crypto/), the transcript reducer
+                              (src/sync/reducer/), and apiSocket, the user-scoped
+                              Socket.IO client with infinite reconnect + app-state
+                              reporting (src/sync/), are wired up. Auth pages and the sync
+                              engine (gap detection, TanStack Query invalidation) still
+                              [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
