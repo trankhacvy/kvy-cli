@@ -3847,3 +3847,118 @@ tests total, 0 failures).
    bootstrap — explicitly flagged as a follow-up in its own land task-
    summary, blocked on the still-unmerged `POST /v1/sessions` route (§1.1/
    1.2, see item 1 above).
+
+## Cycle 33 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `3eee615ac73151a6dd048c926ce2463fcdf91595`
+— "fix: P1-land-1.1-1.2-server-realtime-write-path - resolve test
+failures"). Since Cycle 32's tracker commit (`ca8f3b1`), the long-flagged
+blocker finally cleared: `65b5794` ("Land the server Socket.IO read-path +
+idempotent HTTP write-path branch onto main") and `3eee615` landed for
+real on the shared `main` ref — confirmed via `/usr/bin/git rev-parse
+HEAD`, `/usr/bin/git merge-base --is-ancestor 65b5794 HEAD` → true, and
+`/usr/bin/git ls-tree main -- packages/server/src/app/socket.ts
+packages/server/src/app/socket/rpcHandler.ts` (both present in `main`'s
+tree, not just a worktree).
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (all cache hits, `FULL TURBO`; cache validity is content-hash based so
+  this reflects `main`'s actual current tree).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server` **140**
+  (up from 87 at Cycle 32 — the +53 is the Socket.IO/`eventRouter`/
+  `rpcHandler` read-path tests plus the seven HTTP write-path route test
+  files, now landed on `main`), `falcon` (cli) 168. Total **470 tests, 0
+  failures**.
+
+### Task-summaries read this cycle
+
+- **`task-summary/P1-land-1.1-1.2-server-realtime-write-path.md`** —
+  **exists on `main`** (its content documents the full multi-cycle
+  reconciliation history plus an "Addendum: main actually fast-forwarded"
+  section from the session that performed `git merge --ff-only 65b5794`
+  directly against the primary checkout). Independently re-verified rather
+  than trusting the summary's own narrative at face value: `main`'s HEAD is
+  a descendant of `65b5794`, the read-path/write-path source files are
+  present in `git ls-tree main`, and a fresh `pnpm typecheck`/`pnpm test`
+  on `main` itself is green (470/470). Credited — see plan.md §1.1/§1.2
+  confirmation notes added this cycle (checkboxes were already `[x]` from
+  a prior worktree session, so no checkbox toggle was needed, only the
+  landing confirmation).
+- **`task-summary/P1-land-1.5-ensure-daemon-running.md`** — **does not
+  exist on `main`** (`git ls-tree main --` empty for that path; only
+  present inside `.worktrees/P1-land-1.5-ensure-daemon-running/` and
+  `.worktrees/P1-1.5-ensure-daemon-running/`). `git merge-base
+  --is-ancestor P1-land-1.5-ensure-daemon-running main` → **not an
+  ancestor**; `git cat-file -e
+  main:packages/cli/src/daemon/ensureDaemonRunning.ts` fails. Same
+  unlanded state flagged at Cycles 31/32; **not credited** — this file was
+  requested by this cycle's instructions as if from a "successful task,"
+  but it does not actually exist on `main` and the underlying work has not
+  landed. Not treated as a typecheck/test failure (out of scope for that
+  gate) but flagged below as a process issue.
+- **`task-summary/P1-land-1.6-reducer-port.md`** — **does not exist on
+  `main`** (same check, empty `git ls-tree`). `git merge-base
+  --is-ancestor P1-land-1.6-reducer-port main` / `P1-1.6-reducer-port
+  main` both → **not an ancestor**; `main`'s `packages/web/src/sync/`
+  directory does not exist. Also requested as if from a "successful task"
+  but not actually landed; **not credited**.
+
+### Tasks completed this cycle
+
+**1 task** (`P1-land-1.1-1.2-server-realtime-write-path` — server realtime
+Socket.IO read path + idempotent HTTP write path, §16 1.1 + 1.2). The
+checkbox flips were performed by a prior worktree session; this tracker's
+contribution this cycle is independently confirming the actual landing
+onto the shared `main` ref (previously flagged unlanded for 6 consecutive
+cycles, 27→32) and re-verifying a fresh green `pnpm typecheck`/`pnpm test`
+run directly on `main`. `plan.md` §16 checkbox count is unchanged at
+**53/135** (`grep -c '^\- \[x\]' plan.md` → 53) — the checkboxes had
+already been flipped in a prior session's commit; this cycle only added
+confirmation narrative, no new toggles.
+
+### Blockers / issues found
+
+1. **Two of the three task-summary files requested this cycle do not
+   exist on `main` and their underlying work has not landed** —
+   `task-summary/P1-land-1.5-ensure-daemon-running.md` and
+   `task-summary/P1-land-1.6-reducer-port.md` were passed in as if from
+   completed/successful tasks, but both are only present in throwaway
+   `.worktrees/` checkouts, never merged onto the shared `main` ref. This
+   is the same "land step never happens" gap flagged repeatedly since
+   Cycle 27 for the (now-resolved) 1.1/1.2 branch — it is still live for
+   these two. Recommend the orchestrator double-check task completion
+   status against `main` (e.g. `git merge-base --is-ancestor <branch>
+   main`) before crediting a task-summary as "successful" to the progress
+   tracker.
+2. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **53/135 checked (~39.3%)**, unchanged from
+Cycle 32's 41/135 in terms of *this cycle's* new toggles (the jump from
+41→53 already happened in the prior worktree session that performed the
+actual `main` land; this cycle only confirms it). `pnpm typecheck`/`pnpm
+test` both green on `main` (470 tests total, 0 failures, up from 417 at
+Cycle 32 — the +53 `@falcon/server` tests from the newly-landed
+Socket.IO read-path + HTTP write-path).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.5-ensure-daemon-running` (or its underlying
+   `P1-1.5-ensure-daemon-running` branch) onto `main`** — small,
+   self-contained, depends only on already-merged §1.5 primitives
+   (`lock.ts`/`state.ts`/`controlServer.ts`/`commands.ts`); self-verified
+   green in its own worktree per its task-summary. Now the
+   longest-standing unlanded item (flagged since Cycle 31).
+2. **Land `P1-land-1.6-reducer-port` (or `P1-1.6-reducer-port`) onto
+   `main`** — the reducer port (`packages/web/src/sync/reducer/{reduce,
+   types}.ts`) is self-verified green (55/55 `@falcon/web` tests per its
+   own task-summary) and sits disjoint from anything else in
+   `packages/web/src/`.
+3. **Wire the call-site for `notifyDaemonSessionStarted`** into session
+   bootstrap — now unblocked, since `POST /v1/sessions` (§1.1/1.2) has
+   landed on `main` this cycle.

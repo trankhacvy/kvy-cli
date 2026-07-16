@@ -54,7 +54,15 @@ packages/
 │                             cache, app.authenticate preHandler) + `POST /v1/auth`
 │                             challenge/response route, `POST /v1/auth/register` OAuth
 │                             (Google/GitHub) sign-in, and `/v1/auth/pair*` device-pairing
-│                             routes. Socket.IO routes still [planned].
+│                             routes + Socket.IO on `/v1/stream` (src/app/socket.ts,
+│                             src/app/socket/rpcHandler.ts) fanning out through
+│                             `src/app/events/eventRouter.ts` (room-scoped emitUpdate/
+│                             emitEphemeral, presence ephemerals, backpressure coalescing)
+│                             + the HTTP write path (src/app/routes/: POST /v1/sessions,
+│                             POST/GET .../messages, PUT .../metadata|state CAS, GET
+│                             /v1/sync, GET /v1/sessions, POST /v1/machines — all
+│                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
+│                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme, one placeholder route. Auth,
                               sync engine, crypto bridge, and API calls still [planned].
