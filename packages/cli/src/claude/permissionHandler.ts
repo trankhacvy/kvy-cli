@@ -178,6 +178,18 @@ export class PermissionHandler {
       return this.requestPermission(toolName, input, options.signal);
     }
 
+    const descriptor = getToolDescriptor(toolName);
+
+    // ExitPlanMode always requires user approval — never auto-approve it,
+    // even if a prior `{kind:'allow', scope:'session'}` decision added it to
+    // `allowedTools` (checked below). This must run *before* the allow-list
+    // checks, the same precedence AskUserQuestion gets above, or a single
+    // "allow for session" answer would silently defeat the always-prompt
+    // invariant for every later ExitPlanMode call.
+    if (descriptor.exitPlan) {
+      return this.requestPermission(toolName, input, options.signal);
+    }
+
     if (toolName === "Bash") {
       const command = typeof input.command === "string" ? input.command : undefined;
       if (command) {
@@ -192,13 +204,6 @@ export class PermissionHandler {
       }
     } else if (this.allowedTools.has(toolName)) {
       return { behavior: "allow", updatedInput: input };
-    }
-
-    const descriptor = getToolDescriptor(toolName);
-
-    // ExitPlanMode always requires user approval — never auto-approve it.
-    if (descriptor.exitPlan) {
-      return this.requestPermission(toolName, input, options.signal);
     }
 
     if (this.mode === "bypassPermissions") {

@@ -118,6 +118,22 @@ describe("PermissionHandler allow-for-session", () => {
     const result = await handler.canUseTool("Bash", { command: "git log --oneline" }, makeOptions());
     expect(result).toMatchObject({ behavior: "allow" });
   });
+
+  it("allow scope:session on ExitPlanMode does NOT auto-approve a later ExitPlanMode call — it must always prompt", async () => {
+    const { handler, envelopes } = createHandler();
+    const first = handler.canUseTool("ExitPlanMode", { plan: "do the thing" }, makeOptions());
+    const reqId = (envelopes.at(-1)?.ev as { reqId: string }).reqId;
+    handler.resolve({ reqId, decision: { kind: "allow", scope: "session" } });
+    await expect(first).resolves.toMatchObject({ behavior: "allow" });
+
+    // A second ExitPlanMode call must still emit a fresh perm-request rather
+    // than being silently auto-approved via the (now-populated) allow-list.
+    const second = handler.canUseTool("ExitPlanMode", { plan: "do another thing" }, makeOptions());
+    expect(envelopes.filter((e) => e.ev.t === "perm-request")).toHaveLength(2);
+    const secondReqId = (envelopes.at(-1)?.ev as { reqId: string }).reqId;
+    handler.resolve({ reqId: secondReqId, decision: { kind: "deny" } });
+    await expect(second).resolves.toMatchObject({ behavior: "deny" });
+  });
 });
 
 describe("PermissionHandler mode decision", () => {
