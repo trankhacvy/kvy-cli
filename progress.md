@@ -1,5 +1,60 @@
 # Falcon — Progress Log
 
+## Cycle 56 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `8821c00` — "chore: cycle 55 — completed 2 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon` cli, plus their `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 67/67, `@falcon/wire` 66/66,
+  `@falcon/server` 230/230 (32 files), `falcon` cli 540/540 (55 files) — all re-run fresh this
+  cycle; `@falcon/web`'s test task cache-hit replayed at 196/196 per its own logged summary. 1099
+  tests total, 0 failures across the whole workspace.
+
+### Tasks reviewed this cycle
+
+No tasks were reported as confirmed merged onto `main` this cycle (task list supplied to this
+tracker run was empty — "none merged this cycle"). Per instructions, no task-summary file was
+taken on faith; since there was nothing in the confirmed-merged list to check, no
+`git merge-base --is-ancestor <task_id> main` calls were needed to gate a checkbox flip. As a
+sanity check anyway, none of the "next recommended" candidates from Cycle 55
+(`P2-2.4-web-control-surface`) show up as a merged ref: `git merge-base --is-ancestor
+P2-2.4-web-control-surface main` → **not an ancestor** (confirmed still an open worktree at tip
+`1eb867f`, two commits ahead of its branch point, not yet landed).
+
+### Tasks completed this cycle
+
+**0 checkboxes flipped.** `plan.md` is unchanged this cycle: 89/135 checked, same as the tally
+Cycle 55 recorded after its own two flips. Nothing new landed on `main` since Cycle 55's HEAD.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each, 1099 total
+tests: 67 crypto + 66 wire + 196 web + 230 server + 540 cli — 0 failures anywhere).
+
+### Overall completion
+
+`plan.md` checkbox count: **89/135 checked (~65.9%)** — unchanged from Cycle 55 (no new merges
+this cycle to credit).
+
+### Next recommended tasks
+
+1. **Land `P2-2.4-web-control-surface`** (worktree `.worktrees/P2-2.4-web-control-surface`, tip
+   `1eb867f`) — Composer/`PermCard`/`ControlBar`/attention-badge implementation is already
+   committed there (`feat: ...` + a `fix: ... resolve test failures` follow-up commit) but not yet
+   merged onto `main`; this is the only Phase 2 checklist section (§2.4) with zero checked bullets,
+   and per Cycle 55's notes it's now unblocked by §2.3's permission envelopes.
+2. **Live-wire `perm-request`/`perm-resolve` envelopes into the web timeline**, replacing the
+   hand-built demo fixture (`packages/web/src/components/timeline/demo-items.ts`) with the live
+   sync engine/socket — closes one of §2.3's two remaining documented gaps, likely overlaps with
+   the §2.4 landing above.
+3. **Retire superseded/stale worktrees**: `.worktrees/P1-1.3-cli-locator` (duplicate of
+   already-landed `P1-1.3-provider-detection`) and `.worktrees/P1-1.5-daemon-singleton-lock`
+   (superseded — §1.5 already fully landed via `P1-land-1.5-daemon-worktrees`) — pure cleanup,
+   flagged across multiple prior cycles, not pending feature work.
+
 ## Cycle 55 — 2026-07-16
 
 **Branch checked:** `main` (HEAD `0eb8362` — "merge: land P2-2.5-notification-fallback-and-mute
