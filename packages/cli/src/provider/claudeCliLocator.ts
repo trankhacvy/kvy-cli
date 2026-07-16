@@ -150,8 +150,13 @@ export function findClaudeInPath(): ClaudeCliLocation | null {
     // On Windows, npm creates shell script shims (no extension) for global
     // packages. These cannot be spawned directly by Node.js. When we find
     // such a shim, resolve to the actual cli.js in the adjacent
-    // node_modules directory.
+    // node_modules directory. On other platforms `which`/`realpath` only
+    // ever return real, already-executable files — including the
+    // extensionless native binary `@anthropic-ai/claude-code` ships since
+    // 2.1.113 (see `resolveClaudeEntrypoint`) — so no shim resolution is
+    // needed there; treat any resolved path as executable.
     const isExecutable =
+      process.platform !== "win32" ||
       resolvedPath.endsWith(".js") ||
       resolvedPath.endsWith(".cjs") ||
       resolvedPath.endsWith(".exe");

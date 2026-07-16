@@ -271,6 +271,26 @@ describe("findClaudeInPath", () => {
     expect(result).not.toBeNull();
     expect(result?.path).toBe(realpathSync(cliPath));
   });
+
+  it("resolves a real extensionless native binary found directly on PATH (>=2.1.113 format)", () => {
+    if (process.platform === "win32") return;
+
+    const binDir = path.join(root, "bin");
+    mkdirSync(binDir, { recursive: true });
+    // Current @anthropic-ai/claude-code releases ship a platform-specific
+    // native binary with no file extension on macOS/Linux (see
+    // `resolveClaudeEntrypoint`'s doc comment) — this must not be mistaken
+    // for an unresolvable Windows-style npm shim.
+    const realBinary = path.join(binDir, "claude-real");
+    writeFileSync(realBinary, "#!/bin/sh\necho stub\n");
+    chmodSync(realBinary, 0o755);
+    symlinkSync(realBinary, path.join(binDir, "claude"));
+
+    process.env.PATH = `${binDir}:${originalPath ?? ""}`;
+    const result = findClaudeInPath();
+    expect(result).not.toBeNull();
+    expect(result?.path).toBe(realpathSync(realBinary));
+  });
 });
 
 describe("findGlobalClaudeCliPath", () => {
