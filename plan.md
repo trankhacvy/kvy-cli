@@ -762,17 +762,17 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] `falcon doctor` (+ `clean`): process discovery, categorization, runaway kill **(P)**
 - [ ] Chaos test suite: kill daemon mid-turn, kill session process, sleep/wake, server restart — all recover per failure matrix
 
-**3.3 Session adoption (UC9)** — §11
-- [ ] Daemon transcript indexer: fs-watch provider dirs for registered workspaces → `unmanagedSessions` upserts (encrypted summary, 2s debounce); liveness via process scan **(N** reusing scanner utils**)**
+**3.3 Session adoption (UC9)** — §11 *(partially landed 2026-07-17, progress tracker, cycle 58, via `P3-3.3-session-adoption-indexer` — merge commit `fa3990e` ("feat: P3-3.3-session-adoption-indexer - Daemon transcript indexer for unmanaged (plain claude/codex) sessions"), confirmed via `git merge-base --is-ancestor fa3990e main` → **true**. Scoped strictly to the daemon-side transcript indexer per the task brief: `packages/server/src/app/routes/unmanagedSessions.ts` (new write route, upsert-by-`(machineId, providerRef)`, fan-out via `eventRouter`), `packages/cli/src/daemon/{processScan.ts (+resolveProcessCwd), unmanagedSessionClient.ts, transcriptIndexer.ts}` (new). Only the first bullet below is actually built; `adopt`/`adopt.take` RPC and the web unmanaged-section UI are explicitly out of scope for this task (separate, later §3.3 bullets) and stay unchecked. `pnpm typecheck`/`pnpm test` both green on `main` as of this verification.)*
+- [x] Daemon transcript indexer: fs-watch provider dirs for registered workspaces → `unmanagedSessions` upserts (encrypted summary, 2s debounce); liveness via process scan **(N** reusing scanner utils**)** *(2026-07-17, progress tracker)*
 - [ ] Read-only mirror on demand: chunked RPC ≤64KB, blob path for large transcripts **(N)**
 - [ ] `falcon adopt [--remote] [--list]` + `falcon --continue` alias: import history → resume; old→new provider-id lineage mapping **(N)**
 - [ ] `adopt.take` RPC: takeover (SIGTERM≤5s→SIGKILL of owning pid) vs fork; idempotency-key replay; mid-turn warning surfaced to client **(N)**
 - [ ] Web: unmanaged section, live mirror view, Take over / Fork Instead dialog
 
-**3.4 Codex adapter** — §12
-- [ ] `codex app-server` JSON-RPC stdio client (newline-delimited, hand-rolled) **(P)**
-- [ ] Approval routing: `exec:request`/`patch:request` → permission pipeline **(P)**
-- [ ] `codexEnvelopeMapper` + reasoning/diff processors **(P)**; `startLocal()` = null with honest CLI note
+**3.4 Codex adapter** — §12 *(partially landed 2026-07-17, progress tracker, cycle 58, via `P3-3.4-codex-adapter` — merge commit `e1e556b` ("feat: P3-3.4-codex-adapter - Codex app-server JSON-RPC stdio client adapter"), confirmed via `git merge-base --is-ancestor e1e556b main` → **true**. New, fully independent `packages/cli/src/codex/` directory (`codexAppServerClient.ts`, `codexAppServerTypes.ts`, `permissionHandler.ts`, `envelopeMapper.ts`, `codexProviderAdapter.ts`, `codexRemote.ts`), ported from `slopus/happy`'s MIT-licensed Codex client. First three bullets below are genuinely implemented; the fourth is only half-done — `falcon codex` was already parsed pre-existing and now prints an honest "(beta, no local TUI)" note via `describeStart()`, but the web spawn flow has no provider picker yet (explicitly deferred to §3.1's spawn-flow work, per this task's own "what was not built" section) — so that bullet stays unchecked. `pnpm typecheck`/`pnpm test` both green on `main` as of this verification.)*
+- [x] `codex app-server` JSON-RPC stdio client (newline-delimited, hand-rolled) **(P)** *(2026-07-17, progress tracker)*
+- [x] Approval routing: `exec:request`/`patch:request` → permission pipeline **(P)** *(2026-07-17, progress tracker)*
+- [x] `codexEnvelopeMapper` + reasoning/diff processors **(P)**; `startLocal()` = null with honest CLI note *(2026-07-17, progress tracker)*
 - [ ] `falcon codex` command + provider pick in web spawn flow (beta banner)
 
 **Phase 3 exit:** spawn a session on an offline-then-waking machine from the web; adopt a running plain `claude` session from the phone; Codex session end-to-end.

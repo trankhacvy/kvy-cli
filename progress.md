@@ -1,5 +1,89 @@
 # Falcon — Progress Log
 
+## Cycle 58 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `962d853` — "merge: land P3-3.3-session-adoption-indexer onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon` cli, plus their `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 67/67 (8 files), `@falcon/wire`
+  66/66 (6 files), `@falcon/web` 253/253 (29 files), `@falcon/server` 233/233 (33 files), `falcon`
+  cli 678/678 (68 files) — **1297 tests total, 0 failures** across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested task-summaries exist on `main` and were checked against
+`git merge-base --is-ancestor <task_id> main`. None of the three branch refs exist anymore (normal
+post-merge cleanup, confirmed via `git branch -a`), so each was resolved to its real commit SHA via
+`git log --all --oneline | grep <task-id>` first, then verified as an ancestor:
+
+1. **`task-summary/P3-3.1-daemon-spawn-rpc.md`** (daemon `spawn` RPC: idempotency-key replay map,
+   workspace-path validation, tmux-preferred spawner + detached fallback, env `${VAR}` expansion,
+   PID-based spawn↔webhook awaiter). Commits `a39d4a5`/`b2795bd` → both
+   `git merge-base --is-ancestor <sha> main` = **true**. `plan.md`'s §3.1 first three bullets
+   (lines 752–754) were **already `[x]`** from that task's own prior landing pass — **no checkbox
+   change needed this cycle**, re-verified only (no confirmation note appended, to avoid duplicate
+   narrative on an already-fully-documented section).
+2. **`task-summary/P3-3.3-session-adoption-indexer.md`** (daemon transcript indexer: fs-watch over
+   registered workspaces' Claude Code transcript dirs → `unmanagedSessions` upserts, 2s debounce,
+   liveness via process-scan; new `POST /v1/unmanaged-sessions` write route). Merge commit `fa3990e`
+   → `git merge-base --is-ancestor fa3990e main` = **true**. `git cat-file -e
+   main:packages/cli/src/daemon/transcriptIndexer.ts` and
+   `main:packages/server/src/app/routes/unmanagedSessions.ts` both succeed. `plan.md`'s §3.3 first
+   bullet (line 766) was still `[ ]` despite the confirmed merge — **flipped to `[x]` this cycle**
+   with a dated note; the section header note clarifies only this one bullet is done (indexer only,
+   per the task's own explicit scope — not `adopt`/`adopt.take` RPC, not the web UI), so the other
+   four §3.3 bullets correctly stay unchecked.
+3. **`task-summary/P3-3.4-codex-adapter.md`** (Codex `app-server` JSON-RPC stdio client, exec/patch
+   approval routing into the permission pipeline, `codexEnvelopeMapper` + reasoning/diff processing,
+   `startLocal()` = null with an honest CLI note). Merge commit `e1e556b` →
+   `git merge-base --is-ancestor e1e556b main` = **true**. `git cat-file -e
+   main:packages/cli/src/codex/codexAppServerClient.ts` succeeds. `plan.md`'s §3.4 first three
+   bullets (lines 773–775) were still `[ ]` despite the confirmed merge — **flipped to `[x]` this
+   cycle**; the fourth bullet ("`falcon codex` command + provider pick in web spawn flow") stays
+   unchecked since the task-summary's own "what was not built" section confirms the web
+   provider-picker half is explicitly deferred to §3.1's spawn-flow work.
+
+### Tasks completed this cycle
+
+**4 checkboxes newly flipped**: `plan.md` §3.3 line 766 ("Daemon transcript indexer") and §3.4
+lines 773–775 ("Codex JSON-RPC stdio client", "Approval routing", "`codexEnvelopeMapper` +
+reasoning/diff processors"), all `[ ]` → `[x]` — genuinely merged onto `main` but not yet reflected
+in the checklist. `P3-3.1-daemon-spawn-rpc`'s three bullets were already checked off by its own
+land-pass commit in a prior cycle; independently re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 turbo tasks each, 1297
+tests, 0 failures). All three requested deliverables are confirmed genuine ancestors of `main` via
+their real commit SHAs, with their code present and functioning in `main`'s tree.
+
+### Overall completion
+
+`plan.md` checkbox count: **102/135 checked (~75.6%)** — up from 95/135 (~70.4%) at Cycle 57: +4
+from this cycle's own flips (§3.3 indexer bullet, §3.4's three Codex-client bullets) plus +3 already
+credited to `main`'s tally from `P3-3.1`'s own prior land-pass (that pass's checkbox flips predate
+this cycle's count baseline).
+
+### Next recommended tasks
+
+1. **Wire the transcript indexer + Codex adapter into the daemon's actual boot sequence.** Both
+   `startTranscriptIndexer` (§3.3) and the whole `packages/cli/src/codex/*` module (§3.4) are fully
+   built and tested but not yet called from `daemon/commands.ts`'s `runDaemonStartSync` — same
+   "standalone module built ahead of its wiring point" pattern this codebase has used before
+   (`machineRpc.ts` from §3.1 has the identical gap). A single wiring pass could plausibly close
+   several of these dangling seams at once, once workspace registration (the shared blocker all
+   three task-summaries name) exists.
+2. **Build the workspace-registration store.** All three of this cycle's task-summaries
+   independently flag the same missing piece: nothing in `packages/cli` yet persists "which
+   workspace paths are registered" (`workspacePath.ts`'s `WorkspaceRootLookup`, `transcriptIndexer.ts`'s
+   `listWorkspaces`, and the spawn-RPC's own workspace validation all take it as an injected seam).
+   Building this unblocks real wiring for §3.1, §3.3, and future §3.2/§4.1 work simultaneously.
+3. **`adopt`/`adopt.take` RPC + web unmanaged-session UI** (remaining §3.3 bullets, lines 767–770) —
+   the indexer landed this cycle is the prerequisite; these are the next concrete slice of UC9.
+
 ## Cycle 57 — 2026-07-16
 
 **Branch checked:** `main` (HEAD `0423c05` — "merge: land P2-2.3-local-mode-hook-honesty onto main")
