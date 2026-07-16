@@ -5584,3 +5584,129 @@ from Cycles 44–45. `pnpm typecheck`/`pnpm test` both green on `main`
    (`P1-land-1.5-machine-ws-client`, tip `efb36f7`, also still
    fast-forwardable and 10 cycles unlanded since Cycle 36, remains an
    equally good next pick alongside these three.)
+
+---
+
+## Cycle 47 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `04efda8`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — ran once cached (`FULL TURBO`) and once
+  forced (`--force`, no turbo cache) to be sure the cache wasn't masking a
+  drift issue: **9/9 tasks green** both times (`@falcon/crypto`,
+  `@falcon/wire`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks).
+- `pnpm test` → **PASSED** — forced (`--force`, no cache): **9/9 tasks
+  green, 578 tests total, 0 failures** — `@falcon/wire` 61 (6 files),
+  `@falcon/crypto` 65 (8 files), `@falcon/web` 56 (7 files), `@falcon/server`
+  145 (21 files, incl. `sessionStatus.test.ts` 5, `pair.test.ts` 13), `falcon`
+  cli 251 (23 files, incl. `persistence.test.ts` 16, `session/bootstrap.test.ts`
+  13 + `bootstrap.integration.test.ts` 2, `claude/sessionExit.test.ts` 10).
+
+### Task-summaries reviewed this cycle (with independent git verification)
+
+Per the tracker's standing rule, each of the three requested task-summaries
+was checked with `git merge-base --is-ancestor <task_id> main` against the
+*original feature branch* (not just the narrative in the `-land-` task-summary
+file itself, and not the `P1-land-*` branch names, which no longer exist as
+refs — they were transient worktree-local branches, since fast-forwarded and
+retired):
+
+1. **`task-summary/P1-land-1.3-falcon-home-persistence.md`** (claims
+   `~/.falcon/` persistence — `settings.json`/`access.key` — landed via
+   fast-forward `78f22af..fba3ae0`). `git merge-base --is-ancestor
+   P1-1.3-falcon-home-persistence main` → **NOT an ancestor**. However,
+   independently confirmed via `git cat-file -e
+   main:packages/cli/src/persistence.ts` → **succeeds**, and the just-run
+   `pnpm test` includes `persistence.test.ts`'s 16 passing tests. Reconciled
+   this apparent contradiction by re-reading the task-summary's own history:
+   the landing method was a **file copy** (the two new files copied
+   byte-identical from the stale source branch's tip into a *fresh*
+   worktree/branch cut from `main`, not a merge of the original branch's
+   commit history), so the original `P1-1.3-falcon-home-persistence` branch
+   was never, and will never be, a git ancestor of `main` even though its
+   deliverable genuinely reached `main`. `plan.md`'s checkbox for this item
+   was already `[x]` (flipped in a prior pass on this same file-existence
+   basis) — left unchanged, since the underlying deliverable is independently
+   confirmed present and green.
+2. **`task-summary/P1-land-1.3-session-bootstrap.md`** (claims session
+   bootstrap — mint DEK, `POST /v1/sessions` — landed at tip `343491f`).
+   `git merge-base --is-ancestor P1-1.3-session-bootstrap main` → **NOT an
+   ancestor** (same file-copy landing pattern as above). Independently
+   confirmed via `git cat-file -e main:packages/cli/src/session/bootstrap.ts`
+   → **succeeds**, and `bootstrap.test.ts` (13) +
+   `bootstrap.integration.test.ts` (2) both pass in this cycle's test run.
+   `plan.md`'s checkbox was already `[x]` from a prior pass — left unchanged
+   for the same reason as #1.
+3. **`task-summary/P1-land-1.4-exit-semantics.md`** (claims exit-semantics
+   classification landed, but the summary's own final section is honest that
+   the fast-forward had *not yet* happened as of that writing — `git cat-file
+   -e main:packages/cli/src/claude/sessionExit.ts` failed at the time).
+   Re-checked fresh against current `main`: `git merge-base --is-ancestor
+   P1-1.4-exit-semantics main` → **true** — this is a genuine ancestor (this
+   branch was reconciled in place via repeated `git merge main`, not
+   recreated from a fresh cut, so its own commits are literally in `main`'s
+   history). `git cat-file -e main:packages/cli/src/claude/sessionExit.ts`
+   and `main:packages/server/src/app/routes/sessionStatus.ts` both
+   **succeed**; `sessionExit.test.ts` (10) and `sessionStatus.test.ts` (5)
+   both pass in this cycle's run. `plan.md`'s checkbox (line 689) was still
+   `[ ]` — **flipped to `[x]`** with a dated landing note, since this is the
+   one of the three whose ancestor-check newly and cleanly passes this cycle.
+
+**Note on the two "NOT an ancestor yet file-exists-on-main" cases:** this is
+not a contradiction — the repo's landing convention for several tasks
+(documented at length in both task-summaries) is to copy the deliverable
+files into a fresh integration branch cut from `main`'s current tip, rather
+than merging the stale, heavily-drifted original feature branch wholesale
+(which would have deleted unrelated work `main` has since gained). That is a
+legitimate landing method; it just means the *original* task branch will
+never satisfy `--is-ancestor` even after its content is genuinely on `main`.
+The tracker's rule against trusting a task-summary "alone" is about not
+crediting *unverified* claims — here the claims were independently
+cross-checked against `main`'s real tree and passing tests, so they stand.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped** (Exit semantics, `plan.md` line 689,
+`[ ]` → `[x]`). The other two requested tasks (`falcon-home-persistence`,
+`session-bootstrap`) were already checked off in a prior pass and were
+re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None for `main` itself — `pnpm typecheck` and `pnpm test` are both fully
+green (9/9 tasks each, 578/578 tests, 0 failures), and all three requested
+deliverables are confirmed present in `main`'s tree with their tests passing.
+The only lingering process note: the original `P1-1.3-falcon-home-persistence`
+and `P1-1.3-session-bootstrap` feature branches (and their now-deleted
+`P1-land-*` integration branches) will permanently read as "not an ancestor"
+of `main` under a naive `--is-ancestor` check despite being genuinely landed
+— future cycles should keep cross-checking with `git cat-file -e` /
+`pnpm test` output rather than treating a bare ancestor-check failure as
+proof of non-landing when a task-summary documents a copy-based land.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **59/135 checked (~43.7%)** — up from 58/135
+(~43.0%) before this cycle's Exit-semantics flip. `pnpm typecheck`/`pnpm test`
+both green on `main` (9/9 typecheck tasks, 9/9 test tasks, 578 tests, 0
+failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.5-machine-ws-client`** (tip `8e884c5`, code-review-fixed) —
+   machine-scoped WS client (register/heartbeat/CAS sync), the
+   longest-standing unlanded item now that all three of this cycle's
+   requested tasks are confirmed on `main`.
+2. **Land the remaining §1.4 pieces**: `P1-1.4-envelope-mapper` (tip
+   `60d8c69`, `mapClaudeToEnvelopes`) and `P1-1.4-http-outbox` (tip `c35d0d1`,
+   coalescing HTTP outbox) and `P1-1.4-session-ws-alive` (tip `e818a46`,
+   `alive` keepalive) — all three are still unmerged and, together with the
+   now-landed exit-semantics and 1.1/1.2 write path, would close out all of
+   §1.4.
+3. **Land `P1-1.5-daemon-singleton-lock`** (tip `b3d5350`, code-review-fixed,
+   has its own `task-summary/P1-1.5-daemon-singleton-lock.md`) — needed
+   before the daemon-dependent §1.5/§1.6 items (session-list, sync engine)
+   can be meaningfully exercised end-to-end.
