@@ -27,7 +27,7 @@
  * swap in in-memory fakes instead of a real Socket.IO connection and a real
  * `document` — mirrors `crypto/client.ts`'s `WorkerLike` split.
  */
-import type { Ephemeral, Update } from "@falcon/wire";
+import type { EncryptedBox, Ephemeral, Update } from "@falcon/wire";
 import { EphemeralSchema, UpdateSchema } from "@falcon/wire";
 
 export type AppState = "active" | "background";
@@ -86,6 +86,28 @@ type Listener<T> = (payload: T) => void;
 // at the `on`/`off`/`emit` boundary, never inside the class body.
 type ErasedListener = (payload: never) => void;
 
+/** Ack payload for an `rpc-call` (design §4.4, server's `rpcHandler.ts`):
+ * `ok: false` covers everything from "bad params" through "target offline"
+ * to "target died mid-call" — the relay always resolves the ack, it never
+ * lets a call hang past its own 30s cap. Never thrown as an error by
+ * `rpcCall` below; callers branch on `.ok`. */
+export type RpcCallResult = { ok: true; result: EncryptedBox } | { ok: false; error: string };
+
+// Comfortably above the server's own 30s `rpc-call` timeout (design §4.4) so
+// a well-behaved server's own `{ok:false, error:"..."}` ack always wins the
+// race — this is purely a last-resort guard against an ack that never
+// arrives at all (e.g. the transport drops the response frame).
+const RPC_CALL_CLIENT_TIMEOUT_MS = 35_000;
+
+function isRpcCallResult(value: unknown): value is RpcCallResult {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "ok" in value &&
+    typeof (value as { ok: unknown }).ok === "boolean"
+  );
+}
+
 export interface ApiSocket {
   /** Connect (or reconnect with a new token — e.g. after re-auth). Idempotent
    * no-op if already connected with this exact token. */
@@ -101,6 +123,13 @@ export interface ApiSocket {
     handler: Listener<ApiSocketEventMap[K]>,
   ): () => void;
   off<K extends keyof ApiSocketEventMap>(event: K, handler: Listener<ApiSocketEventMap[K]>): void;
+  /** Calls a machine/session RPC method over the WS `rpc-call` transport
+   * (design §4.4: `target` is `m:<machineId>:<method>` or
+   * `s:<sessionId>:<method>`; `params` is always an `EncryptedBox` — the
+   * relay forwards opaque bytes). Never rejects: no live socket, or an ack
+   * that never arrives, resolves `{ok:false}` the same as a server-reported
+   * failure — callers always branch on `.ok`, never on a caught exception. */
+  rpcCall(target: string, method: string, params: EncryptedBox): Promise<RpcCallResult>;
 }
 
 export function createApiSocket(
@@ -220,5 +249,30 @@ export function createApiSocket(
     },
     on,
     off,
+    rpcCall(target, method, params) {
+      return new Promise<RpcCallResult>((resolve) => {
+        if (!socket) {
+          resolve({ ok: false, error: "not-connected" });
+          return;
+        }
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          resolve({ ok: false, error: "timeout" });
+        }, RPC_CALL_CLIENT_TIMEOUT_MS);
+        // A real socket.io-client socket treats a trailing function argument
+        // as the ack callback natively — no extra API surface needed on
+        // `SocketLike` beyond the `...args: unknown[]` it already has.
+        socket.emit("rpc-call", { target, method, params }, (response: unknown) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(
+            isRpcCallResult(response) ? response : { ok: false, error: "malformed-response" },
+          );
+        });
+      });
+    },
   };
 }
