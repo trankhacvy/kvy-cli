@@ -67,7 +67,11 @@ describe("POST /v1/sessions/:id/status", () => {
     expect(response.json()).toEqual({ status: "failed" });
 
     expect(updates).toHaveLength(1);
-    expect(updates[0]?.payload.body).toEqual({ t: "session-update", id: sessionId, status: "failed" });
+    expect(updates[0]?.payload.body).toEqual({
+      t: "session-update",
+      id: sessionId,
+      status: "failed",
+    });
 
     expect(ephemerals).toHaveLength(1);
     expect(ephemerals[0]?.payload).toEqual({ t: "attention", sessionId, kind: "failed" });

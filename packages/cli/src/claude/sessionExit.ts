@@ -58,9 +58,9 @@
  * best-effort report it with whatever session id is known, then exit.
  */
 
-import type { Logger } from "../logger.js";
 import type { ReportSessionFailedDeps, ReportSessionFailedResult } from "../api/sessionStatus.js";
 import { reportSessionFailed as defaultReportSessionFailed } from "../api/sessionStatus.js";
+import type { Logger } from "../logger.js";
 
 const TRACKED_SIGNALS: NodeJS.Signals[] = ["SIGINT", "SIGTERM", "SIGHUP"];
 

@@ -25,9 +25,9 @@ function fakeProcess() {
 }
 
 function buildTracker(overrides: Partial<Parameters<typeof createSessionExitTracker>[0]> = {}) {
-  const reportSessionFailed = vi.fn<
-    (...args: unknown[]) => Promise<ReportSessionFailedResult>
-  >().mockResolvedValue({ type: "ok" });
+  const reportSessionFailed = vi
+    .fn<(...args: unknown[]) => Promise<ReportSessionFailedResult>>()
+    .mockResolvedValue({ type: "ok" });
   const { proc, emit, exit } = fakeProcess();
 
   const tracker = createSessionExitTracker({
@@ -208,7 +208,10 @@ describe("createSessionExitTracker", () => {
 
     expect(reportSessionFailed).toHaveBeenCalledWith(
       { backendUrl: "http://backend.example", accessToken: "tok" },
-      { sessionId: "sess_mid_session", error: expect.objectContaining({ message: "bug in wrapper" }) },
+      {
+        sessionId: "sess_mid_session",
+        error: expect.objectContaining({ message: "bug in wrapper" }),
+      },
     );
     expect(exitOnUncaught).toHaveBeenCalledWith(1);
     stop();
