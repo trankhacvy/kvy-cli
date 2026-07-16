@@ -56,11 +56,22 @@ export function createRenotifyScheduler(): RenotifyScheduler {
 
       if (!RENOTIFIABLE_KINDS.has(kind)) return;
 
-      const scheduled = RENOTIFY_DELAYS_MS.map((delay) => {
+      const scheduled = RENOTIFY_DELAYS_MS.map((delay, i) => {
+        const isLast = i === RENOTIFY_DELAYS_MS.length - 1;
         const timer = setTimeout(() => {
           void retry().catch((err) => {
             console.error({ module: "push" }, `re-notify attempt failed: ${err}`);
           });
+          // The schedule for this session has run to completion. Drop the
+          // bookkeeping entry so it doesn't linger in `timersBySession`
+          // forever — a session whose perm-request is eventually answered
+          // (or never re-dispatched) would otherwise never be cleaned up.
+          // The identity check guards against a fresh schedule that
+          // superseded this one via a later `onDispatch` for the same
+          // session (that call already replaced the map entry).
+          if (isLast && timersBySession.get(sessionId) === scheduled) {
+            timersBySession.delete(sessionId);
+          }
         }, delay);
         // Never let a pending re-notify keep the process alive on its own.
         timer.unref();
