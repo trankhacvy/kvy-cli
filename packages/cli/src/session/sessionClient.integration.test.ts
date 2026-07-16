@@ -67,9 +67,7 @@ describe("sessionClient (integration: real socket.io server)", () => {
     expect(receivedAlives[0]).toEqual({ sessionId: "sess_int_1", working: false });
 
     working = true;
-    await vi.waitFor(() =>
-      expect(receivedAlives.some((a) => a.working === true)).toBe(true),
-    );
+    await vi.waitFor(() => expect(receivedAlives.some((a) => a.working === true)).toBe(true));
 
     handle.stop();
   }, 10_000);
