@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
 import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
+import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import {
   createDaemonCommandDeps,
   runDaemonStart,
@@ -65,6 +66,8 @@ Usage:
                                      Process management escape hatches
   falcon sessions list              List active/recent sessions on this machine
   falcon resume <session-id>        Reattach a terminal to an existing session
+  falcon adopt [--remote] [--list]  Adopt the most recent plain claude session in this directory
+  falcon --continue                 Alias for "falcon adopt" (most recent, local)
   falcon workspace config [--base-ref <ref>] [--remote <name>] [--directory <path>]
   falcon workspace sync             (coming soon)
   falcon notify -p <message>        Send a test push notification
@@ -219,6 +222,26 @@ async function runResume(command: Extract<FalconCommand, { type: "resume" }>): P
   return 0;
 }
 
+/**
+ * `falcon adopt [--remote] [--list]` / `falcon --continue` (plan.md §16
+ * "3.3 Session adoption (UC9)") — see `commands/adopt.ts` for the actual
+ * listing/resume/lineage logic. `ensureDaemon()` runs first for
+ * consistency with every other agent-adjacent subcommand (PRD FR-1.2):
+ * `--remote`'s detached child self-reports to the daemon's control server
+ * the same way any other spawned session does.
+ */
+async function runAdopt(command: Extract<FalconCommand, { type: "adopt" }>): Promise<number> {
+  const daemon = await ensureDaemon();
+  if (!daemon.ok) {
+    process.stderr.write(daemon.message);
+    return 1;
+  }
+  return runAdoptCommand(
+    { list: command.list, remote: command.remote },
+    createAdoptCommandDeps({ workingDirectory: process.cwd() }, { logger }),
+  );
+}
+
 function run(command: FalconCommand): number | Promise<number> {
   switch (command.type) {
     case "help":
@@ -239,6 +262,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runSessions(command);
     case "resume":
       return runResume(command);
+    case "adopt":
+      return runAdopt(command);
     case "workspace-config":
       process.stdout.write("falcon workspace config: not implemented yet\n");
       return 0;

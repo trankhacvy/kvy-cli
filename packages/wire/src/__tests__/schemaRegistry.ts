@@ -36,6 +36,8 @@ export const schemaRegistry: Record<string, z.ZodTypeAny> = {
   AdoptListResultSchema: wire.AdoptListResultSchema,
   AdoptTakeParamsSchema: wire.AdoptTakeParamsSchema,
   AdoptTakeResultSchema: wire.AdoptTakeResultSchema,
+  AdoptMirrorParamsSchema: wire.AdoptMirrorParamsSchema,
+  AdoptMirrorResultSchema: wire.AdoptMirrorResultSchema,
   MessageRpcParamsSchema: wire.MessageRpcParamsSchema,
   MessageRpcResultSchema: wire.MessageRpcResultSchema,
   PermAnswerParamsSchema: wire.PermAnswerParamsSchema,
