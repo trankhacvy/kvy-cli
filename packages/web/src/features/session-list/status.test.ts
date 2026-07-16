@@ -85,6 +85,19 @@ describe("deriveSessionStatus", () => {
     expect(deriveSessionStatus({ ...base, items })).toBe("waiting-for-permission");
   });
 
+  it("finds a pending permission in a subagent scope that never linked to a parent tool call", () => {
+    const items = reduceEnvelopes([
+      createEnvelope("user", { t: "turn-start" }, { time: 1 }),
+      createEnvelope("agent", { t: "sub-start" }, { time: 2, subagent: "orphan-subagent" }),
+      createEnvelope(
+        "agent",
+        { t: "perm-request", reqId: "r1", name: "Write", args: {}, modes: ["default"] },
+        { time: 3, subagent: "orphan-subagent" },
+      ),
+    ]);
+    expect(deriveSessionStatus({ ...base, items })).toBe("waiting-for-permission");
+  });
+
   it("is waiting-for-input when the attention signal says a question is outstanding", () => {
     expect(deriveSessionStatus({ ...base, items: [], attention: "question" })).toBe(
       "waiting-for-input",

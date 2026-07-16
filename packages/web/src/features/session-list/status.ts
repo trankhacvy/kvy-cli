@@ -28,7 +28,12 @@ export interface DeriveSessionStatusInput {
  * permission that was requested but has no decision yet — `permission` is
  * shared by reference and updated in place when a `perm-resolve` lands
  * (see `RenderItem`'s doc comment), so an undefined `decision` always means
- * "still outstanding right now", not "as of some stale snapshot". */
+ * "still outstanding right now", not "as of some stale snapshot". Subagent
+ * content can reach this list two ways (`reduceEnvelopes`'s
+ * `linkSubagentScopes`): linked onto the parent `ToolItem.subagent`, or, for
+ * a scope that never matched a parent tool call, as a standalone top-level
+ * `subagent-group` item — both are walked so an orphaned subagent's pending
+ * permission still surfaces instead of being silently missed. */
 function hasPendingPermission(items: RenderItem[]): boolean {
   for (const item of items) {
     if (item.kind === "perm-placeholder" && item.permission.decision === undefined) return true;
@@ -36,6 +41,7 @@ function hasPendingPermission(items: RenderItem[]): boolean {
       if (item.permission && item.permission.decision === undefined) return true;
       if (item.subagent && hasPendingPermission(item.subagent)) return true;
     }
+    if (item.kind === "subagent-group" && hasPendingPermission(item.items)) return true;
   }
   return false;
 }
