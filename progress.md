@@ -5272,3 +5272,105 @@ typecheck failure uncovered by forcing past the turbo cache.
 3. **Land `P1-1.6-session-list-screen` and `P1-1.6-timeline-screen`** —
    both self-contained under disjoint directories, no `P1-land-*`
    integration branch exists yet for either; carried over from Cycle 42.
+
+## Cycle 44 — 2026-07-16
+
+### Verification run on `main`
+
+- `main` HEAD at start of this cycle: `78ece02` ("chore: cycle 43 —
+  completed 0 tasks"). `git status --porcelain`: clean.
+- Plain `pnpm typecheck` reported 8/8 green, but (per the known
+  cross-worktree turbo-cache hazard flagged since Cycle 43) several
+  tasks replayed cached logs whose paths pointed at other worktrees
+  (`.worktrees/P1-1.5-machine-ws-client`, `.worktrees/P1-1.3-falcon-
+  home-persistence`) rather than this checkout. Re-ran forced:
+  `pnpm exec turbo run typecheck --force` — **PASSED**, 8/8 tasks green,
+  genuinely executed on this checkout (0 cached).
+- `pnpm exec turbo run test --force`: **PASSED**, 9/9 tasks green — 528
+  tests total, 0 failures: `falcon` cli 206, `@falcon/server` 140,
+  `@falcon/web` 56, `@falcon/wire` 61, `@falcon/crypto` 65 — identical
+  count to Cycle 43 (no source has landed on `main` between the two
+  cycles besides the Cycle 43 chore commit itself).
+
+### Task-summaries requested this cycle
+
+- **`task-summary/P1-1.3-falcon-home-persistence.md`** — still does
+  **not** exist in `main`'s `task-summary/` directory (confirmed via
+  `git ls-tree HEAD -- task-summary/P1-1.3-falcon-home-persistence.md`
+  and the `P1-land-1.3-falcon-home-persistence.md` variant, both empty).
+  `git merge-base --is-ancestor P1-1.3-falcon-home-persistence HEAD` and
+  the same check for `P1-land-1.3-falcon-home-persistence` both → **not
+  an ancestor**; `git cat-file -e HEAD:packages/cli/src/persistence.ts`
+  still fails. Both worktrees (`.worktrees/P1-1.3-falcon-home-
+  persistence` tip `9d8ee3a`, `.worktrees/P1-land-1.3-falcon-home-
+  persistence` tip `505874b`) are unchanged and still unmerged. Not
+  credited; bullet stays unchecked. Unlanded for 11 consecutive cycles
+  now (since Cycle 34).
+- **`task-summary/P1-1.3-provider-detection.md`** — still does **not**
+  exist on `main` (`git ls-tree HEAD -- task-summary/P1-1.3-provider-
+  detection.md` empty). `git merge-base --is-ancestor P1-1.3-provider-
+  detection HEAD` → **not an ancestor**; `main`'s `packages/cli/src/`
+  still has no `provider/` directory. Worktree `.worktrees/P1-1.3-
+  provider-detection` (tip `706d4e0`) unchanged since Cycle 40, still
+  unmerged, and the duplicate-locator overlap with `P1-1.3-cli-locator`
+  flagged there remains unresolved. Not credited; bullet stays
+  unchecked.
+- **`task-summary/P1-1.5-machine-ws-client.md`** — still does **not**
+  exist on `main` (`git ls-tree HEAD -- task-summary/P1-1.5-machine-ws-
+  client.md` empty). `git merge-base --is-ancestor P1-1.5-machine-ws-
+  client HEAD` → **not an ancestor**; `git cat-file -e HEAD:packages/
+  cli/src/daemon/machineClient.ts` fails. Worktree `.worktrees/P1-1.5-
+  machine-ws-client` (tip `8e884c5`) unchanged since Cycle 36, still
+  unmerged. Not credited; bullet stays unchecked. Unlanded for 9
+  consecutive cycles now (since Cycle 36).
+
+### Tasks completed this cycle
+
+**0 tasks merged/credited.** All three requested task-summaries
+describe real, complete, self-verified work confined to worktrees that
+were never fast-forwarded/merged onto the primary `main` checkout — the
+same systemic pattern flagged every cycle since each was first raised.
+`plan.md` §16 checkbox count: **56/135 — unchanged from Cycle 43.**
+
+### Blockers / issues found
+
+1. **Three long-unlanded worktrees, unchanged again this cycle:**
+   `P1-1.3-falcon-home-persistence` / `P1-land-1.3-falcon-home-
+   persistence` (11 cycles since Cycle 34), `P1-1.3-provider-detection`
+   (since Cycle 40, also blocked on a duplicate-locator decision vs.
+   `P1-1.3-cli-locator`), and `P1-1.5-machine-ws-client` (9 cycles since
+   Cycle 36). None of the three worktree tips changed since their
+   respective last-checked cycle, meaning no further work (and no land
+   attempt) happened on any of them between Cycle 43 and this cycle.
+   Landing any of them requires an actual `git merge`/fast-forward from
+   the primary, non-worktree `main` checkout — out of this tracker's
+   scope.
+2. **Turbo cache cross-worktree hazard, reproduced again.** A plain
+   `pnpm typecheck` replayed cached logs referencing other worktrees'
+   absolute paths rather than validating this checkout; `--force` was
+   required to get a trustworthy result. No real failure was hiding
+   behind the cache this time (forced run matched the cached result),
+   unlike Cycle 43.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)** — unchanged
+from Cycle 43. `pnpm typecheck`/`pnpm test` both green on `main` (8/8
+typecheck tasks, 9/9 test tasks, 528 tests, 0 failures), forced past the
+turbo cache to confirm genuinely on this checkout.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary
+   `main` checkout — integration branch already exists (tip `505874b`),
+   longest-standing unlanded item, now 11 cycles unlanded (since Cycle
+   34).
+2. **Land `P1-1.5-machine-ws-client`** onto the primary `main` checkout
+   — no integration branch exists yet, but the source worktree (tip
+   `8e884c5`) reports fully green and self-contained; 9 cycles unlanded
+   (since Cycle 36).
+3. **Land `P1-1.3-provider-detection`** — self-contained under
+   `packages/cli/src/provider/`, but first resolve the duplicate-locator
+   overlap with `P1-1.3-cli-locator` (both independently built a
+   near-identical Claude-CLI-path resolver) before merging either, to
+   avoid landing two competing implementations.
