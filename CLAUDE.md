@@ -64,8 +64,16 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme, one placeholder route. Auth,
-                              sync engine, crypto bridge, and API calls still [planned].
+                              wired up, dark default theme, one placeholder route. Crypto
+                              worker bridge (src/crypto/) wired up. `src/sync/engine.ts`:
+                              the sync engine (design §8.1/§9.1, DELTA D2) — headerSeq
+                              structural fast-path + per-session msgSeq message fast-path
+                              against a TanStack Query cache, gap ⇒ `invalidateQueries`,
+                              WS reconnect ⇒ invalidate everything. Takes an injectable
+                              `SyncSocketSource` (`on('update'|'reconnect', ...)`) so it
+                              composes with the real `apiSocket` once that lands without an
+                              adapter. Auth pages, `apiSocket` itself, and the reducer still
+                              [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
