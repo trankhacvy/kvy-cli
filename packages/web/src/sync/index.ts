@@ -38,9 +38,6 @@ export type {
   VisibilitySource,
 } from "./apiSocket.js";
 export { createApiSocket } from "./apiSocket.js";
-export { createSocketFactory } from "./socket-factory.js";
-export { createBrowserVisibilitySource } from "./visibility.js";
-
 export type { SyncEngine, SyncSocketSource } from "./engine.js";
 export { createSyncEngine } from "./engine.js";
 export {
@@ -49,4 +46,6 @@ export {
   messagesSessionIdFromKey,
   syncQueryKey,
 } from "./queryKeys.js";
+export { createSocketFactory } from "./socket-factory.js";
 export type { MessageItem, MessagesPage, MessagesQueryData, SyncSnapshot } from "./types.js";
+export { createBrowserVisibilitySource } from "./visibility.js";
