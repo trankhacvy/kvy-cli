@@ -3742,3 +3742,108 @@ against a green `pnpm typecheck`/`pnpm test` run covering all 5 packages on
    pieces (`cli-locator`, `cli-auth-login`, `envelope-mapper`,
    `http-outbox`) — all self-contained, all report green in their own
    worktrees, all still waiting for an actual land step.
+
+## Cycle 32 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `ca8f3b1` — "feat:
+P1-land-1.5-notify-daemon-session-started - Land the
+notifyDaemonSessionStarted webhook client onto main"). Since Cycle 31's
+tracker commit (`a75ab25`), one real land happened on `main`:
+`376fe04` (merge) + `ca8f3b1` (checkbox/task-summary commit) actually merged
+`P1-1.5-notify-daemon-session-started` onto the shared `main` ref — the
+first of the three tasks requested this cycle. Confirmed via `/usr/bin/git
+rev-parse HEAD`, `/usr/bin/git log --oneline a75ab25..HEAD`, and
+`/usr/bin/git status --short` (clean tree).
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`@falcon/crypto`, `@falcon/wire`, `@falcon/server`, `@falcon/web`,
+  `falcon` cli — all cache hits, `FULL TURBO`).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61, `@falcon/web` 36, `@falcon/crypto` 65, `@falcon/server` 87, `falcon`
+  (cli) **168** (up from 161 at Cycle 31 — the +7 is exactly
+  `daemon/notify.test.ts` (5) + `daemon/notify.integration.test.ts` (2), now
+  landed on `main`). Total **417 tests, 0 failures**.
+
+### Task-summaries read this cycle
+
+- **`task-summary/P1-land-1.1-1.2-server-realtime-write-path.md`** — **does
+  not exist on `main`** (`/usr/bin/git ls-tree main --` empty for that path;
+  only present inside `.worktrees/P1-land-1.1-1.2-server-realtime-write-path/`
+  and two sibling worktrees). `/usr/bin/git merge-base --is-ancestor
+  P1-land-1.1-1.2-server-realtime-write-path main` → **not an ancestor**.
+  Same unlanded state flagged every cycle since 27; not credited.
+- **`task-summary/P1-land-1.5-ensure-daemon-running.md`** — **does not exist
+  on `main`** (`/usr/bin/git ls-tree main --` empty; only present inside
+  `.worktrees/P1-land-1.5-ensure-daemon-running/` and
+  `.worktrees/P1-1.5-ensure-daemon-running/`). `/usr/bin/git merge-base
+  --is-ancestor P1-land-1.5-ensure-daemon-running main` → **not an
+  ancestor**; `git cat-file -e main:packages/cli/src/daemon/ensureDaemonRunning.ts`
+  still fails. Same unlanded state flagged at Cycle 31; not credited.
+- **`task-summary/P1-land-1.5-notify-daemon-session-started.md`** — **exists
+  on `main`** (added by commit `ca8f3b1`, itself an ancestor of current
+  HEAD). Read in full: a landing task that merged the already-self-verified
+  `P1-1.5-notify-daemon-session-started` (tip `3864766`) `--no-ff` onto a
+  fresh branch off `main`'s then-tip `a75ab25`, conflict-free (only adds
+  `packages/cli/src/daemon/notify.ts` + its two test files + its own
+  task-summary — no overlap with anything `main` had changed since the
+  branch's drifted fork point). The task itself already re-ran
+  `pnpm build`/`turbo run typecheck`/`turbo run test` (all green) and
+  **already flipped** the "Session self-report: `notifyDaemonSessionStarted`
+  webhook" bullet (plan.md §1.5) to `[x]` with its own "Landed 2026-07-16"
+  narrative note — this tracker's own re-verification above (417/417 tests,
+  including `notify.test.ts`/`notify.integration.test.ts`) independently
+  confirms that credit is accurate. No further plan.md checkbox edit needed
+  for this bullet; added a short Cycle 32 confirmation note to the same
+  §1.5 narrative paragraph for the record.
+
+### Tasks completed this cycle
+
+**1 task** (`P1-1.5-notify-daemon-session-started`, credited via the
+already-existing `P1-land-1.5-notify-daemon-session-started` land commit) —
+the checkbox flip was performed by the landing task itself before this
+cycle started, but this tracker independently re-verified the claim against
+`main`'s actual tree and a fresh test run rather than taking the summary at
+face value. `plan.md` §16 checkbox count: **41/135** checked (up from
+40/135 at Cycle 31) — `grep -c '^\- \[x\]' plan.md` → 41, `grep -c '^\- \[
+\]' plan.md` → 94.
+
+### Blockers / issues found
+
+1. **§1.1/1.2 server realtime + write path remains unlanded** — sixth
+   consecutive cycle (27→32) flagging `P1-land-1.1-1.2-server-realtime-write-path`
+   as the single highest-value pending item (real Socket.IO read path +
+   idempotent HTTP write path, fully self-verified per its own worktree
+   task-summary). Still sitting only in `.worktrees/`, never merged onto the
+   shared `main` ref.
+2. **`P1-1.5-ensure-daemon-running` sits complete and unlanded** — second
+   consecutive cycle (31→32) flagging this: `ensureDaemonRunning()` +
+   `index.ts` wiring, self-verified (169/169 `falcon` tests in its own
+   worktree), depends only on already-merged §1.5 primitives — a small,
+   low-risk, disjoint merge that just needs an actual land step.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **41/135 checked (~30.4%)**, up from 40/135
+(~29.6%) at Cycle 31 — the one net-new credit this cycle is the
+already-landed `notifyDaemonSessionStarted` webhook client, independently
+re-verified against a green `pnpm typecheck`/`pnpm test` run on `main` (417
+tests total, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.1-1.2-server-realtime-write-path` onto `main`** — still
+   the single highest-value pending item, unchanged for six cycles: real
+   Socket.IO read path + idempotent HTTP write path, fully self-verified,
+   sitting in `.worktrees/P1-land-1.1-1.2-server-realtime-write-path` (tip
+   `56058aa`).
+2. **Land `P1-1.5-ensure-daemon-running` (or its `P1-land-*` wrapper)** onto
+   `main` — small, self-contained, depends only on already-merged §1.5
+   primitives (`lock.ts`/`state.ts`/`controlServer.ts`/`commands.ts`).
+3. **Wire the call-site for `notifyDaemonSessionStarted`** into session
+   bootstrap — explicitly flagged as a follow-up in its own land task-
+   summary, blocked on the still-unmerged `POST /v1/sessions` route (§1.1/
+   1.2, see item 1 above).
