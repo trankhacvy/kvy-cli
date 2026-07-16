@@ -16,12 +16,16 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@falcon/crypto": "workspace:*",
     "@falcon/wire": "workspace:*",
+    "cross-spawn": "^7.0.6",
     "fastify": "^5.10.0",
     "fastify-type-provider-zod": "^7.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@falcon/server": "workspace:*",
+    "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "pkgroll": "^2.14.2",
     "shx": "^0.3.4",

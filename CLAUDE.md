@@ -41,11 +41,16 @@ packages/
 │                             `src/daemon/`: singleton lock (atomic hard-link + stale-PID
 │                             detection), `daemon.state.json` read/write helpers, a Fastify
 │                             control server (`/session-started`, `/list`, `/stop-session`,
-│                             `/spawn-session`, `/stop`), and process-scan-based `falcon kill
-│                             daemon/sessions/all/all-force`. `falcon daemon
-│                             start/start-sync/stop/status`, `ensureDaemonRunning()`, the
-│                             machine-scoped WS client, and Auth/provider spawning still
-│                             [planned].
+│                             `/spawn-session`, `/stop`), process-scan-based `falcon kill
+│                             daemon/sessions/all/all-force`, `falcon daemon
+│                             start/start-sync/stop/status`, and `ensureDaemonRunning()`
+│                             (auto-start wiring called from `start`/`auth`/`sessions`/`resume`,
+│                             respects `FALCON_NO_SERVICE=1`). `src/persistence.ts`: `~/.falcon/`
+│                             local state — schema-versioned `settings.json` (atomic
+│                             lock-file-guarded read-modify-write) and 0600-permissioned
+│                             `access.key` credentials, both tmp-write + rename so readers
+│                             never observe a partial write. The machine-scoped WS client and
+│                             Auth/provider spawning still [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -53,7 +58,15 @@ packages/
 │                             cache, app.authenticate preHandler) + `POST /v1/auth`
 │                             challenge/response route, `POST /v1/auth/register` OAuth
 │                             (Google/GitHub) sign-in, and `/v1/auth/pair*` device-pairing
-│                             routes. Socket.IO routes still [planned].
+│                             routes + Socket.IO on `/v1/stream` (src/app/socket.ts,
+│                             src/app/socket/rpcHandler.ts) fanning out through
+│                             `src/app/events/eventRouter.ts` (room-scoped emitUpdate/
+│                             emitEphemeral, presence ephemerals, backpressure coalescing)
+│                             + the HTTP write path (src/app/routes/: POST /v1/sessions,
+│                             POST/GET .../messages, PUT .../metadata|state CAS, GET
+│                             /v1/sync, GET /v1/sessions, POST /v1/machines — all
+│                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
+│                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme, one placeholder route. Auth,
                               sync engine, crypto bridge, and API calls still [planned].

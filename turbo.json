@@ -14,6 +14,22 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "@falcon/web#typecheck": {
+      // Unlike the default `typecheck` task (which only needs upstream
+      // workspace packages built, via `^build`), @falcon/web's `tsc --noEmit`
+      // type-checks generated route types under `.next/types/app/**` that
+      // Next.js only emits as a side effect of `next build`. Depending on
+      // just `^build` lets turbo schedule this package's `typecheck` and
+      // `build` tasks concurrently, so `tsc` can race a `next build` that
+      // hasn't written `.next/types/app/layout.ts` yet, intermittently
+      // failing with TS6053 ('File ... not found') when both tasks are run
+      // together in one `turbo run build typecheck` invocation. Depending on
+      // same-package `build` too (in addition to `^build`) forces `next
+      // build` to finish first, matching the CLAUDE.md-documented sequential
+      // `pnpm build` then `pnpm typecheck` flow that doesn't hit this race.
+      "dependsOn": ["^build", "build"],
+      "outputs": []
+    },
     "test": {
       "dependsOn": ["build"],
       "outputs": []

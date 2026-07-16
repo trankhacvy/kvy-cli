@@ -5,6 +5,7 @@ import { db } from "./client.js";
 import { runMigrations } from "./migrate.js";
 import { accounts, sessions } from "./schema.js";
 import { allocHeaderSeq, allocMsgSeq } from "./seq.js";
+import { isDatabaseAvailable } from "./testDbAvailable.js";
 
 // Integration test: exercises the real atomic `UPDATE ... RETURNING` against
 // Postgres (drizzle-orm's query builder can't be faithfully mocked for
@@ -17,17 +18,7 @@ import { allocHeaderSeq, allocMsgSeq } from "./seq.js";
 // `describe.skipIf` is evaluated at collection time, before any hook runs —
 // so the availability probe has to happen at module load (top-level await),
 // not inside `beforeAll`.
-async function isDatabaseAvailable(): Promise<boolean> {
-  try {
-    await db.execute(sql`select 1`);
-    return true;
-  } catch {
-    await db.$client.end({ timeout: 1 }).catch(() => {});
-    return false;
-  }
-}
-
-const dbAvailable = await isDatabaseAvailable();
+const dbAvailable = await isDatabaseAvailable(db);
 if (dbAvailable) {
   await runMigrations();
 }
