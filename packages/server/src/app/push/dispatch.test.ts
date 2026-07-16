@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { accounts, pushSubscriptions } from "../../db/schema.js";
+import { accounts, pushSubscriptions, sessions } from "../../db/schema.js";
 import { createTestDb } from "../routes/testHelpers.js";
 import { channels } from "./channels/index.js";
 import { buildPushDispatcher } from "./dispatch.js";
@@ -136,6 +137,56 @@ describe("buildPushDispatcher", () => {
       where: (row, { eq }) => eq(row.id, sub.id),
     });
     expect(remaining).toBeDefined();
+  });
+
+  it("suppresses the push when the account has notificationsMutedAll set", async () => {
+    const { account } = await seedAccountAndSubscription(db);
+    await db
+      .update(accounts)
+      .set({ notificationsMutedAll: true })
+      .where(eq(accounts.id, account.id));
+    const sendSpy = vi.spyOn(channels.webpush, "send");
+
+    const dispatcher = buildPushDispatcher(db, fakePresence(false));
+    await dispatcher.dispatch({ accountId: account.id, sessionId: "sess_muted_all", kind: "perm" });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("suppresses the push when the specific session is muted", async () => {
+    const { account } = await seedAccountAndSubscription(db);
+    const [session] = await db
+      .insert(sessions)
+      .values({
+        accountId: account.id,
+        tag: "muted-session",
+        provider: "claude-code",
+        metadata: new Uint8Array(),
+        dek: new Uint8Array(),
+        notificationsMuted: true,
+      })
+      .returning();
+    if (!session) throw new Error("seed: session insert returned no row");
+    const sendSpy = vi.spyOn(channels.webpush, "send");
+
+    const dispatcher = buildPushDispatcher(db, fakePresence(false));
+    await dispatcher.dispatch({ accountId: account.id, sessionId: session.id, kind: "perm" });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("does not suppress an unmuted session belonging to a non-muted account", async () => {
+    const { account } = await seedAccountAndSubscription(db);
+    const sendSpy = vi.spyOn(channels.webpush, "send").mockResolvedValue(undefined);
+
+    const dispatcher = buildPushDispatcher(db, fakePresence(false));
+    await dispatcher.dispatch({
+      accountId: account.id,
+      sessionId: "sess_not_muted",
+      kind: "perm",
+    });
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
   });
 
   it("is a silent no-op when the account has no subscriptions", async () => {

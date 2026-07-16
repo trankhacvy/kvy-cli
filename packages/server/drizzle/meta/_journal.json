@@ -8,6 +8,13 @@
       "when": 1784101253376,
       "tag": "0000_thin_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784212700933,
+      "tag": "0001_clear_starjammers",
+      "breakpoints": true
     }
   ]
 }

@@ -31,6 +31,7 @@ function fakeSessionRow(overrides: Partial<SessionRow> = {}): SessionRow {
     agentState: null,
     dek: encodeBase64(getRandomBytes(32)),
     msgSeq: 0,
+    notificationsMuted: false,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     ...overrides,

@@ -30,6 +30,11 @@ export const accounts = pgTable("accounts", {
   oauthSubject: text("oauth_subject"),
   headerSeq: integer("header_seq").notNull().default(0), // account-level: HEADER changes only
   settings: bytea("settings"), // EncryptedBox
+  // Plaintext (not part of the encrypted `settings` blob) because the push
+  // dispatcher (`app/push/dispatch.ts`) must be able to check it without
+  // decrypting anything — the server holds no keys (design §5.3). Per-account
+  // "mute all" quiet control (PRD FR-8.3, plan.md §10).
+  notificationsMutedAll: boolean("notifications_muted_all").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -82,6 +87,10 @@ export const sessions = pgTable(
     agentStateVersion: integer("agent_state_version").notNull().default(0),
     dek: bytea("dek").notNull(),
     msgSeq: integer("msg_seq").notNull().default(0), // per-session message counter
+    // Plaintext for the same reason as `accounts.notificationsMutedAll` above
+    // — the push dispatcher must be able to check it without decrypting
+    // anything. Per-session "mute" quiet control (PRD FR-8.3, plan.md §10).
+    notificationsMuted: boolean("notifications_muted").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -146,6 +155,24 @@ export const pushSubscriptions = pgTable(
   },
   (t) => [index().on(t.accountId)],
 );
+
+// Telegram bot `/start` deep-link pairing (falcon-system-design.md §6.4,
+// plan.md §10: "Fallback channels"). `code` is the opaque token embedded in
+// the `https://t.me/<bot>?start=<code>` link; the webhook route
+// (routes/telegramLink.ts) resolves it back to `accountId` once the user
+// starts the bot, then deletes the row (single-use) and upserts a
+// `push_subscriptions` row for the resulting chat id. Same bounded-TTL shape
+// as `pairRequests` above, for the same reason: an unbounded pairing window
+// is a standing vulnerability.
+export const telegramLinkRequests = pgTable("telegram_link_requests", {
+  id: text("id").primaryKey().$defaultFn(createId),
+  code: text("code").notNull().unique(),
+  accountId: text("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
 
 // Presigned-URL bookkeeping; the encrypted bytes themselves live in S3/R2 —
 // see §5.3 (blobs never touch the DB, only their metadata does).

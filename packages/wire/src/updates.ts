@@ -29,6 +29,7 @@ export const UpdateBodySchema = z.discriminatedUnion("t", [
     metadata: VersionedSchema(EncryptedBoxSchema).optional(),
     agentState: VersionedSchema(EncryptedBoxSchema).optional(),
     status: SessionStatusSchema.optional(),
+    notificationsMuted: z.boolean().optional(),
   }),
   z.object({
     t: z.literal("session-delete"),

@@ -16,6 +16,7 @@ const sessionRow = {
   agentState: null,
   dek: "sealed-dek",
   msgSeq: 0,
+  notificationsMuted: false,
   createdAt: 1,
   updatedAt: 1,
 };

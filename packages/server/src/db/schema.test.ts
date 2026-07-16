@@ -18,6 +18,7 @@ describe("db schema", () => {
       schema.unmanagedSessions,
       schema.pairRequests,
       schema.pushSubscriptions,
+      schema.telegramLinkRequests,
       schema.blobs,
     ].map((t) => getTableConfig(t).name);
 
@@ -30,6 +31,7 @@ describe("db schema", () => {
       "unmanaged_sessions",
       "pair_requests",
       "push_subscriptions",
+      "telegram_link_requests",
       "blobs",
     ]);
   });

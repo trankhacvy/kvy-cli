@@ -1,19 +1,37 @@
+import { env } from "../../../config.js";
 import type { PushChannel } from "../types.js";
+import { notificationDeepLink, notificationLabel } from "./messageText.js";
 
 /**
  * Falcon-add fallback channel (plan.md §10, falcon-system-design.md §6.4).
  * `endpoint` holds the ntfy.sh (or self-hosted ntfy) topic name the user
- * configured to subscribe to.
+ * configured in Settings — no pairing needed, unlike Telegram, since a topic
+ * is just a name the user picks; `POST /v1/push/subscribe` already accepts
+ * `channel: "ntfy"` subscriptions directly.
  *
- * Stub only — see `telegram.ts` for the shared rationale. `POST
- * /v1/push/subscribe` already accepts `channel: "ntfy"` subscriptions; this
- * is the documented no-op until the ntfy HTTP publish call lands.
+ * Same content-free, kind-keyed payload rule as every other channel (see
+ * `messageText.ts`): the label is ntfy's message body, and the deep link (if
+ * `PUBLIC_WEB_ORIGIN` is configured) rides in ntfy's `Click` header so
+ * tapping the notification opens the session directly.
  */
 export const ntfyChannel: PushChannel = {
-  async send(sub) {
-    console.error(
-      { module: "push", channel: "ntfy" },
-      `ntfy channel not yet implemented — dropping notification for subscription ${sub.id}`,
-    );
+  async send(sub, payload) {
+    const label = notificationLabel(payload.kind);
+    const link = notificationDeepLink(payload.sessionId);
+    const url = `${env.NTFY_BASE_URL.replace(/\/+$/, "")}/${encodeURIComponent(sub.endpoint)}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Title: "Falcon",
+        ...(link ? { Click: link } : {}),
+      },
+      body: label,
+    });
+
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(`ntfy publish failed (${response.status}): ${body}`);
+    }
   },
 };

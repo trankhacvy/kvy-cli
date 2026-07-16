@@ -20,6 +20,7 @@ export function toSessionRow(row: typeof sessions.$inferSelect): SessionRow {
       : null,
     dek: encodeBase64(row.dek),
     msgSeq: row.msgSeq,
+    notificationsMuted: row.notificationsMuted,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   };
