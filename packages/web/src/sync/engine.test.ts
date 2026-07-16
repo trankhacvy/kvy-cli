@@ -177,6 +177,29 @@ describe("createSyncEngine", () => {
       expect(session?.status).toBe("active"); // untouched field survives
     });
 
+    it("patches notificationsMuted on session-update, leaving other fields untouched", () => {
+      queryClient.setQueryData(
+        syncQueryKey,
+        makeSnapshot({
+          headerSeq: 5,
+          sessions: [makeSession("sess-1", { status: "active", notificationsMuted: false })],
+        }),
+      );
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      emitUpdate({
+        seq: 6,
+        ts: 2000,
+        body: { t: "session-update", id: "sess-1", notificationsMuted: true },
+      });
+
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      const session = data?.sessions.find((s) => s.id === "sess-1");
+      expect(session?.notificationsMuted).toBe(true);
+      expect(session?.status).toBe("active"); // untouched field survives
+    });
+
     it("upserts machines and unmanaged sessions by id", () => {
       queryClient.setQueryData(syncQueryKey, makeSnapshot({ headerSeq: 5, machines: [] }));
       const { source, emitUpdate } = createFakeSyncSocket();

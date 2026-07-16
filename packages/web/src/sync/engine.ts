@@ -91,6 +91,9 @@ function patchSession(
     ...(body.metadata !== undefined ? { metadata: body.metadata } : {}),
     ...(body.agentState !== undefined ? { agentState: body.agentState } : {}),
     ...(body.status !== undefined ? { status: body.status } : {}),
+    ...(body.notificationsMuted !== undefined
+      ? { notificationsMuted: body.notificationsMuted }
+      : {}),
   };
 }
 
