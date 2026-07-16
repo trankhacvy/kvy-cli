@@ -4185,3 +4185,137 @@ total, 0 failures — up from 478 at Cycle 34, reflecting the additive
    5 golden-transcript fixtures) — the next unstarted §1.4 bullet after the
    already-landed scanner/fileWatcher pair, and a prerequisite for the
    HTTP-outbox bullet's real-world use.
+
+---
+
+## Cycle 36 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `27e0567` — "chore: cycle 35 — completed 0
+tasks (re-verified 3 already-landed tasks)"). Confirmed via `/usr/bin/git
+rev-parse HEAD` on the primary (non-worktree) checkout.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`pnpm exec turbo run typecheck --force`, no cache) →
+  **PASSED**, 7/7 tasks green (`@falcon/wire`, `@falcon/crypto`, `falcon`
+  cli, `@falcon/server`, `@falcon/web` all clean `tsc --noEmit`).
+- `pnpm test` (`pnpm exec turbo run test --force`, no cache) → **PASSED**,
+  9/9 tasks green: `falcon` (cli) 181/181, `@falcon/server` 140/140 (incl.
+  the two real-Postgres `seq.test.ts` concurrency cases), plus
+  `@falcon/wire`/`@falcon/crypto`/`@falcon/web`. No regressions since Cycle
+  35.
+- Note on tooling: a bare `ls`/`cat` invoked as the very first commands of
+  this session (via the Bash tool, routed through this environment's `rtk`
+  hook) returned empty output for non-empty directories/files; `/bin/ls`
+  and plain `cat`/`git`/`grep` in later calls returned correct output
+  throughout the rest of the cycle — consistent with prior cycles' notes
+  that the `rtk` hook intermittently mangles output for some invocations.
+  No load-bearing claim below relied on a mangled result.
+
+### Task-summaries read this cycle
+
+Both requested task-summaries describe real, complete, self-verified work
+that is **still unmerged into `main`** — neither is credited, continuing
+the exact pattern flagged every cycle since 16.
+
+- **`task-summary/P1-1.3-session-bootstrap.md`** — does not exist on
+  `main` (`/usr/bin/git ls-tree main --
+  task-summary/P1-1.3-session-bootstrap.md` empty). `git merge-base
+  --is-ancestor P1-1.3-session-bootstrap main` → **not an ancestor**;
+  `main`'s `packages/cli/src/session/` does not exist (`git cat-file -e
+  main:packages/cli/src/session/bootstrap.ts` fails). The work exists only
+  in worktree `.worktrees/P1-1.3-session-bootstrap` (tip `fd673bd`):
+  `packages/cli/src/session/bootstrap.ts` — `bootstrapSession` mints a
+  fresh 32-byte DEK, wraps it to the account's X25519 content public key
+  via the already-merged `wrapDek`, seals `{title, path, providerSessionId}`
+  under it, and POSTs to the already-merged `POST /v1/sessions` route with
+  a deterministic `sha256(machineId+" "+workspacePath+" "+nonce)`
+  idempotency tag; on an idempotent replay (`200`, tag already existed) it
+  unwraps and returns the *existing* row's DEK rather than the fresh one it
+  minted and the server discarded — a real correctness property (silent
+  desync avoidance), not just plumbing. 13 unit tests + 2 integration tests
+  that boot a real `@falcon/server` app via its own `testHelpers` and prove
+  the replay-returns-original-DEK behavior end to end (no mocked HTTP). Own
+  task-summary reports `falcon` (cli) 196/196 tests green, workspace-wide
+  build/typecheck/test all green (8/8, 9/9 tasks). Not credited; `plan.md`
+  line 681's "Session bootstrap" checkbox stays unchecked; added a Cycle 36
+  annotation to the §1.3 narrative recording this.
+- **`task-summary/P1-1.5-machine-ws-client.md`** — does not exist on
+  `main` (`/usr/bin/git ls-tree main --
+  task-summary/P1-1.5-machine-ws-client.md` empty). `git merge-base
+  --is-ancestor P1-1.5-machine-ws-client main` → **not an ancestor**;
+  `main`'s `packages/cli/src/daemon/` has no `machineClient.ts` (`git
+  cat-file -e main:packages/cli/src/daemon/machineClient.ts` fails). The
+  work exists only in worktree `.worktrees/P1-1.5-machine-ws-client` (tip
+  `8e884c5`): `packages/cli/src/daemon/machineClient.ts` —
+  `registerOrResumeMachine`/`casUpdateMachine` (HTTP-only registration +
+  CAS-retry-with-backoff sync against the already-merged `POST
+  /v1/machines` route, design DELTA D1 — Falcon's write path is HTTP-only
+  even though this is nominally a "WS client" task) and
+  `startMachineClient` (opens the `/v1/stream` socket with
+  `clientType: "machine-scoped"` auth, 60s heartbeat via `machine-alive`,
+  re-pushes `daemonState` on every (re)connect, explicit `socket.connect()`
+  on server-initiated disconnect since socket.io-client doesn't
+  auto-reconnect from those). Also adds a backward-compatible optional
+  `machineId` field to the already-merged `daemon/state.ts`'s
+  `DaemonState`. 17 unit tests + 1 real-socket integration test (a real
+  `socket.io` `Server`, not a mock, proving reconnect resumes the same
+  `machineId` with no duplicate row created). RPC handler registration is
+  explicitly out of scope per the bullet's own text. Own task-summary
+  reports `falcon` (cli) 199/199 tests green, workspace-wide
+  build/typecheck/test all green (7/7 typecheck, 9/9 test tasks, 339
+  total). Not credited; `plan.md` line 696's "Machine-scoped WS client"
+  checkbox stays unchecked; added a Cycle 36 annotation to the §1.5
+  narrative recording this.
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** Both requested task-summaries correspond to
+genuine, complete, unmerged work — no checkbox in `plan.md` was flipped
+this cycle. `plan.md` §16 checkbox count: **54/135**
+(`/usr/bin/grep -c '^\- \[x\]' plan.md`), unchanged from Cycle 35.
+
+### Blockers / issues found
+
+1. **Both tasks requested for credit this cycle are unmerged worktree
+   work, not `main` state** — same recurring pattern flagged every cycle
+   since 16. Neither depends on the other; both are small and
+   self-contained, and both depend only on already-merged pieces
+   (`P1-1.3-session-bootstrap` needs the already-merged `POST /v1/sessions`
+   route and `@falcon/crypto`'s `wrapDek`/`seal`; `P1-1.5-machine-ws-client`
+   needs the already-merged `POST /v1/machines` route and
+   `daemon/state.ts`). Both are good, low-risk land candidates — neither
+   touches a file the other touches.
+2. The longer-standing unlanded backlog is unchanged from Cycle 35:
+   `P1-1.6-reducer-port` (flagged since Cycle 23, still the longest-standing
+   item), `P1-1.3-falcon-home-persistence` (since Cycle 34),
+   `P1-1.4-envelope-mapper`, `P1-1.4-http-outbox`, `P1-1.6-auth-pages`,
+   `P1-1.6-api-socket`, `P1-1.3-cli-auth-login`, `P1-1.3-cli-locator` /
+   `P1-1.3-provider-detection` (duplicate-work situation, per that task's
+   own task-summary), `P1-1.3-claude-launcher-script`, and
+   `P0-cross-cutting-mit-attribution-headers`.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **54/135 checked (~40.0%)**, unchanged from
+Cycle 35. `pnpm typecheck`/`pnpm test` both green on `main` (forced, no
+cache — 7/7 typecheck tasks, 9/9 test tasks, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.3-session-bootstrap` and `P1-1.5-machine-ws-client` onto
+   `main`** — both requested this cycle, both self-verified green, both
+   small and disjoint from each other and from everything else currently
+   on `main` (new files only: `packages/cli/src/session/bootstrap.ts` +
+   `packages/cli/src/daemon/machineClient.ts`, plus a purely-additive
+   optional field on `daemon/state.ts`'s `DaemonState`). Straightforward
+   land candidates for the next orchestrator pass.
+2. **Land `P1-1.6-reducer-port`** — still the longest-standing unlanded
+   item (flagged since Cycle 23, 13 cycles now with no progress),
+   self-verified green (55/55 `@falcon/web` tests), disjoint from
+   everything else in `packages/web/src/`.
+3. **Land `P1-1.3-falcon-home-persistence`** — small, self-contained
+   (`persistence.ts` + tests only), no apparent overlap with anything
+   already on `main`.
