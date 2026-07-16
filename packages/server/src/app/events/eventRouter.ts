@@ -179,6 +179,40 @@ class EventRouter {
     });
   }
 
+  /**
+   * Push-suppression check (design §6.4: "skip if any user-scoped connection
+   * reports `app-state: active` **and** has the session's room joined
+   * (visible)"). Falcon add vs. Happy's `isUserActive` (account-wide only,
+   * see `happy-server/sources/app/push/pushDispatch.ts`): scoped to the
+   * rooms a given session's traffic actually reaches
+   * (`all-interested-in-session`'s room set — session-scoped room ∪
+   * user-scoped room) rather than every room the account has any socket in,
+   * so a push for session A isn't suppressed by a client that only has
+   * session B open.
+   *
+   * Only `user-scoped` connections count as "a visible client" here —
+   * session-scoped sockets are CLI/daemon processes, not humans, and
+   * machine-scoped is excluded implicitly (it never joins these rooms). The
+   * web app today only ever joins its account-wide `user-scoped` room (it
+   * has no per-session "I'm looking at this one" signal yet — no session
+   * detail screen exists), so in practice this currently behaves like "the
+   * account has an active tab open somewhere" until that screen lands and
+   * starts joining the per-session room too — at which point this method
+   * needs no further change to start honoring it.
+   */
+  async hasActiveVisibleClient(accountId: string, sessionId: string): Promise<boolean> {
+    const rooms = this.getRoomsForFilter(accountId, {
+      type: "all-interested-in-session",
+      sessionId,
+    });
+    const sockets = await this.io.in(rooms).fetchSockets();
+    return sockets.some((s) => {
+      if (s.data.clientType !== "user-scoped") return false;
+      const appState = s.data.appState as string | undefined;
+      return appState !== "background";
+    });
+  }
+
   // === PRIVATE ROUTING LOGIC ===
 
   private getRoomsForFilter(accountId: string, filter: RecipientFilter): string[] {

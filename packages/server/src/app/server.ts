@@ -18,11 +18,15 @@ import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
 import { pairRoutes } from "./api/pair.js";
 import { eventRouter as defaultEventRouter, type EventRouterPort } from "./events/eventRouter.js";
+import { buildPushDispatcher } from "./push/dispatch.js";
+import type { PushDispatcherPort } from "./push/types.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
+import { buildPushRoutes } from "./routes/push.js";
 import { buildSessionCasRoutes } from "./routes/sessionCas.js";
+import { buildSessionNotifyRoutes } from "./routes/sessionNotify.js";
 import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
 import { buildSyncRoutes } from "./routes/sync.js";
@@ -44,7 +48,10 @@ const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
 // implementations but can be overridden — oauth.test.ts injects fakes instead of
 // touching the network. `eventRouter` defaults to the process-wide Socket.IO-backed
 // singleton (events/eventRouter.ts) but route tests inject a recording fake so they
-// can assert on fan-out without a real socket connection.
+// can assert on fan-out without a real socket connection. `pushDispatcher` defaults
+// to a real one built from `db` + the process-wide `eventRouter` singleton's presence
+// check (`app/push/dispatch.ts`) but route tests inject a recording fake so they can
+// assert "a dispatch was requested" without touching real Web Push/Socket.IO.
 export async function buildServer(
   opts: FastifyServerOptions = {},
   deps: {
@@ -52,10 +59,16 @@ export async function buildServer(
     oauthVerifier?: OAuthVerifier;
     githubExchanger?: GithubCodeExchanger;
     eventRouter?: EventRouterPort;
+    pushDispatcher?: PushDispatcherPort;
   } = {},
 ) {
   const db = deps.db ?? defaultDb;
   const eventRouter = deps.eventRouter ?? defaultEventRouter;
+  // Deliberately built from `defaultEventRouter` (the real, presence-capable
+  // singleton), not the possibly-fake `eventRouter` above — `EventRouterPort`
+  // (what `deps.eventRouter` is typed as) doesn't carry `hasActiveVisibleClient`,
+  // only the full `eventRouter` singleton does (see events/eventRouter.ts).
+  const pushDispatcher = deps.pushDispatcher ?? buildPushDispatcher(db, defaultEventRouter);
 
   const app = Fastify({
     logger: buildLoggerOptions(),
@@ -106,9 +119,11 @@ export async function buildServer(
   await app.register(buildSessionsRoutes(db, eventRouter));
   await app.register(buildMessagesRoutes(db, eventRouter));
   await app.register(buildSessionCasRoutes(db, eventRouter));
-  await app.register(buildSessionStatusRoutes(db, eventRouter));
+  await app.register(buildSessionStatusRoutes(db, eventRouter, pushDispatcher));
+  await app.register(buildSessionNotifyRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildSyncRoutes(db));
   await app.register(buildMachinesRoutes(db, eventRouter));
+  await app.register(buildPushRoutes(db));
 
   // Socket.IO attaches to the underlying HTTP server (design §4.1 "/v1/stream" —
   // read-only updates/ephemerals + RPC transport). Started here rather than in

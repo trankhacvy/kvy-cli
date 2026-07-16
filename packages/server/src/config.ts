@@ -35,6 +35,17 @@ const EnvSchema = z
     // — GitHub sign-in simply refuses exchanges (401) until both are configured.
     GITHUB_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+    // Web Push (VAPID) — falcon-system-design.md §6.4/§3 "Push | Web Push (VAPID)
+    // via `web-push`". Optional: unset simply means the `webpush` channel logs and
+    // skips sending (src/app/push/channels/webpush.ts) rather than failing closed —
+    // there's no security boundary to protect here, just a missing capability, and a
+    // dev/self-host box may not have keys generated yet. Generate a pair with
+    // `pnpm --filter @falcon/server exec web-push generate-vapid-keys`.
+    VAPID_PUBLIC_KEY: z.string().min(1).optional(),
+    VAPID_PRIVATE_KEY: z.string().min(1).optional(),
+    // The `mailto:`/`https:` contact URL Web Push's VAPID spec requires push
+    // services be able to reach if they need to reach the sender.
+    VAPID_SUBJECT: z.string().min(1).default("mailto:support@falcon.dev"),
   })
   // Belt-and-suspenders against shipping the dev-only secret to production: a silent
   // fallback there would let anyone who has read this source mint tokens for any

@@ -70,7 +70,16 @@ packages/
 │                             POST/GET .../messages, PUT .../metadata|state CAS, GET
 │                             /v1/sync, GET /v1/sessions, POST /v1/machines — all
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
-│                             through that same `eventRouter` post-commit.
+│                             through that same `eventRouter` post-commit, and lifecycle
+│                             push dispatch (src/app/push/: `dispatch.ts`'s
+│                             `buildPushDispatcher` — presence-suppressed via
+│                             `eventRouter.hasActiveVisibleClient`, fans out to a
+│                             pluggable `channels/` registry — `webpush` fully wired via
+│                             `web-push` + VAPID config, `telegram`/`ntfy` stubbed for a
+│                             later task; wired into `POST /v1/sessions/:id/status`'s
+│                             `failed` transition and the new `POST
+│                             /v1/sessions/:id/notify {kind: perm|question|done}`) +
+│                             `POST`/`DELETE /v1/push/subscribe` (src/app/routes/push.ts).
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme. Auth pages (OAuth sign-in, key
                               generation, recovery-code export, pairing-approve —
@@ -96,10 +105,18 @@ packages/
                               `UseSessionListSnapshot` hook (defaults to a static mock
                               snapshot, `mock-source.ts`) so it composes with the real
                               sync-engine-backed hook once the two are wired together, same
-                              seam as the sync engine's `SyncSocketSource`. Wiring the sync
-                              engine into the Home screen (gap detection, TanStack Query
-                              invalidation, FR-7.2 session timeline) and auth-gating the Home
-                              route still [planned].
+                              seam as the sync engine's `SyncSocketSource`. Web Push
+                              (src/push/: `subscribe.ts`'s `subscribeToPush`/
+                              `unsubscribeFromPush` against an injectable
+                              `PushEnvironment`/`PushApiPort`, same testable-seam pattern
+                              as `apiSocket.ts`; `public/sw.js`, a plain static service
+                              worker — `push` shows a generic kind-keyed notification,
+                              `notificationclick` deep-links to `/session/<id>/`) is wired
+                              up behind `src/app/settings/notifications/`, a minimal
+                              enable/disable toggle. Wiring the sync engine into the Home
+                              screen (gap detection, TanStack Query invalidation, FR-7.2
+                              session timeline) and auth-gating the Home route still
+                              [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

@@ -5,6 +5,7 @@ import { sessions } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
 import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
+import type { PushDispatcherPort } from "../push/types.js";
 import { NotFoundSchema, SessionIdParamsSchema } from "./shared.js";
 
 // `error` is a short, human-readable diagnostic string (e.g. an exit-code
@@ -43,6 +44,7 @@ const SessionStatusResponseSchema = z.object({ status: z.literal("failed") });
 export function buildSessionStatusRoutes(
   db: Database,
   eventRouter: EventRouterPort,
+  pushDispatcher: PushDispatcherPort,
 ): FastifyPluginAsyncZod {
   return async (app) => {
     app.post(
@@ -103,6 +105,9 @@ export function buildSessionStatusRoutes(
               recipientFilter: { type: "all-interested-in-session", sessionId: id },
               payload: { t: "attention", sessionId: id, kind: "failed" },
             });
+            // Lifecycle push dispatch (plan.md §10) — fire-and-forget, never
+            // blocks the response; presence-suppressed inside the dispatcher.
+            void pushDispatcher.dispatch({ accountId, sessionId: id, kind: "failed" });
           });
         }
 
