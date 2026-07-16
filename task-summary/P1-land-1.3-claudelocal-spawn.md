@@ -27,7 +27,7 @@ in `plan.md` §1.3.
    already on `main`.
 5. `git merge --no-ff P1-1.3-claudelocal-spawn` — clean, conflict-free ("Merge made
    by the 'ort' strategy"). Landed: `packages/cli/src/claude/claudeLocal.ts` (544
-   lines), `packages/cli/src/claude/claudeLocal.test.ts` (550 lines, 23 tests),
+   lines), `packages/cli/src/claude/claudeLocal.test.ts` (550 lines, 25 tests),
    `packages/cli/package.json` (+2 deps), `pnpm-lock.yaml`, and the branch's own
    `task-summary/P1-1.3-claudelocal-spawn.md`.
 6. Re-ran verification on `main` (this worktree, post-merge), forced (no cache):
