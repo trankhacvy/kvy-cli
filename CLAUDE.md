@@ -49,19 +49,32 @@ packages/
 │                             (`daemon/machineClient.ts`: `registerOrResumeMachine`/CAS-retry
 │                             sync against `POST /v1/machines`, `startMachineClient` opening
 │                             `/v1/stream` as `clientType: "machine-scoped"` with a 60s
-│                             heartbeat). `src/persistence.ts`: `~/.falcon/`
-│                             local state — schema-versioned `settings.json` (atomic
-│                             lock-file-guarded read-modify-write) and 0600-permissioned
-│                             `access.key` credentials, both tmp-write + rename so readers
-│                             never observe a partial write. `src/codex/`: the Codex provider
-│                             adapter (design §7.7, plan.md §16 "3.4 Codex adapter") —
-│                             `codexAppServerClient.ts`, a hand-rolled newline-delimited
-│                             JSON-RPC 2.0 stdio client for `codex app-server` (initialize
-│                             handshake, `thread/start`/`thread/resume`, `turn/start`/
-│                             `turn/interrupt`, and server->client `exec`/`patch` approval
-│                             routing for both legacy and v2 method names); `permissionHandler.ts`,
-│                             a Codex-specific parallel to `claude/permissionHandler.ts` (own
-│                             pending-approval map, first-wins `resolve()`, and a
+│                             heartbeat), and the adoption Tier-1 transcript indexer
+│                             (`daemon/transcriptIndexer.ts`: fs-watches every registered
+│                             workspace's Claude Code project transcript dir — reusing
+│                             `claude/scanner.ts`'s `getProjectPath` — debounced 2s per
+│                             session file, parses title/last-activity, derives a
+│                             best-effort "running?" liveness signal from
+│                             `processScan.ts`'s new `resolveProcessCwd` + `markers.ts`'s
+│                             Falcon-process classifier, and upserts via
+│                             `daemon/unmanagedSessionClient.ts` against the server's new
+│                             `POST /v1/unmanaged-sessions`, design §8/§11 UC9 Tier 1;
+│                             `listWorkspaces`/`isManaged` are injectable seams with no
+│                             real default yet — workspace registration and managed-session
+│                             lineage are separate, later tasks). `src/persistence.ts`:
+│                             `~/.falcon/` local state — schema-versioned `settings.json`
+│                             (atomic lock-file-guarded read-modify-write) and
+│                             0600-permissioned `access.key` credentials, both tmp-write +
+│                             rename so readers never observe a partial write. `src/codex/`:
+│                             the Codex provider adapter (design §7.7, plan.md §16 "3.4 Codex
+│                             adapter") — `codexAppServerClient.ts`, a hand-rolled
+│                             newline-delimited JSON-RPC 2.0 stdio client for `codex
+│                             app-server` (initialize handshake, `thread/start`/
+│                             `thread/resume`, `turn/start`/`turn/interrupt`, and
+│                             server->client `exec`/`patch` approval routing for both legacy
+│                             and v2 method names); `permissionHandler.ts`, a Codex-specific
+│                             parallel to `claude/permissionHandler.ts` (own pending-approval
+│                             map, first-wins `resolve()`, and a
 │                             `bypassPermissions`/`acceptEdits`-only auto-rule mapping — Codex
 │                             has no equivalent to Claude's other two SDK modes);
 │                             `envelopeMapper.ts` (`mapCodexEventToEnvelopes`), translating
@@ -101,7 +114,12 @@ packages/
 │                             later task; wired into `POST /v1/sessions/:id/status`'s
 │                             `failed` transition and the new `POST
 │                             /v1/sessions/:id/notify {kind: perm|question|done}`) +
-│                             `POST`/`DELETE /v1/push/subscribe` (src/app/routes/push.ts).
+│                             `POST`/`DELETE /v1/push/subscribe` (src/app/routes/push.ts) +
+│                             `POST /v1/unmanaged-sessions` (src/app/routes/
+│                             unmanagedSessions.ts — adoption Tier 1, design §8/§11 UC9):
+│                             upsert-by-`(machineId, providerRef)` for the daemon transcript
+│                             indexer, fanning out `unmanaged-new`/`unmanaged-update`
+│                             through the same `eventRouter`.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme. Auth pages (OAuth sign-in, key
                               generation, recovery-code export, pairing-approve —

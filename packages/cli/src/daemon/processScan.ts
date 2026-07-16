@@ -15,6 +15,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { readlink } from "node:fs/promises";
 
 export interface ProcessEntry {
   pid: number;
@@ -77,4 +78,59 @@ function runPs(args: string[]): Promise<string> {
 export async function listProcesses(): Promise<ProcessEntry[]> {
   const output = await runPs(["-axo", "pid=,ppid=,command="]);
   return parsePsOutput(output);
+}
+
+/**
+ * Resolves a pid's current working directory — the signal the transcript
+ * indexer (`transcriptIndexer.ts`) uses to tell whether a plain `claude`
+ * process found by `listProcesses()` is actually running in a given
+ * registered workspace (`ps`'s command line alone never includes cwd). Two
+ * platform-specific strategies, matching this file's own "macOS/Linux only"
+ * scope note:
+ *
+ *  - **Linux**: `/proc/<pid>/cwd` is a symlink to the live cwd — a single
+ *    `readlink`, no subprocess.
+ *  - **macOS**: no `/proc`; shells out to `lsof -a -d cwd -p <pid> -Fn`,
+ *    which (restricted to the `cwd` file descriptor via `-d cwd`) prints
+ *    exactly one `n<path>` line for a live pid.
+ *
+ * Best-effort like the rest of this file: any failure (pid gone, permission
+ * denied, `lsof` missing, unsupported platform) resolves `null` rather than
+ * throwing or rejecting — a liveness signal that can't be determined is
+ * "unknown", not a crash.
+ */
+export async function resolveProcessCwd(
+  pid: number,
+  currentPlatform: NodeJS.Platform = process.platform,
+): Promise<string | null> {
+  if (currentPlatform === "linux") {
+    try {
+      return await readlink(`/proc/${pid}/cwd`);
+    } catch {
+      return null;
+    }
+  }
+
+  if (currentPlatform === "darwin") {
+    return new Promise((resolve) => {
+      execFile(
+        "lsof",
+        ["-a", "-d", "cwd", "-p", String(pid), "-Fn"],
+        { maxBuffer: 1024 * 1024 },
+        (error, stdout) => {
+          if (error) {
+            resolve(null);
+            return;
+          }
+          const nameLine = stdout
+            .toString()
+            .split("\n")
+            .find((line) => line.startsWith("n"));
+          resolve(nameLine ? nameLine.slice(1) : null);
+        },
+      );
+    });
+  }
+
+  return null;
 }
