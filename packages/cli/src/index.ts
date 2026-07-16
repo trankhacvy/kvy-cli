@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
+import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import {
   createDaemonCommandDeps,
   runDaemonStart,
@@ -55,7 +56,7 @@ const HELP_TEXT = `falcon — wrapper CLI for Claude Code / Codex agent sessions
 Usage:
   falcon                            Start a session with the default provider
   falcon claude [args...]           Start a Claude Code session (flags pass through)
-  falcon codex [args...]            Start a Codex session (flags pass through)
+  falcon codex [args...]            Start a Codex session (beta, no local TUI — flags pass through)
   falcon -b <branch>                Start a session on a new git worktree/branch
   falcon auth login|logout|status   Manage Falcon account auth
   falcon daemon start [--no-wait] | start-sync | stop | status
@@ -74,12 +75,21 @@ Environment: FALCON_BACKEND_URL, FALCON_FRONTEND_URL, FALCON_HOME_DIR,
 FALCON_DEBUG=1, FALCON_NO_UPDATE=1, FALCON_NO_SERVICE=1
 `;
 
+/**
+ * Codex has no local-interactive mode (design §7.7, plan.md §16 "3.4 Codex
+ * adapter": "`startLocal()` = null with honest CLI note") — `falcon codex`
+ * always runs the programmatic `codex app-server` path, never a real Codex
+ * TUI the way `falcon claude` can. Surfaced here, ahead of the (still
+ * unimplemented) provider spawn itself, so the honest note reaches the user
+ * regardless of how much of `runStart` is wired up yet.
+ */
 function describeStart(command: Extract<FalconCommand, { type: "start" }>): string {
   const parts = [`falcon: would start a ${command.provider} session`];
   if (command.branch !== undefined) parts.push(`on branch "${command.branch}"`);
   if (command.providerArgs.length > 0) parts.push(`with args: ${command.providerArgs.join(" ")}`);
   parts.push("(provider spawning not implemented yet)");
-  return `${parts.join(" ")}\n`;
+  const note = command.provider === "codex" ? `\n${CODEX_NO_LOCAL_MODE_NOTE}\n` : "";
+  return `${parts.join(" ")}\n${note}`;
 }
 
 /**
