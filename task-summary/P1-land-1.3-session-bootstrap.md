@@ -4,6 +4,48 @@
 worktree `.worktrees/P1-1.3-session-bootstrap` (tip `fd673bd`) onto this task's own
 `main`-derived worktree, `.worktrees/P1-land-1.3-session-bootstrap`.
 
+## Fourth pass (2026-07-16): actually landed onto the shared `main` ref
+
+Prior passes below were correctly reconciled but explicitly stopped short of updating
+the real, primary-checkout `main` — that constraint does not apply to this task, which
+was scoped specifically to perform the land.
+
+Starting state re-verified from scratch before touching anything: `git merge-base
+--is-ancestor main HEAD` — but `main` had moved on again since the third pass (185ebc9)
+to `fba3ae0` (`P1-land-1.3-falcon-home-persistence`'s land, adding
+`packages/cli/src/persistence.ts`). Confirmed `git cat-file -e
+main:packages/cli/src/session/bootstrap.ts` still failed against that new tip.
+
+1. `git merge --no-commit --no-ff main` inside this worktree (previous tip `adac405`,
+   which had already merged `main`'s `78f22af`) — auto-merged clean, only `plan.md`
+   touched (narrative-only), `CLAUDE.md`/`pnpm-lock.yaml` picked up `main`'s
+   persistence-landing changes with zero overlap against `session/bootstrap.ts`.
+   Committed as `343491f` ("reconcile onto main tip fba3ae0") after re-verifying:
+   - `pnpm build` — 5/5 tasks green.
+   - `pnpm exec turbo run typecheck --force` — 9/9 tasks green.
+   - `pnpm exec turbo run test --force --concurrency=1` — 9/9 tasks green, 559/559
+     tests (61 wire + 56 web + 65 crypto + 140 server + 237 falcon cli, incl.
+     `session/bootstrap.test.ts`'s 13 and `session/bootstrap.integration.test.ts`'s 2).
+2. Confirmed `git merge-base --is-ancestor main HEAD` was now true (clean fast-forward
+   candidate), then switched to the primary, non-worktree checkout (repo root, branch
+   `main`, clean working tree at `fba3ae0`) and ran `git merge --ff-only
+   P1-land-1.3-session-bootstrap` there — fast-forwarded `main` from `fba3ae0` to
+   `343491f`. This is the actual shared-ref update; `git reflog show main` records it as
+   `merge P1-land-1.3-session-bootstrap: Fast-forward`.
+3. Re-verified on the primary checkout post-landing: `git cat-file -e
+   main:packages/cli/src/session/bootstrap.ts` → present. Ran `pnpm install` there
+   (the primary checkout's `node_modules` symlinks hadn't picked up the newly-added
+   `@falcon/crypto`/`@falcon/server` deps in `packages/cli/package.json` yet — first
+   `pnpm exec turbo run typecheck --force` attempt failed with `Cannot find module
+   '@falcon/crypto'` in `packages/cli` until this ran). After `pnpm install`:
+   - `pnpm build` — 5/5 tasks green.
+   - `pnpm exec turbo run typecheck --force` — 9/9 tasks green.
+   - `pnpm exec turbo run test --force --concurrency=1` — 9/9 tasks green, 559/559
+     tests, same breakdown as above.
+
+`main` (real, shared ref) is now at `343491f` with `packages/cli/src/session/bootstrap.ts`
+present and the full workspace suite green.
+
 ## Third pass (2026-07-16): reconcile again with main's further-advanced tip
 
 By this pass, this branch's own tip (`78b6c54`, the second pass above) had `56189dc`
@@ -151,16 +193,15 @@ section below, which still applies.
    note in the same style as the file's other `P1-land-*` entries, documenting exactly
    what was verified and the sandboxing caveat below.
 
-## Sandboxing caveat
+## Sandboxing caveat (superseded — see "Fourth pass" above)
 
-Per this task's own rules ("ALL file edits MUST be in the worktree... do NOT merge or
-push"), everything above happened only inside `.worktrees/P1-land-1.3-session-bootstrap`
-on its own `P1-land-1.3-session-bootstrap` branch (based on `main`'s tip `a7bbceb`).
-Fast-forwarding or `--no-ff` merging this branch onto the shared `main` ref from the
-primary, non-worktree checkout is a follow-up step outside this subagent's write access
-— the same pattern every other `P1-land-*` task in this repo's history has followed
-(see plan.md's own narrative for `P1-land-1.5-ensure-daemon-running`,
-`P1-land-1.5-notify-daemon-session-started`, etc.).
+Passes one through three below happened only inside
+`.worktrees/P1-land-1.3-session-bootstrap`, per the general rule that worktree tasks
+don't touch the primary checkout. This task's own instructions explicitly carved out an
+exception — "land it onto the real shared main ref" — so the fourth pass above performed
+the actual `git merge --ff-only` against the primary, non-worktree `main` checkout and
+re-verified there. `main` now genuinely has `packages/cli/src/session/bootstrap.ts` at
+tip `343491f`.
 
 ## Files changed in this worktree
 
