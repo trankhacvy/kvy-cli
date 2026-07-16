@@ -12,7 +12,13 @@
  * the underlying `useQuery(['sync'], ...)` / `useInfiniteQuery(['messages',
  * sessionId], ...)` fetches.
  */
-export { createSyncEngine } from "./engine.js";
+
 export type { SyncEngine, SyncSocketSource } from "./engine.js";
-export { isSyncQueryKey, messagesQueryKey, messagesSessionIdFromKey, syncQueryKey } from "./queryKeys.js";
+export { createSyncEngine } from "./engine.js";
+export {
+  isSyncQueryKey,
+  messagesQueryKey,
+  messagesSessionIdFromKey,
+  syncQueryKey,
+} from "./queryKeys.js";
 export type { MessageItem, MessagesPage, MessagesQueryData, SyncSnapshot } from "./types.js";

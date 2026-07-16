@@ -197,9 +197,9 @@ describe("createSyncEngine", () => {
         },
       });
 
-      expect(queryClient.getQueryData<SyncSnapshot>(syncQueryKey)?.machines.map((m) => m.id)).toEqual([
-        "mach-1",
-      ]);
+      expect(
+        queryClient.getQueryData<SyncSnapshot>(syncQueryKey)?.machines.map((m) => m.id),
+      ).toEqual(["mach-1"]);
     });
 
     it("upserts a machine-update onto an existing machine by id, not appending a duplicate", () => {
@@ -323,7 +323,13 @@ describe("createSyncEngine", () => {
 
       emitUpdate({
         ts: 4000,
-        body: { t: "message-new", sessionId: "sess-1", msgSeq: 4, localId: "l-4", content: box("m4") },
+        body: {
+          t: "message-new",
+          sessionId: "sess-1",
+          msgSeq: 4,
+          localId: "l-4",
+          content: box("m4"),
+        },
       });
 
       const data = queryClient.getQueryData<MessagesQueryData>(messagesQueryKey("sess-1"));
@@ -430,7 +436,12 @@ describe("createSyncEngine", () => {
       queryClient.setQueryData(
         messagesQueryKey("sess-1"),
         makeMessagesData({
-          pages: [{ messages: [{ seq: 10, localId: null, content: box("m10"), createdAt: 9 }], nextBefore: null }],
+          pages: [
+            {
+              messages: [{ seq: 10, localId: null, content: box("m10"), createdAt: 9 }],
+              nextBefore: null,
+            },
+          ],
           pageParams: [undefined],
         }),
       );

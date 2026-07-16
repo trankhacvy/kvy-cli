@@ -32,9 +32,15 @@
  * or a manual `setQueryData` elsewhere — and it only ever calls
  * `setQueryData`/`invalidateQueries`, never `fetchQuery`.
  */
-import type { QueryClient } from "@tanstack/react-query";
+
 import type { MachineRow, SessionRow, UnmanagedSessionRow, Update, UpdateBody } from "@falcon/wire";
-import { isSyncQueryKey, messagesQueryKey, messagesSessionIdFromKey, syncQueryKey } from "./queryKeys.js";
+import type { QueryClient } from "@tanstack/react-query";
+import {
+  isSyncQueryKey,
+  messagesQueryKey,
+  messagesSessionIdFromKey,
+  syncQueryKey,
+} from "./queryKeys.js";
 import type { MessageItem, MessagesQueryData, SyncSnapshot } from "./types.js";
 
 /**
@@ -107,7 +113,9 @@ export function createSyncEngine(queryClient: QueryClient, socket: SyncSocketSou
   // update as a gap forever.
   const initialSync = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
   if (initialSync) lastHeaderSeq = initialSync.headerSeq;
-  for (const [key, data] of queryClient.getQueriesData<MessagesQueryData>({ queryKey: ["messages"] })) {
+  for (const [key, data] of queryClient.getQueriesData<MessagesQueryData>({
+    queryKey: ["messages"],
+  })) {
     const sessionId = messagesSessionIdFromKey(key);
     const newest = msgSeqBaseline(data);
     if (sessionId !== null && newest !== undefined) lastMsgSeq.set(sessionId, newest);
