@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
+import { clearTitleOverride, setTitleOverride } from "@/lib/document-title-store";
 import type { AttentionState } from "./attention";
 import { computeTabTitle, faviconColor, faviconDataUri } from "./tab-attention";
 
@@ -33,19 +34,31 @@ function applyFavicon(href: string): () => void {
 /**
  * Reflects a session's attention state in the browser tab — title prefix +
  * a colored-dot favicon (falcon-prd.md FR-7.9: "cheap, high-value web
- * ergonomics"). Pure computation lives in `tab-attention.ts`; this hook is
- * just the DOM side-effect, restored on unmount so leaving the session
- * screen doesn't leave a stale badge behind.
+ * ergonomics"). Pure computation lives in `tab-attention.ts`.
+ *
+ * The favicon is a plain DOM side effect (this screen is the only place in
+ * the app that touches it today, restored on unmount). The title *can't*
+ * use the same trick: `app/layout.tsx` used to render a static `metadata`
+ * `<title>Falcon</title>`, and a plain `document.title = ...` mutation from
+ * a `useEffect` here got silently clobbered by the very next unrelated
+ * React re-render anywhere in the tree — confirmed live, the manual
+ * assignment never stuck. Rendering our *own* competing `<title>` element
+ * doesn't fix it either: per the HTML spec `document.title` always reflects
+ * the *first* `<title>` in tree order, so a second, deeper one can lose
+ * even while genuinely present in the DOM. The real fix (see
+ * `components/DocumentTitle.tsx`) was making that the app's *only*
+ * `<title>` fiber, driven by an external store — this hook just pushes/pops
+ * this screen's override into that store instead of touching the DOM.
  */
 export function useTabAttention(title: string, attention: AttentionState, working: boolean): void {
-  useEffect(() => {
-    const originalTitle = document.title;
-    document.title = computeTabTitle(title, attention, working);
-    const restoreFavicon = applyFavicon(faviconDataUri(faviconColor(attention, working)));
+  const id = useId();
 
-    return () => {
-      document.title = originalTitle;
-      restoreFavicon();
-    };
-  }, [title, attention, working]);
+  useEffect(() => {
+    setTitleOverride(id, computeTabTitle(title, attention, working));
+    return () => clearTitleOverride(id);
+  }, [id, title, attention, working]);
+
+  useEffect(() => {
+    return applyFavicon(faviconDataUri(faviconColor(attention, working)));
+  }, [attention, working]);
 }
