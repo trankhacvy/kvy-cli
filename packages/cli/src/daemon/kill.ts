@@ -155,7 +155,14 @@ async function killForce(targets: ClassifiedProcess[], deps: KillDeps): Promise<
   return outcomes;
 }
 
-async function killGraceful(
+/**
+ * SIGTERM-then-wait-then-SIGKILL escalation over `targets`. Exported (in
+ * addition to the `killDaemon`/`killSessions`/`killAll` convenience
+ * wrappers below) so `doctor.ts`'s `falcon doctor clean` can reuse the exact
+ * same escalation logic against its own, narrower "runaway process" target
+ * set rather than duplicating it.
+ */
+export async function killGraceful(
   targets: ClassifiedProcess[],
   deps: KillDeps,
   gracefulTimeoutMs: number,

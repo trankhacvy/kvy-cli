@@ -12,6 +12,7 @@ import {
   runDaemonStop,
 } from "./commands.js";
 import { acquireDaemonLock, lockFilePath } from "./lock.js";
+import { persistSession } from "./sessionsStore.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
 function noopLogger(): Logger {
@@ -173,6 +174,56 @@ describe("daemon commands", () => {
       );
 
       if (held.ok) await held.handle.release();
+    });
+  });
+
+  describe("runDaemonStartSync — durability (§3.2)", () => {
+    it("restores persisted sessions.json before serving any request", async () => {
+      await persistSession(homeDir, {
+        sessionId: "sess_1",
+        provider: "claude-code",
+        encryption: {
+          encryptionKey: "wrapped-dek",
+          seq: 3,
+          metadataVersion: 1,
+          agentStateVersion: 1,
+        },
+        savedAt: Date.now(),
+      });
+
+      const info = vi.fn();
+      const deps = buildDeps(homeDir, {
+        logger: { ...noopLogger(), info },
+        registerShutdownSignals: (onShutdown) => {
+          setTimeout(() => onShutdown(), 10);
+          return () => {};
+        },
+      });
+
+      const code = await runDaemonStartSync(deps);
+
+      expect(code).toBe(0);
+      expect(info).toHaveBeenCalledWith(
+        "daemon start-sync: restored persisted sessions",
+        expect.objectContaining({ count: 1 }),
+      );
+    });
+
+    it("hands off to a fresh daemon once the bundle is replaced and no sessions are live", async () => {
+      const spawnStartSync = vi.fn();
+      const deps = buildDeps(homeDir, {
+        spawnStartSync,
+        heartbeatIntervalMs: 5,
+        captureBundleMtimeMs: () => 111,
+        hasBundleBeenReplaced: () => true, // pretend the bundle was replaced on the very first tick
+        registerShutdownSignals: () => () => {},
+      });
+
+      const code = await runDaemonStartSync(deps);
+
+      expect(code).toBe(0);
+      expect(spawnStartSync).toHaveBeenCalledOnce();
+      expect(await readDaemonState(homeDir)).toBeNull();
     });
   });
 

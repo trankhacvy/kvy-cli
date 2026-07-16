@@ -7,9 +7,9 @@
  * underlying provider CLI untouched.
  *
  * Two parsing modes coexist:
- *  - Falcon's own subcommands (`auth`, `daemon`, `kill`, `sessions`,
- *    `resume`, `workspace`, `notify`, `--help`, `--version`) are parsed and
- *    validated below.
+ *  - Falcon's own subcommands (`auth`, `daemon`, `kill`, `doctor`,
+ *    `sessions`, `resume`, `workspace`, `notify`, `--help`, `--version`) are
+ *    parsed and validated below.
  *  - `falcon claude [args...]` / `falcon codex [args...]` — and the
  *    default `falcon [args...]` form — never inspect `args`; they are
  *    forwarded verbatim as `providerArgs`.
@@ -24,6 +24,7 @@ export type FalconCommand =
   | { type: "auth"; action: "login" | "logout" | "status" }
   | { type: "daemon"; action: "start" | "start-sync" | "stop" | "status"; noWait: boolean }
   | { type: "kill"; target: "daemon" | "sessions" | "all" | "all-force" }
+  | { type: "doctor"; action: "report" | "clean" }
   | { type: "sessions"; action: "list" }
   | { type: "resume"; sessionId: string }
   | { type: "workspace-config"; baseRef?: string; remote?: string; directory?: string }
@@ -73,6 +74,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseDaemon(rest);
     case "kill":
       return parseKill(rest);
+    case "doctor":
+      return parseDoctor(rest);
     case "sessions":
       return parseSessions(rest);
     case "resume":
@@ -158,6 +161,12 @@ function parseKill(rest: string[]): FalconCommand {
     `Unknown "falcon kill" target: ${target ?? "(none)"}`,
     "falcon kill daemon|sessions|all|all-force",
   );
+}
+
+function parseDoctor(rest: string[]): FalconCommand {
+  if (rest.length === 0) return { type: "doctor", action: "report" };
+  if (rest[0] === "clean") return { type: "doctor", action: "clean" };
+  throw new ArgParseError(`Unknown "falcon doctor" action: ${rest[0]}`, "falcon doctor [clean]");
 }
 
 function parseSessions(rest: string[]): FalconCommand {

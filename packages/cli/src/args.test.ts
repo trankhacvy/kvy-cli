@@ -164,6 +164,20 @@ describe("parseArgs — kill", () => {
   });
 });
 
+describe("parseArgs — doctor", () => {
+  it("defaults to the report action with no subcommand", () => {
+    expect(parseArgs(["doctor"])).toEqual({ type: "doctor", action: "report" });
+  });
+
+  it("parses doctor clean", () => {
+    expect(parseArgs(["doctor", "clean"])).toEqual({ type: "doctor", action: "clean" });
+  });
+
+  it("throws on an unknown doctor action", () => {
+    expect(() => parseArgs(["doctor", "bogus"])).toThrow(ArgParseError);
+  });
+});
+
 describe("parseArgs — sessions", () => {
   it("parses sessions list", () => {
     expect(parseArgs(["sessions", "list"])).toEqual({ type: "sessions", action: "list" });

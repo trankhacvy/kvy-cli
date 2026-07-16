@@ -5,12 +5,12 @@
  * Mirrors `rpc/sessionRpc.ts`'s registration/decrypt/validate/seal shape
  * (same `rpc-register`/`rpc-request` wire contract, same `EncryptedBox`
  * params/results sealed under the owning DEK), adapted to the
- * machine-scoped `m:<machineId>:<method>` target namespace. `spawn` and the
- * New Session directory picker's `fs.list`/`fs.mkdir` are in scope here —
- * `stopSession`/`resumeSession`/`listSessions`/`git.*`/`fs.read`/`adopt.*`
- * are separate, later plan bullets (§3.2/§3.3/§4.1) and can be added to
- * `MACHINE_RPC_METHODS`/`buildMethodTable` the same way without touching
- * this module's dispatch shape.
+ * machine-scoped `m:<machineId>:<method>` target namespace. `spawn`,
+ * `resumeSession`, and the New Session directory picker's
+ * `fs.list`/`fs.mkdir` are in scope here — `stopSession`/`listSessions`/
+ * `git.*`/`fs.read`/`adopt.*` are separate, later plan bullets (§3.3/§4.1)
+ * and can be added to `MACHINE_RPC_METHODS`/`buildMethodTable` the same way
+ * without touching this module's dispatch shape.
  *
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
  * double-spawn"): wraps `deps.spawnSession` in a `Map<idempotencyKey,
@@ -21,6 +21,12 @@
  * replaying — a validation or timeout failure is safe, and correct, to
  * retry from scratch. `fs.list`/`fs.mkdir` need no such cache — listing is
  * naturally idempotent, and `mkdir -p` succeeds identically on retry.
+ * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
+ * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
+ * retried resume of the same session is not a "double spawn" risk:
+ * `resumeSession.ts` itself always stops any still-live process for that
+ * session before relaunching, so a second call just relaunches again rather
+ * than creating a duplicate.
  */
 import { open, seal } from "@falcon/crypto";
 import {
@@ -34,6 +40,8 @@ import {
   FsMkdirParamsSchema,
   type FsMkdirResult,
   FsMkdirResultSchema,
+  ResumeSessionParamsSchema,
+  ResumeSessionResultSchema,
   type SpawnParams,
   SpawnParamsSchema,
   type SpawnResult,
@@ -47,7 +55,7 @@ import {
   listDirectory as listDirectoryDefault,
 } from "./fsBrowse.js";
 
-export const MACHINE_RPC_METHODS = ["spawn", "fs.list", "fs.mkdir"] as const;
+export const MACHINE_RPC_METHODS = ["spawn", "resumeSession", "fs.list", "fs.mkdir"] as const;
 export type MachineRpcMethod = (typeof MACHINE_RPC_METHODS)[number];
 
 export interface MachineRpcDeps {
@@ -57,6 +65,8 @@ export interface MachineRpcDeps {
   socket: Socket;
   /** Performs the actual spawn (`spawnEngine.ts`'s `spawnSession`, typically) — throws (any `Error`) on failure. */
   spawnSession: (params: SpawnParams) => Promise<SpawnResult>;
+  /** Performs the actual resume (`resumeSession.ts`'s `resumeSession`, typically) — throws (any `Error`) on failure; the wire result is always a bare `{ok:true}`, so only success/failure matters here. */
+  resumeSession: (sessionId: string) => Promise<unknown>;
   /** Backs the `fs.list` directory-picker RPC. Injectable for tests; defaults to `fsBrowse.ts`'s real filesystem listing. Throws on failure. */
   listDirectory?: (params: FsListParams) => Promise<FsListResult>;
   /** Backs the `fs.mkdir` create-directory-approval RPC. Injectable for tests; defaults to `fsBrowse.ts`'s real `mkdir -p`. Throws on failure. */
@@ -102,12 +112,12 @@ function isMachineRpcMethod(method: unknown): method is MachineRpcMethod {
 }
 
 /**
- * Registers the daemon's machine-scoped `spawn`/`fs.list`/`fs.mkdir` RPCs:
- * joins `m:<machineId>:<method>` for each on every (re)connect, and answers
- * `rpc-request` by decrypting params, validating against the method's
- * `@falcon/wire` schema, running (or, for `spawn`, replaying) the handler,
- * and sealing the result back for the server's `emitWithAck` to relay to
- * the caller.
+ * Registers the daemon's machine-scoped `spawn`/`resumeSession`/`fs.list`/
+ * `fs.mkdir` RPCs: joins `m:<machineId>:<method>` for each on every
+ * (re)connect, and answers `rpc-request` by decrypting params, validating
+ * against the method's `@falcon/wire` schema, running (or, for `spawn`,
+ * replaying) the handler, and sealing the result back for the server's
+ * `emitWithAck` to relay to the caller.
  */
 export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHandle {
   const logger = deps.logger ?? noopLogger;
@@ -134,11 +144,22 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
     return result;
   }
 
+  /** No idempotency-key replay here — see this module's header comment for why `resumeSession` doesn't need one. */
+  async function handleResumeSession(params: { sessionId: string }): Promise<{ ok: true }> {
+    await deps.resumeSession(params.sessionId);
+    return { ok: true };
+  }
+
   const methods: { [M in MachineRpcMethod]: MethodSpec<unknown, unknown> } = {
     spawn: {
       paramsSchema: SpawnParamsSchema,
       resultSchema: SpawnResultSchema,
       handle: handleSpawn as (params: unknown) => Promise<unknown>,
+    },
+    resumeSession: {
+      paramsSchema: ResumeSessionParamsSchema,
+      resultSchema: ResumeSessionResultSchema,
+      handle: handleResumeSession as (params: unknown) => Promise<unknown>,
     },
     "fs.list": {
       paramsSchema: FsListParamsSchema,

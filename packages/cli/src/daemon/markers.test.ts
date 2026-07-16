@@ -61,6 +61,8 @@ describe("classifyFalconCommand", () => {
       "falcon notify -p hi",
       "falcon --help",
       "falcon --version",
+      "falcon doctor",
+      "falcon doctor clean",
     ]) {
       expect(classifyFalconCommand(cmd)).toEqual({ kind: "other", spawnedByDaemon: false });
     }
