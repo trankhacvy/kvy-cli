@@ -4482,3 +4482,156 @@ tasks, 9/9 test tasks, 483 tests, 0 failures).
    item (flagged since Cycle 23, 14 cycles now with no progress),
    self-verified green (55/55 `@falcon/web` tests), disjoint from
    everything else in `packages/web/src/`.
+
+## Cycle 38 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `a7bbceb` — "chore: cycle 37 — completed 0
+tasks (verified 2 requested tasks unlanded)"). Confirmed via `git rev-parse
+HEAD` on the primary (non-worktree) checkout; `git status --short` clean.
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`@falcon/wire`, `@falcon/crypto`, `falcon` cli, `@falcon/server`,
+  `@falcon/web` — cache hits, replayed clean logs).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61/61, `@falcon/crypto` 65/65, `@falcon/web` 36/36, `falcon` (cli) 181/181,
+  `@falcon/server` 140/140 (incl. the two real-Postgres `seq.test.ts`
+  concurrency cases). 483 tests total, 0 failures. No regressions since
+  Cycle 37.
+- Note on tooling: the `rtk` hook again mangled plain shell commands
+  containing a bare `:` path separator this cycle — e.g. `git show
+  BRANCH:task-summary/FILE.md` came back as `git show
+  BRANCHask-summary/FILE.md` (silently dropping the colon and the `t` in
+  `task`), producing a false "unknown revision" error. Confirmed this is a
+  hook-mangling artifact, not a real error, by re-running the identical
+  command through `rtk proxy` (raw passthrough), which returned the file
+  content correctly every time. All load-bearing checks below used `rtk
+  proxy git ...` for any command containing a `:`, and `/bin/ls`/plain `git`
+  otherwise. Same intermittent-mangling pattern flagged every cycle since 27.
+
+### Task-summaries read this cycle
+
+All three requested task-summaries are `P1-land-*` ("landing") task-summaries
+that describe complete, self-verified **merges performed entirely inside each
+task's own isolated worktree/branch** — none of the three branches is an
+ancestor of the shared `main` ref this tracker checks out, so none is
+actually on `main` yet.
+
+- **`task-summary/P1-land-1.3-claudelocal-spawn.md`** — does not exist on
+  `main` (`rtk proxy git ls-tree main -- task-summary/P1-land-1.3-claudelocal-
+  spawn.md` empty). `rtk proxy git merge-base --is-ancestor
+  P1-land-1.3-claudelocal-spawn main` → **not an ancestor**. Branch tip
+  `0ddc131`; its task-summary describes `git merge --no-ff
+  P1-1.3-claudelocal-spawn` performed inside worktree
+  `.worktrees/P1-land-1.3-claudelocal-spawn` (landing
+  `packages/cli/src/claude/claudeLocal.ts` + test, `cross-spawn` dependency),
+  re-verified there with `pnpm build`/`typecheck`/`test --force` all green
+  (`falcon` cli 206/206) and its own `plan.md` copy's checkbox flipped — but
+  that worktree's branch was never fast-forwarded/merged onto the real
+  shared `main`. The task-summary also does a useful independent sanity-check
+  of the bare-`--resume`/`-r` passthrough behavior (traces `extractFlag`/
+  `resolveSessionFlags` line-by-line and confirms it matches Happy's actual
+  behavior and falcon-plan.md's stated goal — no code change made). Confirmed
+  on `main` itself: `git cat-file -e
+  main:packages/cli/src/claude/claudeLocal.ts` fails. Not credited; added a
+  Cycle 38 annotation to the §1.3 narrative recording this.
+- **`task-summary/P1-land-1.3-session-bootstrap.md`** — does not exist on
+  `main` (`rtk proxy git ls-tree main -- task-summary/P1-land-1.3-session-
+  bootstrap.md` empty). `rtk proxy git merge-base --is-ancestor
+  P1-land-1.3-session-bootstrap main` → **not an ancestor**. Branch tip
+  `3c5f7d9`; its task-summary explicitly documents (its own "Sandboxing
+  caveat" section) that per its instructions ("do NOT merge or push"), it
+  copied the three source files (`session/bootstrap.ts` + two test files)
+  and the two small config deltas by hand into its own worktree
+  (`.worktrees/P1-land-1.3-session-bootstrap`) and regenerated the lockfile
+  via `pnpm install` there — verified green in isolation (`pnpm test
+  --force --concurrency=1`: 9/9; per-package isolated runs: `@falcon/server`
+  140/140, `falcon` cli 196/196) after noting a parallel-run PGlite
+  resource-contention flake that isn't a real regression — but flipping
+  `plan.md`'s checkbox happened only in that worktree's own copy of
+  `plan.md`, not on `main`. Confirmed on `main` itself:
+  `packages/cli/src/session/` does not exist at all (`git cat-file -e
+  main:packages/cli/src/session/bootstrap.ts` fails). Not credited; added a
+  Cycle 38 annotation to the §1.3 narrative recording this.
+- **`task-summary/P1-land-1.6-reducer-port.md`** — does not exist on `main`
+  (`rtk proxy git ls-tree main -- task-summary/P1-land-1.6-reducer-port.md`
+  empty). `rtk proxy git merge-base --is-ancestor P1-land-1.6-reducer-port
+  main` → **not an ancestor**. Branch tip `ba70c7e`; its task-summary reports
+  picking up a stalled prior attempt (a real two-parent merge commit
+  `3aef5c1` from Cycle 33 that had since fallen 15 commits behind `main`),
+  merging current `main` (`a7bbceb`, cycle 37) into the branch with one
+  narrative-only conflict in `plan.md` resolved by hand, producing merge
+  commit `821d110` (parents `6cc5e56` and `a7bbceb`) — verified in isolation
+  per-package (503/503 total: wire 61/61, crypto 65/65, web 56/56, server
+  140/140, cli 181/181). Its own "Scope / non-goals" section is explicit that
+  "no actual `git checkout main && git merge`/push was performed" and that "a
+  separate integration step is expected to fast-forward/merge this branch
+  ... onto the shared `main` ref" — confirmed still not done:
+  `git cat-file -e main:packages/web/src/sync/reducer/reduce.ts` fails on
+  `main`. Not credited; added a Cycle 38 annotation to the §1.6 narrative
+  recording this. Now flagged for **15 consecutive cycles** (since Cycle 23)
+  without landing — the longest-standing item in this backlog.
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** All three requested task-summaries are
+genuine, complete, self-verified merges — but every one of them merged onto
+its own isolated worktree branch, not onto the shared `main` ref, so none
+qualifies for a `plan.md` checkbox flip. `plan.md` §16 checkbox count:
+**54/135**, unchanged from Cycle 37.
+
+### Blockers / issues found
+
+1. **Systemic pattern across all three `P1-land-*` tasks this cycle: each
+   one performed a real, clean, well-verified merge — but only inside its own
+   worktree/branch, never onto the actual shared `main` git ref.** Every
+   task-summary is honest and explicit about this in its own "scope
+   caveat" section, so this isn't a case of overclaiming — it's a structural
+   gap in how "land" tasks are being dispatched: they get a worktree branched
+   off `main` and permission to merge/commit *inside* that worktree, but none
+   of them has write access (or is told) to actually fast-forward/merge that
+   result back onto the primary, non-worktree `main` checkout. This exact
+   gap has now recurred for `P1-land-1.6-reducer-port` across 3+ cycles
+   (33, 34, 38) and is now also true of the two new `P1-land-1.3-*` tasks.
+   The fix is orchestration-level: a task (or this tracker, if given write
+   access to the primary checkout) needs to explicitly `git merge --no-ff`
+   each of these three branch tips onto the real `main` from the primary
+   checkout — all three are reported as small, disjoint, and already
+   green in isolation, so this should be a low-risk mechanical step once
+   someone has the right checkout.
+2. The longer-standing unlanded backlog is otherwise unchanged from Cycle 37:
+   `P1-1.3-falcon-home-persistence` (since Cycle 34), `P1-1.4-envelope-
+   mapper`, `P1-1.4-http-outbox`, `P1-1.6-auth-pages`, `P1-1.6-api-socket`,
+   `P1-1.6-sync-engine` (since Cycle 37), `P1-1.3-cli-auth-login`,
+   `P1-1.3-cli-locator` / `P1-1.3-provider-detection` (duplicate-work
+   situation, per that task's own task-summary), `P1-1.3-claude-launcher-
+   script`, and `P0-cross-cutting-mit-attribution-headers`.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **54/135 checked (~40.0%)**, unchanged from
+Cycle 37. `pnpm typecheck`/`pnpm test` both green on `main` (7/7 typecheck
+tasks, 9/9 test tasks, 483 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Actually fast-forward/merge the three already-verified `P1-land-*`
+   branch tips onto the real, shared `main` ref** —
+   `P1-land-1.3-claudelocal-spawn` (tip `0ddc131`), `P1-land-1.3-session-
+   bootstrap` (tip `3c5f7d9`), and `P1-land-1.6-reducer-port` (tip
+   `ba70c7e`) are all reported green in isolation and touch disjoint files
+   (`packages/cli/src/claude/`, `packages/cli/src/session/`,
+   `packages/web/src/sync/reducer/` respectively) — from the primary
+   non-worktree checkout, in that order (claudelocal-spawn and
+   session-bootstrap touch the same `packages/cli/package.json`/lockfile so
+   should land sequentially, not in parallel).
+2. **Land `P1-1.3-falcon-home-persistence`** — small, self-contained
+   (`persistence.ts` + tests only), no apparent overlap with anything
+   already on `main`, flagged since Cycle 34.
+3. **Land `P1-1.6-sync-engine`** — self-contained (new `packages/web/src/
+   sync/{queryKeys,types,engine,index}.ts`, injectable socket interface so it
+   doesn't need `P1-1.6-api-socket` to land first), 49/49 `@falcon/web`
+   tests self-reported green, flagged since Cycle 37.
