@@ -43,4 +43,24 @@ describe("recordAdoptionLineage / getAdoptionLineage", () => {
     expect(await getAdoptionLineage("old-1", { homeDir })).toEqual(["old-1", "new-1"]);
     expect(await getAdoptionLineage("old-2", { homeDir })).toEqual(["old-2", "new-2"]);
   });
+
+  it("extends the original chain across 3+ adoption generations, matching the real `falcon adopt` call pattern (each call keyed on the most-recently-active transcript, not the original root)", async () => {
+    // Real invocation pattern: `commands/adopt.ts` always passes
+    // `listAdoptableSessions()`'s pick as `old`, which is B after the
+    // first adopt, C after the second, etc. — never the original root A.
+    const chain1 = await recordAdoptionLineage("A", "B", { homeDir });
+    expect(chain1).toEqual(["A", "B"]);
+
+    const chain2 = await recordAdoptionLineage("B", "C", { homeDir });
+    expect(chain2).toEqual(["A", "B", "C"]);
+
+    const chain3 = await recordAdoptionLineage("C", "D", { homeDir });
+    expect(chain3).toEqual(["A", "B", "C", "D"]);
+
+    // Full history must be reconstitutable from the original root id...
+    expect(await getAdoptionLineage("A", { homeDir })).toEqual(["A", "B", "C", "D"]);
+    // ...and from any later hop, since callers may only know the most
+    // recent id.
+    expect(await getAdoptionLineage("C", { homeDir })).toEqual(["A", "B", "C", "D"]);
+  });
 });

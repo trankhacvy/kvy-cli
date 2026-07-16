@@ -11,10 +11,35 @@
 import { type PersistenceOptions, readSettings, updateSettings } from "../persistence.js";
 
 /**
- * Appends `newProviderSessionId` onto `oldProviderSessionId`'s lineage
- * chain (creating a fresh one-entry chain the first time), returning the
- * full chain in adoption order, oldest first. Idempotent: re-recording the
- * same `newProviderSessionId` is a no-op.
+ * `falcon adopt`'s real call site (`commands/adopt.ts`) always passes
+ * `listAdoptableSessions()`'s pick as `oldProviderSessionId` — i.e. the
+ * *most recently active* transcript on disk. After a first adopt (A -> B),
+ * B is now that most-recent transcript, so the next `falcon adopt` records
+ * (B, C), not (A, C). Chains must therefore be looked up by *any* id they
+ * contain, not just their first (root) element, or each new adopt+resume
+ * hop would fragment into its own disconnected 2-entry chain instead of
+ * extending the original session's full history.
+ */
+function findChainEntry(
+  adoptedSessions: Record<string, string[]>,
+  providerSessionId: string,
+): [rootKey: string, chain: string[]] | undefined {
+  const direct = adoptedSessions[providerSessionId];
+  if (direct) return [providerSessionId, direct];
+  for (const [rootKey, chain] of Object.entries(adoptedSessions)) {
+    if (chain.includes(providerSessionId)) return [rootKey, chain];
+  }
+  return undefined;
+}
+
+/**
+ * Appends `newProviderSessionId` onto whichever lineage chain already
+ * contains `oldProviderSessionId` (as its root id *or* any later hop),
+ * creating a fresh one-entry chain keyed on `oldProviderSessionId` the
+ * first time one doesn't exist. Returns the full chain in adoption order,
+ * oldest first, still stored under its original root id so the complete
+ * history stays reachable from where it started. Idempotent: re-recording
+ * the same `newProviderSessionId` is a no-op.
  */
 export async function recordAdoptionLineage(
   oldProviderSessionId: string,
@@ -24,21 +49,27 @@ export async function recordAdoptionLineage(
   let chain: string[] = [];
   await updateSettings((current) => {
     const adoptedSessions = { ...(current.adoptedSessions ?? {}) };
-    const existing = adoptedSessions[oldProviderSessionId] ?? [oldProviderSessionId];
+    const found = findChainEntry(adoptedSessions, oldProviderSessionId);
+    const rootKey = found?.[0] ?? oldProviderSessionId;
+    const existing = found?.[1] ?? [oldProviderSessionId];
     chain = existing.includes(newProviderSessionId)
       ? existing
       : [...existing, newProviderSessionId];
-    adoptedSessions[oldProviderSessionId] = chain;
+    adoptedSessions[rootKey] = chain;
     return { ...current, adoptedSessions };
   }, options);
   return chain;
 }
 
-/** Looks up a previously-recorded lineage chain for `oldProviderSessionId`, or `null` if none was ever recorded. */
+/**
+ * Looks up a previously-recorded lineage chain containing
+ * `oldProviderSessionId` — whether it's the original root id or a later
+ * hop recorded since — or `null` if none was ever recorded.
+ */
 export async function getAdoptionLineage(
   oldProviderSessionId: string,
   options: PersistenceOptions = {},
 ): Promise<string[] | null> {
   const settings = await readSettings(options);
-  return settings.adoptedSessions?.[oldProviderSessionId] ?? null;
+  return findChainEntry(settings.adoptedSessions ?? {}, oldProviderSessionId)?.[1] ?? null;
 }

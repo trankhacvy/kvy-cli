@@ -89,16 +89,30 @@ interface RpcRequestData {
   params?: unknown;
 }
 
-/** Wraps a handler with idempotency-key replay: a retried call with the same key returns the cached result instead of re-running the handler. Never caches a rejected call. */
+/**
+ * Wraps a handler with idempotency-key replay: a retried call with the
+ * same key *and the same params* returns the cached result instead of
+ * re-running the handler. Never caches a rejected call.
+ *
+ * Keyed on `idempotencyKey` + a JSON snapshot of `params` (all three
+ * methods' params are plain JSON-safe primitives — see `@falcon/wire`'s
+ * `rpc.ts`), not on `idempotencyKey` alone: `adopt.mirror`'s result is a
+ * transcript chunk addressed by `cursor`, so a caller that (incorrectly)
+ * reused one `idempotencyKey` across a paginated sequence of different
+ * cursors must still get each cursor's own chunk rather than silently
+ * replaying whichever chunk happened to be cached first for that key.
+ * A genuine retry — same key, same params — still replays as intended.
+ */
 function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
   fn: (params: P) => Promise<R>,
 ): (params: P) => Promise<R> {
   const cache = new Map<string, R>();
   return async (params: P) => {
-    const cached = cache.get(params.idempotencyKey);
+    const cacheKey = `${params.idempotencyKey}:${JSON.stringify(params)}`;
+    const cached = cache.get(cacheKey);
     if (cached !== undefined) return cached;
     const result = await fn(params);
-    cache.set(params.idempotencyKey, result);
+    cache.set(cacheKey, result);
     return result;
   };
 }

@@ -317,6 +317,33 @@ describe("registerMachineRpcHandlers", () => {
       expect(adoptMirror).toHaveBeenCalledOnce();
     });
 
+    it("does NOT replay a stale chunk when the same idempotencyKey is reused across different cursors — each cursor's params get their own cache entry", async () => {
+      const socket = new FakeSocket();
+      const adoptMirror = vi
+        .fn()
+        .mockResolvedValueOnce({ chunk: "chunk-0", nextCursor: 100, done: false })
+        .mockResolvedValueOnce({ chunk: "chunk-100", nextCursor: null, done: true });
+      register(socket, { adoptMirror });
+
+      // Same idempotencyKey reused across a paginated sequence (misuse —
+      // a real client should mint a fresh key per chunk — but must not
+      // silently replay the first chunk for a differently-cursored call).
+      const first = await callAndAwaitAck(
+        socket,
+        "adopt.mirror",
+        seal(adoptMirrorParams({ cursor: 0 }), DEK),
+      );
+      const second = await callAndAwaitAck(
+        socket,
+        "adopt.mirror",
+        seal(adoptMirrorParams({ cursor: 100 }), DEK),
+      );
+
+      expect(adoptMirror).toHaveBeenCalledTimes(2);
+      expect(open(first, DEK)).toEqual({ chunk: "chunk-0", nextCursor: 100, done: false });
+      expect(open(second, DEK)).toEqual({ chunk: "chunk-100", nextCursor: null, done: true });
+    });
+
     it("replies with a sealed error when adoptMirror throws (e.g. unreadable transcript)", async () => {
       const socket = new FakeSocket();
       register(socket, {
