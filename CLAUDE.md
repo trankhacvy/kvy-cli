@@ -74,10 +74,16 @@ packages/
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme, one placeholder route. Crypto
                               worker bridge (src/crypto/), the transcript reducer
-                              (src/sync/reducer/), and apiSocket, the user-scoped
-                              Socket.IO client with infinite reconnect + app-state
-                              reporting (src/sync/), are wired up. Auth pages and the sync
-                              engine (gap detection, TanStack Query invalidation) still
+                              (src/sync/reducer/), apiSocket — the user-scoped Socket.IO
+                              client with infinite reconnect + app-state reporting — and
+                              `src/sync/engine.ts`, the sync engine (design §8.1/§9.1, DELTA
+                              D2: headerSeq structural fast-path + per-session msgSeq
+                              message fast-path against a TanStack Query cache, gap ⇒
+                              `invalidateQueries`, WS reconnect ⇒ invalidate everything),
+                              are all wired up (src/sync/). The engine takes an injectable
+                              `SyncSocketSource` (`on('update'|'reconnect', ...)`), which the
+                              real `apiSocket` satisfies structurally — no adapter needed.
+                              Auth pages still [planned].
                               [planned].
 ```
 

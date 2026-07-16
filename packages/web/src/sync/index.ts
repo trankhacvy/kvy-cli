@@ -1,15 +1,26 @@
 /**
- * apiSocket — public surface for `packages/web/src/sync/`.
+ * `packages/web/src/sync/` — public surface: `apiSocket` (the WS transport)
+ * plus the sync engine that reconciles it into a TanStack Query cache.
  *
  * `apiSocket` is the singleton app code imports. Call `.connect(token)` once
- * auth completes (design §9.1) and register listeners:
+ * auth completes (design §9.1), then wire the engine up once:
  *
- *   apiSocket.on('update', (u) => { ... fast-path or invalidate on gap ... });
+ *   const engine = createSyncEngine(queryClient, apiSocket);
  *   apiSocket.on('ephemeral', (e) => { ... activity/attention/presence ... });
- *   apiSocket.on('reconnect', () => queryClient.invalidateQueries());
+ *   // ... later, on logout/teardown:
+ *   engine.dispose();
+ *   apiSocket.disconnect();
  *
- * On document visibility change it reports `app-state` to the server so the
- * push pipeline can suppress notifications for a foregrounded tab (§6.4).
+ * `apiSocket` satisfies `SyncSocketSource` (`on('update'|'reconnect', ...)`)
+ * structurally, so no adapter is needed between the two. On document
+ * visibility change `apiSocket` also reports `app-state` to the server so
+ * the push pipeline can suppress notifications for a foregrounded tab
+ * (§6.4).
+ *
+ * See `engine.ts` for the fast-path/gap-invalidation design and
+ * `queryKeys.ts` for the Query key contract shared with whatever hooks own
+ * the underlying `useQuery(['sync'], ...)` / `useInfiniteQuery(['messages',
+ * sessionId], ...)` fetches.
  */
 import { createApiSocket } from "./apiSocket.js";
 import { createSocketFactory } from "./socket-factory.js";
@@ -27,5 +38,14 @@ export type {
   VisibilitySource,
 } from "./apiSocket.js";
 export { createApiSocket } from "./apiSocket.js";
+export type { SyncEngine, SyncSocketSource } from "./engine.js";
+export { createSyncEngine } from "./engine.js";
+export {
+  isSyncQueryKey,
+  messagesQueryKey,
+  messagesSessionIdFromKey,
+  syncQueryKey,
+} from "./queryKeys.js";
 export { createSocketFactory } from "./socket-factory.js";
+export type { MessageItem, MessagesPage, MessagesQueryData, SyncSnapshot } from "./types.js";
 export { createBrowserVisibilitySource } from "./visibility.js";
