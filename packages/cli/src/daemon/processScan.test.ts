@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 const execFileMock = vi.fn();
 vi.mock("node:child_process", () => ({ execFile: (...args: unknown[]) => execFileMock(...args) }));
 
-const { listProcesses, parsePsOutput } = await import("./processScan.js");
+const readlinkMock = vi.fn();
+vi.mock("node:fs/promises", () => ({ readlink: (...args: unknown[]) => readlinkMock(...args) }));
+
+const { listProcesses, parsePsOutput, resolveProcessCwd } = await import("./processScan.js");
 
 describe("parsePsOutput", () => {
   it("parses a realistic `ps -axo pid=,ppid=,command=` transcript", () => {
@@ -62,5 +65,42 @@ describe("listProcesses", () => {
     });
 
     await expect(listProcesses()).resolves.toEqual([]);
+  });
+});
+
+describe("resolveProcessCwd", () => {
+  it("reads /proc/<pid>/cwd on linux", async () => {
+    readlinkMock.mockResolvedValueOnce("/home/dev/project");
+    await expect(resolveProcessCwd(4242, "linux")).resolves.toBe("/home/dev/project");
+    expect(readlinkMock).toHaveBeenCalledWith("/proc/4242/cwd");
+  });
+
+  it("resolves null on linux when the pid is gone", async () => {
+    readlinkMock.mockRejectedValueOnce(new Error("ENOENT"));
+    await expect(resolveProcessCwd(4242, "linux")).resolves.toBeNull();
+  });
+
+  it("parses `lsof -a -d cwd -p <pid> -Fn` output on darwin", async () => {
+    execFileMock.mockImplementation((_cmd, _args, _opts, callback) => {
+      callback(null, "p4242\nfcwd\nn/Users/dev/project\n", "");
+    });
+    await expect(resolveProcessCwd(4242, "darwin")).resolves.toBe("/Users/dev/project");
+    expect(execFileMock).toHaveBeenCalledWith(
+      "lsof",
+      ["-a", "-d", "cwd", "-p", "4242", "-Fn"],
+      expect.any(Object),
+      expect.any(Function),
+    );
+  });
+
+  it("resolves null on darwin when lsof fails (pid gone, not installed, etc)", async () => {
+    execFileMock.mockImplementation((_cmd, _args, _opts, callback) => {
+      callback(new Error("lsof: command not found"), "", "");
+    });
+    await expect(resolveProcessCwd(4242, "darwin")).resolves.toBeNull();
+  });
+
+  it("resolves null on an unsupported platform", async () => {
+    await expect(resolveProcessCwd(4242, "win32")).resolves.toBeNull();
   });
 });

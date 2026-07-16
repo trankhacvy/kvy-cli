@@ -32,6 +32,7 @@ import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
 import { buildSyncRoutes } from "./routes/sync.js";
 import { buildTelegramLinkRoutes } from "./routes/telegramLink.js";
+import { buildUnmanagedSessionsRoutes } from "./routes/unmanagedSessions.js";
 import { startSocket } from "./socket.js";
 
 // Default request-size cap (design §4.3: "request-size caps"). The message
@@ -125,6 +126,7 @@ export async function buildServer(
   await app.register(buildSessionNotifyRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildSyncRoutes(db));
   await app.register(buildMachinesRoutes(db, eventRouter));
+  await app.register(buildUnmanagedSessionsRoutes(db, eventRouter));
   await app.register(buildPushRoutes(db));
   await app.register(buildTelegramLinkRoutes(db));
   await app.register(buildNotificationSettingsRoutes(db, eventRouter));
