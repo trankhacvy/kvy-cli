@@ -101,6 +101,7 @@ function makeFakeRemoteDeps(counter: { n: number }): ClaudeRemoteLauncherDeps {
         send: (text: string) => opts.onEnvelopes([createEnvelope("user", { t: "text", md: text })]),
         interrupt: async () => {},
         setMode: async () => {},
+        resolvePermission: () => ({ ok: false }),
         stop: async () => ({ providerSessionId }),
       };
     },

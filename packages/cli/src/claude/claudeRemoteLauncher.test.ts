@@ -30,6 +30,7 @@ function fakeStartClaudeRemote(providerSessionId: string | null): {
     },
     interrupt: async () => {},
     setMode: async () => {},
+    resolvePermission: () => ({ ok: false }),
     stop,
   };
 
