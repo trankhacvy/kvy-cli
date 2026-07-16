@@ -147,4 +147,79 @@ describe("buildPushDispatcher", () => {
     ).resolves.toBeUndefined();
     expect(sendSpy).not.toHaveBeenCalled();
   });
+
+  describe("re-notify scheduling", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("re-notifies an unanswered perm dispatch at +5min and +10min, capped at 3 total", async () => {
+      const { account } = await seedAccountAndSubscription(db);
+      const sendSpy = vi.spyOn(channels.webpush, "send").mockResolvedValue(undefined);
+
+      const dispatcher = buildPushDispatcher(db, fakePresence(false));
+      await dispatcher.dispatch({ accountId: account.id, sessionId: "sess_perm", kind: "perm" });
+      expect(sendSpy).toHaveBeenCalledTimes(1); // the initial notification
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(sendSpy).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(sendSpy).toHaveBeenCalledTimes(3);
+
+      // No further follow-ups beyond the +10min mark — max 3 total.
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      expect(sendSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it("does not schedule follow-ups for terminal kinds like done/failed", async () => {
+      const { account } = await seedAccountAndSubscription(db);
+      const sendSpy = vi.spyOn(channels.webpush, "send").mockResolvedValue(undefined);
+
+      const dispatcher = buildPushDispatcher(db, fakePresence(false));
+      await dispatcher.dispatch({ accountId: account.id, sessionId: "sess_done", kind: "done" });
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      expect(sendSpy).toHaveBeenCalledTimes(1); // no follow-up ever fires
+    });
+
+    it("suppresses a follow-up the same way the initial dispatch is suppressed", async () => {
+      const { account } = await seedAccountAndSubscription(db);
+      const sendSpy = vi.spyOn(channels.webpush, "send").mockResolvedValue(undefined);
+      const presenceCheck = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const dispatcher = buildPushDispatcher(db, { hasActiveVisibleClient: presenceCheck });
+      await dispatcher.dispatch({
+        accountId: account.id,
+        sessionId: "sess_suppressed",
+        kind: "perm",
+      });
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+
+      // A visible client shows up before the +5min follow-up fires.
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      expect(sendSpy).toHaveBeenCalledTimes(1); // still 1 — the follow-up was suppressed
+    });
+
+    it("cancels a still-pending schedule when a later event for the same session lands", async () => {
+      const { account } = await seedAccountAndSubscription(db);
+      const sendSpy = vi.spyOn(channels.webpush, "send").mockResolvedValue(undefined);
+
+      const dispatcher = buildPushDispatcher(db, fakePresence(false));
+      await dispatcher.dispatch({ accountId: account.id, sessionId: "sess_race", kind: "perm" });
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+
+      // Turn completes before the +5min follow-up would have fired.
+      await dispatcher.dispatch({ accountId: account.id, sessionId: "sess_race", kind: "done" });
+      expect(sendSpy).toHaveBeenCalledTimes(2);
+
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      expect(sendSpy).toHaveBeenCalledTimes(2); // no stale perm follow-up ever fires
+    });
+  });
 });
