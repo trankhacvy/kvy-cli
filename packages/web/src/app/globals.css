@@ -99,8 +99,9 @@
  * Rendered markdown (timeline message text — `src/lib/markdown.ts` +
  * `src/components/timeline/Markdown.tsx`, design §9.1 "unified/remark +
  * shiki"). Scoped under `.markdown-body` rather than tailwind `@apply`s in
- * component files, since this HTML comes from `dangerouslySetInnerHTML`
- * with no chance to attach Tailwind classes to individual nodes.
+ * component files, since these are real React elements produced by
+ * `rehype-react` (never `dangerouslySetInnerHTML` — see markdown.ts) with no
+ * chance to attach Tailwind classes to individual nodes from here.
  */
 .markdown-body p {
   margin: 0.25rem 0;
