@@ -1,5 +1,98 @@
 # Falcon — Progress Log
 
+## Cycle 53 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `08f5b3f9dd6cbdf8225c7b651d4f26ed603df336`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon` cli, plus their `build` dependency tasks). No
+  errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/wire` (cache hit), `@falcon/crypto`
+  (cache hit), `@falcon/web` 195/195 (22 files), `@falcon/server` 205/205 (28 files), `falcon`
+  cli 517/517 (53 files). 0 failures across the whole workspace.
+
+Note: this cycle's `git log`/`git rev-parse HEAD` invocations initially returned inconsistent
+results when run as bare shell commands (an rtk-hook artifact in this sandbox); all git
+verification below was re-run through the real binary directly
+(`/opt/homebrew/bin/git --no-pager ...`) and cross-checked for consistency before being
+trusted.
+
+### Tasks reviewed this cycle (verified against `main` via `git merge-base --is-ancestor`)
+
+Both requested task_ids exist as real commits on `main`'s own line of history (not deleted
+branches this time — `main`'s current HEAD `08f5b3f9` is the "merge: land
+P2-2.5-renotify-scheduling onto main" commit; its parent `7a97142` is the "merge: land
+P2-2.2-mode-switching onto main" commit):
+
+1. **`task-summary/P2-2.2-mode-switching.md`** (`loop.ts` mode state machine port +
+   `claudeLocalLauncher`/`claudeRemoteLauncher` orchestrators, `ModeSwitchDedupe` 5-min
+   text+role-keyed ring buffer, loss-lessness switch-storm test). Merge commit `7a97142` →
+   `git merge-base --is-ancestor 7a97142 main` = **true**. Confirmed in tree:
+   `packages/cli/src/claude/{loop,claudeLocalLauncher,claudeRemoteLauncher}.ts` and their three
+   test files (22 tests) all present. `plan.md` §2.2 "Mode switching" was still all `[ ]` (5
+   bullets) despite the confirmed merge — **all 5 flipped to `[x]` this cycle** with dated
+   confirmation notes, since a single task closes every bullet in that sub-section.
+2. **`task-summary/P2-2.5-renotify-scheduling.md`** (`createRenotifyScheduler()` — per-session
+   +5min/+10min re-notify timers for unanswered `perm`/`question` events, capped at 3 total
+   sends, superseded by any later dispatch for the same session; wired into
+   `buildPushDispatcher`'s existing `attempt()` fanout). Merge commit `07e9cdb` →
+   `git merge-base --is-ancestor 07e9cdb main` = **true**. Confirmed in tree:
+   `packages/server/src/app/push/renotify.ts` (new) + `dispatch.ts`'s `scheduler.onDispatch(...)`
+   call, `renotify.test.ts` (new) and an extended `describe("re-notify scheduling")` block in
+   `dispatch.test.ts`. `plan.md`'s "Server dispatch" bullet under §2.5 had been deliberately left
+   `[ ]` since Cycle 52 specifically because this clause was missing — **flipped to `[x]` this
+   cycle** with a dated confirmation note now that the re-notify piece is confirmed landed.
+   §2.5's other two bullets ("Fallback channels", "Per-session mute") remain unchecked — out of
+   this task's scope, no implementation exists for either.
+
+### Tasks completed this cycle
+
+**6 checkboxes newly flipped**: all 5 bullets under "2.2 Mode switching" (`plan.md` §2.2) and
+the "Server dispatch" bullet under "2.5 Notifications" (`plan.md` §2.5), all `[ ]` → `[x]` —
+genuinely merged onto `main` but the checkboxes had not yet been updated to reflect it.
+
+### Blockers / issues found
+
+None blocking. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each,
+0 failures). Both reviewed tasks are confirmed genuine ancestors of `main` via
+`git merge-base --is-ancestor` against their real merge-commit SHAs, with their code present in
+`main`'s tree. One environment quirk noted above (bare `git log`/`git rev-parse` giving
+inconsistent output via the rtk shell hook) — worked around by invoking the real git binary
+directly; does not affect the correctness of the verification, only how it had to be obtained.
+
+Worktrees under `.worktrees/` are otherwise unchanged from Cycle 52's notes: most of the
+`P0-*`/`P1-*` ones correspond to features already landed under a superseding branch name and
+are likely pure cleanup, not pending work. One new candidate stands out:
+`.worktrees/P2-2.3-permission-pipeline` (tip `3ce8a39`, working tree clean, 2 commits ahead of
+its `main` base) implements the `PermissionHandler`/`getToolDescriptor` port for §2.3 — no
+`task-summary/` file exists for it yet, so it has not been reviewed/landed by this tracker; it
+is the natural next task given §2.1 (remote mode) and §2.2 (mode switching) are both now done.
+
+### Overall completion
+
+`plan.md` checkbox count: **84/135 checked (~62.2%)** — up from 78/135 (~57.8%) before this
+cycle's six flips (all of §2.2 Mode switching, plus §2.5's "Server dispatch" bullet).
+
+### Next recommended tasks
+
+1. **Land `P2-2.3-permission-pipeline`** (worktree `.worktrees/P2-2.3-permission-pipeline`, tip
+   `3ce8a39`, clean working tree, 2 commits ahead of base) — `PermissionHandler` port
+   (auto-rules, AskUserQuestion/ExitPlanMode always-prompt, Bash allowlists, pending-promise
+   map, agentState CAS writes) + `getToolDescriptor` classification, replacing remote mode's
+   permission stub with real first-wins logic. Closes most of §2.3 and unblocks §2.4's
+   `PermCard`/`ControlBar` web surface, which depends on real `perm-request`/`perm-resolve`
+   envelopes.
+2. **§2.4 Web control surface** (§8.4) — composer TanStack mutation wired to the `message` RPC,
+   `PermCard` (Allow/Deny/Allow-for-session/mode-switch + diff preview), `ControlBar`
+   (interrupt/mode selector/take-control), tab-title/favicon attention badges. Natural follow-on
+   once §2.3's real permission envelopes exist to render.
+3. **§2.5 remaining bullets** — Fallback channels (`telegram`/`ntfy` real delivery + Telegram
+   `/start` pairing flow, currently log-and-drop stubs) and per-session/mute-all settings UI.
+   Lower priority than #1/#2 since the Phase 2 exit demo only requires Web Push, which is
+   already done.
+
 ## Cycle 52 — 2026-07-16T12:02:41Z
 
 **Branch checked:** `main` (HEAD `5310de0`)
