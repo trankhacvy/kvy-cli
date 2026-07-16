@@ -42,12 +42,72 @@ export interface ClearRequest {
   type: "clear";
 }
 
+/**
+ * Report the account identity provisioned on this device, if any — used by
+ * the sign-in page to decide between a silent challenge/response login
+ * (identity already present) and the OAuth sign-up flow (no identity yet).
+ * Only ever returns public keys, never the master secret.
+ */
+export interface GetIdentityRequest {
+  id: string;
+  type: "getIdentity";
+}
+
+/**
+ * Produce everything `POST /v1/auth` needs (design §5.2 "Sign-in"): a fresh
+ * locally-generated challenge, its Ed25519 signature, and the account's
+ * public keys. Fails with `not-initialized` if no identity has been
+ * provisioned on this device yet.
+ */
+export interface SignInChallengeRequest {
+  id: string;
+  type: "signInChallenge";
+}
+
+/**
+ * Export the provisioned master secret as a user-readable recovery code
+ * (design §5.1 "Recovery"). This is the one deliberate exception to "keys
+ * never leave the worker" — the whole point of a recovery code is to hand
+ * the user their key material in backup-able form.
+ */
+export interface ExportRecoveryCodeRequest {
+  id: string;
+  type: "exportRecoveryCode";
+}
+
+/**
+ * CLI pairing approval (design §5.2 "CLI pairing"): seal this device's master
+ * secret to a new device's ephemeral X25519 public key (`ephPub`, base64),
+ * so it can be relayed through the server without the server ever reading it.
+ */
+export interface SealForPeerRequest {
+  id: string;
+  type: "sealForPeer";
+  ephPub: string;
+}
+
 export type CryptoWorkerRequest =
   | InitRequest
   | SetSessionKeyRequest
   | SealRequest
   | OpenRequest
-  | ClearRequest;
+  | ClearRequest
+  | GetIdentityRequest
+  | SignInChallengeRequest
+  | ExportRecoveryCodeRequest
+  | SealForPeerRequest;
+
+/** Public identity (base64-encoded keys) provisioned on this device. */
+export interface DeviceIdentity {
+  signPubKey: string;
+  contentPubKey: string;
+}
+
+/** Everything `POST /v1/auth` needs, freshly minted. */
+export interface SignInChallengeResult extends DeviceIdentity {
+  challenge: string;
+  signature: string;
+}
 
 /**
  * Result payload per request type — kept as a lookup map so `client.ts` can
@@ -60,6 +120,10 @@ export interface CryptoWorkerResults {
   seal: EncryptedBox;
   open: unknown | null;
   clear: null;
+  getIdentity: DeviceIdentity | null;
+  signInChallenge: SignInChallengeResult;
+  exportRecoveryCode: string;
+  sealForPeer: string;
 }
 
 export interface CryptoWorkerOkResponse<T = unknown> {

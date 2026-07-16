@@ -43,10 +43,18 @@ packages/
 │                             control server (`/session-started`, `/list`, `/stop-session`,
 │                             `/spawn-session`, `/stop`), process-scan-based `falcon kill
 │                             daemon/sessions/all/all-force`, `falcon daemon
-│                             start/start-sync/stop/status`, and `ensureDaemonRunning()`
+│                             start/start-sync/stop/status`, `ensureDaemonRunning()`
 │                             (auto-start wiring called from `start`/`auth`/`sessions`/`resume`,
-│                             respects `FALCON_NO_SERVICE=1`). The machine-scoped WS client and
-│                             Auth/provider spawning still [planned].
+│                             respects `FALCON_NO_SERVICE=1`), and the machine-scoped WS client
+│                             (`daemon/machineClient.ts`: `registerOrResumeMachine`/CAS-retry
+│                             sync against `POST /v1/machines`, `startMachineClient` opening
+│                             `/v1/stream` as `clientType: "machine-scoped"` with a 60s
+│                             heartbeat). `src/persistence.ts`: `~/.falcon/`
+│                             local state — schema-versioned `settings.json` (atomic
+│                             lock-file-guarded read-modify-write) and 0600-permissioned
+│                             `access.key` credentials, both tmp-write + rename so readers
+│                             never observe a partial write. RPC handler registration, Auth, and
+│                             provider spawning still [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -64,21 +72,48 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme, plus a read-only session
-                              timeline screen (`/session/[id]`, `src/components/timeline/`):
-                              a virtualized `Timeline` that renders the reducer's
-                              `RenderItem[]` as a structured chat transcript — markdown via
-                              a unified/remark/shiki pipeline compiled straight to React
+                              wired up, dark default theme. Auth pages (OAuth sign-in, key
+                              generation, recovery-code export, pairing-approve —
+                              src/app/signin, src/app/auth, src/app/pair,
+                              src/app/settings/recovery) are landed. Crypto worker bridge
+                              (src/crypto/), the transcript reducer (src/sync/reducer/) —
+                              folds `SessionEnvelope[]` into ordered `RenderItem[]` (design
+                              §9.1) — apiSocket, the user-scoped Socket.IO client with
+                              infinite reconnect + app-state reporting, and
+                              `src/sync/engine.ts`, the sync engine (design §8.1/§9.1, DELTA
+                              D2: headerSeq structural fast-path + per-session msgSeq
+                              message fast-path against a TanStack Query cache, gap ⇒
+                              `invalidateQueries`, WS reconnect ⇒ invalidate everything), are
+                              all wired up (src/sync/). The engine takes an injectable
+                              `SyncSocketSource` (`on('update'|'reconnect', ...)`), which the
+                              real `apiSocket` satisfies structurally — no adapter needed.
+                              `src/features/session-list/`: the Home screen (design §9.2
+                              "Home" row, FR-7.1) — sessions grouped by workspace, a derived
+                              status dot per session (`status.ts`'s `deriveSessionStatus`,
+                              computed from each session's `RenderItem[]` plus live
+                              presence/attention signals, never stored — design principle
+                              #3) and machine online/offline badges. Takes an injectable
+                              `UseSessionListSnapshot` hook (defaults to a static mock
+                              snapshot, `mock-source.ts`) so it composes with the real
+                              sync-engine-backed hook once the two are wired together, same
+                              seam as the sync engine's `SyncSocketSource`. A read-only
+                              session timeline screen (`/session/[id]`,
+                              `src/components/timeline/`) is also landed: a virtualized
+                              `Timeline` that renders the reducer's `RenderItem[]` as a
+                              structured chat transcript — markdown via a
+                              unified/remark/shiki pipeline compiled straight to React
                               elements (`rehype-react`, `src/lib/markdown.ts` — no
                               `dangerouslySetInnerHTML` anywhere), collapsible thinking
                               blocks, a `ToolCard` registry (Bash, Edit/Write/MultiEdit+diff,
                               Read, Grep/Glob, TodoWrite checklist, Task/subagent nesting,
                               MCP generic fallback), and read-only permission/service/file
-                              markers. Composer, permission actions, and the control bar are
-                              Phase 2. Runs off a hand-built demo fixture
-                              (`src/components/timeline/demo-items.ts`) until the sync engine
-                              (a separate in-flight task) lands live data. Auth, sync engine,
-                              and crypto bridge wiring still [planned].
+                              markers. It runs off a hand-built demo fixture
+                              (`src/components/timeline/demo-items.ts`) pending the sync
+                              engine wiring. Wiring the sync engine into the Home screen and
+                              timeline (gap detection, TanStack Query invalidation, FR-7.2
+                              live session timeline), the composer, permission actions, the
+                              control bar (Phase 2), and auth-gating the Home route are
+                              still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

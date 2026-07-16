@@ -8,7 +8,12 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
 import tweetnacl from "tweetnacl";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { OAuthIdentity, OAuthProvider, OAuthVerifier } from "../../auth/oauth.js";
+import type {
+  GithubCodeExchanger,
+  OAuthIdentity,
+  OAuthProvider,
+  OAuthVerifier,
+} from "../../auth/oauth.js";
 import { verifyToken } from "../../auth/tokens.js";
 import * as schema from "../../db/schema.js";
 import { accounts } from "../../db/schema.js";
@@ -171,5 +176,68 @@ describe("POST /v1/auth/register", () => {
     expect(loginResponse.statusCode).toBe(200);
     const loginAccountId = (await verifyToken(loginResponse.json().token))?.accountId;
     expect(loginAccountId).toBe(registeredAccountId);
+  });
+});
+
+// Fake exchanger: `"valid-code"` succeeds, anything else fails — keeps these tests off
+// the network entirely (mirrors `fakeVerifier` above).
+function fakeGithubExchanger(): GithubCodeExchanger {
+  return {
+    async exchange(code: string) {
+      return code === "valid-code" ? "gho_faketoken" : null;
+    },
+  };
+}
+
+describe("POST /v1/auth/oauth/github/exchange", () => {
+  let pglite: PGlite;
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    pglite = new PGlite();
+    const db = drizzle(pglite, { schema });
+    await migrate(db, { migrationsFolder });
+
+    app = await buildServer(
+      { logger: false },
+      { db, oauthVerifier: fakeVerifier(), githubExchanger: fakeGithubExchanger() },
+    );
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await pglite.close();
+  });
+
+  it("returns the access token for a valid code", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/oauth/github/exchange",
+      payload: { code: "valid-code", redirectUri: "https://app.falcon.dev/auth/callback/github" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ accessToken: "gho_faketoken" });
+  });
+
+  it("returns 401 when the exchanger rejects the code", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/oauth/github/exchange",
+      payload: { code: "bad-code", redirectUri: "https://app.falcon.dev/auth/callback/github" },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "GitHub code exchange failed" });
+  });
+
+  it("returns 400 when the body is missing redirectUri", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/oauth/github/exchange",
+      payload: { code: "valid-code" },
+    });
+
+    expect(response.statusCode).toBe(400);
   });
 });

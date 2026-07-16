@@ -98,6 +98,60 @@ export async function verifyGithubAccessToken(
 }
 
 /**
+ * Exchanges a GitHub OAuth authorization `code` for an access token — the piece of
+ * GitHub's flow that requires the app's client secret and therefore can't happen in
+ * the (statically exported, secret-less) web app. Returns `null` on any failure:
+ * unconfigured credentials (fail closed, same rationale as the Google audience check
+ * above), a rejected code, or a malformed response — never throws.
+ *
+ * `fetchToken` is injectable so tests can stub the HTTP call instead of hitting
+ * GitHub's live token endpoint (see oauth.test.ts), mirroring `verifyGithubAccessToken`.
+ */
+export async function exchangeGithubCode(
+  code: string,
+  redirectUri: string,
+  fetchToken: (body: Record<string, string>) => Promise<Response> = (body) =>
+    fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+    }),
+): Promise<string | null> {
+  if (!env.GITHUB_OAUTH_CLIENT_ID || !env.GITHUB_OAUTH_CLIENT_SECRET) return null;
+
+  try {
+    const response = await fetchToken({
+      client_id: env.GITHUB_OAUTH_CLIENT_ID,
+      client_secret: env.GITHUB_OAUTH_CLIENT_SECRET,
+      code,
+      redirect_uri: redirectUri,
+    });
+    if (!response.ok) return null;
+
+    const body = (await response.json()) as { access_token?: string };
+    return typeof body.access_token === "string" && body.access_token.length > 0
+      ? body.access_token
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Interface (rather than calling `exchangeGithubCode` directly from the route) exists
+ * so `buildOAuthRoutes` can be tested with a fake exchanger that never touches the
+ * network, the same way it's tested with a fake `OAuthVerifier`.
+ */
+export interface GithubCodeExchanger {
+  exchange(code: string, redirectUri: string): Promise<string | null>;
+}
+
+/** Production exchanger: real GitHub token-endpoint call. */
+export const defaultGithubCodeExchanger: GithubCodeExchanger = {
+  exchange: exchangeGithubCode,
+};
+
+/**
  * Verifies an `oauthProof` for a given provider. The interface (rather than calling
  * `verifyGoogleIdToken`/`verifyGithubAccessToken` directly from the route) exists so
  * `buildRegisterRoute` can be tested with a fake verifier that never touches the

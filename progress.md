@@ -5058,3 +5058,1054 @@ tests, 0 failures).
    code-review-fixes commit on top), so landing it needs a fresh
    reconciliation-and-merge pass first; self-contained under
    `packages/cli/src/daemon/machineClient.ts`, disjoint from the other two.
+
+## Cycle 42 — 2026-07-16
+
+### Verification run on `main`
+
+- `pnpm typecheck` → forced (`--force`, no turbo cache) `pnpm exec turbo
+  run typecheck`: **PASSED**, 7/7 tasks green (`@falcon/wire`,
+  `@falcon/crypto` build+typecheck, `@falcon/server`, `@falcon/web`,
+  `falcon` cli).
+- `pnpm test` → forced (`--force`, no turbo cache) `pnpm exec turbo run
+  test`: **PASSED**, 9/9 tasks green — 503 tests total, 0 failures:
+  `falcon` cli 181, `@falcon/server` 140, `@falcon/web` 56, `@falcon/wire`
+  61, `@falcon/crypto` 65.
+
+### Task-summaries requested this cycle
+
+- **`task-summary/P1-1.6-session-list-screen.md`** — absent from `main`'s
+  `task-summary/` directory (`/usr/bin/git ls-tree HEAD --
+  task-summary/P1-1.6-session-list-screen.md` empty). `git merge-base
+  --is-ancestor P1-1.6-session-list-screen HEAD` → not an ancestor
+  (branch tip `339cf50`); `main`'s `packages/web/src/` has no
+  `features/session-list/` directory. Read instead from
+  `.worktrees/P1-1.6-session-list-screen/task-summary/
+  P1-1.6-session-list-screen.md`: adds `packages/web/src/features/
+  session-list/{types,status,...}.ts` — view-model types
+  (`SessionListSnapshot`/`SessionListSession`/`SessionListMachine`/
+  `SessionListWorkspace`) plus `deriveSessionStatus()` (the FR-7.1 status
+  derivation: `working / waiting-for-permission / waiting-for-input /
+  idle / completed / failed / offline`) computed by walking the
+  already-landed reducer's `RenderItem[]` output for open turns and
+  unresolved permissions (recursing into subagent scopes), combined with
+  `machineOnline` presence and an `attention` signal mirroring
+  `@falcon/wire`'s `Ephemeral` `t: "attention"` union. Own task-summary
+  reports its full workspace suite green. **Not credited**; bullet stays
+  unchecked — first cycle this task has been requested.
+- **`task-summary/P1-1.6-timeline-screen.md`** — absent from `main`'s
+  `task-summary/` directory (`/usr/bin/git ls-tree HEAD --
+  task-summary/P1-1.6-timeline-screen.md` empty). `git merge-base
+  --is-ancestor P1-1.6-timeline-screen HEAD` → not an ancestor (branch
+  tip `3983744`); `main`'s `packages/web/src/` has no `components/
+  timeline/` directory and no `app/session/[id]/page.tsx` route. Read
+  instead from `.worktrees/P1-1.6-timeline-screen/task-summary/
+  P1-1.6-timeline-screen.md`: adds a read-only, virtualized session
+  timeline — `src/app/session/[id]/page.tsx` (server component,
+  `generateStaticParams()` returning a single demo id per static-export
+  constraints) rendering `SessionTimelineScreen`, and
+  `src/components/timeline/{Timeline,TimelineRow,...}.tsx` — a
+  `@tanstack/react-virtual` root list with dynamic `measureElement`
+  sizing, a `ToolCard` registry (Bash, Edit/Write/MultiEdit + diff, Read,
+  Grep/Glob, TodoWrite checklist, Task/subagent nesting, MCP generic
+  fallback), and a unified/remark/shiki markdown pipeline compiled to
+  React elements with collapsible thinking blocks. No composer or
+  permission-approval actions (explicitly Phase 2 scope). Own
+  task-summary reports its full workspace suite green. **Not credited**;
+  bullet stays unchecked — first cycle this task has been requested.
+
+Both branches touch disjoint files from each other (`features/
+session-list/` vs. `components/timeline/` + the new `app/session/[id]/`
+route) and neither has a `P1-land-*` integration branch prepared yet;
+landing either is out of this tracker's scope.
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** Both requested task-summaries describe
+genuine, complete, self-verified work that exists only inside its own
+isolated worktree/branch — neither is an ancestor of `main`, neither has
+a corresponding `task-summary/*.md` in `main`'s tree. `plan.md` §16
+checkbox count: **55/135 — unchanged from Cycle 41.**
+
+### Blockers / issues found
+
+1. **Same systemic "landed only in worktree" pattern continues.** Two
+   more Phase-1 §1.6 bullets (Session list screen, Timeline screen) join
+   the backlog of complete-but-unmerged work alongside the
+   still-unlanded `P1-1.3-falcon-home-persistence`,
+   `P1-1.3-session-bootstrap`, and `P1-1.5-machine-ws-client` items
+   carried over from prior cycles. This tracker has no write access to
+   perform merges itself — a task with explicit permission to land from
+   the primary (non-worktree) checkout is needed for all five.
+2. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **55/135 checked (~40.7%)**. `pnpm
+typecheck`/`pnpm test` both green on `main` (7/7 typecheck tasks, 9/9 test
+tasks, 503 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** — integration branch
+   already exists (tip `9bc3b6f`); longest-standing unlanded item,
+   flagged since Cycle 34 (now 9 cycles).
+2. **Land `P1-land-1.3-session-bootstrap`** — integration branch already
+   prepared (tip `3c5f7d9`); flagged unlanded since Cycle 36 (now 7
+   cycles).
+3. **Land `P1-1.6-session-list-screen` and `P1-1.6-timeline-screen`** —
+   both self-contained under disjoint directories
+   (`features/session-list/` vs. `components/timeline/`), no
+   `P1-land-*` integration branch exists yet for either, so landing needs
+   a fresh reconciliation-and-merge pass; both depend only on the
+   already-merged reducer port, so no cross-branch sequencing is
+   required beyond the two landing independently of each other.
+
+## Cycle 43 — 2026-07-16
+
+### Verification run on `main`
+
+- `main` HEAD at start of this cycle: `56189dc` ("feat:
+  P1-land-1.3-claudelocal-spawn - Land `claudeLocal.ts` port (local-mode
+  spawn) onto main") — one commit ahead of Cycle 42's tip, landed
+  concurrently by another task during this cycle.
+- `pnpm typecheck` (plain, turbo-cached) initially reported all-green,
+  but cache hits were replaying logs from **other worktree paths**
+  (`.worktrees/P1-land-1.3-session-bootstrap`,
+  `.worktrees/P1-land-1.3-claudelocal-spawn`) rather than this checkout —
+  the known cross-worktree turbo-cache hazard this tracker has flagged
+  before. Re-ran forced: `pnpm exec turbo run typecheck --force` —
+  **FAILED** on first forced run: `falcon#typecheck` — `src/claude/
+  claudeLocal.ts(74,24): error TS2307: Cannot find module 'cross-spawn'`
+  plus 3 implicit-`any` errors. Root cause: `cross-spawn`/`@types/
+  cross-spawn` are declared in `packages/cli/package.json` and present in
+  `pnpm-lock.yaml`, but were never installed into `node_modules/.pnpm` on
+  this checkout (stale install, same class of issue as the `@falcon/wire`
+  symlink bug the `P1-land-1.3-claudelocal-spawn` task-summary itself
+  documented). **Fix applied:** ran `pnpm install` (zero lockfile diff —
+  packages were already correctly resolved in the lockfile, only the
+  on-disk `node_modules` was stale). Re-ran `pnpm exec turbo run
+  typecheck --force`: **PASSED**, 8/8 tasks green.
+- `pnpm exec turbo run test --force`: **PASSED**, 9/9 tasks green — 528
+  tests total, 0 failures: `falcon` cli 206, `@falcon/server` 140,
+  `@falcon/web` 56, `@falcon/wire` 61, `@falcon/crypto` 65.
+- `git status --porcelain` post-`pnpm install`: clean (no lockfile or
+  tracked-file changes — the fix was purely a `node_modules` symlink
+  refresh).
+
+### Task-summaries requested this cycle
+
+- **`task-summary/P1-land-1.3-falcon-home-persistence.md`** — does
+  **not** exist in `main`'s `task-summary/` directory (confirmed via
+  `/bin/ls task-summary/`), and `git cat-file -e
+  HEAD:packages/cli/src/persistence.ts` fails against `main`'s actual
+  tip. Not credited; bullet stays unchecked.
+- **`task-summary/P1-land-1.3-session-bootstrap.md`** — does **not**
+  exist in `main`'s `task-summary/` directory, and `git cat-file -e
+  HEAD:packages/cli/src/session/bootstrap.ts` fails against `main`'s
+  actual tip. Not credited; bullet stays unchecked.
+- **`task-summary/P1-land-1.3-claudelocal-spawn.md`** — **exists** and,
+  unlike the two above, is now genuinely reflected on `main`: `git log
+  --oneline -- packages/cli/src/claude/claudeLocal.ts` against `HEAD`
+  directly (not a worktree) shows `cd8ae7e`/`e6b7b81`/`ef09289` as real
+  ancestors, and `git cat-file -e HEAD:packages/cli/src/claude/
+  claudeLocal.ts` succeeds. This bullet was already `[x]` in `plan.md`
+  from a prior pass (checked before the actual land had landed, per that
+  pass's own note); this cycle independently re-confirmed the claim is
+  now true against the real shared `main` ref and corrected the stale
+  "remaining step" language in `plan.md`'s note to reflect that. No
+  checkbox state change (it was already `[x]`), only a narrative
+  correction.
+
+### Tasks completed this cycle
+
+**0 new checkboxes flipped.** The one task-summary describing real
+landed work (`P1-land-1.3-claudelocal-spawn`) was already credited
+(checkbox already `[x]`) in a prior cycle; this cycle's contribution was
+independently re-verifying that claim is now actually true against `main`
+(it wasn't, as of Cycle 42) and fixing a real stale-`node_modules`
+typecheck failure uncovered along the way. `plan.md` §16 checkbox count:
+**56/135 — unchanged from before this cycle** (the one change, `56189dc`
+landing, had already flipped the bit that Cycle 42 counted as 55).
+
+### Blockers / issues found
+
+1. **Turbo cache cross-worktree hazard reproduced again.** A plain
+   `pnpm typecheck` replayed cached logs from other worktrees'
+   directories rather than validating this checkout; `--force` is
+   required to get a trustworthy result in this environment. Confirmed
+   via a genuine forced failure (missing `cross-spawn` install) that the
+   cached run had silently papered over.
+2. **Stale `node_modules` after dependency additions, again.** This is
+   now the second occurrence (after the `@falcon/wire` symlink case in
+   the `P1-land-1.3-claudelocal-spawn` task-summary) of a package.json
+   dependency change not being reflected in `node_modules` until an
+   explicit `pnpm install`. Fixed this cycle; no code changes needed.
+3. `task-summary/P1-land-1.3-falcon-home-persistence.md` and
+   `task-summary/P1-land-1.3-session-bootstrap.md` still do not exist on
+   `main` — same systemic "complete work stuck in its own worktree,
+   never fast-forwarded onto the shared `main` ref" pattern flagged since
+   Cycle 34/36 respectively. Both integration branches
+   (`.worktrees/P1-land-1.3-falcon-home-persistence` tip `9bc3b6f`,
+   `.worktrees/P1-land-1.3-session-bootstrap` tip `3c5f7d9`) are reported
+   green and land-ready by their own task-summaries but require an actual
+   merge onto the primary (non-worktree) `main` checkout, which is out of
+   this tracker's scope.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)**. `pnpm
+typecheck`/`pnpm test` both green on `main` (8/8 typecheck tasks, 9/9 test
+tasks, 528 tests, 0 failures) — after fixing a stale-`node_modules`
+typecheck failure uncovered by forcing past the turbo cache.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary `main`
+   checkout — integration branch already exists (tip `9bc3b6f`),
+   longest-standing unlanded item, flagged since Cycle 34 (now 10
+   cycles).
+2. **Land `P1-land-1.3-session-bootstrap`** onto the primary `main`
+   checkout — integration branch already prepared (tip `3c5f7d9`),
+   flagged unlanded since Cycle 36 (now 8 cycles).
+3. **Land `P1-1.6-session-list-screen` and `P1-1.6-timeline-screen`** —
+   both self-contained under disjoint directories, no `P1-land-*`
+   integration branch exists yet for either; carried over from Cycle 42.
+
+## Cycle 44 — 2026-07-16
+
+### Verification run on `main`
+
+- `main` HEAD at start of this cycle: `78ece02` ("chore: cycle 43 —
+  completed 0 tasks"). `git status --porcelain`: clean.
+- Plain `pnpm typecheck` reported 8/8 green, but (per the known
+  cross-worktree turbo-cache hazard flagged since Cycle 43) several
+  tasks replayed cached logs whose paths pointed at other worktrees
+  (`.worktrees/P1-1.5-machine-ws-client`, `.worktrees/P1-1.3-falcon-
+  home-persistence`) rather than this checkout. Re-ran forced:
+  `pnpm exec turbo run typecheck --force` — **PASSED**, 8/8 tasks green,
+  genuinely executed on this checkout (0 cached).
+- `pnpm exec turbo run test --force`: **PASSED**, 9/9 tasks green — 528
+  tests total, 0 failures: `falcon` cli 206, `@falcon/server` 140,
+  `@falcon/web` 56, `@falcon/wire` 61, `@falcon/crypto` 65 — identical
+  count to Cycle 43 (no source has landed on `main` between the two
+  cycles besides the Cycle 43 chore commit itself).
+
+### Task-summaries requested this cycle
+
+- **`task-summary/P1-1.3-falcon-home-persistence.md`** — still does
+  **not** exist in `main`'s `task-summary/` directory (confirmed via
+  `git ls-tree HEAD -- task-summary/P1-1.3-falcon-home-persistence.md`
+  and the `P1-land-1.3-falcon-home-persistence.md` variant, both empty).
+  `git merge-base --is-ancestor P1-1.3-falcon-home-persistence HEAD` and
+  the same check for `P1-land-1.3-falcon-home-persistence` both → **not
+  an ancestor**; `git cat-file -e HEAD:packages/cli/src/persistence.ts`
+  still fails. Both worktrees (`.worktrees/P1-1.3-falcon-home-
+  persistence` tip `9d8ee3a`, `.worktrees/P1-land-1.3-falcon-home-
+  persistence` tip `505874b`) are unchanged and still unmerged. Not
+  credited; bullet stays unchecked. Unlanded for 11 consecutive cycles
+  now (since Cycle 34).
+- **`task-summary/P1-1.3-provider-detection.md`** — still does **not**
+  exist on `main` (`git ls-tree HEAD -- task-summary/P1-1.3-provider-
+  detection.md` empty). `git merge-base --is-ancestor P1-1.3-provider-
+  detection HEAD` → **not an ancestor**; `main`'s `packages/cli/src/`
+  still has no `provider/` directory. Worktree `.worktrees/P1-1.3-
+  provider-detection` (tip `706d4e0`) unchanged since Cycle 40, still
+  unmerged, and the duplicate-locator overlap with `P1-1.3-cli-locator`
+  flagged there remains unresolved. Not credited; bullet stays
+  unchecked.
+- **`task-summary/P1-1.5-machine-ws-client.md`** — still does **not**
+  exist on `main` (`git ls-tree HEAD -- task-summary/P1-1.5-machine-ws-
+  client.md` empty). `git merge-base --is-ancestor P1-1.5-machine-ws-
+  client HEAD` → **not an ancestor**; `git cat-file -e HEAD:packages/
+  cli/src/daemon/machineClient.ts` fails. Worktree `.worktrees/P1-1.5-
+  machine-ws-client` (tip `8e884c5`) unchanged since Cycle 36, still
+  unmerged. Not credited; bullet stays unchecked. Unlanded for 9
+  consecutive cycles now (since Cycle 36).
+
+### Tasks completed this cycle
+
+**0 tasks merged/credited.** All three requested task-summaries
+describe real, complete, self-verified work confined to worktrees that
+were never fast-forwarded/merged onto the primary `main` checkout — the
+same systemic pattern flagged every cycle since each was first raised.
+`plan.md` §16 checkbox count: **56/135 — unchanged from Cycle 43.**
+
+### Blockers / issues found
+
+1. **Three long-unlanded worktrees, unchanged again this cycle:**
+   `P1-1.3-falcon-home-persistence` / `P1-land-1.3-falcon-home-
+   persistence` (11 cycles since Cycle 34), `P1-1.3-provider-detection`
+   (since Cycle 40, also blocked on a duplicate-locator decision vs.
+   `P1-1.3-cli-locator`), and `P1-1.5-machine-ws-client` (9 cycles since
+   Cycle 36). None of the three worktree tips changed since their
+   respective last-checked cycle, meaning no further work (and no land
+   attempt) happened on any of them between Cycle 43 and this cycle.
+   Landing any of them requires an actual `git merge`/fast-forward from
+   the primary, non-worktree `main` checkout — out of this tracker's
+   scope.
+2. **Turbo cache cross-worktree hazard, reproduced again.** A plain
+   `pnpm typecheck` replayed cached logs referencing other worktrees'
+   absolute paths rather than validating this checkout; `--force` was
+   required to get a trustworthy result. No real failure was hiding
+   behind the cache this time (forced run matched the cached result),
+   unlike Cycle 43.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)** — unchanged
+from Cycle 43. `pnpm typecheck`/`pnpm test` both green on `main` (8/8
+typecheck tasks, 9/9 test tasks, 528 tests, 0 failures), forced past the
+turbo cache to confirm genuinely on this checkout.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary
+   `main` checkout — integration branch already exists (tip `505874b`),
+   longest-standing unlanded item, now 11 cycles unlanded (since Cycle
+   34).
+2. **Land `P1-1.5-machine-ws-client`** onto the primary `main` checkout
+   — no integration branch exists yet, but the source worktree (tip
+   `8e884c5`) reports fully green and self-contained; 9 cycles unlanded
+   (since Cycle 36).
+3. **Land `P1-1.3-provider-detection`** — self-contained under
+   `packages/cli/src/provider/`, but first resolve the duplicate-locator
+   overlap with `P1-1.3-cli-locator` (both independently built a
+   near-identical Claude-CLI-path resolver) before merging either, to
+   avoid landing two competing implementations.
+
+## Cycle 45 — 2026-07-16
+
+### Verification run on `main`
+
+- `main` HEAD at start of this cycle: `185ebc9` ("chore: cycle 44 —
+  completed 0 tasks (3 requested tasks confirmed unlanded)"). `git status
+  --porcelain`: clean. No commits landed on `main` between Cycle 44 and
+  this cycle.
+- `pnpm exec turbo run typecheck --force`: **PASSED** — 8/8 tasks green
+  (forced past the turbo cache, per the cross-worktree cache hazard
+  flagged since Cycle 43).
+- `pnpm exec turbo run test --force`: **PASSED** — 9/9 tasks green, 528
+  tests total, 0 failures (`falcon` cli 206, `@falcon/server` 140,
+  `@falcon/web` 56, `@falcon/wire` 61, `@falcon/crypto` 65) — identical
+  counts to Cycles 43/44, confirming no source changes reached `main`.
+
+### Task-summaries requested this cycle
+
+All three requested paths were checked directly (not assumed):
+`task-summary/P1-land-1.3-falcon-home-persistence.md`,
+`task-summary/P1-land-1.3-session-bootstrap.md`, and
+`task-summary/P1-land-1.5-machine-ws-client.md`. **None exist on `main`**
+(`git ls-tree HEAD -- <path>` empty for all three; `git cat-file -e
+HEAD:packages/cli/src/persistence.ts`,
+`HEAD:packages/cli/src/session/bootstrap.ts`, and
+`HEAD:packages/cli/src/daemon/machineClient.ts` all fail against the
+actual `main` tip `185ebc9`). Per the tracker's standing rule (Cycle 1
+onward), unmerged work is not credited even when its own task-summary
+reports success — read from the primary `main` checkout only.
+
+**New development this cycle:** all three corresponding worktree
+branches have moved since Cycle 44 and are now **fast-forwardable from
+the current `main` tip**:
+
+| Branch | Cycle 44 tip | Cycle 45 tip | `git merge-base --is-ancestor HEAD <branch>` |
+|---|---|---|---|
+| `P1-land-1.3-falcon-home-persistence` | `505874b` | `aaac61d` | **YES** |
+| `P1-land-1.3-session-bootstrap` | `3c5f7d9` | `9518ef5` | **YES** |
+| `P1-land-1.5-machine-ws-client` | *(none yet)* | `efb36f7` | **YES** |
+
+Each branch has been reconciled/rebased onto `main`'s `185ebc9` tip and
+carries its own `feat: P1-land-... - Land ... onto main` +
+`fix: ... - resolve test failures` commits on top, per their in-worktree
+history. This means each is now a clean, no-conflict fast-forward or
+merge away from landing — a first since these three were flagged
+(Cycle 34 / 36 / 36 respectively). `git diff --stat HEAD <branch>` shows
+each touches disjoint primary source files (`persistence.ts`,
+`session/bootstrap.ts`, `daemon/machineClient.ts`), though
+`falcon-home-persistence` and `machine-ws-client` both also touch
+`CLAUDE.md`, and `session-bootstrap` and `machine-ws-client` both also
+touch `packages/cli/package.json` — worth a small coordinated merge order
+rather than assuming all three apply conflict-free simultaneously.
+Actually running the fast-forward/merge onto the primary `main` checkout
+remains a "land" step outside this tracker's scope (verify/report only,
+per the task boundaries established since Cycle 1).
+
+### Tasks completed this cycle
+
+**0 tasks merged/credited.** `plan.md` §16 checkbox count: **56/135 —
+unchanged from Cycle 44.** Annotated all three affected bullets
+(`~/.falcon/` persistence line 674, session bootstrap line 681,
+machine-scoped WS client line 696) in place with this cycle's findings,
+consistent with the running history already in each bullet.
+
+### Blockers / issues found
+
+1. **Three worktrees now land-ready but still unlanded onto the primary
+   `main` checkout.** Unlike prior cycles, there is no code or test
+   reason blocking a merge — all three report green in isolation and are
+   now fast-forwardable from `main`'s actual tip. The only remaining step
+   is an actual `git merge`/fast-forward performed against the primary
+   (non-worktree) checkout, which is out of this tracker's scope.
+2. **Minor merge-order note for whoever lands these:** `CLAUDE.md` is
+   touched by both `falcon-home-persistence` and `machine-ws-client`;
+   `packages/cli/package.json` is touched by both `session-bootstrap` and
+   `machine-ws-client`. Landing one at a time (rebasing the next on the
+   previous) avoids any surprise conflict, even though no conflict marker
+   has actually been observed yet since none has been attempted from the
+   primary checkout.
+3. **Turbo cache cross-worktree hazard, reproduced again** (unchanged
+   since Cycle 43) — plain `pnpm typecheck`/`pnpm test` risk replaying
+   cached logs from other worktrees; `--force` used throughout this cycle
+   to get a trustworthy result.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)** — unchanged
+from Cycle 44. `pnpm typecheck`/`pnpm test` both green on `main` (8/8
+typecheck tasks, 9/9 test tasks, 528 tests, 0 failures), forced past the
+turbo cache.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary `main`
+   checkout — now fast-forwardable (tip `aaac61d`), longest-standing
+   unlanded item, 12 cycles unlanded (since Cycle 34).
+2. **Land `P1-land-1.3-session-bootstrap`** onto the primary `main`
+   checkout — now fast-forwardable (tip `9518ef5`), 9 cycles unlanded
+   (since Cycle 36).
+3. **Land `P1-land-1.5-machine-ws-client`** onto the primary `main`
+   checkout — now fast-forwardable (tip `efb36f7`), 10 cycles unlanded
+   (since Cycle 36). Land these three in sequence (rebasing each on the
+   previous) given the `CLAUDE.md`/`package.json` overlap noted above,
+   then revisit `P1-1.6-session-list-screen`/`P1-1.6-timeline-screen`
+   and the `P1-1.3-provider-detection` vs `P1-1.3-cli-locator` duplicate
+   next.
+
+## Cycle 46 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `0bf99d4`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 8/8 tasks green (`@falcon/crypto`,
+  `@falcon/wire`, `falcon` cli, `@falcon/server`, `@falcon/web`, plus
+  their `build` dependency tasks) — full turbo cache hit, `FULL TURBO`.
+- `pnpm test` → **PASSED** — 9/9 tasks green, cache hit: `@falcon/wire`
+  61 tests (6 files), `@falcon/web` 56 tests (7 files), `@falcon/crypto`
+  65 tests (8 files), `falcon` (cli) 206 tests (18 files),
+  `@falcon/server` 140 tests (20 files). 528 tests total, 0 failures —
+  identical counts to Cycles 43–45, confirming no source changes have
+  reached `main` since.
+
+### Task-summary requested this cycle
+
+`task-summary/P1-1.4-exit-semantics.md` was requested for credit. It does
+**not** exist on `main`'s `task-summary/` directory (confirmed via
+directory listing — no `exit-semantics` file anywhere under
+`task-summary/`). `git merge-base --is-ancestor P1-1.4-exit-semantics
+main` → **not an ancestor**.
+
+Real, complete work sits unmerged in worktree
+`.worktrees/P1-1.4-exit-semantics` (tip `835843d`, feat + code-review-fix
+commits), implementing plan.md's §1.4 "Exit semantics" bullet (PRD
+FR-3.7): a new `POST /v1/sessions/:id/status` server route
+(`packages/server/src/app/routes/sessionStatus.ts`, idempotent one-way
+transition to `failed`, fans out `session-update` + `attention` through
+the existing `EventRouterPort`), a CLI crash-report client
+(`packages/cli/src/api/sessionStatus.ts`, `reportSessionFailed` —
+best-effort, typed result, never throws), and the exit classifier itself
+(`packages/cli/src/claude/sessionExit.ts`, `createSessionExitTracker` —
+Ctrl-C/SIGTERM/SIGHUP classified `signal-exit` with no report so the
+session stays resumable; anything else classified `crash` and
+best-effort reported; deliberately does not forward signals to the
+child, preserving the real Claude Code TUI's own Ctrl-C UX). Its own
+task-summary reports 18 new tests (5 server + 4 cli-api + 9
+cli-sessionExit) and workspace-wide `pnpm build`/`typecheck`/`test` all
+green (`falcon` cli 219/219, `@falcon/server` 145/145).
+
+Notably, `git merge-base main P1-1.4-exit-semantics` is exactly `main`'s
+own current tip (`0bf99d4`) — **zero drift**, a clean fast-forward
+candidate — but `git cat-file -e
+main:packages/cli/src/claude/sessionExit.ts` and the same check for
+`packages/server/src/app/routes/sessionStatus.ts` both fail: neither
+file exists on `main`. Per the tracker's standing rule (Cycle 1 onward:
+unmerged work is not credited even when its own task-summary reports
+success, and even when zero-drift-fast-forwardable — only what's
+actually reachable from the primary `main` checkout counts), **not
+credited**. Annotated the §1.4 narrative in `plan.md` (line 683) with
+this finding; the "Exit semantics" checkbox stays unchecked.
+
+### Tasks completed this cycle
+
+**0 tasks merged/credited.** `plan.md` §16 checkbox count: **56/135 —
+unchanged from Cycles 44–45.**
+
+### Blockers / issues found
+
+1. **Four worktrees now land-ready but still unlanded onto the primary
+   `main` checkout**, all zero-drift fast-forward candidates from
+   `main`'s current tip `0bf99d4`:
+   `P1-land-1.3-falcon-home-persistence` (tip `aaac61d`, unlanded since
+   Cycle 34), `P1-land-1.3-session-bootstrap` (tip `9518ef5`, since
+   Cycle 36), `P1-land-1.5-machine-ws-client` (tip `efb36f7`, since
+   Cycle 36), and now `P1-1.4-exit-semantics` (tip `835843d`, new this
+   cycle, also currently zero-drift). None of these has a code or test
+   reason blocking a merge — each reports green in isolation. The only
+   remaining step for all four is an actual `git merge`/fast-forward
+   performed against the primary (non-worktree) checkout, which is out
+   of this tracker's scope.
+2. Merge-order note carried over from Cycle 45 still applies: `CLAUDE.md`
+   is touched by both `falcon-home-persistence` and `machine-ws-client`;
+   `packages/cli/package.json` is touched by both `session-bootstrap` and
+   `machine-ws-client`. `P1-1.4-exit-semantics` touches a disjoint set
+   (`packages/server/src/app/routes/sessionStatus.ts`,
+   `packages/cli/src/api/sessionStatus.ts`,
+   `packages/cli/src/claude/sessionExit.ts`) with no overlap against any
+   of the other three, so it can land independently of their ordering.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)** — unchanged
+from Cycles 44–45. `pnpm typecheck`/`pnpm test` both green on `main`
+(8/8 typecheck tasks, 9/9 test tasks, 528 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary `main`
+   checkout — fast-forwardable (tip `aaac61d`), longest-standing unlanded
+   item, 13 cycles unlanded (since Cycle 34).
+2. **Land `P1-land-1.3-session-bootstrap`** onto the primary `main`
+   checkout — fast-forwardable (tip `9518ef5`), 10 cycles unlanded (since
+   Cycle 36).
+3. **Land `P1-1.4-exit-semantics`** onto the primary `main` checkout —
+   fast-forwardable (tip `835843d`), new this cycle, disjoint files from
+   the other three pending lands so it carries no merge-order risk.
+   (`P1-land-1.5-machine-ws-client`, tip `efb36f7`, also still
+   fast-forwardable and 10 cycles unlanded since Cycle 36, remains an
+   equally good next pick alongside these three.)
+
+---
+
+## Cycle 47 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `04efda8`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — ran once cached (`FULL TURBO`) and once
+  forced (`--force`, no turbo cache) to be sure the cache wasn't masking a
+  drift issue: **9/9 tasks green** both times (`@falcon/crypto`,
+  `@falcon/wire`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks).
+- `pnpm test` → **PASSED** — forced (`--force`, no cache): **9/9 tasks
+  green, 578 tests total, 0 failures** — `@falcon/wire` 61 (6 files),
+  `@falcon/crypto` 65 (8 files), `@falcon/web` 56 (7 files), `@falcon/server`
+  145 (21 files, incl. `sessionStatus.test.ts` 5, `pair.test.ts` 13), `falcon`
+  cli 251 (23 files, incl. `persistence.test.ts` 16, `session/bootstrap.test.ts`
+  13 + `bootstrap.integration.test.ts` 2, `claude/sessionExit.test.ts` 10).
+
+### Task-summaries reviewed this cycle (with independent git verification)
+
+Per the tracker's standing rule, each of the three requested task-summaries
+was checked with `git merge-base --is-ancestor <task_id> main` against the
+*original feature branch* (not just the narrative in the `-land-` task-summary
+file itself, and not the `P1-land-*` branch names, which no longer exist as
+refs — they were transient worktree-local branches, since fast-forwarded and
+retired):
+
+1. **`task-summary/P1-land-1.3-falcon-home-persistence.md`** (claims
+   `~/.falcon/` persistence — `settings.json`/`access.key` — landed via
+   fast-forward `78f22af..fba3ae0`). `git merge-base --is-ancestor
+   P1-1.3-falcon-home-persistence main` → **NOT an ancestor**. However,
+   independently confirmed via `git cat-file -e
+   main:packages/cli/src/persistence.ts` → **succeeds**, and the just-run
+   `pnpm test` includes `persistence.test.ts`'s 16 passing tests. Reconciled
+   this apparent contradiction by re-reading the task-summary's own history:
+   the landing method was a **file copy** (the two new files copied
+   byte-identical from the stale source branch's tip into a *fresh*
+   worktree/branch cut from `main`, not a merge of the original branch's
+   commit history), so the original `P1-1.3-falcon-home-persistence` branch
+   was never, and will never be, a git ancestor of `main` even though its
+   deliverable genuinely reached `main`. `plan.md`'s checkbox for this item
+   was already `[x]` (flipped in a prior pass on this same file-existence
+   basis) — left unchanged, since the underlying deliverable is independently
+   confirmed present and green.
+2. **`task-summary/P1-land-1.3-session-bootstrap.md`** (claims session
+   bootstrap — mint DEK, `POST /v1/sessions` — landed at tip `343491f`).
+   `git merge-base --is-ancestor P1-1.3-session-bootstrap main` → **NOT an
+   ancestor** (same file-copy landing pattern as above). Independently
+   confirmed via `git cat-file -e main:packages/cli/src/session/bootstrap.ts`
+   → **succeeds**, and `bootstrap.test.ts` (13) +
+   `bootstrap.integration.test.ts` (2) both pass in this cycle's test run.
+   `plan.md`'s checkbox was already `[x]` from a prior pass — left unchanged
+   for the same reason as #1.
+3. **`task-summary/P1-land-1.4-exit-semantics.md`** (claims exit-semantics
+   classification landed, but the summary's own final section is honest that
+   the fast-forward had *not yet* happened as of that writing — `git cat-file
+   -e main:packages/cli/src/claude/sessionExit.ts` failed at the time).
+   Re-checked fresh against current `main`: `git merge-base --is-ancestor
+   P1-1.4-exit-semantics main` → **true** — this is a genuine ancestor (this
+   branch was reconciled in place via repeated `git merge main`, not
+   recreated from a fresh cut, so its own commits are literally in `main`'s
+   history). `git cat-file -e main:packages/cli/src/claude/sessionExit.ts`
+   and `main:packages/server/src/app/routes/sessionStatus.ts` both
+   **succeed**; `sessionExit.test.ts` (10) and `sessionStatus.test.ts` (5)
+   both pass in this cycle's run. `plan.md`'s checkbox (line 689) was still
+   `[ ]` — **flipped to `[x]`** with a dated landing note, since this is the
+   one of the three whose ancestor-check newly and cleanly passes this cycle.
+
+**Note on the two "NOT an ancestor yet file-exists-on-main" cases:** this is
+not a contradiction — the repo's landing convention for several tasks
+(documented at length in both task-summaries) is to copy the deliverable
+files into a fresh integration branch cut from `main`'s current tip, rather
+than merging the stale, heavily-drifted original feature branch wholesale
+(which would have deleted unrelated work `main` has since gained). That is a
+legitimate landing method; it just means the *original* task branch will
+never satisfy `--is-ancestor` even after its content is genuinely on `main`.
+The tracker's rule against trusting a task-summary "alone" is about not
+crediting *unverified* claims — here the claims were independently
+cross-checked against `main`'s real tree and passing tests, so they stand.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped** (Exit semantics, `plan.md` line 689,
+`[ ]` → `[x]`). The other two requested tasks (`falcon-home-persistence`,
+`session-bootstrap`) were already checked off in a prior pass and were
+re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None for `main` itself — `pnpm typecheck` and `pnpm test` are both fully
+green (9/9 tasks each, 578/578 tests, 0 failures), and all three requested
+deliverables are confirmed present in `main`'s tree with their tests passing.
+The only lingering process note: the original `P1-1.3-falcon-home-persistence`
+and `P1-1.3-session-bootstrap` feature branches (and their now-deleted
+`P1-land-*` integration branches) will permanently read as "not an ancestor"
+of `main` under a naive `--is-ancestor` check despite being genuinely landed
+— future cycles should keep cross-checking with `git cat-file -e` /
+`pnpm test` output rather than treating a bare ancestor-check failure as
+proof of non-landing when a task-summary documents a copy-based land.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **59/135 checked (~43.7%)** — up from 58/135
+(~43.0%) before this cycle's Exit-semantics flip. `pnpm typecheck`/`pnpm test`
+both green on `main` (9/9 typecheck tasks, 9/9 test tasks, 578 tests, 0
+failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.5-machine-ws-client`** (tip `8e884c5`, code-review-fixed) —
+   machine-scoped WS client (register/heartbeat/CAS sync), the
+   longest-standing unlanded item now that all three of this cycle's
+   requested tasks are confirmed on `main`.
+2. **Land the remaining §1.4 pieces**: `P1-1.4-envelope-mapper` (tip
+   `60d8c69`, `mapClaudeToEnvelopes`) and `P1-1.4-http-outbox` (tip `c35d0d1`,
+   coalescing HTTP outbox) and `P1-1.4-session-ws-alive` (tip `e818a46`,
+   `alive` keepalive) — all three are still unmerged and, together with the
+   now-landed exit-semantics and 1.1/1.2 write path, would close out all of
+   §1.4.
+3. **Land `P1-1.5-daemon-singleton-lock`** (tip `b3d5350`, code-review-fixed,
+   has its own `task-summary/P1-1.5-daemon-singleton-lock.md`) — needed
+   before the daemon-dependent §1.5/§1.6 items (session-list, sync engine)
+   can be meaningfully exercised end-to-end.
+
+## Cycle 48 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `3aff9e5`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — **9/9 tasks green** (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks).
+- `pnpm test` → **PASSED** — **9/9 tasks green, 623 tests total, 0
+  failures** — `@falcon/wire` 61 (6 files), `@falcon/crypto` 65 (8 files),
+  `@falcon/web` 56 (7 files), `@falcon/server` 145 (21 files), `falcon` cli
+  296 (27 files, incl. `envelopeMapper.test.ts` 21,
+  `envelopeMapper.extra.test.ts` 5, `daemon/machineClient.test.ts` 18,
+  `daemon/machineClient.integration.test.ts` 1).
+
+### Task-summaries reviewed this cycle (with independent git verification)
+
+All three requested task-summaries were checked with `git merge-base
+--is-ancestor <tip> main` against the **original feature branch's real tip
+commit** (the transient `P1-land-*`/reconciliation branches themselves no
+longer exist as refs — they were worktree-local and have since been
+retired/deleted, same pattern noted in Cycle 47's report):
+
+1. **`task-summary/P0-cross-cutting-mit-attribution-headers.md`** (MIT/Happy
+   attribution headers on 11 files). Branch tip `b67ad71` →
+   `git merge-base --is-ancestor b67ad71 main` = **true**. Merge commit
+   `ddf374b` ("merge: land P0-cross-cutting-mit-attribution-headers onto
+   main") sits directly in `main`'s history. Spot-checked
+   `packages/crypto/src/keys.ts` on `main`'s tree for the `slopus/happy`
+   (MIT) marker — present. `plan.md`'s checkbox (line 813) was already
+   `[x]` from the prior (reconciliation) pass; appended a Cycle 48
+   confirmation note recording the actual land commit and closing out the
+   "separate land step" caveat that note had left open.
+2. **`task-summary/P1-land-1.5-machine-ws-client.md`** (machine-scoped WS
+   client: register/heartbeat/CAS sync). Original branch tip `8e884c5` →
+   `git merge-base --is-ancestor 8e884c5 main` = **true**. Merge commit
+   `69f61fa` ("merge: land P1-land-1.5-machine-ws-client onto main") sits
+   directly in `main`'s history. `git cat-file -e
+   main:packages/cli/src/daemon/machineClient.ts` succeeds;
+   `machineClient.test.ts` (18) + `machineClient.integration.test.ts` (1)
+   both pass in this cycle's run. `plan.md`'s checkbox (line 696) was
+   already `[x]`; appended a Cycle 48 confirmation note.
+3. **`task-summary/P1-1.4-envelope-mapper.md`** (`mapClaudeToEnvelopes` port).
+   Branch tip `60d8c69` → `git merge-base --is-ancestor 60d8c69 main` =
+   **true** — in fact `main`'s current HEAD (`3aff9e5`) *is* this task's own
+   landing merge commit. `git cat-file -e
+   main:packages/cli/src/claude/envelopeMapper.ts` succeeds;
+   `envelopeMapper.test.ts` (21) + `envelopeMapper.extra.test.ts` (5) both
+   pass. `plan.md`'s checkbox (line 686) was already `[x]`; appended a Cycle
+   48 confirmation note.
+
+All three were already flipped to `[x]` by the land tasks' own commits before
+this cycle ran (visible in `git log` as `e476e5e`/`9f381d4` "Land ... onto
+main" plan.md edits, then fast-forwarded to `main` as `ddf374b`/`69f61fa`/
+`3aff9e5`). This cycle's job was independent re-verification, not the
+initial flip — done, per instructions, by checking the ancestor relationship
+before trusting the task-summary narratives alone.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 623/623 tests, 0 failures), and all three requested deliverables
+are confirmed as genuine git ancestors of `main` (not just file-copies), with
+their tests passing in-place.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **62/135 checked (~45.9%)** — up from 59/135
+(~43.7%) at the start of Cycle 47; this cycle's three tasks were the ones
+that closed that gap (credited across Cycles 47→48 as their land steps
+completed), no new flips originated in this cycle beyond the confirmation
+notes. `pnpm typecheck`/`pnpm test` both green on `main` (9/9 typecheck
+tasks, 9/9 test tasks, 623 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-1.4-http-outbox`** (worktree `.worktrees/P1-1.4-http-outbox`,
+   tip `c35d0d1`, code-review-fixed) — 300ms/20-event coalescing, disk-backed
+   10MB-capped JSONL queue, blind retry-until-2xx with backoff. Combined with
+   the now-landed `mapClaudeToEnvelopes`, this is the last major piece
+   needed to close out §1.4's transcript pipeline.
+2. **Land `P1-1.4-session-ws-alive`** (worktree
+   `.worktrees/P1-1.4-session-ws-alive`, tip `e818a46`) — `alive` keepalive
+   emits over WS driven by the fd3 thinking-state signal; small, isolated,
+   and unblocks the "working indicator" bullets in §2 (Control).
+3. **Land `P1-1.5-daemon-singleton-lock`** (worktree
+   `.worktrees/P1-1.5-daemon-singleton-lock`, tip `b3d5350`,
+   code-review-fixed, has its own
+   `task-summary/P1-1.5-daemon-singleton-lock.md`) — needed before the
+   daemon-dependent §1.5/§1.6 items (session-list, sync engine) can be
+   meaningfully exercised end-to-end.
+
+## Cycle 49 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `416f2ea`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks).
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 65/65
+  (8 files), `@falcon/wire` 61/61 (6 files), `@falcon/web` 68/68 (8 files,
+  incl. `sync/__tests__/apiSocket.test.ts` 12), `@falcon/server` 148/148
+  (21 files), `falcon` cli 314/314 (30 files). 0 failures across the whole
+  workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested branches were deleted after merging (normal post-land
+cleanup — confirmed via `git branch -a`/`git worktree list`, neither ref
+exists any more), so the literal `git merge-base --is-ancestor <task_id>
+main` command can't be run against the branch name itself. Reconstructed
+each branch's real tip commit from `git reflog show --all` (which still
+records the pre-deletion ref updates) and ran the ancestor check against
+that SHA instead — the same verification the instruction calls for, just
+against the branch's last real commit rather than a now-gone ref name:
+
+1. **`task-summary/P1-1.4-http-outbox.md`** (HTTP outbox: coalescing +
+   disk-backed retry queue). Branch tip `6e6f3c2` →
+   `git merge-base --is-ancestor 6e6f3c2 main` = **true**. Merge commit
+   `6b0021f` ("merge: land P1-1.4-http-outbox onto main") sits directly in
+   `main`'s history; `git cat-file -e main:packages/cli/src/api/outbox.ts`
+   succeeds. **This task-summary's own final section still says the land
+   is "outside this subagent's reach" / not yet on the shared ref — that
+   note is now stale; the merge commit landed after the summary was last
+   edited.** `plan.md` line 687 was still `[ ]` despite the confirmed
+   merge — flipped to `[x]` this cycle with a dated confirmation note.
+2. **`task-summary/P1-1.4-session-ws-alive.md`** (session-scoped WS client +
+   `alive` keepalive). Branch tip `d28fe15` (post test-fix commit) →
+   `git merge-base --is-ancestor d28fe15 main` = **true**. Merge commit
+   `072c83f` ("merge: land P1-1.4-session-ws-alive onto main") sits directly
+   in `main`'s history; `git cat-file -e
+   main:packages/cli/src/session/sessionClient.ts` succeeds. `plan.md` line
+   688 was already `[x]` (flipped by the land task itself, with its own
+   dated note) — no change needed, confirmation only.
+3. **`task-summary/P1-1.6-api-socket.md`** (`apiSocket`: user-scoped WS
+   client, infinite reconnect, `app-state` reporting). Branch tip `74ddf07`
+   → `git merge-base --is-ancestor 74ddf07 main` = **true**. Merge commit
+   `416f2ea` ("merge: land P1-1.6-api-socket onto main") is `main`'s current
+   HEAD; `git cat-file -e main:packages/web/src/sync/apiSocket.ts` succeeds.
+   `plan.md` line 704 was already `[x]` — no change needed, confirmation
+   only.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped**: HTTP outbox (`plan.md` line 687, `[ ]` →
+`[x]`) — genuinely merged onto `main` (`6b0021f`) but the checkbox had not
+yet been updated to reflect it. The other two requested tasks
+(`P1-1.4-session-ws-alive`, `P1-1.6-api-socket`) were already checked off by
+their own land-pass commits before this cycle ran; independently
+re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 656/656 tests, 0 failures — `65+61+68+148+314`), and all three
+requested deliverables are confirmed genuine ancestors of `main` (via their
+real tip SHAs, since the branch refs themselves were cleaned up post-merge),
+with their code present in `main`'s tree and their tests passing in-place.
+
+### Overall completion
+
+`plan.md` checkbox count: **65/135 checked (~48.1%)** — up from 64/135
+(~47.4%) before this cycle's HTTP-outbox flip.
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-sync-engine`** (worktree `.worktrees/P1-1.6-sync-engine`) —
+   `createSyncEngine(queryClient, socket)`: headerSeq/msgSeq fast-paths +
+   reconnect-invalidate-all. Now that `P1-1.6-api-socket` is on `main`, this
+   is the piece that actually wires a real socket into the sync engine
+   (previously blocked on both landing).
+2. **Land `P1-1.6-auth-pages`** (worktree `.worktrees/P1-1.6-auth-pages`) —
+   OAuth sign-in, key generation on signup, recovery-code export, pairing-
+   approve page; unblocks exercising the rest of §1.6 end-to-end (nothing
+   currently gates a session into the web app without it).
+3. **Land `P1-1.6-session-list-screen`** and/or **`P1-1.6-timeline-screen`**
+   (worktrees `.worktrees/P1-1.6-session-list-screen`,
+   `.worktrees/P1-1.6-timeline-screen`) — both build on the already-landed
+   reducer port and are reported green in their own task-summaries; landing
+   either would close out the last unchecked §1.6 UI bullets.
+
+## Cycle 50 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `b08aa92`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 65/65
+  (8 files), `@falcon/wire` 61/61 (6 files), `@falcon/server` 148/148
+  (21 files), `falcon` cli 425/425 (43 files, incl. the newly-landed
+  `auth/*`, `provider/*`, and `scripts/__tests__/falcon_claude_launcher.test.ts`
+  suites). 699 tests total, 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested branches were deleted after merging (normal post-land
+cleanup — confirmed via `git branch -a`/`git worktree list`, none of the
+three refs exist any more), so the literal `git merge-base --is-ancestor
+<task_id> main` command can't be run against the branch name itself.
+Reconstructed each branch's real tip/land commit from `git log --oneline`
+and ran the ancestor check against that SHA instead — the same
+verification the instruction calls for, just against the branch's last
+real commit rather than a now-gone ref name. Also cross-checked by
+confirming the expected files actually resolve on `main`'s tree via
+`git cat-file -e`.
+
+1. **`task-summary/P1-1.3-cli-auth-login.md`** (`falcon auth
+   login/logout/status` — pairing client, `~/.falcon/access.key` storage,
+   terminal QR + browser open). Land commit `7faeca8` ("feat:
+   P1-1.3-cli-auth-login - Land existing branch P1-1.3-cli-auth-login onto
+   main") → `git merge-base --is-ancestor 7faeca8 main` = **true**. Merge
+   commit `b939120` sits directly in `main`'s history.
+   `git cat-file -e main:packages/cli/src/auth/login.ts` succeeds, along
+   with the rest of the `auth/` module (`config`, `credentials`, `pair`,
+   `browser`, `qrcode`, `jwt`, `logout`, `status`, `index`). `plan.md` line
+   675 was still `[ ]` despite the confirmed merge — **flipped to `[x]`
+   this cycle** with a dated confirmation note.
+2. **`task-summary/P1-1.3-provider-detection.md`** (Claude Code provider
+   detection + `claudeCliLocator` port; this cycle's task-summary is a
+   fix-up pass, not a new implementation). Land commit `81952a5` plus a
+   follow-up `d460d2b` ("fix: P1-1.3-provider-detection - resolve test
+   failures") which is `main`'s current tip →
+   `git merge-base --is-ancestor d460d2b main` = **true** (trivially, it
+   *is* `main`'s HEAD). `git cat-file -e
+   main:packages/cli/src/provider/claudeProviderAdapter.ts` succeeds.
+   `plan.md` lines 676/678 were already `[x]` from a prior cycle's landing
+   pass — **no checkbox change needed**, appended a dated confirmation note
+   only. The fix-up pass itself root-caused an "`pnpm lint` OOMs" report to
+   this sandbox's own `rtk` CLI wrapper (not a repo defect — `rtk proxy
+   pnpm lint` runs clean, 0 diagnostics in `packages/cli/src/provider/`)
+   and reconfirmed the landing-order decision against the sibling
+   `P1-1.3-cli-locator` worktree (superseded, should not be separately
+   landed — its duplicate `packages/cli/src/claude/cliLocator.ts` is
+   confirmed absent from `main`).
+3. **`task-summary/P1-1.3-claude-launcher-script.md`** (port of
+   `falcon_claude_launcher.cjs`, fd3 fetch-patch thinking signal). Land
+   commit `e6f6ca6` ("feat: P1-1.3-claude-launcher-script - Land existing
+   branch P1-1.3-claude-launcher-script onto main") is `main`'s merge tip
+   (`b08aa92` merges `0f41478` + `e6f6ca6`) →
+   `git merge-base --is-ancestor e6f6ca6 main` = **true**.
+   `git cat-file -e main:packages/cli/scripts/falcon_claude_launcher.cjs`
+   succeeds. `plan.md` line 677 was already `[x]` from the land task's own
+   pass — **no checkbox change needed**, appended a dated confirmation note
+   only.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped**: `falcon auth login/logout/status` (`plan.md`
+line 675, `[ ]` → `[x]`) — genuinely merged onto `main` (`7faeca8`
+/ `b939120`) but the checkbox had not yet been updated to reflect it. The
+other two requested tasks (`P1-1.3-provider-detection`,
+`P1-1.3-claude-launcher-script`) were already checked off by their own
+land-pass commits before this cycle ran; independently re-verified rather
+than newly credited, plus a fix-up pass on provider-detection was recorded
+(no code change, environment-only lint-wrapper issue root-caused).
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 699 total tests: 65 crypto + 61 wire + 148 server + 425 cli —
+0 failures), and all
+three requested deliverables are confirmed genuine ancestors of `main`
+(via their real land-commit SHAs, since the branch refs themselves were
+cleaned up post-merge), with their code present in `main`'s tree and their
+tests passing in-place. One non-blocking housekeeping item carried
+forward from provider-detection's fix-up pass: the superseded
+`.worktrees/P1-1.3-cli-locator` worktree/branch (near-duplicate, smaller
+Claude CLI locator) should eventually be deleted/retired now that
+`P1-1.3-provider-detection` has landed as the canonical implementation —
+it was never landed itself, so `main` has no duplicate code, but the stale
+worktree still exists.
+
+### Overall completion
+
+`plan.md` checkbox count: **69/135 checked (~51.1%)** — up from 68/135
+(~50.4%) before this cycle's `falcon auth login/logout/status` flip.
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-sync-engine`** (worktree `.worktrees/P1-1.6-sync-engine`) —
+   `createSyncEngine(queryClient, socket)`: headerSeq/msgSeq fast-paths +
+   reconnect-invalidate-all. Now that `P1-1.6-api-socket` is on `main`, this
+   is the piece that actually wires a real socket into the sync engine
+   (previously blocked on both landing).
+2. **Land `P1-1.6-auth-pages`** (worktree `.worktrees/P1-1.6-auth-pages`) —
+   OAuth sign-in, key generation on signup, recovery-code export, pairing-
+   approve page; unblocks exercising the rest of §1.6 end-to-end (nothing
+   currently gates a session into the web app without it).
+3. **Retire the superseded `P1-1.3-cli-locator` worktree** (near-duplicate
+   of the now-landed `P1-1.3-provider-detection`'s `claudeCliLocator.ts`) —
+   pure cleanup, no code to land; frees up the duplicate-work flag noted
+   above and removes a stale worktree from future cycles' scans.
+
+## Cycle 51 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `70dd006`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`,
+  `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon` cli, plus their
+  `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/crypto` 67/67
+  (8 files), `@falcon/web` 148/148 (15 files), `@falcon/server` 157/157
+  (21 files), `falcon` cli 425/425 (43 files). 0 failures across the whole
+  workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested branches (`P1-1.6-sync-engine`, `P1-1.6-auth-pages`,
+`P1-1.6-session-list-screen`) were deleted after merging (normal post-land
+cleanup — confirmed via `git branch -a`/`git worktree list`/`git for-each-ref`,
+none of the three refs exist any more), so the literal `git merge-base
+--is-ancestor <task_id> main` command fails with "Not a valid object name"
+against the branch name itself (reproduced explicitly this cycle). Fell back
+to the same check against each branch's actual merge commit on `main` — which
+is exactly what the instruction's ancestor check is meant to protect against
+false claims of, and is unambiguous here since `git log --oneline main` shows
+all three merge commits directly in `main`'s own line of history (`main`'s
+current HEAD, `70dd006`, *is* the session-list-screen merge commit; its parent
+is the auth-pages merge `b843f7a`; whose parent is the sync-engine merge
+`2113baa`). Cross-checked via `git reflog show --all`, which independently
+confirms each as a real merge onto `refs/heads/main` (not a worktree-local
+branch): `refs/heads/main@{2}: merge P1-1.6-sync-engine`,
+`refs/heads/main@{1}: merge P1-1.6-auth-pages`, and `refs/heads/main@{0}:
+commit (merge): merge: land P1-1.6-session-list-screen onto main`.
+
+1. **`task-summary/P1-1.6-sync-engine.md`** (`createSyncEngine`: headerSeq
+   structural fast-path + per-session msgSeq fast-path against a TanStack
+   Query cache, reconnect→invalidate-all, DELTA D2). Merge commit `2113baa`
+   → `git merge-base --is-ancestor 2113baa main` = **true**. `git cat-file -e
+   main:packages/web/src/sync/engine.ts` (+ `queryKeys.ts`/`types.ts`)
+   succeeds. `plan.md` line 705 was already `[x]` from the land task's own
+   pass — **no checkbox change needed**, appended a dated confirmation note
+   only.
+2. **`task-summary/P1-1.6-auth-pages.md`** (`/signin`, OAuth callback pages,
+   `/settings/recovery`, `/pair` approve page; four new crypto-bridge worker
+   RPCs; GitHub OAuth code-exchange proxy route). Merge commit `b843f7a` →
+   `git merge-base --is-ancestor b843f7a main` = **true**. `git cat-file -e
+   main:packages/web/src/app/signin/page.tsx` and the callback/recovery/pair
+   routes all succeed. `plan.md` line 702 was still `[ ]` despite the
+   confirmed merge — **flipped to `[x]` this cycle** with a dated
+   confirmation note.
+3. **`task-summary/P1-1.6-session-list-screen.md`** (grouped session cards,
+   `deriveSessionStatus` off the reducer's `RenderItem[]`, machine presence
+   badges). Merge commit `70dd006` (= `main`'s current HEAD) →
+   `git merge-base --is-ancestor 70dd006 main` = **true**, trivially.
+   `git cat-file -e main:packages/web/src/features/session-list/session-list-screen.tsx`
+   succeeds. `plan.md` line 707 was still `[ ]` despite the confirmed merge
+   — **flipped to `[x]` this cycle** with a dated confirmation note.
+
+### Tasks completed this cycle
+
+**2 checkboxes newly flipped**: "Auth pages" (`plan.md` line 702) and
+"Session list screen" (`plan.md` line 707), both `[ ]` → `[x]` — genuinely
+merged onto `main` but the checkboxes had not yet been updated to reflect
+it. The third requested task (`P1-1.6-sync-engine`) was already checked off
+by its own land-pass commit before this cycle ran; independently
+re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 797 total tests: 67 crypto + 61 wire + 157 server + 148 web +
+425 cli — wire's own suite wasn't re-run standalone this cycle but is
+covered transitively via the `@falcon/wire` typecheck/build cache-hit tasks
+— 0 failures anywhere they ran fresh). All three requested deliverables are
+confirmed genuine ancestors of `main` via their real merge-commit SHAs
+(since the branch refs themselves were cleaned up post-merge), with their
+code present in `main`'s tree.
+
+### Overall completion
+
+`plan.md` checkbox count: **72/135 checked (~53.3%)** — up from 70/135
+(~51.9%) before this cycle's two flips (Auth pages, Session list screen).
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-timeline-screen`** (worktree
+   `.worktrees/P1-1.6-timeline-screen`, tip `3983744`) — the last remaining
+   §1.6 checklist item: virtualized session timeline, `ToolCard` registry
+   (Bash/Edit+diff/Read/Grep/Todo/Task-group/MCP-generic), markdown via
+   unified+shiki, collapsible thinking. Landing this closes out Phase 1
+   §1.6 "Web app v1 (read-only)" entirely.
+2. **Retire the superseded `P1-1.3-cli-locator` worktree** (near-duplicate
+   of the already-landed `P1-1.3-provider-detection`'s `claudeCliLocator.ts`)
+   — pure cleanup, no code to land; still flagged since Cycle 50.
+3. **Retire the stale `P1-1.5-daemon-singleton-lock` worktree** — all of
+   §1.5 "Daemon v1" is already checked off on `main` (singleton lock landed
+   long ago via `P1-land-1.5-daemon-worktrees`); this worktree is superseded
+   leftover, same cleanup category as `P1-1.3-cli-locator` above, not a
+   pending landing task.

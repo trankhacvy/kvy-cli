@@ -14,6 +14,8 @@ import type {
   CryptoWorkerRequest,
   CryptoWorkerRequestPayload,
   CryptoWorkerResponse,
+  DeviceIdentity,
+  SignInChallengeResult,
 } from "./protocol.js";
 
 export interface WorkerLike {
@@ -38,6 +40,14 @@ export interface CryptoBridgeClient {
   open<T = unknown>(box: EncryptedBox): Promise<T | null>;
   /** Wipe in-memory keys and persisted key material (logout). */
   clear(): Promise<void>;
+  /** The account identity provisioned on this device, or `null` if none yet. */
+  getIdentity(): Promise<DeviceIdentity | null>;
+  /** Mint a fresh signed challenge for `POST /v1/auth`. Rejects if not initialized. */
+  signInChallenge(): Promise<SignInChallengeResult>;
+  /** Export the provisioned master secret as a grouped-Base32 recovery code. */
+  exportRecoveryCode(): Promise<string>;
+  /** Seal the master secret to a pairing peer's ephemeral X25519 public key (base64). */
+  sealForPeer(ephPub: string): Promise<string>;
   /** Terminate the underlying worker. */
   terminate(): void;
 }
@@ -100,6 +110,10 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     seal: (data) => call<EncryptedBox>({ type: "seal", data }),
     open: <T>(box: EncryptedBox) => call<T | null>({ type: "open", box }),
     clear: () => call<null>({ type: "clear" }).then(() => undefined),
+    getIdentity: () => call<DeviceIdentity | null>({ type: "getIdentity" }),
+    signInChallenge: () => call<SignInChallengeResult>({ type: "signInChallenge" }),
+    exportRecoveryCode: () => call<string>({ type: "exportRecoveryCode" }),
+    sealForPeer: (ephPub) => call<string>({ type: "sealForPeer", ephPub }),
     terminate: () => {
       rejectAllPending(new Error("crypto-bridge worker terminated"));
       worker.terminate?.();

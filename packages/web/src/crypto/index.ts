@@ -13,4 +13,6 @@ export { createCryptoBridge } from "./factory.js";
 export type {
   CryptoWorkerRequest,
   CryptoWorkerResponse,
+  DeviceIdentity,
+  SignInChallengeResult,
 } from "./protocol.js";

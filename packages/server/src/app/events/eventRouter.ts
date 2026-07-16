@@ -254,3 +254,17 @@ export const eventRouter = new EventRouter();
 export function buildMachinePresenceEphemeral(machineId: string, online: boolean): Ephemeral {
   return { t: "machine-presence", machineId, online };
 }
+
+/**
+ * The `activity` ephemeral a session-scoped socket's `alive` keepalive
+ * (`packages/cli/src/session/sessionClient.ts`) turns into server-side:
+ * relayed to whoever's watching the session (its own session-scoped room
+ * plus the account's user-scoped clients — design §4.3's `ClientEmit`
+ * `{ e: 'alive'; sessionId; working }` becomes this `Update`-sibling
+ * `Ephemeral` fan-out). This is just the relay; the write-behind
+ * `lastSeenAt`/90s-offline-sweep presence cache described in design §6.3 is
+ * a separate, still-open task — see `socket.ts`'s `alive` handler.
+ */
+export function buildSessionActivityEphemeral(sessionId: string, working: boolean): Ephemeral {
+  return { t: "activity", sessionId, working };
+}

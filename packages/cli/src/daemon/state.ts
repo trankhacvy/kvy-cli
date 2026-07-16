@@ -12,12 +12,26 @@ import path from "node:path";
  * deliberately dumb: no locking, no staleness logic — `lock.ts` is the
  * source of truth for "is a daemon actually running", this is just its
  * advertised metadata.
+ *
+ * Port of Happy's daemon state file — https://github.com/slopus/happy (MIT);
+ * mirrors `happy-cli/src/daemon/run.ts`'s published pid/port/version state
+ * (plan.md §7.4: "Happy persists finished sessions ... daemon/run.ts,
+ * sessions.json"), split out here into its own small read/write module.
  */
 export interface DaemonState {
   pid: number;
   port: number;
   version: string;
   startedAt: number;
+  /**
+   * The server-assigned machine id, once this daemon has registered (or
+   * resumed) a machine row via `POST /v1/machines` (`machineClient.ts`).
+   * Absent until the first successful registration; round-tripping it
+   * through this file is what lets a restarted daemon resume the same
+   * server-side machine row instead of registering a brand new one every
+   * time it boots.
+   */
+  machineId?: string;
 }
 
 export function daemonStatePath(homeDir: string): string {
@@ -31,7 +45,8 @@ function isDaemonState(value: unknown): value is DaemonState {
     typeof candidate.pid === "number" &&
     typeof candidate.port === "number" &&
     typeof candidate.version === "string" &&
-    typeof candidate.startedAt === "number"
+    typeof candidate.startedAt === "number" &&
+    (candidate.machineId === undefined || typeof candidate.machineId === "string")
   );
 }
 

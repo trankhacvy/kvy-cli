@@ -33,6 +33,22 @@ const nextConfig = (phase: string): NextConfig => ({
   // levels up from packages/web) so Next's file tracing doesn't guess wrong
   // when it finds another lockfile above the repo, e.g. inside a worktree.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  webpack(config) {
+    // `src/crypto/*` (the crypto-bridge worker bridge, shared with the
+    // isomorphic @falcon/crypto package), the reducer (`src/sync/reducer/`),
+    // and other `tsconfig.base.json` "moduleResolution": "bundler" code all
+    // use explicit `.js`-suffixed relative imports against `.ts`/`.tsx`
+    // source files — the standard pattern for that resolution mode, which
+    // `tsc`/`vitest` already resolve fine. Webpack's default resolver has no
+    // such alias, so without this it 404s on every one of those imports as
+    // soon as a page actually pulls in the crypto bridge, the reducer, or
+    // anything else under `packages/web/src` bundled this way.
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      ".js": [".ts", ".tsx", ".js"],
+    };
+    return config;
+  },
 });
 
 export default nextConfig;
