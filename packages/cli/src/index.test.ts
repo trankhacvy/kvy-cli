@@ -341,4 +341,54 @@ describe("main()", () => {
       stdout.mockRestore();
     });
   });
+
+  describe("adopt subcommand wiring", () => {
+    afterEach(() => {
+      vi.doUnmock("./commands/adopt.js");
+    });
+
+    it("wires `adopt` to commands/adopt.js with the parsed list/remote flags", async () => {
+      const runAdoptCommand = vi.fn(async () => 0);
+      vi.doMock("./commands/adopt.js", () => ({
+        createAdoptCommandDeps: vi.fn(
+          (required: Record<string, unknown>, overrides: Record<string, unknown> = {}) => ({
+            ...required,
+            ...overrides,
+          }),
+        ),
+        runAdoptCommand,
+      }));
+      const main = await importMain();
+
+      const code = await main(["adopt", "--list"]);
+
+      expect(code).toBe(0);
+      expect(runAdoptCommand).toHaveBeenCalledExactlyOnceWith(
+        { list: true, remote: false },
+        expect.objectContaining({ workingDirectory: process.cwd() }),
+      );
+    });
+
+    it("wires `--continue` to the same command as `adopt`", async () => {
+      const runAdoptCommand = vi.fn(async () => 0);
+      vi.doMock("./commands/adopt.js", () => ({
+        createAdoptCommandDeps: vi.fn(
+          (required: Record<string, unknown>, overrides: Record<string, unknown> = {}) => ({
+            ...required,
+            ...overrides,
+          }),
+        ),
+        runAdoptCommand,
+      }));
+      const main = await importMain();
+
+      const code = await main(["--continue"]);
+
+      expect(code).toBe(0);
+      expect(runAdoptCommand).toHaveBeenCalledExactlyOnceWith(
+        { list: false, remote: false },
+        expect.objectContaining({ workingDirectory: process.cwd() }),
+      );
+    });
+  });
 });

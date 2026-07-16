@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   AdoptListParamsSchema,
+  AdoptMirrorParamsSchema,
+  AdoptMirrorResultSchema,
   AdoptTakeParamsSchema,
+  AdoptTakeResultSchema,
   FsListParamsSchema,
   FsListResultSchema,
   FsMkdirParamsSchema,
@@ -75,6 +78,30 @@ describe("idempotencyKey on caller-retriable machine RPCs", () => {
     expect(
       FsReadParamsSchema.safeParse({ idempotencyKey: "idem-6", worktree: "/repo", path: "a.ts" })
         .success,
+    ).toBe(true);
+
+    expect(AdoptMirrorParamsSchema.safeParse({ providerSessionId: "p1" }).success).toBe(false);
+    expect(
+      AdoptMirrorParamsSchema.safeParse({ idempotencyKey: "idem-7", providerSessionId: "p1" })
+        .success,
+    ).toBe(true);
+  });
+});
+
+describe("adopt.take / adopt.mirror result shapes", () => {
+  it("AdoptTakeResultSchema's warning is optional (absent on fork / idle takeover)", () => {
+    expect(AdoptTakeResultSchema.safeParse({ sessionId: "s1" }).success).toBe(true);
+    expect(
+      AdoptTakeResultSchema.safeParse({ sessionId: "s1", warning: "interrupted mid-turn" }).success,
+    ).toBe(true);
+  });
+
+  it("AdoptMirrorResultSchema accepts a chunk with a nullable nextCursor", () => {
+    expect(
+      AdoptMirrorResultSchema.safeParse({ chunk: "{}\n", nextCursor: 128, done: false }).success,
+    ).toBe(true);
+    expect(
+      AdoptMirrorResultSchema.safeParse({ chunk: "{}\n", nextCursor: null, done: true }).success,
     ).toBe(true);
   });
 });

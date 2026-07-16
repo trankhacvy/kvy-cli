@@ -243,6 +243,48 @@ describe("parseArgs — workspace", () => {
   });
 });
 
+describe("parseArgs — adopt", () => {
+  it("parses a bare `falcon adopt` as local, non-list", () => {
+    expect(parseArgs(["adopt"])).toEqual({ type: "adopt", list: false, remote: false });
+  });
+
+  it("parses --list and --remote, in either order", () => {
+    expect(parseArgs(["adopt", "--list"])).toEqual({ type: "adopt", list: true, remote: false });
+    expect(parseArgs(["adopt", "--remote"])).toEqual({ type: "adopt", list: false, remote: true });
+    expect(parseArgs(["adopt", "--remote", "--list"])).toEqual({
+      type: "adopt",
+      list: true,
+      remote: true,
+    });
+  });
+
+  it("throws on an unknown adopt flag", () => {
+    expect(() => parseArgs(["adopt", "--bogus"])).toThrow(ArgParseError);
+  });
+});
+
+describe("parseArgs — --continue alias", () => {
+  it("aliases a bare `falcon --continue` to adopt (local, non-list)", () => {
+    expect(parseArgs(["--continue"])).toEqual({ type: "adopt", list: false, remote: false });
+  });
+
+  it("composes with --remote/--list the same way `falcon adopt` does", () => {
+    expect(parseArgs(["--continue", "--remote"])).toEqual({
+      type: "adopt",
+      list: false,
+      remote: true,
+    });
+  });
+
+  it("does not intercept --continue when it's not the first arg (provider passthrough wins)", () => {
+    expect(parseArgs(["codex", "-r", "--continue"])).toEqual({
+      type: "start",
+      provider: "codex",
+      providerArgs: ["-r", "--continue"],
+    });
+  });
+});
+
 describe("parseArgs — notify", () => {
   it("parses -p <message>", () => {
     expect(parseArgs(["notify", "-p", "build finished"])).toEqual({

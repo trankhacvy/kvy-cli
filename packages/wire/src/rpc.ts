@@ -207,7 +207,41 @@ export const AdoptTakeParamsSchema = z.object({
   mode: z.enum(["takeover", "fork"]),
 });
 
-export const AdoptTakeResultSchema = z.object({ sessionId: z.string() });
+// `warning` is set when a 'takeover' actually interrupted a live, mid-turn
+// process (design §10.4/FR-9.3: "if the process is mid-turn, show a
+// warning") — additive field, absent on 'fork' or when the original process
+// was already idle/finished.
+export const AdoptTakeResultSchema = z.object({
+  sessionId: z.string(),
+  warning: z.string().optional(),
+});
+export type AdoptTakeResult = z.infer<typeof AdoptTakeResultSchema>;
+export type AdoptTakeParams = z.infer<typeof AdoptTakeParamsSchema>;
+
+// Read-only transcript mirror (design §4.4 "payload size rule" / §8 /
+// plan.md §16 "3.3 Session adoption (UC9)"): serves an unmanaged session's
+// transcript on demand in ≤64KB chunks rather than uploading whole
+// histories eagerly. `cursor`/`nextCursor` are byte offsets into the
+// transcript file; `done: true` on the final chunk (`nextCursor: null`).
+// `blobRef` is a reserved extension point for the eventual blob-storage
+// fallback for very large transcripts (plan.md §16 "4.3 Distribution &
+// self-host") — unset until that subsystem lands, same as `git.diff`/
+// `fs.read`'s own not-yet-wired `blobRef`.
+export const AdoptMirrorParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  providerSessionId: z.string(),
+  cursor: z.number().int().nonnegative().optional(),
+  maxBytes: z.number().int().positive().optional(),
+});
+export type AdoptMirrorParams = z.infer<typeof AdoptMirrorParamsSchema>;
+
+export const AdoptMirrorResultSchema = z.object({
+  chunk: z.string(),
+  nextCursor: z.number().int().nonnegative().nullable(),
+  done: z.boolean(),
+  blobRef: z.string().optional(),
+});
+export type AdoptMirrorResult = z.infer<typeof AdoptMirrorResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Session RPCs — registered by the session process (design §4.4)

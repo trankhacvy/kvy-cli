@@ -1,26 +1,34 @@
 /**
  * Machine-scoped RPC registration for the daemon (design §4.4's "Machine
- * RPCs — registered by the daemon" table; plan.md §16 "3.1 Remote spawn").
+ * RPCs — registered by the daemon" table; plan.md §16 "3.1 Remote spawn" /
+ * "3.3 Session adoption (UC9)").
  *
  * Mirrors `rpc/sessionRpc.ts`'s registration/decrypt/validate/seal shape
  * (same `rpc-register`/`rpc-request` wire contract, same `EncryptedBox`
  * params/results sealed under the owning DEK), adapted to the
  * machine-scoped `m:<machineId>:<method>` target namespace. `spawn`,
- * `resumeSession`, and the New Session directory picker's
- * `fs.list`/`fs.mkdir` are in scope here — `stopSession`/`listSessions`/
- * `git.*`/`fs.read`/`adopt.*` are separate, later plan bullets (§3.3/§4.1)
- * and can be added to `MACHINE_RPC_METHODS`/`buildMethodTable` the same way
- * without touching this module's dispatch shape.
+ * `resumeSession`, the New Session directory picker's `fs.list`/`fs.mkdir`,
+ * and session adoption's `adopt.take`/`adopt.mirror` are in scope here —
+ * `stopSession`/`listSessions`/`git.*`/`fs.read`/`adopt.list` are separate,
+ * later plan bullets (§3.2/§4.1) and can be added to
+ * `MACHINE_RPC_METHODS`/`methods` the same way without touching this
+ * module's dispatch shape.
  *
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
- * double-spawn"): wraps `deps.spawnSession` in a `Map<idempotencyKey,
- * SpawnResult>` — a retried call with the same key replays the prior
- * *successful* result instead of spawning again. A failed attempt is not
- * cached: the actual non-idempotent side effect is the process spawn
- * itself, so only a result that means a spawn genuinely happened is worth
- * replaying — a validation or timeout failure is safe, and correct, to
- * retry from scratch. `fs.list`/`fs.mkdir` need no such cache — listing is
- * naturally idempotent, and `mkdir -p` succeeds identically on retry.
+ * double-spawn"; the same rationale extends to `adopt.take`'s kill+spawn
+ * side effect and to `adopt.mirror`'s file read — "or re-reading a file
+ * mid-write twice", per `@falcon/wire`'s own `rpc.ts` doc comment):
+ * `spawn` wraps `deps.spawnSession` in a `Map<idempotencyKey, SpawnResult>`
+ * — a retried call with the same key replays the prior *successful* result
+ * instead of spawning again. A failed attempt is not cached: the actual
+ * non-idempotent side effect is the process spawn itself, so only a result
+ * that means a spawn genuinely happened is worth replaying — a validation
+ * or timeout failure is safe, and correct, to retry from scratch.
+ * `adopt.take`/`adopt.mirror` use the same never-cache-a-failure replay
+ * pattern via `withIdempotencyCache` (keyed on `idempotencyKey` + a JSON
+ * snapshot of `params` — see that helper's own doc comment for why).
+ * `fs.list`/`fs.mkdir` need no such cache — listing is naturally
+ * idempotent, and `mkdir -p` succeeds identically on retry.
  * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
  * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
  * retried resume of the same session is not a "double spawn" risk:
@@ -30,6 +38,14 @@
  */
 import { open, seal } from "@falcon/crypto";
 import {
+  type AdoptMirrorParams,
+  AdoptMirrorParamsSchema,
+  type AdoptMirrorResult,
+  AdoptMirrorResultSchema,
+  type AdoptTakeParams,
+  AdoptTakeParamsSchema,
+  type AdoptTakeResult,
+  AdoptTakeResultSchema,
   type EncryptedBox,
   EncryptedBoxSchema,
   type FsListParams,
@@ -55,7 +71,14 @@ import {
   listDirectory as listDirectoryDefault,
 } from "./fsBrowse.js";
 
-export const MACHINE_RPC_METHODS = ["spawn", "resumeSession", "fs.list", "fs.mkdir"] as const;
+export const MACHINE_RPC_METHODS = [
+  "spawn",
+  "resumeSession",
+  "fs.list",
+  "fs.mkdir",
+  "adopt.take",
+  "adopt.mirror",
+] as const;
 export type MachineRpcMethod = (typeof MACHINE_RPC_METHODS)[number];
 
 export interface MachineRpcDeps {
@@ -71,6 +94,10 @@ export interface MachineRpcDeps {
   listDirectory?: (params: FsListParams) => Promise<FsListResult>;
   /** Backs the `fs.mkdir` create-directory-approval RPC. Injectable for tests; defaults to `fsBrowse.ts`'s real `mkdir -p`. Throws on failure. */
   createDirectory?: (params: FsMkdirParams) => Promise<FsMkdirResult>;
+  /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
+  adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
+  /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
+  adoptMirror: (params: AdoptMirrorParams) => Promise<AdoptMirrorResult>;
   logger?: Logger;
 }
 
@@ -112,18 +139,48 @@ function isMachineRpcMethod(method: unknown): method is MachineRpcMethod {
 }
 
 /**
+ * Wraps a handler with idempotency-key replay: a retried call with the
+ * same key *and the same params* returns the cached result instead of
+ * re-running the handler. Never caches a rejected call.
+ *
+ * Keyed on `idempotencyKey` + a JSON snapshot of `params` (both methods'
+ * params are plain JSON-safe primitives — see `@falcon/wire`'s `rpc.ts`),
+ * not on `idempotencyKey` alone: `adopt.mirror`'s result is a transcript
+ * chunk addressed by `cursor`, so a caller that (incorrectly) reused one
+ * `idempotencyKey` across a paginated sequence of different cursors must
+ * still get each cursor's own chunk rather than silently replaying
+ * whichever chunk happened to be cached first for that key. A genuine
+ * retry — same key, same params — still replays as intended.
+ */
+function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
+  fn: (params: P) => Promise<R>,
+): (params: P) => Promise<R> {
+  const cache = new Map<string, R>();
+  return async (params: P) => {
+    const cacheKey = `${params.idempotencyKey}:${JSON.stringify(params)}`;
+    const cached = cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+    const result = await fn(params);
+    cache.set(cacheKey, result);
+    return result;
+  };
+}
+
+/**
  * Registers the daemon's machine-scoped `spawn`/`resumeSession`/`fs.list`/
- * `fs.mkdir` RPCs: joins `m:<machineId>:<method>` for each on every
- * (re)connect, and answers `rpc-request` by decrypting params, validating
- * against the method's `@falcon/wire` schema, running (or, for `spawn`,
- * replaying) the handler, and sealing the result back for the server's
- * `emitWithAck` to relay to the caller.
+ * `fs.mkdir`/`adopt.take`/`adopt.mirror` RPCs: joins `m:<machineId>:<method>`
+ * for each on every (re)connect, and answers `rpc-request` by decrypting
+ * params, validating against the method's `@falcon/wire` schema, running
+ * (or, where applicable, replaying) the handler, and sealing the result
+ * back for the server's `emitWithAck` to relay to the caller.
  */
 export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHandle {
   const logger = deps.logger ?? noopLogger;
   const spawnResults = new Map<string, SpawnResult>();
   const listDirectory = deps.listDirectory ?? listDirectoryDefault;
   const createDirectory = deps.createDirectory ?? createDirectoryDefault;
+  const cachedAdoptTake = withIdempotencyCache(deps.adoptTake);
+  const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
 
   async function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
     const cached = spawnResults.get(params.idempotencyKey);
@@ -170,6 +227,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: FsMkdirParamsSchema,
       resultSchema: FsMkdirResultSchema,
       handle: createDirectory as (params: unknown) => Promise<unknown>,
+    },
+    "adopt.take": {
+      paramsSchema: AdoptTakeParamsSchema,
+      resultSchema: AdoptTakeResultSchema,
+      handle: cachedAdoptTake as (params: unknown) => Promise<unknown>,
+    },
+    "adopt.mirror": {
+      paramsSchema: AdoptMirrorParamsSchema,
+      resultSchema: AdoptMirrorResultSchema,
+      handle: cachedAdoptMirror as (params: unknown) => Promise<unknown>,
     },
   };
 

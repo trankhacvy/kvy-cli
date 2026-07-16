@@ -8,26 +8,17 @@
       },
       "t": {
         "kind": "literal",
-        "values": [
-          "enc"
-        ]
+        "values": ["enc"]
       },
       "v": {
         "kind": "literal",
-        "values": [
-          1
-        ]
+        "values": [1]
       }
     }
   },
   "PermissionModeSchema": {
     "kind": "enum",
-    "options": [
-      "acceptEdits",
-      "bypassPermissions",
-      "default",
-      "plan"
-    ]
+    "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
   },
   "PermDecisionSchema": {
     "kind": "union",
@@ -37,16 +28,11 @@
         "fields": {
           "kind": {
             "kind": "literal",
-            "values": [
-              "allow"
-            ]
+            "values": ["allow"]
           },
           "scope": {
             "kind": "enum",
-            "options": [
-              "once",
-              "session"
-            ]
+            "options": ["once", "session"]
           },
           "updatedInput": {
             "kind": "optional",
@@ -62,9 +48,7 @@
         "fields": {
           "kind": {
             "kind": "literal",
-            "values": [
-              "deny"
-            ]
+            "values": ["deny"]
           },
           "message": {
             "kind": "optional",
@@ -80,18 +64,11 @@
         "fields": {
           "kind": {
             "kind": "literal",
-            "values": [
-              "mode"
-            ]
+            "values": ["mode"]
           },
           "mode": {
             "kind": "enum",
-            "options": [
-              "acceptEdits",
-              "bypassPermissions",
-              "default",
-              "plan"
-            ]
+            "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
           }
         }
       }
@@ -109,9 +86,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "text"
-            ]
+            "values": ["text"]
           },
           "thinking": {
             "kind": "optional",
@@ -127,9 +102,7 @@
         "fields": {
           "t": {
             "kind": "literal",
-            "values": [
-              "service"
-            ]
+            "values": ["service"]
           },
           "text": {
             "kind": "leaf",
@@ -156,19 +129,12 @@
             "kind": "optional",
             "inner": {
               "kind": "enum",
-              "options": [
-                "exec",
-                "network",
-                "read",
-                "write"
-              ]
+              "options": ["exec", "network", "read", "write"]
             }
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "tool-start"
-            ]
+            "values": ["tool-start"]
           },
           "title": {
             "kind": "optional",
@@ -199,9 +165,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "tool-end"
-            ]
+            "values": ["tool-end"]
           }
         }
       },
@@ -242,9 +206,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "file"
-            ]
+            "values": ["file"]
           }
         }
       },
@@ -253,9 +215,7 @@
         "fields": {
           "t": {
             "kind": "literal",
-            "values": [
-              "turn-start"
-            ]
+            "values": ["turn-start"]
           }
         }
       },
@@ -264,17 +224,11 @@
         "fields": {
           "status": {
             "kind": "enum",
-            "options": [
-              "cancelled",
-              "completed",
-              "failed"
-            ]
+            "options": ["cancelled", "completed", "failed"]
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "turn-end"
-            ]
+            "values": ["turn-end"]
           }
         }
       },
@@ -296,12 +250,7 @@
             "kind": "array",
             "element": {
               "kind": "enum",
-              "options": [
-                "acceptEdits",
-                "bypassPermissions",
-                "default",
-                "plan"
-              ]
+              "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
             }
           },
           "name": {
@@ -314,9 +263,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "perm-request"
-            ]
+            "values": ["perm-request"]
           }
         }
       },
@@ -331,16 +278,11 @@
                 "fields": {
                   "kind": {
                     "kind": "literal",
-                    "values": [
-                      "allow"
-                    ]
+                    "values": ["allow"]
                   },
                   "scope": {
                     "kind": "enum",
-                    "options": [
-                      "once",
-                      "session"
-                    ]
+                    "options": ["once", "session"]
                   },
                   "updatedInput": {
                     "kind": "optional",
@@ -356,9 +298,7 @@
                 "fields": {
                   "kind": {
                     "kind": "literal",
-                    "values": [
-                      "deny"
-                    ]
+                    "values": ["deny"]
                   },
                   "message": {
                     "kind": "optional",
@@ -374,18 +314,11 @@
                 "fields": {
                   "kind": {
                     "kind": "literal",
-                    "values": [
-                      "mode"
-                    ]
+                    "values": ["mode"]
                   },
                   "mode": {
                     "kind": "enum",
-                    "options": [
-                      "acceptEdits",
-                      "bypassPermissions",
-                      "default",
-                      "plan"
-                    ]
+                    "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
                   }
                 }
               }
@@ -397,9 +330,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "perm-resolve"
-            ]
+            "values": ["perm-resolve"]
           }
         }
       },
@@ -408,23 +339,15 @@
         "fields": {
           "by": {
             "kind": "enum",
-            "options": [
-              "client",
-              "terminal"
-            ]
+            "options": ["client", "terminal"]
           },
           "control": {
             "kind": "enum",
-            "options": [
-              "local",
-              "remote"
-            ]
+            "options": ["local", "remote"]
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "mode-switch"
-            ]
+            "values": ["mode-switch"]
           }
         }
       },
@@ -433,9 +356,7 @@
         "fields": {
           "t": {
             "kind": "literal",
-            "values": [
-              "sub-start"
-            ]
+            "values": ["sub-start"]
           }
         }
       },
@@ -444,9 +365,7 @@
         "fields": {
           "t": {
             "kind": "literal",
-            "values": [
-              "sub-stop"
-            ]
+            "values": ["sub-stop"]
           }
         }
       }
@@ -467,9 +386,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "text"
-                ]
+                "values": ["text"]
               },
               "thinking": {
                 "kind": "optional",
@@ -485,9 +402,7 @@
             "fields": {
               "t": {
                 "kind": "literal",
-                "values": [
-                  "service"
-                ]
+                "values": ["service"]
               },
               "text": {
                 "kind": "leaf",
@@ -514,19 +429,12 @@
                 "kind": "optional",
                 "inner": {
                   "kind": "enum",
-                  "options": [
-                    "exec",
-                    "network",
-                    "read",
-                    "write"
-                  ]
+                  "options": ["exec", "network", "read", "write"]
                 }
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "tool-start"
-                ]
+                "values": ["tool-start"]
               },
               "title": {
                 "kind": "optional",
@@ -557,9 +465,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "tool-end"
-                ]
+                "values": ["tool-end"]
               }
             }
           },
@@ -600,9 +506,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "file"
-                ]
+                "values": ["file"]
               }
             }
           },
@@ -611,9 +515,7 @@
             "fields": {
               "t": {
                 "kind": "literal",
-                "values": [
-                  "turn-start"
-                ]
+                "values": ["turn-start"]
               }
             }
           },
@@ -622,17 +524,11 @@
             "fields": {
               "status": {
                 "kind": "enum",
-                "options": [
-                  "cancelled",
-                  "completed",
-                  "failed"
-                ]
+                "options": ["cancelled", "completed", "failed"]
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "turn-end"
-                ]
+                "values": ["turn-end"]
               }
             }
           },
@@ -654,12 +550,7 @@
                 "kind": "array",
                 "element": {
                   "kind": "enum",
-                  "options": [
-                    "acceptEdits",
-                    "bypassPermissions",
-                    "default",
-                    "plan"
-                  ]
+                  "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
                 }
               },
               "name": {
@@ -672,9 +563,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "perm-request"
-                ]
+                "values": ["perm-request"]
               }
             }
           },
@@ -689,16 +578,11 @@
                     "fields": {
                       "kind": {
                         "kind": "literal",
-                        "values": [
-                          "allow"
-                        ]
+                        "values": ["allow"]
                       },
                       "scope": {
                         "kind": "enum",
-                        "options": [
-                          "once",
-                          "session"
-                        ]
+                        "options": ["once", "session"]
                       },
                       "updatedInput": {
                         "kind": "optional",
@@ -714,9 +598,7 @@
                     "fields": {
                       "kind": {
                         "kind": "literal",
-                        "values": [
-                          "deny"
-                        ]
+                        "values": ["deny"]
                       },
                       "message": {
                         "kind": "optional",
@@ -732,18 +614,11 @@
                     "fields": {
                       "kind": {
                         "kind": "literal",
-                        "values": [
-                          "mode"
-                        ]
+                        "values": ["mode"]
                       },
                       "mode": {
                         "kind": "enum",
-                        "options": [
-                          "acceptEdits",
-                          "bypassPermissions",
-                          "default",
-                          "plan"
-                        ]
+                        "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
                       }
                     }
                   }
@@ -755,9 +630,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "perm-resolve"
-                ]
+                "values": ["perm-resolve"]
               }
             }
           },
@@ -766,23 +639,15 @@
             "fields": {
               "by": {
                 "kind": "enum",
-                "options": [
-                  "client",
-                  "terminal"
-                ]
+                "options": ["client", "terminal"]
               },
               "control": {
                 "kind": "enum",
-                "options": [
-                  "local",
-                  "remote"
-                ]
+                "options": ["local", "remote"]
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "mode-switch"
-                ]
+                "values": ["mode-switch"]
               }
             }
           },
@@ -791,9 +656,7 @@
             "fields": {
               "t": {
                 "kind": "literal",
-                "values": [
-                  "sub-start"
-                ]
+                "values": ["sub-start"]
               }
             }
           },
@@ -802,9 +665,7 @@
             "fields": {
               "t": {
                 "kind": "literal",
-                "values": [
-                  "sub-stop"
-                ]
+                "values": ["sub-stop"]
               }
             }
           }
@@ -816,10 +677,7 @@
       },
       "role": {
         "kind": "enum",
-        "options": [
-          "agent",
-          "user"
-        ]
+        "options": ["agent", "user"]
       },
       "subagent": {
         "kind": "optional",
@@ -862,15 +720,11 @@
                 },
                 "t": {
                   "kind": "literal",
-                  "values": [
-                    "enc"
-                  ]
+                  "values": ["enc"]
                 },
                 "v": {
                   "kind": "literal",
-                  "values": [
-                    1
-                  ]
+                  "values": [1]
                 }
               }
             },
@@ -916,15 +770,11 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "enc"
-                ]
+                "values": ["enc"]
               },
               "v": {
                 "kind": "literal",
-                "values": [
-                  1
-                ]
+                "values": [1]
               }
             }
           },
@@ -948,12 +798,7 @@
       },
       "status": {
         "kind": "enum",
-        "options": [
-          "active",
-          "archived",
-          "compacted",
-          "failed"
-        ]
+        "options": ["active", "archived", "compacted", "failed"]
       },
       "tag": {
         "kind": "leaf",
@@ -993,15 +838,11 @@
                 },
                 "t": {
                   "kind": "literal",
-                  "values": [
-                    "enc"
-                  ]
+                  "values": ["enc"]
                 },
                 "v": {
                   "kind": "literal",
-                  "values": [
-                    1
-                  ]
+                  "values": [1]
                 }
               }
             },
@@ -1039,15 +880,11 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "enc"
-                ]
+                "values": ["enc"]
               },
               "v": {
                 "kind": "literal",
-                "values": [
-                  1
-                ]
+                "values": [1]
               }
             }
           },
@@ -1091,15 +928,11 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "enc"
-            ]
+            "values": ["enc"]
           },
           "v": {
             "kind": "literal",
-            "values": [
-              1
-            ]
+            "values": [1]
           }
         }
       },
@@ -1143,15 +976,11 @@
                             },
                             "t": {
                               "kind": "literal",
-                              "values": [
-                                "enc"
-                              ]
+                              "values": ["enc"]
                             },
                             "v": {
                               "kind": "literal",
-                              "values": [
-                                1
-                              ]
+                              "values": [1]
                             }
                           }
                         },
@@ -1197,15 +1026,11 @@
                           },
                           "t": {
                             "kind": "literal",
-                            "values": [
-                              "enc"
-                            ]
+                            "values": ["enc"]
                           },
                           "v": {
                             "kind": "literal",
-                            "values": [
-                              1
-                            ]
+                            "values": [1]
                           }
                         }
                       },
@@ -1229,12 +1054,7 @@
                   },
                   "status": {
                     "kind": "enum",
-                    "options": [
-                      "active",
-                      "archived",
-                      "compacted",
-                      "failed"
-                    ]
+                    "options": ["active", "archived", "compacted", "failed"]
                   },
                   "tag": {
                     "kind": "leaf",
@@ -1255,9 +1075,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "session-new"
-                ]
+                "values": ["session-new"]
               }
             }
           },
@@ -1278,15 +1096,11 @@
                         },
                         "t": {
                           "kind": "literal",
-                          "values": [
-                            "enc"
-                          ]
+                          "values": ["enc"]
                         },
                         "v": {
                           "kind": "literal",
-                          "values": [
-                            1
-                          ]
+                          "values": [1]
                         }
                       }
                     },
@@ -1315,15 +1129,11 @@
                         },
                         "t": {
                           "kind": "literal",
-                          "values": [
-                            "enc"
-                          ]
+                          "values": ["enc"]
                         },
                         "v": {
                           "kind": "literal",
-                          "values": [
-                            1
-                          ]
+                          "values": [1]
                         }
                       }
                     },
@@ -1345,19 +1155,12 @@
                 "kind": "optional",
                 "inner": {
                   "kind": "enum",
-                  "options": [
-                    "active",
-                    "archived",
-                    "compacted",
-                    "failed"
-                  ]
+                  "options": ["active", "archived", "compacted", "failed"]
                 }
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "session-update"
-                ]
+                "values": ["session-update"]
               }
             }
           },
@@ -1370,9 +1173,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "session-delete"
-                ]
+                "values": ["session-delete"]
               }
             }
           },
@@ -1388,15 +1189,11 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "enc"
-                    ]
+                    "values": ["enc"]
                   },
                   "v": {
                     "kind": "literal",
-                    "values": [
-                      1
-                    ]
+                    "values": [1]
                   }
                 }
               },
@@ -1417,9 +1214,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "message-new"
-                ]
+                "values": ["message-new"]
               }
             }
           },
@@ -1447,15 +1242,11 @@
                             },
                             "t": {
                               "kind": "literal",
-                              "values": [
-                                "enc"
-                              ]
+                              "values": ["enc"]
                             },
                             "v": {
                               "kind": "literal",
-                              "values": [
-                                1
-                              ]
+                              "values": [1]
                             }
                           }
                         },
@@ -1493,15 +1284,11 @@
                           },
                           "t": {
                             "kind": "literal",
-                            "values": [
-                              "enc"
-                            ]
+                            "values": ["enc"]
                           },
                           "v": {
                             "kind": "literal",
-                            "values": [
-                              1
-                            ]
+                            "values": [1]
                           }
                         }
                       },
@@ -1515,9 +1302,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "machine-new"
-                ]
+                "values": ["machine-new"]
               }
             }
           },
@@ -1545,15 +1330,11 @@
                             },
                             "t": {
                               "kind": "literal",
-                              "values": [
-                                "enc"
-                              ]
+                              "values": ["enc"]
                             },
                             "v": {
                               "kind": "literal",
-                              "values": [
-                                1
-                              ]
+                              "values": [1]
                             }
                           }
                         },
@@ -1591,15 +1372,11 @@
                           },
                           "t": {
                             "kind": "literal",
-                            "values": [
-                              "enc"
-                            ]
+                            "values": ["enc"]
                           },
                           "v": {
                             "kind": "literal",
-                            "values": [
-                              1
-                            ]
+                            "values": [1]
                           }
                         }
                       },
@@ -1613,9 +1390,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "machine-update"
-                ]
+                "values": ["machine-update"]
               }
             }
           },
@@ -1654,15 +1429,11 @@
                       },
                       "t": {
                         "kind": "literal",
-                        "values": [
-                          "enc"
-                        ]
+                        "values": ["enc"]
                       },
                       "v": {
                         "kind": "literal",
-                        "values": [
-                          1
-                        ]
+                        "values": [1]
                       }
                     }
                   },
@@ -1678,9 +1449,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "unmanaged-new"
-                ]
+                "values": ["unmanaged-new"]
               }
             }
           },
@@ -1719,15 +1488,11 @@
                       },
                       "t": {
                         "kind": "literal",
-                        "values": [
-                          "enc"
-                        ]
+                        "values": ["enc"]
                       },
                       "v": {
                         "kind": "literal",
-                        "values": [
-                          1
-                        ]
+                        "values": [1]
                       }
                     }
                   },
@@ -1743,9 +1508,7 @@
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "unmanaged-update"
-                ]
+                "values": ["unmanaged-update"]
               }
             }
           },
@@ -1761,23 +1524,17 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "enc"
-                    ]
+                    "values": ["enc"]
                   },
                   "v": {
                     "kind": "literal",
-                    "values": [
-                      1
-                    ]
+                    "values": [1]
                   }
                 }
               },
               "t": {
                 "kind": "literal",
-                "values": [
-                  "account-update"
-                ]
+                "values": ["account-update"]
               }
             }
           }
@@ -1808,9 +1565,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "activity"
-            ]
+            "values": ["activity"]
           },
           "working": {
             "kind": "leaf",
@@ -1831,9 +1586,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "machine-presence"
-            ]
+            "values": ["machine-presence"]
           }
         }
       },
@@ -1842,12 +1595,7 @@
         "fields": {
           "kind": {
             "kind": "enum",
-            "options": [
-              "done",
-              "failed",
-              "perm",
-              "question"
-            ]
+            "options": ["done", "failed", "perm", "question"]
           },
           "sessionId": {
             "kind": "leaf",
@@ -1855,9 +1603,7 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "attention"
-            ]
+            "values": ["attention"]
           }
         }
       }
@@ -1879,15 +1625,11 @@
           },
           "t": {
             "kind": "literal",
-            "values": [
-              "enc"
-            ]
+            "values": ["enc"]
           },
           "v": {
             "kind": "literal",
-            "values": [
-              1
-            ]
+            "values": [1]
           }
         }
       },
@@ -1945,19 +1687,11 @@
       },
       "permissionMode": {
         "kind": "enum",
-        "options": [
-          "acceptEdits",
-          "bypassPermissions",
-          "default",
-          "plan"
-        ]
+        "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
       },
       "provider": {
         "kind": "enum",
-        "options": [
-          "claude-code",
-          "codex"
-        ]
+        "options": ["claude-code", "codex"]
       },
       "workspaceId": {
         "kind": "leaf",
@@ -2048,10 +1782,7 @@
           "fields": {
             "controlMode": {
               "kind": "enum",
-              "options": [
-                "local",
-                "remote"
-              ]
+              "options": ["local", "remote"]
             },
             "pid": {
               "kind": "optional",
@@ -2062,10 +1793,7 @@
             },
             "provider": {
               "kind": "enum",
-              "options": [
-                "claude-code",
-                "codex"
-              ]
+              "options": ["claude-code", "codex"]
             },
             "sessionId": {
               "kind": "leaf",
@@ -2077,11 +1805,7 @@
             },
             "status": {
               "kind": "enum",
-              "options": [
-                "active",
-                "failed",
-                "stopped"
-              ]
+              "options": ["active", "failed", "stopped"]
             },
             "workspaceId": {
               "kind": "leaf",
@@ -2131,13 +1855,7 @@
             },
             "status": {
               "kind": "enum",
-              "options": [
-                "added",
-                "deleted",
-                "modified",
-                "renamed",
-                "untracked"
-              ]
+              "options": ["added", "deleted", "modified", "renamed", "untracked"]
             }
           }
         }
@@ -2373,10 +2091,7 @@
       },
       "mode": {
         "kind": "enum",
-        "options": [
-          "fork",
-          "takeover"
-        ]
+        "options": ["fork", "takeover"]
       },
       "providerSessionId": {
         "kind": "leaf",
@@ -2390,6 +2105,67 @@
       "sessionId": {
         "kind": "leaf",
         "type": "string"
+      },
+      "warning": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "AdoptMirrorParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "cursor": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "maxBytes": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "providerSessionId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "AdoptMirrorResultSchema": {
+    "kind": "object",
+    "fields": {
+      "blobRef": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "chunk": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "done": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "nextCursor": {
+        "kind": "nullable",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
       }
     }
   },
@@ -2411,9 +2187,7 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "text"
-                    ]
+                    "values": ["text"]
                   },
                   "thinking": {
                     "kind": "optional",
@@ -2429,9 +2203,7 @@
                 "fields": {
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "service"
-                    ]
+                    "values": ["service"]
                   },
                   "text": {
                     "kind": "leaf",
@@ -2458,19 +2230,12 @@
                     "kind": "optional",
                     "inner": {
                       "kind": "enum",
-                      "options": [
-                        "exec",
-                        "network",
-                        "read",
-                        "write"
-                      ]
+                      "options": ["exec", "network", "read", "write"]
                     }
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "tool-start"
-                    ]
+                    "values": ["tool-start"]
                   },
                   "title": {
                     "kind": "optional",
@@ -2501,9 +2266,7 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "tool-end"
-                    ]
+                    "values": ["tool-end"]
                   }
                 }
               },
@@ -2544,9 +2307,7 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "file"
-                    ]
+                    "values": ["file"]
                   }
                 }
               },
@@ -2555,9 +2316,7 @@
                 "fields": {
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "turn-start"
-                    ]
+                    "values": ["turn-start"]
                   }
                 }
               },
@@ -2566,17 +2325,11 @@
                 "fields": {
                   "status": {
                     "kind": "enum",
-                    "options": [
-                      "cancelled",
-                      "completed",
-                      "failed"
-                    ]
+                    "options": ["cancelled", "completed", "failed"]
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "turn-end"
-                    ]
+                    "values": ["turn-end"]
                   }
                 }
               },
@@ -2598,12 +2351,7 @@
                     "kind": "array",
                     "element": {
                       "kind": "enum",
-                      "options": [
-                        "acceptEdits",
-                        "bypassPermissions",
-                        "default",
-                        "plan"
-                      ]
+                      "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
                     }
                   },
                   "name": {
@@ -2616,9 +2364,7 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "perm-request"
-                    ]
+                    "values": ["perm-request"]
                   }
                 }
               },
@@ -2633,16 +2379,11 @@
                         "fields": {
                           "kind": {
                             "kind": "literal",
-                            "values": [
-                              "allow"
-                            ]
+                            "values": ["allow"]
                           },
                           "scope": {
                             "kind": "enum",
-                            "options": [
-                              "once",
-                              "session"
-                            ]
+                            "options": ["once", "session"]
                           },
                           "updatedInput": {
                             "kind": "optional",
@@ -2658,9 +2399,7 @@
                         "fields": {
                           "kind": {
                             "kind": "literal",
-                            "values": [
-                              "deny"
-                            ]
+                            "values": ["deny"]
                           },
                           "message": {
                             "kind": "optional",
@@ -2676,18 +2415,11 @@
                         "fields": {
                           "kind": {
                             "kind": "literal",
-                            "values": [
-                              "mode"
-                            ]
+                            "values": ["mode"]
                           },
                           "mode": {
                             "kind": "enum",
-                            "options": [
-                              "acceptEdits",
-                              "bypassPermissions",
-                              "default",
-                              "plan"
-                            ]
+                            "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
                           }
                         }
                       }
@@ -2699,9 +2431,7 @@
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "perm-resolve"
-                    ]
+                    "values": ["perm-resolve"]
                   }
                 }
               },
@@ -2710,23 +2440,15 @@
                 "fields": {
                   "by": {
                     "kind": "enum",
-                    "options": [
-                      "client",
-                      "terminal"
-                    ]
+                    "options": ["client", "terminal"]
                   },
                   "control": {
                     "kind": "enum",
-                    "options": [
-                      "local",
-                      "remote"
-                    ]
+                    "options": ["local", "remote"]
                   },
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "mode-switch"
-                    ]
+                    "values": ["mode-switch"]
                   }
                 }
               },
@@ -2735,9 +2457,7 @@
                 "fields": {
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "sub-start"
-                    ]
+                    "values": ["sub-start"]
                   }
                 }
               },
@@ -2746,9 +2466,7 @@
                 "fields": {
                   "t": {
                     "kind": "literal",
-                    "values": [
-                      "sub-stop"
-                    ]
+                    "values": ["sub-stop"]
                   }
                 }
               }
@@ -2760,10 +2478,7 @@
           },
           "role": {
             "kind": "enum",
-            "options": [
-              "agent",
-              "user"
-            ]
+            "options": ["agent", "user"]
           },
           "subagent": {
             "kind": "optional",
@@ -2807,16 +2522,11 @@
             "fields": {
               "kind": {
                 "kind": "literal",
-                "values": [
-                  "allow"
-                ]
+                "values": ["allow"]
               },
               "scope": {
                 "kind": "enum",
-                "options": [
-                  "once",
-                  "session"
-                ]
+                "options": ["once", "session"]
               },
               "updatedInput": {
                 "kind": "optional",
@@ -2832,9 +2542,7 @@
             "fields": {
               "kind": {
                 "kind": "literal",
-                "values": [
-                  "deny"
-                ]
+                "values": ["deny"]
               },
               "message": {
                 "kind": "optional",
@@ -2850,18 +2558,11 @@
             "fields": {
               "kind": {
                 "kind": "literal",
-                "values": [
-                  "mode"
-                ]
+                "values": ["mode"]
               },
               "mode": {
                 "kind": "enum",
-                "options": [
-                  "acceptEdits",
-                  "bypassPermissions",
-                  "default",
-                  "plan"
-                ]
+                "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
               }
             }
           }
@@ -2886,16 +2587,11 @@
               "fields": {
                 "kind": {
                   "kind": "literal",
-                  "values": [
-                    "allow"
-                  ]
+                  "values": ["allow"]
                 },
                 "scope": {
                   "kind": "enum",
-                  "options": [
-                    "once",
-                    "session"
-                  ]
+                  "options": ["once", "session"]
                 },
                 "updatedInput": {
                   "kind": "optional",
@@ -2911,9 +2607,7 @@
               "fields": {
                 "kind": {
                   "kind": "literal",
-                  "values": [
-                    "deny"
-                  ]
+                  "values": ["deny"]
                 },
                 "message": {
                   "kind": "optional",
@@ -2929,18 +2623,11 @@
               "fields": {
                 "kind": {
                   "kind": "literal",
-                  "values": [
-                    "mode"
-                  ]
+                  "values": ["mode"]
                 },
                 "mode": {
                   "kind": "enum",
-                  "options": [
-                    "acceptEdits",
-                    "bypassPermissions",
-                    "default",
-                    "plan"
-                  ]
+                  "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
                 }
               }
             }
@@ -2955,9 +2642,7 @@
         "kind": "optional",
         "inner": {
           "kind": "literal",
-          "values": [
-            "already-answered"
-          ]
+          "values": ["already-answered"]
         }
       }
     }
@@ -2985,12 +2670,7 @@
     "fields": {
       "mode": {
         "kind": "enum",
-        "options": [
-          "acceptEdits",
-          "bypassPermissions",
-          "default",
-          "plan"
-        ]
+        "options": ["acceptEdits", "bypassPermissions", "default", "plan"]
       }
     }
   },
@@ -3005,31 +2685,18 @@
   },
   "LifecycleKindSchema": {
     "kind": "enum",
-    "options": [
-      "done",
-      "failed",
-      "perm",
-      "question"
-    ]
+    "options": ["done", "failed", "perm", "question"]
   },
   "PushChannelSchema": {
     "kind": "enum",
-    "options": [
-      "ntfy",
-      "telegram",
-      "webpush"
-    ]
+    "options": ["ntfy", "telegram", "webpush"]
   },
   "PushSubscribeBodySchema": {
     "kind": "object",
     "fields": {
       "channel": {
         "kind": "enum",
-        "options": [
-          "ntfy",
-          "telegram",
-          "webpush"
-        ]
+        "options": ["ntfy", "telegram", "webpush"]
       },
       "endpoint": {
         "kind": "leaf",
@@ -3067,12 +2734,7 @@
     "fields": {
       "kind": {
         "kind": "enum",
-        "options": [
-          "done",
-          "failed",
-          "perm",
-          "question"
-        ]
+        "options": ["done", "failed", "perm", "question"]
       },
       "sessionId": {
         "kind": "leaf",

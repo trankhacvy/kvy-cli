@@ -92,7 +92,42 @@ packages/
 │                             failure matrix (daemon crash mid-turn, session-process kill,
 │                             sleep/wake heartbeat gaps, and — since none of this touches a
 │                             server at all — "server restart") against the real registry/
-│                             store/resume modules with injected process fakes. `src/persistence.ts`:
+│                             store/resume modules with injected process fakes. Tier 2/3 of
+│                             adoption (design §7.8/§8/§10.4, plan.md §16 "3.3 Session adoption
+│                             (UC9)") are also landed: `daemon/adoptTake.ts` (`handleAdoptTake`
+│                             — the `adopt.take` machine RPC's core: `mode:'takeover'` finds
+│                             the live owning `claude` pid via `adopt/liveness.ts`,
+│                             SIGTERM≤5s→SIGKILL it, then spawns a continuation via an injected
+│                             `spawnSession`; `mode:'fork'` skips the kill; a mid-turn
+│                             `warning` is returned when takeover interrupted a still-running
+│                             process) and `daemon/transcriptMirror.ts` (`handleAdoptMirror` —
+│                             the `adopt.mirror` machine RPC's core: reads an unmanaged
+│                             session's transcript in ≤64KB, line-boundary-safe chunks via a
+│                             byte cursor; a `blobRef` field is reserved on the wire schema for
+│                             a future blob-storage fallback, unset until that subsystem
+│                             lands). Both RPCs are registered in `daemon/machineRpc.ts`
+│                             alongside `spawn`/`resumeSession`/`fs.list`/`fs.mkdir` (each
+│                             wrapped in its own idempotency-key replay cache where one
+│                             applies).
+│                             `daemon/providerSessionResolver.ts` defines the shared
+│                             `resolveProviderSession` seam both handlers depend on (provider
+│                             session id → registered workspace; no real default yet, same
+│                             "workspace registration is separate work" caveat as above). The
+│                             terminal-side half —
+│                             `falcon adopt [--remote] [--list]` + `falcon --continue` alias
+│                             (`commands/adopt.ts`, wired into `args.ts`/`index.ts`) — lists
+│                             plain sessions for cwd's workspace (`adopt/listSessions.ts`,
+│                             reusing `transcriptIndexer.ts`'s `parseTranscript`), preselects
+│                             the most recent, and continues it: locally via `claude --resume
+│                             <id>` (inherited stdio, blocking) with a before/after directory
+│                             snapshot to detect the new provider session id `--resume` mints
+│                             and record the old→new lineage (`adopt/lineage.ts`, persisted in
+│                             `settings.json`'s new `adoptedSessions` map); or, with `--remote`,
+│                             a detached tmux-preferred launch of `falcon claude
+│                             --starting-mode remote --continue-from <id>` (lineage recording
+│                             for that path is deferred — no hook wired to an ad hoc detached
+│                             start yet — and prints an explicit note rather than silently
+│                             skipping it). `src/persistence.ts`:
 │                             `~/.falcon/` local state — schema-versioned `settings.json`
 │                             (atomic lock-file-guarded read-modify-write) and
 │                             0600-permissioned `access.key` credentials, both tmp-write +

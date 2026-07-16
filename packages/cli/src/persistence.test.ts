@@ -70,6 +70,23 @@ describe("readSettings", () => {
     expect(settings.backendUrl).toBe("https://api.example.com");
     expect(settings).not.toHaveProperty("somethingFromTheFuture");
   });
+
+  it("normalizes adoptedSessions, dropping any entry whose value isn't a string array", async () => {
+    writeFileSync(
+      path.join(homeDir, "settings.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        onboardingCompleted: false,
+        adoptedSessions: {
+          "old-1": ["old-1", "new-1"],
+          "old-2": "not-an-array",
+          "old-3": ["ok", 42],
+        },
+      }),
+    );
+    const settings = await readSettings({ homeDir });
+    expect(settings.adoptedSessions).toEqual({ "old-1": ["old-1", "new-1"] });
+  });
 });
 
 describe("updateSettings", () => {

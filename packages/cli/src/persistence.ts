@@ -95,6 +95,16 @@ export interface Settings {
   frontendUrl?: string;
   /** Whether `ensureDaemonRunning()` (plan.md §16 "1.5 Daemon v1") auto-starts the daemon. */
   daemonAutoStart?: boolean;
+  /**
+   * Old→new provider-session-id lineage recorded by `falcon adopt`
+   * (design §7.8 FR-9.5, plan.md §16 "3.3 Session adoption (UC9)"): keyed
+   * by the original (oldest) provider session id, each value is the full
+   * adoption chain in order, `[originalId, ...resumedIds]` — Claude Code's
+   * `--resume` mints a brand-new session id every time, so this is how
+   * Falcon later presents one continuous timeline across resumes instead
+   * of a series of unrelated sessions.
+   */
+  adoptedSessions?: Record<string, string[]>;
 }
 
 const defaultSettings: Settings = {
@@ -118,6 +128,15 @@ function normalizeSettings(raw: Record<string, unknown>): Settings {
   if (typeof raw.backendUrl === "string") settings.backendUrl = raw.backendUrl;
   if (typeof raw.frontendUrl === "string") settings.frontendUrl = raw.frontendUrl;
   if (typeof raw.daemonAutoStart === "boolean") settings.daemonAutoStart = raw.daemonAutoStart;
+  if (isPlainObject(raw.adoptedSessions)) {
+    const adoptedSessions: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(raw.adoptedSessions)) {
+      if (Array.isArray(value) && value.every((entry) => typeof entry === "string")) {
+        adoptedSessions[key] = value;
+      }
+    }
+    settings.adoptedSessions = adoptedSessions;
+  }
   return settings;
 }
 

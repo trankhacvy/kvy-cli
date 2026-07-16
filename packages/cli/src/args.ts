@@ -29,7 +29,8 @@ export type FalconCommand =
   | { type: "resume"; sessionId: string }
   | { type: "workspace-config"; baseRef?: string; remote?: string; directory?: string }
   | { type: "workspace-sync" }
-  | { type: "notify"; message: string };
+  | { type: "notify"; message: string }
+  | { type: "adopt"; list: boolean; remote: boolean };
 
 /** Thrown for malformed Falcon-level commands. Never thrown for provider passthrough. */
 export class ArgParseError extends Error {
@@ -44,6 +45,7 @@ export class ArgParseError extends Error {
 
 const HELP_FLAGS = new Set(["--help", "-h"]);
 const VERSION_FLAGS = new Set(["--version", "-v", "-V"]);
+const CONTINUE_FLAGS = new Set(["--continue"]);
 const PROVIDERS = new Set<Provider>(["claude", "codex"]);
 const KILL_TARGETS = new Set(["daemon", "sessions", "all", "all-force"]);
 
@@ -59,6 +61,12 @@ export function parseArgs(argv: string[]): FalconCommand {
   // `falcon claude --help` correctly forwards `--help` to Claude Code.
   if (HELP_FLAGS.has(first)) return { type: "help" };
   if (VERSION_FLAGS.has(first)) return { type: "version" };
+  // `falcon --continue` aliases `falcon adopt` (design §7.8 FR-9.2, plan.md
+  // §16 "3.3 Session adoption (UC9)"): preselect the most-recent plain
+  // session in cwd's workspace and continue it. `--remote`/`--list`
+  // compose the same way as `falcon adopt` itself (`falcon --continue
+  // --remote`).
+  if (CONTINUE_FLAGS.has(first)) return parseAdopt(rest);
 
   if (isProvider(first)) {
     // Everything after the provider name is passed through VERBATIM —
@@ -84,6 +92,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseWorkspace(rest);
     case "notify":
       return parseNotify(rest);
+    case "adopt":
+      return parseAdopt(rest);
     default:
       // Not a known Falcon subcommand: the whole argv is passthrough to the
       // default provider (claude), same as `falcon claude [args...]` minus
@@ -225,6 +235,19 @@ function parseNotify(rest: string[]): FalconCommand {
     throw new ArgParseError('"falcon notify" requires -p <message>', "falcon notify -p <message>");
   }
   return { type: "notify", message };
+}
+
+const ADOPT_USAGE = "falcon adopt [--remote] [--list]";
+
+function parseAdopt(rest: string[]): FalconCommand {
+  let list = false;
+  let remote = false;
+  for (const arg of rest) {
+    if (arg === "--list") list = true;
+    else if (arg === "--remote") remote = true;
+    else throw new ArgParseError(`Unknown "falcon adopt" flag: ${arg}`, ADOPT_USAGE);
+  }
+  return { type: "adopt", list, remote };
 }
 
 function requireValue(flag: string, value: string | undefined, usage: string): string {
