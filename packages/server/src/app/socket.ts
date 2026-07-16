@@ -3,6 +3,7 @@ import { Server, type Socket } from "socket.io";
 import { verifyToken } from "../auth/tokens.js";
 import {
   buildMachinePresenceEphemeral,
+  buildSessionActivityEphemeral,
   type ClientConnection,
   eventRouter,
 } from "./events/eventRouter.js";
@@ -122,6 +123,34 @@ export function startSocket(app: FastifyInstance): Server {
     socket.on("app-state", (data: { state?: string }) => {
       socket.data.appState = data?.state === "active" ? "active" : "background";
     });
+
+    // Session-scoped keepalive (`packages/cli/src/session/sessionClient.ts`'s
+    // `alive` volatile emit, design §4.3 `ClientEmit` `{ e: 'alive'; sessionId;
+    // working }`). Relayed as an `activity` ephemeral to whoever's watching this
+    // session so far — the write-behind `lastSeenAt`/offline-sweep presence
+    // cache from design §6.3 is a separate, still-open task; without this
+    // handler the event was simply dropped (no listener at all), so this is
+    // the minimal relay that makes it observable rather than the full cache.
+    // `sessionId` is taken from the authenticated connection, never trusted
+    // from the payload, so a session-scoped client can't spoof activity for a
+    // session it isn't connected as.
+    if (connection.connectionType === "session-scoped") {
+      const sessionConnection = connection;
+      socket.on("alive", (data: { working?: boolean } | undefined) => {
+        eventRouter.emitEphemeral({
+          accountId,
+          payload: buildSessionActivityEphemeral(
+            sessionConnection.sessionId,
+            Boolean(data?.working),
+          ),
+          recipientFilter: {
+            type: "all-interested-in-session",
+            sessionId: sessionConnection.sessionId,
+          },
+          skipSenderConnection: connection,
+        });
+      });
+    }
 
     socket.on("disconnect", () => {
       eventRouter.removeConnection(accountId, connection);

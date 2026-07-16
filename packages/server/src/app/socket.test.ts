@@ -105,6 +105,38 @@ describe("startSocket (/v1/stream handshake)", () => {
     expect(gotEcho).toBe(false);
   });
 
+  it("relays a session-scoped client's 'alive' emit as an 'activity' ephemeral to session watchers", async () => {
+    const token = await mintToken("acct_alive");
+    const userClient = connect({ token });
+    await new Promise<void>((resolve) => userClient.once("connect", () => resolve()));
+
+    const sessionClient = connect({ token, clientType: "session-scoped", sessionId: "sess_alive" });
+    await new Promise<void>((resolve) => sessionClient.once("connect", () => resolve()));
+
+    const activityEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    sessionClient.volatile.emit("alive", { sessionId: "sess_alive", working: true });
+
+    expect(await activityEvent).toEqual({ t: "activity", sessionId: "sess_alive", working: true });
+  });
+
+  it("does not echo the 'activity' ephemeral back to the session client that sent 'alive'", async () => {
+    const token = await mintToken("acct_alive_2");
+    const sessionClient = connect({
+      token,
+      clientType: "session-scoped",
+      sessionId: "sess_alive_2",
+    });
+    await new Promise<void>((resolve) => sessionClient.once("connect", () => resolve()));
+
+    let gotEcho = false;
+    sessionClient.on("ephemeral", () => {
+      gotEcho = true;
+    });
+    sessionClient.volatile.emit("alive", { sessionId: "sess_alive_2", working: false });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(gotEcho).toBe(false);
+  });
+
   it("defaults app-state to background when omitted from the handshake, then updates it on the app-state event", async () => {
     const token = await mintToken("acct_appstate_1");
     const client = connect({ token });
