@@ -5481,3 +5481,106 @@ turbo cache.
    then revisit `P1-1.6-session-list-screen`/`P1-1.6-timeline-screen`
    and the `P1-1.3-provider-detection` vs `P1-1.3-cli-locator` duplicate
    next.
+
+## Cycle 46 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `0bf99d4`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 8/8 tasks green (`@falcon/crypto`,
+  `@falcon/wire`, `falcon` cli, `@falcon/server`, `@falcon/web`, plus
+  their `build` dependency tasks) — full turbo cache hit, `FULL TURBO`.
+- `pnpm test` → **PASSED** — 9/9 tasks green, cache hit: `@falcon/wire`
+  61 tests (6 files), `@falcon/web` 56 tests (7 files), `@falcon/crypto`
+  65 tests (8 files), `falcon` (cli) 206 tests (18 files),
+  `@falcon/server` 140 tests (20 files). 528 tests total, 0 failures —
+  identical counts to Cycles 43–45, confirming no source changes have
+  reached `main` since.
+
+### Task-summary requested this cycle
+
+`task-summary/P1-1.4-exit-semantics.md` was requested for credit. It does
+**not** exist on `main`'s `task-summary/` directory (confirmed via
+directory listing — no `exit-semantics` file anywhere under
+`task-summary/`). `git merge-base --is-ancestor P1-1.4-exit-semantics
+main` → **not an ancestor**.
+
+Real, complete work sits unmerged in worktree
+`.worktrees/P1-1.4-exit-semantics` (tip `835843d`, feat + code-review-fix
+commits), implementing plan.md's §1.4 "Exit semantics" bullet (PRD
+FR-3.7): a new `POST /v1/sessions/:id/status` server route
+(`packages/server/src/app/routes/sessionStatus.ts`, idempotent one-way
+transition to `failed`, fans out `session-update` + `attention` through
+the existing `EventRouterPort`), a CLI crash-report client
+(`packages/cli/src/api/sessionStatus.ts`, `reportSessionFailed` —
+best-effort, typed result, never throws), and the exit classifier itself
+(`packages/cli/src/claude/sessionExit.ts`, `createSessionExitTracker` —
+Ctrl-C/SIGTERM/SIGHUP classified `signal-exit` with no report so the
+session stays resumable; anything else classified `crash` and
+best-effort reported; deliberately does not forward signals to the
+child, preserving the real Claude Code TUI's own Ctrl-C UX). Its own
+task-summary reports 18 new tests (5 server + 4 cli-api + 9
+cli-sessionExit) and workspace-wide `pnpm build`/`typecheck`/`test` all
+green (`falcon` cli 219/219, `@falcon/server` 145/145).
+
+Notably, `git merge-base main P1-1.4-exit-semantics` is exactly `main`'s
+own current tip (`0bf99d4`) — **zero drift**, a clean fast-forward
+candidate — but `git cat-file -e
+main:packages/cli/src/claude/sessionExit.ts` and the same check for
+`packages/server/src/app/routes/sessionStatus.ts` both fail: neither
+file exists on `main`. Per the tracker's standing rule (Cycle 1 onward:
+unmerged work is not credited even when its own task-summary reports
+success, and even when zero-drift-fast-forwardable — only what's
+actually reachable from the primary `main` checkout counts), **not
+credited**. Annotated the §1.4 narrative in `plan.md` (line 683) with
+this finding; the "Exit semantics" checkbox stays unchecked.
+
+### Tasks completed this cycle
+
+**0 tasks merged/credited.** `plan.md` §16 checkbox count: **56/135 —
+unchanged from Cycles 44–45.**
+
+### Blockers / issues found
+
+1. **Four worktrees now land-ready but still unlanded onto the primary
+   `main` checkout**, all zero-drift fast-forward candidates from
+   `main`'s current tip `0bf99d4`:
+   `P1-land-1.3-falcon-home-persistence` (tip `aaac61d`, unlanded since
+   Cycle 34), `P1-land-1.3-session-bootstrap` (tip `9518ef5`, since
+   Cycle 36), `P1-land-1.5-machine-ws-client` (tip `efb36f7`, since
+   Cycle 36), and now `P1-1.4-exit-semantics` (tip `835843d`, new this
+   cycle, also currently zero-drift). None of these has a code or test
+   reason blocking a merge — each reports green in isolation. The only
+   remaining step for all four is an actual `git merge`/fast-forward
+   performed against the primary (non-worktree) checkout, which is out
+   of this tracker's scope.
+2. Merge-order note carried over from Cycle 45 still applies: `CLAUDE.md`
+   is touched by both `falcon-home-persistence` and `machine-ws-client`;
+   `packages/cli/package.json` is touched by both `session-bootstrap` and
+   `machine-ws-client`. `P1-1.4-exit-semantics` touches a disjoint set
+   (`packages/server/src/app/routes/sessionStatus.ts`,
+   `packages/cli/src/api/sessionStatus.ts`,
+   `packages/cli/src/claude/sessionExit.ts`) with no overlap against any
+   of the other three, so it can land independently of their ordering.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)** — unchanged
+from Cycles 44–45. `pnpm typecheck`/`pnpm test` both green on `main`
+(8/8 typecheck tasks, 9/9 test tasks, 528 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary `main`
+   checkout — fast-forwardable (tip `aaac61d`), longest-standing unlanded
+   item, 13 cycles unlanded (since Cycle 34).
+2. **Land `P1-land-1.3-session-bootstrap`** onto the primary `main`
+   checkout — fast-forwardable (tip `9518ef5`), 10 cycles unlanded (since
+   Cycle 36).
+3. **Land `P1-1.4-exit-semantics`** onto the primary `main` checkout —
+   fast-forwardable (tip `835843d`), new this cycle, disjoint files from
+   the other three pending lands so it carries no merge-order risk.
+   (`P1-land-1.5-machine-ws-client`, tip `efb36f7`, also still
+   fast-forwardable and 10 cycles unlanded since Cycle 36, remains an
+   equally good next pick alongside these three.)
