@@ -1,0 +1,86 @@
+{
+  "description": "A perm-request with no call id (adapter hasn't started the tool yet) rendered as a placeholder, then matched to its tool-start by name+args, then resolved.",
+  "envelopes": [
+    { "id": "e1", "time": 2000, "role": "agent", "turn": "turn-2", "ev": { "t": "turn-start" } },
+    {
+      "id": "e2",
+      "time": 2001,
+      "role": "agent",
+      "turn": "turn-2",
+      "ev": {
+        "t": "perm-request",
+        "reqId": "req-1",
+        "name": "Bash",
+        "args": { "command": "rm -rf dist" },
+        "modes": ["default", "acceptEdits"]
+      }
+    },
+    {
+      "id": "e3",
+      "time": 2002,
+      "role": "agent",
+      "turn": "turn-2",
+      "ev": {
+        "t": "tool-start",
+        "call": "call-9",
+        "name": "Bash",
+        "args": { "command": "rm -rf dist" },
+        "risk": "exec"
+      }
+    },
+    {
+      "id": "e4",
+      "time": 2003,
+      "role": "user",
+      "ev": {
+        "t": "perm-resolve",
+        "reqId": "req-1",
+        "decision": { "kind": "allow", "scope": "once" }
+      }
+    },
+    {
+      "id": "e5",
+      "time": 2004,
+      "role": "agent",
+      "turn": "turn-2",
+      "ev": { "t": "tool-end", "call": "call-9", "ok": true, "output": { "stdout": "" } }
+    },
+    {
+      "id": "e6",
+      "time": 2005,
+      "role": "agent",
+      "turn": "turn-2",
+      "ev": { "t": "turn-end", "status": "completed" }
+    }
+  ],
+  "expected": [
+    { "id": "e1", "time": 2000, "role": "agent", "turn": "turn-2", "kind": "turn-start" },
+    {
+      "id": "e3",
+      "time": 2002,
+      "role": "agent",
+      "turn": "turn-2",
+      "kind": "tool",
+      "call": "call-9",
+      "name": "Bash",
+      "args": { "command": "rm -rf dist" },
+      "risk": "exec",
+      "status": "done",
+      "ok": true,
+      "output": { "stdout": "" },
+      "permission": {
+        "reqId": "req-1",
+        "modes": ["default", "acceptEdits"],
+        "decision": { "kind": "allow", "scope": "once" }
+      }
+    },
+    {
+      "id": "e6",
+      "time": 2005,
+      "role": "agent",
+      "turn": "turn-2",
+      "kind": "turn-end",
+      "status": "completed"
+    }
+  ]
+}

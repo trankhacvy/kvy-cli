@@ -1,0 +1,48 @@
+{
+  "description": "A tool-end with no matching tool-start (history truncated before it) and a perm-request that never resolves or matches — both surfaced, never silently dropped.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 6000,
+      "role": "agent",
+      "ev": {
+        "t": "tool-end",
+        "call": "ghost-call",
+        "ok": false,
+        "output": { "error": "ETIMEDOUT" }
+      }
+    },
+    {
+      "id": "e2",
+      "time": 6001,
+      "role": "agent",
+      "ev": {
+        "t": "perm-request",
+        "reqId": "req-9",
+        "name": "WebFetch",
+        "args": { "url": "https://example.com" },
+        "modes": ["default"]
+      }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e1",
+      "time": 6000,
+      "role": "agent",
+      "kind": "orphan-tool-end",
+      "call": "ghost-call",
+      "ok": false,
+      "output": { "error": "ETIMEDOUT" }
+    },
+    {
+      "id": "e2",
+      "time": 6001,
+      "role": "agent",
+      "kind": "perm-placeholder",
+      "name": "WebFetch",
+      "args": { "url": "https://example.com" },
+      "permission": { "reqId": "req-9", "modes": ["default"] }
+    }
+  ]
+}
