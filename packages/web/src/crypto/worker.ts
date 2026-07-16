@@ -10,7 +10,7 @@
  * `postMessage` — see `worker-handler.ts` for the trust-boundary argument.
  */
 import { createIndexedDbKeyStorage } from "./key-storage.js";
-import type { CryptoWorkerRequest, CryptoWorkerErrResponse } from "./protocol.js";
+import type { CryptoWorkerErrResponse, CryptoWorkerRequest } from "./protocol.js";
 import { createCryptoWorkerHandler } from "./worker-handler.js";
 
 const handler = createCryptoWorkerHandler(createIndexedDbKeyStorage());
