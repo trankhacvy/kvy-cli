@@ -14,15 +14,26 @@
  * ```
  * const tracker = createSessionExitTracker({ reportSessionFailed, logger });
  * const stop = tracker.start();
+ * let sessionId: string | null = null;
  * try {
- *   const sessionId = await claudeLocal({ abort, ... }, deps);
- *   await tracker.handleOutcome(sessionId, { ok: true });
+ *   const resolved = await claudeLocal(
+ *     { abort, onSessionFound: (id) => { sessionId = id; tracker.setSessionId(id); }, ... },
+ *     deps,
+ *   );
+ *   await tracker.handleOutcome(sessionId ?? resolved, { ok: true });
  * } catch (error) {
  *   await tracker.handleOutcome(sessionId, { ok: false, error });
  * } finally {
  *   stop();
  * }
  * ```
+ *
+ * Wiring `onSessionFound` to `tracker.setSessionId` (not just a local
+ * variable) matters: an `uncaughtException`/`unhandledRejection` can fire
+ * while `claudeLocal(...)` is still in flight — the entire lifetime of a
+ * session — well before `handleOutcome` ever runs. Without `setSessionId`,
+ * this module's own crash-reporting for that case would have no session id
+ * to attach the report to and would silently skip it.
  *
  * ## Why signal tracking, not signal forwarding
  * A real terminal delivers SIGINT/SIGTERM/SIGHUP to the whole foreground
@@ -86,6 +97,14 @@ export interface SessionExitTracker {
   start(): () => void;
   /** True once a tracked signal has fired since the last `start()`. */
   sawSignal(): boolean;
+  /**
+   * Records the session id as soon as it's known (e.g. from
+   * `claudeLocal(...)`'s `onSessionFound` callback), independent of
+   * `handleOutcome`. Lets an `uncaughtException`/`unhandledRejection` that
+   * fires mid-session — before the child has settled at all — still attach
+   * the right session id to its best-effort crash report.
+   */
+  setSessionId(sessionId: string | null): void;
   /**
    * Classifies how the session process ended and, for a genuine crash,
    * best-effort reports it. Never throws — reporting failures are logged
@@ -175,6 +194,10 @@ export function createSessionExitTracker(deps: SessionExitTrackerDeps): SessionE
 
     sawSignal() {
       return lastSignal !== null;
+    },
+
+    setSessionId(sessionId) {
+      currentSessionId = sessionId;
     },
 
     async handleOutcome(sessionId, outcome) {

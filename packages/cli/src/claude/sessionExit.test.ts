@@ -182,6 +182,38 @@ describe("createSessionExitTracker", () => {
     stop();
   });
 
+  it("uncaughtException mid-session: setSessionId lets the report attach the right id even before any handleOutcome call", async () => {
+    const reportSessionFailed = vi
+      .fn<(...args: unknown[]) => Promise<ReportSessionFailedResult>>()
+      .mockResolvedValue({ type: "ok" });
+    const exitOnUncaught = vi.fn();
+    const { proc, emit } = fakeProcess();
+
+    const tracker = createSessionExitTracker({
+      reportDeps: { backendUrl: "http://backend.example", accessToken: "tok" },
+      reportSessionFailed,
+      process: proc,
+      exitOnUncaught,
+    });
+    const stop = tracker.start();
+
+    // Simulates onSessionFound firing while claudeLocal(...) is still in
+    // flight — no handleOutcome call has happened yet.
+    tracker.setSessionId("sess_mid_session");
+
+    emit("uncaughtException", new Error("bug in wrapper"));
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(reportSessionFailed).toHaveBeenCalledWith(
+      { backendUrl: "http://backend.example", accessToken: "tok" },
+      { sessionId: "sess_mid_session", error: expect.objectContaining({ message: "bug in wrapper" }) },
+    );
+    expect(exitOnUncaught).toHaveBeenCalledWith(1);
+    stop();
+  });
+
   it("start() returns a cleanup function that removes all listeners", async () => {
     const { tracker, reportSessionFailed, emit } = buildTracker();
     const stop = tracker.start();
