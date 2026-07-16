@@ -49,8 +49,12 @@ packages/
 │                             (`daemon/machineClient.ts`: `registerOrResumeMachine`/CAS-retry
 │                             sync against `POST /v1/machines`, `startMachineClient` opening
 │                             `/v1/stream` as `clientType: "machine-scoped"` with a 60s
-│                             heartbeat). RPC handler registration, Auth, and provider spawning
-│                             still [planned].
+│                             heartbeat). `src/persistence.ts`: `~/.falcon/`
+│                             local state — schema-versioned `settings.json` (atomic
+│                             lock-file-guarded read-modify-write) and 0600-permissioned
+│                             `access.key` credentials, both tmp-write + rename so readers
+│                             never observe a partial write. RPC handler registration, Auth, and
+│                             provider spawning still [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth

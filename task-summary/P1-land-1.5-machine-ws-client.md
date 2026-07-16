@@ -4,7 +4,49 @@ Lands the machine-scoped WS client work (`P1-1.5-machine-ws-client`, tip
 `8e884c5`) onto `main`, per plan.md §16 "1.5 Daemon v1" — unlanded for 9
 consecutive progress-tracker cycles (since Cycle 36).
 
-## What was done
+## Cycle 47 reconciliation (this task)
+
+This branch (tip `efb36f7`) had previously been reconciled against `main`'s
+Cycle 44 tip (`185ebc9`) and was confirmed fast-forwardable — but it sat
+worktree-local for 10+ further cycles while `main` kept moving (through the
+`persistence.ts`/`session/bootstrap.ts` and `sessionExit.ts`→
+`packages/server/.../sessionStatus.ts` refactor landings), reaching tip
+`3e59f6d`. By the time this task started, `git merge-base --is-ancestor main
+HEAD` was **false** again — the earlier fast-forward window had closed.
+
+This task's actual work:
+
+1. `git merge main --no-ff` inside this worktree. Two conflicts, both
+   narrative-only:
+   - `CLAUDE.md`'s `packages/cli` package-layout bullet — resolved by
+     keeping both the machine-scoped WS client description (this branch)
+     and the `persistence.ts` description (`main`), and narrowing the
+     trailing "[planned]" list to what both branches agree is still missing
+     (RPC handler registration, Auth, provider spawning).
+   - `plan.md`'s §1.5 machine-ws-client bullet — `main`'s copy still showed
+     `[ ]` unchecked with only the Cycle-44/45 "not yet landed" narrative;
+     this branch's copy was `[x]` with the fuller "Landed via
+     `P1-land-1.5-machine-ws-client`" narrative. Resolved by keeping this
+     branch's `[x]` version (superset of `main`'s narrative plus the actual
+     landing note) and appending a new paragraph recording this
+     reconciliation.
+   - Every code/test file auto-merged cleanly — `machineClient.ts` and its
+     two test files are disjoint from every file `main`'s drift touched
+     (`persistence.ts`, `session/bootstrap.ts`, `api/sessionStatus.ts`,
+     `server/app/routes/sessionStatus.ts`, `server/db/testDbAvailable.ts`,
+     etc.), so nothing else needed hand resolution.
+2. Re-ran `pnpm install`, `pnpm build` (5/5 tasks green), `pnpm exec turbo
+   run typecheck --force` (9/9 green), `pnpm exec turbo run test --force`
+   (9/9 tasks green: `falcon` cli **270/270** tests incl.
+   `daemon/machineClient.test.ts` 18/18 and
+   `daemon/machineClient.integration.test.ts` 1/1, `@falcon/server`
+   **145/145**).
+3. Committed the merge to this worktree's branch. Fast-forwarding the
+   primary (non-worktree) `main` checkout onto this reconciled tip remains a
+   follow-up step outside this task's write access, same as every prior
+   `P1-land-*` task.
+
+## What was done (original merge, prior cycle)
 
 1. Created worktree `.worktrees/P1-land-1.5-machine-ws-client` on a fresh
    branch of the same name, forked directly off `main`'s then-current tip
