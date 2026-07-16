@@ -1,5 +1,97 @@
 # Falcon — Progress Log
 
+## Cycle 59 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `0850222` — "refactor: P3-3.3-adopt-cli-and-take-rpc - code review fixes")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks). No errors
+  (all cache hits, replayed clean).
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/server` 233/233 (33 files), `falcon`
+  cli 831/831 (82 files) run fresh; `@falcon/crypto`/`@falcon/wire`/`@falcon/web` cache-hit-replayed
+  clean. 0 failures across the whole workspace. (A handful of `stderr` lines in
+  `dispatch.test.ts`/`adopt.test.ts` are intentional simulated-failure log output from passing
+  tests, not real failures.)
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested task-summaries exist on `main`. Each task's real commit history was found via
+`git log --oneline --all | grep <task-id>` (no live branch refs remain — normal post-merge
+cleanup), then every commit in that history (feat → resolve-test-failures → code-review-fixes) was
+checked with `git merge-base --is-ancestor <sha> main`:
+
+1. **`task-summary/P3-3.1-web-new-session-flow.md`** — Web "New Session" flow (machine → daemon
+   `fs.list`/`fs.mkdir` RPCs → directory picker → provider/mode/model → spawn, 409
+   directory-creation approval loop) + branch/worktree option (`git worktree add`/`checkout` via a
+   new `gitWorktree.ts`). Commits `fdcda07`/`52656f8`/`1baf704` → all three
+   `git merge-base --is-ancestor <sha> main` = **true**. `plan.md` §3.1's last two bullets (lines
+   755–756) were still `[ ]` despite the confirmed merge — **flipped to `[x]` this cycle**.
+2. **`task-summary/P3-3.2-daemon-durability.md`** — `sessions.json` persistence (wrapped
+   DEK/seq/versions, restore-on-boot), `resumeSession` RPC (`FALCON_RECONNECT_*` env re-attach),
+   daemon self-update (bundle-mtime detection per Happy's #1107 lesson, restart-when-idle),
+   `falcon doctor`/`clean`, and a chaos test suite (`durability.chaos.test.ts`) covering
+   kill-daemon-mid-turn / kill-session-process / sleep-wake / server-restart recovery. Commits
+   `694b8e0`/`2071083` → both `git merge-base --is-ancestor <sha> main` = **true**. `plan.md` §3.2's
+   entire bullet list (lines 759–763) was still `[ ]` despite the confirmed merge — **all five
+   flipped to `[x]` this cycle**; the task summary's own "Verification" section confirms all five
+   were genuinely built and tested, not partial.
+3. **`task-summary/P3-3.3-adopt-cli-and-take-rpc.md`** — the three remaining §3.3 bullets after the
+   already-landed transcript indexer: chunked read-only transcript mirror (`adopt.mirror` RPC,
+   ≤64KB chunks, newline/UTF-8-safe boundaries; `blobRef` field reserved but not implemented, same
+   precedent as existing `GitDiffResultSchema`/`FsReadResultSchema`), `falcon adopt
+   [--remote]/[--list]` + `falcon --continue` (local resume via `claude --resume`, detached
+   `--remote` continuation, old→new provider-id lineage recording), and `adopt.take` RPC
+   (SIGTERM≤5s→SIGKILL takeover vs. fork, idempotency-key replay via `machineRpc.ts`'s now-generic
+   dispatch table, mid-turn warning surfaced in the result). Commits `89951fc`/`12db74a`/`0850222` →
+   all three `git merge-base --is-ancestor <sha> main` = **true**. `plan.md` §3.3 lines 767–769 were
+   still `[ ]` despite the confirmed merge — **flipped to `[x]` this cycle**; line 770 ("Web:
+   unmanaged section, live mirror view, Take over / Fork Instead dialog") correctly stays unchecked
+   — explicitly out of scope per the task summary's own scope-decisions section.
+
+### Tasks completed this cycle
+
+**10 checkboxes newly flipped**, all genuinely merged onto `main` in prior cycles but not yet
+reflected in the checklist:
+- §3.1 (lines 755–756): Web "New Session" flow; branch/worktree option.
+- §3.2 (lines 759–763): `sessions.json` persistence; `resumeSession` RPC; daemon self-update;
+  `falcon doctor`/`clean`; chaos test suite.
+- §3.3 (lines 767–769): read-only transcript mirror; `falcon adopt`/`--continue`; `adopt.take` RPC.
+
+No new code was written this cycle — this was a verification-and-bookkeeping pass only, per the
+progress-tracker's mandate. Every flip was gated on `git merge-base --is-ancestor` succeeding
+against `main`'s real HEAD; no checkbox was flipped on a task-summary's say-so alone.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 turbo tasks each, 0
+failures). All three requested deliverables are confirmed genuine ancestors of `main` via their
+real commit SHAs (feat + fix + refactor commits, all three checked per task), with their code
+present and functioning in `main`'s tree.
+
+### Overall completion
+
+`plan.md` checkbox count: **112/135 checked (~83.0%)** — up from 102/135 (~75.6%) at Cycle 58: +10
+from this cycle's flips (§3.1 ×2, §3.2 ×5, §3.3 ×3).
+
+### Next recommended tasks
+
+1. **Web: unmanaged section, live mirror view, Take-over / Fork-Instead dialog** (§3.3 line 770) —
+   the last remaining UC9 bullet; `adopt.mirror`/`adopt.take` RPCs and the transcript indexer are
+   now all landed and confirmed, so this is purely front-end wiring against already-built daemon
+   RPCs.
+2. **Build the workspace-registration store.** Every §3.1/§3.2/§3.3 task-summary so far
+   independently flags the same missing piece: nothing in `packages/cli` yet persists "which
+   workspace paths are registered" — `resolveProviderSession`/`resolveDirectory`/`listWorkspaces`
+   are all injected seams with no real default. This single piece unblocks real end-to-end wiring
+   for spawn, resume, and adopt simultaneously.
+3. **Wire `machineClient.ts`'s socket + `registerMachineRpcHandlers` into `daemon/commands.ts`'s
+   boot sequence.** `spawn`/`resumeSession`/`adopt.take`/`adopt.mirror` are all real, fully
+   unit-tested RPC handlers but none is reachable from a live machine WS connection yet (confirmed
+   again this cycle: no call site for `startMachineClient` anywhere in `packages/cli/src`) — the
+   single biggest remaining gap between "built" and "usable end-to-end."
+
 ## Cycle 58 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `962d853` — "merge: land P3-3.3-session-adoption-indexer onto main")
