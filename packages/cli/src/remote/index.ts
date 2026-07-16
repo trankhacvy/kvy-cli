@@ -4,7 +4,6 @@ export { MessageBuffer, pushEnvelopeToBuffer, summarizeEnvelope } from "./messag
 export type { BufferedMessage, BufferedMessageKind } from "./messageBuffer.js";
 export { DEFAULT_TOOL_START_DELAY_MS, OrderedEnvelopeQueue } from "./outgoingQueue.js";
 export type { OrderedEnvelopeQueueOptions } from "./outgoingQueue.js";
-export { createStubCanUseTool, PERMISSION_PIPELINE_NOT_LANDED_MESSAGE } from "./permissionStub.js";
 export { PushableAsyncIterable } from "./pushableAsyncIterable.js";
 export { RemoteModeDisplay } from "./RemoteModeDisplay.js";
 export {
