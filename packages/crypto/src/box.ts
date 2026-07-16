@@ -3,6 +3,11 @@
  * shape every ciphertext payload travels the wire in. New code (design
  * principle #1): `open()` returns `null` on any failure, it never throws —
  * one corrupt record can't poison a sync batch.
+ *
+ * Not itself a Happy port — plan.md §3.1 introduces this wrapper directly on
+ * top of the ported primitives it calls. `encryptWithDataKey`/`decryptWithDataKey`
+ * are adapted from Happy — https://github.com/slopus/happy (MIT); see
+ * `encryption.ts`'s header for the full license text those primitives carry.
  */
 import {
   decodeBase64,

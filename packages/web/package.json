@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "falcon-web — Next.js PWA (App Router, static export). Statically exported and served from a separate origin than the API (design §5.3, §9): the server never renders user content, it's ciphertext to it anyway. Scaffold stage — no auth/sync/API wiring yet.",
+  "description": "falcon-web — Next.js PWA (App Router, static export). Statically exported and served from a separate origin than the API (design §5.3, §9): the server never renders user content, it's ciphertext to it anyway. Auth pages and the sync engine are still not started; the crypto-bridge worker, the transcript reducer, and the apiSocket WS client (src/sync/) are wired up.",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@falcon/crypto": "workspace:*",
+    "@falcon/wire": "workspace:*",
     "next": "^15.5.20",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "@radix-ui/react-slot": "^1.3.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

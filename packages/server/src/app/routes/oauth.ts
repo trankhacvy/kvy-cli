@@ -1,3 +1,11 @@
+/**
+ * Falcon-specific OAuth sign-up route — see https://github.com/slopus/happy
+ * (MIT), the reference codebase for this monorepo. This route is not a port:
+ * it has no equivalent in Happy's original single-key auth model
+ * (falcon-plan.md §1.2 delta D5). It is the sibling of `auth.ts`'s
+ * near-verbatim `POST /v1/auth` port; see the docblock on `buildOAuthRoutes`
+ * below for the full delta rationale.
+ */
 import { decodeBase64 } from "@falcon/crypto";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
