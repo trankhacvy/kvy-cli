@@ -62,6 +62,50 @@ land-ready again:
 4. Committed the merge + doc updates to the worktree branch (see commit hash
    reported by the harness).
 
+## Cycle 33 catch-up (this run, second pass)
+
+`main` had moved on again since the prior "Cycle 33 update" pass above — this time
+by a much larger margin (`171af64` → `acd4126`, bringing in the full
+`P1-land-1.1-1.2-server-realtime-write-path` land: Socket.IO read-path
+(`socket.ts`, `eventRouter.ts`, `rpcHandler.ts`) plus the HTTP write-path routes
+(`sessions`, `messages`, `sessionCas`, `machines`, `sync`) landing on `main` for
+real, plus a further tracker cycle commit) — so the branch again needed bringing
+forward before it can be considered land-ready:
+
+1. `git merge main` into `P1-land-1.5-ensure-daemon-running` → merge commit
+   `5277754`. **One conflict**, same file as last time: `plan.md`'s §1.5
+   narrative paragraph (both sides had appended their own cycle-33 prose after
+   the same shared base text). Resolved by hand — kept this branch's own
+   "Cycle 33 (this task)" note, appended the incoming progress-tracker's
+   "Cycle 33 (progress tracker)" note (which records `P1-land-1.1-1.2-...`
+   actually landing this cycle — unrelated to this branch but factually part of
+   the shared paragraph history), then added a new note for this second-pass
+   catch-up itself. `CLAUDE.md`, `progress.md`, `pnpm-lock.yaml`, and all
+   `packages/server/src/**` additions from the 1.1/1.2 land auto-merged with
+   **zero conflicts**; `packages/cli/src/daemon/ensureDaemonRunning.ts` and
+   `packages/cli/src/index.ts` were completely untouched by `main`'s drift
+   (confirmed via `git status --short` showing no entries for either path after
+   the merge) and needed no reconciliation at all.
+2. Re-verified end to end, forced (`--force`, no turbo cache):
+   - `pnpm install --frozen-lockfile` → clean, no drift.
+   - `pnpm exec turbo run build typecheck --force` → **10/10 tasks green**.
+   - `pnpm exec turbo run test --force` → **9/9 test tasks green** — `falcon`
+     (cli) **176/176** (incl. `ensureDaemonRunning.test.ts` 5, `index.test.ts`
+     11), `@falcon/server` **140/140** (now includes the 1.1/1.2 socket +
+     write-path route test files), `@falcon/web` 36/36, `@falcon/wire` 61/61,
+     `@falcon/crypto` 65/65 — **478 tests total, 0 failures**, up from 425 in
+     the prior pass (the +53 is entirely `@falcon/server` growing from 87 to
+     140 as the 1.1/1.2 land brought its own test files in).
+   - `pnpm lint` → no new errors; same pre-existing warning set as before (48
+     warnings, 1 info — unrelated to this change, confirmed present on `main`
+     itself before this merge too), out of scope per the established precedent
+     for this land task.
+3. Confirmed via `git cat-file -e` that `packages/cli/src/daemon/{ensureDaemonRunning,ensureDaemonRunning.test}.ts`
+   still exist post-merge and via `grep` on `index.ts` that the `ensureDaemon()`
+   call sites in `start`/`auth`/`sessions`/`resume` are unchanged.
+4. Committed the merge + doc updates to the worktree branch (see commit hash
+   reported by the harness).
+
 ## What was intentionally *not* done
 
 This task's own instructions are explicit: "ALL file edits MUST be in
@@ -83,6 +127,12 @@ git merge --no-ff P1-1.5-ensure-daemon-running -m "..."   # conflict-free
 pnpm install
 pnpm exec turbo run build typecheck --force                # 10/10 green
 pnpm exec turbo run test --force                            # 9/9 green, falcon 169/169
+
+# this run's catch-up (main a75ab25 → acd4126):
+git merge main                                              # one conflict (plan.md), resolved by hand
+pnpm install --frozen-lockfile
+pnpm exec turbo run build typecheck --force                 # 10/10 green
+pnpm exec turbo run test --force                             # 9/9 green — 478 tests total, 0 failures
 ```
 
 ## Assumptions
