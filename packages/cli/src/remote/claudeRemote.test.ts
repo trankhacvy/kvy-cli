@@ -1,4 +1,4 @@
-import type { Query } from "@anthropic-ai/claude-agent-sdk";
+import type { Query, query } from "@anthropic-ai/claude-agent-sdk";
 import type { SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import { startClaudeRemote } from "./claudeRemote.js";
@@ -200,5 +200,64 @@ describe("startClaudeRemote", () => {
     await handle.stop();
     await handle.stop();
     expect(fakeQuery.close).toHaveBeenCalledOnce();
+  });
+
+  it("defaults canUseTool to a real permission pipeline: a dangerous tool call emits a perm-request envelope and resolvePermission() answers it first-wins", async () => {
+    const fakeQuery = new FakeQuery([]);
+    let capturedCanUseTool: unknown;
+    const queryImpl = vi.fn((params: { prompt: unknown; options: { canUseTool: unknown } }) => {
+      capturedCanUseTool = params.options.canUseTool;
+      return fakeQuery as unknown as Query;
+    }) as unknown as typeof query;
+    const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
+
+    const handle = startClaudeRemote(
+      { workingDirectory: "/tmp/work", permissionMode: "default", onEnvelopes },
+      { queryImpl },
+    );
+
+    const canUseTool = capturedCanUseTool as (
+      toolName: string,
+      input: Record<string, unknown>,
+      options: { signal: AbortSignal },
+    ) => Promise<unknown>;
+    const pending = canUseTool("Bash", { command: "ls" }, { signal: new AbortController().signal });
+    await flushMicrotasks();
+
+    const delivered = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
+    const permRequest = delivered.find((e) => e.ev.t === "perm-request");
+    expect(permRequest).toBeDefined();
+    const reqId = (permRequest?.ev as { reqId: string }).reqId;
+
+    const first = handle.resolvePermission({ reqId, decision: { kind: "allow", scope: "once" } });
+    const second = handle.resolvePermission({ reqId, decision: { kind: "deny" } });
+
+    expect(first).toEqual({ ok: true });
+    expect(second).toMatchObject({ ok: false, reason: "already-answered" });
+    await expect(pending).resolves.toMatchObject({ behavior: "allow" });
+  });
+
+  it("setMode() syncs the permission handler's mode so a later tool call is auto-approved accordingly", async () => {
+    const fakeQuery = new FakeQuery([]);
+    let capturedCanUseTool: unknown;
+    const queryImpl = vi.fn((params: { prompt: unknown; options: { canUseTool: unknown } }) => {
+      capturedCanUseTool = params.options.canUseTool;
+      return fakeQuery as unknown as Query;
+    }) as unknown as typeof query;
+
+    const handle = startClaudeRemote(
+      { workingDirectory: "/tmp/work", permissionMode: "default", onEnvelopes: () => {} },
+      { queryImpl },
+    );
+
+    await handle.setMode("bypassPermissions");
+
+    const canUseTool = capturedCanUseTool as (
+      toolName: string,
+      input: Record<string, unknown>,
+      options: { signal: AbortSignal },
+    ) => Promise<unknown>;
+    const result = await canUseTool("Bash", { command: "ls" }, { signal: new AbortController().signal });
+    expect(result).toMatchObject({ behavior: "allow" });
   });
 });

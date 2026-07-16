@@ -724,12 +724,12 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Cross-mode dedupe ring buffer (5-min, text+id keyed) — tailer must not re-send SDK-written prompts **(P)** *(2026-07-16, cycle 53 — `P2-2.2-mode-switching`, merge `7a97142`)*
 - [x] Loss-lessness test: scripted switch storm (5 rapid switches with queued messages) → no dupes, no drops *(2026-07-16, cycle 53 — `P2-2.2-mode-switching`, merge `7a97142`)*
 
-**2.3 Permission pipeline** — §9
-- [ ] `PermissionHandler` port: auto-rules (bypass/acceptEdits/plan/read-only descriptors), AskUserQuestion + ExitPlanMode always-prompt, Bash literal/prefix allowlists, pending-promise map, agentState CAS writes, reset-on-mode-switch **(P)**
-- [ ] `getToolDescriptor` port (read-only/edit/dangerous/exitPlan classification) **(V)**
-- [ ] First-wins resolution: atomic check-and-delete; loser gets `{ok:false, reason:'already-answered', decision}` **(N)**
-- [ ] `perm-request`/`perm-resolve` envelopes into the timeline
-- [ ] Local-mode honesty: hooks fire attention events; dashboard shows "waiting at terminal" (no fake remote answering)
+**2.3 Permission pipeline** — §9 *(implemented on worktree `P2-2.3-permission-pipeline`, not yet landed onto `main`: adds `packages/cli/src/claude/{permissionHandler,getToolDescriptor}.ts` + tests, and wires the result into `packages/cli/src/remote/claudeRemote.ts` in place of the fail-closed `permissionStub.ts` placeholder (removed — see this task's own `task-summary/P2-2.3-permission-pipeline.md` for the full delta list vs. Happy and the assumptions made where Falcon's already-landed wire schema is simpler than Happy's own shapes, e.g. `reqId` is a fresh cuid2 rather than `agentID:toolUseID`, and `agentState` CAS persistence is an injectable seam since no session-scoped CAS HTTP client exists in `packages/cli` yet). `pnpm build`/`typecheck`/`test` all green workspace-wide (15/15 turbo tasks; `falcon` cli 516/516 tests).)*
+- [x] `PermissionHandler` port: auto-rules (bypass/acceptEdits/plan/read-only descriptors), AskUserQuestion + ExitPlanMode always-prompt, Bash literal/prefix allowlists, pending-promise map, agentState CAS writes, reset-on-mode-switch **(P)**
+- [x] `getToolDescriptor` port (read-only/edit/dangerous/exitPlan classification) **(V)**
+- [x] First-wins resolution: atomic check-and-delete; loser gets `{ok:false, reason:'already-answered', decision}` **(N)**
+- [x] `perm-request`/`perm-resolve` envelopes into the timeline
+- [ ] Local-mode honesty: hooks fire attention events; dashboard shows "waiting at terminal" (no fake remote answering) — *partially true by construction (the permission pipeline is remote-mode-only; local mode was never touched, so there is no fake remote answering), but the "hooks fire attention events" half is not built: `hookServer.ts` still only handles `SessionStart` (session-id discovery), no `Notification`/`Stop` hook wiring or attention-ephemeral emission exists anywhere yet. Left unchecked, out of this task's file scope (`packages/cli/src/claude/{permissionHandler,getToolDescriptor}.ts` + the `permissionStub.ts` swap only).*
 
 **2.4 Web control surface** — §8.4
 - [ ] Composer: TanStack mutation → session RPC `message`; optimistic insert reconciled by echo; queued-while-running indicator

@@ -42,17 +42,24 @@
  * orchestrators") — deliberately out of scope here, same as `claudeLocal.ts`
  * treats its own launcher-script path as "a given" rather than building it.
  *
- * `canUseTool` is a stub by default (see `permissionStub.ts`) — the real
- * permission pipeline (plan.md §16 "2.3") isn't landed yet; `ClaudeRemoteOptions.canUseTool`
- * exists so wiring the real one in later needs no change here.
+ * `canUseTool` defaults to a real `PermissionHandler` (plan.md §16 "2.3
+ * Permission pipeline", design §7.6) wired to this query's own ordered
+ * outgoing queue, so `perm-request`/`perm-resolve` envelopes are sequenced
+ * alongside every other envelope this query produces. `ClaudeRemoteOptions.
+ * canUseTool` still exists so tests (and, later, a shared cross-mode
+ * permission handler instance) can override it. The handler's first-wins
+ * `resolve()` is exposed as `ClaudeRemoteHandle.resolvePermission` — the
+ * still-not-landed `perm.answer` session RPC handler (plan.md §16 "2.1
+ * Remote mode" lists it; wiring `registerSessionRpcHandlers` to an actual
+ * `ClaudeRemoteHandle` is `loop.ts`'s job, §2.2, not built yet) calls it.
  */
 import { type CanUseTool, type Query, query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
 import { AbortError } from "@anthropic-ai/claude-agent-sdk";
-import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type PermDecision, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
 import { FALCON_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
+import { type PermAnswerResult, PermissionHandler } from "../claude/permissionHandler.js";
 import type { Logger } from "../logger.js";
 import { OrderedEnvelopeQueue } from "./outgoingQueue.js";
-import { createStubCanUseTool } from "./permissionStub.js";
 import { PushableAsyncIterable } from "./pushableAsyncIterable.js";
 import { SdkToEnvelopeConverter } from "./sdkToEnvelope.js";
 
@@ -63,7 +70,7 @@ export interface ClaudeRemoteOptions {
   resume?: string | null;
   permissionMode: PermissionMode;
   model?: string;
-  /** Defaults to the fail-closed stub — see `permissionStub.ts`. */
+  /** Defaults to a real `PermissionHandler`'s `canUseTool` — see the file header. */
   canUseTool?: CanUseTool;
   /** Every envelope this query produces, already strict-ordered (design §7.4). */
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
@@ -77,6 +84,8 @@ export interface ClaudeRemoteHandle {
   send(prompt: string): void;
   interrupt(): Promise<void>;
   setMode(mode: PermissionMode): Promise<void>;
+  /** First-wins resolution for a pending `perm-request` (design §7.6's "Falcon add"). */
+  resolvePermission(params: { reqId: string; decision: PermDecision }): PermAnswerResult;
   /** Ends the prompt stream and closes the query; resolves with the last known `providerSessionId`. */
   stop(): Promise<{ providerSessionId: string | null }>;
 }
@@ -116,7 +125,25 @@ export function startClaudeRemote(
   let providerSessionId: string | null = opts.resume ?? null;
   let stopped = false;
 
-  const sdkQuery: Query = queryImpl({
+  // Declared before `sdkQuery` is assigned so `onModeChange` can close over
+  // it — a `perm.answer` decision that switches mode (design §7.6) must sync
+  // the live SDK query the same way `setMode()` below does, since a custom
+  // `canUseTool` fully replaces the SDK's own mode-based auto-approval.
+  let sdkQuery: Query;
+  const permissionHandler = new PermissionHandler({
+    initialMode: opts.permissionMode,
+    emitEnvelope: (envelope) => outgoing.push(envelope),
+    onModeChange: (mode) => {
+      sdkQuery.setPermissionMode(mode).catch((error) => {
+        logger.debug("[claude-remote] failed to sync permission mode via SDK", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    },
+    logger,
+  });
+
+  sdkQuery = queryImpl({
     prompt: prompts,
     options: {
       cwd: opts.workingDirectory,
@@ -124,7 +151,7 @@ export function startClaudeRemote(
       permissionMode: opts.permissionMode,
       model: opts.model,
       systemPrompt: { type: "preset", preset: "claude_code", append: FALCON_SYSTEM_PROMPT },
-      canUseTool: opts.canUseTool ?? createStubCanUseTool(logger),
+      canUseTool: opts.canUseTool ?? permissionHandler.canUseTool,
     },
   });
 
@@ -175,6 +202,11 @@ export function startClaudeRemote(
 
   async function setMode(mode: PermissionMode): Promise<void> {
     await sdkQuery.setPermissionMode(mode);
+    permissionHandler.setMode(mode);
+  }
+
+  function resolvePermission(params: { reqId: string; decision: PermDecision }): PermAnswerResult {
+    return permissionHandler.resolve(params);
   }
 
   async function stop(): Promise<{ providerSessionId: string | null }> {
@@ -192,6 +224,12 @@ export function startClaudeRemote(
       });
     }
 
+    // Cancel any permission request still awaiting a `perm.answer` — the
+    // `canUseTool` promise it's blocking on must settle, not hang forever
+    // against a handler nobody can reach once this query is gone (design:
+    // "reset-on-mode-switch").
+    permissionHandler.reset("Session stopped");
+
     prompts.end();
     outgoing.pushAll(converter.closeTurn("cancelled"));
     outgoing.flush();
@@ -203,5 +241,5 @@ export function startClaudeRemote(
     return { providerSessionId };
   }
 
-  return { send, interrupt, setMode, stop };
+  return { send, interrupt, setMode, resolvePermission, stop };
 }
