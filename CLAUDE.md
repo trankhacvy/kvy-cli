@@ -45,7 +45,11 @@ packages/
 │                             daemon/sessions/all/all-force`, `falcon daemon
 │                             start/start-sync/stop/status`, and `ensureDaemonRunning()`
 │                             (auto-start wiring called from `start`/`auth`/`sessions`/`resume`,
-│                             respects `FALCON_NO_SERVICE=1`). The machine-scoped WS client and
+│                             respects `FALCON_NO_SERVICE=1`). `src/persistence.ts`: `~/.falcon/`
+│                             local state — schema-versioned `settings.json` (atomic
+│                             lock-file-guarded read-modify-write) and 0600-permissioned
+│                             `access.key` credentials, both tmp-write + rename so readers
+│                             never observe a partial write. The machine-scoped WS client and
 │                             Auth/provider spawning still [planned].
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
