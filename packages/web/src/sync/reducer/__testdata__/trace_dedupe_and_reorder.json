@@ -1,0 +1,19 @@
+{
+  "description": "Simulates a reconnect merge: the same envelope id appears twice (repeated page fetch) and an envelope with an earlier timestamp arrives later in the array (out-of-order delivery).",
+  "envelopes": [
+    { "id": "e1", "time": 5000, "role": "user", "ev": { "t": "text", "md": "ping" } },
+    { "id": "e2", "time": 5001, "role": "agent", "ev": { "t": "text", "md": "pong" } },
+    { "id": "e1", "time": 5000, "role": "user", "ev": { "t": "text", "md": "ping" } },
+    {
+      "id": "e3",
+      "time": 4999,
+      "role": "agent",
+      "ev": { "t": "service", "text": "session resumed" }
+    }
+  ],
+  "expected": [
+    { "id": "e3", "time": 4999, "role": "agent", "kind": "service", "text": "session resumed" },
+    { "id": "e1", "time": 5000, "role": "user", "kind": "text", "md": "ping", "thinking": false },
+    { "id": "e2", "time": 5001, "role": "agent", "kind": "text", "md": "pong", "thinking": false }
+  ]
+}
