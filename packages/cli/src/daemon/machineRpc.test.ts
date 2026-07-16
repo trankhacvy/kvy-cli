@@ -1,5 +1,11 @@
 import { open, seal } from "@falcon/crypto";
-import type { EncryptedBox, SpawnParams, SpawnResult } from "@falcon/wire";
+import type {
+  EncryptedBox,
+  FsListResult,
+  FsMkdirResult,
+  SpawnParams,
+  SpawnResult,
+} from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import { registerMachineRpcHandlers } from "./machineRpc.js";
 
@@ -58,7 +64,7 @@ async function callAndAwaitAck(
 }
 
 describe("registerMachineRpcHandlers", () => {
-  it("registers the spawn target on connect", () => {
+  it("registers the spawn/fs.list/fs.mkdir targets on connect", () => {
     const socket = new FakeSocket();
     registerMachineRpcHandlers({
       machineId: "mach_1",
@@ -73,6 +79,14 @@ describe("registerMachineRpcHandlers", () => {
       event: "rpc-register",
       payload: { target: "m:mach_1:spawn" },
     });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:fs.list" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:fs.mkdir" },
+    });
   });
 
   it("registers immediately if the socket is already connected", () => {
@@ -85,7 +99,7 @@ describe("registerMachineRpcHandlers", () => {
       spawnSession: vi.fn(),
     });
 
-    expect(socket.emitted).toHaveLength(1);
+    expect(socket.emitted).toHaveLength(3);
   });
 
   it("decrypts params, calls spawnSession, and seals the result", async () => {
@@ -253,11 +267,95 @@ describe("registerMachineRpcHandlers", () => {
       machineId: "mach_1",
       dek: DEK,
       socket: socket as unknown as import("socket.io-client").Socket,
-      spawnSession: vi.fn(async () => ({ notSessionId: "oops" }) as unknown as SpawnResult),
+      spawnSession: vi.fn(async () => ({ sessionId: 42 }) as unknown as SpawnResult),
     });
 
     const response = await callAndAwaitAck(socket, "spawn", seal(spawnParams(), DEK));
     expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-result" });
+  });
+
+  it("fs.list: decrypts params, calls listDirectory, and seals the result", async () => {
+    const socket = new FakeSocket();
+    const listDirectory = vi.fn(
+      async (): Promise<FsListResult> => ({
+        path: "/home/me",
+        parent: "/home",
+        entries: [{ name: "projects", isDirectory: true }],
+      }),
+    );
+    registerMachineRpcHandlers({
+      machineId: "mach_1",
+      dek: DEK,
+      socket: socket as unknown as import("socket.io-client").Socket,
+      spawnSession: vi.fn(),
+      listDirectory,
+    });
+
+    const params = { idempotencyKey: "idem_fs_1", path: "/home/me" };
+    const response = await callAndAwaitAck(socket, "fs.list", seal(params, DEK));
+
+    expect(listDirectory).toHaveBeenCalledExactlyOnceWith(params);
+    expect(open(response, DEK)).toEqual({
+      path: "/home/me",
+      parent: "/home",
+      entries: [{ name: "projects", isDirectory: true }],
+    });
+  });
+
+  it("fs.list: replies with a sealed error when listDirectory throws", async () => {
+    const socket = new FakeSocket();
+    registerMachineRpcHandlers({
+      machineId: "mach_1",
+      dek: DEK,
+      socket: socket as unknown as import("socket.io-client").Socket,
+      spawnSession: vi.fn(),
+      listDirectory: vi.fn(async () => {
+        throw new Error("directory not found");
+      }),
+    });
+
+    const response = await callAndAwaitAck(
+      socket,
+      "fs.list",
+      seal({ idempotencyKey: "idem_fs_2" }, DEK),
+    );
+    expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+  });
+
+  it("fs.mkdir: decrypts params, calls createDirectory, and seals the result", async () => {
+    const socket = new FakeSocket();
+    const createDirectory = vi.fn(async (): Promise<FsMkdirResult> => ({ ok: true }));
+    registerMachineRpcHandlers({
+      machineId: "mach_1",
+      dek: DEK,
+      socket: socket as unknown as import("socket.io-client").Socket,
+      spawnSession: vi.fn(),
+      createDirectory,
+    });
+
+    const params = { idempotencyKey: "idem_mk_1", path: "/tmp/new-project" };
+    const response = await callAndAwaitAck(socket, "fs.mkdir", seal(params, DEK));
+
+    expect(createDirectory).toHaveBeenCalledExactlyOnceWith(params);
+    expect(open(response, DEK)).toEqual({ ok: true });
+  });
+
+  it("fs.mkdir: replies with a sealed error when params fail schema validation (missing path)", async () => {
+    const socket = new FakeSocket();
+    registerMachineRpcHandlers({
+      machineId: "mach_1",
+      dek: DEK,
+      socket: socket as unknown as import("socket.io-client").Socket,
+      spawnSession: vi.fn(),
+      createDirectory: vi.fn(),
+    });
+
+    const response = await callAndAwaitAck(
+      socket,
+      "fs.mkdir",
+      seal({ idempotencyKey: "idem_mk_2" }, DEK),
+    );
+    expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
   });
 
   it("stop() removes this module's listeners from the socket", () => {

@@ -48,7 +48,26 @@ export const SpawnParamsSchema = z.object({
 });
 export type SpawnParams = z.infer<typeof SpawnParamsSchema>;
 
-export const SpawnResultSchema = z.object({ sessionId: z.string() });
+// `sessionId` is optional (rather than the union `SpawnSessionResult` the
+// daemon's loopback controlServer contract uses internally,
+// packages/cli/src/daemon/types.ts) because the additive-only policy
+// (design §5.3) forbids retyping an already-shipped required field into a
+// union — schemaRegistry.ts's compat check would reject that. `requiresApproval`
+// is the wire-safe equivalent of that contract's
+// `requestToApproveDirectoryCreation` case (plan.md §16 "3.1 Remote spawn"
+// — "409 directory-creation approval loop"): the target directory doesn't
+// exist yet, so the caller offers to create it (`fs.mkdir`) and retries
+// `spawn` with the same `idempotencyKey`. Exactly one of `sessionId` /
+// `requiresApproval` is set on any successful (non-throwing) response.
+export const SpawnResultSchema = z.object({
+  sessionId: z.string().optional(),
+  requiresApproval: z
+    .object({
+      action: z.literal("create-directory"),
+      directory: z.string(),
+    })
+    .optional(),
+});
 export type SpawnResult = z.infer<typeof SpawnResultSchema>;
 
 export const StopSessionParamsSchema = z.object({
@@ -124,6 +143,46 @@ export const FsReadResultSchema = z.object({
   blobRef: z.string().optional(),
   truncated: z.boolean(),
 });
+
+// `fs.list`/`fs.mkdir` — the New Session directory picker's daemon-provided
+// browsing RPCs (falcon-prd.md FR-7.5 "workspace/directory picker
+// (daemon-provided)"; plan.md §16 "3.1 Remote spawn"). Deliberately NOT
+// scoped to a `worktree` like `fs.read` above: picking a brand-new
+// directory has to work before any workspace/worktree is registered.
+// `spawn`'s own workspace-path validation (`workspacePath.ts`) remains the
+// actual "no arbitrary-directory execution" boundary (design §12) — these
+// two RPCs only let the caller *see* and *create* directories, never run
+// anything in them.
+export const FsListParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  /** Absolute path to list; omitted lists the machine's home directory. */
+  path: z.string().optional(),
+});
+export type FsListParams = z.infer<typeof FsListParamsSchema>;
+
+export const FsEntrySchema = z.object({
+  name: z.string(),
+  isDirectory: z.boolean(),
+});
+export type FsEntry = z.infer<typeof FsEntrySchema>;
+
+export const FsListResultSchema = z.object({
+  /** The resolved absolute path that was listed (symlinks followed). */
+  path: z.string(),
+  /** Absolute path of the parent directory; `null` at the filesystem root. */
+  parent: z.string().nullable(),
+  entries: z.array(FsEntrySchema),
+});
+export type FsListResult = z.infer<typeof FsListResultSchema>;
+
+export const FsMkdirParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  path: z.string(),
+});
+export type FsMkdirParams = z.infer<typeof FsMkdirParamsSchema>;
+
+export const FsMkdirResultSchema = z.object({ ok: z.boolean() });
+export type FsMkdirResult = z.infer<typeof FsMkdirResultSchema>;
 
 export const AdoptListParamsSchema = z.object({
   idempotencyKey: z.string(),
