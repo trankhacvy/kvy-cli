@@ -18,7 +18,14 @@ import type {
  * landed reducer, one fixture per FR-7.1 status.
  */
 
-const NOW = Date.parse("2026-07-16T12:00:00Z");
+// Derived from the real clock at module-eval time (not a hardcoded absolute
+// timestamp) so the relative offsets below stay meaningful whenever this
+// fixture is loaded: `SessionCard` renders `session.updatedAt` through
+// `formatRelativeTime`'s *real* `Date.now()` (no `now` override threaded
+// through), so a pinned `NOW` drifts out of sync with wall-clock time and
+// each fixture's intended "3m"/"2h"/etc. spread would otherwise collapse
+// toward "just now" (or drift the other way) as real time moves past it.
+const NOW = Date.now();
 const MIN = 60_000;
 
 /** `reduceEnvelopes`, given a shorthand name here since every fixture below
