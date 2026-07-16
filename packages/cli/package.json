@@ -16,14 +16,17 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.211",
     "@falcon/crypto": "workspace:*",
     "@falcon/wire": "workspace:*",
     "@paralleldrive/cuid2": "^2.2.2",
     "cross-spawn": "^7.0.6",
     "fastify": "^5.10.0",
     "fastify-type-provider-zod": "^7.0.0",
+    "ink": "^7.1.0",
     "open": "^10.2.0",
     "qrcode-terminal": "^0.12.0",
+    "react": "^19.2.0",
     "socket.io-client": "^4.8.1",
     "tweetnacl": "^1.0.3",
     "zod": "^4.0.0"
@@ -33,6 +36,7 @@
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "@types/qrcode-terminal": "^0.12.2",
+    "@types/react": "^19.2.0",
     "pkgroll": "^2.14.2",
     "shx": "^0.3.4",
     "socket.io": "^4.8.1",
