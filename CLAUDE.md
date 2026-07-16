@@ -64,8 +64,21 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme, one placeholder route. Auth,
-                              sync engine, crypto bridge, and API calls still [planned].
+                              wired up, dark default theme, plus a read-only session
+                              timeline screen (`/session/[id]`, `src/components/timeline/`):
+                              a virtualized `Timeline` that renders the reducer's
+                              `RenderItem[]` as a structured chat transcript — markdown via
+                              a unified/remark/shiki pipeline compiled straight to React
+                              elements (`rehype-react`, `src/lib/markdown.ts` — no
+                              `dangerouslySetInnerHTML` anywhere), collapsible thinking
+                              blocks, a `ToolCard` registry (Bash, Edit/Write/MultiEdit+diff,
+                              Read, Grep/Glob, TodoWrite checklist, Task/subagent nesting,
+                              MCP generic fallback), and read-only permission/service/file
+                              markers. Composer, permission actions, and the control bar are
+                              Phase 2. Runs off a hand-built demo fixture
+                              (`src/components/timeline/demo-items.ts`) until the sync engine
+                              (a separate in-flight task) lands live data. Auth, sync engine,
+                              and crypto bridge wiring still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

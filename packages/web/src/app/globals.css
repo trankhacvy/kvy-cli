@@ -94,3 +94,70 @@
     color: var(--foreground);
   }
 }
+
+/*
+ * Rendered markdown (timeline message text — `src/lib/markdown.ts` +
+ * `src/components/timeline/Markdown.tsx`, design §9.1 "unified/remark +
+ * shiki"). Scoped under `.markdown-body` rather than tailwind `@apply`s in
+ * component files, since this HTML comes from `dangerouslySetInnerHTML`
+ * with no chance to attach Tailwind classes to individual nodes.
+ */
+.markdown-body p {
+  margin: 0.25rem 0;
+}
+.markdown-body p:first-child {
+  margin-top: 0;
+}
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+.markdown-body ul,
+.markdown-body ol {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+}
+.markdown-body ul {
+  list-style: disc;
+}
+.markdown-body ol {
+  list-style: decimal;
+}
+.markdown-body a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.markdown-body blockquote {
+  margin: 0.5rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  color: var(--muted-foreground);
+}
+.markdown-body :not(pre) > code {
+  background-color: var(--muted);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+}
+.markdown-body pre {
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  border-radius: var(--radius-md);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8em;
+  line-height: 1.5;
+}
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0.5rem 0;
+  font-size: 0.9em;
+}
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.5rem;
+}
+.markdown-body hr {
+  border-color: var(--border);
+  margin: 0.75rem 0;
+}
