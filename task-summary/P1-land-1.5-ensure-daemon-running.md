@@ -31,6 +31,37 @@ tip `32721e5`) onto `main`, per plan.md §16 "1.5 Daemon v1".
 5. Committed the above to the worktree branch (see commit hash reported by
    the harness).
 
+## Cycle 33 update (this run)
+
+`main` had moved on since the original merge (`a75ab25` → `171af64`, 2 commits:
+`P1-land-1.5-notify-daemon-session-started`'s merge `ca8f3b1` + `chore: cycle 32`
+`171af64`), so the branch needed bringing forward before it could be considered
+land-ready again:
+
+1. `git merge main` into `P1-land-1.5-ensure-daemon-running` → merge commit
+   `26a0338`. **One conflict**: `plan.md`'s §1.5 narrative paragraph (both
+   sides had appended their own prose after the same shared base text).
+   Resolved by hand — combined both narratives in chronological order and
+   appended a new note describing this merge. `progress.md` and the incoming
+   `packages/cli/src/daemon/notify*.ts` files (from the now-landed
+   `notify-daemon-session-started` work) auto-merged with **no conflict**;
+   `packages/cli/src/index.ts`/`ensureDaemonRunning.ts` were untouched by
+   `main`'s drift and needed no reconciliation.
+2. Re-verified end to end, forced (`--force`, no turbo cache):
+   - `pnpm build` → **5/5 tasks green**.
+   - `pnpm exec turbo run typecheck --force` → **7/7 tasks green**.
+   - `pnpm exec turbo run test --force` → **9/9 test tasks green** —
+     `falcon` (cli) **176/176** (incl. `ensureDaemonRunning.test.ts` 5,
+     `index.test.ts` 11, `notify.test.ts` 5, `notify.integration.test.ts` 2),
+     `@falcon/server` 87/87, `@falcon/web` 36/36, `@falcon/wire` 61/61,
+     `@falcon/crypto` 65/65 — **425 tests total, 0 failures**.
+3. Updated `plan.md`'s §1.5 `ensureDaemonRunning()` bullet note with a
+   "Cycle 33 update" addendum recording this merge-forward and the refreshed
+   test counts; the checkbox itself was already `[x]` from the prior run and
+   needed no change.
+4. Committed the merge + doc updates to the worktree branch (see commit hash
+   reported by the harness).
+
 ## What was intentionally *not* done
 
 This task's own instructions are explicit: "ALL file edits MUST be in
