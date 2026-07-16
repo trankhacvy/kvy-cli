@@ -64,8 +64,21 @@ packages/
 │                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
 │                             through that same `eventRouter` post-commit.
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme, one placeholder route. Auth,
-                              sync engine, crypto bridge, and API calls still [planned].
+                              wired up, dark default theme. `src/sync/reducer/`: the sync
+                              reducer (design §9.1) — folds `SessionEnvelope[]` into ordered
+                              `RenderItem[]`. `src/crypto/`: the crypto worker bridge.
+                              `src/features/session-list/`: the Home screen (design §9.2
+                              "Home" row, FR-7.1) — sessions grouped by workspace, a derived
+                              status dot per session (`status.ts`'s `deriveSessionStatus`,
+                              computed from each session's `RenderItem[]` plus live
+                              presence/attention signals, never stored — design principle #3)
+                              and machine online/offline badges. Takes an injectable
+                              `UseSessionListSnapshot` hook (defaults to a static mock
+                              snapshot, `mock-source.ts`) so it composes with the real
+                              sync-engine-backed hook once `apiSocket`/the sync engine land,
+                              same seam as the (unlanded) sync-engine work's
+                              `SyncSocketSource`. Auth, the sync engine, `apiSocket`, and the
+                              session timeline (FR-7.2) still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

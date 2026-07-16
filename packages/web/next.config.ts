@@ -33,6 +33,20 @@ const nextConfig = (phase: string): NextConfig => ({
   // levels up from packages/web) so Next's file tracing doesn't guess wrong
   // when it finds another lockfile above the repo, e.g. inside a worktree.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  // The reducer (`src/sync/reducer/`) and other `tsconfig.base.json`
+  // "moduleResolution": "bundler" code use explicit `.js`-suffixed relative
+  // imports against `.ts` source files (the standard pattern for that
+  // resolution mode — `tsc`/`vitest` already resolve it fine). Webpack's
+  // default resolver doesn't map `.js` imports to `.ts`/`.tsx` files on its
+  // own, so anything under `packages/web/src` that gets bundled by Next
+  // needs this alias too.
+  webpack(config) {
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      ".js": [".tsx", ".ts", ".js"],
+    };
+    return config;
+  },
 });
 
 export default nextConfig;
