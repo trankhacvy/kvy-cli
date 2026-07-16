@@ -33,6 +33,7 @@ export type {
   ApiSocketAuth,
   AppState,
   ClientType,
+  RpcCallResult,
   SocketFactory,
   SocketLike,
   VisibilitySource,
@@ -46,6 +47,22 @@ export {
   messagesSessionIdFromKey,
   syncQueryKey,
 } from "./queryKeys.js";
+export type {
+  InterruptResult,
+  MessageRpcParams,
+  MessageRpcResult,
+  PermAnswerParams,
+  PermAnswerResult,
+  SessionRpcClient,
+  SessionRpcCrypto,
+  SessionRpcMethod,
+  SessionRpcParams,
+  SessionRpcResults,
+  SetModeParams,
+  SetModeResult,
+  TakeControlResult,
+} from "./sessionRpc.js";
+export { createSessionRpcClient, SessionRpcError } from "./sessionRpc.js";
 export { createSocketFactory } from "./socket-factory.js";
 export type { MessageItem, MessagesPage, MessagesQueryData, SyncSnapshot } from "./types.js";
 export { createBrowserVisibilitySource } from "./visibility.js";

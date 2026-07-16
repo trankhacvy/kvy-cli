@@ -1,9 +1,15 @@
 import type { Metadata, Viewport } from "next";
 
+import { DocumentTitle } from "@/components/DocumentTitle";
 import "./globals.css";
+import { Providers } from "./providers";
 
+// `title` is deliberately *not* set here — `<DocumentTitle />` below is the
+// app's one and only `<title>` element (see its own docstring for why: a
+// second, statically-rendered `<title>` from `metadata` would silently win
+// over any per-screen dynamic title, per the HTML spec's "first `<title>`
+// in tree order" rule for `document.title`).
 export const metadata: Metadata = {
-  title: "Falcon",
   description: "Falcon — end-to-end encrypted mission control for coding agents.",
   manifest: "/manifest.webmanifest",
 };
@@ -22,7 +28,10 @@ export default function RootLayout({
   // screen) can flip it later without any other change to this file.
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className="antialiased">{children}</body>
+      <body className="antialiased">
+        <DocumentTitle />
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

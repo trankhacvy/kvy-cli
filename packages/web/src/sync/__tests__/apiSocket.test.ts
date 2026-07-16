@@ -1,7 +1,22 @@
-import type { Ephemeral, Update } from "@falcon/wire";
+import type { EncryptedBox, Ephemeral, Update } from "@falcon/wire";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiSocket } from "../apiSocket.js";
 import { createFakeSocketFactory, createFakeVisibilitySource } from "./fakes.js";
+
+const box = (c: string): EncryptedBox => ({ t: "enc", v: 1, c });
+
+/** Pulls the ack callback off the most recent `rpc-call` emit recorded by
+ * the fake socket — mirrors how a real socket.io-client socket treats a
+ * trailing function argument as the ack (see apiSocket.ts's `rpcCall`). */
+function lastRpcCallback(
+  emitted: Array<{ event: string; args: unknown[] }>,
+): (response: unknown) => void {
+  const call = [...emitted].reverse().find((e) => e.event === "rpc-call");
+  if (!call) throw new Error("no rpc-call was emitted");
+  const cb = call.args[call.args.length - 1];
+  if (typeof cb !== "function") throw new Error("rpc-call was emitted without an ack callback");
+  return cb as (response: unknown) => void;
+}
 
 describe("apiSocket", () => {
   it("connects once per distinct token and requests the current app-state via auth", () => {
@@ -198,6 +213,95 @@ describe("apiSocket", () => {
 
     expect(a).not.toHaveBeenCalled();
     expect(b).not.toHaveBeenCalled();
+  });
+
+  it("rpcCall emits {target, method, params} and resolves with the ack response", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const params = box("params-ct");
+    const pending = client.rpcCall("s:sess-1:interrupt", "interrupt", params);
+
+    expect(sockets[0]?.emitted).toContainEqual(
+      expect.objectContaining({
+        event: "rpc-call",
+        args: expect.arrayContaining([
+          { target: "s:sess-1:interrupt", method: "interrupt", params },
+        ]),
+      }),
+    );
+
+    lastRpcCallback(sockets[0]?.emitted ?? [])({ ok: true, result: box("result-ct") });
+    await expect(pending).resolves.toEqual({ ok: true, result: box("result-ct") });
+  });
+
+  it("rpcCall resolves {ok:false} verbatim when the server reports failure", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const pending = client.rpcCall("s:sess-1:interrupt", "interrupt", box("p"));
+    lastRpcCallback(sockets[0]?.emitted ?? [])({ ok: false, error: "target-offline" });
+
+    await expect(pending).resolves.toEqual({ ok: false, error: "target-offline" });
+  });
+
+  it("rpcCall resolves {ok:false} without throwing when no socket is connected", async () => {
+    const { factory } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    // never connected
+
+    await expect(client.rpcCall("s:sess-1:interrupt", "interrupt", box("p"))).resolves.toEqual({
+      ok: false,
+      error: "not-connected",
+    });
+  });
+
+  it("rpcCall resolves {ok:false, error:'malformed-response'} on a garbage ack payload", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const pending = client.rpcCall("s:sess-1:interrupt", "interrupt", box("p"));
+    lastRpcCallback(sockets[0]?.emitted ?? [])("not-an-object");
+
+    await expect(pending).resolves.toEqual({ ok: false, error: "malformed-response" });
+  });
+
+  it("rpcCall ignores a second callback invocation (settles once)", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const pending = client.rpcCall("s:sess-1:interrupt", "interrupt", box("p"));
+    const cb = lastRpcCallback(sockets[0]?.emitted ?? []);
+    cb({ ok: true, result: box("first") });
+    cb({ ok: true, result: box("second") });
+
+    await expect(pending).resolves.toEqual({ ok: true, result: box("first") });
+  });
+
+  it("rpcCall resolves {ok:false, error:'timeout'} if the ack never arrives", async () => {
+    vi.useFakeTimers();
+    try {
+      const { factory } = createFakeSocketFactory();
+      const { source } = createFakeVisibilitySource("active");
+      const client = createApiSocket(factory, source);
+      client.connect("tok-1");
+
+      const pending = client.rpcCall("s:sess-1:interrupt", "interrupt", box("p"));
+      const assertion = expect(pending).resolves.toEqual({ ok: false, error: "timeout" });
+      await vi.advanceTimersByTimeAsync(60_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

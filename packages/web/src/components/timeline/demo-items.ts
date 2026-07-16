@@ -267,4 +267,20 @@ export const demoRenderItems: RenderItem[] = [
       },
     ],
   },
+  {
+    id: "e21",
+    time: 1020,
+    role: "agent",
+    turn: "turn-2",
+    kind: "tool",
+    call: "call-bash-2",
+    name: "Bash",
+    args: { command: "rm -rf dist/", description: "Clean the build output" },
+    risk: "exec",
+    status: "running",
+    // Interactive PermCard exercise (plan.md §16 "2.4 Web control surface"):
+    // a running tool call awaiting Allow/Deny/mode-switch, distinct from
+    // e7/e8's standalone-placeholder case above.
+    permission: { reqId: "req-2", modes: ["default", "acceptEdits", "bypassPermissions"] },
+  },
 ];
