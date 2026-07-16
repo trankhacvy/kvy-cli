@@ -457,6 +457,30 @@ describe("startMachineClient", () => {
     }
   });
 
+  it("logs connect_error instead of failing silently", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_connerr" })));
+    const fakeSocket = new FakeSocket();
+    const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+    const warn = vi.fn();
+    const deps = buildDeps({
+      fetchImpl,
+      ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+      logger: { ...silentLogger(), warn },
+    });
+
+    const result = await startMachineClient(deps);
+    expect(result.ok).toBe(true);
+
+    fakeSocket.trigger("connect_error", new Error("Invalid authentication token"));
+
+    expect(warn).toHaveBeenCalledWith(
+      "[machine-client] connect error",
+      expect.objectContaining({ error: "Invalid authentication token" }),
+    );
+  });
+
   it("persists the resolved machineId into daemon.state.json when one exists", async () => {
     const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-client-ws-"));
     try {

@@ -404,6 +404,15 @@ export async function startMachineClient(
       });
   });
 
+  socket.on("connect_error", (error: Error) => {
+    // The server rejects the handshake itself (bad/expired token, missing
+    // machineId, ...) via `connect_error`, not `disconnect` — socket.io-client
+    // keeps retrying automatically either way, but silently, so this must be
+    // logged or a persistent auth/config problem would never be visible
+    // (no-silent-failures).
+    deps.logger.warn("[machine-client] connect error", { error: error.message });
+  });
+
   socket.on("disconnect", (reason: string) => {
     deps.logger.info("[machine-client] disconnected", { reason });
     stopHeartbeat();
