@@ -10,13 +10,28 @@
  * `postMessage` — see `worker-handler.ts` for the trust-boundary argument.
  */
 import { createIndexedDbKeyStorage } from "./key-storage.js";
-import type { CryptoWorkerRequest } from "./protocol.js";
+import type { CryptoWorkerRequest, CryptoWorkerErrResponse } from "./protocol.js";
 import { createCryptoWorkerHandler } from "./worker-handler.js";
 
 const handler = createCryptoWorkerHandler(createIndexedDbKeyStorage());
 
 self.onmessage = (event: MessageEvent<CryptoWorkerRequest>) => {
-  handler.handle(event.data).then((response) => {
-    self.postMessage(response);
-  });
+  handler.handle(event.data).then(
+    (response) => {
+      self.postMessage(response);
+    },
+    (err: unknown) => {
+      // Defense in depth: `handle()` currently wraps every branch in its own
+      // try/catch and should never reject, but if a future edit adds an
+      // `await` outside that try block, a rejection here must still surface
+      // to the main-thread client as an `{ ok: false }` response instead of
+      // being silently swallowed inside the Worker thread.
+      const response: CryptoWorkerErrResponse = {
+        id: event.data.id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      self.postMessage(response);
+    },
+  );
 };

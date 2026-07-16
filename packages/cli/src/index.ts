@@ -11,6 +11,10 @@ import {
   runDaemonStop,
 } from "./daemon/commands.js";
 import {
+  createEnsureDaemonRunningDeps,
+  ensureDaemonRunning,
+} from "./daemon/ensureDaemonRunning.js";
+import {
   describeKillSummary,
   type KillTarget,
   killAll,
@@ -76,6 +80,22 @@ function describeStart(command: Extract<FalconCommand, { type: "start" }>): stri
 }
 
 /**
+ * Auto-starts the background daemon ahead of every agent-invoking
+ * subcommand (plan.md §16 1.5, PRD FR-1.2: "First run of `falcon` triggers
+ * ... daemon auto-start — no separate setup steps"). `FALCON_NO_SERVICE=1`
+ * opts out entirely — `ensureDaemonRunning()`'s "disabled" result is
+ * treated the same as success here, since the user has explicitly taken
+ * over daemon lifecycle management themselves.
+ */
+async function ensureDaemon(): Promise<{ ok: true } | { ok: false; message: string }> {
+  const result = await ensureDaemonRunning(
+    createEnsureDaemonRunningDeps({ version: readVersion() }),
+  );
+  if (result.ok || result.reason === "disabled") return { ok: true };
+  return { ok: false, message: result.message };
+}
+
+/**
  * `falcon kill *` is process-scan based (plan.md §7.2/§7.4) and therefore
  * inherently async (it shells out to `ps`, then waits out a graceful-stop
  * timeout) — the only subcommand so far that can't return its exit code
@@ -131,6 +151,53 @@ async function runDaemon(command: Extract<FalconCommand, { type: "daemon" }>): P
   }
 }
 
+/**
+ * `falcon` / `falcon claude` / `falcon codex` — the primary agent-invoking
+ * entrypoint. Provider spawning itself is still a stub (see
+ * `describeStart`), but the daemon auto-start it depends on (PRD FR-1.2)
+ * is real: this is the first place a fresh install actually touches the
+ * daemon.
+ */
+async function runStart(command: Extract<FalconCommand, { type: "start" }>): Promise<number> {
+  const daemon = await ensureDaemon();
+  if (!daemon.ok) {
+    process.stderr.write(daemon.message);
+    return 1;
+  }
+  process.stdout.write(describeStart(command));
+  return 0;
+}
+
+async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promise<number> {
+  const daemon = await ensureDaemon();
+  if (!daemon.ok) {
+    process.stderr.write(daemon.message);
+    return 1;
+  }
+  process.stdout.write(`falcon auth ${command.action}: not implemented yet\n`);
+  return 0;
+}
+
+async function runSessions(command: Extract<FalconCommand, { type: "sessions" }>): Promise<number> {
+  const daemon = await ensureDaemon();
+  if (!daemon.ok) {
+    process.stderr.write(daemon.message);
+    return 1;
+  }
+  process.stdout.write(`falcon sessions ${command.action}: not implemented yet\n`);
+  return 0;
+}
+
+async function runResume(command: Extract<FalconCommand, { type: "resume" }>): Promise<number> {
+  const daemon = await ensureDaemon();
+  if (!daemon.ok) {
+    process.stderr.write(daemon.message);
+    return 1;
+  }
+  process.stdout.write(`falcon resume ${command.sessionId}: not implemented yet\n`);
+  return 0;
+}
+
 function run(command: FalconCommand): number | Promise<number> {
   switch (command.type) {
     case "help":
@@ -140,21 +207,17 @@ function run(command: FalconCommand): number | Promise<number> {
       process.stdout.write(`falcon ${readVersion()}\n`);
       return 0;
     case "start":
-      process.stdout.write(describeStart(command));
-      return 0;
+      return runStart(command);
     case "auth":
-      process.stdout.write(`falcon auth ${command.action}: not implemented yet\n`);
-      return 0;
+      return runAuth(command);
     case "daemon":
       return runDaemon(command);
     case "kill":
       return runKill(command.target);
     case "sessions":
-      process.stdout.write(`falcon sessions ${command.action}: not implemented yet\n`);
-      return 0;
+      return runSessions(command);
     case "resume":
-      process.stdout.write(`falcon resume ${command.sessionId}: not implemented yet\n`);
-      return 0;
+      return runResume(command);
     case "workspace-config":
       process.stdout.write("falcon workspace config: not implemented yet\n");
       return 0;
@@ -180,11 +243,13 @@ function handleUnexpectedError(error: unknown): number {
   return 1;
 }
 
-// `run()` is synchronous for every subcommand except `kill` (process-scan
-// based, so inherently async — see `runKill` above). `main()` stays
-// synchronous-by-default so every existing subcommand (and its tests) is
-// unaffected, only widening to `Promise<number>` for the one command that
-// needs it; the bottom-of-file guard below handles both shapes.
+// `run()` returns a `Promise<number>` for every subcommand that touches the
+// daemon — `kill` (process-scan based, §7.2/§7.4) and `start`/`auth`/
+// `sessions`/`resume` (all call `ensureDaemon()` first, PRD FR-1.2) — and a
+// plain `number` for the handful that don't (`help`/`version`/`daemon`'s own
+// subcommands notwithstanding, since `daemon` is itself always async).
+// `main()`'s return type stays `number | Promise<number>` to cover both
+// shapes; the bottom-of-file guard below handles either.
 export function main(argv: string[] = process.argv.slice(2)): number | Promise<number> {
   logger.debug("cli invoked", { argv });
   try {
