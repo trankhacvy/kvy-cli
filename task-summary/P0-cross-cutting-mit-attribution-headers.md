@@ -100,3 +100,40 @@ with its sibling `auth.ts`.
   after the plain `pnpm lint` hit the environment's documented transient OOM
   even on retry) — exit code 0, 44 pre-existing warnings (`noExplicitAny`,
   `noNonNullAssertion` etc.), 0 errors, none introduced by this change.
+
+## 2026-07-16 reconciliation (this session)
+
+`git merge-base --is-ancestor P0-cross-cutting-mit-attribution-headers main`
+confirmed the branch (tip `b67ad71`) was still not an ancestor of `main`,
+which had advanced 50 commits since this branch's merge-base (`19776b4`) —
+including real (non-comment) changes to `packages/cli/src/daemon/state.ts`
+(an added `unlink` import/cleanup path) that plan.md's own Cycle 28 note
+flagged as a possible overlap with concurrently-landing machine-ws-client
+work.
+
+Resolved by merging `main` into this worktree's branch in place
+(`git merge main --no-edit`, merge commit `2ed4bfb`, parents `b67ad71` +
+main's tip `3e59f6d`): the merge was fully automatic, no conflicts — the
+`state.ts` overlap turned out to touch disjoint regions (main's new `unlink`
+import vs. this branch's appended doc-comment paragraph) so git merged them
+cleanly. Verified all 11 attributed files still carry their
+`slopus/happy`/MIT marker post-merge.
+
+Also flipped the plan.md §16 checkbox for "MIT attribution headers on every
+ported Happy file" from `[ ]` to `[x]` and replaced the stale Cycle 28
+"not credited" annotation with one describing this reconciliation.
+
+Re-ran verification on the merged tree (`pnpm install` picked up new
+dependencies main had added — `socket.io`, `socket.io-client`,
+`@fastify/rate-limit`, `prom-client` — that weren't yet in this worktree's
+`node_modules`):
+
+- `pnpm build` — 5/5 packages green
+- `pnpm typecheck` — 9/9 tasks green
+- `pnpm test` — 9/9 tasks, 396 tests, all green
+
+This commit is the reconciliation/merge step, done entirely inside the
+worktree per this task's instructions (no push, no direct edit to the
+primary `main` checkout). Fast-forwarding the shared `main` ref to this
+result is a separate land step, expected to be trivial (fast-forward only,
+since `main`'s tip is already one of this merge commit's two parents).
