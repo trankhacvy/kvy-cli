@@ -5374,3 +5374,110 @@ turbo cache to confirm genuinely on this checkout.
    overlap with `P1-1.3-cli-locator` (both independently built a
    near-identical Claude-CLI-path resolver) before merging either, to
    avoid landing two competing implementations.
+
+## Cycle 45 — 2026-07-16
+
+### Verification run on `main`
+
+- `main` HEAD at start of this cycle: `185ebc9` ("chore: cycle 44 —
+  completed 0 tasks (3 requested tasks confirmed unlanded)"). `git status
+  --porcelain`: clean. No commits landed on `main` between Cycle 44 and
+  this cycle.
+- `pnpm exec turbo run typecheck --force`: **PASSED** — 8/8 tasks green
+  (forced past the turbo cache, per the cross-worktree cache hazard
+  flagged since Cycle 43).
+- `pnpm exec turbo run test --force`: **PASSED** — 9/9 tasks green, 528
+  tests total, 0 failures (`falcon` cli 206, `@falcon/server` 140,
+  `@falcon/web` 56, `@falcon/wire` 61, `@falcon/crypto` 65) — identical
+  counts to Cycles 43/44, confirming no source changes reached `main`.
+
+### Task-summaries requested this cycle
+
+All three requested paths were checked directly (not assumed):
+`task-summary/P1-land-1.3-falcon-home-persistence.md`,
+`task-summary/P1-land-1.3-session-bootstrap.md`, and
+`task-summary/P1-land-1.5-machine-ws-client.md`. **None exist on `main`**
+(`git ls-tree HEAD -- <path>` empty for all three; `git cat-file -e
+HEAD:packages/cli/src/persistence.ts`,
+`HEAD:packages/cli/src/session/bootstrap.ts`, and
+`HEAD:packages/cli/src/daemon/machineClient.ts` all fail against the
+actual `main` tip `185ebc9`). Per the tracker's standing rule (Cycle 1
+onward), unmerged work is not credited even when its own task-summary
+reports success — read from the primary `main` checkout only.
+
+**New development this cycle:** all three corresponding worktree
+branches have moved since Cycle 44 and are now **fast-forwardable from
+the current `main` tip**:
+
+| Branch | Cycle 44 tip | Cycle 45 tip | `git merge-base --is-ancestor HEAD <branch>` |
+|---|---|---|---|
+| `P1-land-1.3-falcon-home-persistence` | `505874b` | `aaac61d` | **YES** |
+| `P1-land-1.3-session-bootstrap` | `3c5f7d9` | `9518ef5` | **YES** |
+| `P1-land-1.5-machine-ws-client` | *(none yet)* | `efb36f7` | **YES** |
+
+Each branch has been reconciled/rebased onto `main`'s `185ebc9` tip and
+carries its own `feat: P1-land-... - Land ... onto main` +
+`fix: ... - resolve test failures` commits on top, per their in-worktree
+history. This means each is now a clean, no-conflict fast-forward or
+merge away from landing — a first since these three were flagged
+(Cycle 34 / 36 / 36 respectively). `git diff --stat HEAD <branch>` shows
+each touches disjoint primary source files (`persistence.ts`,
+`session/bootstrap.ts`, `daemon/machineClient.ts`), though
+`falcon-home-persistence` and `machine-ws-client` both also touch
+`CLAUDE.md`, and `session-bootstrap` and `machine-ws-client` both also
+touch `packages/cli/package.json` — worth a small coordinated merge order
+rather than assuming all three apply conflict-free simultaneously.
+Actually running the fast-forward/merge onto the primary `main` checkout
+remains a "land" step outside this tracker's scope (verify/report only,
+per the task boundaries established since Cycle 1).
+
+### Tasks completed this cycle
+
+**0 tasks merged/credited.** `plan.md` §16 checkbox count: **56/135 —
+unchanged from Cycle 44.** Annotated all three affected bullets
+(`~/.falcon/` persistence line 674, session bootstrap line 681,
+machine-scoped WS client line 696) in place with this cycle's findings,
+consistent with the running history already in each bullet.
+
+### Blockers / issues found
+
+1. **Three worktrees now land-ready but still unlanded onto the primary
+   `main` checkout.** Unlike prior cycles, there is no code or test
+   reason blocking a merge — all three report green in isolation and are
+   now fast-forwardable from `main`'s actual tip. The only remaining step
+   is an actual `git merge`/fast-forward performed against the primary
+   (non-worktree) checkout, which is out of this tracker's scope.
+2. **Minor merge-order note for whoever lands these:** `CLAUDE.md` is
+   touched by both `falcon-home-persistence` and `machine-ws-client`;
+   `packages/cli/package.json` is touched by both `session-bootstrap` and
+   `machine-ws-client`. Landing one at a time (rebasing the next on the
+   previous) avoids any surprise conflict, even though no conflict marker
+   has actually been observed yet since none has been attempted from the
+   primary checkout.
+3. **Turbo cache cross-worktree hazard, reproduced again** (unchanged
+   since Cycle 43) — plain `pnpm typecheck`/`pnpm test` risk replaying
+   cached logs from other worktrees; `--force` used throughout this cycle
+   to get a trustworthy result.
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **56/135 checked (~41.5%)** — unchanged
+from Cycle 44. `pnpm typecheck`/`pnpm test` both green on `main` (8/8
+typecheck tasks, 9/9 test tasks, 528 tests, 0 failures), forced past the
+turbo cache.
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** onto the primary `main`
+   checkout — now fast-forwardable (tip `aaac61d`), longest-standing
+   unlanded item, 12 cycles unlanded (since Cycle 34).
+2. **Land `P1-land-1.3-session-bootstrap`** onto the primary `main`
+   checkout — now fast-forwardable (tip `9518ef5`), 9 cycles unlanded
+   (since Cycle 36).
+3. **Land `P1-land-1.5-machine-ws-client`** onto the primary `main`
+   checkout — now fast-forwardable (tip `efb36f7`), 10 cycles unlanded
+   (since Cycle 36). Land these three in sequence (rebasing each on the
+   previous) given the `CLAUDE.md`/`package.json` overlap noted above,
+   then revisit `P1-1.6-session-list-screen`/`P1-1.6-timeline-screen`
+   and the `P1-1.3-provider-detection` vs `P1-1.3-cli-locator` duplicate
+   next.
