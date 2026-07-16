@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { pushSubscriptions } from "../../db/schema.js";
+import { accounts, pushSubscriptions, sessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 import { channels } from "./channels/index.js";
 import { createRenotifyScheduler } from "./renotify.js";
@@ -24,6 +24,13 @@ import type { LifecycleKind, PresencePort, PushDispatcherPort } from "./types.js
  * `channels` registry (`webpush` | `telegram` | `ntfy`) instead of a single
  * hardcoded Expo sender — iOS Web Push is unreliable and the notification
  * IS the product (plan.md §10).
+ *
+ * Falcon add — quiet controls (PRD FR-8.3, plan.md §10 "Per-session mute +
+ * mute-all"): checked right alongside presence, before any channel fan-out.
+ * An explicit user setting, so it applies uniformly to every channel and
+ * every follow-up re-notify attempt — there's no "mute Telegram but not
+ * ntfy" concept, and a muted session that later gets un-muted picks the very
+ * next lifecycle event back up automatically (nothing is cached).
  *
  * `dispatch` never rejects: every failure (presence check, subscription
  * lookup, a channel's `send`) is caught and logged so a broken push path
@@ -60,6 +67,26 @@ export function buildPushDispatcher(db: Database, presence: PresencePort): PushD
         // check failed, sending push anyway") — a presence bug must never
         // silently swallow a real notification.
         console.error({ module: "push" }, `presence check failed, dispatching anyway: ${err}`);
+      }
+
+      try {
+        const [account, session] = await Promise.all([
+          db.query.accounts.findFirst({
+            where: eq(accounts.id, accountId),
+            columns: { notificationsMutedAll: true },
+          }),
+          db.query.sessions.findFirst({
+            where: eq(sessions.id, sessionId),
+            columns: { notificationsMuted: true },
+          }),
+        ]);
+        if (account?.notificationsMutedAll || session?.notificationsMuted) {
+          return; // muted — an explicit quiet control, same effect as presence suppression
+        }
+      } catch (err) {
+        // Fail OPEN here too, for the same reason as the presence check above:
+        // a broken mute lookup must never silently swallow a real notification.
+        console.error({ module: "push" }, `mute check failed, dispatching anyway: ${err}`);
       }
 
       const subs = await db.query.pushSubscriptions.findMany({

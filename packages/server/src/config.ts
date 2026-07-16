@@ -46,6 +46,34 @@ const EnvSchema = z
     // The `mailto:`/`https:` contact URL Web Push's VAPID spec requires push
     // services be able to reach if they need to reach the sender.
     VAPID_SUBJECT: z.string().min(1).default("mailto:support@falcon.dev"),
+    // Fallback notification channels (falcon-system-design.md §6.4, plan.md §10
+    // "Falcon add — fallback channels"). All optional: same "missing config =
+    // skipped capability" stance as VAPID above — a self-host box that hasn't
+    // set up a Telegram bot yet just gets a documented no-op, not a crash.
+    // Bot token for the Telegram Bot API (`sendMessage`, and the webhook this
+    // server registers to receive `/start` pairing messages).
+    TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+    // The bot's public @username (no `@`), used to build the `/start`
+    // deep-link (`https://t.me/<username>?start=<code>`) `POST
+    // /v1/push/telegram/link` returns.
+    TELEGRAM_BOT_USERNAME: z.string().min(1).optional(),
+    // Matched against Telegram's `X-Telegram-Bot-Api-Secret-Token` header on
+    // `POST /v1/push/telegram/webhook` (set via `setWebhook`'s `secret_token`
+    // param). Unset simply skips the check — there's no content to protect on
+    // that route beyond the pairing codes themselves, which are already
+    // short-lived, single-use, and unguessable.
+    TELEGRAM_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // ntfy (ntfy.sh or a self-hosted instance) publish endpoint. Always has a
+    // default — unlike Telegram, ntfy needs no bot registration, just a topic
+    // name the user picks in Settings.
+    NTFY_BASE_URL: z.string().url().default("https://ntfy.sh"),
+    // Public origin the web app is served from, e.g. `https://app.falcon.dev`.
+    // Used only to build a deep link inside the Telegram/ntfy message text —
+    // webpush doesn't need this because its payload is decoded and rendered
+    // client-side (`public/sw.js`) already knows its own origin. Optional:
+    // unset just omits the link, matching this file's "missing config, not a
+    // crash" stance throughout.
+    PUBLIC_WEB_ORIGIN: z.string().url().optional(),
   })
   // Belt-and-suspenders against shipping the dev-only secret to production: a silent
   // fallback there would let anyone who has read this source mint tokens for any

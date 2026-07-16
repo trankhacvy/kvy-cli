@@ -5,7 +5,7 @@
  * pulled in for this: the shapes are small and fixed, and a malformed
  * response surfaces as a thrown `ApiError` either way.
  */
-import type { PushSubscribeBody } from "@falcon/wire";
+import type { PushSubscribeBody, SessionRow } from "@falcon/wire";
 import { API_URL } from "./config.js";
 
 export class ApiError extends Error {
@@ -18,8 +18,8 @@ export class ApiError extends Error {
   }
 }
 
-async function sendJson<T>(
-  method: "POST" | "DELETE",
+async function request<T>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
   body: unknown,
   token?: string,
@@ -29,10 +29,10 @@ async function sendJson<T>(
     response = await fetch(`${API_URL}${path}`, {
       method,
       headers: {
-        "Content-Type": "application/json",
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(body),
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
     throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
@@ -56,8 +56,25 @@ async function sendJson<T>(
   return json as T;
 }
 
+function getJson<T>(path: string, token?: string): Promise<T> {
+  return request<T>("GET", path, undefined, token);
+}
+
 function postJson<T>(path: string, body: unknown, token?: string): Promise<T> {
-  return sendJson<T>("POST", path, body, token);
+  return request<T>("POST", path, body, token);
+}
+
+function putJson<T>(path: string, body: unknown, token?: string): Promise<T> {
+  return request<T>("PUT", path, body, token);
+}
+
+function sendJson<T>(
+  method: "POST" | "DELETE",
+  path: string,
+  body: unknown,
+  token?: string,
+): Promise<T> {
+  return request<T>(method, path, body, token);
 }
 
 /** `POST /v1/auth/register` — sign-up: binds a freshly-generated identity to an OAuth proof. */
@@ -104,4 +121,36 @@ export function subscribePush(token: string, body: PushSubscribeBody): Promise<{
 /** `DELETE /v1/push/subscribe` — remove a push subscription by endpoint. */
 export function unsubscribePush(token: string, endpoint: string): Promise<{ ok: true }> {
   return sendJson("DELETE", "/v1/push/subscribe", { endpoint }, token);
+}
+
+/** `POST /v1/push/telegram/link` — mint a Telegram `/start` pairing deep link (FR-8.3). */
+export function linkTelegram(token: string): Promise<{ code: string; deepLink: string }> {
+  return postJson("/v1/push/telegram/link", undefined, token);
+}
+
+/** `GET /v1/sessions` — list the caller's sessions (used here just to populate the
+ * per-session mute picker in Settings; full history isn't paged in). */
+export function listSessions(
+  token: string,
+): Promise<{ sessions: SessionRow[]; nextCursor: string | null }> {
+  return getJson(`/v1/sessions?limit=100`, token);
+}
+
+/** `GET /v1/account/notifications-mute` — current "mute all" state (FR-8.3). */
+export function getMutedAll(token: string): Promise<{ mutedAll: boolean }> {
+  return getJson("/v1/account/notifications-mute", token);
+}
+
+/** `PUT /v1/account/notifications-mute` — toggle "mute all" (FR-8.3). */
+export function setMutedAll(token: string, mutedAll: boolean): Promise<{ mutedAll: boolean }> {
+  return putJson("/v1/account/notifications-mute", { mutedAll }, token);
+}
+
+/** `PUT /v1/sessions/:id/notifications-mute` — mute/unmute one session (FR-8.3). */
+export function setSessionMuted(
+  token: string,
+  sessionId: string,
+  muted: boolean,
+): Promise<{ muted: boolean }> {
+  return putJson(`/v1/sessions/${sessionId}/notifications-mute`, { muted }, token);
 }

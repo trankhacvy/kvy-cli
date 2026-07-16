@@ -32,6 +32,11 @@ describe("config env parsing", () => {
     delete process.env.VAPID_PUBLIC_KEY;
     delete process.env.VAPID_PRIVATE_KEY;
     delete process.env.VAPID_SUBJECT;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.TELEGRAM_BOT_USERNAME;
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    delete process.env.NTFY_BASE_URL;
+    delete process.env.PUBLIC_WEB_ORIGIN;
 
     const { env } = await importFreshConfig();
 
@@ -44,6 +49,11 @@ describe("config env parsing", () => {
     expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
     expect(env.VAPID_PRIVATE_KEY).toBeUndefined();
     expect(env.VAPID_SUBJECT).toBe("mailto:support@falcon.dev");
+    expect(env.TELEGRAM_BOT_TOKEN).toBeUndefined();
+    expect(env.TELEGRAM_BOT_USERNAME).toBeUndefined();
+    expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
+    expect(env.NTFY_BASE_URL).toBe("https://ntfy.sh");
+    expect(env.PUBLIC_WEB_ORIGIN).toBeUndefined();
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -65,6 +75,11 @@ describe("config env parsing", () => {
     process.env.VAPID_PUBLIC_KEY = "test-vapid-public-key";
     process.env.VAPID_PRIVATE_KEY = "test-vapid-private-key";
     process.env.VAPID_SUBJECT = "mailto:ops@falcon.dev";
+    process.env.TELEGRAM_BOT_TOKEN = "test-bot-token";
+    process.env.TELEGRAM_BOT_USERNAME = "FalconNotifyBot";
+    process.env.TELEGRAM_WEBHOOK_SECRET = "test-webhook-secret";
+    process.env.NTFY_BASE_URL = "https://ntfy.internal";
+    process.env.PUBLIC_WEB_ORIGIN = "https://app.falcon.dev";
 
     const { env } = await importFreshConfig();
 
@@ -78,6 +93,11 @@ describe("config env parsing", () => {
       VAPID_PUBLIC_KEY: "test-vapid-public-key",
       VAPID_PRIVATE_KEY: "test-vapid-private-key",
       VAPID_SUBJECT: "mailto:ops@falcon.dev",
+      TELEGRAM_BOT_TOKEN: "test-bot-token",
+      TELEGRAM_BOT_USERNAME: "FalconNotifyBot",
+      TELEGRAM_WEBHOOK_SECRET: "test-webhook-secret",
+      NTFY_BASE_URL: "https://ntfy.internal",
+      PUBLIC_WEB_ORIGIN: "https://app.falcon.dev",
     });
   });
 

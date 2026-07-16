@@ -24,6 +24,10 @@ export const SessionRowSchema = z.object({
   agentState: VersionedSchema(EncryptedBoxSchema).nullable(),
   dek: z.string(), // opaque sealed-box wrap; server can route it but not open it
   msgSeq: z.number(),
+  // Per-session "mute" quiet control (PRD FR-8.3, plan.md §10). Plaintext —
+  // not part of `metadata` — because the server's push dispatcher reads it
+  // directly (design §5.3: it holds no keys to decrypt `metadata`).
+  notificationsMuted: z.boolean(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

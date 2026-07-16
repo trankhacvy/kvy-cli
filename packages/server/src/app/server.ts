@@ -23,6 +23,7 @@ import type { PushDispatcherPort } from "./push/types.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
+import { buildNotificationSettingsRoutes } from "./routes/notificationSettings.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
 import { buildPushRoutes } from "./routes/push.js";
 import { buildSessionCasRoutes } from "./routes/sessionCas.js";
@@ -30,6 +31,7 @@ import { buildSessionNotifyRoutes } from "./routes/sessionNotify.js";
 import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
 import { buildSyncRoutes } from "./routes/sync.js";
+import { buildTelegramLinkRoutes } from "./routes/telegramLink.js";
 import { startSocket } from "./socket.js";
 
 // Default request-size cap (design §4.3: "request-size caps"). The message
@@ -124,6 +126,8 @@ export async function buildServer(
   await app.register(buildSyncRoutes(db));
   await app.register(buildMachinesRoutes(db, eventRouter));
   await app.register(buildPushRoutes(db));
+  await app.register(buildTelegramLinkRoutes(db));
+  await app.register(buildNotificationSettingsRoutes(db, eventRouter));
 
   // Socket.IO attaches to the underlying HTTP server (design §4.1 "/v1/stream" —
   // read-only updates/ephemerals + RPC transport). Started here rather than in

@@ -24,6 +24,7 @@ function makeSession(id: string, overrides: Partial<SessionRow> = {}): SessionRo
     agentState: null,
     dek: "dek-opaque",
     msgSeq: 0,
+    notificationsMuted: false,
     createdAt: 1000,
     updatedAt: 1000,
     ...overrides,
