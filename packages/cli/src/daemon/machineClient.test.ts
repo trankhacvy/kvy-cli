@@ -64,7 +64,10 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
-function buildDeps(overrides: Partial<MachineClientDeps> = {}, homeDir = "/tmp/unused"): MachineClientDeps {
+function buildDeps(
+  overrides: Partial<MachineClientDeps> = {},
+  homeDir = "/tmp/unused",
+): MachineClientDeps {
   return {
     serverUrl: "http://localhost:4000",
     token: "test-token",
@@ -112,7 +115,9 @@ describe("registerOrResumeMachine", () => {
   it("resumes an existing machineId via a plain update (200, no conflict)", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, machineRow({ id: "mach_9", metadataVersion: 3, daemonStateVersion: 2 })));
+      .mockResolvedValue(
+        jsonResponse(200, machineRow({ id: "mach_9", metadataVersion: 3, daemonStateVersion: 2 })),
+      );
     const deps = buildDeps({ fetchImpl });
 
     const result = await registerOrResumeMachine(deps, "mach_9");
@@ -123,7 +128,8 @@ describe("registerOrResumeMachine", () => {
       expect(result.identity.metadata.version).toBe(3);
       expect(result.identity.daemonState?.version).toBe(2);
     }
-    const body = JSON.parse((fetchImpl.mock.calls[0]?.[1] as RequestInit).body as string);
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
     expect(body.machineId).toBe("mach_9");
     expect(body.dek).toBeUndefined();
   });
@@ -153,7 +159,8 @@ describe("registerOrResumeMachine", () => {
       },
     });
     // The retried request must carry the server's fresh versions from `current`, not the stale ones.
-    const secondBody = JSON.parse((fetchImpl.mock.calls[1]?.[1] as RequestInit).body as string);
+    const [, secondInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    const secondBody = JSON.parse(secondInit.body as string);
     expect(secondBody.metadata.expectedVersion).toBe(5);
     expect(secondBody.daemonState.expectedVersion).toBe(4);
   });
@@ -167,7 +174,9 @@ describe("registerOrResumeMachine", () => {
     // `Response` — a `Response` body can only be read once, and reusing one
     // instance across retries would make the 2nd/3rd `res.json()` throw,
     // masking the real "exhausted retries" behavior under a body-read error.
-    const fetchImpl = vi.fn().mockImplementation(async () => jsonResponse(409, { current: conflictCurrent }));
+    const fetchImpl = vi
+      .fn()
+      .mockImplementation(async () => jsonResponse(409, { current: conflictCurrent }));
     const deps = buildDeps({ fetchImpl, maxCasRetries: 3 });
 
     const result = await registerOrResumeMachine(deps, "mach_stuck");
@@ -186,7 +195,8 @@ describe("registerOrResumeMachine", () => {
     const result = await registerOrResumeMachine(deps, "mach_stale");
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);
-    const secondBody = JSON.parse((fetchImpl.mock.calls[1]?.[1] as RequestInit).body as string);
+    const [, secondInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
+    const secondBody = JSON.parse(secondInit.body as string);
     expect(secondBody.machineId).toBeUndefined();
     expect(secondBody.dek).toBe("wrapped-dek-b64");
     expect(result).toEqual({
@@ -214,7 +224,9 @@ describe("pushRuntimeState", () => {
   it("sends the identity's tracked versions and updates them from the response", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, machineRow({ id: "mach_1", metadataVersion: 1, daemonStateVersion: 1 })));
+      .mockResolvedValue(
+        jsonResponse(200, machineRow({ id: "mach_1", metadataVersion: 1, daemonStateVersion: 1 })),
+      );
     const deps = buildDeps({ fetchImpl });
 
     const identity = {
@@ -226,7 +238,8 @@ describe("pushRuntimeState", () => {
     const result = await pushRuntimeState(deps, identity, { ...FIXED_STATE, status: "running" });
 
     expect(result.ok).toBe(true);
-    const body = JSON.parse((fetchImpl.mock.calls[0]?.[1] as RequestInit).body as string);
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string);
     expect(body.metadata.expectedVersion).toBe(0);
     expect(body.daemonState.expectedVersion).toBe(0);
   });
@@ -312,7 +325,10 @@ describe("startMachineClient", () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_ws" })));
     const fakeSocket = new FakeSocket();
     const ioFactory = vi.fn().mockReturnValue(fakeSocket);
-    const deps = buildDeps({ fetchImpl, ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"] });
+    const deps = buildDeps({
+      fetchImpl,
+      ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+    });
 
     const result = await startMachineClient(deps);
 
@@ -362,13 +378,21 @@ describe("startMachineClient", () => {
   it("pushes daemonState via CAS on connect", async () => {
     const fetchImpl = vi
       .fn()
-      .mockResolvedValueOnce(jsonResponse(201, machineRow({ id: "mach_push", daemonStateVersion: 0 })))
       .mockResolvedValueOnce(
-        jsonResponse(200, machineRow({ id: "mach_push", metadataVersion: 0, daemonStateVersion: 1 })),
+        jsonResponse(201, machineRow({ id: "mach_push", daemonStateVersion: 0 })),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          200,
+          machineRow({ id: "mach_push", metadataVersion: 0, daemonStateVersion: 1 }),
+        ),
       );
     const fakeSocket = new FakeSocket();
     const ioFactory = vi.fn().mockReturnValue(fakeSocket);
-    const deps = buildDeps({ fetchImpl, ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"] });
+    const deps = buildDeps({
+      fetchImpl,
+      ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+    });
 
     const result = await startMachineClient(deps);
     expect(result.ok).toBe(true);
@@ -383,10 +407,15 @@ describe("startMachineClient", () => {
   it("stops the heartbeat and closes the socket on stop()", async () => {
     vi.useFakeTimers();
     try {
-      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_stop" })));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_stop" })));
       const fakeSocket = new FakeSocket();
       const ioFactory = vi.fn().mockReturnValue(fakeSocket);
-      const deps = buildDeps({ fetchImpl, ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"] });
+      const deps = buildDeps({
+        fetchImpl,
+        ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+      });
 
       const result = await startMachineClient(deps);
       expect(result.ok).toBe(true);
@@ -406,10 +435,15 @@ describe("startMachineClient", () => {
   it("stops the heartbeat on disconnect", async () => {
     vi.useFakeTimers();
     try {
-      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_disc" })));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_disc" })));
       const fakeSocket = new FakeSocket();
       const ioFactory = vi.fn().mockReturnValue(fakeSocket);
-      const deps = buildDeps({ fetchImpl, ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"] });
+      const deps = buildDeps({
+        fetchImpl,
+        ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+      });
 
       await startMachineClient(deps);
       fakeSocket.trigger("connect");
@@ -427,7 +461,9 @@ describe("startMachineClient", () => {
     const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-client-ws-"));
     try {
       await writeDaemonState(homeDir, { pid: 1, port: 2, version: "0.1.0", startedAt: 0 });
-      const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_persist" })));
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_persist" })));
       const fakeSocket = new FakeSocket();
       const ioFactory = vi.fn().mockReturnValue(fakeSocket);
       const deps = buildDeps(

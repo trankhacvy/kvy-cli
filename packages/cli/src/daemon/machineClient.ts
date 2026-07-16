@@ -26,7 +26,7 @@
  *    connection lifecycle + registration + heartbeat + CAS sync.
  */
 
-import { hostname, homedir, platform } from "node:os";
+import { homedir, hostname, platform } from "node:os";
 import { encodeBase64, encrypt } from "@falcon/crypto";
 import type { EncryptedBox, MachineRow } from "@falcon/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
@@ -341,7 +341,9 @@ export type StartMachineClientResult =
  * `machineId` — never a fresh insert — so a dropped-and-restored
  * connection cannot duplicate the machine row.
  */
-export async function startMachineClient(deps: MachineClientDeps): Promise<StartMachineClientResult> {
+export async function startMachineClient(
+  deps: MachineClientDeps,
+): Promise<StartMachineClientResult> {
   const existingState = await readDaemonState(deps.homeDir);
   const registered = await registerOrResumeMachine(deps, existingState?.machineId ?? null);
   if (!registered.ok) {

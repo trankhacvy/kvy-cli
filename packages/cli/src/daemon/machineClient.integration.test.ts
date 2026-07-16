@@ -1,6 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Server as IoServer } from "socket.io";
@@ -159,7 +159,12 @@ describe("machineClient (integration: real socket.io + machines HTTP mock)", () 
     // Mirrors real daemon boot order: `daemon start-sync` (commands.ts,
     // already merged) writes `daemon.state.json` before anything else
     // starts, so it already exists by the time a machine client would run.
-    await writeDaemonState(homeDir, { pid: process.pid, port: 1234, version: "0.1.0", startedAt: 1 });
+    await writeDaemonState(homeDir, {
+      pid: process.pid,
+      port: 1234,
+      version: "0.1.0",
+      startedAt: 1,
+    });
 
     const result = await startMachineClient({
       serverUrl: url,
@@ -168,8 +173,18 @@ describe("machineClient (integration: real socket.io + machines HTTP mock)", () 
       encryptionKey: new Uint8Array(32).fill(3),
       encryptionVariant: "legacy",
       dek: "wrapped-dek-b64",
-      buildMetadata: () => ({ host: "int-host", platform: "linux", homeDir: "/h", cliVersion: "0.1.0" }),
-      buildRuntimeState: () => ({ status: "running", pid: process.pid, controlPort: 1234, startedAt: 1 }),
+      buildMetadata: () => ({
+        host: "int-host",
+        platform: "linux",
+        homeDir: "/h",
+        cliVersion: "0.1.0",
+      }),
+      buildRuntimeState: () => ({
+        status: "running",
+        pid: process.pid,
+        controlPort: 1234,
+        startedAt: 1,
+      }),
       fetchImpl: fetch,
       ioFactory: (u, opts) =>
         ioClient(u, { ...opts, reconnectionDelay: 20, reconnectionDelayMax: 40 }),
