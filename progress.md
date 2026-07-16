@@ -5058,3 +5058,106 @@ tests, 0 failures).
    code-review-fixes commit on top), so landing it needs a fresh
    reconciliation-and-merge pass first; self-contained under
    `packages/cli/src/daemon/machineClient.ts`, disjoint from the other two.
+
+## Cycle 42 — 2026-07-16
+
+### Verification run on `main`
+
+- `pnpm typecheck` → forced (`--force`, no turbo cache) `pnpm exec turbo
+  run typecheck`: **PASSED**, 7/7 tasks green (`@falcon/wire`,
+  `@falcon/crypto` build+typecheck, `@falcon/server`, `@falcon/web`,
+  `falcon` cli).
+- `pnpm test` → forced (`--force`, no turbo cache) `pnpm exec turbo run
+  test`: **PASSED**, 9/9 tasks green — 503 tests total, 0 failures:
+  `falcon` cli 181, `@falcon/server` 140, `@falcon/web` 56, `@falcon/wire`
+  61, `@falcon/crypto` 65.
+
+### Task-summaries requested this cycle
+
+- **`task-summary/P1-1.6-session-list-screen.md`** — absent from `main`'s
+  `task-summary/` directory (`/usr/bin/git ls-tree HEAD --
+  task-summary/P1-1.6-session-list-screen.md` empty). `git merge-base
+  --is-ancestor P1-1.6-session-list-screen HEAD` → not an ancestor
+  (branch tip `339cf50`); `main`'s `packages/web/src/` has no
+  `features/session-list/` directory. Read instead from
+  `.worktrees/P1-1.6-session-list-screen/task-summary/
+  P1-1.6-session-list-screen.md`: adds `packages/web/src/features/
+  session-list/{types,status,...}.ts` — view-model types
+  (`SessionListSnapshot`/`SessionListSession`/`SessionListMachine`/
+  `SessionListWorkspace`) plus `deriveSessionStatus()` (the FR-7.1 status
+  derivation: `working / waiting-for-permission / waiting-for-input /
+  idle / completed / failed / offline`) computed by walking the
+  already-landed reducer's `RenderItem[]` output for open turns and
+  unresolved permissions (recursing into subagent scopes), combined with
+  `machineOnline` presence and an `attention` signal mirroring
+  `@falcon/wire`'s `Ephemeral` `t: "attention"` union. Own task-summary
+  reports its full workspace suite green. **Not credited**; bullet stays
+  unchecked — first cycle this task has been requested.
+- **`task-summary/P1-1.6-timeline-screen.md`** — absent from `main`'s
+  `task-summary/` directory (`/usr/bin/git ls-tree HEAD --
+  task-summary/P1-1.6-timeline-screen.md` empty). `git merge-base
+  --is-ancestor P1-1.6-timeline-screen HEAD` → not an ancestor (branch
+  tip `3983744`); `main`'s `packages/web/src/` has no `components/
+  timeline/` directory and no `app/session/[id]/page.tsx` route. Read
+  instead from `.worktrees/P1-1.6-timeline-screen/task-summary/
+  P1-1.6-timeline-screen.md`: adds a read-only, virtualized session
+  timeline — `src/app/session/[id]/page.tsx` (server component,
+  `generateStaticParams()` returning a single demo id per static-export
+  constraints) rendering `SessionTimelineScreen`, and
+  `src/components/timeline/{Timeline,TimelineRow,...}.tsx` — a
+  `@tanstack/react-virtual` root list with dynamic `measureElement`
+  sizing, a `ToolCard` registry (Bash, Edit/Write/MultiEdit + diff, Read,
+  Grep/Glob, TodoWrite checklist, Task/subagent nesting, MCP generic
+  fallback), and a unified/remark/shiki markdown pipeline compiled to
+  React elements with collapsible thinking blocks. No composer or
+  permission-approval actions (explicitly Phase 2 scope). Own
+  task-summary reports its full workspace suite green. **Not credited**;
+  bullet stays unchecked — first cycle this task has been requested.
+
+Both branches touch disjoint files from each other (`features/
+session-list/` vs. `components/timeline/` + the new `app/session/[id]/`
+route) and neither has a `P1-land-*` integration branch prepared yet;
+landing either is out of this tracker's scope.
+
+### Tasks completed this cycle
+
+**0 tasks landed onto `main`.** Both requested task-summaries describe
+genuine, complete, self-verified work that exists only inside its own
+isolated worktree/branch — neither is an ancestor of `main`, neither has
+a corresponding `task-summary/*.md` in `main`'s tree. `plan.md` §16
+checkbox count: **55/135 — unchanged from Cycle 41.**
+
+### Blockers / issues found
+
+1. **Same systemic "landed only in worktree" pattern continues.** Two
+   more Phase-1 §1.6 bullets (Session list screen, Timeline screen) join
+   the backlog of complete-but-unmerged work alongside the
+   still-unlanded `P1-1.3-falcon-home-persistence`,
+   `P1-1.3-session-bootstrap`, and `P1-1.5-machine-ws-client` items
+   carried over from prior cycles. This tracker has no write access to
+   perform merges itself — a task with explicit permission to land from
+   the primary (non-worktree) checkout is needed for all five.
+2. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **55/135 checked (~40.7%)**. `pnpm
+typecheck`/`pnpm test` both green on `main` (7/7 typecheck tasks, 9/9 test
+tasks, 503 tests, 0 failures).
+
+### Next recommended tasks
+
+1. **Land `P1-land-1.3-falcon-home-persistence`** — integration branch
+   already exists (tip `9bc3b6f`); longest-standing unlanded item,
+   flagged since Cycle 34 (now 9 cycles).
+2. **Land `P1-land-1.3-session-bootstrap`** — integration branch already
+   prepared (tip `3c5f7d9`); flagged unlanded since Cycle 36 (now 7
+   cycles).
+3. **Land `P1-1.6-session-list-screen` and `P1-1.6-timeline-screen`** —
+   both self-contained under disjoint directories
+   (`features/session-list/` vs. `components/timeline/`), no
+   `P1-land-*` integration branch exists yet for either, so landing needs
+   a fresh reconciliation-and-merge pass; both depend only on the
+   already-merged reducer port, so no cross-branch sequencing is
+   required beyond the two landing independently of each other.
