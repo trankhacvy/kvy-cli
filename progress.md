@@ -1,5 +1,84 @@
 # Falcon — Progress Log
 
+## Cycle 57 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `0423c05` — "merge: land P2-2.3-local-mode-hook-honesty onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `@falcon/web`, `falcon` cli, plus their `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/wire` 66/66 (6 files), `@falcon/web`
+  253/253 (29 files), `falcon` cli 553/553 (55 files, incl. `hookServer.test.ts` 24/24) — all
+  re-run fresh this cycle (0 cache hits reported for the top-level packages); `@falcon/crypto`/
+  `@falcon/server`'s `test` tasks cache-hit-replayed clean. 872+ tests total across the packages
+  that ran fresh, 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+Both requested task-summaries were checked against `git merge-base --is-ancestor <task_id> main`
+using the branch name first; since both branch refs no longer exist post-merge (normal cleanup —
+confirmed via `git branch -a`), fell back to the same check against each task's actual merge
+commit on `main`, both found directly in `main`'s own line of history (`git log --oneline main`
+shows `0423c05` as `main`'s current HEAD, with `c165a43` as its grandparent, both literal
+`merge: land ... onto main` commits).
+
+1. **`task-summary/P2-2.4-web-control-surface.md`** (`Composer`/`PermCard`/`ControlBar`, session-RPC
+   transport, attention derivation, tab-title/favicon badges). Merge commit `c165a43` →
+   `git merge-base --is-ancestor c165a43 main` = **true**. `git cat-file -e
+   main:packages/web/src/features/session-control/attention.ts` and
+   `main:packages/web/src/components/timeline/Composer.tsx` both succeed. `plan.md` §2.4's five
+   bullets (lines 735–739) were **already `[x]`** — the land task itself had flipped them as part
+   of its own commit — so no checkbox change was needed this cycle; appended a dated confirmation
+   note to the §2.4 landing narrative only.
+2. **`task-summary/P2-2.3-local-mode-hook-honesty.md`** (`hookServer.ts`: new `/hook/notification` +
+   `/hook/stop` routes, `attentionKindFromNotificationMessage()` heuristic, `onAttention` callback
+   injection, generalized forwarder script). Merge commit `0423c05` (= `main`'s current HEAD) →
+   `git merge-base --is-ancestor 0423c05 main` = **true**, trivially. `git cat-file -e
+   main:packages/cli/src/claude/hookServer.ts` succeeds, and its contents confirm the
+   `Notification`/`Stop` routes and `onAttention` wiring described in the task-summary are
+   genuinely present (not just claimed). `plan.md` line 732 ("Local-mode honesty") was still `[ ]`
+   despite the confirmed merge — **flipped to `[x]` this cycle** with a dated confirmation note,
+   since the bullet's own literal text ("hooks fire attention events") is now satisfied; wiring
+   `onAttention` into a real notify HTTP call from the local launcher remains separate, unstarted
+   follow-up work per the task's own scope note, but does not gate this bullet.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped**: "Local-mode honesty" (`plan.md` line 732), `[ ]` → `[x]` — genuinely
+merged onto `main` but the checkbox had not yet been updated to reflect it. The other requested
+task (`P2-2.4-web-control-surface`) was already fully checked off by its own land-pass commit
+before this cycle ran; independently re-verified rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each, 0 failures
+anywhere they ran fresh this cycle). Both requested deliverables are confirmed genuine ancestors of
+`main` via their real merge-commit SHAs (branch refs themselves were cleaned up post-merge), with
+their code present and functioning in `main`'s tree.
+
+### Overall completion
+
+`plan.md` checkbox count: **95/135 checked (~70.4%)** — up from 89/135 (~65.9%) at Cycle 56: +5 from
+the already-landed `P2-2.4-web-control-surface` bullets (credited by the land task itself, prior to
+this cycle) plus +1 from this cycle's own "Local-mode honesty" flip.
+
+### Next recommended tasks
+
+1. **Live-wire `perm-request`/`perm-resolve` envelopes into the web timeline** (plan.md line 731) —
+   replace the hand-built demo fixture (`packages/web/src/components/timeline/demo-items.ts`) with
+   the real sync engine/socket now that both §2.3's permission envelopes and §2.4's control surface
+   (`Composer`/`PermCard`/`ControlBar`) are landed on `main`; this is the natural next integration
+   point and closes one of the two remaining §2.3 gaps.
+2. **Wire `hookServer.ts`'s `onAttention` into the real local-launcher spawn flow**
+   (`packages/cli/src/claude/claudeLocal.ts`) plus a session-scoped `POST /v1/sessions/:id/notify`
+   HTTP client — the hooks now fire attention events (this cycle's flip), but nothing yet calls the
+   already-built notify route from local mode, so the dashboard doesn't actually see them fire.
+3. **Retire superseded/stale worktrees**: `.worktrees/P1-1.3-cli-locator` (duplicate of
+   already-landed `P1-1.3-provider-detection`) and `.worktrees/P1-1.5-daemon-singleton-lock`
+   (superseded — §1.5 already fully landed via `P1-land-1.5-daemon-worktrees`) — pure cleanup,
+   flagged across multiple prior cycles, not pending feature work.
+
 ## Cycle 56 — 2026-07-16
 
 **Branch checked:** `main` (HEAD `8821c00` — "chore: cycle 55 — completed 2 tasks")
