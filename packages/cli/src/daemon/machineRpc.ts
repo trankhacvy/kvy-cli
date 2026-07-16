@@ -124,7 +124,13 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       return cached;
     }
     const result = await deps.spawnSession(params);
-    spawnResults.set(params.idempotencyKey, result);
+    // Only a genuine spawn (a `sessionId` was actually launched) is worth
+    // replaying. `requiresApproval` means no process was started — caching
+    // it would replay a stale "directory doesn't exist" answer forever once
+    // the caller creates the directory and retries with the same key.
+    if (result.sessionId) {
+      spawnResults.set(params.idempotencyKey, result);
+    }
     return result;
   }
 

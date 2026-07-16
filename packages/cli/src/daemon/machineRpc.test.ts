@@ -160,6 +160,34 @@ describe("registerMachineRpcHandlers", () => {
     expect(open(second, DEK)).toEqual({ sessionId: "sess_2" });
   });
 
+  it("does NOT cache a requiresApproval result — a retry with the same key re-runs spawnSession", async () => {
+    const socket = new FakeSocket();
+    const spawnSession = vi
+      .fn()
+      .mockResolvedValueOnce({
+        requiresApproval: { action: "create-directory", directory: "/tmp/proj" },
+      } satisfies SpawnResult)
+      .mockResolvedValueOnce({ sessionId: "sess_3" } satisfies SpawnResult);
+    registerMachineRpcHandlers({
+      machineId: "mach_1",
+      dek: DEK,
+      socket: socket as unknown as import("socket.io-client").Socket,
+      spawnSession,
+    });
+
+    const params = spawnParams();
+    const first = await callAndAwaitAck(socket, "spawn", seal(params, DEK));
+    expect(open(first, DEK)).toEqual({
+      requiresApproval: { action: "create-directory", directory: "/tmp/proj" },
+    });
+
+    // Same idempotencyKey, retried after the caller created the directory —
+    // must actually re-run spawnSession, not replay the stale requiresApproval.
+    const second = await callAndAwaitAck(socket, "spawn", seal(params, DEK));
+    expect(spawnSession).toHaveBeenCalledTimes(2);
+    expect(open(second, DEK)).toEqual({ sessionId: "sess_3" });
+  });
+
   it("distinguishes idempotency keys — a different key always spawns fresh", async () => {
     const socket = new FakeSocket();
     const spawnSession = vi

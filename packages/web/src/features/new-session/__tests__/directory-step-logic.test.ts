@@ -6,9 +6,7 @@ import type { SpawnRequest } from "../types";
 
 describe("isDirectoryNotFoundError", () => {
   it("matches the daemon's fs.list not-found message shape", () => {
-    expect(isDirectoryNotFoundError("directory not found: /Users/vy/projects/new-idea")).toBe(
-      true,
-    );
+    expect(isDirectoryNotFoundError("directory not found: /Users/vy/projects/new-idea")).toBe(true);
   });
 
   it("does not match other browse failures", () => {
