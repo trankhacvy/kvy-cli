@@ -175,6 +175,22 @@ describe("reduceEnvelopes — permission ↔ tool-use matching", () => {
     expect(placeholder.kind).toBe("perm-placeholder");
     expect(placeholder.permission.decision).toBeUndefined();
   });
+
+  it("silently ignores a perm-resolve whose reqId was never seen in a prior perm-request", () => {
+    // Best-effort, never-throw design (task-summary/P1-1.6-reducer-port.md
+    // "Assumptions / design notes"): there's no render target for a resolve
+    // that doesn't match any known request, so it's a no-op rather than an
+    // invented phantom item — and it must not disturb unrelated items.
+    const resolve = createEnvelope(
+      "agent",
+      { t: "perm-resolve", reqId: "never-requested", decision: { kind: "allow", scope: "once" } },
+      { id: "res1", time: 1 },
+    );
+    const text = createEnvelope("agent", { t: "text", md: "hello" }, { id: "t1", time: 2 });
+    const items = reduceEnvelopes([resolve, text]);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: "text", md: "hello" });
+  });
 });
 
 describe("reduceEnvelopes — subagent/sidechain linking", () => {
