@@ -143,7 +143,8 @@ describe("startClaudeLocalLauncher", () => {
     expect(abortCount).toBe(1);
   });
 
-  it("treats a non-zero exit racing an in-flight switch request as a switch, not a crash", async () => {
+  it("treats a non-zero exit racing an in-flight switch request as a switch, not a crash, and still emits the mode-switch envelope", async () => {
+    const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
     const deps = baseDeps({
       claudeLocal: async (opts) => {
         if (!opts.abort.aborted) {
@@ -154,7 +155,10 @@ describe("startClaudeLocalLauncher", () => {
         throw new ExitCodeError(1);
       },
     });
-    const handle = startClaudeLocalLauncher(baseOptions({ providerSessionId: "s1" }), deps);
+    const handle = startClaudeLocalLauncher(
+      baseOptions({ providerSessionId: "s1", onEnvelopes }),
+      deps,
+    );
     handle.requestSwitch({ id: "m1", text: "hi" });
     const result = await handle.done;
     expect(result).toEqual({
@@ -162,6 +166,11 @@ describe("startClaudeLocalLauncher", () => {
       providerSessionId: "s1",
       queuedMessages: [{ id: "m1", text: "hi" }],
     });
+
+    const delivered = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
+    expect(delivered).toEqual([
+      expect.objectContaining({ ev: { t: "mode-switch", control: "remote", by: "client" } }),
+    ]);
   });
 
   it("reports the effective session id via onProviderSessionId and seeds the scanner's onNewSession", async () => {

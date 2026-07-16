@@ -183,6 +183,12 @@ export function startClaudeLocalLauncher(
           if (switchRequested) {
             // A non-zero exit racing an in-flight abort is still a switch,
             // not a crash — the child going down is exactly what we asked for.
+            // Emit the same mode-switch marker the clean-exit switch path
+            // emits below — the timeline must not silently miss it just
+            // because the abort happened to race a non-zero exit.
+            opts.onEnvelopes([
+              createEnvelope("agent", { t: "mode-switch", control: "remote", by: "client" }),
+            ]);
             return {
               type: "switch",
               providerSessionId: effectiveSessionId,
