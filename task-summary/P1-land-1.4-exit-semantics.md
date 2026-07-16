@@ -93,23 +93,37 @@ then the full suite again, forced:
 
 ## Current state / what remains
 
-- `git merge-base --is-ancestor main HEAD` → **true** (post-reconciliation,
-  both passes). This branch (tip after this task) is a genuine, conflict-free
-  fast-forward/merge candidate for `main`'s tip as of this task's completion.
-- `git cat-file -e main:packages/cli/src/claude/sessionExit.ts` /
+- **Update (post-landing correction pass, 2026-07-16):** the fast-forward onto
+  the shared `main` ref described as outstanding below **has since happened**.
+  `git reflog` on the primary (non-worktree) checkout shows `merge
+  P1-land-1.4-exit-semantics: Fast-forward` at commit `02127a6`
+  ("fix: P1-land-1.4-exit-semantics - resolve test failures"), and `main`'s
+  current tip (`49ddb8c` at time of this correction) is a descendant of that
+  commit. Independently verified directly against `main` (not this worktree,
+  which was cleaned up after landing and no longer exists on disk):
+  `git cat-file -e main:packages/cli/src/claude/sessionExit.ts` and
+  `git cat-file -e main:packages/server/src/app/routes/sessionStatus.ts` both
+  **succeed**, and `pnpm test` on `main` is green for the affected suites
+  (`falcon` cli incl. `claude/sessionExit.test.ts`, `@falcon/server` incl.
+  `app/routes/sessionStatus.test.ts`). `plan.md`'s "Exit semantics" bullet has
+  already been flipped to `[x]` (see its Cycle 47 note) reflecting this. The
+  paragraphs immediately below are kept as-is for the historical record of
+  what this task observed *at the time it ran*, but should not be read in
+  isolation as the current state — see this update instead.
+- (Historical, at the time this task ran) `git merge-base --is-ancestor main
+  HEAD` → **true** (post-reconciliation, both passes). This branch (tip after
+  this task) is a genuine, conflict-free fast-forward/merge candidate for
+  `main`'s tip as of this task's completion.
+- (Historical, at the time this task ran) `git cat-file -e
+  main:packages/cli/src/claude/sessionExit.ts` /
   `main:packages/server/src/app/routes/sessionStatus.ts` still both **fail** —
-  the actual fast-forward onto the shared `main` ref has **not** happened as
+  the actual fast-forward onto the shared `main` ref had **not** happened as
   part of this task. Per this task's own sandboxing rules, actually moving the
   shared `main` ref (fast-forward or `--no-ff` merge performed from the
-  primary, non-worktree checkout) is a follow-up step outside this worktree
-  session's write access — the same constraint every other genuine
-  `P1-land-*` task in this repo's `plan.md` history has flagged. Given `main`
-  is moving concurrently, whatever process performs that final step should
-  re-check drift once more immediately before fast-forwarding.
-- Once that fast-forward happens, `plan.md`'s "Exit semantics" bullet should be
-  flipped back to `[x]` with a note pointing at the real merge commit on
-  `main` (mirroring the `P1-land-1.5-daemon-worktrees`/`P1-land-1.3-cli-scaffold`
-  pattern of correcting a false claim once the real land is verified).
+  primary, non-worktree checkout) was flagged as a follow-up step outside this
+  worktree session's write access — the same constraint every other genuine
+  `P1-land-*` task in this repo's `plan.md` history has flagged. That
+  follow-up has since been completed, per the update above.
 
 ## Assumptions / judgment calls
 
