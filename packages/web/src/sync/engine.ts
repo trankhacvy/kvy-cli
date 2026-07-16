@@ -65,6 +65,17 @@ function upsertById<T extends { id: string }>(list: T[], item: T): T[] {
   return next;
 }
 
+/** The msgSeq baseline for a cached `['messages', sessionId]` page: the
+ * newest cached message's `seq`, or `0` if the page is cached but currently
+ * empty (a brand-new session with no messages yet is still "open" — its
+ * first `message-new` must still fast-path apply, not be silently dropped),
+ * or `undefined` if there's no cached page at all (session genuinely not
+ * open — see `applyMessageFastPath`'s `known === undefined` check). */
+function msgSeqBaseline(data: MessagesQueryData | undefined): number | undefined {
+  if (!data) return undefined;
+  return data.pages[0]?.messages[0]?.seq ?? 0;
+}
+
 function patchSession(
   session: SessionRow,
   body: Extract<UpdateBody, { t: "session-update" }>,
@@ -98,7 +109,7 @@ export function createSyncEngine(queryClient: QueryClient, socket: SyncSocketSou
   if (initialSync) lastHeaderSeq = initialSync.headerSeq;
   for (const [key, data] of queryClient.getQueriesData<MessagesQueryData>({ queryKey: ["messages"] })) {
     const sessionId = messagesSessionIdFromKey(key);
-    const newest = data?.pages[0]?.messages[0]?.seq;
+    const newest = msgSeqBaseline(data);
     if (sessionId !== null && newest !== undefined) lastMsgSeq.set(sessionId, newest);
   }
 
@@ -113,7 +124,7 @@ export function createSyncEngine(queryClient: QueryClient, socket: SyncSocketSou
     const sessionId = messagesSessionIdFromKey(queryKey);
     if (sessionId === null) return;
     const data = state.data as MessagesQueryData | undefined;
-    const newest = data?.pages[0]?.messages[0]?.seq;
+    const newest = msgSeqBaseline(data);
     if (newest !== undefined) lastMsgSeq.set(sessionId, newest);
   });
 

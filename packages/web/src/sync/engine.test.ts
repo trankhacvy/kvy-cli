@@ -150,6 +150,32 @@ describe("createSyncEngine", () => {
       expect(session?.tag).toBe("sess-1"); // untouched field survives
     });
 
+    it("patches metadata and agentState on session-update, leaving status untouched", () => {
+      queryClient.setQueryData(
+        syncQueryKey,
+        makeSnapshot({ headerSeq: 5, sessions: [makeSession("sess-1", { status: "active" })] }),
+      );
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      emitUpdate({
+        seq: 6,
+        ts: 2000,
+        body: {
+          t: "session-update",
+          id: "sess-1",
+          metadata: { value: box("meta-v2"), version: 2 },
+          agentState: { value: box("state-v1"), version: 1 },
+        },
+      });
+
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      const session = data?.sessions.find((s) => s.id === "sess-1");
+      expect(session?.metadata).toEqual({ value: box("meta-v2"), version: 2 });
+      expect(session?.agentState).toEqual({ value: box("state-v1"), version: 1 });
+      expect(session?.status).toBe("active"); // untouched field survives
+    });
+
     it("upserts machines and unmanaged sessions by id", () => {
       queryClient.setQueryData(syncQueryKey, makeSnapshot({ headerSeq: 5, machines: [] }));
       const { source, emitUpdate } = createFakeSyncSocket();
@@ -174,6 +200,118 @@ describe("createSyncEngine", () => {
       expect(queryClient.getQueryData<SyncSnapshot>(syncQueryKey)?.machines.map((m) => m.id)).toEqual([
         "mach-1",
       ]);
+    });
+
+    it("upserts a machine-update onto an existing machine by id, not appending a duplicate", () => {
+      queryClient.setQueryData(
+        syncQueryKey,
+        makeSnapshot({
+          headerSeq: 5,
+          machines: [
+            {
+              id: "mach-1",
+              accountId: "acc-1",
+              metadata: { value: box("m-old"), version: 1 },
+              daemonState: null,
+              dek: "dek",
+              lastSeenAt: null,
+            },
+          ],
+        }),
+      );
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      emitUpdate({
+        seq: 6,
+        ts: 2000,
+        body: {
+          t: "machine-update",
+          machine: {
+            id: "mach-1",
+            accountId: "acc-1",
+            metadata: { value: box("m-new"), version: 2 },
+            daemonState: null,
+            dek: "dek",
+            lastSeenAt: 3000,
+          },
+        },
+      });
+
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      expect(data?.machines).toHaveLength(1);
+      expect(data?.machines[0]?.lastSeenAt).toBe(3000);
+    });
+
+    it("upserts unmanaged-new and unmanaged-update items by id", () => {
+      queryClient.setQueryData(syncQueryKey, makeSnapshot({ headerSeq: 5, unmanagedSessions: [] }));
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      const item = {
+        id: "un-1",
+        accountId: "acc-1",
+        machineId: "mach-1",
+        workspaceId: "ws-1",
+        providerRef: "ref-1",
+        summary: box("s1"),
+        dek: "dek",
+        updatedAt: 1000,
+      };
+      emitUpdate({ seq: 6, ts: 2000, body: { t: "unmanaged-new", item } });
+      expect(
+        queryClient.getQueryData<SyncSnapshot>(syncQueryKey)?.unmanagedSessions.map((u) => u.id),
+      ).toEqual(["un-1"]);
+
+      emitUpdate({
+        seq: 7,
+        ts: 3000,
+        body: { t: "unmanaged-update", item: { ...item, summary: box("s2") } },
+      });
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      expect(data?.unmanagedSessions).toHaveLength(1);
+      expect(data?.unmanagedSessions[0]?.summary).toEqual(box("s2"));
+    });
+
+    it("removes the session on a contiguous session-delete fast-path apply", () => {
+      queryClient.setQueryData(
+        syncQueryKey,
+        makeSnapshot({ headerSeq: 5, sessions: [makeSession("sess-1"), makeSession("sess-2")] }),
+      );
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      emitUpdate({ seq: 6, ts: 2000, body: { t: "session-delete", id: "sess-1" } });
+
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      expect(data?.headerSeq).toBe(6);
+      expect(data?.sessions.map((s) => s.id)).toEqual(["sess-2"]);
+    });
+
+    it("is a documented no-op for account-update: bumps headerSeq without touching cached fields", () => {
+      queryClient.setQueryData(syncQueryKey, makeSnapshot({ headerSeq: 5 }));
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      emitUpdate({ seq: 6, ts: 2000, body: { t: "account-update", settings: box("settings") } });
+
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      expect(data?.headerSeq).toBe(6);
+      expect(data?.sessions.map((s) => s.id)).toEqual(["sess-1"]);
+    });
+
+    it("invalidates rather than fast-path-applying an exact-duplicate headerSeq redelivery", () => {
+      queryClient.setQueryData(syncQueryKey, makeSnapshot({ headerSeq: 5 }));
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      // seq === lastHeaderSeq (not +1) — a redelivered/duplicate update, not a gap forward.
+      emitUpdate({ seq: 5, ts: 2000, body: { t: "session-delete", id: "sess-1" } });
+
+      expect(queryClient.getQueryState(syncQueryKey)?.isInvalidated).toBe(true);
+      const data = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
+      expect(data?.headerSeq).toBe(5);
+      expect(data?.sessions.map((s) => s.id)).toEqual(["sess-1"]); // not deleted
     });
   });
 
@@ -238,6 +376,28 @@ describe("createSyncEngine", () => {
       expect(queryClient.getQueryState(messagesQueryKey("sess-1"))?.isInvalidated).toBe(false);
       const data = queryClient.getQueryData<MessagesQueryData>(messagesQueryKey("sess-1"));
       expect(data?.pages[0]?.messages).toHaveLength(1); // not duplicated
+    });
+
+    it("fast-path applies the first message-new for a session with an empty cached page (not a silent drop)", () => {
+      // The session is "open" (its message page is cached) but has zero
+      // messages yet — e.g. a brand-new session. This must be distinguished
+      // from "session never opened" (no cached page at all): the tracker
+      // baseline is 0, so msgSeq 1 is contiguous and applies, not dropped.
+      queryClient.setQueryData(
+        messagesQueryKey("sess-empty"),
+        makeMessagesData({ pages: [{ messages: [], nextBefore: null }] }),
+      );
+      const { source, emitUpdate } = createFakeSyncSocket();
+      createSyncEngine(queryClient, source);
+
+      emitUpdate({
+        ts: 1000,
+        body: { t: "message-new", sessionId: "sess-empty", msgSeq: 1, content: box("m1") },
+      });
+
+      expect(queryClient.getQueryState(messagesQueryKey("sess-empty"))?.isInvalidated).toBe(false);
+      const data = queryClient.getQueryData<MessagesQueryData>(messagesQueryKey("sess-empty"));
+      expect(data?.pages[0]?.messages.map((m) => m.seq)).toEqual([1]);
     });
 
     it("ignores message-new for a session that has no cached message page", () => {
