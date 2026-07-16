@@ -4072,3 +4072,116 @@ confirmed).
 3. **Wire the call-site for `notifyDaemonSessionStarted`** into session
    bootstrap — still unblocked since `POST /v1/sessions` (§1.1/1.2) landed;
    no task has picked this up yet across two cycles.
+
+---
+
+## Cycle 35 — 2026-07-16
+
+**Branch checked:** `main` (HEAD `0eada0c` — "test: P1-1.4-transcript-scanner -
+extend scanner test coverage"). Since Cycle 34's tracker commit, two further
+commits landed directly on the shared `main` ref: `8218b50 fix:
+P1-1.6-crypto-worker - resolve test failures` and `0eada0c test:
+P1-1.4-transcript-scanner - extend scanner test coverage` — both additive
+hardening on top of features that were already landed and already checked
+off in `plan.md` in prior cycles (crypto worker via
+`P1-land-1.6-crypto-worker-final`, cycle ≤15; scanner/fileWatcher via
+`P1-land-1.4-transcript-scanner-final`, cycle 19/20).
+
+### Verification run on `main`
+
+- `pnpm typecheck` (`turbo run typecheck`) → **PASSED**, 7/7 tasks green
+  (`FULL TURBO`, all cache hits — content-hash based, reflects `main`'s
+  actual current tree).
+- `pnpm test` (`turbo run test`) → **PASSED**, 9/9 tasks green: `@falcon/wire`
+  61, `@falcon/crypto` 65, `@falcon/web` 36, `@falcon/server` 140, `falcon`
+  (cli) **181** (up from 176 at Cycle 34 — the `+5` is
+  `scanner.test.ts`'s new coverage from `0eada0c`, confirmed via the test
+  output listing `createSessionScanner` cases including a new
+  "dedupes summary lines by leafUuid+summary" and "keeps scanning the
+  previous session after onNewSession moves it to pending" case). **Total
+  483 tests, 0 failures** — up from 478 at Cycle 34.
+
+### Task-summaries read this cycle
+
+- **`task-summary/P1-1.4-transcript-scanner.md`** — exists on `main`. Documents
+  the `sessionScanner`/`startFileWatcher` port itself (dedupe via
+  `processedEntryKeys`, `deadSessions` phantom guard, `onNewSession`
+  revival semantics) and reports 66/66 `falcon` tests green at the time it
+  was written. Already landed (cycle 19/20) and already reflected by the
+  `[x]` `sessionScanner`/`startFileWatcher` bullets in `plan.md` §1.4 — no
+  new checkbox toggle needed. Re-verified `packages/cli/src/claude/{types,
+  fileWatcher,scanner}.ts` present via `git cat-file -e` on `main`'s current
+  HEAD, and the additive `0eada0c` test-coverage commit is included in the
+  483-test green run above.
+- **`task-summary/P1-1.5-daemon-singleton-lock.md`** — exists on `main`.
+  Documents the atomic hard-link lock (`lock.ts`) + `daemon.state.json`
+  helpers (`state.ts`) with stale-PID detection via `kill(pid,0)`, 10
+  `lock.test.ts` + 5 `state.test.ts` cases including a 12-way concurrent-
+  acquire race test. Already landed (via `P1-land-1.5-daemon-worktrees` /
+  `-final`, cycle ≤27) and already reflected by the `[x]` "Singleton" bullet
+  in `plan.md` §1.5 — no new checkbox toggle needed. Re-verified
+  `packages/cli/src/daemon/lock.ts` present via `git cat-file -e` on `main`.
+- **`task-summary/P1-1.6-crypto-worker.md`** — exists on `main`. Documents
+  the crypto-bridge Worker (`protocol.ts`/`key-storage.ts`/
+  `worker-handler.ts`/`worker.ts`/`client.ts`/`factory.ts`), holding
+  `keyTree`/`activeDek` in a closure never exposed back to the main thread,
+  with a deep byte-scan test asserting no response ever carries raw key
+  material. Already landed (via `P1-land-1.6-crypto-worker-final`, cycle
+  ≤15) and already reflected by the `[x]` "Crypto worker" bullet in
+  `plan.md` §1.6 — no new checkbox toggle needed. Re-verified
+  `packages/web/src/crypto/client.ts` present via `git cat-file -e`, and the
+  additive `8218b50` fix commit is included in the green test run above
+  (`@falcon/web` 36/36).
+
+### Tasks completed this cycle
+
+**0 new tasks landed this cycle** in the checkbox sense — all three
+requested task-summaries correspond to work that was already fully landed
+and already checked off in prior cycles; the two new commits on `main`
+since Cycle 34 are hardening/fixes on top of that existing work, not new
+features crossing a plan.md bullet. `plan.md` §16 checkbox count:
+**54/135** (`/usr/bin/grep -c '^\- \[x\]' plan.md`), unchanged from Cycle 34
+— no new bullet crossed this cycle. Added brief Cycle 35 confirmation notes
+to the §1.4/§1.5/§1.6 narrative blocks in `plan.md` (matching the
+document's established convention), with no checkbox toggles.
+
+### Blockers / issues found
+
+1. **No new landing activity this cycle** — the three task-summaries
+   requested were all re-verifications of already-landed work rather than
+   newly-completed, unlanded tasks. This is not itself a blocker, but it
+   means the backlog of genuinely unlanded worktrees below saw no progress
+   this cycle either.
+2. Confirmed via `git worktree list` that a long tail of unmerged worktrees
+   remains outstanding, unchanged from prior cycles' findings — most
+   notably `P1-1.6-reducer-port` / `P1-land-1.6-reducer-port` (flagged
+   unlanded since Cycle 23, still the longest-standing item),
+   `P1-1.3-falcon-home-persistence` / `P1-land-1.3-falcon-home-persistence`
+   (flagged since Cycle 34), `P1-1.4-envelope-mapper`, `P1-1.4-http-outbox`,
+   `P1-1.6-auth-pages`, `P1-1.6-api-socket`, and the duplicate-locator
+   situation between `P1-1.3-cli-locator`/`P1-1.3-provider-detection`.
+3. No `pnpm lint` run this cycle (out of this role's required gate — only
+   `typecheck`/`test` are required, both green).
+
+### Overall completion
+
+`plan.md` §16 checkbox count: **54/135 checked (~40.0%)**, unchanged from
+Cycle 34. `pnpm typecheck`/`pnpm test` both green on `main` (483 tests
+total, 0 failures — up from 478 at Cycle 34, reflecting the additive
+`P1-1.4-transcript-scanner` test-coverage commit landed directly on
+`main` this cycle).
+
+### Next recommended tasks
+
+1. **Land `P1-1.6-reducer-port` (or its `P1-land-1.6-reducer-port` worktree)
+   onto `main`** — self-verified green (55/55 `@falcon/web` tests per its
+   own task-summary), disjoint from everything else in `packages/web/src/`,
+   still the longest-standing unlanded item (flagged since Cycle 23, no
+   progress across 12 cycles now).
+2. **Land `P1-1.3-falcon-home-persistence` (or its `P1-land-...` worktree)
+   onto `main`** — small, self-contained (`persistence.ts` + tests only,
+   274+185 lines), no apparent overlap with anything already on `main`.
+3. **Land `P1-1.4-envelope-mapper`** (`mapClaudeToEnvelopes`, 21 tests incl.
+   5 golden-transcript fixtures) — the next unstarted §1.4 bullet after the
+   already-landed scanner/fileWatcher pair, and a prerequisite for the
+   HTTP-outbox bullet's real-world use.
