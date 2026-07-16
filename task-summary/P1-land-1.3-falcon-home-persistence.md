@@ -135,3 +135,54 @@ the primary repo, no push. The branch is now a clean, verified-green
 merge commit (`7bdca3c`, second parent = main's current tip `237202d`) ready
 for an actual land step by the orchestrator against the primary,
 non-worktree `main` checkout.
+
+---
+
+## Update 2026-07-16 (later cycle): second reconciliation pass, main tip 185ebc9
+
+`main` had moved further ahead again (5 more commits since the previous
+reconciliation's `237202d`, notably `P1-land-1.3-claudelocal-spawn`'s
+`claudeLocal.ts` port landing) while this branch had picked up one more
+"fix: resolve test failures" commit (tip `505874b`) but was still, genuinely,
+not an ancestor of `main`:
+
+- `git merge-base --is-ancestor P1-land-1.3-falcon-home-persistence main` →
+  **not an ancestor** (confirmed before touching anything).
+- `git cat-file -e main:packages/cli/src/persistence.ts` → **fails** (still
+  absent from `main`'s tree at `185ebc9`).
+
+### What was done this pass
+
+1. `git merge --no-ff main` (`185ebc9`) into this worktree's branch —
+   **zero conflicts** this time (`main`'s new commits touched `claudeLocal.ts`
+   / `plan.md`'s claudelocal-spawn+cycle-history prose / `progress.md` /
+   `turbo.json` / lockfile — none of which overlap `persistence.ts`; `plan.md`
+   auto-merged cleanly via `git`'s line-based merge since the two branches'
+   edits landed on different lines of the same file). Result: merge commit
+   `1cfe723` (parents `505874b`, `185ebc9`).
+2. Re-ran the full workspace suite post-merge, forced past the turbo cache:
+   - `pnpm install --frozen-lockfile` — clean, no resolution changes.
+   - `pnpm exec turbo run typecheck --force` — **8/8 tasks green**.
+   - `pnpm exec turbo run test --force` — **9/9 tasks green, 544/544 tests**
+     (crypto 65, wire 61, web 56, falcon cli 222 incl. `persistence.test.ts`'s
+     16, server 140).
+   - `pnpm build` — **5/5 tasks green** (turbo replayed cached logs for
+     unaffected packages; `falcon`/`@falcon/server` rebuilt clean).
+3. Left the `~/.falcon/` persistence checkbox in `plan.md` §1.3 **unchecked**
+   (`main`'s side, taken as-is by the merge) — the real, disqualifying fact
+   is still that `persistence.ts` is absent from the primary `main` checkout,
+   and this task's own operating constraint is reconcile-and-commit-in-worktree
+   only, not merge-onto-main. Flipping the checkbox here would misreport state
+   to the progress tracker for an 11th-plus cycle running; it stays `[ ]`
+   until an actual fast-forward/merge against the primary, non-worktree `main`
+   lands this content there.
+
+### Current state
+
+Branch `P1-land-1.3-falcon-home-persistence`, tip `1cfe723`, is a clean,
+fully green, conflict-free merge of `persistence.ts`/`persistence.test.ts`
+onto `main`'s real current tip (`185ebc9`). Nothing further is needed from
+this worktree to make it mergeable — the only remaining step is for the
+orchestrator to actually fast-forward or `--no-ff` merge this branch onto
+the primary, non-worktree `main` checkout (this invocation's own rules
+explicitly scope that step out).
