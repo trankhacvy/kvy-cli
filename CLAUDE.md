@@ -42,7 +42,11 @@ packages/
 │                             detection), `daemon.state.json` read/write helpers, a Fastify
 │                             control server (`/session-started`, `/list`, `/stop-session`,
 │                             `/spawn-session`, `/stop`), and process-scan-based `falcon kill
-│                             daemon/sessions/all/all-force`. `falcon daemon
+│                             daemon/sessions/all/all-force`. `src/persistence.ts`: `~/.falcon/`
+│                             local state — schema-versioned `settings.json` (atomic
+│                             lock-file-guarded read-modify-write) and 0600-permissioned
+│                             `access.key` credentials, both tmp-write + rename so readers
+│                             never observe a partial write. `falcon daemon
 │                             start/start-sync/stop/status`, `ensureDaemonRunning()`, the
 │                             machine-scoped WS client, and Auth/provider spawning still
 │                             [planned].
