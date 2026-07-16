@@ -18,6 +18,15 @@ export interface DaemonState {
   port: number;
   version: string;
   startedAt: number;
+  /**
+   * The server-assigned machine id, once this daemon has registered (or
+   * resumed) a machine row via `POST /v1/machines` (`machineClient.ts`).
+   * Absent until the first successful registration; round-tripping it
+   * through this file is what lets a restarted daemon resume the same
+   * server-side machine row instead of registering a brand new one every
+   * time it boots.
+   */
+  machineId?: string;
 }
 
 export function daemonStatePath(homeDir: string): string {
@@ -31,7 +40,8 @@ function isDaemonState(value: unknown): value is DaemonState {
     typeof candidate.pid === "number" &&
     typeof candidate.port === "number" &&
     typeof candidate.version === "string" &&
-    typeof candidate.startedAt === "number"
+    typeof candidate.startedAt === "number" &&
+    (candidate.machineId === undefined || typeof candidate.machineId === "string")
   );
 }
 
