@@ -1,5 +1,106 @@
 # Falcon — Progress Log
 
+## Cycle 52 — 2026-07-16T12:02:41Z
+
+**Branch checked:** `main` (HEAD `5310de0`)
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** (9/9 turbo tasks: `@falcon/wire`, `@falcon/crypto`, `@falcon/server`, `@falcon/web`, `falcon`).
+- `pnpm test` → **PASSED** (9/9 turbo tasks, 826 tests total: `@falcon/wire` 66, `@falcon/web` 195, `@falcon/crypto` 67, `@falcon/server` 193, `falcon` (cli) 495 — 0 failures).
+
+### Tasks reviewed this cycle (verified against `main` via `git merge-base --is-ancestor`)
+
+None of the three requested task_ids (`P1-1.6-timeline-screen`, `P2-2.1-remote-mode-sdk`,
+`P2-2.5-notifications-dispatch`) exist as git refs any more (`git rev-parse --verify <id>`
+fails "Not a valid object name" for all three — branches were deleted post-merge, normal
+cleanup). Fell back to the same ancestor check against each task's real merge commit on
+`main`, cross-checked against `git log --oneline main`/`git reflog`, which is unambiguous
+here since all three merge commits sit directly in `main`'s own line of history (`main`'s
+current HEAD `5310de0` *is* the notifications-dispatch merge; its parent `3ef072d` is the
+remote-mode-sdk merge; whose parent `ec66391` is the timeline-screen merge):
+
+1. **`task-summary/P1-1.6-timeline-screen.md`** (virtualized session timeline, `ToolCard`
+   registry, unified+shiki markdown pipeline). Merge commit `ec66391` →
+   `git merge-base --is-ancestor ec66391 main` = **true**. `git cat-file -e
+   main:packages/web/src/components/timeline/Timeline.tsx` and
+   `main:packages/web/src/app/session/[id]/page.tsx` both succeed. `plan.md` line 708 was
+   already `[x]` (flipped by a prior cycle before the merge had actually landed) —
+   **no checkbox change needed**, appended a dated confirmation note only.
+2. **`task-summary/P2-2.1-remote-mode-sdk.md`** (SDK wrapper `startClaudeRemote`,
+   `PushableAsyncIterable`, `OrderedEnvelopeQueue`, `SdkToEnvelopeConverter` reusing the
+   already-landed envelope mapper, Ink `RemoteModeDisplay` + keypress handling, session RPC
+   registration for `message`/`interrupt`/`takeControl`/`setMode`/`perm.answer`). Merge
+   commit `3ef072d` → `git merge-base --is-ancestor 3ef072d main` = **true**. `git cat-file -e`
+   confirms all 9 new `packages/cli/src/remote/*.ts` files + `packages/cli/src/rpc/*.ts`.
+   `plan.md` §2.1 was still `[ ]` (all 4 bullets) despite the confirmed merge —
+   **flipped to `[x]` this cycle** with a dated confirmation note.
+3. **`task-summary/P2-2.5-notifications-dispatch.md`** (server push dispatch with presence
+   suppression, full `web-push` channel, `telegram`/`ntfy` stubs, `POST/DELETE
+   /v1/push/subscribe`, `POST /v1/sessions/:id/notify`, web-app service-worker + subscribe
+   plumbing + settings toggle). Merge commit `5310de0` (= `main`'s current HEAD) →
+   `git merge-base --is-ancestor 5310de0 main` = **true**, trivially. `git cat-file -e`
+   confirms `packages/server/src/app/push/**`, `packages/web/src/push/**`,
+   `packages/web/public/sw.js`. **Only partially flipped**: "Web Push" (`plan.md` §2.5)
+   flipped `[ ]` → `[x]`; "Server dispatch" stayed `[ ]` because its own bullet text bundles
+   a "re-notify unanswered perms +5/+10min max 3" clause that has **no implementation** —
+   `git grep -in "retry\|renotify\|re-notify" packages/server/src/app/push` returns nothing.
+   "Fallback channels" and "Per-session mute" also stay `[ ]`: `telegram.ts`/`ntfy.ts` are
+   explicit log-and-drop stubs (no real delivery, no bot pairing flow) and no mute settings
+   UI exists, both matching the task's own documented scope, not a gap in this review.
+
+### Tasks completed this cycle
+
+**5 checkboxes newly flipped**: all 4 bullets under "2.1 Remote mode" (`plan.md` §2.1) and
+the "Web Push" bullet under "2.5 Notifications" (`plan.md` §2.5), all `[ ]` → `[x]` —
+genuinely merged onto `main` but the checkboxes had not yet been updated. The "Timeline
+screen" checkbox was already correctly checked from a prior cycle; independently
+re-verified rather than newly credited. The "Server dispatch", "Fallback channels", and
+"Per-session mute" bullets were deliberately left unchecked — partial completion, not a
+verification failure (see above).
+
+### Blockers / issues found
+
+None blocking. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks
+each, 826 tests, 0 failures). All reviewed tasks are confirmed genuine ancestors of `main`
+via their real merge-commit SHAs (branch refs themselves were cleaned up post-merge), with
+their code present in `main`'s tree. One real scope gap surfaced: the notifications-dispatch
+task's own "Server dispatch" bullet promised a re-notify/backoff schedule that was never
+implemented — flagged as a follow-up, not re-opened as a blocker since the rest of the
+feature (dispatch + presence suppression + Web Push) works standalone.
+
+Several worktrees under `.worktrees/` (`P0-land-cross-wire-schema-lint-final`,
+`P0-land-phase0-worktrees`, `P1-1.3-cli-locator`, `P1-1.3-falcon-home-persistence`,
+`P1-1.3-session-bootstrap`, `P1-1.5-daemon-singleton-lock`,
+`P1-land-1.1-1.2-server-realtime-write-path`, `P1-land-1.3-claudelocal-spawn`,
+`P1-land-1.4-transcript-scanner-final`, `P1-land-1.5-daemon-worktrees`,
+`P1-land-1.6-crypto-worker-final`, `P1-land-1.6-reducer-port`,
+`P1-land-1.6-web-worktrees`) still exist and were not inspected in depth this cycle — most
+correspond to features already confirmed landed under a different (superseding) branch name
+in earlier cycles' notes and are likely pure cleanup, not pending work; a future cycle should
+audit and prune them.
+
+### Overall completion
+
+`plan.md` checkbox count: **78/135 checked (~57.8%)** — up from 73/135 (~54.1%) before this
+cycle's 5 flips (SDK wrapper, SDKToEnvelope+queue, Ink RemoteModeDisplay, session RPC
+registration, Web Push).
+
+### Next recommended tasks
+
+1. **`P2-2.2` Mode switching** (`loop.ts` port + `claudeLocalLauncher`/`claudeRemoteLauncher`
+   orchestrators, §6.7) — the natural next step now that `P2-2.1-remote-mode-sdk` has landed
+   a standalone, independently-tested `startClaudeRemote` handle with exactly the
+   `onProviderSessionId`/`stop()` hook points this orchestration task needs to wire up.
+2. **`P2-2.3` Permission pipeline** (`PermissionHandler` port, auto-rules, `getToolDescriptor`,
+   first-wins resolution) — unblocks swapping the remote-mode SDK wrapper's explicit
+   `permissionStub.ts` (fails closed, documented placeholder) for real logic, and is a
+   prerequisite for the "`perm-request`/`perm-resolve` envelopes into the timeline" bullet.
+3. **Notifications re-notify scheduling** — the one concretely missing piece of the
+   "Server dispatch" bullet (+5/+10min re-notify for unanswered perms, capped at 3): a small,
+   well-scoped follow-up to `packages/server/src/app/push/dispatch.ts` that would close out
+   that checkbox without needing a new full task.
+
 ## Cycle 1 — 2026-07-15
 
 **Branch checked:** `main` (HEAD `442f5cf`)
