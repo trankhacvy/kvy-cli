@@ -17,6 +17,7 @@ import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
 import { buildSessionCasRoutes } from "./routes/sessionCas.js";
+import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
 import { buildSyncRoutes } from "./routes/sync.js";
 import { startSocket } from "./socket.js";
@@ -88,6 +89,7 @@ export async function buildServer(
   await app.register(buildSessionsRoutes(db, eventRouter));
   await app.register(buildMessagesRoutes(db, eventRouter));
   await app.register(buildSessionCasRoutes(db, eventRouter));
+  await app.register(buildSessionStatusRoutes(db, eventRouter));
   await app.register(buildSyncRoutes(db));
   await app.register(buildMachinesRoutes(db, eventRouter));
 
