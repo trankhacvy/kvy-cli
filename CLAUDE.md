@@ -53,8 +53,30 @@ packages/
 │                             local state — schema-versioned `settings.json` (atomic
 │                             lock-file-guarded read-modify-write) and 0600-permissioned
 │                             `access.key` credentials, both tmp-write + rename so readers
-│                             never observe a partial write. RPC handler registration, Auth, and
-│                             provider spawning still [planned].
+│                             never observe a partial write. `src/codex/`: the Codex provider
+│                             adapter (design §7.7, plan.md §16 "3.4 Codex adapter") —
+│                             `codexAppServerClient.ts`, a hand-rolled newline-delimited
+│                             JSON-RPC 2.0 stdio client for `codex app-server` (initialize
+│                             handshake, `thread/start`/`thread/resume`, `turn/start`/
+│                             `turn/interrupt`, and server->client `exec`/`patch` approval
+│                             routing for both legacy and v2 method names); `permissionHandler.ts`,
+│                             a Codex-specific parallel to `claude/permissionHandler.ts` (own
+│                             pending-approval map, first-wins `resolve()`, and a
+│                             `bypassPermissions`/`acceptEdits`-only auto-rule mapping — Codex
+│                             has no equivalent to Claude's other two SDK modes);
+│                             `envelopeMapper.ts` (`mapCodexEventToEnvelopes`), translating
+│                             Codex's `codex/event` notifications (turn lifecycle, agent
+│                             messages/reasoning, exec/patch tool calls, `turn_diff`) into
+│                             `SessionEnvelope`s; `codexProviderAdapter.ts` (`detect()` +
+│                             `startLocal()` — always `null`, since Codex has no local TUI
+│                             mode, with an honest CLI note printed by `falcon codex`); and
+│                             `codexRemote.ts`, wiring all of the above into one session
+│                             handle (mirrors `remote/claudeRemote.ts`). RPC handler
+│                             registration and provider spawning (both Claude and Codex) are
+│                             still [planned] — this task, like the Claude adapter's own
+│                             pieces before it, lands the adapter modules themselves ahead of
+│                             the `falcon claude`/`falcon codex` orchestration that spawns and
+│                             drives them.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth

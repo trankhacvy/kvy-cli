@@ -70,6 +70,29 @@ describe("main()", () => {
     stdout.mockRestore();
   });
 
+  it("describes a codex passthrough start with the honest no-local-mode note", async () => {
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const code = await main(["codex"]);
+
+    expect(code).toBe(0);
+    expect(stdout.mock.calls[0]?.[0]).toContain("would start a codex session");
+    expect(stdout.mock.calls[0]?.[0]).toContain("Codex has no local terminal mode");
+    stdout.mockRestore();
+  });
+
+  it("does not print the codex no-local-mode note for a claude start", async () => {
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const code = await main(["claude"]);
+
+    expect(code).toBe(0);
+    expect(stdout.mock.calls[0]?.[0]).not.toContain("no local terminal mode");
+    stdout.mockRestore();
+  });
+
   it("prints a usage error and exits 1 for a malformed Falcon subcommand", async () => {
     const main = await importMain();
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
