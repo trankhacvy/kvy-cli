@@ -1,7 +1,7 @@
 import type { EncryptedBox, SessionRow, Update } from "@falcon/wire";
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createFakeSyncSocket } from "./__tests__/fakes.js";
+import { createFakeSyncSocket } from "./__tests__/engineFakes.js";
 import { createSyncEngine } from "./engine.js";
 import { messagesQueryKey, syncQueryKey } from "./queryKeys.js";
 import type { MessagesQueryData, SyncSnapshot } from "./types.js";

@@ -1,41 +1,94 @@
-import type { Update } from "@falcon/wire";
-import type { SyncSocketSource } from "../engine.js";
+/**
+ * In-memory doubles for apiSocket's injectable dependencies — no real
+ * network connection or `document`, so the connect/reconnect/backoff state
+ * machine and app-state reporting can be verified under plain Vitest
+ * (mirrors crypto/__tests__/loopback.ts).
+ */
+import type { ApiSocketAuth, SocketFactory, SocketLike, VisibilitySource } from "../apiSocket.js";
 
-/** In-memory `SyncSocketSource` double — mirrors what a real `apiSocket`'s
- * `on('update'|'reconnect', ...)` would deliver, without any Socket.IO
- * connection (see `apiSocket.ts`'s own `fakes.ts` for the same pattern one
- * level down the stack). */
-export function createFakeSyncSocket(): {
-  source: SyncSocketSource;
-  emitUpdate: (update: Update) => void;
-  emitReconnect: () => void;
+export interface FakeSocket extends SocketLike {
+  /** Simulate the server side emitting an event to this socket. */
+  serverEmit(event: string, payload?: unknown): void;
+  /** Every payload the client emitted via `.emit()`, in order. */
+  emitted: Array<{ event: string; args: unknown[] }>;
+  /** Every auth snapshot `getAuth()` produced, one per `.connect()` call. */
+  authSnapshots: ApiSocketAuth[];
+}
+
+export function createFakeSocketFactory(): {
+  factory: SocketFactory;
+  /** All sockets ever created by this factory, in creation order. */
+  sockets: FakeSocket[];
 } {
-  const updateHandlers = new Set<(update: Update) => void>();
-  const reconnectHandlers = new Set<() => void>();
+  const sockets: FakeSocket[] = [];
 
-  function on(event: "update", handler: (update: Update) => void): () => void;
-  function on(event: "reconnect", handler: () => void): () => void;
-  function on(
-    event: "update" | "reconnect",
-    handler: ((update: Update) => void) | (() => void),
-  ): () => void {
-    if (event === "update") {
-      const h = handler as (update: Update) => void;
-      updateHandlers.add(h);
-      return () => updateHandlers.delete(h);
-    }
-    const h = handler as () => void;
-    reconnectHandlers.add(h);
-    return () => reconnectHandlers.delete(h);
-  }
+  const factory: SocketFactory = (getAuth) => {
+    const handlers = new Map<string, Set<(...args: never[]) => void>>();
+    let connected = false;
+    const emitted: Array<{ event: string; args: unknown[] }> = [];
+    const authSnapshots: ApiSocketAuth[] = [];
 
+    const socket: FakeSocket = {
+      get connected() {
+        return connected;
+      },
+      connect() {
+        connected = true;
+        authSnapshots.push(getAuth());
+        for (const h of handlers.get("connect") ?? []) (h as () => void)();
+      },
+      disconnect() {
+        connected = false;
+        for (const h of handlers.get("disconnect") ?? []) (h as () => void)();
+      },
+      on(event, handler) {
+        let set = handlers.get(event);
+        if (!set) {
+          set = new Set();
+          handlers.set(event, set);
+        }
+        set.add(handler);
+      },
+      off(event, handler) {
+        if (!handler) {
+          handlers.delete(event);
+          return;
+        }
+        handlers.get(event)?.delete(handler);
+      },
+      emit(event, ...args) {
+        emitted.push({ event, args });
+      },
+      serverEmit(event, payload) {
+        for (const h of handlers.get(event) ?? []) (h as (p: unknown) => void)(payload);
+      },
+      emitted,
+      authSnapshots,
+    };
+    sockets.push(socket);
+    return socket;
+  };
+
+  return { factory, sockets };
+}
+
+export function createFakeVisibilitySource(initial: "active" | "background" = "active"): {
+  source: VisibilitySource;
+  trigger(state: "active" | "background"): void;
+} {
+  let state = initial;
+  const subscribers = new Set<(state: "active" | "background") => void>();
   return {
-    source: { on },
-    emitUpdate: (update) => {
-      for (const h of updateHandlers) h(update);
+    source: {
+      currentState: () => state,
+      subscribe(handler) {
+        subscribers.add(handler);
+        return () => subscribers.delete(handler);
+      },
     },
-    emitReconnect: () => {
-      for (const h of reconnectHandlers) h();
+    trigger(next) {
+      state = next;
+      for (const h of subscribers) h(next);
     },
   };
 }

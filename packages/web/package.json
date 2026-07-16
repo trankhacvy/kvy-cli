@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "falcon-web — Next.js PWA (App Router, static export). Statically exported and served from a separate origin than the API (design §5.3, §9): the server never renders user content, it's ciphertext to it anyway. Crypto worker bridge and the sync engine (headerSeq/msgSeq fast-path) are wired up; auth pages and apiSocket are still planned.",
+  "description": "falcon-web — Next.js PWA (App Router, static export). Statically exported and served from a separate origin than the API (design §5.3, §9): the server never renders user content, it's ciphertext to it anyway. Crypto worker bridge, the transcript reducer, apiSocket (the user-scoped WS client), and the sync engine (headerSeq/msgSeq fast-path, src/sync/) are wired up; auth pages are still planned.",
   "scripts": {
     "build": "next build",
     "dev": "next dev",
@@ -20,6 +20,7 @@
     "next": "^15.5.20",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

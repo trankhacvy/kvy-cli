@@ -1,0 +1,111 @@
+{
+  "description": "A single turn: user prompt, agent reads a file, fixes it, turn ends. No permissions, no subagents — the baseline general transform.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 1000,
+      "role": "user",
+      "ev": { "t": "text", "md": "Fix the failing test in utils.ts" }
+    },
+    { "id": "e2", "time": 1001, "role": "agent", "turn": "turn-1", "ev": { "t": "turn-start" } },
+    {
+      "id": "e3",
+      "time": 1002,
+      "role": "agent",
+      "turn": "turn-1",
+      "ev": { "t": "text", "md": "Let me look at the test file." }
+    },
+    {
+      "id": "e4",
+      "time": 1003,
+      "role": "agent",
+      "turn": "turn-1",
+      "ev": {
+        "t": "tool-start",
+        "call": "call-1",
+        "name": "Read",
+        "title": "Read utils.test.ts",
+        "args": { "path": "utils.test.ts" },
+        "risk": "read"
+      }
+    },
+    {
+      "id": "e5",
+      "time": 1004,
+      "role": "agent",
+      "turn": "turn-1",
+      "ev": {
+        "t": "tool-end",
+        "call": "call-1",
+        "ok": true,
+        "output": { "content": "expect(add(1,2)).toBe(4)" }
+      }
+    },
+    {
+      "id": "e6",
+      "time": 1005,
+      "role": "agent",
+      "turn": "turn-1",
+      "ev": { "t": "text", "md": "Found it — off-by-one, fixing now." }
+    },
+    {
+      "id": "e7",
+      "time": 1006,
+      "role": "agent",
+      "turn": "turn-1",
+      "ev": { "t": "turn-end", "status": "completed" }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e1",
+      "time": 1000,
+      "role": "user",
+      "kind": "text",
+      "md": "Fix the failing test in utils.ts",
+      "thinking": false
+    },
+    { "id": "e2", "time": 1001, "role": "agent", "turn": "turn-1", "kind": "turn-start" },
+    {
+      "id": "e3",
+      "time": 1002,
+      "role": "agent",
+      "turn": "turn-1",
+      "kind": "text",
+      "md": "Let me look at the test file.",
+      "thinking": false
+    },
+    {
+      "id": "e4",
+      "time": 1003,
+      "role": "agent",
+      "turn": "turn-1",
+      "kind": "tool",
+      "call": "call-1",
+      "name": "Read",
+      "title": "Read utils.test.ts",
+      "args": { "path": "utils.test.ts" },
+      "risk": "read",
+      "status": "done",
+      "ok": true,
+      "output": { "content": "expect(add(1,2)).toBe(4)" }
+    },
+    {
+      "id": "e6",
+      "time": 1005,
+      "role": "agent",
+      "turn": "turn-1",
+      "kind": "text",
+      "md": "Found it — off-by-one, fixing now.",
+      "thinking": false
+    },
+    {
+      "id": "e7",
+      "time": 1006,
+      "role": "agent",
+      "turn": "turn-1",
+      "kind": "turn-end",
+      "status": "completed"
+    }
+  ]
+}

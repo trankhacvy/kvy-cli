@@ -14,6 +14,12 @@
  * e.g. `adopt.take`'s takeover, falcon-system-design.md §7.8), then SIGKILL
  * anything still alive. `all-force` SIGKILLs every target immediately, no
  * grace period.
+ *
+ * The discovery this composes (`processScan.ts` + `markers.ts`) mirrors
+ * Happy's `daemon/doctor.ts` (`findAllHappyProcesses`) —
+ * https://github.com/slopus/happy (MIT); the SIGTERM-then-SIGKILL escalation
+ * policy above is Falcon-specific (falcon-system-design.md §11), not present
+ * in Happy's doctor.ts.
  */
 
 import type { Logger } from "../logger.js";
