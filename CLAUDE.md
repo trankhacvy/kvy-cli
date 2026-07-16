@@ -96,10 +96,24 @@ packages/
                               `UseSessionListSnapshot` hook (defaults to a static mock
                               snapshot, `mock-source.ts`) so it composes with the real
                               sync-engine-backed hook once the two are wired together, same
-                              seam as the sync engine's `SyncSocketSource`. Wiring the sync
-                              engine into the Home screen (gap detection, TanStack Query
-                              invalidation, FR-7.2 session timeline) and auth-gating the Home
-                              route still [planned].
+                              seam as the sync engine's `SyncSocketSource`. A read-only
+                              session timeline screen (`/session/[id]`,
+                              `src/components/timeline/`) is also landed: a virtualized
+                              `Timeline` that renders the reducer's `RenderItem[]` as a
+                              structured chat transcript — markdown via a
+                              unified/remark/shiki pipeline compiled straight to React
+                              elements (`rehype-react`, `src/lib/markdown.ts` — no
+                              `dangerouslySetInnerHTML` anywhere), collapsible thinking
+                              blocks, a `ToolCard` registry (Bash, Edit/Write/MultiEdit+diff,
+                              Read, Grep/Glob, TodoWrite checklist, Task/subagent nesting,
+                              MCP generic fallback), and read-only permission/service/file
+                              markers. It runs off a hand-built demo fixture
+                              (`src/components/timeline/demo-items.ts`) pending the sync
+                              engine wiring. Wiring the sync engine into the Home screen and
+                              timeline (gap detection, TanStack Query invalidation, FR-7.2
+                              live session timeline), the composer, permission actions, the
+                              control bar (Phase 2), and auth-gating the Home route are
+                              still [planned].
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

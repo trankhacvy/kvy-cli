@@ -1,0 +1,33 @@
+import { Pencil } from "lucide-react";
+import { parseEditArgs } from "@/lib/tool-args";
+import type { ToolItem } from "@/sync/reducer";
+import { DiffView } from "../DiffView";
+import { ToolCardShell } from "./ToolCardShell";
+
+/** Handles `Edit`, `MultiEdit`, and `Write` — all three are "change this
+ * file" tools that render as one or more diffs. `Write` has no
+ * `old_string`, so its diff renders as a pure addition. */
+export function EditCard({ item }: { item: ToolItem }) {
+  const args = parseEditArgs(item.args);
+  const edits =
+    args.edits && args.edits.length > 0
+      ? args.edits
+      : [{ oldString: args.oldString, newString: args.newString ?? args.content }];
+
+  return (
+    <ToolCardShell item={item} icon={<Pencil className="size-4 text-muted-foreground" />}>
+      {args.filePath && (
+        <p className="mb-1.5 truncate font-mono text-xs text-muted-foreground">{args.filePath}</p>
+      )}
+      <div className="flex flex-col gap-2">
+        {edits.map((edit) => (
+          <DiffView
+            key={`${edit.oldString ?? ""}::${edit.newString ?? ""}`}
+            oldText={edit.oldString}
+            newText={edit.newString}
+          />
+        ))}
+      </div>
+    </ToolCardShell>
+  );
+}
