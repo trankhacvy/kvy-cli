@@ -3,7 +3,11 @@ import type { AddressInfo } from "node:net";
 import { Server } from "socket.io";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildMachinePresenceEphemeral, eventRouter } from "./eventRouter.js";
+import {
+  buildMachinePresenceEphemeral,
+  buildSessionActivityEphemeral,
+  eventRouter,
+} from "./eventRouter.js";
 
 // Exercises the eventRouter's room scheme, recipient filters, and ephemeral backpressure
 // coalescing against a real Socket.IO server/client pair — the room-join behavior lives
@@ -121,6 +125,26 @@ describe("eventRouter", () => {
     });
 
     expect(await received).toEqual({ t: "machine-presence", machineId: "mach_9", online: true });
+  });
+
+  it("buildSessionActivityEphemeral shapes an 'activity' ephemeral and emitEphemeral delivers it to session watchers", async () => {
+    const client = await connectClient();
+    const [serverSocket] = await io.fetchSockets();
+    eventRouter.addConnection("acct_activity", {
+      connectionType: "user-scoped",
+      // biome-ignore lint/suspicious/noExplicitAny: fetchSockets returns RemoteSocket
+      socket: serverSocket as any,
+      accountId: "acct_activity",
+    });
+
+    const received = waitForEvent(client, "ephemeral");
+    eventRouter.emitEphemeral({
+      accountId: "acct_activity",
+      payload: buildSessionActivityEphemeral("sess_activity", true),
+      recipientFilter: { type: "all-interested-in-session", sessionId: "sess_activity" },
+    });
+
+    expect(await received).toEqual({ t: "activity", sessionId: "sess_activity", working: true });
   });
 
   it("coalesces backpressured 'activity' ephemerals to the latest value per session, flushed on drain", async () => {

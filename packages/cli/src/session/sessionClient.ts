@@ -18,12 +18,18 @@
  *    Sent via `socket.volatile.emit` (design §4.3: "volatile keepalive" —
  *    droppable, never queued for a disconnected/backpressured socket).
  *  - The `working` flag is NOT read from fd3 here. The real signal
- *    (thinking-state parsed off Claude's stdio fd3 stream) lives in the
- *    still-unmerged `claudeLocal.ts`. This client instead takes an
+ *    (thinking-state parsed off Claude's stdio fd3 stream, debounced) now
+ *    lives in `claudeLocal.ts`'s `onThinkingChange` callback — merged into
+ *    this branch's worktree, but there is not yet any call site that starts
+ *    both `claudeLocal()` and this module together for the same session
+ *    process: that's the still-unbuilt mode-loop/launcher orchestration
+ *    (plan.md §16 "`loop.ts` port + `claudeLocalLauncher`/
+ *    `claudeRemoteLauncher` orchestration"). This client instead takes an
  *    injectable `getWorking: () => boolean` — same shape as
  *    `machineClient.ts`'s `buildMetadata`/`buildRuntimeState` — so callers
- *    (and tests) can supply it however they like today and swap in the real
- *    fd3-backed source later without touching this module.
+ *    (and tests) can supply it however they like today, and the eventual
+ *    orchestration layer wires a mutable flag toggled by `onThinkingChange`
+ *    into `getWorking` without touching this module.
  *  - Reconnect handling mirrors `machineClient.ts` exactly: socket.io-client's
  *    own auto-reconnect handles ordinary transport drops; an explicit
  *    `disconnect` handler re-triggers `socket.connect()` only for the one
@@ -45,9 +51,12 @@ export interface SessionClientDeps {
   aliveIntervalMs: number;
   /**
    * Returns the current working/idle flag to attach to the next `alive`
-   * emit. Placeholder for the real fd3 thinking-state signal, which lives
-   * in the still-unmerged `claudeLocal.ts` — callers wire that in later by
-   * passing a `getWorking` that reads it instead of the default `false`.
+   * emit. Placeholder for the real fd3 thinking-state signal, which lives in
+   * `claudeLocal.ts`'s `onThinkingChange` callback — callers wire that in
+   * once the session-process orchestration layer that starts both modules
+   * together exists (plan.md §16, still unbuilt), by passing a `getWorking`
+   * that reads a flag toggled from `onThinkingChange` instead of the default
+   * `false`.
    */
   getWorking: () => boolean;
 }
