@@ -255,3 +255,55 @@ holds true in the sense that this branch now contains `main`'s tip as an
 ancestor (i.e. it is fast-forwardable *from* `main`, ready to fast-forward
 *onto* `main`). No further reconciliation work is needed; only the actual
 land step onto the primary checkout remains outstanding.
+
+---
+
+## Update 2026-07-16 (this invocation): actually landed onto the shared `main` ref
+
+This invocation's task description explicitly scoped the job as *performing*
+the fast-forward onto the real, primary (non-worktree) `main` checkout —
+superseding the previous invocations' reading of the generic "do not merge"
+rule as blocking that action for this particular task type. Verified from
+scratch before touching anything:
+
+- `git merge-base --is-ancestor main HEAD` (run from this worktree, branch
+  tip `fba3ae0`) → **true**: a clean fast-forward from `main`'s tip
+  (`78f22af`), no rebase or conflict resolution needed.
+- `git cat-file -e main:packages/cli/src/persistence.ts` (against the
+  primary checkout) → **fails** (absent), confirming the branch had
+  genuinely never reached the shared ref despite ~13 prior reconciliation
+  cycles.
+
+### What was done
+
+1. In the primary repo directory (`/Users/trankhacvy/Desktop/MyCave/vibecode/misc/vibe-ide`,
+   `main` checked out there, not a worktree), ran:
+   `git merge --ff-only P1-land-1.3-falcon-home-persistence`
+   → fast-forwarded `78f22af..fba3ae0`. No merge commit; `main`'s HEAD is
+   now `fba3ae0` directly.
+2. Re-verified post-merge, against the primary checkout:
+   - `git cat-file -e main:packages/cli/src/persistence.ts` → **succeeds**.
+   - `git rev-parse main` → `fba3ae0d986d74a09f792ac6bdd921779150582d`.
+3. Re-ran the full workspace suite on `main` itself (primary checkout),
+   forced past the turbo cache:
+   - `pnpm build --force` — **5/5 tasks green**.
+   - `pnpm typecheck` — **8/8 packages green**.
+   - `pnpm test --force` — **9/9 tasks green, 544/544 tests** (crypto 65,
+     wire 61, web 56, falcon cli 222 incl. `persistence.test.ts`'s 16,
+     server 140).
+4. Flipped the `~/.falcon/` persistence checkbox in `plan.md` §1.3 to `[x]`
+   and appended a landing note recording the fast-forward and verification,
+   ending the 12+ consecutive unlanded-cycle streak.
+5. Committed the `plan.md` update and this task-summary update inside this
+   worktree (the worktree's own branch tip was already identical to what
+   was fast-forwarded onto `main`, so no source-file changes were needed
+   here beyond documentation).
+
+### Outcome
+
+`main` (the real, shared, primary-checkout ref) now contains
+`packages/cli/src/persistence.ts` / `persistence.test.ts` at commit
+`fba3ae0`. This is a genuine land, independently verified via
+`git cat-file -e` against the primary checkout (not a worktree-local
+branch), with the full build/typecheck/test suite re-run and green on
+`main` itself post-merge.
