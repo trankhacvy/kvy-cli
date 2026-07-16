@@ -227,7 +227,10 @@ describe("startClaudeRemote", () => {
     const delivered = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
     const permRequest = delivered.find((e) => e.ev.t === "perm-request");
     expect(permRequest).toBeDefined();
-    const reqId = (permRequest?.ev as { reqId: string }).reqId;
+    if (!permRequest) {
+      throw new Error("expected a perm-request envelope to have been delivered");
+    }
+    const reqId = (permRequest.ev as { reqId: string }).reqId;
 
     const first = handle.resolvePermission({ reqId, decision: { kind: "allow", scope: "once" } });
     const second = handle.resolvePermission({ reqId, decision: { kind: "deny" } });
@@ -235,6 +238,65 @@ describe("startClaudeRemote", () => {
     expect(first).toEqual({ ok: true });
     expect(second).toMatchObject({ ok: false, reason: "already-answered" });
     await expect(pending).resolves.toMatchObject({ behavior: "allow" });
+  });
+
+  it("stop() while a permission request is still pending rejects the blocked canUseTool() call and cancels it via the permission pipeline", async () => {
+    const fakeQuery = new FakeQuery([]);
+    let capturedCanUseTool: unknown;
+    const queryImpl = vi.fn((params: { prompt: unknown; options: { canUseTool: unknown } }) => {
+      capturedCanUseTool = params.options.canUseTool;
+      return fakeQuery as unknown as Query;
+    }) as unknown as typeof query;
+    const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
+
+    const handle = startClaudeRemote(
+      { workingDirectory: "/tmp/work", permissionMode: "default", onEnvelopes },
+      { queryImpl },
+    );
+
+    const canUseTool = capturedCanUseTool as (
+      toolName: string,
+      input: Record<string, unknown>,
+      options: { signal: AbortSignal },
+    ) => Promise<unknown>;
+    const pending = canUseTool("Bash", { command: "ls" }, { signal: new AbortController().signal });
+    // Swallow the rejection at the point the promise is created so Node's
+    // unhandled-rejection tracking doesn't flag it before the assertion below
+    // gets a chance to attach its own handler.
+    pending.catch(() => {});
+    await flushMicrotasks();
+
+    const beforeStop = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
+    const permRequest = beforeStop.find((e) => e.ev.t === "perm-request");
+    expect(permRequest).toBeDefined();
+    if (!permRequest) {
+      throw new Error("expected a perm-request envelope to have been delivered");
+    }
+    const reqId = (permRequest.ev as { reqId: string }).reqId;
+
+    await handle.stop();
+
+    // The canUseTool() promise the SDK is awaiting must settle (reject)
+    // rather than hang forever now that the query is gone.
+    await expect(pending).rejects.toThrow();
+
+    // resolvePermission() for that same reqId now reports it as already
+    // answered (canceled by stop()), not as if it were still outstanding.
+    expect(
+      handle.resolvePermission({ reqId, decision: { kind: "allow", scope: "once" } }),
+    ).toMatchObject({ ok: false, reason: "already-answered" });
+
+    // A perm-resolve envelope carrying the cancellation decision was emitted
+    // as part of stop()'s cleanup.
+    const afterStop = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
+    const permResolve = afterStop.find(
+      (e) => e.ev.t === "perm-resolve" && "reqId" in e.ev && e.ev.reqId === reqId,
+    );
+    expect(permResolve?.ev).toMatchObject({
+      t: "perm-resolve",
+      reqId,
+      decision: { kind: "deny", message: "Session stopped" },
+    });
   });
 
   it("setMode() syncs the permission handler's mode so a later tool call is auto-approved accordingly", async () => {
@@ -257,7 +319,11 @@ describe("startClaudeRemote", () => {
       input: Record<string, unknown>,
       options: { signal: AbortSignal },
     ) => Promise<unknown>;
-    const result = await canUseTool("Bash", { command: "ls" }, { signal: new AbortController().signal });
+    const result = await canUseTool(
+      "Bash",
+      { command: "ls" },
+      { signal: new AbortController().signal },
+    );
     expect(result).toMatchObject({ behavior: "allow" });
   });
 });

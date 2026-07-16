@@ -18,7 +18,12 @@ export function getToolDescriptor(toolName: string): ToolDescriptor {
   if (toolName === "exit_plan_mode" || toolName === "ExitPlanMode") {
     return { edit: false, exitPlan: true, dangerous: false };
   }
-  if (toolName === "Edit" || toolName === "MultiEdit" || toolName === "Write" || toolName === "NotebookEdit") {
+  if (
+    toolName === "Edit" ||
+    toolName === "MultiEdit" ||
+    toolName === "Write" ||
+    toolName === "NotebookEdit"
+  ) {
     return { edit: true, exitPlan: false, dangerous: true };
   }
   if (toolName === "Bash") {

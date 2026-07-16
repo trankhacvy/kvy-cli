@@ -3,8 +3,16 @@ import { getToolDescriptor } from "./getToolDescriptor.js";
 
 describe("getToolDescriptor", () => {
   it("classifies ExitPlanMode (both spellings) as exitPlan, nothing else", () => {
-    expect(getToolDescriptor("ExitPlanMode")).toEqual({ edit: false, exitPlan: true, dangerous: false });
-    expect(getToolDescriptor("exit_plan_mode")).toEqual({ edit: false, exitPlan: true, dangerous: false });
+    expect(getToolDescriptor("ExitPlanMode")).toEqual({
+      edit: false,
+      exitPlan: true,
+      dangerous: false,
+    });
+    expect(getToolDescriptor("exit_plan_mode")).toEqual({
+      edit: false,
+      exitPlan: true,
+      dangerous: false,
+    });
   });
 
   it("classifies edit tools as edit+dangerous, not exitPlan", () => {

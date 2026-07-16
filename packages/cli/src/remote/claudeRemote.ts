@@ -53,9 +53,19 @@
  * Remote mode" lists it; wiring `registerSessionRpcHandlers` to an actual
  * `ClaudeRemoteHandle` is `loop.ts`'s job, §2.2, not built yet) calls it.
  */
-import { type CanUseTool, type Query, query, type SDKUserMessage } from "@anthropic-ai/claude-agent-sdk";
-import { AbortError } from "@anthropic-ai/claude-agent-sdk";
-import { createEnvelope, type PermDecision, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
+import {
+  AbortError,
+  type CanUseTool,
+  type Query,
+  query,
+  type SDKUserMessage,
+} from "@anthropic-ai/claude-agent-sdk";
+import {
+  createEnvelope,
+  type PermDecision,
+  type PermissionMode,
+  type SessionEnvelope,
+} from "@falcon/wire";
 import { FALCON_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
 import { type PermAnswerResult, PermissionHandler } from "../claude/permissionHandler.js";
 import type { Logger } from "../logger.js";

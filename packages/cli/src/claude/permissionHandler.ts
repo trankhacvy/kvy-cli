@@ -62,15 +62,16 @@
  *    `perm-resolve` envelopes by the reducer, so there is no second
  *    lookup path to maintain here.
  */
-import { createId } from "@paralleldrive/cuid2";
+
 import type { CanUseTool, PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import {
   createEnvelope,
-  PermAnswerResultSchema,
+  type PermAnswerResultSchema,
   type PermDecision,
   type PermissionMode,
   type SessionEnvelope,
 } from "@falcon/wire";
+import { createId } from "@paralleldrive/cuid2";
 import type { z } from "zod";
 import type { Logger } from "../logger.js";
 import { getToolDescriptor } from "./getToolDescriptor.js";
@@ -118,12 +119,19 @@ export interface PermissionHandlerDeps {
 const DEFAULT_DENY_MESSAGE =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.";
 
-const ALL_MODES: readonly PermissionMode[] = ["default", "acceptEdits", "plan", "bypassPermissions"];
+const ALL_MODES: readonly PermissionMode[] = [
+  "default",
+  "acceptEdits",
+  "plan",
+  "bypassPermissions",
+];
 /** `ExitPlanMode` can't reasonably offer "switch to plan mode" as a way to resolve itself. */
 const EXIT_PLAN_MODES: readonly PermissionMode[] = ["default", "acceptEdits", "bypassPermissions"];
 
 function availableModes(toolName: string): PermissionMode[] {
-  return [...(toolName === "ExitPlanMode" || toolName === "exit_plan_mode" ? EXIT_PLAN_MODES : ALL_MODES)];
+  return [
+    ...(toolName === "ExitPlanMode" || toolName === "exit_plan_mode" ? EXIT_PLAN_MODES : ALL_MODES),
+  ];
 }
 
 function mergeInput(
@@ -243,10 +251,18 @@ export class PermissionHandler {
 
     const result = this.applyDecision(pending, params.decision);
     pending.resolve(result);
-    this.completeRequest(params.reqId, params.decision, result.behavior === "deny" ? "denied" : "approved");
+    this.completeRequest(
+      params.reqId,
+      params.decision,
+      result.behavior === "deny" ? "denied" : "approved",
+    );
 
     this.deps.emitEnvelope(
-      createEnvelope("agent", { t: "perm-resolve", reqId: params.reqId, decision: params.decision }),
+      createEnvelope("agent", {
+        t: "perm-resolve",
+        reqId: params.reqId,
+        decision: params.decision,
+      }),
     );
 
     return { ok: true };
@@ -327,7 +343,10 @@ export class PermissionHandler {
     switch (decision.kind) {
       case "allow": {
         if (decision.scope === "session") this.allowForSession(pending.toolName, pending.input);
-        return { behavior: "allow", updatedInput: mergeInput(pending.input, decision.updatedInput) };
+        return {
+          behavior: "allow",
+          updatedInput: mergeInput(pending.input, decision.updatedInput),
+        };
       }
       case "deny":
         return { behavior: "deny", message: decision.message ?? DEFAULT_DENY_MESSAGE };
