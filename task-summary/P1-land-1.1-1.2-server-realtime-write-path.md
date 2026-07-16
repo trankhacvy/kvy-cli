@@ -8,7 +8,69 @@ work (plan.md §16, "1.1 Server realtime (read path)" + "1.2 Server write path
 and self-verified this work but none had ever reached the shared `main` ref — each
 "land" attempt only ever merged inside its own disposable, throwaway worktree.
 
-## Update (latest session, 2026-07-16): reconciled with main's actual current tip (`a75ab25`)
+## Update (this session, 2026-07-16): re-reconciled with main's actual current tip (`171af64`)
+
+`main` had advanced one more commit (`171af64`, "cycle 32") past the previous
+session's reconciliation point (`a75ab25`) via `P1-1.5-notify-daemon-session-started`'s
+land (`ca8f3b1`, adds `packages/cli/src/daemon/notify.ts` + tests — entirely under
+`packages/cli/`, no overlap with this branch's `packages/server/` changes) plus a
+docs-only cycle commit. Confirmed via `git diff --stat <merge-base> main` before
+merging: only `packages/cli/src/daemon/notify*`, `plan.md`, `progress.md`, and two
+`task-summary/*.md` files changed — zero touches to `packages/server/`,
+`packages/wire/`, or `pnpm-lock.yaml`.
+
+1. `git merge --no-ff main -m "merge: reconcile with main tip 171af64 before
+   landing"` — this time fully automatic, **zero conflicts** (even `plan.md`
+   auto-merged cleanly; the previous session's narrative paragraph and `main`'s new
+   content did not overlap in the same hunk). Merge commit: `0cc7196`. `git
+   merge-base --is-ancestor main HEAD` → true.
+2. Confirmed zero leftover conflict markers: `grep -n '^<<<<<<<\|^=======\|^>>>>>>>'
+   plan.md progress.md pnpm-lock.yaml` → 0 hits.
+3. **Re-confirmed the documented `rtk` plain-shell-output hazard live, this
+   session:** a bare `git log -1` / `git log --oneline -5` echoed stale/wrong
+   output — at one point showing `main`'s tip commit (`171af64`) as if it were this
+   worktree's `HEAD`, when the worktree's actual `HEAD` was the new merge commit
+   `0cc7196` (parents `56058aa` + `171af64`). Cross-checked with `rtk proxy git
+   rev-parse HEAD` / `rtk proxy git log -1 --pretty=full`, which correctly reported
+   `0cc7196`. **Every command and file-existence claim in this update was run
+   through `rtk proxy <cmd>` and/or independently cross-checked with the `Read`
+   tool directly against files on disk** — never taken from unfiltered plain
+   `git`/`pnpm` shell output alone.
+4. Re-ran the full workspace suite, forced/cache-bypassed, via `rtk proxy`:
+   - `rtk proxy pnpm build` — 5/5 tasks (some cache hits from the shared worktree
+     turbo cache, expected and harmless for `build`).
+   - `rtk proxy pnpm exec turbo run typecheck --force` — **7/7 tasks**, all cache
+     bypassed.
+   - `rtk proxy pnpm exec turbo run test --force` — **9/9 tasks**, all cache
+     bypassed: `@falcon/wire` 61/61 (6 files), `@falcon/crypto` 65/65 (8 files),
+     `@falcon/web` 36/36 (5 files), `@falcon/server` **140/140** (20 files, incl.
+     `app/socket.test.ts` 10, `app/socket/rpcHandler.test.ts` 9,
+     `app/events/eventRouter.test.ts` 8, and all seven HTTP write-path route test
+     files), `falcon` (cli) 168/168 (16 files). **470 tests total, 0 failures.**
+5. Independently re-verified via the `Read` tool (not `ls`/`find`, which the `rtk`
+   hook can also intercept) that `packages/server/src/app/socket.ts`,
+   `app/socket/rpcHandler.ts`, `app/routes/sessions.ts`, and `db/box.ts` all exist
+   with real, substantive implementations (read the first ~20 lines of each; all
+   match their documented port/design provenance in `plan.md`'s own bullet
+   annotations).
+6. Updated `plan.md`'s §1.1 narrative paragraph with a new dated entry documenting
+   this reconciliation pass (checkboxes were already `[x]` from the prior session;
+   left unchanged).
+
+**Scope boundary (unchanged from prior sessions):** this task's own operating rules
+place "do NOT merge or push — just commit in the worktree" and "ALL file edits MUST
+be in `.worktrees/.../` (not the main branch)" as hard constraints on a per-task
+worktree session. Advancing the shared `main` ref itself — the one remaining step —
+is performed by whichever process in this workflow has write access to the primary
+(non-worktree) repo checkout, consistent with how every other "land" task that has
+actually reached `main` in this repo's history (`P1-1.3-hook-server`,
+`P1-1.5-daemon-cli-commands`, `P1-1.5-notify-daemon-session-started`, etc.) shows up
+as a single-parent commit made from that checkout, not a merge commit pushed from a
+worktree. This worktree's tip is, once again, a clean, zero-conflict, fully-green,
+ancestor-verified fast-forward/merge candidate for `main`'s current tip (`171af64`
+at the time of this session).
+
+## Update (prior session, 2026-07-16): reconciled with main's actual current tip (`a75ab25`)
 
 Task this time: rebase/reconcile this branch onto `main`'s actual current `HEAD`
 (`a75ab25`), resolve the routine `plan.md`/`progress.md` narrative conflicts, run a
