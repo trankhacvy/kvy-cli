@@ -36,7 +36,7 @@ const nextConfig = (phase: string): NextConfig => ({
   // host or CDN in front of the split web origin can't silently swap out a
   // JS/CSS bundle without the browser refusing to execute it. This is the one
   // half of "CSP+SRI" that's a build-time concern; the CSP header itself is
-  // set at serve time by `deploy/web/nginx.conf.template`.
+  // set at serve time by `deploy/web/default.conf.template`.
   experimental: {
     sri: {
       algorithm: "sha256",
