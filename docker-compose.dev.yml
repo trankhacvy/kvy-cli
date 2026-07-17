@@ -4,9 +4,9 @@
 # SQL dialect it uses in prod/self-host (design decision: one dialect, one
 # drizzle-kit migration set forever — see falcon-system-design.md §6.5).
 #
-# This is the dev-only precursor to `deploy/docker-compose.yml` (Phase 4),
-# which will add the `server` service (+ optional `minio`) for self-hosting.
-# Until then, run the server locally with `pnpm dev` against this database.
+# This is the dev-only sibling of `deploy/docker-compose.yml`, which adds
+# the `server`/`web` services (+ optional `minio`) for self-hosting. Run the
+# server locally with `pnpm dev` against this database for day-to-day dev.
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up -d

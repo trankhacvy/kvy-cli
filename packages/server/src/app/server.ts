@@ -1,3 +1,4 @@
+import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyServerOptions } from "fastify";
 import {
@@ -13,9 +14,9 @@ import {
   type OAuthVerifier,
 } from "../auth/index.js";
 import {
+  type BlobStorageDriver,
   buildBlobStorage,
   resolveLocalDriverConfig,
-  type BlobStorageDriver,
 } from "../blobStorage/index.js";
 import type { LocalDriverConfig } from "../blobStorage/localDriver.js";
 import { env } from "../config.js";
@@ -41,6 +42,7 @@ import { buildSessionsRoutes } from "./routes/sessions.js";
 import { buildSyncRoutes } from "./routes/sync.js";
 import { buildTelegramLinkRoutes } from "./routes/telegramLink.js";
 import { buildUnmanagedSessionsRoutes } from "./routes/unmanagedSessions.js";
+import { buildCorsOriginValidator } from "./security/cors.js";
 import { startSocket } from "./socket.js";
 
 // Default request-size cap (design §4.3: "request-size caps"). The message
@@ -81,7 +83,8 @@ export async function buildServer(
   const eventRouter = deps.eventRouter ?? defaultEventRouter;
   const blobStorage = deps.blobStorage ?? buildBlobStorage(env);
   const blobLocalConfig =
-    deps.blobLocalConfig ?? (blobStorage.kind === "local" ? resolveLocalDriverConfig(env) : undefined);
+    deps.blobLocalConfig ??
+    (blobStorage.kind === "local" ? resolveLocalDriverConfig(env) : undefined);
   // Deliberately built from `defaultEventRouter` (the real, presence-capable
   // singleton), not the possibly-fake `eventRouter` above — `EventRouterPort`
   // (what `deps.eventRouter` is typed as) doesn't carry `hasActiveVisibleClient`,
@@ -98,6 +101,36 @@ export async function buildServer(
   // typed route registered below (design §3: "Typed routes").
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  // HTTP CORS for the split-origin self-host shape (falcon-system-design.md §5.3/§9,
+  // plan.md §16 "4.3 Distribution & self-host": web is a static export served from a
+  // different origin than this API). Reuses the exact same allowlist validator Socket.IO's
+  // `cors.origin` already uses (`security/cors.ts`, built for the wildcard-CORS removal in
+  // P4-4.4-security-pass) so there is one `CORS_ALLOWED_ORIGINS` allowlist governing both
+  // transports, not two independently-drifting lists. `credentials: false`: auth is a
+  // bearer token in the `Authorization` header (auth/tokens.ts), never a cookie, so there's
+  // no session to leak via a credentialed cross-origin request — omitting
+  // `Access-Control-Allow-Credentials` entirely is strictly safer than the alternative.
+  // `allowedHeaders` is an explicit allowlist (not the plugin's default "reflect whatever
+  // the browser asked for") to match this file's general stance of narrow-by-default.
+  //
+  // `@fastify/cors`'s origin-function callback is `(err, origin: StaticOrigin) => void`
+  // (its second argument becomes the literal `Access-Control-Allow-Origin` value, or a
+  // boolean shorthand for "reflect the request origin" / "deny"), which differs just
+  // enough from `buildCorsOriginValidator`'s `(err, allow?: boolean) => void` shape
+  // (matched to Socket.IO's `cors` package convention) that TypeScript won't structurally
+  // unify the two callback types. `allow ?? false` below adapts the boolean the shared
+  // validator already produces into this plugin's expected shape without duplicating the
+  // allowlist-matching logic itself.
+  const isAllowedOrigin = buildCorsOriginValidator(env.CORS_ALLOWED_ORIGINS);
+  await app.register(cors, {
+    origin: (origin, callback) => {
+      isAllowedOrigin(origin, (err, allow) => callback(err, allow ?? false));
+    },
+    credentials: false,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  });
 
   // Global default; individual routes narrow it further via `config.rateLimit`
   // (design §4.3: "rate limits on auth + ingest routes"). Keyed by the

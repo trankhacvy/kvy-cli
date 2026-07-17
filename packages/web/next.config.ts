@@ -29,6 +29,19 @@ const nextConfig = (phase: string): NextConfig => ({
     // No image optimization server exists for a static export.
     unoptimized: true,
   },
+  // Subresource Integrity (plan.md §16 "4.3 Distribution & self-host": "strict
+  // CSP+SRI" for the split-origin web deploy). Next stamps an `integrity`
+  // attribute (sha256 of the file's contents) onto every `<script>`/`<link>`
+  // tag it emits for its own build output, so a compromised/tampered static
+  // host or CDN in front of the split web origin can't silently swap out a
+  // JS/CSS bundle without the browser refusing to execute it. This is the one
+  // half of "CSP+SRI" that's a build-time concern; the CSP header itself is
+  // set at serve time by `deploy/web/default.conf.template`.
+  experimental: {
+    sri: {
+      algorithm: "sha256",
+    },
+  },
   // Pin the workspace root explicitly (this is the pnpm monorepo root, two
   // levels up from packages/web) so Next's file tracing doesn't guess wrong
   // when it finds another lockfile above the repo, e.g. inside a worktree.

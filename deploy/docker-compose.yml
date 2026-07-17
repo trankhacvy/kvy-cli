@@ -1,0 +1,161 @@
+# Self-host stack (falcon-system-design.md §6.5, plan.md §16 "4.3 Distribution
+# & self-host"): @falcon/server + Postgres 16 + an optional MinIO (the
+# S3-compatible target the already-landed blob-storage driver picks up
+# whenever `S3_BUCKET` is set — see packages/server/src/blobStorage/index.ts;
+# leave it unset and blobs fall back to local disk, no MinIO required). The
+# web app is served from a *separate* origin (its own nginx container) with a
+# strict CSP + SRI — see deploy/web/default.conf.template and
+# packages/web/next.config.ts's `experimental.sri`.
+#
+# Usage (from this directory):
+#   cp .env.example .env            # then set FALCON_MASTER_SECRET at least
+#   docker compose up -d --build              # server + postgres + web
+#   docker compose --profile minio up -d --build   # ...plus MinIO
+#
+# See deploy/README.md for the full self-host walkthrough.
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: falcon
+      POSTGRES_PASSWORD: falcon
+      POSTGRES_DB: falcon
+    volumes:
+      - falcon-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U falcon -d falcon"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ..
+      dockerfile: deploy/server.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-3005}:3005"
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3005
+      - DATABASE_URL=postgres://falcon:falcon@postgres:5432/falcon
+      # Fails the compose invocation up front (rather than the container
+      # crash-looping) if this is still unset — config.ts refuses to boot
+      # with the dev-only default once NODE_ENV=production anyway, but this
+      # surfaces the same mistake before an image even starts.
+      - FALCON_MASTER_SECRET=${FALCON_MASTER_SECRET:?Set FALCON_MASTER_SECRET in deploy/.env to a real 32+ char secret before starting}
+      # CORS allowlist for both the HTTP API and the /v1/stream WebSocket
+      # (app/security/cors.ts) — must name the *web* container's own public
+      # origin, since that's the split origin the browser will call in from.
+      - CORS_ALLOWED_ORIGINS=${PUBLIC_WEB_ORIGIN:-http://localhost:8080}
+      - PUBLIC_WEB_ORIGIN=${PUBLIC_WEB_ORIGIN:-http://localhost:8080}
+      - PUBLIC_API_ORIGIN=${PUBLIC_API_ORIGIN:-http://localhost:3005}
+      - BLOB_LOCAL_DIR=/data/blobs
+      # Everything below is optional (design stance throughout config.ts:
+      # "missing config = skipped capability, not a crash"). Bare `- KEY`
+      # entries pass a variable through from `.env`/the shell only when it's
+      # actually set there — leaving it genuinely *unset* inside the
+      # container (not set-to-empty-string) so zod's `.optional()` checks
+      # behave the same as running the server outside Docker.
+      - S3_BUCKET
+      - S3_REGION
+      - S3_ENDPOINT
+      - S3_ACCESS_KEY_ID
+      - S3_SECRET_ACCESS_KEY
+      - S3_FORCE_PATH_STYLE
+      - GOOGLE_OAUTH_CLIENT_ID
+      - GITHUB_OAUTH_CLIENT_ID
+      - GITHUB_OAUTH_CLIENT_SECRET
+      - VAPID_PUBLIC_KEY
+      - VAPID_PRIVATE_KEY
+      - VAPID_SUBJECT
+      - TELEGRAM_BOT_TOKEN
+      - TELEGRAM_BOT_USERNAME
+      - TELEGRAM_WEBHOOK_SECRET
+      - NTFY_BASE_URL
+    volumes:
+      - falcon-server-data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        # Build-time only (Next inlines these into the static bundle — see
+        # packages/web/src/lib/config.ts) — rebuild this image whenever the
+        # API origin or these ids change, `docker compose up -d --build`.
+        API_ORIGIN: ${PUBLIC_API_ORIGIN:-http://localhost:3005}
+        GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+        GITHUB_OAUTH_CLIENT_ID: ${GITHUB_OAUTH_CLIENT_ID:-}
+        VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    environment:
+      # Runtime only — the CSP header's connect-src (default.conf.template),
+      # substituted into nginx config at container start. Keep in sync with
+      # the `API_ORIGIN` build arg above; they're the same value.
+      - API_ORIGIN=${PUBLIC_API_ORIGIN:-http://localhost:3005}
+
+  # Optional S3-compatible target for the blob-storage driver (design §6.5:
+  # "MinIO in dev/self-host"). Only started with `--profile minio`; leave
+  # S3_BUCKET unset in `.env` to skip this entirely and use the local-disk
+  # driver instead (falcon-server-data volume above already covers that).
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    profiles: ["minio"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-falcon}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-falcon12345}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - falcon-minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: creates the bucket `S3_BUCKET` names, idempotently, then exits.
+  # Runs only alongside `minio` (same profile) — the server's own S3 driver
+  # (blobStorage/s3Driver.ts) only ever presigns PUT/GET URLs, it never
+  # creates the bucket itself.
+  minio-init:
+    image: minio/mc:latest
+    profiles: ["minio"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-falcon}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-falcon12345}
+      S3_BUCKET: ${S3_BUCKET:-falcon-blobs}
+    entrypoint: sh
+    command:
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+
+volumes:
+  falcon-pg-data: {}
+  falcon-server-data: {}
+  falcon-minio-data: {}

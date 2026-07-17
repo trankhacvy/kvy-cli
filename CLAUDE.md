@@ -357,6 +357,8 @@ to run against an already-current database.
 - `falcon-system-design.md` — architecture, protocol, and encryption design.
 - `falcon-prd.md` — product requirements.
 - `docs/protocol.md`, `docs/encryption.md` — short stubs pointing into the design doc.
+- `deploy/README.md` — self-host walkthrough (`deploy/docker-compose.yml`: server +
+  postgres + optional minio, migrate-on-boot, split-origin web with strict CSP + SRI).
 
 Update this file as each phase lands new packages (e.g. once `cli`/`server`/`web` exist,
 move them out of "planned" above and add any new root-level commands they introduce).
