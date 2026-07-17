@@ -202,7 +202,32 @@ packages/
 │                             tested but had no live boot-time caller until now. Both were
 │                             previously honest-but-always-empty stubs; `resolveProviderSession`
 │                             (`adopt.take`/`adopt.mirror`) still has no real default, same
-│                             reasoning as above.
+│                             reasoning as above. `src/adapters/` (design §7.9, plan.md §16
+│                             "17. v2 — ACP migration / Phase 2.0 — foundation": adapter
+│                             manager) is landed: `manifest.ts`'s `ADAPTER_MANIFEST` pins each
+│                             official ACP adapter's exact npm-scoped package name, version,
+│                             and npm-registry `dist.integrity` hash (`claude-code` →
+│                             `@agentclientprotocol/claude-agent-acp`, `codex` →
+│                             `@agentclientprotocol/codex-acp` — both scoped; the design doc's
+│                             unscoped shorthand doesn't exist on the registry); `install.ts`
+│                             runs a real `npm install <pkg>@<exact version>` into
+│                             `~/.falcon/adapters/` (its own npm prefix, injectable `NpmExec`
+│                             seam) and re-verifies before reporting success;
+│                             `verify.ts` is the actual check — reads npm's own
+│                             `node_modules/.package-lock.json` and compares version +
+│                             integrity against the manifest, never throws; `health.ts` wraps
+│                             it for `falcon doctor`/`falcon adapters`; `spawn.ts`'s
+│                             `resolveAdapterSpawn` is the verify-before-spawn seam Phase
+│                             2.1's `acpConnection.ts` will call instead of touching
+│                             `paths.ts` directly — no `npx` at session start, ever. Wired up
+│                             as `falcon adapters install|upgrade` (`commands/adapters.ts`,
+│                             `args.ts`, `index.ts`, no daemon interaction — a local npm-prefix
+│                             operation) and into `falcon doctor`'s report (`daemon/doctor.ts`
+│                             gained `adapters`/`providers` sections, reusing the existing
+│                             `detectClaudeCode`/`detectCodex` `ProviderAdapter.detect()`
+│                             implementations rather than duplicating CLI detection).
+│                             Standalone module — no dependency on the claim store or
+│                             `@falcon/wire` changes from the same phase.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth

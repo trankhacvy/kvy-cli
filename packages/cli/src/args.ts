@@ -36,6 +36,7 @@ export type FalconCommand =
   | { type: "notify"; message: string }
   | { type: "adopt"; list: boolean; remote: boolean }
   | { type: "shim"; action: "install" | "uninstall" | "status" }
+  | { type: "adapters"; action: "install" | "upgrade" }
   | { type: "update" };
 
 /** Thrown for malformed Falcon-level commands. Never thrown for provider passthrough. */
@@ -102,6 +103,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseAdopt(rest);
     case "shim":
       return parseShim(rest);
+    case "adapters":
+      return parseAdapters(rest);
     case "update":
       return { type: "update" };
     default:
@@ -334,6 +337,17 @@ function parseShim(rest: string[]): FalconCommand {
   throw new ArgParseError(
     `Unknown "falcon shim" action: ${action ?? "(none)"}`,
     "falcon shim install|uninstall|status",
+  );
+}
+
+function parseAdapters(rest: string[]): FalconCommand {
+  const action = rest[0];
+  if (action === "install" || action === "upgrade") {
+    return { type: "adapters", action };
+  }
+  throw new ArgParseError(
+    `Unknown "falcon adapters" action: ${action ?? "(none)"}`,
+    "falcon adapters install|upgrade",
   );
 }
 

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
 import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
+import { runAdaptersInstallCommand, runAdaptersUpgradeCommand } from "./commands/adapters.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import { runResumeCommand } from "./commands/resume.js";
 import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
@@ -149,6 +150,7 @@ Usage:
   falcon workspace sync             (coming soon)
   falcon shim install|uninstall|status
                                      Manage the claude/codex PATH shim (Tier 3 adoption)
+  falcon adapters install|upgrade   Install/upgrade the pinned ACP adapter packages
   falcon update                     Check for and install a newer falcon version
   falcon notify -p <message>        Send a test push notification
   falcon --help, -h                 Show this help
@@ -399,6 +401,21 @@ async function runShim(command: Extract<FalconCommand, { type: "shim" }>): Promi
 }
 
 /**
+ * `falcon adapters install|upgrade` (design §7.9, plan.md §16 "Phase 2.0 —
+ * foundation") — see `commands/adapters.ts` / `adapters/install.ts` for the
+ * actual npm-prefix install + integrity-verification logic. Deliberately
+ * does **not** call `ensureDaemon()`, same rationale as `shim`/`workspace
+ * config`: a local filesystem/npm operation under `~/.falcon/adapters`, no
+ * daemon interaction at all.
+ */
+async function runAdapters(command: Extract<FalconCommand, { type: "adapters" }>): Promise<number> {
+  const deps = { homeDir: resolveHomeDir() };
+  return command.action === "install"
+    ? runAdaptersInstallCommand(deps)
+    : runAdaptersUpgradeCommand(deps);
+}
+
+/**
  * `falcon sessions list` (plan.md §16 "4.2 Adoption Tier 3 + polish") — see
  * `commands/sessionsList.ts` for the actual local+remote listing logic.
  * `ensureDaemon()` runs first for consistency with every other
@@ -528,6 +545,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runAdopt(command);
     case "shim":
       return runShim(command);
+    case "adapters":
+      return runAdapters(command);
     case "update":
       return runUpdate();
     case "workspace-config":

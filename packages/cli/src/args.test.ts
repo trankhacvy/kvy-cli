@@ -328,6 +328,20 @@ describe("parseArgs — shim", () => {
   });
 });
 
+describe("parseArgs — adapters", () => {
+  it.each(["install", "upgrade"] as const)("parses adapters %s", (action) => {
+    expect(parseArgs(["adapters", action])).toEqual({ type: "adapters", action });
+  });
+
+  it("throws on an unknown adapters action", () => {
+    expect(() => parseArgs(["adapters", "bogus"])).toThrow(ArgParseError);
+  });
+
+  it("throws when no adapters action is given", () => {
+    expect(() => parseArgs(["adapters"])).toThrow(ArgParseError);
+  });
+});
+
 describe("parseArgs — update", () => {
   it("parses `falcon update`", () => {
     expect(parseArgs(["update"])).toEqual({ type: "update" });
