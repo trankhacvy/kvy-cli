@@ -100,12 +100,14 @@ export function recordWsConnectionClosed(scope: string): void {
 
 /**
  * `GET /metrics` — unauthenticated (a scrape target can't hold a bearer
- * token any more meaningfully than `/health` can) and excluded from the
- * global rate limiter's default budget by being cheap/rare-relative-to-user-
- * traffic in practice; if a deployment's Prometheus scrape interval is
- * aggressive enough to matter, the fix is the standard one — put it behind
- * a private scrape network, per the module comment above, not throttle it
- * in-process.
+ * token any more meaningfully than `/health` can). No `config.rateLimit`
+ * override is registered for this route (same as `/health`), so it shares
+ * the server's global default budget (300 req/min, keyed by IP since this
+ * route is unauthenticated) rather than being excluded from rate limiting
+ * — a normal Prometheus scrape interval (15-60s) is nowhere near that
+ * budget in practice. If a deployment's scrape interval is ever aggressive
+ * enough to matter, the fix is the standard one — put it behind a private
+ * scrape network, per the module comment above, not throttle it in-process.
  */
 export const metricsRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get("/metrics", async (_req, reply) => {
