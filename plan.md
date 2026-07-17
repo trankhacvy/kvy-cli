@@ -1022,6 +1022,23 @@ connection pooling, no agent-id-as-identity). Design authority:
       repeatedly for Phase 2.0's bullets above (cycles 70–74); not flipped. A genuine
       land pass (fresh worktree off current `main`, merge/re-apply `38c9471`, re-verify,
       fast-forward the real `main` ref) is still needed. See `progress.md` Cycle 75.)*
+      *(2026-07-18, progress tracker, cycle 76: a `P17-land-2.1-acp-connection` branch
+      now exists (tip `115e474`) whose own `task-summary/P17-land-2.1-acp-connection.md`
+      documents a clean `git cherry-pick 487ac17..38c9471` onto a fresh worktree off
+      `main` at `cc3e9ae`, re-verified green from a clean install (`pnpm build` 6/6,
+      `pnpm typecheck` 11/11, `pnpm test` 126 files/1206 tests, scoped `biome check
+      packages/cli/src/acp/` 0 errors/0 warnings) — but that task-summary itself states
+      it deliberately did **not** merge or push to the real `main` ref ("harness's
+      explicit rule for this run: Do NOT merge or push — just commit in the worktree").
+      Independently confirmed from `main` (still HEAD `cc3e9ae`, unchanged this cycle):
+      `git merge-base --is-ancestor P17-land-2.1-acp-connection main` → **false**;
+      `task-summary/P17-land-2.1-acp-connection.md` does not exist on `main`'s tree
+      (only on the branch). Checkbox correctly left unflipped — flipping it now would be
+      the exact false-landing mistake this tracker exists to catch. Needs an actual
+      `git merge --no-ff` (or fast-forward) of `P17-land-2.1-acp-connection` onto the
+      real `main` ref by a step with merge/push access, mirroring the `-real` follow-up
+      that finally landed `P17-land-2.0-adapter-manager`/`P17-land-2.0-claim-store`/
+      `P17-land-2.0-wire-envelope-verification`. See `progress.md` Cycle 76.)*
 - [ ] `cli/src/acp/acpToEnvelope.ts`: single shared mapper, ACP `session/update` →
       `SessionEnvelope` (mapping table in design §7.3); unknown kinds logged + dropped;
       subagent scope from `_meta.claudeCode.parentToolUseId`; turn-start/turn-end
@@ -1038,6 +1055,24 @@ connection pooling, no agent-id-as-identity). Design authority:
       **false**; `git cat-file -e main:packages/cli/src/acp/acpToEnvelope.ts` fails — the
       file does not exist on `main`'s tree. Same worktree-only shape as
       `acpConnection.ts` above; not flipped. See `progress.md` Cycle 75.)*
+      *(2026-07-18, progress tracker, cycle 76: a `P17-land-2.1-acp-to-envelope` branch
+      now exists (tip `b303ae3`) whose own `task-summary/
+      P17-land-2.1-acp-to-envelope.md` documents a clean `git cherry-pick 16815af` onto a
+      fresh worktree off `main` at `cc3e9ae`, re-verified green from a clean install
+      (`pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 126 files/1203 tests
+      including `acpToEnvelope.test.ts` 22/22) — but that task-summary itself states the
+      checkbox is deliberately left `[ ]` because "this subagent's operating rules for
+      worktree 'land' tasks are explicit: Do NOT merge or push — just commit in the
+      worktree", and from inside that worktree `git merge-base --is-ancestor 6f25a93
+      main` still returns false. Independently confirmed from `main` (still HEAD
+      `cc3e9ae`, unchanged this cycle): `git merge-base --is-ancestor
+      P17-land-2.1-acp-to-envelope main` → **false**; `task-summary/
+      P17-land-2.1-acp-to-envelope.md` does not exist on `main`'s tree. Checkbox
+      correctly left unflipped. Needs the same real `git merge --no-ff` (or
+      fast-forward) of `P17-land-2.1-acp-to-envelope` onto the real `main` ref, and can
+      land in either order relative to `acpConnection.ts` (no dependency between them —
+      `AcpSessionUpdate` is intentionally decoupled from the ACP SDK). See `progress.md`
+      Cycle 76.)*
 - [ ] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
       existing reducer test corpus
 - [ ] Unified ACP permission handler: `session/request_permission` → existing §7.6

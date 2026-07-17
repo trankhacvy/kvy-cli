@@ -1,5 +1,98 @@
 # Falcon — Progress Log
 
+## Cycle 76 — 2026-07-18
+
+**Branch checked:** `main` (HEAD `cc3e9ae` — "chore: cycle 75 — completed 0 tasks (2
+unlanded, blocked on merge)", unchanged since Cycle 75 — no merge landed on `main` in
+between).
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `falcon` cli, `@falcon/e2e`, `@falcon/web` — including a fresh static
+  export of all 15 routes). All tasks cache-hit-replayed clean (`>>> FULL TURBO`).
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 125 files /
+  1181 tests, `@falcon/server` 42 files / 302 tests, `@falcon/e2e` 1 file / 1 test
+  (20-step `exercise-flow` conformance run), `@falcon/wire` 6 files / 90 tests, plus a
+  cached green replay for `@falcon/web`.
+
+### Task-summaries reviewed this cycle
+
+Requested: `task-summary/P17-land-2.1-acp-connection.md` and `task-summary/
+P17-land-2.1-acp-to-envelope.md`. **Neither file exists on `main`'s tree** — both only
+exist on their own dedicated branches (`P17-land-2.1-acp-connection` tip `115e474`,
+`P17-land-2.1-acp-to-envelope` tip `b303ae3`), which branched off `main` at `cc3e9ae`
+(Cycle 75's tip) and were never merged back.
+
+1. **`P17-land-2.1-acp-connection`** (tip `115e474`) — its own task-summary describes a
+   clean `git cherry-pick 487ac17..38c9471` (the original `P17-2.1-acp-connection` work)
+   onto a fresh worktree/branch off `main` at `cc3e9ae`, re-verified from a clean
+   install: `pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 126 files / 1206 tests
+   (20 `AcpConnection` tests among them, against a real spawned NDJSON fixture child),
+   scoped `biome check packages/cli/src/acp/` 0 errors/0 warnings. The task-summary is
+   explicit that it **deliberately did not merge or push** to the real `main` ref — its
+   own text: *"harness's explicit rule for this run: Do NOT merge or push — just commit
+   in the worktree"* — and that the actual fast-forward + checkbox flip are "left to the
+   orchestrating step that consumes this worktree's commit." Independently confirmed:
+   `git merge-base --is-ancestor P17-land-2.1-acp-connection main` → **false**;
+   `git cat-file -e main:packages/cli/src/acp/acpConnection.ts` fails.
+2. **`P17-land-2.1-acp-to-envelope`** (tip `b303ae3`) — same shape: clean `git
+   cherry-pick 16815af` onto a fresh worktree/branch off `main` at `cc3e9ae`, re-verified
+   green (`pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 126 files / 1203 tests
+   including `acpToEnvelope.test.ts` 22/22). Its task-summary is equally explicit that
+   the checkbox is left `[ ]` because *"this subagent's operating rules for worktree
+   'land' tasks are explicit: Do NOT merge or push — just commit in the worktree,"* and
+   that from inside that worktree `git merge-base --is-ancestor 6f25a93 main` still
+   returns false. Independently confirmed: `git merge-base --is-ancestor
+   P17-land-2.1-acp-to-envelope main` → **false**; `git cat-file -e
+   main:packages/cli/src/acp/acpToEnvelope.ts` fails.
+
+Both branches contain real, tested, byte-for-byte-clean cherry-picks of the Phase 2.1
+work and are fully ready to land — they are one `git merge --no-ff`/fast-forward away
+from `main`. That merge step itself is outside this progress-tracker cycle's mandate
+(matching every prior worktree/branch this tracker has reviewed: it verifies and
+documents, a separate step with merge/push access performs the actual fast-forward, as
+happened for `P17-land-2.0-adapter-manager-real`, `P17-land-2.0-claim-store-real`, and
+`P17-land-2.0-wire-envelope-verification`'s follow-up).
+
+### Tasks completed this cycle
+
+**0 checkboxes newly flipped.** Both `plan.md` bullets for `acpConnection.ts` and
+`acpToEnvelope.ts` got a dated Cycle 76 note documenting that ready-to-land branches now
+exist, without flipping to `[x]` — `main` itself has not moved since Cycle 75, so nothing
+is actually landed yet.
+
+### Blockers / issues found
+
+No code-quality issues — `main` remains fully green (`pnpm typecheck` 11/11, `pnpm test`
+11/11, 0 failures). The blocker is purely a **landing/merge gap**, now doubly confirmed:
+two fully-verified, cherry-picked-clean Phase 2.1 branches (`P17-land-2.1-acp-connection`,
+`P17-land-2.1-acp-to-envelope`) are waiting for an actual `git merge --no-ff` (or
+fast-forward) of the real `main` ref by a step with merge/push access — the same recipe
+that closed out `P17-land-2.0-adapter-manager`, `P17-land-2.0-claim-store`, and
+`P17-land-2.0-wire-envelope-verification` in prior cycles.
+
+### Overall completion
+
+`plan.md` checkbox count: **136/152 checked (~89.5%)** — unchanged from Cycle 75 (no new
+work actually landed on `main` this cycle; two branches are staged and ready).
+
+### Next recommended tasks
+
+1. **Land `P17-land-2.1-acp-connection` onto the real `main` ref** (branch tip
+   `115e474`) — `git merge --no-ff P17-land-2.1-acp-connection` (or fast-forward) from a
+   `main` worktree with push access, re-verify `pnpm build`/`typecheck`/`test` green,
+   then flip `plan.md`'s `acpConnection.ts` checkbox once `git merge-base --is-ancestor
+   <merge-sha> main` → true.
+2. **Land `P17-land-2.1-acp-to-envelope` onto the real `main` ref** (branch tip
+   `b303ae3`) — same recipe. No dependency on `acpConnection.ts` (`AcpSessionUpdate` is
+   intentionally decoupled from the ACP SDK), so order doesn't matter; can even be
+   merged together in one pass.
+3. **Start `cli/src/acp/` golden-trace fixtures / unified ACP permission handler**
+   (Phase 2.1's remaining two bullets) once the above two are actually on `main` — the
+   permission handler in particular depends on `acpConnection.ts`'s
+   `setPermissionHandler` seam existing in the shared tree, not just a branch.
+
 ## Cycle 75 — 2026-07-18
 
 **Branch checked:** `main` (HEAD `ee98d78` — "fix: P17-land-2.0-wire-envelope-verification -
