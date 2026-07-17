@@ -144,8 +144,24 @@ function hasPipedStdio(child: ChildProcess): child is ChildProcessWithoutNullStr
   return child.stdin !== null && child.stdout !== null && child.stderr !== null;
 }
 
-/** Cheap `_meta` bounds check (file header) — drops (never throws on) anything that isn't a plausibly-small plain object, logging once per call site. `undefined`/`null` pass through unchanged since both are valid "no metadata" per the ACP schema. */
-function boundMeta(
+/**
+ * Cheap `_meta` bounds check (file header) — drops (never throws on) anything that isn't a
+ * plausibly-small plain object, logging once per call site. `undefined`/`null` pass through
+ * unchanged since both are valid "no metadata" per the ACP schema.
+ *
+ * Exported (only) so `acpConnection.test.ts` can exercise the "not a plain object" and
+ * "unserializable" drop paths directly — neither is reachable end-to-end through a real
+ * spawned adapter: the "unserializable" path needs a value that fails `JSON.stringify` (a
+ * circular reference, a `BigInt`), and `_meta` here only ever arrives already round-tripped
+ * through `JSON.parse`, which can't produce either. The "not a plain object" path needs a
+ * non-record `_meta` (e.g. an array) to reach this function at all, but
+ * `@agentclientprotocol/sdk`'s own generated zod schemas already validate every `_meta` field
+ * as `z.record(z.string(), z.unknown()).nullish()` and default a non-conforming value to
+ * `undefined` *before* `emitSessionUpdate`/`handlePermissionRequest` ever call `boundMeta` —
+ * so both branches are real defensive code for future non-wire-sourced callers, verified by a
+ * direct unit test rather than an integration one.
+ */
+export function boundMeta(
   meta: unknown,
   logger: Logger,
   context: string,

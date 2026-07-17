@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import type { SessionNotification } from "@agentclientprotocol/sdk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { ADAPTER_MANIFEST, adapterEntryPath, installedLockPath } from "../adapters/index.js";
-import { AcpConnection, AcpConnectionError } from "./acpConnection.js";
+import { AcpConnection, AcpConnectionError, boundMeta } from "./acpConnection.js";
 
 const FIXTURE_PATH = fileURLToPath(new URL("./__fixtures__/fakeAcpAdapter.cjs", import.meta.url));
 
@@ -296,6 +296,62 @@ describe("AcpConnection session-update buffering", () => {
     } finally {
       await connection.disconnect();
     }
+  });
+});
+
+describe("boundMeta", () => {
+  // Direct unit tests for the two drop paths that can't be exercised via a
+  // real spawned adapter, for two different reasons:
+  //  - "unserializable": both inbound call sites (`emitSessionUpdate`,
+  //    `handlePermissionRequest`) only ever feed `boundMeta` a `_meta` that
+  //    already round-tripped through `JSON.parse` on the wire, which can
+  //    never produce a value that then fails `JSON.stringify` (no circular
+  //    refs, no `BigInt`).
+  //  - "not a plain object": the `@agentclientprotocol/sdk`'s own generated
+  //    zod schemas (`schema/zod.gen.js`) validate every `_meta` field as
+  //    `z.record(z.string(), z.unknown()).nullish()` wrapped in a
+  //    `defaultOnError(..., () => undefined)` — so a non-record `_meta`
+  //    (e.g. an array) sent by a real adapter is already defaulted to
+  //    `undefined` by the SDK itself before `emitSessionUpdate`/
+  //    `handlePermissionRequest` ever call `boundMeta`. An end-to-end fixture
+  //    test asserting this branch fires was tried and confirmed unreachable
+  //    (the notification arrives with `_meta: undefined`, not the dropped
+  //    `null` `boundMeta` itself would have produced).
+  // Both are real defensive code for callers other than the two wire-sourced
+  // ones `acpConnection.ts` has today — verified directly here instead.
+  const testLogger = {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  };
+
+  it("passes undefined and null through unchanged", () => {
+    expect(boundMeta(undefined, testLogger, "test")).toBeUndefined();
+    expect(boundMeta(null, testLogger, "test")).toBeNull();
+  });
+
+  it("drops a non-plain-object (array) _meta value", () => {
+    const warnings: unknown[][] = [];
+    const logger = { ...testLogger, warn: (...args: unknown[]) => warnings.push(args) };
+    expect(boundMeta(["not", "an", "object"], logger, "test-context")).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.[0]).toContain("not a plain object");
+  });
+
+  it("drops an unserializable (circular) _meta value", () => {
+    const circular: Record<string, unknown> = { a: 1 };
+    circular.self = circular;
+    const warnings: unknown[][] = [];
+    const logger = { ...testLogger, warn: (...args: unknown[]) => warnings.push(args) };
+    expect(boundMeta(circular, logger, "test-context")).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.[0]).toContain("unserializable");
+  });
+
+  it("passes a small plain object through unchanged", () => {
+    const meta = { foo: "bar" };
+    expect(boundMeta(meta, testLogger, "test")).toEqual(meta);
   });
 });
 
