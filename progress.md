@@ -1,5 +1,122 @@
 # Falcon — Progress Log
 
+## Cycle 65 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `cb61d90` — "merge: land P4-4.4-security-pass onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks; all
+  cache-hit-replayed clean, including a fresh `@falcon/web` static export of all 14 routes).
+  No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green (all cache-hit-replayed): `@falcon/server`
+  284/284 tests, `falcon` cli 101 files/993 tests. 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+None of the three requested task_ids (`P3-workspace-registration-wiring`,
+`P4-4.3-blob-storage`, `P4-4.4-security-pass`) exist as git refs any more (`git rev-parse
+--verify <id>` fails "Not a valid object name" for all three — branches were deleted
+post-merge, normal cleanup). Fell back to the same ancestor check against each task's real
+merge commit on `main` (found via `git log --all --oneline --grep`), which is unambiguous
+here since `main`'s current HEAD (`cb61d90`) *is* the security-pass merge; its parent lineage
+runs straight through the blob-storage merge (`36b17b6`) and the workspace-registration-wiring
+merge (`fe5258e`, itself fast-forwarded onto `main` earlier this same day per that task's own
+"Correction" addendum):
+
+1. **`task-summary/P3-workspace-registration-wiring.md`** (wires the previously-inert
+   `createWorkspaceRootLookup`/`createTranscriptIndexerWorkspaceLister` adapters into
+   `daemon/commands.ts`'s boot sequence and starts `transcriptIndexer.ts`'s
+   `startTranscriptIndexer` for real from `machineIntegration.ts`, previously fully-built but
+   never called). Merge commit `fe5258e` → `git merge-base --is-ancestor fe5258e main` =
+   **true**. `plan.md` line 752 already carried this task's confirmation note (appended by an
+   earlier pass, before this task-summary's own documented "Correction" step actually moved
+   `refs/heads/main`) — re-verified the note's claims still hold (`git show
+   main:packages/cli/src/daemon/commands.ts` shows `resolveWorkspaceRoot:
+   createWorkspaceRootLookup(...)`, not the old `() => null` stub) — **no checkbox/note
+   change needed** this cycle.
+2. **`task-summary/P4-4.3-blob-storage.md`** (presigned upload/download REST routes +
+   S3/local-disk drivers in `@falcon/server`, `deriveBlobKey` in `@falcon/crypto`, best-effort
+   blob upload wired into `gitDiff.ts`/`transcriptMirror.ts`, encrypted attachment path —
+   crypto-worker `sealBlob`/`openBlob` + composer paperclip UI — in `@falcon/web`). Merge
+   commit `36b17b6` → `git merge-base --is-ancestor 36b17b6 main` = **true** (feat commit
+   `7aca455` and fix commit `deff341` also confirmed ancestors). `git cat-file -e
+   main:packages/server/src/blobStorage/index.ts` and
+   `main:packages/cli/src/daemon/blobClient.ts` both succeed. `plan.md` line 797 was still
+   `[ ]` despite the confirmed merge — **flipped to `[x]` this cycle** with a dated
+   confirmation note.
+3. **`task-summary/P4-4.4-security-pass.md`** (Socket.IO wildcard-CORS removal via new
+   `CORS_ALLOWED_ORIGINS`-driven origin validator, pino redact-path hardening, per-route HTTP
+   rate limits on auth/pairing plus a new in-memory `rpcRateLimiter.ts` for Socket.IO
+   `rpc-call`; pairing-request TTL was already correct from an earlier task and needed no
+   change). Merge commit `cb61d90` (= `main`'s current HEAD) → `git merge-base --is-ancestor
+   cb61d90 main` = **true**, trivially. `git cat-file -e
+   main:packages/server/src/app/security/cors.ts` and
+   `main:packages/server/src/app/socket/rpcRateLimiter.ts` both succeed. `plan.md` line 804
+   was still `[ ]` despite the confirmed merge — **flipped to `[x]` this cycle** with a dated
+   confirmation note.
+
+Used `/usr/bin/git`/`/usr/bin/grep`/`/bin/ls` throughout (not the `rtk`-hooked equivalents)
+per the tooling hazard noted in prior cycles — plain `ls`/`grep` again produced empty/mangled
+output this cycle when called unqualified.
+
+### Tasks completed this cycle
+
+**2 checkboxes flipped** in `plan.md`:
+- Line 797, §4.3 "Distribution & self-host": "Blob storage: presigned upload/download routes
+  + S3/local-disk drivers; encrypted attachment path in composer" `[ ]` → `[x]`.
+- Line 804, §4.4 "Hardening & release gate": "Security pass: pairing-request TTL,
+  wildcard-CORS removal, token-scrubbing in logs, rate limits (the 7 reported Happy vuln
+  classes as a checklist)" `[ ]` → `[x]`.
+
+Both dated 2026-07-17 with a confirmation note citing the specific merge/feat commit SHAs and
+the `git merge-base --is-ancestor` result, not taken on the strength of the task-summary
+files alone. The third requested task (`P3-workspace-registration-wiring`) was already fully
+reflected in `plan.md` from a prior cycle's pass (including its own later "Correction"
+addendum once the fast-forward onto `main` actually happened) — independently re-verified
+rather than newly credited.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each, 284
+server tests + 993 cli tests confirmed fresh this cycle, 0 failures). Both task-summaries
+flag pre-existing, unrelated environmental flakiness worth carrying forward as background
+awareness (not blockers): `P4-4.3-blob-storage.md` notes
+`commands.machineWiring.integration.test.ts` intermittently hits a 10s `beforeAll` timeout
+only under full-parallel `pnpm test` load (passed cleanly both times it ran this cycle);
+`P4-4.4-security-pass.md` notes the workspace-wide `pnpm lint` (biome) has a documented
+out-of-memory flake in this environment, worked around by scoping `biome check` to touched
+files directly.
+
+### Overall completion
+
+`plan.md` checkbox count: **123/135 checked (~91.1%)** — up from 121/135 (~89.6%) last cycle
+(+2 net new checked lines). §4.3 "Distribution & self-host" is now 1/6 checked (blob storage
+only); §4.4 "Hardening & release gate" is now 1/5 checked (security pass only).
+
+### Next recommended tasks
+
+1. **§4.3 Distribution & self-host, remaining 5 bullets** (plan.md lines 793–796, 798, all
+   still `[ ]`): `bun build --compile` standalone binaries + `curl | sh` installer + npm
+   publish pipeline, CLI self-update (`cli-latest` rolling tag), launchd/systemd-user service
+   install, `deploy/docker-compose.yml` self-host stack (server+postgres+optional minio — the
+   blob storage driver landed this cycle now gives this compose file a real S3-compatible
+   target to wire against), and uninstall docs. This is now the largest remaining unchecked
+   block.
+2. **§4.4 Hardening & release gate, remaining 4 bullets** (plan.md lines 801–803, 805, all
+   still `[ ]`): provider contract tests in CI (daily cron against latest Claude Code),
+   the 20-step conformance script (`exercise-flow`), RPC integration tests (dead-daemon
+   fast-fail, reconnect storm, double-takeover race — directly exercises the safety guard
+   `P4-4.2-sessions-cli`'s `resume` command already added), and Prometheus metrics/docs
+   quickstart. Worth running in parallel with §4.3 since neither section depends on the
+   other.
+3. **Wire a live `adopt.list` daemon-side RPC handler** (carried over from prior cycles,
+   still outstanding) — `P4-4.2-session-import`'s web wizard step already speaks the
+   `adopt.list` wire contract but has no live handler to call yet; `plan.md` line 752's own
+   note flags this as the one piece `P3-workspace-registration-wiring` explicitly left as
+   follow-up work, not part of its scope.
+
 ## Cycle 64 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `89a9c22` — "merge: land P4-4.2-session-import onto main")
