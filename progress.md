@@ -1,5 +1,79 @@
 # Falcon — Progress Log
 
+## Cycle 66 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `c5423c5` — "chore: cycle 65 — completed 2 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/wire`, `@falcon/crypto`
+  (build), `@falcon/server` (build+typecheck), `falcon` cli (typecheck), `@falcon/web`
+  (build+typecheck), plus dependency `build` tasks); all cache-hit-replayed clean, including
+  a fresh `@falcon/web` static export of all 14 routes.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `falcon` (cli) 101 test files / 993 tests
+  all passed; other packages cache-hit-replayed clean. 0 failures across the whole workspace.
+
+### Task-summary reviewed this cycle (with independent ancestor verification)
+
+Requested: `task-summary/P1-land-1.3-session-bootstrap.md`.
+
+The literal ref `P1-land-1.3-session-bootstrap` no longer exists as a git object (`git
+merge-base --is-ancestor P1-land-1.3-session-bootstrap main` → `fatal: Not a valid object
+name`, branch deleted post-merge — normal cleanup). Read the task-summary itself: its
+"Fourth pass" section documents the real landing commit as `343491f` (`git merge --ff-only
+P1-land-1.3-session-bootstrap` performed on the primary, non-worktree checkout, fast-forwarding
+`main` from `fba3ae0` to `343491f`). Verified against that real commit instead of the
+now-gone branch name:
+
+- `git merge-base --is-ancestor 343491f main` → **true**.
+- `git cat-file -e main:packages/cli/src/session/bootstrap.ts` → **succeeds**.
+- `git log --oneline --all --grep session-bootstrap` shows this landing is old news, already
+  re-confirmed in cycles 36 (unlanded, correctly withheld), 38/40/43/45 (unlanded, correctly
+  withheld), the fourth-pass land itself (2026-07-16), and re-confirmed again in cycle 54
+  ("P1-land-1.3-session-bootstrap re-confirmed").
+
+`plan.md` line 681 (§1.3 "Session bootstrap: mint DEK, wrap to content key, `POST
+/v1/sessions`") is **already `[x]`**, with a "Landed 2026-07-16 via `P1-land-1.3-session-
+bootstrap` (this task)" note already present describing exactly this verification. No
+checkbox flip or narrative edit needed this cycle — re-verified an already-correct entry
+rather than taking the task-summary on faith.
+
+### Tasks completed this cycle
+
+**0 checkboxes flipped.** The one requested task-summary was already fully and correctly
+reflected in `plan.md` from a prior cycle's pass; this cycle's job was limited to
+independently re-confirming the ancestry claim still holds (it does) and running the two
+required workspace-wide checks (both green).
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each, 993
+cli tests confirmed fresh this cycle). No new flakiness observed. Carrying forward the same
+pre-existing, unrelated environmental notes from prior cycles: occasional turbo-parallel
+`beforeAll` PGlite timeout flakiness under full-parallel `pnpm test` load (not reproduced
+this cycle), and a documented `pnpm lint` (biome) out-of-memory flake in this environment.
+
+### Overall completion
+
+`plan.md` checkbox count: **123/135 checked (~91.1%)** — unchanged from last cycle (no new
+checkboxes flipped this cycle; the requested task was already credited).
+
+### Next recommended tasks
+
+1. **§4.3 Distribution & self-host, remaining bullets** (plan.md lines 793–794, 796, 798):
+   `bun build --compile` standalone binaries + installer + npm publish pipeline; CLI
+   self-update (`cli-latest` rolling tag); `deploy/docker-compose.yml`
+   (server+postgres+minio) with strict CSP+SRI web serving; uninstall docs/cleanup guide.
+2. **§4.4 Hardening & release gate, remaining bullets** (plan.md lines 801–803, 805):
+   fixture-prompt regression pass against latest Claude Code; permission/interrupt/adoption
+   failure-matrix scenarios; dead-daemon/reconnect-storm/double-takeover race tests;
+   Prometheus `/metrics` + docs site quickstart + <5min onboarding-time measurement.
+3. **§4.5 process bullets** (plan.md lines 811, 812, 814): grow the golden-trace corpus with
+   provider quirks found so far; add regression tests for each design-§11 failure-matrix
+   scenario as first encountered; keep `docs/` updated alongside any protocol/crypto change.
+   These are process/discipline bullets rather than one-shot implementation tasks — worth
+   folding into whichever of #1/#2 above gets picked up next rather than tackled standalone.
+
 ## Cycle 65 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `cb61d90` — "merge: land P4-4.4-security-pass onto main")
