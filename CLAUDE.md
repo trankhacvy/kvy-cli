@@ -357,6 +357,9 @@ to run against an already-current database.
 - `falcon-system-design.md` — architecture, protocol, and encryption design.
 - `falcon-prd.md` — product requirements.
 - `docs/protocol.md`, `docs/encryption.md` — short stubs pointing into the design doc.
+- `docs/uninstall.md` — user-facing uninstall/cleanup guide: `falcon shim uninstall`,
+  `falcon daemon service uninstall`, and the full `rm -rf ~/.falcon` walkthrough
+  (falcon-prd.md FR-1.6).
 - `deploy/README.md` — self-host walkthrough (`deploy/docker-compose.yml`: server +
   postgres + optional minio, migrate-on-boot, split-origin web with strict CSP + SRI).
 
