@@ -858,6 +858,17 @@ connection pooling, no agent-id-as-identity). Design authority:
       Reference semantics: mobvibe `wal-store.ts` `claimMessageSend`/`completeMessageSend`
       (INSERT-OR-IGNORE claim + verify-claimId-then-record-result-atomically; a
       pre-existing claim with no result is *indeterminate* — never re-execute)
+      *(2026-07-17, progress tracker, cycle 72: still `[ ]` — not landed. A follow-up
+      `P17-land-2.0-claim-store` worktree (tip `ed64101`) did `git merge --no-ff 19f8c59`
+      of the original `P17-2.0-claim-store` branch, re-verified green
+      (`pnpm build`/`typecheck`/`test`, 1146 tests), and flipped this checkbox — but only
+      **within its own worktree branch**; its own task-summary says explicitly "Do NOT
+      merge or push — just commit in the worktree." `git merge-base --is-ancestor
+      P17-land-2.0-claim-store main` → **false**;
+      `git cat-file -e main:packages/cli/src/claims/claimStore.ts` still fails. Same
+      false-landing shape flagged in cycles 70–71, now one hop further along a chain of
+      worktrees that never actually touches the shared `main` ref. See `progress.md`
+      Cycle 72.)*
 - [x] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
@@ -882,6 +893,16 @@ connection pooling, no agent-id-as-identity). Design authority:
       (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
       own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,
       `falcon doctor` adapter checks. No npx at session start
+      *(2026-07-17, progress tracker, cycle 72: still `[ ]` — not landed. A follow-up
+      `P17-land-2.0-adapter-manager` worktree (tip `43d01f1`) did `git merge --no-ff
+      P17-2.0-adapter-manager` of the original branch, re-verified green
+      (`pnpm build`/`typecheck`/`test`, 1159 CLI tests), and flipped this checkbox — but
+      only **within its own worktree branch**; its own task-summary confirms "Did not
+      merge or push to `main` itself — per instructions, work stays on the
+      `P17-land-2.0-adapter-manager` branch/worktree." `git merge-base --is-ancestor
+      P17-land-2.0-adapter-manager main` → **false**;
+      `git cat-file -e main:packages/cli/src/adapters/manifest.ts` still fails. Same
+      false-landing shape as the claim-store bullet above. See `progress.md` Cycle 72.)*
 - [ ] Wire schema: no new envelope types needed (verified mapping, proposal §3 A4) —
       assert via golden fixtures rather than schema change
 

@@ -1,5 +1,98 @@
 # Falcon — Progress Log
 
+## Cycle 72 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `efcff70` — "chore: cycle 71 — completed 1 task")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `falcon` cli, `@falcon/e2e`, `@falcon/web` — including a fresh static export
+  of all 15 routes). All cache-hit-replayed clean (`>>> FULL TURBO`).
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 118 files / 1125
+  tests, `@falcon/e2e` 1 file / 1 test (20-step `exercise-flow` conformance run), plus cached
+  green replays for `@falcon/wire`, `@falcon/crypto`, `@falcon/server`, `@falcon/web`.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+The requested files, `task-summary/P17-land-2.0-claim-store.md` and
+`task-summary/P17-land-2.0-adapter-manager.md`, are **not present on `main`**
+(`git cat-file -e main:task-summary/P17-land-2.0-claim-store.md` and the adapter-manager
+equivalent both fail). Read instead from their own worktrees:
+
+1. **`.worktrees/P17-land-2.0-claim-store/task-summary/P17-land-2.0-claim-store.md`**
+   (branch `P17-land-2.0-claim-store`, tip `ed64101` — "refactor: ... code review fixes").
+   This task's own account: it merged the original `P17-2.0-claim-store` branch
+   (`git merge --no-ff 19f8c59`) into a *new* worktree/branch off `main` at `efcff70`,
+   re-verified green in that worktree (`pnpm build` 6/6, `typecheck` 11/11, `test` 11/11 —
+   1146 tests), and flipped `plan.md` line 855 there. But its own "Assumptions / notes"
+   section states plainly: *"Per this task's explicit instructions ('Do NOT merge or push —
+   just commit in the worktree'), the merge was committed only in this task's own worktree
+   branch ... it was **not** merged onto the shared `main` ref."* Confirmed independently:
+   `git merge-base --is-ancestor P17-land-2.0-claim-store main` → **false**;
+   `git cat-file -e main:packages/cli/src/claims/claimStore.ts` → fails, does not exist on
+   `main`. `plan.md` line 855 stays `[ ]` on `main` — **not flipped** (a dated non-flip note
+   was appended instead, see below).
+2. **`.worktrees/P17-land-2.0-adapter-manager/task-summary/P17-land-2.0-adapter-manager.md`**
+   (branch `P17-land-2.0-adapter-manager`, tip `43d01f1` — "feat: ... Land P17-2.0-adapter-manager
+   onto main"). Same shape: merged `git merge --no-ff P17-2.0-adapter-manager` into a new
+   worktree/branch off `main` at `efcff70`, re-verified green (`pnpm build` 6/6, `typecheck`
+   11/11, `test` 11/11 — 1159 CLI tests), flipped `plan.md`'s adapter-manager bullet there. Its
+   own "Assumptions / notes" section: *"Did not merge or push to `main` itself — per
+   instructions, work stays on the `P17-land-2.0-adapter-manager` branch/worktree, ready for a
+   separate landing step to fast-forward or merge into `main`."* Confirmed independently:
+   `git merge-base --is-ancestor P17-land-2.0-adapter-manager main` → **false**;
+   `git cat-file -e main:packages/cli/src/adapters/manifest.ts` → fails. `plan.md` line 881
+   stays `[ ]` on `main` — **not flipped**.
+
+Per the standing instruction (no checkbox flip without a successful ancestor check against the
+real `main`), both bullets were left unflipped, with a dated note appended to each documenting
+this cycle's verification and pointing at the next required step (a real merge onto `main`,
+not another worktree-local merge).
+
+### Tasks completed this cycle
+
+**0 checkboxes newly flipped** (2 confirmation/non-flip notes appended). Both `P17-2.0-claim-store`
+and `P17-2.0-adapter-manager` now have a *third* generation of "land" worktree
+(`P17-land-2.0-claim-store` / `P17-land-2.0-adapter-manager`) that repeats the exact same
+false-landing pattern flagged in Cycles 70–71: each one successfully merges the feature branch
+and re-verifies green, but commits that merge only to its own throwaway worktree branch instead
+of the shared `main` ref, so `git merge-base --is-ancestor <branch> main` still comes back false
+and the code is still absent from `main`'s tree.
+
+### Blockers / issues found
+
+**Blocker (process, not code), now three cycles running (70 → 71 → 72) for the same two tasks:**
+neither `P17-2.0-claim-store` nor `P17-2.0-adapter-manager` has a commit that is an ancestor of
+`main`, despite two separate "land" attempts each (the original branch's own same-branch "Land
+... onto main" commit, then this cycle's dedicated `P17-land-2.0-*` worktree merge) — every
+attempt so far has landed onto a worktree-local branch, never onto `main` itself. `main` itself
+remains fully healthy (`pnpm typecheck`/`pnpm test` both green, 11/11 turbo tasks, 0 failures).
+This is purely a "the actual `git merge`/PR onto `main` has still never been performed" gap, not
+a code defect in either feature — both implementations are complete, tested, and sitting ready
+in `.worktrees/P17-land-2.0-claim-store` (tip `ed64101`) and
+`.worktrees/P17-land-2.0-adapter-manager` (tip `43d01f1`).
+
+### Overall completion
+
+`plan.md` checkbox count: **133/152 checked (~87.5%)** — unchanged from Cycle 71. No new flips
+this cycle; claim store and adapter manager remain the two blockers to closing out Phase 2.0.
+
+### Next recommended tasks
+
+1. **Actually merge `P17-land-2.0-claim-store` (tip `ed64101`) onto the real `main`** — a
+   `git merge`/PR that lands this worktree's tip as a true ancestor of `main`, not another
+   worktree-local commit. The code, tests, and checkbox flip are all already prepared and
+   verified; only the final merge onto the shared ref is missing.
+2. **Actually merge `P17-land-2.0-adapter-manager` (tip `43d01f1`) onto the real `main`** — same
+   fix needed, independent of claim-store, can land in parallel.
+3. **Once both truly land**, revisit the standing convention that's now caused this exact failure
+   three cycles in a row: whatever step in the pipeline is supposed to perform "the actual `git
+   merge` ... onto `main`" (referenced by name in the claim-store task-summary itself as "the
+   outer landing/orchestration step") does not appear to be running, or is stopping short. Fixing
+   that gap would prevent a fourth generation of `P17-land-land-2.0-*` worktrees from being
+   needed.
+
 ## Cycle 71 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `f61fb41` — "docs: flip plan.md P17-2.0-message-rpc-tristate
