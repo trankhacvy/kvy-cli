@@ -90,4 +90,14 @@ describe("buildSpawnRequest", () => {
       branch: { name: "task-1", createWorktree: true },
     });
   });
+
+  it("carries the picked provider (e.g. codex) through to the spawn request", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      provider: "codex",
+    });
+    expect(request.provider).toBe("codex");
+  });
 });
