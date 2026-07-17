@@ -1,5 +1,81 @@
 # Falcon — Progress Log
 
+## Cycle 60 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `b09e1b2` — "chore: cycle 59 — completed 3 tasks")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks). No errors.
+- `pnpm test` (forced, `turbo run test --force`, no cache) → **PASSED** — 9/9 turbo tasks green:
+  `falcon` cli 831/831 (82 files), `@falcon/server` 233/233 (33 files) run fresh; 0 failures across
+  the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+Two task-summaries were requested for credit this cycle:
+
+1. **`task-summary/P1-land-1.3-falcon-home-persistence.md`** (`~/.falcon/settings.json` +
+   `access.key` persistence: schema-versioned settings with atomic lock-file read-modify-write,
+   0600 credentials via tmp+chmod+rename). Its branch ref (`P1-land-1.3-falcon-home-persistence`)
+   no longer exists — `git rev-parse` fails with "unknown revision", normal post-merge cleanup —
+   so the literal `git merge-base --is-ancestor <task_id> main` command cannot be run against the
+   branch name itself. Fell back to the branch's real merge-commit SHAs, found via
+   `git log --oneline main -- packages/cli/src/persistence.ts`: `2c52920` (feat) and `9bc3b6f`
+   (fix, "resolve test failures"), both directly in `main`'s own commit history.
+   `git merge-base --is-ancestor 9bc3b6f main` → **true**. `git cat-file -e
+   main:packages/cli/src/persistence.ts` succeeds against the primary (non-worktree) checkout.
+   `plan.md` line 674 was already `[x]` from a prior cycle's actual fast-forward (`78f22af..fba3ae0`,
+   per that task-summary's own "actually landed onto the shared `main` ref" pass) — **no checkbox
+   change needed**; appended a dated Cycle 60 confirmation note only.
+2. **`task-summary/P1-land-1.3-session-bootstrap.md`** (`bootstrapSession`: mints a DEK, wraps it
+   to the account's content key, seals `{title,path,providerSessionId}`, `POST /v1/sessions` with a
+   deterministic `sha256(machineId+path+nonce)` idempotency tag, idempotent-replay unwrap path).
+   Its branch ref is likewise deleted. Real merge-commit SHAs found via `git log --oneline main --
+   packages/cli/src/session/bootstrap.ts`: `c4172f6` (feat) and `3c5f7d9` (fix, "resolve test
+   failures"), both in `main`'s own history. `git merge-base --is-ancestor 3c5f7d9 main` → **true**.
+   `git cat-file -e main:packages/cli/src/session/bootstrap.ts` succeeds. `plan.md` line 681 was
+   already `[x]` from a prior cycle's fast-forward — **no checkbox change needed**; appended a
+   dated Cycle 60 confirmation note only.
+
+Both tasks were genuinely landed onto the primary, non-worktree `main` ref in earlier cycles (per
+their own task-summaries' multi-pass reconciliation histories — see plan.md's inline notes for the
+full blow-by-blow). This cycle's job was independent re-verification against current ground truth,
+per the tracker's standing rule of never trusting a task-summary's own claim (or a stale checkbox)
+without a fresh `git merge-base --is-ancestor` check.
+
+### Tasks completed this cycle
+
+**0 checkboxes flipped.** Both requested tasks (`P1-land-1.3-falcon-home-persistence`,
+`P1-land-1.3-session-bootstrap`) were already correctly `[x]` on `main` from prior cycles;
+independently re-confirmed rather than newly credited. No regressions found.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each).
+
+### Overall completion
+
+`plan.md` checkbox count: **112/135 checked (~83.0%)** — unchanged from before this cycle (no new
+checkboxes were eligible to flip; both requested tasks were already accounted for).
+
+### Next recommended tasks
+
+1. **Web: unmanaged section, live mirror view, Take-over / Fork-Instead dialog** (§3.3, plan.md
+   line 770) — the last remaining UC9 bullet; `adopt.mirror`/`adopt.take` RPCs and the transcript
+   indexer are already landed and confirmed, so this is purely front-end wiring against
+   already-built daemon RPCs.
+2. **Build the workspace-registration store.** Multiple §3.1/§3.2/§3.3 task-summaries independently
+   flag the same missing piece: nothing in `packages/cli` yet persists "which workspace paths are
+   registered" — `resolveProviderSession`/`resolveDirectory`/`listWorkspaces` are all injected seams
+   with no real default. This unblocks real end-to-end wiring for spawn, resume, and adopt at once.
+3. **Wire `machineClient.ts`'s socket + `registerMachineRpcHandlers` into `daemon/commands.ts`'s
+   boot sequence** — `spawn`/`resumeSession`/`adopt.take`/`adopt.mirror` are all real,
+   fully unit-tested RPC handlers but none is reachable from a live machine WS connection yet (no
+   call site for `startMachineClient` anywhere in `packages/cli/src`) — the single biggest
+   remaining gap between "built" and "usable end-to-end."
+
 ## Cycle 59 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `0850222` — "refactor: P3-3.3-adopt-cli-and-take-rpc - code review fixes")
