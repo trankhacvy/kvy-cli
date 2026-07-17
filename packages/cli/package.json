@@ -1,19 +1,37 @@
 {
   "name": "falcon",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "license": "MIT",
   "description": "falcon — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework, matching Happy's approach), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/falcon-dev/falcon.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/falcon-dev/falcon#readme",
+  "bugs": "https://github.com/falcon-dev/falcon/issues",
+  "keywords": ["cli", "claude-code", "codex", "agent", "ai"],
   "bin": {
     "falcon": "./bin/falcon.mjs"
   },
   "main": "./dist/index.mjs",
+  "files": [
+    "bin",
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "shx rm -rf dist && tsc --noEmit && pkgroll",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.211",

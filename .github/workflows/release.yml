@@ -1,0 +1,90 @@
+name: release
+
+# Cuts a Falcon CLI release: standalone bun-compiled binaries (darwin-arm64/
+# x64, linux-x64) attached to a GitHub Release for scripts/install.sh to
+# fetch, plus the same build published to npm so `npm install -g falcon`
+# keeps working (falcon-system-design.md §3, plan.md §16 "4.3 Distribution
+# & self-host").
+#
+# Trigger: push a `vX.Y.Z` tag matching packages/cli/package.json's
+# "version" field, or run manually via workflow_dispatch.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: build falcon + its workspace dependencies
+        run: pnpm --filter falcon... build
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: compile standalone binaries (darwin-arm64/x64, linux-x64)
+        run: bash scripts/build-binaries.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: falcon-binaries
+          path: dist-binaries/*
+          if-no-files-found: error
+
+  github-release:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: falcon-binaries
+          path: dist-binaries
+
+      - name: publish GitHub Release with binaries attached
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-binaries/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+  publish-npm:
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: install workspace deps
+        run: pnpm install --frozen-lockfile
+
+      - name: build falcon + its workspace dependencies
+        run: pnpm --filter falcon... build
+
+      # Regular `npm install -g falcon` runs on Node (bin/falcon.mjs →
+      # dist/index.mjs) — no compiled binary needed in this package, so the
+      # tsc/pkgroll build above is all `npm publish` ships.
+      - name: publish falcon to npm
+        run: pnpm --filter falcon publish --access public --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

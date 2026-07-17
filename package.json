@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "node ./scripts/postinstall.cjs",
     "build": "turbo run build",
+    "build:binaries": "bash scripts/build-binaries.sh",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "biome check . || (echo '[lint] first attempt failed (possibly transient OOM from biome/next resource contention) — retrying once...' >&2 && biome check .)",
