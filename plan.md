@@ -1100,11 +1100,29 @@ connection pooling, no agent-id-as-identity). Design authority:
       tree: `pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 126 files/1203 tests
       (`acpToEnvelope.test.ts` 22/22). Checkbox flipped for real, same two-step shape that
       closed out the sibling `wire-envelope-verification` bullet in Phase 2.0.)*
-- [ ] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
+- [x] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
       existing reducer test corpus
-- [ ] Unified ACP permission handler: `session/request_permission` → existing §7.6
+      *(2026-07-18, direct: `src/acp/__fixtures__/acp-{text,tool}-turn.jsonl` recorded via
+      raw NDJSON JSON-RPC against the pinned claude-agent-acp@0.59.0 (installed through
+      the adapter manager) + `acpGoldenTrace.test.ts` replay. Surfaced and fixed two
+      real-stream bugs the unit fixtures missed: per-delta text chunks → mapper
+      coalescing by (turn, subagent, thinking, messageId); initial `tool_call` has
+      `rawInput:{}` with args streaming in via refinements → deferred tool-start.
+      "Both providers" caveat: Codex fixtures deferred to Phase 2.3's codex-acp wiring —
+      the replay harness is provider-agnostic. A live permission-request recording was
+      not capturable (this machine's real Claude settings auto-allow the candidate
+      commands; an isolated CLAUDE_CONFIG_DIR loses auth) — the permission path is
+      schema-exactly unit-tested and gated by Phase 2.2's manual E2E.)*
+- [x] Unified ACP permission handler: `session/request_permission` → existing §7.6
       pipeline (auto-rules, first-wins `resolve()`, `perm.answer` RPC) → mapped ACP
       option response; mode-switch decisions call `session/set_mode`
+      *(2026-07-18, direct: `src/acp/acpPermissionHandler.ts` — one handler for both
+      providers. v1's pipeline core kept (minted reqId, envelopes, agentState seam,
+      first-wins, reset-on-mode-switch, mode-decision-resolves-as-allow via
+      `onModeChange`); v1's mode auto-rule engine + allow-lists deliberately dropped —
+      under ACP those run inside the agent (SDK permissionMode; `allow_always`
+      persists agent-side). ACP has no modified-input channel: allow-with-updatedInput
+      degrades to plain allow with a visible warn.)*
 
 ### Phase 2.2 — Claude remote on ACP (delete SDK path)
 - [ ] `claudeRemoteLauncher` inner transport → `AcpRemote` (`session/new` with
