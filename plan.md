@@ -1150,8 +1150,11 @@ connection pooling, no agent-id-as-identity). Design authority:
       interrupt; local↔remote switch both directions (id-compatible resume verified);
       `falcon resume`; session exit paths; adapter-kill mid-turn ⇒ turn-end{failed} +
       `outcome-unknown` on retry
-      *(pending — requires the live server+web+adapter stack driven by hand; unit +
-      golden-trace + conformance coverage is green as a pre-gate.)*
+      *(partially verified 2026-07-18: the ACP contract test (Phase 2.4) ran LIVE against
+      the real adapter and passed the core — spawn → prompt → reply, real Bash-permission
+      auto-allow, mapper fidelity. What remains genuinely manual: the web↔terminal
+      round-trip, mode switching both directions, and `--resume` against a live
+      server+web stack. Unit + golden-trace + conformance coverage green as a pre-gate.)*
 - [x] Failure-matrix regression tests: adapter-child-dies-mid-turn, duplicated
       `message` RPC (design §11 new rows)
       *(2026-07-18, direct: `acp/acpRemote.test.ts` covers adapter death mid-turn
@@ -1182,13 +1185,31 @@ connection pooling, no agent-id-as-identity). Design authority:
       Same live-gate honesty as Claude's Phase 2.2 manual matrix.)*
 
 ### Phase 2.4 — quality sweep
-- [ ] ACP adapter contract tests in the daily provider-contract CI job (pinned versions
+- [x] ACP adapter contract tests in the daily provider-contract CI job (pinned versions
       + latest-versions canary, design §13.2)
-- [ ] Docs: `docs/protocol.md` ACP section; `CLAUDE.md` package-layout refresh;
+      *(2026-07-18, direct: `packages/cli/scripts/acp-contract-test.ts` +
+      `contract:acp` script, wired into `.github/workflows/provider-contract.yml`. Drives
+      Falcon's REAL ACP stack (`AcpConnection` + `acpToEnvelope` + `acpPermissionHandler`)
+      against the pinned adapter — asserts UUID sessionId, text-turn coalescing +
+      `end_turn`, tool-turn `_meta.claudeCode.toolName` + tool-start/end — as a HARD gate,
+      plus a soft latest-version structural canary. **Ran live and PASSED** against
+      claude-agent-acp 0.59.0 (text + Bash-permission turns), which also live-verifies the
+      core of the Phase 2.2 gate: spawn → prompt → reply, real permission auto-allow, and
+      mapper fidelity end to end.)*
+- [x] Docs: `docs/protocol.md` ACP section; `CLAUDE.md` package-layout refresh;
       uninstall doc gains `~/.falcon/adapters` + `~/.falcon/claims`
-- [ ] Remove dead provider-specific seams exposed by the deletions (mapper/permission
+      *(2026-07-18, direct: `docs/protocol.md` §4 tri-state `message` reply + new §5
+      "Provider transport (ACP)"; `CLAUDE.md` `src/codex/` blurb replaced with the v2 ACP
+      layer (`src/acp/`, `src/adapters/`, `src/claims/`, the two start commands);
+      `docs/uninstall.md` gains `adapters/` + `claims/` rows.)*
+- [x] Remove dead provider-specific seams exposed by the deletions (mapper/permission
       indirections that now have a single implementation); `pnpm build/typecheck/test/lint`
       green; conformance harness (`e2e/`) re-run against the ACP stack
+      *(2026-07-18, direct: the deletions themselves removed the per-provider remote/mapper/
+      permission seams — remote mode is one `AcpRemote` + one mapper + one permission
+      handler now. Scan found only stale header-comment references to deleted files (fixed
+      in `acpToEnvelope.ts`). Full `build/typecheck/test/lint` green; e2e conformance
+      (20 steps) green against the ACP stack.)*
 
 ---
 

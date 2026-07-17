@@ -131,31 +131,44 @@ packages/
 │                             `~/.falcon/` local state — schema-versioned `settings.json`
 │                             (atomic lock-file-guarded read-modify-write) and
 │                             0600-permissioned `access.key` credentials, both tmp-write +
-│                             rename so readers never observe a partial write. `src/codex/`:
-│                             the Codex provider adapter (design §7.7, plan.md §16 "3.4 Codex
-│                             adapter") — `codexAppServerClient.ts`, a hand-rolled
-│                             newline-delimited JSON-RPC 2.0 stdio client for `codex
-│                             app-server` (initialize handshake, `thread/start`/
-│                             `thread/resume`, `turn/start`/`turn/interrupt`, and
-│                             server->client `exec`/`patch` approval routing for both legacy
-│                             and v2 method names); `permissionHandler.ts`, a Codex-specific
-│                             parallel to `claude/permissionHandler.ts` (own pending-approval
-│                             map, first-wins `resolve()`, and a
-│                             `bypassPermissions`/`acceptEdits`-only auto-rule mapping — Codex
-│                             has no equivalent to Claude's other two SDK modes);
-│                             `envelopeMapper.ts` (`mapCodexEventToEnvelopes`), translating
-│                             Codex's `codex/event` notifications (turn lifecycle, agent
-│                             messages/reasoning, exec/patch tool calls, `turn_diff`) into
-│                             `SessionEnvelope`s; `codexProviderAdapter.ts` (`detect()` +
-│                             `startLocal()` — always `null`, since Codex has no local TUI
-│                             mode, with an honest CLI note printed by `falcon codex`); and
-│                             `codexRemote.ts`, wiring all of the above into one session
-│                             handle (mirrors `remote/claudeRemote.ts`). RPC handler
-│                             registration and provider spawning (both Claude and Codex) are
-│                             still [planned] — this task, like the Claude adapter's own
-│                             pieces before it, lands the adapter modules themselves ahead of
-│                             the `falcon claude`/`falcon codex` orchestration that spawns and
-│                             drives them. Git panel (design §4.4, plan.md §16 "4.1 Git
+│                             rename so readers never observe a partial write.
+│                             **v2 — ACP (Agent Client Protocol) remote layer (plan.md §17,
+│                             design v0.3 §7.3/7.4/7.6/7.9/7.10):** remote mode for BOTH
+│                             providers runs through one shared stack in `src/acp/`.
+│                             `acpConnection.ts` spawns a managed ACP adapter child (via the
+│                             adapter manager's verify-before-spawn) and drives it over
+│                             NDJSON stdio with `@agentclientprotocol/sdk` (initialize →
+│                             session/new|load|resume → session/prompt → session/cancel →
+│                             session/set_mode, pre-ready session-update buffering, stderr
+│                             ring-buffer on connect/exit errors). `acpToEnvelope.ts` is the
+│                             single provider-agnostic `session/update` → `SessionEnvelope`
+│                             mapper (text-chunk coalescing + deferred tool-start, both found
+│                             via real recorded fixtures in `acp/__fixtures__/`).
+│                             `acpPermissionHandler.ts` is the single first-wins permission
+│                             pipeline behind `session/request_permission` (auto-rules now
+│                             live agent-side). `acpRemote.ts` (`startAcpRemote`) ties them
+│                             into the `RemoteHandle`-shaped transport — `adapterId` selects
+│                             `claude-code` (Claude meta payload) vs `codex` (codex-acp, no
+│                             Claude preset). This replaced the deleted v1 SDK path
+│                             (`remote/claudeRemote.ts`, `sdkToEnvelope.ts`,
+│                             `pushableAsyncIterable.ts`, `claude/permissionHandler.ts`,
+│                             `claude/getToolDescriptor.ts`, and the
+│                             `@anthropic-ai/claude-agent-sdk` dep) AND the hand-rolled Codex
+│                             app-server client (`codex/codexAppServerClient.ts`,
+│                             `codexAppServerTypes.ts`, `codexRemote.ts`, `envelopeMapper.ts`,
+│                             `permissionHandler.ts`). `src/codex/` now holds only
+│                             `codexProviderAdapter.ts` — `detect()` + `startLocal()` (always
+│                             `null`; Codex has no local TUI) + the honest no-local-mode note.
+│                             `src/adapters/` is the managed adapter manager (pinned-version
+│                             manifest + integrity verify + `~/.falcon/adapters/` npm-prefix
+│                             install, `falcon adapters install|upgrade`, `falcon doctor`
+│                             health). `src/claims/claimStore.ts` is the send-idempotency
+│                             claim store (`~/.falcon/claims/<sessionId>.json`, claim →
+│                             tri-state (`queued`/`duplicate`/`outcome-unknown`) → complete).
+│                             `commands/start.ts` (`falcon claude`) drives the local↔remote
+│                             `loop.ts` with the ACP remote transport; `commands/startCodex.ts`
+│                             (`falcon codex`) is a remote-only session process (no loop; Codex
+│                             has no local mode). Git panel (design §4.4, plan.md §16 "4.1 Git
 │                             panel", falcon-prd.md FR-7.7) is also landed: the `git.status`/
 │                             `git.diff` machine RPCs (`daemon/gitStatus.ts` parses `git
 │                             status --porcelain=v2 --branch`; `daemon/gitDiff.ts` runs `git

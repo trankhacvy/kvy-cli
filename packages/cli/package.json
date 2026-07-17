@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "contract:provider": "tsx scripts/provider-contract-test.ts",
+    "contract:acp": "tsx scripts/acp-contract-test.ts",
     "prepublishOnly": "pnpm run build"
   },
   "dependencies": {

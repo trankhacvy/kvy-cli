@@ -54,7 +54,34 @@ machine ops (spawn, stop, resume, list, git, fs, adopt) and session ops
 through encrypted blobs referenced by `blobRef`. Mutating RPCs carry
 idempotency keys.
 
+The `message` session RPC reply is a **tri-state** (v0.3, additive): `status:
+'queued' | 'duplicate' | 'outcome-unknown'` on top of the original `queued`
+boolean. A retried/duplicated send whose claim already completed replies
+`duplicate`; one whose claim exists without a recorded result (e.g. a crash
+mid-turn) replies `outcome-unknown` and the client reconciles from the
+transcript rather than blind-resending. See design §7.10.
+
 Design doc: [§4.4 RPC contracts](../falcon-system-design.md#44-rpc-contracts).
+
+## 5. Provider transport (ACP) — below the wire protocol
+
+The wire protocol above is CLI↔server↔client. Separately, **inside** the CLI
+session process, remote mode talks to the coding agent over the **Agent
+Client Protocol (ACP)**: Falcon spawns a managed adapter child
+(`@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`)
+and drives it via `@agentclientprotocol/sdk` over NDJSON stdio. This is a
+loopback, CLI-internal concern — it never crosses the encryption boundary and
+is not part of `@falcon/wire`.
+
+ACP's `session/update` notifications map onto the provider-agnostic
+`SessionEnvelope` stream (§2) by a single shared mapper (`cli/src/acp/
+acpToEnvelope.ts`); `session/request_permission` drives the same
+`perm-request`/`perm-resolve` envelopes and `perm.answer` RPC. Nothing about
+ACP is visible to the server, web, or wire schema — swapping the provider
+transport (as v2 did, from the Claude Agent SDK / hand-rolled Codex client to
+ACP) is invisible above this line.
+
+Design doc: [§7.3–§7.10 CLI provider layer](../falcon-system-design.md#73-provider-adapter-interface).
 
 ## Reserved namespaces (deferred features)
 

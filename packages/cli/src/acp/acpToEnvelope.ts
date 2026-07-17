@@ -11,16 +11,11 @@
  * kinds are logged and dropped ... the wire schema is closed and stays
  * provider-agnostic." (plan.md §16 "Phase 2.1 - ACP core".)
  *
- * This is a pure mapping module (plan.md: "independently buildable and
- * testable against literal ACP `session/update` JSON fixtures ... without
- * needing `acpConnection.ts` to exist yet") — it has no dependency on
- * `@agentclientprotocol/sdk` at all. Like `../remote/sdkToEnvelope.ts`
- * narrows `@anthropic-ai/claude-agent-sdk`'s `SDKMessage` to a private
- * structural interface instead of importing the SDK's own types, this file
- * defines `AcpSessionUpdate` as a narrow structural type reading only the
- * fields the mapping rules actually need — decoupled from ACP SDK version
- * churn, and buildable before `acpConnection.ts` (a sibling, not-yet-landed
- * task) ever adds the SDK as a real dependency.
+ * This is a pure mapping module — it has no dependency on
+ * `@agentclientprotocol/sdk` at all: `AcpSessionUpdate` is a narrow
+ * structural type reading only the fields the mapping rules actually need,
+ * decoupled from ACP SDK version churn. (The deleted v1 `sdkToEnvelope.ts`
+ * took the same approach against the Claude Agent SDK's `SDKMessage`.)
  *
  * Session/update kinds handled (design §7.3's mapping table):
  *  - `agent_message_chunk`      -> `text` (coalesced — see below)
@@ -28,12 +23,11 @@
  *  - `tool_call`                -> `tool-start`
  *  - `tool_call_update`         -> `tool-end`, only once `status` reaches a
  *    terminal value (`completed`/`failed`) — ACP has no wire equivalent for
- *    intermediate `pending`/`in_progress` transitions, matching the existing
- *    Claude/Codex mappers' start/end-only lifecycle.
+ *    intermediate `pending`/`in_progress` transitions; a start/end-only
+ *    lifecycle.
  *  - `user_message_chunk`       -> intentionally dropped, no log. The prompt
  *    text is already emitted synchronously by whatever calls `session/prompt`
- *    (mirrors `sdkToEnvelope.ts`'s identical rule for SDK-echoed user
- *    messages) — mapping it here too would duplicate it.
+ *    (`acpRemote.ts`'s `send()`) — mapping it here too would duplicate it.
  *  - everything else (`plan`/`plan_update`/`plan_removed`,
  *    `current_mode_update`, `available_commands_update`, `session_info_
  *    update`, `usage_update`, `config_option_update`, and any future/unknown
