@@ -18,13 +18,21 @@
  * (previously no-op stubs — nothing could ever reach `loop()`, which is why
  * the web Composer's "RPC target not available" error happened: nothing on
  * the CLI side ever joined the `s:<sessionId>:<method>` room the server's
- * relay looks up). `interrupt`/`setMode`/`perm.answer` have no existing hook
- * to call into yet (`claudeLocalLauncher.ts` has no "interrupt without
- * switching" primitive, `claudeRemoteLauncher.ts`'s handle doesn't expose
- * the underlying `ClaudeRemoteHandle`'s `interrupt`/`setMode`/
- * `resolvePermission`, and local mode can't answer a permission prompt that
- * doesn't exist on this path per plan.md's "Local-mode honesty" FR-3.6) —
- * each returns an honest not-supported result rather than a fake success.
+ * relay looks up).
+ *
+ * v2 (ACP, plan.md §17 Phase 2.2): `interrupt`/`setMode`/`perm.answer` now
+ * reach a live remote turn — `loop()`'s `onRemoteActive` hands this module
+ * the running remote launcher's controls (`interrupt`/`setMode`/
+ * `resolvePermission`) for the duration of each remote run, `null` in local
+ * mode (where the RPCs stay honestly not-supported — a permission prompt on
+ * the provider's own TTY can't be answered remotely, plan.md FR-3.6).
+ *
+ * Send idempotency (design §7.10): the `message` RPC claims `(sessionId,
+ * envelopeId)` in the on-disk claim store BEFORE emitting — a duplicate
+ * whose claim already completed replies `duplicate`, one whose claim exists
+ * with no result (crash mid-turn) replies `outcome-unknown`, and a fresh
+ * claim is completed when the turn settles (`onTurnSettled`). A retried RPC
+ * can never run the agent twice for one logical send.
  */
 import path from "node:path";
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
@@ -37,6 +45,7 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
+import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
 import {
@@ -45,6 +54,7 @@ import {
   type LoopOptions,
   loop as loopDefault,
   type QueuedMessage,
+  type RemoteControls,
 } from "../claude/loop.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
@@ -309,6 +319,16 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const takeControlSignal = createSignal<void>();
   let currentMode: ClaudeMode = "local";
 
+  // Live remote controls while a remote turn is running (`loop()`'s
+  // `onRemoteActive`), or null in local mode. The `interrupt`/`setMode`/
+  // `perm.answer` RPCs route here.
+  let activeRemote: RemoteControls | null = null;
+
+  // Send-idempotency claim bookkeeping (design §7.10): envelopeId -> claimId,
+  // so the turn-settle hook can complete exactly the claim its `message`
+  // handler opened. Cleared once completed.
+  const openClaims = new Map<string, string>();
+
   const rpcHandlers: SessionRpcHandlers = {
     message: async ({ envelope }) => {
       if (envelope.ev.t !== "text") {
@@ -317,36 +337,65 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         });
         return { queued: false };
       }
+      // Claim BEFORE emitting — a retried/duplicated RPC must never run the
+      // agent twice (design §7.10). `readCreds` guaranteed a homeDir above.
+      const claim = await claimMessageSend(bootstrap.sessionId, envelope.id, {
+        homeDir: deps.homeDir,
+      });
+      if (claim.status === "completed") {
+        logger.debug("[start-claude] message RPC replay — claim already completed", {
+          id: envelope.id,
+        });
+        return { queued: false, status: "duplicate" };
+      }
+      if (claim.status === "in-progress") {
+        logger.warn(
+          "[start-claude] message RPC outcome indeterminate — open claim, not re-running",
+          {
+            id: envelope.id,
+          },
+        );
+        return { queued: false, status: "outcome-unknown" };
+      }
+      openClaims.set(envelope.id, claim.claimId);
       const queued = currentMode === "local";
       messageSignal.emit({ id: envelope.id, text: envelope.ev.md });
-      return { queued };
+      return { queued, status: "queued" };
     },
     takeControl: async () => {
       takeControlSignal.emit();
       return { ok: true };
     },
-    // No existing hook: `claudeLocalLauncher.ts` only knows how to abort-
-    // and-switch-to-remote, not "interrupt the current turn and stay
-    // local"; `claudeRemoteLauncher.ts`'s handle doesn't expose the
-    // underlying SDK query's own `interrupt()` either. Honest
-    // not-supported rather than a silent no-op that looks like success.
+    // Wired (v2): cancels the in-flight remote turn. In local mode there is
+    // no remote turn to interrupt — honest not-supported (the real TUI owns
+    // its own Ctrl-C).
     interrupt: async () => {
-      logger.warn("[start-claude] interrupt RPC received — not wired yet, no-op");
-      return { ok: false };
+      if (!activeRemote) {
+        logger.debug("[start-claude] interrupt RPC in local mode — no remote turn to cancel");
+        return { ok: false };
+      }
+      await activeRemote.interrupt();
+      return { ok: true };
     },
-    // Same gap as `interrupt`: `loop.ts` reads `permissionMode` once at
-    // startup and has no live hook to change it mid-run.
-    setMode: async () => {
-      logger.warn("[start-claude] setMode RPC received — not wired yet, no-op");
-      return { ok: false };
+    // Wired (v2): syncs the live remote session's permission mode. Local mode
+    // has no live permission pipeline to retune.
+    setMode: async ({ mode }) => {
+      if (!activeRemote) {
+        logger.debug("[start-claude] setMode RPC in local mode — no remote session");
+        return { ok: false };
+      }
+      await activeRemote.setMode(mode);
+      return { ok: true };
     },
-    // plan.md's "Local-mode honesty" (FR-3.6): local mode can't answer a
-    // permission prompt on the provider's own TTY — never fake resolving
-    // one. (Remote mode has no wiring for this yet either — same gap as
-    // `interrupt`/`setMode` above — so the honest answer applies either way.)
-    permAnswer: async () => {
-      logger.warn("[start-claude] perm.answer RPC received — not answerable on this path yet");
-      return { ok: false };
+    // Wired (v2): first-wins resolution against the live remote permission
+    // handler. In local mode a permission prompt lives on the provider's own
+    // TTY and can't be answered remotely (plan.md FR-3.6) — honest failure.
+    permAnswer: async ({ reqId, decision }) => {
+      if (!activeRemote) {
+        logger.debug("[start-claude] perm.answer RPC in local mode — not answerable on this path");
+        return { ok: false };
+      }
+      return activeRemote.resolvePermission({ reqId, decision });
     },
   };
 
@@ -364,11 +413,36 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         workingDirectory: deps.workingDirectory,
         startingMode: "local",
         permissionMode,
+        homeDir: deps.homeDir,
         claudeArgs: deps.claudeArgs,
         claudeEnvVars: { FALCON_CLAUDE_PATH: location.path },
         onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
         onModeChange: (mode) => {
           currentMode = mode;
+        },
+        onRemoteActive: (controls) => {
+          activeRemote = controls;
+        },
+        // Complete the send claim the moment a turn reaches a terminal
+        // stopReason (design §7.10). A turn whose prompt was REJECTED never
+        // fires this — its claim stays open so a retry sees `outcome-unknown`.
+        onTurnSettled: ({ messageId, status }) => {
+          if (!messageId) return;
+          const claimId = openClaims.get(messageId);
+          if (!claimId) return;
+          openClaims.delete(messageId);
+          void completeMessageSend(
+            bootstrap.sessionId,
+            messageId,
+            claimId,
+            { status },
+            { homeDir: deps.homeDir },
+          ).catch((error: unknown) => {
+            logger.warn("[start-claude] failed to complete send claim", {
+              id: messageId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
         },
         onMessage: (handler) => messageSignal.subscribe(handler),
         onTakeControl: (handler) => takeControlSignal.subscribe(handler),

@@ -36,19 +36,12 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`assertion failed: ${message}`);
 }
 
-/**
- * `CanUseTool`'s SDK-declared return type is `PermissionResult | null`, but
- * `PermissionHandler.canUseTool` never actually resolves `null` in
- * practice — every real code path returns a concrete
- * `{behavior: 'allow'|'deny', ...}`. Treat a `null` result as the real bug
- * it would be rather than a silently-skipped assertion.
- */
+/** Asserts a harness `requestTool` result resolved to the expected allow/deny (derived from the ACP permission response, see `fakeSessionProcess.ts`). */
 function expectBehavior(
   result: CanUseToolResult,
   expected: "allow" | "deny",
   message: string,
 ): void {
-  assert(result !== null, `${message} (canUseTool resolved null, expected a PermissionResult)`);
   assert(result.behavior === expected, message);
 }
 
@@ -210,20 +203,44 @@ export const STEPS: Step[] = [
       assert(answer.ok === true, "perm.answer (allow session) should succeed");
       const resolved = await pending;
       expectBehavior(resolved, "allow", "Bash echo hello-session should have been allowed");
+      // Wait for this request's own perm-resolve to land on the server
+      // (symmetric with step 5) so step 8's `findPendingPermRequest` — which
+      // excludes resolved reqIds — can't race onto this now-answered one.
+      await waitForEnvelope(
+        state.stack,
+        state.sessionId,
+        (e) => e.ev.t === "perm-resolve" && e.ev.reqId === req.reqId,
+      );
     },
   },
   {
-    name: "8. verify allow-session was persisted (same Bash literal auto-approves, no new perm-request)",
+    // v2 (ACP): allow-lists moved into the agent process — the CLI-side
+    // handler no longer persists an "allow for session" decision, so
+    // re-running the same tool DOES re-prompt. (A real Claude adapter
+    // remembers the `allow_always` selection itself and simply wouldn't send
+    // a second `session/request_permission`; that agent-side behavior is
+    // covered by the provider-contract tests, not this harness.) This step
+    // pins the CLI contract: every tool the agent escalates gets its own
+    // fresh first-wins `perm-request`.
+    name: "8. re-running the same tool re-prompts (allow-lists are agent-side under ACP)",
     run: async (state) => {
       const before = permRequestEnvelopes(
         await fetchEnvelopes(state.stack, state.sessionId),
       ).length;
-      const resolved = await state.process().requestTool("Bash", { command: "echo hello-session" });
-      expectBehavior(resolved, "allow", "the re-run of the same Bash literal should auto-allow");
+      const proc = state.process();
+      const pending = proc.requestTool("Bash", { command: "echo hello-session" });
+      const req = await waitForPendingPermRequest(state.stack, state.sessionId, "Bash");
+      const answer = await state.stack.callSessionRpc<{ ok: boolean }>(
+        state.sessionId,
+        "perm.answer",
+        { reqId: req.reqId, decision: { kind: "allow", scope: "once" } },
+      );
+      assert(answer.ok === true, "perm.answer (allow once) should succeed");
+      expectBehavior(await pending, "allow", "the re-run should be allowed once answered");
       const after = permRequestEnvelopes(await fetchEnvelopes(state.stack, state.sessionId)).length;
       assert(
-        after === before,
-        "an allow-session literal must not re-prompt (no new perm-request envelope)",
+        after > before,
+        "under ACP the CLI re-prompts every escalated tool (a new perm-request envelope)",
       );
     },
   },
@@ -443,20 +460,29 @@ export const STEPS: Step[] = [
       const unresolved = requests.filter((e) => !resolvedIds.has(e.ev.reqId));
 
       assert(
-        requests.length === 6,
-        `expected 6 perm-request envelopes (Write/Edit/Bash/AskUserQuestion/Bash/Grep), got ${requests.length}`,
+        requests.length === 7,
+        // v2 (ACP): step 8 now escalates its own perm-request (the CLI no
+        // longer persists allow-session), so the Bash re-run adds a 7th.
+        `expected 7 perm-request envelopes (Write/Edit/Bash/Bash/AskUserQuestion/Bash/Grep), got ${requests.length}`,
+      );
+      // v2 (ACP): an interrupted permission request now emits a *cancelled*
+      // perm-resolve (the AcpPermissionHandler settles the PermCard rather
+      // than leaving it dangling, unlike v1) — so EVERY request resolves.
+      assert(
+        resolves.length === 7,
+        `expected 7 perm-resolve envelopes (interrupted requests now resolve as cancelled), got ${resolves.length}`,
       );
       assert(
-        resolves.length === 5,
-        `expected 5 perm-resolve envelopes (one interrupted request has none), got ${resolves.length}`,
+        unresolved.length === 0,
+        `expected no unresolved perm-requests (interrupt now settles its own), got ${unresolved.length}`,
+      );
+      const cancelledResolve = resolves.find(
+        (e) =>
+          e.ev.decision.kind === "deny" && e.ev.decision.message === "Permission request cancelled",
       );
       assert(
-        unresolved.length === 1,
-        `expected exactly one unresolved perm-request (the interrupted one), got ${unresolved.length}`,
-      );
-      assert(
-        unresolved[0]?.ev.name === "Bash",
-        "the unresolved perm-request should be the interrupted Bash call",
+        cancelledResolve !== undefined,
+        "the interrupted Bash call should have a cancelled (deny) perm-resolve",
       );
 
       assert(

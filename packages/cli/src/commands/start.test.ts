@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import { createEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
@@ -250,54 +253,70 @@ describe("runStartClaudeCommand", () => {
     expect(sessionClientHandle.stop).toHaveBeenCalledOnce();
   });
 
-  it("routes a message RPC into loop()'s onMessage subscribers and reports queued/direct-delivery honestly by mode", async () => {
-    // A plain `let` reassigned only from inside the `loop` mock's closure
-    // defeats TypeScript's control-flow narrowing at the call site below
-    // (it can't see the closure's assignment as reachable) — an object
-    // property mutation sidesteps that entirely.
-    const modeChangeBag: { onModeChange: ((mode: "local" | "remote") => void) | null } = {
-      onModeChange: null,
-    };
-    const receivedMessages: { id: string; text: string }[] = [];
+  it("routes a message RPC into loop()'s onMessage subscribers and reports queued/direct-delivery (with tri-state status) honestly by mode", async () => {
+    // A real temp homeDir: the message handler now claims (design §7.10)
+    // through the on-disk claim store before emitting.
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-test-"));
+    try {
+      // A plain `let` reassigned only from inside the `loop` mock's closure
+      // defeats TypeScript's control-flow narrowing at the call site below
+      // (it can't see the closure's assignment as reachable) — an object
+      // property mutation sidesteps that entirely.
+      const modeChangeBag: { onModeChange: ((mode: "local" | "remote") => void) | null } = {
+        onModeChange: null,
+      };
+      const receivedMessages: { id: string; text: string }[] = [];
 
-    const loop = vi.fn(async (options: LoopOptions, loopDeps: LoopDeps) => {
-      options.onMessage((message) => receivedMessages.push(message));
-      modeChangeBag.onModeChange = options.onModeChange ?? null;
-      // `deps.remote` must be a real object, not undefined, since a
-      // requested switch calls `startClaudeRemoteLauncher(..., deps.remote)`.
-      expect(loopDeps.remote).toBeDefined();
-      return 0;
-    });
+      const loop = vi.fn(async (options: LoopOptions, loopDeps: LoopDeps) => {
+        options.onMessage((message) => receivedMessages.push(message));
+        modeChangeBag.onModeChange = options.onModeChange ?? null;
+        // `deps.remote` must be a real object, not undefined, since a
+        // requested switch calls `startClaudeRemoteLauncher(..., deps.remote)`.
+        expect(loopDeps.remote).toBeDefined();
+        return 0;
+      });
 
-    let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
-      capturedHandlers = rpcDeps.handlers;
-      return { stop: vi.fn() };
-    });
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
-    await runStartClaudeCommand(
-      baseDeps({
-        loop,
-        registerSessionRpcHandlers,
-      }),
-    );
+      await runStartClaudeCommand(
+        baseDeps({
+          homeDir,
+          loop,
+          registerSessionRpcHandlers,
+        }),
+      );
 
-    expect(capturedHandlers).not.toBeNull();
-    const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+      expect(capturedHandlers).not.toBeNull();
+      const handlers = capturedHandlers as unknown as SessionRpcHandlers;
 
-    // Still in local mode: the message is queued for delivery via the
-    // local→remote switch, not delivered directly.
-    const envelope = createEnvelope("user", { t: "text", md: "hello from web" });
-    const result = await handlers.message({ envelope });
-    expect(result).toEqual({ queued: true });
-    expect(receivedMessages).toEqual([{ id: envelope.id, text: "hello from web" }]);
+      // Still in local mode: the message is queued for delivery via the
+      // local→remote switch, not delivered directly. A fresh claim →
+      // status 'queued'.
+      const envelope = createEnvelope("user", { t: "text", md: "hello from web" });
+      const result = await handlers.message({ envelope });
+      expect(result).toEqual({ queued: true, status: "queued" });
+      expect(receivedMessages).toEqual([{ id: envelope.id, text: "hello from web" }]);
 
-    // Once loop() reports a switch to remote, a message is delivered
-    // directly (no longer queued).
-    modeChangeBag.onModeChange?.("remote");
-    const envelope2 = createEnvelope("user", { t: "text", md: "second message" });
-    const result2 = await handlers.message({ envelope: envelope2 });
-    expect(result2).toEqual({ queued: false });
+      // A retry of the SAME envelope id — its claim is still open (the turn
+      // never settled in this loop mock), so the send is indeterminate: it
+      // must NOT re-emit, and reports 'outcome-unknown'.
+      const retry = await handlers.message({ envelope });
+      expect(retry).toEqual({ queued: false, status: "outcome-unknown" });
+      expect(receivedMessages).toHaveLength(1);
+
+      // Once loop() reports a switch to remote, a NEW message is delivered
+      // directly (no longer queued), still with a fresh 'queued' status.
+      modeChangeBag.onModeChange?.("remote");
+      const envelope2 = createEnvelope("user", { t: "text", md: "second message" });
+      const result2 = await handlers.message({ envelope: envelope2 });
+      expect(result2).toEqual({ queued: false, status: "queued" });
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
   });
 
   it("routes a takeControl RPC into loop()'s onTakeControl subscribers", async () => {

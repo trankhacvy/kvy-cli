@@ -12,6 +12,7 @@
     "exercise-flow": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.2.1",
     "@falcon/crypto": "workspace:*",
     "@falcon/wire": "workspace:*",
     "socket.io-client": "^4.8.1"

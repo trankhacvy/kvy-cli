@@ -92,10 +92,10 @@ function makeFakeLocalDeps(counter: { n: number }): {
   return { deps, scanners };
 }
 
-/** Remote-mode fake — `send()` emits a user text envelope directly (mirrors `claudeRemote.ts`'s real `send()`); `stop()` returns an incrementing providerSessionId. */
+/** Remote-mode fake — `send()` emits a user text envelope directly (mirrors `acpRemote.ts`'s real `send()`); `stop()` returns an incrementing providerSessionId. */
 function makeFakeRemoteDeps(counter: { n: number }): ClaudeRemoteLauncherDeps {
   return {
-    startClaudeRemote: (opts) => {
+    startAcpRemote: (opts) => {
       const providerSessionId = opts.resume ?? `remote-${counter.n++}`;
       return {
         send: (text: string) => opts.onEnvelopes([createEnvelope("user", { t: "text", md: text })]),
@@ -125,6 +125,7 @@ function baseLoopOptions(overrides: Partial<LoopOptions> = {}): {
   const options: LoopOptions = {
     workingDirectory: "/tmp/work",
     permissionMode: "default",
+    homeDir: "/tmp/falcon-home",
     onEnvelopes: (envs) => envelopes.push(...envs),
     onModeChange: (mode) => modeChanges.push(mode),
     onMessage: messageTrigger.register,

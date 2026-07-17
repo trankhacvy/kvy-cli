@@ -27,32 +27,40 @@
  * SOFTWARE.
  *
  * ---
- * Orchestrates ONE remote-mode run: starts the already-built
- * `startClaudeRemote()` SDK-driven query, feeds it any messages queued
- * during a prior local→remote switch plus any that arrive mid-run, and
- * reports back either a clean `exit` (double-Ctrl-C) or a `switch`-to-local
- * (capturing the SDK's own `providerSessionId` so the caller can
- * `claude --resume <id>`, per plan.md §6.7). This is exactly the
- * orchestration `claudeRemote.ts`'s own file header calls out as
- * deliberately out of its scope: "the orchestration that decides WHEN to
- * start/stop one of these ... is a separate, not-yet-landed plan bullet".
+ * Orchestrates ONE remote-mode run: starts the ACP-driven `startAcpRemote()`
+ * session (design §7.4 v0.3 — v2 replaced the SDK `startClaudeRemote()` this
+ * launcher used to drive), feeds it any messages queued during a prior
+ * local→remote switch plus any that arrive mid-run, and reports back either
+ * a clean `exit` (double-Ctrl-C) or a `switch`-to-local (capturing the ACP
+ * session id — which IS the Claude Code session UUID, design §7.4 — so the
+ * caller can `claude --resume <id>`, per plan.md §6.7).
  *
- * Returns a handle (`{ done, deliverMessage, requestSwitchToLocal,
- * requestExit }`) so `loop.ts` can push events into the currently-running
- * launcher without waiting on (or restructuring around) the async run
- * itself — same shape `claudeLocalLauncher.ts` uses.
+ * Returns a handle (`{ done, deliverMessage, interrupt, setMode,
+ * resolvePermission, requestSwitchToLocal, requestExit }`) so `loop.ts` can
+ * push events into the currently-running launcher without waiting on (or
+ * restructuring around) the async run itself — same shape
+ * `claudeLocalLauncher.ts` uses. `interrupt`/`setMode`/`resolvePermission`
+ * delegate straight to the underlying `AcpRemoteHandle`, so the session RPCs
+ * (`interrupt`/`setMode`/`perm.answer`) reach a live remote turn.
  *
  * ## Scope note
- * This module does not own the RPC transport that decides *when*
- * `deliverMessage()`/`requestSwitchToLocal()`/`requestExit()` get called
- * from the web (that's `loop.ts`/the session-RPC wiring's job) — but it DOES
- * own `RemoteModeDisplay`'s Ctrl-T/double-space/double-Ctrl-C local-terminal
- * gestures, same as Happy's own `claudeRemoteLauncher.ts`: they call the same
- * `requestSwitchToLocal`/`requestExit` a remote RPC would. The HTTP outbox
- * (`onEnvelopes` is a plain callback the caller wires to `Outbox.enqueue`)
- * and the real permission pipeline (`canUseTool` defaults to
- * `claudeRemote.ts`'s own fail-closed stub, same as it already does —
- * plan.md §2.3, a separate task) are still out of scope here.
+ * This module does not own the RPC transport that decides *when* its handle
+ * methods get called from the web (that's `loop.ts`/the session-RPC wiring's
+ * job) — but it DOES own `RemoteModeDisplay`'s Ctrl-T/double-space/
+ * double-Ctrl-C local-terminal gestures, same as Happy's own
+ * `claudeRemoteLauncher.ts`: they call the same `requestSwitchToLocal`/
+ * `requestExit` a remote RPC would. The HTTP outbox (`onEnvelopes` is a plain
+ * callback the caller wires to `Outbox.enqueue`) is out of scope here. The
+ * permission pipeline is now owned by `AcpRemote`'s own `AcpPermissionHandler`
+ * (design §7.6) — no `canUseTool` seam anymore; `resolvePermission` on the
+ * handle is how a `perm.answer` RPC reaches it.
+ *
+ * ## Send-idempotency (design §7.10)
+ * `onTurnSettled` is threaded straight to `AcpRemote`: it fires with the
+ * originating message's id once its turn reached a terminal stopReason, and
+ * NOT if the turn's prompt was rejected (adapter died) — the caller
+ * (`commands/start.ts`) uses it to complete the send claim, leaving it open
+ * on an indeterminate outcome.
  *
  * ## Terminal UI (ported from Happy's own claudeRemoteLauncher.ts)
  * Renders the already-ported `RemoteModeDisplay` Ink component when stdout/
@@ -68,12 +76,14 @@
  * here would open a race window where the kernel echoes in-flight bytes at
  * wherever Ink last left the cursor (visible garbage / a "second cursor").
  */
-import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
-import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
+import type { PermDecision, PermissionMode, SessionEnvelope } from "@falcon/wire";
+import { createEnvelope } from "@falcon/wire";
 import { render as inkRenderDefault } from "ink";
 import React from "react";
+import type { PermAnswerResult } from "../acp/acpPermissionHandler.js";
+import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
+import type { SessionTurnEndStatus } from "../acp/acpToEnvelope.js";
 import type { Logger } from "../logger.js";
-import { startClaudeRemote as startClaudeRemoteDefault } from "../remote/claudeRemote.js";
 import { MessageBuffer, pushEnvelopeToBuffer } from "../remote/messageBuffer.js";
 import { RemoteModeDisplay } from "../remote/RemoteModeDisplay.js";
 import { cleanupStdinAfterInk } from "../remote/terminalStdinCleanup.js";
@@ -93,14 +103,16 @@ export interface ClaudeRemoteLauncherOptions {
   providerSessionId?: string | null;
   permissionMode: PermissionMode;
   model?: string;
-  /** Defaults to `claudeRemote.ts`'s own fail-closed stub — see file header. */
-  canUseTool?: CanUseTool;
-  /** Messages queued while local mode was aborting, delivered immediately once the query starts, in order. */
+  /** `~/.falcon` (or override) — passed to `AcpRemote` for the adapter manager's verify-before-spawn. */
+  homeDir: string;
+  /** Messages queued while local mode was aborting, delivered immediately once the session starts, in order. */
   initialMessages?: QueuedMessage[];
-  /** Every envelope this query produces, already filtered through `dedupe`. Forward to the outbox. */
+  /** Every envelope this session produces, already filtered through `dedupe`. Forward to the outbox. */
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
-  /** Fires once per newly-observed `providerSessionId` (the SDK's own session_id). */
+  /** Fires once per newly-observed `providerSessionId` (the ACP session id = provider session UUID). */
   onProviderSessionId?: (providerSessionId: string) => void;
+  /** Fires when a turn reaches a terminal stopReason — the send-claim completion hook (file header, design §7.10). */
+  onTurnSettled?: (info: { messageId?: string; status: SessionTurnEndStatus }) => void;
   /** Shared cross-mode dedupe (plan.md §6.7) — see `loop.ts`'s file header. */
   dedupe: ModeSwitchDedupe;
   logger?: Logger;
@@ -121,8 +133,8 @@ interface TerminalStdio {
 }
 
 export interface ClaudeRemoteLauncherDeps {
-  /** Injectable for tests; defaults to the real `startClaudeRemote()`. */
-  startClaudeRemote?: typeof startClaudeRemoteDefault;
+  /** Injectable for tests; defaults to the real `startAcpRemote()`. */
+  startAcpRemote?: typeof startAcpRemoteDefault;
   /** Injectable for tests; defaults to `ink`'s real `render`. Never called unless `hasTTY` (see file header). */
   render?: InkRender;
   /** Injectable for tests; defaults to the real `process.stdout`/`process.stdin`. */
@@ -136,8 +148,14 @@ export type ClaudeRemoteLauncherResult =
 
 export interface ClaudeRemoteLauncherHandle {
   readonly done: Promise<ClaudeRemoteLauncherResult>;
-  /** Delivers a message arriving mid-run (the `message` RPC) directly into the live query. */
+  /** Delivers a message arriving mid-run (the `message` RPC) directly into the live session. */
   deliverMessage(message: QueuedMessage): void;
+  /** Cancels the in-flight turn (`interrupt` RPC) — no-op once the run has settled. */
+  interrupt(): Promise<void>;
+  /** Syncs the live session's permission mode (`setMode` RPC) — no-op once the run has settled. */
+  setMode(mode: PermissionMode): Promise<void>;
+  /** First-wins resolution for a pending `perm-request` (the `perm.answer` RPC). */
+  resolvePermission(params: { reqId: string; decision: PermDecision }): PermAnswerResult;
   /**
    * Requests handing control back to the terminal (`takeControl` RPC, or
    * Ctrl-T/double-space-confirm in `RemoteModeDisplay`). Idempotent —
@@ -147,6 +165,9 @@ export interface ClaudeRemoteLauncherHandle {
   /** Requests exiting the whole client (double-Ctrl-C). Idempotent — only the first call decides the outcome. */
   requestExit(): void;
 }
+
+/** Result of a `perm.answer` against a launcher that has already settled (no live remote to resolve against). */
+const NO_ACTIVE_REMOTE_PERM_RESULT: PermAnswerResult = { ok: false, reason: "already-answered" };
 
 const noopLogger: Logger = {
   debug: () => {},
@@ -161,7 +182,7 @@ export function startClaudeRemoteLauncher(
   deps: ClaudeRemoteLauncherDeps = {},
 ): ClaudeRemoteLauncherHandle {
   const logger = deps.logger ?? opts.logger ?? noopLogger;
-  const start = deps.startClaudeRemote ?? startClaudeRemoteDefault;
+  const start = deps.startAcpRemote ?? startAcpRemoteDefault;
   const inkRender = deps.render ?? (inkRenderDefault as InkRender);
   const terminal: TerminalStdio = deps.terminal ?? { stdout: process.stdout, stdin: process.stdin };
 
@@ -214,7 +235,7 @@ export function startClaudeRemoteLauncher(
       resume: opts.providerSessionId,
       permissionMode: opts.permissionMode,
       model: opts.model,
-      canUseTool: opts.canUseTool,
+      homeDir: opts.homeDir,
       onEnvelopes: (envelopes) => {
         const forwarded = envelopes.filter((envelope) => !opts.dedupe.isDuplicate(envelope));
         if (forwarded.length === 0) return;
@@ -222,6 +243,7 @@ export function startClaudeRemoteLauncher(
         opts.onEnvelopes(forwarded);
       },
       onProviderSessionId: opts.onProviderSessionId,
+      onTurnSettled: opts.onTurnSettled,
       logger,
     },
     {},
@@ -237,6 +259,21 @@ export function startClaudeRemoteLauncher(
       return;
     }
     handle.send(message.text, message.id);
+  }
+
+  async function interrupt(): Promise<void> {
+    if (outcome) return;
+    await handle.interrupt();
+  }
+
+  async function setMode(mode: PermissionMode): Promise<void> {
+    if (outcome) return;
+    await handle.setMode(mode);
+  }
+
+  function resolvePermission(params: { reqId: string; decision: PermDecision }): PermAnswerResult {
+    if (outcome) return NO_ACTIVE_REMOTE_PERM_RESULT;
+    return handle.resolvePermission(params);
   }
 
   async function run(): Promise<ClaudeRemoteLauncherResult> {
@@ -263,5 +300,13 @@ export function startClaudeRemoteLauncher(
     return { type: "switch", providerSessionId };
   }
 
-  return { done: run(), deliverMessage, requestSwitchToLocal, requestExit };
+  return {
+    done: run(),
+    deliverMessage,
+    interrupt,
+    setMode,
+    resolvePermission,
+    requestSwitchToLocal,
+    requestExit,
+  };
 }

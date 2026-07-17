@@ -1125,18 +1125,39 @@ connection pooling, no agent-id-as-identity). Design authority:
       degrades to plain allow with a visible warn.)*
 
 ### Phase 2.2 — Claude remote on ACP (delete SDK path)
-- [ ] `claudeRemoteLauncher` inner transport → `AcpRemote` (`session/new` with
+- [x] `claudeRemoteLauncher` inner transport → `AcpRemote` (`session/new` with
       `_meta.systemPrompt` preset+append + `_meta.claudeCode.options.resume`); **delete**
       `remote/claudeRemote.ts` + `remote/sdkToEnvelope.ts` (+ drop the
       `@anthropic-ai/claude-agent-sdk` dependency) in the same change
-- [ ] Claim store wired into `deliverMessage()` (claim → send → complete on turn-end)
+      *(2026-07-18, direct: `acp/acpRemote.ts` is the SDK→ACP transport swap behind the
+      unchanged launcher/loop/outbox. Deleted `remote/claudeRemote.ts`,
+      `remote/sdkToEnvelope.ts`, `remote/pushableAsyncIterable.ts`, and the now-orphaned
+      v1 `claude/permissionHandler.ts` + `claude/getToolDescriptor.ts` (superseded by
+      `acp/acpPermissionHandler.ts`), plus the `@anthropic-ai/claude-agent-sdk` dep and
+      the `remote/index.ts` barrel's dead exports. `loop.ts` drops the `CanUseTool` seam
+      and gains `homeDir`/`onTurnSettled`/`onRemoteActive`. The e2e conformance harness
+      was migrated to `AcpPermissionHandler` too — its 20-step suite passes against the
+      ACP stack, including the reframed permission semantics (allow-lists are agent-side;
+      interrupted requests now resolve as cancelled).)*
+- [x] Claim store wired into `deliverMessage()` (claim → send → complete on turn-end)
+      *(2026-07-18, direct: wired in `commands/start.ts`'s `message` RPC handler — claims
+      before emitting, tri-state reply (`queued`/`duplicate`/`outcome-unknown`),
+      completes via loop's `onTurnSettled` on a terminal stopReason. `AcpRemote`'s
+      `onTurnSettled` deliberately does NOT fire on a rejected prompt, so a crash
+      mid-turn leaves the claim open → retry sees `outcome-unknown`.)*
 - [ ] Verification gate (manual E2E matrix, all must pass): web message → reply streams
       to web + terminal; perm approve/deny/allow-session/mode-switch from phone;
       interrupt; local↔remote switch both directions (id-compatible resume verified);
       `falcon resume`; session exit paths; adapter-kill mid-turn ⇒ turn-end{failed} +
       `outcome-unknown` on retry
-- [ ] Failure-matrix regression tests: adapter-child-dies-mid-turn, duplicated
+      *(pending — requires the live server+web+adapter stack driven by hand; unit +
+      golden-trace + conformance coverage is green as a pre-gate.)*
+- [x] Failure-matrix regression tests: adapter-child-dies-mid-turn, duplicated
       `message` RPC (design §11 new rows)
+      *(2026-07-18, direct: `acp/acpRemote.test.ts` covers adapter death mid-turn
+      (service envelope + turn-end{failed} + claim-hook-unfired) and rejected-prompt
+      indeterminacy; `commands/start.test.ts` covers the duplicated `message` RPC
+      (`outcome-unknown`, no re-emit).)*
 
 ### Phase 2.3 — Codex on ACP (delete hand-rolled client)
 - [ ] `falcon codex` spawning wired through the same `AcpRemote` (`codex-acp` adapter;

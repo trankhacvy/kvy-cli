@@ -1,6 +1,6 @@
 import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
-import type { ClaudeRemoteHandle, ClaudeRemoteOptions } from "../remote/claudeRemote.js";
+import type { AcpRemoteHandle, AcpRemoteOptions } from "../acp/acpRemote.js";
 import type { MessageBuffer } from "../remote/messageBuffer.js";
 import { RemoteModeDisplay } from "../remote/RemoteModeDisplay.js";
 import {
@@ -11,16 +11,16 @@ import {
 import { ModeSwitchDedupe } from "./loop.js";
 
 interface FakeRemote {
-  handle: ClaudeRemoteHandle;
+  handle: AcpRemoteHandle;
   sentPrompts: string[];
-  /** Same sends, paired with whatever id (or lack of one) `send()` was called with — mirrors the real `claudeRemote.ts`'s `send(prompt, id?)` shape. */
+  /** Same sends, paired with whatever id (or lack of one) `send()` was called with — mirrors the real `acpRemote.ts`'s `send(prompt, id?)` shape. */
   sentMessages: Array<{ text: string; id?: string }>;
   stop: ReturnType<typeof vi.fn>;
 }
 
-/** Fake `startClaudeRemote()` — `send()` emits a user text envelope directly (reusing the given id, same as the real implementation's fix), `stop()` returns a fixed/incrementing providerSessionId. */
-function fakeStartClaudeRemote(providerSessionId: string | null): {
-  start: NonNullable<ClaudeRemoteLauncherDeps["startClaudeRemote"]>;
+/** Fake `startAcpRemote()` — `send()` emits a user text envelope directly (reusing the given id, same as the real implementation), `stop()` returns a fixed providerSessionId. */
+function fakeStartAcpRemote(providerSessionId: string | null): {
+  start: NonNullable<ClaudeRemoteLauncherDeps["startAcpRemote"]>;
   fake: FakeRemote;
 } {
   const sentPrompts: string[] = [];
@@ -28,7 +28,7 @@ function fakeStartClaudeRemote(providerSessionId: string | null): {
   let capturedOnEnvelopes: ((envs: SessionEnvelope[]) => void) | undefined;
   const stop = vi.fn(async () => ({ providerSessionId }));
 
-  const handle: ClaudeRemoteHandle = {
+  const handle: AcpRemoteHandle = {
     send: (prompt: string, id?: string) => {
       sentPrompts.push(prompt);
       sentMessages.push({ text: prompt, id });
@@ -40,10 +40,10 @@ function fakeStartClaudeRemote(providerSessionId: string | null): {
     stop,
   };
 
-  const start = ((opts: ClaudeRemoteOptions) => {
+  const start = ((opts: AcpRemoteOptions) => {
     capturedOnEnvelopes = opts.onEnvelopes;
     return handle;
-  }) as unknown as NonNullable<ClaudeRemoteLauncherDeps["startClaudeRemote"]>;
+  }) as unknown as NonNullable<ClaudeRemoteLauncherDeps["startAcpRemote"]>;
 
   return { start, fake: { handle, sentPrompts, sentMessages, stop } };
 }
@@ -54,6 +54,7 @@ function baseOptions(
   return {
     workingDirectory: "/tmp/work",
     permissionMode: "default",
+    homeDir: "/tmp/falcon-home",
     onEnvelopes: () => {},
     dedupe: new ModeSwitchDedupe(),
     ...overrides,
@@ -62,7 +63,7 @@ function baseOptions(
 
 describe("startClaudeRemoteLauncher", () => {
   it("sends every initialMessage in order as soon as the query starts", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-1");
+    const { start, fake } = fakeStartAcpRemote("prov-1");
     const handle = startClaudeRemoteLauncher(
       baseOptions({
         initialMessages: [
@@ -70,7 +71,7 @@ describe("startClaudeRemoteLauncher", () => {
           { id: "m2", text: "second" },
         ],
       }),
-      { startClaudeRemote: start },
+      { startAcpRemote: start },
     );
     handle.requestExit();
     await handle.done;
@@ -78,8 +79,8 @@ describe("startClaudeRemoteLauncher", () => {
   });
 
   it("delivers a mid-run message directly into the live query", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-1");
-    const handle = startClaudeRemoteLauncher(baseOptions(), { startClaudeRemote: start });
+    const { start, fake } = fakeStartAcpRemote("prov-1");
+    const handle = startClaudeRemoteLauncher(baseOptions(), { startAcpRemote: start });
     handle.deliverMessage({ id: "m1", text: "hi there" });
     handle.requestExit();
     await handle.done;
@@ -87,8 +88,8 @@ describe("startClaudeRemoteLauncher", () => {
   });
 
   it("preserves the message RPC's id when delivering mid-run (regression: web Composer's optimistic entry never reconciled, duplicating on screen)", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-1");
-    const handle = startClaudeRemoteLauncher(baseOptions(), { startClaudeRemote: start });
+    const { start, fake } = fakeStartAcpRemote("prov-1");
+    const handle = startClaudeRemoteLauncher(baseOptions(), { startAcpRemote: start });
     handle.deliverMessage({ id: "web-minted-id-123", text: "hi there" });
     handle.requestExit();
     await handle.done;
@@ -96,7 +97,7 @@ describe("startClaudeRemoteLauncher", () => {
   });
 
   it("preserves each initialMessage's own id when sent at query start", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-1");
+    const { start, fake } = fakeStartAcpRemote("prov-1");
     const handle = startClaudeRemoteLauncher(
       baseOptions({
         initialMessages: [
@@ -104,7 +105,7 @@ describe("startClaudeRemoteLauncher", () => {
           { id: "m2", text: "second" },
         ],
       }),
-      { startClaudeRemote: start },
+      { startAcpRemote: start },
     );
     handle.requestExit();
     await handle.done;
@@ -116,9 +117,9 @@ describe("startClaudeRemoteLauncher", () => {
 
   it("resolves 'exit' and does not emit a mode-switch envelope on requestExit()", async () => {
     const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
-    const { start } = fakeStartClaudeRemote("prov-1");
+    const { start } = fakeStartAcpRemote("prov-1");
     const handle = startClaudeRemoteLauncher(baseOptions({ onEnvelopes }), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
     });
     handle.requestExit();
     const result = await handle.done;
@@ -130,9 +131,9 @@ describe("startClaudeRemoteLauncher", () => {
 
   it("resolves 'switch', captures providerSessionId, and emits a mode-switch envelope on requestSwitchToLocal()", async () => {
     const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
-    const { start, fake } = fakeStartClaudeRemote("prov-42");
+    const { start, fake } = fakeStartAcpRemote("prov-42");
     const handle = startClaudeRemoteLauncher(baseOptions({ onEnvelopes }), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
     });
     handle.requestSwitchToLocal();
     const result = await handle.done;
@@ -146,8 +147,8 @@ describe("startClaudeRemoteLauncher", () => {
   });
 
   it("only settles on the first of requestSwitchToLocal()/requestExit() — later calls are no-ops", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-1");
-    const handle = startClaudeRemoteLauncher(baseOptions(), { startClaudeRemote: start });
+    const { start, fake } = fakeStartAcpRemote("prov-1");
+    const handle = startClaudeRemoteLauncher(baseOptions(), { startAcpRemote: start });
     handle.requestSwitchToLocal();
     handle.requestExit();
     handle.requestSwitchToLocal();
@@ -157,8 +158,8 @@ describe("startClaudeRemoteLauncher", () => {
   });
 
   it("drops a message delivered after the run has already settled", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-1");
-    const handle = startClaudeRemoteLauncher(baseOptions(), { startClaudeRemote: start });
+    const { start, fake } = fakeStartAcpRemote("prov-1");
+    const handle = startClaudeRemoteLauncher(baseOptions(), { startAcpRemote: start });
     handle.requestExit();
     await handle.done;
     handle.deliverMessage({ id: "late", text: "too late" });
@@ -170,9 +171,9 @@ describe("startClaudeRemoteLauncher", () => {
     dedupe.isDuplicate(createEnvelope("user", { t: "text", md: "dup me" }));
 
     const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
-    const { start } = fakeStartClaudeRemote("prov-1");
+    const { start } = fakeStartAcpRemote("prov-1");
     const handle = startClaudeRemoteLauncher(baseOptions({ onEnvelopes, dedupe }), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
     });
     handle.deliverMessage({ id: "m1", text: "dup me" });
     handle.requestExit();
@@ -211,11 +212,11 @@ function fakeTerminal(isTTY: boolean) {
 
 describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () => {
   it("never renders or touches stdin when hasTTY is false (the default in any non-interactive/test context)", async () => {
-    const { start } = fakeStartClaudeRemote("prov-1");
+    const { start } = fakeStartAcpRemote("prov-1");
     const render = vi.fn();
     const terminal = fakeTerminal(false);
     const handle = startClaudeRemoteLauncher(baseOptions(), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
       render,
       terminal,
     });
@@ -227,14 +228,14 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
   });
 
   it("renders RemoteModeDisplay, sets raw mode, and unmounts + drains stdin on settle when hasTTY is true", async () => {
-    const { start } = fakeStartClaudeRemote("prov-1");
+    const { start } = fakeStartAcpRemote("prov-1");
     const unmount = vi.fn();
     const render = vi.fn().mockReturnValue({ unmount });
     const terminal = fakeTerminal(true);
     vi.useFakeTimers();
 
     const handle = startClaudeRemoteLauncher(baseOptions(), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
       render,
       terminal,
     });
@@ -257,13 +258,13 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
   });
 
   it("wires RemoteModeDisplay's onExit/onSwitchToLocal props to requestExit/requestSwitchToLocal", async () => {
-    const { start, fake } = fakeStartClaudeRemote("prov-7");
+    const { start, fake } = fakeStartAcpRemote("prov-7");
     const render = vi.fn().mockReturnValue({ unmount: vi.fn() });
     const terminal = fakeTerminal(true);
     vi.useFakeTimers();
 
     const handle = startClaudeRemoteLauncher(baseOptions(), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
       render,
       terminal,
     });
@@ -282,13 +283,13 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
   });
 
   it("feeds forwarded (non-duplicate) envelopes into the message buffer shown by RemoteModeDisplay", async () => {
-    const { start } = fakeStartClaudeRemote("prov-1");
+    const { start } = fakeStartAcpRemote("prov-1");
     const render = vi.fn().mockReturnValue({ unmount: vi.fn() });
     const terminal = fakeTerminal(true);
     vi.useFakeTimers();
 
     const handle = startClaudeRemoteLauncher(baseOptions(), {
-      startClaudeRemote: start,
+      startAcpRemote: start,
       render,
       terminal,
     });
@@ -303,7 +304,7 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
       latestSnapshot = messages.map((m) => m.content);
     });
 
-    handle.deliverMessage({ id: "m1", text: "hello from the web" }); // fakeStartClaudeRemote's send() emits a matching user envelope
+    handle.deliverMessage({ id: "m1", text: "hello from the web" }); // fakeStartAcpRemote's send() emits a matching user envelope
     expect(latestSnapshot.some((c) => c.includes("hello from the web"))).toBe(true);
 
     handle.requestExit();
