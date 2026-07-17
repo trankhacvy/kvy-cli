@@ -7,6 +7,7 @@ import { runAuthCommand } from "./auth/index.js";
 import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import { runResumeCommand } from "./commands/resume.js";
+import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
 import { runShimCommand } from "./commands/shim.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
@@ -99,6 +100,8 @@ Usage:
   falcon auth login|logout|status   Manage Falcon account auth
   falcon daemon start [--no-wait] | start-sync | stop | status
                                      Manage the background daemon
+  falcon daemon service install|uninstall|status
+                                     Register the daemon as a login service (launchd/systemd-user)
   falcon kill daemon|sessions|all|all-force
                                      Process management escape hatches
   falcon doctor [clean]              Discover/categorize Falcon processes (clean: kill runaways)
@@ -231,6 +234,24 @@ async function runDaemon(command: Extract<FalconCommand, { type: "daemon" }>): P
       return code;
     }
   }
+}
+
+/**
+ * `falcon daemon service install|uninstall|status` (falcon-prd.md FR-4.1
+ * "installable as a login service (launchd / systemd-user) [P1]",
+ * falcon-system-design.md §8 "Service install (P1)") — see
+ * `commands/serviceInstall.ts` for the CLI-facing dispatch and
+ * `daemon/serviceInstall.ts` for the actual launchd/systemd logic.
+ * Deliberately does **not** call `ensureDaemon()`: this only registers/
+ * removes the OS-level service definition (a plist/unit file plus a
+ * `launchctl`/`systemctl` call) — the running daemon it points at is a
+ * separate concern, same rationale as `shim`/`workspace config` skipping
+ * daemon auto-start.
+ */
+async function runDaemonService(
+  command: Extract<FalconCommand, { type: "daemon-service" }>,
+): Promise<number> {
+  return runDaemonServiceCommand(command.action);
 }
 
 /**
@@ -406,6 +427,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runAuth(command);
     case "daemon":
       return runDaemon(command);
+    case "daemon-service":
+      return runDaemonService(command);
     case "kill":
       return runKill(command.target);
     case "doctor":

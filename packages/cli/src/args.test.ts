@@ -154,6 +154,20 @@ describe("parseArgs — daemon", () => {
   });
 });
 
+describe("parseArgs — daemon service", () => {
+  it.each(["install", "uninstall", "status"] as const)("parses daemon service %s", (action) => {
+    expect(parseArgs(["daemon", "service", action])).toEqual({ type: "daemon-service", action });
+  });
+
+  it("throws on an unknown daemon service action", () => {
+    expect(() => parseArgs(["daemon", "service", "bogus"])).toThrow(ArgParseError);
+  });
+
+  it("throws when no daemon service action is given", () => {
+    expect(() => parseArgs(["daemon", "service"])).toThrow(ArgParseError);
+  });
+});
+
 describe("parseArgs — kill", () => {
   it.each(["daemon", "sessions", "all", "all-force"] as const)("accepts kill %s", (target) => {
     expect(parseArgs(["kill", target])).toEqual({ type: "kill", target });

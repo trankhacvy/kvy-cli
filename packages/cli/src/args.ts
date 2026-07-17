@@ -23,6 +23,7 @@ export type FalconCommand =
   | { type: "start"; provider: Provider; providerArgs: string[]; branch?: string }
   | { type: "auth"; action: "login" | "logout" | "status" }
   | { type: "daemon"; action: "start" | "start-sync" | "stop" | "status"; noWait: boolean }
+  | { type: "daemon-service"; action: "install" | "uninstall" | "status" }
   | { type: "kill"; target: "daemon" | "sessions" | "all" | "all-force" }
   | { type: "doctor"; action: "report" | "clean" }
   | { type: "sessions"; action: "list" }
@@ -162,9 +163,30 @@ function parseDaemon(rest: string[]): FalconCommand {
   if (action === "start-sync" || action === "stop" || action === "status") {
     return { type: "daemon", action, noWait: false };
   }
+  // `falcon daemon service install|uninstall|status` (falcon-prd.md FR-4.1,
+  // falcon-system-design.md §8 "Service install (P1)") — registers the
+  // daemon as a login-managed OS service (launchd plist / systemd --user
+  // unit). Kept as its own `daemon-service` command type rather than
+  // overloading `daemon`'s own `status`/`start` actions, since "is the OS
+  // service registered" is a distinct question from "is the daemon process
+  // currently running" (`daemon status` above).
+  if (action === "service") {
+    return parseDaemonService(rest.slice(1));
+  }
   throw new ArgParseError(
     `Unknown "falcon daemon" action: ${action ?? "(none)"}`,
-    "falcon daemon start [--no-wait] | start-sync | stop | status",
+    "falcon daemon start [--no-wait] | start-sync | stop | status | service install|uninstall|status",
+  );
+}
+
+function parseDaemonService(rest: string[]): FalconCommand {
+  const action = rest[0];
+  if (action === "install" || action === "uninstall" || action === "status") {
+    return { type: "daemon-service", action };
+  }
+  throw new ArgParseError(
+    `Unknown "falcon daemon service" action: ${action ?? "(none)"}`,
+    "falcon daemon service install|uninstall|status",
   );
 }
 
