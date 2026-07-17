@@ -72,7 +72,9 @@ export interface ResumeSessionDeps {
    * seam a workspace/metadata schema plugs into once it exists; returning
    * `null`/`undefined` fails the resume rather than guessing a directory.
    */
-  resolveDirectory: (session: PersistedSession) => string | null | undefined | Promise<string | null | undefined>;
+  resolveDirectory: (
+    session: PersistedSession,
+  ) => string | null | undefined | Promise<string | null | undefined>;
   /** Extra env vars merged in ahead of the `FALCON_RECONNECT_*` set (rare; mirrors `spawnEngine.ts`'s shape). */
   baseEnv?: NodeJS.ProcessEnv;
   launchProcess?: typeof launchProviderProcessDefault;
@@ -159,10 +161,10 @@ async function waitForOldProcessToExit(
 
   if (!deps.isAlive(pid)) return;
 
-  deps.logger.warn(
-    "[resume-session] old process ignored SIGTERM within timeout, sending SIGKILL",
-    { sessionId, pid },
-  );
+  deps.logger.warn("[resume-session] old process ignored SIGTERM within timeout, sending SIGKILL", {
+    sessionId,
+    pid,
+  });
   deps.killPid(pid, "SIGKILL");
 
   if (deps.isAlive(pid)) {

@@ -84,7 +84,10 @@ describe("createS3Driver", () => {
 
     expect(getSignedUrlMock).toHaveBeenCalledTimes(1);
     const [clientArg, commandArg, optionsArg] = getSignedUrlMock.mock.calls[0]!;
-    expect(commandArg).toEqual({ __command: "put", input: { Bucket: config.bucket, Key: "blob-1" } });
+    expect(commandArg).toEqual({
+      __command: "put",
+      input: { Bucket: config.bucket, Key: "blob-1" },
+    });
     expect(optionsArg).toEqual({ expiresIn: config.urlExpirySeconds });
     // The same client instance the constructor produced is the one handed to getSignedUrl.
     expect(clientArg).toBe(S3ClientMock.mock.instances[0]);
@@ -108,7 +111,10 @@ describe("createS3Driver", () => {
 
     expect(getSignedUrlMock).toHaveBeenCalledTimes(1);
     const [, commandArg, optionsArg] = getSignedUrlMock.mock.calls[0]!;
-    expect(commandArg).toEqual({ __command: "get", input: { Bucket: config.bucket, Key: "blob-2" } });
+    expect(commandArg).toEqual({
+      __command: "get",
+      input: { Bucket: config.bucket, Key: "blob-2" },
+    });
     expect(optionsArg).toEqual({ expiresIn: config.urlExpirySeconds });
 
     expect(target).toEqual({
@@ -123,7 +129,13 @@ describe("createS3Driver", () => {
     await driver.createUploadTarget({ key: "blob-a", size: 1, baseUrl: "https://api.falcon.dev" });
     await driver.createUploadTarget({ key: "blob-b", size: 1, baseUrl: "https://api.falcon.dev" });
 
-    expect(PutObjectCommandMock).toHaveBeenNthCalledWith(1, { Bucket: config.bucket, Key: "blob-a" });
-    expect(PutObjectCommandMock).toHaveBeenNthCalledWith(2, { Bucket: config.bucket, Key: "blob-b" });
+    expect(PutObjectCommandMock).toHaveBeenNthCalledWith(1, {
+      Bucket: config.bucket,
+      Key: "blob-a",
+    });
+    expect(PutObjectCommandMock).toHaveBeenNthCalledWith(2, {
+      Bucket: config.bucket,
+      Key: "blob-b",
+    });
   });
 });

@@ -40,8 +40,8 @@ import type { FastifyRequest } from "fastify";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { BlobStorageDriver } from "../../blobStorage/index.js";
-import { readLocalBlob, writeLocalBlob } from "../../blobStorage/localDriver.js";
 import type { LocalDriverConfig } from "../../blobStorage/localDriver.js";
+import { readLocalBlob, writeLocalBlob } from "../../blobStorage/localDriver.js";
 import { verifyBlobToken } from "../../blobStorage/localToken.js";
 import { blobs, sessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
@@ -61,7 +61,8 @@ export interface BlobsRouteOptions {
 function resolveBaseUrl(request: FastifyRequest, publicApiOrigin?: string): string {
   if (publicApiOrigin) return publicApiOrigin.replace(/\/$/, "");
   const forwardedProto = request.headers["x-forwarded-proto"];
-  const proto = typeof forwardedProto === "string" ? forwardedProto.split(",")[0] : request.protocol;
+  const proto =
+    typeof forwardedProto === "string" ? forwardedProto.split(",")[0] : request.protocol;
   return `${proto}://${request.hostname}`;
 }
 
@@ -115,7 +116,12 @@ export function buildBlobsRoutes(
           baseUrl: resolveBaseUrl(req, opts.publicApiOrigin),
         });
 
-        return { blobId: row.id, uploadUrl: target.url, method: target.method, headers: target.headers };
+        return {
+          blobId: row.id,
+          uploadUrl: target.url,
+          method: target.method,
+          headers: target.headers,
+        };
       },
     );
 
@@ -153,7 +159,9 @@ export function buildBlobsRoutes(
     // entirely rather than mounting dead routes.
     if (blobStorage.kind === "local") {
       if (!opts.local) {
-        throw new Error("buildBlobsRoutes: opts.local is required when blobStorage.kind === 'local'");
+        throw new Error(
+          "buildBlobsRoutes: opts.local is required when blobStorage.kind === 'local'",
+        );
       }
       const localConfig = opts.local;
 

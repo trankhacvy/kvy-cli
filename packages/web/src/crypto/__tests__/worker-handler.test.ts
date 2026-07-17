@@ -94,7 +94,9 @@ describe("createCryptoWorkerHandler", () => {
   });
 
   it("sealBlob() fails before any session key is set", async () => {
-    const res = await handler.handle(req("1", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }));
+    const res = await handler.handle(
+      req("1", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }),
+    );
     expect(res).toEqual({ id: "1", ok: false, error: "no-active-session-key" });
   });
 

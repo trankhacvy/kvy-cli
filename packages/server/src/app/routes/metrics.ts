@@ -1,5 +1,5 @@
-import { Counter, Gauge, Histogram, collectDefaultMetrics, register } from "prom-client";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
+import { Counter, collectDefaultMetrics, Gauge, Histogram, register } from "prom-client";
 
 // Prometheus scrape endpoint (falcon-system-design.md §6.2: "GET /health GET
 // /metrics (bind-local)", plan.md §16 "4.4 Hardening & release gate":

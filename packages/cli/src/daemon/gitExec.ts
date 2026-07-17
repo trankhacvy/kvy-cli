@@ -22,16 +22,11 @@ export type GitExec = (args: string[], cwd: string) => Promise<string>;
 
 export const runGit: GitExec = (args, cwd) =>
   new Promise((resolve, reject) => {
-    execFile(
-      "git",
-      args,
-      { cwd, maxBuffer: 20 * 1024 * 1024 },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new GitExecError(stderr.toString().trim() || error.message));
-          return;
-        }
-        resolve(stdout.toString());
-      },
-    );
+    execFile("git", args, { cwd, maxBuffer: 20 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new GitExecError(stderr.toString().trim() || error.message));
+        return;
+      }
+      resolve(stdout.toString());
+    });
   });

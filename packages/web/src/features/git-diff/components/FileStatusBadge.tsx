@@ -9,13 +9,14 @@ const LABEL: Record<GitFileStatus["status"], string> = {
   untracked: "U",
 };
 
-const VARIANT: Record<GitFileStatus["status"], "success" | "warning" | "destructive" | "outline"> = {
-  added: "success",
-  modified: "warning",
-  deleted: "destructive",
-  renamed: "outline",
-  untracked: "outline",
-};
+const VARIANT: Record<GitFileStatus["status"], "success" | "warning" | "destructive" | "outline"> =
+  {
+    added: "success",
+    modified: "warning",
+    deleted: "destructive",
+    renamed: "outline",
+    untracked: "outline",
+  };
 
 /** One-letter status chip (A/M/D/R/U), matching `git status`'s own porcelain letters — familiar to anyone who's used git. */
 export function FileStatusBadge({ status }: { status: GitFileStatus["status"] }) {

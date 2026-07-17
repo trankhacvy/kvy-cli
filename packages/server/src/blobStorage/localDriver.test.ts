@@ -49,7 +49,11 @@ describe("localDriver", () => {
   });
 
   describe("createUploadTarget / createDownloadTarget", () => {
-    const config = { dir: "/unused", tokenSecret: "test-secret-32-chars-minimum!!!!", urlExpirySeconds: 300 };
+    const config = {
+      dir: "/unused",
+      tokenSecret: "test-secret-32-chars-minimum!!!!",
+      urlExpirySeconds: 300,
+    };
 
     it("mints an upload URL pointing at the local sink with a verifiable token", async () => {
       const driver = createLocalDriver(config);

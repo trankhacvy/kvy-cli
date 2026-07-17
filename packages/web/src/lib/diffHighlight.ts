@@ -68,9 +68,7 @@ export function languageForPath(path: string): string {
 
 /** A line shiki couldn't tokenize renders as one unstyled token carrying its full text — highlighting is cosmetic, so a grammar-load failure (a language shiki doesn't bundle, or the code) must never hide the diff content itself. */
 function plainTokens(lines: string[]): ThemedToken[][] {
-  return lines.map((content) => [
-    { content, offset: 0 } as ThemedToken,
-  ]);
+  return lines.map((content) => [{ content, offset: 0 } as ThemedToken]);
 }
 
 /**

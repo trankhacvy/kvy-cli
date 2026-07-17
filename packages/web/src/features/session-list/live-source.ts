@@ -104,7 +104,10 @@ async function decryptSessionTitle(
   }
 }
 
-async function decryptMachineName(bridge: CryptoBridgeClient, machine: MachineRow): Promise<string> {
+async function decryptMachineName(
+  bridge: CryptoBridgeClient,
+  machine: MachineRow,
+): Promise<string> {
   try {
     const ok = await bridge.setSessionKey(decodeBase64(machine.dek));
     if (!ok) return UNNAMED_MACHINE;
@@ -169,8 +172,10 @@ function useDecryptedTitles(
     return () => {
       cancelled = true;
     };
-    // biome-ignore lint/correctness/useExhaustiveDependencies: `versions` is a stable Map ref used as a mutable cache, not reactive state — including it would defeat the point.
-  }, [bridge, sessions, machines]);
+    // `versions` is a stable Map ref (useState initializer) used as a mutable
+    // cache — listing it satisfies useExhaustiveDependencies and never
+    // triggers a re-run, since the reference itself never changes.
+  }, [bridge, sessions, machines, versions]);
 
   return titles;
 }

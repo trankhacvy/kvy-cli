@@ -17,12 +17,20 @@ class FakeS3Driver implements BlobStorageDriver {
 
   async createUploadTarget({ key, size }: { key: string; size: number }) {
     this.uploadCalls.push({ key, size });
-    return { url: `https://fake-s3.example/${key}?sig=upload`, method: "PUT" as const, headers: {} };
+    return {
+      url: `https://fake-s3.example/${key}?sig=upload`,
+      method: "PUT" as const,
+      headers: {},
+    };
   }
 
   async createDownloadTarget({ key }: { key: string }) {
     this.downloadCalls.push(key);
-    return { url: `https://fake-s3.example/${key}?sig=download`, method: "GET" as const, headers: {} };
+    return {
+      url: `https://fake-s3.example/${key}?sig=download`,
+      method: "GET" as const,
+      headers: {},
+    };
   }
 }
 

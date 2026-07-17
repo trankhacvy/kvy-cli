@@ -21,9 +21,7 @@ export function ChangedFilesList({
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2 px-1 text-sm">
         <span className="font-medium">{status.branch}</span>
-        {status.ahead > 0 && (
-          <span className="text-xs text-muted-foreground">↑{status.ahead}</span>
-        )}
+        {status.ahead > 0 && <span className="text-xs text-muted-foreground">↑{status.ahead}</span>}
         {status.behind > 0 && (
           <span className="text-xs text-muted-foreground">↓{status.behind}</span>
         )}

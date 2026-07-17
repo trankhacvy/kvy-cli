@@ -12,7 +12,7 @@
  * this update check", not as a fatal error (plan.md §16 "4.3": self-update
  * must fail safe).
  */
-import { UPDATE_CHECK_TIMEOUT_MS, releaseAssetUrl } from "./config.js";
+import { releaseAssetUrl, UPDATE_CHECK_TIMEOUT_MS } from "./config.js";
 
 export type FetchImpl = typeof fetch;
 
@@ -22,7 +22,9 @@ export interface FetchLatestVersionOptions {
   timeoutMs?: number;
 }
 
-export async function fetchLatestVersion(options: FetchLatestVersionOptions): Promise<string | null> {
+export async function fetchLatestVersion(
+  options: FetchLatestVersionOptions,
+): Promise<string | null> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? UPDATE_CHECK_TIMEOUT_MS;
   const controller = new AbortController();

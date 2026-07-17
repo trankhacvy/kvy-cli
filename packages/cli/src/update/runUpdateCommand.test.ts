@@ -36,7 +36,10 @@ describe("runUpdateCommand", () => {
 
   it("applies an update when a newer version is found", async () => {
     const fetchLatestVersionImpl = vi.fn(async () => "0.2.0");
-    const applyUpdateImpl = vi.fn(async () => ({ applied: true as const, installKind: "standalone-binary" as const }));
+    const applyUpdateImpl = vi.fn(async () => ({
+      applied: true as const,
+      installKind: "standalone-binary" as const,
+    }));
     const result = await runUpdateCommand({
       ...BASE_DEPS,
       fetchLatestVersionImpl,

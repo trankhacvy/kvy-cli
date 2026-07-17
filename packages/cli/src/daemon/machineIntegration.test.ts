@@ -1,7 +1,13 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { decodeBase64, deriveKeyTree, encodeBase64, getRandomBytes, unwrapDek } from "@falcon/crypto";
+import {
+  decodeBase64,
+  deriveKeyTree,
+  encodeBase64,
+  getRandomBytes,
+  unwrapDek,
+} from "@falcon/crypto";
 import type { EncryptedBox, MachineRow } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,7 +87,10 @@ function fakeServer() {
     return new Response(JSON.stringify(row), { status: 200 });
   });
 
-  return { fetchImpl: fetchImpl as unknown as typeof fetch, registrationCount: () => registrations };
+  return {
+    fetchImpl: fetchImpl as unknown as typeof fetch,
+    registrationCount: () => registrations,
+  };
 }
 
 describe("startMachineIntegration — DEK survives a crash-restart", () => {

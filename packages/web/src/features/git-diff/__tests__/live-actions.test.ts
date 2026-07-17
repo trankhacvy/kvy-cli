@@ -14,7 +14,9 @@ describe("machineRpcToGitDiffActions", () => {
       behind: 0,
       files: [{ path: "src/a.ts", status: "modified" }],
     }));
-    const actions = machineRpcToGitDiffActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
 
     const result = await actions.fetchStatus("/repo");
 
@@ -24,15 +26,14 @@ describe("machineRpcToGitDiffActions", () => {
       behind: 0,
       files: [{ path: "src/a.ts", status: "modified" }],
     });
-    expect(call).toHaveBeenCalledWith(
-      "git.status",
-      expect.objectContaining({ worktree: "/repo" }),
-    );
+    expect(call).toHaveBeenCalledWith("git.status", expect.objectContaining({ worktree: "/repo" }));
   });
 
   it("fetchDiff calls git.diff with worktree/path/baseRef and maps the result", async () => {
     const call = vi.fn(async () => ({ inline: "diff --git a/x b/x", truncated: false }));
-    const actions = machineRpcToGitDiffActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
 
     const result = await actions.fetchDiff("/repo", { path: "src/a.ts", baseRef: "main" });
 
@@ -45,7 +46,9 @@ describe("machineRpcToGitDiffActions", () => {
 
   it("fetchDiff omits path/baseRef when not given", async () => {
     const call = vi.fn(async () => ({ inline: "diff", truncated: false }));
-    const actions = machineRpcToGitDiffActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
 
     await actions.fetchDiff("/repo");
 
@@ -57,7 +60,9 @@ describe("machineRpcToGitDiffActions", () => {
 
   it("fetchDiff surfaces truncated: true diffs unchanged", async () => {
     const call = vi.fn(async () => ({ inline: "partial diff", truncated: true }));
-    const actions = machineRpcToGitDiffActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
 
     const result = await actions.fetchDiff("/repo");
     expect(result).toEqual({ inline: "partial diff", truncated: true });

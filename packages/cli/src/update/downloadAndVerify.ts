@@ -6,16 +6,12 @@
  * so the CLI's own self-update path never installs an unverified download.
  */
 import { createHash } from "node:crypto";
-import { UPDATE_DOWNLOAD_TIMEOUT_MS, releaseAssetUrl } from "./config.js";
+import { releaseAssetUrl, UPDATE_DOWNLOAD_TIMEOUT_MS } from "./config.js";
 import type { FetchImpl } from "./fetchLatestVersion.js";
 
 export class DownloadVerificationError extends Error {}
 
-async function fetchBytes(
-  url: string,
-  fetchImpl: FetchImpl,
-  timeoutMs: number,
-): Promise<Buffer> {
+async function fetchBytes(url: string, fetchImpl: FetchImpl, timeoutMs: number): Promise<Buffer> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

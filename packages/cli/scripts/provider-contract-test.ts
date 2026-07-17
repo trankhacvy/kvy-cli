@@ -188,7 +188,9 @@ function readAndValidateTranscript(projectDir: string, sessionId: string): RawJS
     entries.push(parsed.data);
   });
 
-  const conversational = entries.filter((entry) => entry.type === "user" || entry.type === "assistant");
+  const conversational = entries.filter(
+    (entry) => entry.type === "user" || entry.type === "assistant",
+  );
   assertContract(
     conversational.length > 0,
     `transcript ${file} parsed cleanly but contained no user/assistant entries`,
@@ -307,7 +309,9 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   const kind = error instanceof ContractViolation ? "CONTRACT VIOLATION" : "ERROR";
-  console.error(`[provider-contract] ${kind}: ${error instanceof Error ? error.message : String(error)}`);
+  console.error(
+    `[provider-contract] ${kind}: ${error instanceof Error ? error.message : String(error)}`,
+  );
   if (error instanceof Error && error.stack) console.error(error.stack);
   process.exitCode = 1;
 });

@@ -39,7 +39,9 @@ export interface RunUpdateCommandResult {
   message: string;
 }
 
-export async function runUpdateCommand(deps: RunUpdateCommandDeps): Promise<RunUpdateCommandResult> {
+export async function runUpdateCommand(
+  deps: RunUpdateCommandDeps,
+): Promise<RunUpdateCommandResult> {
   const silent = deps.silent ?? isBackgroundUpdateRun(deps.env);
   const say = (message: string): string => (silent ? "" : message);
 

@@ -36,9 +36,7 @@ describe("parseTranscript", () => {
   it("falls back to the first user message text, truncated to one line", () => {
     const contents = userLine("run ls tool please and also do many other things\nwith a newline");
     const parsed = parseTranscript(contents);
-    expect(parsed?.title).toBe(
-      "run ls tool please and also do many other things with a newline",
-    );
+    expect(parsed?.title).toBe("run ls tool please and also do many other things with a newline");
   });
 
   it("falls back to a generic title when nothing usable is found", () => {

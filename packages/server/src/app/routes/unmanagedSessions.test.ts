@@ -11,10 +11,7 @@ function fakeBox(): EncryptedBox {
   return { t: "enc", v: 1, c: encodeBase64(getRandomBytes(16)) };
 }
 
-async function registerMachine(
-  app: FastifyInstance,
-  authHeader: string,
-): Promise<string> {
+async function registerMachine(app: FastifyInstance, authHeader: string): Promise<string> {
   const response = await app.inject({
     method: "POST",
     url: "/v1/machines",

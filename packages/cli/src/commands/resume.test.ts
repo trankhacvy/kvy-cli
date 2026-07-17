@@ -143,7 +143,10 @@ describe("runResumeCommand", () => {
         baseDeps({
           resumeSessionOverrides: {
             registry,
-            awaiter: { waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })), resolve: vi.fn() },
+            awaiter: {
+              waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })),
+              resolve: vi.fn(),
+            },
             launchProcess,
             falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
           },
@@ -175,10 +178,16 @@ describe("runResumeCommand", () => {
       await writeDaemonState(homeDir, { pid: 999999, port: 4242, version: "0.1.0", startedAt: 1 });
 
       const registry = fakeRegistry();
-      const fetchImpl = vi.fn(async () =>
-        new Response(JSON.stringify({ sessions: [{ sessionId: "sess_1", pid: 999999, startedBy: "daemon" }] }), {
-          status: 200,
-        }),
+      const fetchImpl = vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              sessions: [{ sessionId: "sess_1", pid: 999999, startedBy: "daemon" }],
+            }),
+            {
+              status: 200,
+            },
+          ),
       );
 
       const code = await runResumeCommand(
@@ -207,7 +216,9 @@ describe("runResumeCommand", () => {
         })),
       });
       const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
-      const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ sessions: [] }), { status: 200 }));
+      const fetchImpl = vi.fn(
+        async () => new Response(JSON.stringify({ sessions: [] }), { status: 200 }),
+      );
 
       const code = await runResumeCommand(
         "sess_1",
@@ -216,7 +227,10 @@ describe("runResumeCommand", () => {
           fetchImpl: fetchImpl as unknown as typeof fetch,
           resumeSessionOverrides: {
             registry,
-            awaiter: { waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })), resolve: vi.fn() },
+            awaiter: {
+              waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })),
+              resolve: vi.fn(),
+            },
             launchProcess,
             falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
           },

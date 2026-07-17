@@ -23,8 +23,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
     seal: notImplemented,
     open: notImplemented,
     sealBlob: async (data) => new Uint8Array([0xff, ...data]), // trivial "encryption" marker
-    openBlob: async (bundle) =>
-      bundle[0] === 0xff ? bundle.subarray(1) : null,
+    openBlob: async (bundle) => (bundle[0] === 0xff ? bundle.subarray(1) : null),
     clear: notImplemented,
     getIdentity: notImplemented,
     signInChallenge: notImplemented,
@@ -82,9 +81,9 @@ describe("uploadAttachment", () => {
     });
     globalThis.fetch = vi.fn(async () => new Response(null, { status: 500 })) as typeof fetch;
 
-    await expect(
-      uploadAttachment("tok-1", fakeBridge(), new Uint8Array([1])),
-    ).rejects.toThrow(/upload failed/);
+    await expect(uploadAttachment("tok-1", fakeBridge(), new Uint8Array([1]))).rejects.toThrow(
+      /upload failed/,
+    );
   });
 });
 

@@ -40,7 +40,9 @@ const ASSET_NAME = "falcon-darwin-arm64";
 const BINARY_PAYLOAD = Buffer.from("totally-real-binary-bytes-for-the-integration-test");
 const BINARY_DIGEST = createHash("sha256").update(BINARY_PAYLOAD).digest("hex");
 
-type RouteHandler = (respond: (status: number, body: string | Buffer, delayMs?: number) => void) => void;
+type RouteHandler = (
+  respond: (status: number, body: string | Buffer, delayMs?: number) => void,
+) => void;
 
 describe("update engine — real localhost HTTP round trip", () => {
   let server: Server;
@@ -70,7 +72,9 @@ describe("update engine — real localhost HTTP round trip", () => {
   });
 
   afterAll(async () => {
-    await new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve())));
+    await new Promise<void>((resolve, reject) =>
+      server.close((err) => (err ? reject(err) : resolve())),
+    );
   });
 
   afterEach(() => {
@@ -96,9 +100,13 @@ describe("update engine — real localhost HTTP round trip", () => {
   }
 
   it("fetchLatestVersion: reads the VERSION body over a real socket", async () => {
-    routes.set(`/${REPO}/releases/download/cli-latest/VERSION`, (respond) => respond(200, "9.9.9\n"));
+    routes.set(`/${REPO}/releases/download/cli-latest/VERSION`, (respond) =>
+      respond(200, "9.9.9\n"),
+    );
 
-    await expect(fetchLatestVersion({ repo: REPO, fetchImpl: localFetch() })).resolves.toBe("9.9.9");
+    await expect(fetchLatestVersion({ repo: REPO, fetchImpl: localFetch() })).resolves.toBe(
+      "9.9.9",
+    );
   });
 
   it("fetchLatestVersion: a real HTTP 404 (not a hand-built Response) resolves to null", async () => {
@@ -107,7 +115,9 @@ describe("update engine — real localhost HTTP round trip", () => {
   });
 
   it("fetchLatestVersion: aborts a genuinely in-flight request on timeout", async () => {
-    routes.set(`/${REPO}/releases/download/cli-latest/VERSION`, (respond) => respond(200, "9.9.9\n", 200));
+    routes.set(`/${REPO}/releases/download/cli-latest/VERSION`, (respond) =>
+      respond(200, "9.9.9\n", 200),
+    );
 
     await expect(
       fetchLatestVersion({ repo: REPO, fetchImpl: localFetch(), timeoutMs: 20 }),
@@ -122,7 +132,11 @@ describe("update engine — real localhost HTTP round trip", () => {
       respond(200, `${BINARY_DIGEST}  ${ASSET_NAME}\n`),
     );
 
-    const bytes = await downloadAndVerify({ repo: REPO, assetName: ASSET_NAME, fetchImpl: localFetch() });
+    const bytes = await downloadAndVerify({
+      repo: REPO,
+      assetName: ASSET_NAME,
+      fetchImpl: localFetch(),
+    });
     expect(bytes.equals(BINARY_PAYLOAD)).toBe(true);
   });
 

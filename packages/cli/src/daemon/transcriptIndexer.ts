@@ -192,7 +192,10 @@ export function parseTranscript(contents: string): ParsedTranscript | null {
 /** True for a bare `claude` invocation's command line — false for anything Falcon itself launched (`falcon claude ...`), so a managed session's own process is never mistaken for an unmanaged one. */
 function isPlainClaudeCommand(command: string): boolean {
   if (classifyFalconCommand(command)) return false;
-  const tokens = command.trim().split(/\s+/).filter((t) => t.length > 0);
+  const tokens = command
+    .trim()
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
   const first = tokens[0];
   if (!first) return false;
   const base = first.split("/").pop() ?? first;

@@ -11,9 +11,6 @@ import { OAuthCallbackPage } from "@/components/auth/oauth-callback-page";
 // 1-2 of a real OAuth flow (redirect out, redirect back with a proof).
 export default function DevCallbackPage() {
   return (
-    <OAuthCallbackPage
-      provider="dev"
-      resolveProof={async () => ({ ok: true, value: "dev" })}
-    />
+    <OAuthCallbackPage provider="dev" resolveProof={async () => ({ ok: true, value: "dev" })} />
   );
 }

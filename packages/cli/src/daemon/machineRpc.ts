@@ -105,12 +105,12 @@ import {
 import type { Socket } from "socket.io-client";
 import type { ZodType } from "zod";
 import type { Logger } from "../logger.js";
-import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
-import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import {
   createDirectory as createDirectoryDefault,
   listDirectory as listDirectoryDefault,
 } from "./fsBrowse.js";
+import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
+import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 
 export const MACHINE_RPC_METHODS = [
   "spawn",

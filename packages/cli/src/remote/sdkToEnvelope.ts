@@ -49,10 +49,10 @@
 import { randomUUID } from "node:crypto";
 import type { SessionEnvelope } from "@falcon/wire";
 import {
+  type ClaudeEnvelopeMapperState,
   closeClaudeTurnWithStatus,
   createClaudeEnvelopeMapperState,
   mapClaudeToEnvelopes,
-  type ClaudeEnvelopeMapperState,
   type SessionTurnEndStatus,
 } from "../claude/envelopeMapper.js";
 import type { RawJSONLines } from "../claude/types.js";

@@ -103,7 +103,9 @@ describe("SdkToEnvelopeConverter", () => {
     });
 
     const envelopes = converter.convert({ type: "result", subtype: "success", is_error: false });
-    expect(envelopes).toEqual([expect.objectContaining({ ev: { t: "turn-end", status: "completed" } })]);
+    expect(envelopes).toEqual([
+      expect.objectContaining({ ev: { t: "turn-end", status: "completed" } }),
+    ]);
   });
 
   it("a result message with is_error closes the open turn as failed", () => {
@@ -116,7 +118,9 @@ describe("SdkToEnvelopeConverter", () => {
     });
 
     const envelopes = converter.convert({ type: "result", subtype: "error", is_error: true });
-    expect(envelopes).toEqual([expect.objectContaining({ ev: { t: "turn-end", status: "failed" } })]);
+    expect(envelopes).toEqual([
+      expect.objectContaining({ ev: { t: "turn-end", status: "failed" } }),
+    ]);
   });
 
   it("a result message with no open turn produces no envelopes", () => {
@@ -135,6 +139,8 @@ describe("SdkToEnvelopeConverter", () => {
     });
 
     const envelopes = converter.closeTurn("cancelled");
-    expect(envelopes).toEqual([expect.objectContaining({ ev: { t: "turn-end", status: "cancelled" } })]);
+    expect(envelopes).toEqual([
+      expect.objectContaining({ ev: { t: "turn-end", status: "cancelled" } }),
+    ]);
   });
 });

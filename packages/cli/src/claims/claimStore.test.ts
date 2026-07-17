@@ -243,9 +243,7 @@ describe("claimStore", () => {
     await expect(claimMessageSend("../../etc", "env_1", { homeDir })).rejects.toThrow(
       /unsafe sessionId/,
     );
-    await expect(claimMessageSend("a/b", "env_1", { homeDir })).rejects.toThrow(
-      /unsafe sessionId/,
-    );
+    await expect(claimMessageSend("a/b", "env_1", { homeDir })).rejects.toThrow(/unsafe sessionId/);
     await expect(readClaims("..", { homeDir })).rejects.toThrow(/unsafe sessionId/);
   });
 

@@ -176,9 +176,7 @@ describe("startSocket (/v1/stream handshake)", () => {
     };
 
     const before = await scrape();
-    const activeBeforeMatch = before.match(
-      /ws_connections_active\{scope="user-scoped"\} (\d+)/,
-    );
+    const activeBeforeMatch = before.match(/ws_connections_active\{scope="user-scoped"\} (\d+)/);
     const totalBeforeMatch = before.match(/ws_connections_total\{scope="user-scoped"\} (\d+)/);
     const activeBefore = activeBeforeMatch ? Number(activeBeforeMatch[1]) : 0;
     const totalBefore = totalBeforeMatch ? Number(totalBeforeMatch[1]) : 0;
@@ -188,7 +186,9 @@ describe("startSocket (/v1/stream handshake)", () => {
     await new Promise<void>((resolve) => client.once("connect", () => resolve()));
 
     const afterConnect = await scrape();
-    expect(afterConnect).toContain(`ws_connections_active{scope="user-scoped"} ${activeBefore + 1}`);
+    expect(afterConnect).toContain(
+      `ws_connections_active{scope="user-scoped"} ${activeBefore + 1}`,
+    );
     expect(afterConnect).toContain(`ws_connections_total{scope="user-scoped"} ${totalBefore + 1}`);
 
     const disconnected = new Promise<void>((resolve) => client.once("disconnect", () => resolve()));
@@ -202,6 +202,8 @@ describe("startSocket (/v1/stream handshake)", () => {
     const afterDisconnect = await scrape();
     expect(afterDisconnect).toContain(`ws_connections_active{scope="user-scoped"} ${activeBefore}`);
     // The counter is cumulative — it must never decrease.
-    expect(afterDisconnect).toContain(`ws_connections_total{scope="user-scoped"} ${totalBefore + 1}`);
+    expect(afterDisconnect).toContain(
+      `ws_connections_total{scope="user-scoped"} ${totalBefore + 1}`,
+    );
   });
 });

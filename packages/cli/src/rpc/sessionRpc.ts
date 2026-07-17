@@ -34,6 +34,7 @@
  */
 import { open, seal } from "@falcon/crypto";
 import {
+  type EncryptedBox,
   EncryptedBoxSchema,
   InterruptResultSchema,
   MessageRpcParamsSchema,
@@ -43,10 +44,9 @@ import {
   SetModeParamsSchema,
   SetModeResultSchema,
   TakeControlResultSchema,
-  type EncryptedBox,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
-import { z, type ZodType } from "zod";
+import { type ZodType, z } from "zod";
 import type { Logger } from "../logger.js";
 
 // `@falcon/wire`'s rpc.ts exports the schemas below but not their inferred
@@ -136,7 +136,11 @@ function buildMethodTable(
     interrupt: defineMethod(NoParamsSchema, InterruptResultSchema, handlers.interrupt),
     takeControl: defineMethod(NoParamsSchema, TakeControlResultSchema, handlers.takeControl),
     setMode: defineMethod(SetModeParamsSchema, SetModeResultSchema, handlers.setMode),
-    "perm.answer": defineMethod(PermAnswerParamsSchema, PermAnswerResultSchema, handlers.permAnswer),
+    "perm.answer": defineMethod(
+      PermAnswerParamsSchema,
+      PermAnswerResultSchema,
+      handlers.permAnswer,
+    ),
   };
 }
 
@@ -177,7 +181,10 @@ export function registerSessionRpcHandlers(deps: SessionRpcDeps): SessionRpcHand
     callback?: (response: EncryptedBox) => void,
   ): Promise<void> {
     const method = data.method;
-    if (typeof method !== "string" || !(SESSION_RPC_METHODS as readonly string[]).includes(method)) {
+    if (
+      typeof method !== "string" ||
+      !(SESSION_RPC_METHODS as readonly string[]).includes(method)
+    ) {
       logger.warn("[session-rpc] unknown method", { method });
       callback?.(errorBox(deps.dek, "unknown-method"));
       return;
@@ -210,7 +217,9 @@ export function registerSessionRpcHandlers(deps: SessionRpcDeps): SessionRpcHand
       const result = await spec.run(parsedParams.data);
       const parsedResult = spec.resultSchema.safeParse(result);
       if (!parsedResult.success) {
-        logger.error("[session-rpc] handler returned a result that fails its own schema", { method });
+        logger.error("[session-rpc] handler returned a result that fails its own schema", {
+          method,
+        });
         callback?.(errorBox(deps.dek, "invalid-result"));
         return;
       }

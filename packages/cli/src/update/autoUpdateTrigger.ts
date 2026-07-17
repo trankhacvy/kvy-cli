@@ -51,7 +51,9 @@ function defaultSpawnBackgroundUpdate(): void {
  * Best-effort, rate-limited trigger. Returns immediately (no network I/O in
  * this function's own body) — always resolves, never rejects.
  */
-export async function maybeTriggerAutoUpdate(options: MaybeTriggerAutoUpdateOptions): Promise<void> {
+export async function maybeTriggerAutoUpdate(
+  options: MaybeTriggerAutoUpdateOptions,
+): Promise<void> {
   try {
     if (isUpdateOptedOut(options.env)) {
       options.logger.debug("auto-update: skipped (FALCON_NO_UPDATE set)");
@@ -81,10 +83,9 @@ export async function maybeTriggerAutoUpdate(options: MaybeTriggerAutoUpdateOpti
     // caps how often a background child gets spawned to once per interval
     // even if the check itself hangs or fails, rather than retrying on
     // every single `falcon` invocation in the meantime.
-    await updateSettings(
-      (current) => ({ ...current, lastUpdateCheckAt: now() }),
-      { homeDir: options.homeDir },
-    );
+    await updateSettings((current) => ({ ...current, lastUpdateCheckAt: now() }), {
+      homeDir: options.homeDir,
+    });
 
     const spawnBackgroundUpdate = options.spawnBackgroundUpdate ?? defaultSpawnBackgroundUpdate;
     spawnBackgroundUpdate();

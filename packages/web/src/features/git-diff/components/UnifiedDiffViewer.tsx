@@ -1,10 +1,10 @@
 "use client";
 
-import type { ThemedToken } from "shiki";
 import { useEffect, useState } from "react";
+import type { ThemedToken } from "shiki";
 import { highlightDiffLines, languageForPath } from "@/lib/diffHighlight";
-import { cn } from "@/lib/utils";
 import { parseUnifiedDiff, type UnifiedDiffFile, type UnifiedDiffLine } from "@/lib/unifiedDiff";
+import { cn } from "@/lib/utils";
 import type { GitDiffContent } from "../types";
 
 /** Highlights every hunk line of `file` in one `highlightDiffLines` call (correct multi-line grammar tracking, one grammar load instead of one per line) and returns the token row for each hunk-relative line index. */

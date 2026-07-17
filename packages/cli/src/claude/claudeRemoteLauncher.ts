@@ -73,8 +73,8 @@ import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falc
 import { render as inkRenderDefault } from "ink";
 import React from "react";
 import type { Logger } from "../logger.js";
-import { MessageBuffer, pushEnvelopeToBuffer } from "../remote/messageBuffer.js";
 import { startClaudeRemote as startClaudeRemoteDefault } from "../remote/claudeRemote.js";
+import { MessageBuffer, pushEnvelopeToBuffer } from "../remote/messageBuffer.js";
 import { RemoteModeDisplay } from "../remote/RemoteModeDisplay.js";
 import { cleanupStdinAfterInk } from "../remote/terminalStdinCleanup.js";
 import type { ModeSwitchDedupe, QueuedMessage } from "./loop.js";

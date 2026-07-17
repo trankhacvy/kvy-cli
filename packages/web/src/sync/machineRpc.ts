@@ -27,7 +27,7 @@
  * `z.infer` instead of imported, same values either way.
  */
 import {
-  AdoptListParamsSchema,
+  type AdoptListParamsSchema,
   AdoptListResultSchema,
   type AdoptMirrorParams,
   AdoptMirrorResultSchema,
@@ -44,7 +44,7 @@ import {
   type SpawnParams,
   SpawnResultSchema,
 } from "@falcon/wire";
-import type { z, ZodType } from "zod";
+import type { ZodType, z } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
 
 export type {

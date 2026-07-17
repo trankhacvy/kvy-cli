@@ -25,10 +25,13 @@
  * own either way.
  */
 import type { ProviderSessionSummary, SessionRow } from "@falcon/wire";
-import type { LivenessDeps } from "../adopt/liveness.js";
 import { listAdoptableSessions } from "../adopt/listSessions.js";
+import type { LivenessDeps } from "../adopt/liveness.js";
 import { resolveBackendUrl } from "../auth/config.js";
-import { type FalconCredentials, readCredentials as readCredentialsDefault } from "../auth/credentials.js";
+import {
+  type FalconCredentials,
+  readCredentials as readCredentialsDefault,
+} from "../auth/credentials.js";
 import type { Logger } from "../logger.js";
 
 export interface SessionsListCommandDeps {

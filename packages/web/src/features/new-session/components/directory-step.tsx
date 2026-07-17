@@ -82,7 +82,10 @@ export function DirectoryStep({
           <p className="text-xs text-destructive">{error}</p>
           {notFoundPath && (
             <div className="flex items-center justify-between gap-2 rounded-md border border-border p-2">
-              <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground" title={notFoundPath}>
+              <p
+                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                title={notFoundPath}
+              >
                 Doesn&apos;t exist yet — you can still use it; it&apos;ll be created when you spawn.
               </p>
               <Button

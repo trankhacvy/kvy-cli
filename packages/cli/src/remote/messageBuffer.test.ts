@@ -53,7 +53,10 @@ describe("summarizeEnvelope", () => {
 
   it("summarizes a thinking envelope distinctly", () => {
     const envelope = createEnvelope("agent", { t: "text", md: "pondering", thinking: true });
-    expect(summarizeEnvelope(envelope)).toEqual({ content: "(thinking) pondering", kind: "assistant" });
+    expect(summarizeEnvelope(envelope)).toEqual({
+      content: "(thinking) pondering",
+      kind: "assistant",
+    });
   });
 
   it("summarizes tool-start with its title when present", () => {

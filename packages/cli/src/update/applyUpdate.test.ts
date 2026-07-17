@@ -34,7 +34,8 @@ describe("applyUpdate", () => {
     const digest = createHash("sha256").update(payload).digest("hex");
     const fetchImpl = fakeFetch({
       [`${BASE}/falcon-darwin-arm64`]: () => new Response(payload),
-      [`${BASE}/falcon-darwin-arm64.sha256`]: () => new Response(`${digest}  falcon-darwin-arm64\n`),
+      [`${BASE}/falcon-darwin-arm64.sha256`]: () =>
+        new Response(`${digest}  falcon-darwin-arm64\n`),
     });
 
     const result = await applyUpdate({
@@ -64,7 +65,7 @@ describe("applyUpdate", () => {
       arch: "x64",
     });
     expect(result.applied).toBe(false);
-    expect((await readFile(execPath, "utf8"))).toBe("old binary contents");
+    expect(await readFile(execPath, "utf8")).toBe("old binary contents");
   });
 
   it("npm: delegates to the injected npm-install runner with the pinned version", async () => {

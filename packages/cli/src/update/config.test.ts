@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { isBackgroundUpdateRun, isUpdateOptedOut, releaseAssetUrl, resolveUpdateRepo } from "./config.js";
+import {
+  isBackgroundUpdateRun,
+  isUpdateOptedOut,
+  releaseAssetUrl,
+  resolveUpdateRepo,
+} from "./config.js";
 
 describe("resolveUpdateRepo", () => {
   it("defaults to falcon-dev/falcon (same slug as scripts/install.sh)", () => {

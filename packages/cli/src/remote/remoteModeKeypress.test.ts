@@ -23,7 +23,9 @@ describe("interpretRemoteModeKeypress", () => {
   });
 
   it("Ctrl-C from idle arms the exit confirmation", () => {
-    expect(interpretRemoteModeKeypress(idle, "c", { ctrl: true })).toEqual({ action: "confirm-exit" });
+    expect(interpretRemoteModeKeypress(idle, "c", { ctrl: true })).toEqual({
+      action: "confirm-exit",
+    });
   });
 
   it("a second Ctrl-C while exit is armed confirms the exit", () => {
@@ -33,7 +35,9 @@ describe("interpretRemoteModeKeypress", () => {
 
   it("Ctrl-C while switch is armed re-arms exit rather than confirming switch", () => {
     const state: RemoteModeKeypressState = { confirmationMode: "switch", actionInProgress: null };
-    expect(interpretRemoteModeKeypress(state, "c", { ctrl: true })).toEqual({ action: "confirm-exit" });
+    expect(interpretRemoteModeKeypress(state, "c", { ctrl: true })).toEqual({
+      action: "confirm-exit",
+    });
   });
 
   it("any other key while a confirmation is armed resets it", () => {
@@ -46,7 +50,10 @@ describe("interpretRemoteModeKeypress", () => {
   });
 
   it("every keypress is ignored while an action is already in progress", () => {
-    const state: RemoteModeKeypressState = { confirmationMode: null, actionInProgress: "switching" };
+    const state: RemoteModeKeypressState = {
+      confirmationMode: null,
+      actionInProgress: "switching",
+    };
     expect(interpretRemoteModeKeypress(state, " ")).toEqual({ action: "none" });
     expect(interpretRemoteModeKeypress(state, "t", { ctrl: true })).toEqual({ action: "none" });
     expect(interpretRemoteModeKeypress(state, "c", { ctrl: true })).toEqual({ action: "none" });

@@ -27,20 +27,21 @@
  *    sharing one session's DEK/seq (see `resumeSession.ts`'s own module doc
  *    for why that's unsafe) — an honest refusal, not a silent race.
  */
-import { fileURLToPath } from "node:url";
+
 import type { ChildProcess } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import crossSpawnDefault from "cross-spawn";
-import type { LivenessDeps } from "../adopt/liveness.js";
 import { listAdoptableSessions } from "../adopt/listSessions.js";
+import type { LivenessDeps } from "../adopt/liveness.js";
 import { isProcessAlive as isProcessAliveDefault } from "../daemon/lock.js";
-import {
-  type LaunchProcessDeps,
+import type {
+  LaunchProcessDeps,
   launchProviderProcess as launchProviderProcessDefault,
-  type SpawnFn,
+  SpawnFn,
 } from "../daemon/processLauncher.js";
 import {
-  ResumeSessionError,
   type ResumeSessionDeps,
+  ResumeSessionError,
   resumeSession,
 } from "../daemon/resumeSession.js";
 import { createSessionRegistry } from "../daemon/sessionRegistry.js";

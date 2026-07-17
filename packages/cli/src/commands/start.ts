@@ -43,8 +43,8 @@ import {
   type ClaudeMode,
   type LoopDeps,
   type LoopOptions,
-  type QueuedMessage,
   loop as loopDefault,
+  type QueuedMessage,
 } from "../claude/loop.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";

@@ -37,8 +37,8 @@
  * subsystem existed.
  */
 import type { GitDiffParams, GitDiffResult } from "@falcon/wire";
-import { GitExecError, type GitExec, runGit } from "./gitExec.js";
 import { readWorkspaceGitConfig } from "../workspaceConfig.js";
+import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 
 /** Stays well under the 64KB RPC control-plane cap (design §4.4) after JSON envelope + encryption overhead. */
 const MAX_INLINE_BYTES = 60_000;
@@ -59,7 +59,10 @@ async function defaultResolveConfiguredBaseRef(worktree: string): Promise<string
 }
 
 /** Truncates `text` to fit `maxBytes` (UTF-8), backing off to the last full line so the result stays readable, and appends an explicit marker. */
-function truncateToByteBudget(text: string, maxBytes: number): { text: string; truncated: boolean } {
+function truncateToByteBudget(
+  text: string,
+  maxBytes: number,
+): { text: string; truncated: boolean } {
   if (Buffer.byteLength(text, "utf8") <= maxBytes) {
     return { text, truncated: false };
   }
@@ -85,7 +88,10 @@ function isSafeRevision(ref: string): boolean {
 }
 
 /** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws `GitExecError` on any `git` failure (not a repo, unknown ref, etc.) or an unsafe `baseRef` — no silent empty-diff fallback. */
-export async function getGitDiff(params: GitDiffParams, deps: GitDiffDeps = {}): Promise<GitDiffResult> {
+export async function getGitDiff(
+  params: GitDiffParams,
+  deps: GitDiffDeps = {},
+): Promise<GitDiffResult> {
   const git = deps.git ?? runGit;
   const resolveConfiguredBaseRef = deps.resolveConfiguredBaseRef ?? defaultResolveConfiguredBaseRef;
   const maxInlineBytes = deps.maxInlineBytes ?? MAX_INLINE_BYTES;

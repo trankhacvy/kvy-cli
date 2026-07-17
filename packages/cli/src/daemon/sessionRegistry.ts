@@ -25,11 +25,7 @@
  *    once at boot and kept current as live sessions die (`pruneDeadSessions`).
  */
 import type { Logger } from "../logger.js";
-import {
-  type PersistedSession,
-  persistSession,
-  readPersistedSessions,
-} from "./sessionsStore.js";
+import { type PersistedSession, persistSession, readPersistedSessions } from "./sessionsStore.js";
 import type { SessionEncryptionData, TrackedSession } from "./types.js";
 
 export interface SessionRegistryDeps {

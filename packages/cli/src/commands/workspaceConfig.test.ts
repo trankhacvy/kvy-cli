@@ -11,7 +11,9 @@ let workspaceDir: string;
 
 beforeEach(async () => {
   homeDir = mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-cmd-home-"));
-  workspaceDir = await realpath(mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-cmd-repo-")));
+  workspaceDir = await realpath(
+    mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-cmd-repo-")),
+  );
 });
 
 afterEach(() => {

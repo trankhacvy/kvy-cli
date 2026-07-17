@@ -39,7 +39,9 @@ export default function PairPage() {
     // is a string comparison, not a byte comparison), so every downstream
     // call here (sealForPeer, approvePairing) must use the re-encoded plain
     // form, not the URL-safe one, or the server will never find a match.
-    const ephPubBytes = ephPubUrlSafe ? decodeBase64(ephPubUrlSafe, "base64url") : new Uint8Array(0);
+    const ephPubBytes = ephPubUrlSafe
+      ? decodeBase64(ephPubUrlSafe, "base64url")
+      : new Uint8Array(0);
     if (ephPubBytes.length !== X25519_PUBLIC_KEY_BYTES) {
       setStatus({ kind: "invalid-link" });
       return;

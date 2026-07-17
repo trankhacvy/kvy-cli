@@ -11,7 +11,13 @@
   },
   "homepage": "https://github.com/falcon-dev/falcon#readme",
   "bugs": "https://github.com/falcon-dev/falcon/issues",
-  "keywords": ["cli", "claude-code", "codex", "agent", "ai"],
+  "keywords": [
+    "cli",
+    "claude-code",
+    "codex",
+    "agent",
+    "ai"
+  ],
   "bin": {
     "falcon": "./bin/falcon.mjs"
   },

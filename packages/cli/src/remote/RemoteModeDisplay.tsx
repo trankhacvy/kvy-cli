@@ -39,7 +39,8 @@
  *   - any other key cancels a pending confirmation.
  */
 import { Box, Text, useInput, useStdout } from "ink";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { BufferedMessage, MessageBuffer } from "./messageBuffer.js";
 import {
   CONFIRMATION_TIMEOUT_MS,
@@ -125,11 +126,15 @@ export const RemoteModeDisplay: React.FC<RemoteModeDisplayProps> = ({
   useInput(
     useCallback(
       (input, key) => {
-        const { action } = interpretRemoteModeKeypress({ confirmationMode, actionInProgress }, input, {
-          ctrl: key.ctrl,
-          meta: key.meta,
-          shift: key.shift,
-        });
+        const { action } = interpretRemoteModeKeypress(
+          { confirmationMode, actionInProgress },
+          input,
+          {
+            ctrl: key.ctrl,
+            meta: key.meta,
+            shift: key.shift,
+          },
+        );
         if (action === "none") return;
         if (action === "reset") {
           resetConfirmation();
@@ -155,7 +160,14 @@ export const RemoteModeDisplay: React.FC<RemoteModeDisplayProps> = ({
           onSwitchToLocal?.();
         }
       },
-      [confirmationMode, actionInProgress, onExit, onSwitchToLocal, setConfirmationWithTimeout, resetConfirmation],
+      [
+        confirmationMode,
+        actionInProgress,
+        onExit,
+        onSwitchToLocal,
+        setConfirmationWithTimeout,
+        resetConfirmation,
+      ],
     ),
   );
 

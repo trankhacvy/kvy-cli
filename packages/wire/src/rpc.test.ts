@@ -132,9 +132,9 @@ describe("git.status / git.diff result shapes", () => {
       GitDiffResultSchema.safeParse({ inline: "diff --git a/x b/x", truncated: false }).success,
     ).toBe(true);
     expect(GitDiffResultSchema.safeParse({ truncated: true }).success).toBe(true);
-    expect(
-      GitDiffResultSchema.safeParse({ blobRef: "blob-1", truncated: false }).success,
-    ).toBe(true);
+    expect(GitDiffResultSchema.safeParse({ blobRef: "blob-1", truncated: false }).success).toBe(
+      true,
+    );
   });
 });
 

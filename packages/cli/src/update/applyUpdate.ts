@@ -30,23 +30,31 @@ export interface ApplyUpdateOptions {
 
 function defaultRunNpmInstall(packageSpec: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    execFile("npm", ["install", "-g", packageSpec], { timeout: 120_000 }, (error, _stdout, stderr) => {
-      if (error) {
-        reject(new Error(stderr?.toString().trim() || error.message));
-        return;
-      }
-      resolve();
-    });
+    execFile(
+      "npm",
+      ["install", "-g", packageSpec],
+      { timeout: 120_000 },
+      (error, _stdout, stderr) => {
+        if (error) {
+          reject(new Error(stderr?.toString().trim() || error.message));
+          return;
+        }
+        resolve();
+      },
+    );
   });
 }
 
 /** Downloads the platform binary, verifies it, and atomically replaces `execPath` (write to a sibling tmp file, chmod +x, then `rename` over the target — `rename` is atomic on POSIX, so a concurrently-starting `falcon` process never observes a half-written executable, and the *currently running* process is unaffected since it already holds the old inode open). */
-async function applyStandaloneBinaryUpdate(options: ApplyUpdateOptions): Promise<ApplyUpdateResult> {
+async function applyStandaloneBinaryUpdate(
+  options: ApplyUpdateOptions,
+): Promise<ApplyUpdateResult> {
   const asset = detectPlatformAsset(options.platform, options.arch);
   if (!asset) {
     return {
       applied: false,
-      reason: "no standalone binary published for this platform/architecture — run 'npm install -g falcon' instead",
+      reason:
+        "no standalone binary published for this platform/architecture — run 'npm install -g falcon' instead",
     };
   }
 

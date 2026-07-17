@@ -34,7 +34,10 @@ export interface GitDiffActions {
   /** Fetches the changed-files list for `worktree`. Throws on failure (not a git repo, unreachable machine, ...). */
   fetchStatus(worktree: string): Promise<GitStatusSnapshot>;
   /** Fetches a unified diff for `worktree`, optionally scoped to one `path`, against `baseRef` (falls back to the workspace's configured base ref, then `HEAD`, when omitted — see `daemon/gitDiff.ts`). Throws on failure. */
-  fetchDiff(worktree: string, options?: { path?: string; baseRef?: string }): Promise<GitDiffContent>;
+  fetchDiff(
+    worktree: string,
+    options?: { path?: string; baseRef?: string },
+  ): Promise<GitDiffContent>;
 }
 
 /** One Git-panel actions client per chosen machine — mirrors `UseNewSessionActions = (machineId) => NewSessionActions`. */

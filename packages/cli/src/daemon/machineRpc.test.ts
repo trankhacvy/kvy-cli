@@ -9,7 +9,11 @@ import type {
   SpawnResult,
 } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
-import { MACHINE_RPC_METHODS, type MachineRpcDeps, registerMachineRpcHandlers } from "./machineRpc.js";
+import {
+  MACHINE_RPC_METHODS,
+  type MachineRpcDeps,
+  registerMachineRpcHandlers,
+} from "./machineRpc.js";
 
 /** Minimal fake standing in for a socket.io-client `Socket` (mirrors rpc/sessionRpc.test.ts's FakeSocket). */
 class FakeSocket {

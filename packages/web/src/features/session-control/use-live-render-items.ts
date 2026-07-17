@@ -64,13 +64,16 @@ export function useLiveRenderItems(sessionId: string): RenderItem[] {
         // `client.ts`'s `rejectAllPending`), which must stay visible too
         // rather than becoming an unhandled rejection under this effect.
         if (!cancelled) {
-          console.error(`useLiveRenderItems: failed to decrypt session ${sessionId}'s messages`, err);
+          console.error(
+            `useLiveRenderItems: failed to decrypt session ${sessionId}'s messages`,
+            err,
+          );
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [crypto, messagesQuery.data]);
+  }, [crypto, messagesQuery.data, sessionId]);
 
   return items;
 }

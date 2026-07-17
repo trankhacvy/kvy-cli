@@ -34,7 +34,9 @@ function fakeClaudeLocation(overrides: Partial<ClaudeCliLocation> = {}): ClaudeC
 }
 
 /** Stands in for `startSessionClient()`'s real return value — a fake `Socket` is enough since nothing here exercises the real socket.io wire protocol (that's `sessionClient.test.ts`'s/`sessionRpc.test.ts`'s job). */
-function fakeSessionClientHandle(overrides: Partial<SessionClientHandle> = {}): SessionClientHandle {
+function fakeSessionClientHandle(
+  overrides: Partial<SessionClientHandle> = {},
+): SessionClientHandle {
   return {
     connected: true,
     socket: { id: "fake-socket" } as unknown as SessionClientHandle["socket"],
@@ -268,12 +270,10 @@ describe("runStartClaudeCommand", () => {
     });
 
     let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn(
-      (rpcDeps: { handlers: SessionRpcHandlers }) => {
-        capturedHandlers = rpcDeps.handlers;
-        return { stop: vi.fn() };
-      },
-    );
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
 
     await runStartClaudeCommand(
       baseDeps({
@@ -310,12 +310,10 @@ describe("runStartClaudeCommand", () => {
     });
 
     let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn(
-      (rpcDeps: { handlers: SessionRpcHandlers }) => {
-        capturedHandlers = rpcDeps.handlers;
-        return { stop: vi.fn() };
-      },
-    );
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
 
     await runStartClaudeCommand(baseDeps({ loop, registerSessionRpcHandlers }));
 
@@ -327,12 +325,10 @@ describe("runStartClaudeCommand", () => {
 
   it("answers interrupt/setMode/perm.answer honestly as not-yet-supported rather than faking success", async () => {
     let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn(
-      (rpcDeps: { handlers: SessionRpcHandlers }) => {
-        capturedHandlers = rpcDeps.handlers;
-        return { stop: vi.fn() };
-      },
-    );
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
 
     await runStartClaudeCommand(
       baseDeps({ loop: vi.fn(async () => 0), registerSessionRpcHandlers }),

@@ -51,7 +51,9 @@ async function callAndAwaitAck(
   params: unknown,
 ): Promise<EncryptedBox> {
   return new Promise((resolve) => {
-    socket.trigger("rpc-request", { method, params }, (response: EncryptedBox) => resolve(response));
+    socket.trigger("rpc-request", { method, params }, (response: EncryptedBox) =>
+      resolve(response),
+    );
   });
 }
 

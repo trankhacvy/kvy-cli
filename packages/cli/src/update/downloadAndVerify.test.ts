@@ -36,7 +36,9 @@ describe("downloadAndVerify", () => {
     const fetchImpl = fakeFetch({
       [`${BASE}/falcon-linux-x64`]: () => new Response(payload),
       [`${BASE}/falcon-linux-x64.sha256`]: () =>
-        new Response("0000000000000000000000000000000000000000000000000000000000000000  falcon-linux-x64\n"),
+        new Response(
+          "0000000000000000000000000000000000000000000000000000000000000000  falcon-linux-x64\n",
+        ),
     });
 
     await expect(

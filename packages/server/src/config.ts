@@ -129,7 +129,11 @@ const EnvSchema = z
     // diffs/transcripts/attachments (design §4.4's 64KB figure is the RPC
     // *control-plane* cap this subsystem exists to route around, not a
     // blob-size cap).
-    BLOB_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(64 * 1024 * 1024),
+    BLOB_MAX_SIZE_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(64 * 1024 * 1024),
     // Explicit CORS allowlist (falcon-system-design.md §12, plan.md §16 "4.4
     // Hardening": "wildcard-CORS removal" — one of the reported Happy vuln
     // classes). Comma-separated list of exact browser origins (scheme +
@@ -172,8 +176,7 @@ const EnvSchema = z
   // unset case (see `S3_BUCKET`'s own comment). Failing fast here beats
   // booting into a driver that will 500 on the first real upload.
   .refine(
-    (parsed) =>
-      !parsed.S3_BUCKET || (parsed.S3_ACCESS_KEY_ID && parsed.S3_SECRET_ACCESS_KEY),
+    (parsed) => !parsed.S3_BUCKET || (parsed.S3_ACCESS_KEY_ID && parsed.S3_SECRET_ACCESS_KEY),
     {
       message: "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required when S3_BUCKET is set",
       path: ["S3_BUCKET"],

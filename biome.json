@@ -19,6 +19,8 @@
       "!.worktrees",
       "!happy",
       "!superset",
+      "!mobvibe",
+      "!omnara",
       "!.claude",
       "!.vscode",
       "!.idea"

@@ -48,8 +48,14 @@ describe("runSessionsListCommand", () => {
   }
 
   it("lists local sessions, most-recently-active first", async () => {
-    await writeFile(join(projectDir, "sess-old.jsonl"), userLine("old", "2026-01-01T00:00:00.000Z"));
-    await writeFile(join(projectDir, "sess-new.jsonl"), userLine("new", "2026-01-02T00:00:00.000Z"));
+    await writeFile(
+      join(projectDir, "sess-old.jsonl"),
+      userLine("old", "2026-01-01T00:00:00.000Z"),
+    );
+    await writeFile(
+      join(projectDir, "sess-new.jsonl"),
+      userLine("new", "2026-01-02T00:00:00.000Z"),
+    );
 
     const code = await runSessionsListCommand(baseDeps());
 

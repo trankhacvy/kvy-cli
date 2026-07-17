@@ -8,7 +8,9 @@ function fakeFetch(impl: (url: string) => Promise<Response>) {
 describe("fetchLatestVersion", () => {
   it("returns the trimmed VERSION file body on success", async () => {
     const fetchImpl = fakeFetch(async () => new Response("0.3.1\n", { status: 200 }));
-    await expect(fetchLatestVersion({ repo: "falcon-dev/falcon", fetchImpl })).resolves.toBe("0.3.1");
+    await expect(fetchLatestVersion({ repo: "falcon-dev/falcon", fetchImpl })).resolves.toBe(
+      "0.3.1",
+    );
   });
 
   it("fetches the cli-latest VERSION asset URL", async () => {
@@ -18,7 +20,9 @@ describe("fetchLatestVersion", () => {
       return new Response("0.1.0", { status: 200 });
     });
     await fetchLatestVersion({ repo: "acme/falcon", fetchImpl });
-    expect(requestedUrl).toBe("https://github.com/acme/falcon/releases/download/cli-latest/VERSION");
+    expect(requestedUrl).toBe(
+      "https://github.com/acme/falcon/releases/download/cli-latest/VERSION",
+    );
   });
 
   it("returns null on a non-2xx response", async () => {

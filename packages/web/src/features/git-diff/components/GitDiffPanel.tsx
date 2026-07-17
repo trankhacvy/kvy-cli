@@ -30,8 +30,16 @@ export function GitDiffPanel({
   useActions?: UseGitDiffActions;
 }) {
   const actions = useActions(machineId);
-  const { status, statusError, isStatusLoading, selectedPath, selectFile, diff, diffError, isDiffLoading } =
-    useGitPanel(actions, worktree);
+  const {
+    status,
+    statusError,
+    isStatusLoading,
+    selectedPath,
+    selectFile,
+    diff,
+    diffError,
+    isDiffLoading,
+  } = useGitPanel(actions, worktree);
 
   if (isStatusLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading changed files…</p>;

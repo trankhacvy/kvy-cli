@@ -1,7 +1,12 @@
 import { decryptBlob, encryptBlob, getRandomBytes } from "@falcon/crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
-import { createBlobClientDeps, downloadBlob, type BlobClientDeps, uploadBlob } from "./blobClient.js";
+import {
+  type BlobClientDeps,
+  createBlobClientDeps,
+  downloadBlob,
+  uploadBlob,
+} from "./blobClient.js";
 
 function collectingLogger(): { logger: Logger; warnings: unknown[] } {
   const warnings: unknown[] = [];
@@ -54,9 +59,9 @@ describe("uploadBlob", () => {
 
     expect(blobId).toBe("blob-1");
     expect(capturedRequestUploadBody).toMatchObject({ size: expect.any(Number) });
-    expect(typeof (capturedRequestUploadBody as unknown as { contentHash: string }).contentHash).toBe(
-      "string",
-    );
+    expect(
+      typeof (capturedRequestUploadBody as unknown as { contentHash: string }).contentHash,
+    ).toBe("string");
 
     // The bytes actually PUT are `encryptBlob`'s output — decrypting them
     // under the same key must recover the original plaintext.
@@ -72,7 +77,12 @@ describe("uploadBlob", () => {
       if (url.endsWith("/v1/blobs/request-upload")) {
         capturedBody = JSON.parse(init.body as string);
         return new Response(
-          JSON.stringify({ blobId: "b1", uploadUrl: "https://s.test/b1", method: "PUT", headers: {} }),
+          JSON.stringify({
+            blobId: "b1",
+            uploadUrl: "https://s.test/b1",
+            method: "PUT",
+            headers: {},
+          }),
           { status: 200 },
         );
       }
@@ -92,7 +102,11 @@ describe("uploadBlob", () => {
       async () => new Response(JSON.stringify({ error: "nope" }), { status: 400 }),
     ) as unknown as typeof fetch;
 
-    const blobId = await uploadBlob(new Uint8Array([1]), getRandomBytes(32), baseDeps({ fetchImpl, logger }));
+    const blobId = await uploadBlob(
+      new Uint8Array([1]),
+      getRandomBytes(32),
+      baseDeps({ fetchImpl, logger }),
+    );
 
     expect(blobId).toBeNull();
     expect(warnings).toHaveLength(1);
@@ -103,14 +117,23 @@ describe("uploadBlob", () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith("/v1/blobs/request-upload")) {
         return new Response(
-          JSON.stringify({ blobId: "b1", uploadUrl: "https://s.test/b1", method: "PUT", headers: {} }),
+          JSON.stringify({
+            blobId: "b1",
+            uploadUrl: "https://s.test/b1",
+            method: "PUT",
+            headers: {},
+          }),
           { status: 200 },
         );
       }
       return new Response(null, { status: 500 });
     }) as unknown as typeof fetch;
 
-    const blobId = await uploadBlob(new Uint8Array([1]), getRandomBytes(32), baseDeps({ fetchImpl, logger }));
+    const blobId = await uploadBlob(
+      new Uint8Array([1]),
+      getRandomBytes(32),
+      baseDeps({ fetchImpl, logger }),
+    );
 
     expect(blobId).toBeNull();
     expect(warnings).toHaveLength(1);
@@ -122,7 +145,11 @@ describe("uploadBlob", () => {
       throw new Error("ECONNREFUSED");
     }) as unknown as typeof fetch;
 
-    const blobId = await uploadBlob(new Uint8Array([1]), getRandomBytes(32), baseDeps({ fetchImpl, logger }));
+    const blobId = await uploadBlob(
+      new Uint8Array([1]),
+      getRandomBytes(32),
+      baseDeps({ fetchImpl, logger }),
+    );
 
     expect(blobId).toBeNull();
     expect(warnings).toHaveLength(1);
@@ -133,7 +160,11 @@ describe("uploadBlob", () => {
       async () => new Response(JSON.stringify({ blobId: 123 }), { status: 200 }),
     ) as unknown as typeof fetch;
 
-    const blobId = await uploadBlob(new Uint8Array([1]), getRandomBytes(32), baseDeps({ fetchImpl }));
+    const blobId = await uploadBlob(
+      new Uint8Array([1]),
+      getRandomBytes(32),
+      baseDeps({ fetchImpl }),
+    );
 
     expect(blobId).toBeNull();
   });
@@ -148,7 +179,11 @@ describe("downloadBlob", () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith("/v1/blobs/request-download")) {
         return new Response(
-          JSON.stringify({ downloadUrl: "https://storage.test/blob-1", method: "GET", headers: {} }),
+          JSON.stringify({
+            downloadUrl: "https://storage.test/blob-1",
+            method: "GET",
+            headers: {},
+          }),
           { status: 200 },
         );
       }
@@ -165,9 +200,15 @@ describe("downloadBlob", () => {
 
   it("resolves null when request-download 404s", async () => {
     const { logger, warnings } = collectingLogger();
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({}), { status: 404 })) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(
+      async () => new Response(JSON.stringify({}), { status: 404 }),
+    ) as unknown as typeof fetch;
 
-    const result = await downloadBlob("missing", getRandomBytes(32), baseDeps({ fetchImpl, logger }));
+    const result = await downloadBlob(
+      "missing",
+      getRandomBytes(32),
+      baseDeps({ fetchImpl, logger }),
+    );
 
     expect(result).toBeNull();
     expect(warnings).toHaveLength(1);
@@ -178,7 +219,11 @@ describe("downloadBlob", () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.endsWith("/v1/blobs/request-download")) {
         return new Response(
-          JSON.stringify({ downloadUrl: "https://storage.test/blob-1", method: "GET", headers: {} }),
+          JSON.stringify({
+            downloadUrl: "https://storage.test/blob-1",
+            method: "GET",
+            headers: {},
+          }),
           { status: 200 },
         );
       }
