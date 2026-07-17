@@ -18,6 +18,40 @@ importers:
         specifier: ^5.9.0
         version: 5.9.3
 
+  e2e:
+    dependencies:
+      '@falcon/crypto':
+        specifier: workspace:*
+        version: link:../packages/crypto
+      '@falcon/wire':
+        specifier: workspace:*
+        version: link:../packages/wire
+      socket.io-client:
+        specifier: ^4.8.1
+        version: 4.8.3
+    devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.4
+        version: 0.5.4
+      '@falcon/server':
+        specifier: workspace:*
+        version: link:../packages/server
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.1
+      falcon:
+        specifier: workspace:*
+        version: link:../packages/cli
+      tsx:
+        specifier: ^4.20.0
+        version: 4.23.1
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0)
+
   packages/cli:
     dependencies:
       '@anthropic-ai/claude-agent-sdk':

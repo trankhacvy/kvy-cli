@@ -10,6 +10,14 @@
       "dependsOn": ["^build"],
       "outputs": ["out/**", ".next/**", "!.next/cache/**"]
     },
+    // @falcon/e2e is a scripted harness (design §13 item 3), not a library —
+    // its "build" is a type-check only (`tsc --noEmit`, no pkgroll bundle;
+    // it's driven via `tsx`/vitest in-repo, never published or imported by
+    // another package). No `dist/**` to cache.
+    "@falcon/e2e#build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "typecheck": {
       "dependsOn": ["^build"],
       "outputs": []
