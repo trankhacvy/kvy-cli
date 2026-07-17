@@ -29,6 +29,37 @@ web wizard step already speaks the wire contract for but has no live handler for
 remains separate follow-up work (a new `adopt.list` machine RPC handler), not something this
 wiring task's scope covered.
 
+## Correction (2026-07-17, remediation pass)
+
+The "Landing addendum" above was written and committed (`20b101e`) *before* the last bullet
+("`main` was fast-forwarded to `fe5258e` in the primary checkout") had actually been carried
+out — it described an intended/expected follow-up action as already-completed fact. The merge
+commit `fe5258e` itself was real (created by `git merge main --no-edit` from inside this
+branch, as described), but `refs/heads/main` in the primary checkout was never actually moved
+to it; `main` remained at `61c2822` with the old `resolveWorkspaceRoot: () => null` stub. This
+was caught by a separate landing-verification pass (`git log main` / `git show
+main:packages/cli/src/daemon/commands.ts` on the primary checkout showed the old stub still
+present; `git cat-file -t fe5258e` from the primary checkout's perspective at that time — before
+this remediation — could not resolve it as reachable from any ref `main` builds on).
+
+This pass fixed that for real, from the primary checkout:
+
+- `git merge --ff-only fe5258e` — fast-forwarded `main` from `61c2822` to `fe5258e` (true
+  fast-forward: `61c2822` is `fe5258e`'s second parent).
+- `git merge --ff-only 20b101e` — fast-forwarded `main` again to include this documentation
+  commit itself, since its content is accurate now that the prior step has actually happened.
+- Re-verified on `main` post-fast-forward, for real this time: `pnpm build` — 5/5 packages
+  green; `pnpm typecheck` — 9/9 tasks green; `pnpm test` — 100/100 test files, 976/976 tests
+  green. `git show main:packages/cli/src/daemon/commands.ts` now shows
+  `resolveWorkspaceRoot: createWorkspaceRootLookup({ homeDir })` in place of the old stub.
+- `git merge-base --is-ancestor fe5258e main` now returns true from every checkout of this
+  repo (it wasn't, before this pass).
+
+Lesson for future landing tasks: don't narrate a fast-forward/merge of `main` as complete in
+commit prose or `plan.md` until `refs/heads/main` has actually been moved (verify with
+`git merge-base --is-ancestor <commit> main` returning true) — a worktree branch containing a
+merge of `main` into itself is not the same thing as `main` containing that branch.
+
 ## Scope recap
 
 `P3-workspace-registration-store` landed `packages/cli/src/workspace/{registry,adapters}.ts`
