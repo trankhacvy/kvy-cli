@@ -1038,6 +1038,22 @@ connection pooling, no agent-id-as-identity). Design authority:
       **false**; `git cat-file -e main:packages/cli/src/acp/acpToEnvelope.ts` fails — the
       file does not exist on `main`'s tree. Same worktree-only shape as
       `acpConnection.ts` above; not flipped. See `progress.md` Cycle 75.)*
+      *(2026-07-18, land pass: fresh worktree `.worktrees/P17-land-2.1-acp-to-envelope`
+      branched off current `main` tip `cc3e9ae`. `git cherry-pick 16815af` applied
+      cleanly (zero conflicts — 3 files, all new: `acpToEnvelope.ts`,
+      `acpToEnvelope.test.ts`, the original task's own `task-summary/
+      P17-2.1-acp-to-envelope.md`), committed as `6f25a93` on this worktree's local
+      branch. Re-verified on the merged tree: `pnpm build` 6/6, `pnpm typecheck` 11/11,
+      `pnpm test` 11/11 (126 files/1203 tests, `acpToEnvelope.test.ts` 22/22). Checkbox
+      is deliberately **not** flipped here: this subagent's operating rules are "commit
+      in the worktree, do NOT merge or push", so from inside this worktree
+      `git merge-base --is-ancestor 6f25a93 main` still returns **false** — `main` itself
+      has not been fast-forwarded yet. Flipping the box now would repeat the exact
+      false-landing mistake this bullet already documents once above. See
+      `task-summary/P17-land-2.1-acp-to-envelope.md` for the full account; the real
+      fast-forward + checkbox flip is deferred to whatever step actually has merge/push
+      access to `main`, same two-step shape that closed out the sibling
+      `wire-envelope-verification` bullet in Phase 2.0.)*
 - [ ] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
       existing reducer test corpus
 - [ ] Unified ACP permission handler: `session/request_permission` → existing §7.6
