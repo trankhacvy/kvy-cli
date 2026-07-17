@@ -150,7 +150,10 @@ describe("text chunks (coalesced — one envelope per run, not per delta)", () =
       { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Let me check." } },
       state,
     );
-    const out = evs({ sessionUpdate: "tool_call", toolCallId: "call-1", kind: "read" }, state);
+    const out = evs(
+      { sessionUpdate: "tool_call", toolCallId: "call-1", kind: "read", rawInput: { p: "x" } },
+      state,
+    );
     expect(out).toHaveLength(2);
     expect(out[0]?.ev).toEqual({ t: "text", md: "Let me check." });
     expect(out[1]?.ev).toMatchObject({ t: "tool-start", name: "read" });
@@ -198,15 +201,15 @@ describe("text chunks (coalesced — one envelope per run, not per delta)", () =
 });
 
 describe("unknown update kinds", () => {
-  it("logs and drops unrecognized sessionUpdate kinds, never throws", () => {
+  it("warns and drops genuinely unrecognized sessionUpdate kinds, never throws", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
     const logger = fakeLogger();
-    expect(() => evs({ sessionUpdate: "current_mode_update" }, state, logger)).not.toThrow();
-    expect(evs({ sessionUpdate: "plan" }, state, logger)).toEqual([]);
+    expect(() => evs({ sessionUpdate: "some_future_kind" }, state, logger)).not.toThrow();
+    expect(evs({ sessionUpdate: "some_future_kind" }, state, logger)).toEqual([]);
     expect(logger.warn).toHaveBeenCalledWith(
       "acp_session_update_unknown_kind_dropped",
-      expect.objectContaining({ sessionUpdate: "plan" }),
+      expect.objectContaining({ sessionUpdate: "some_future_kind" }),
     );
   });
 });
@@ -260,6 +263,7 @@ describe("tool_call / tool_call_update lifecycle", () => {
         sessionUpdate: "tool_call",
         toolCallId: "call-2",
         kind: "edit",
+        rawInput: { file_path: "a.ts" },
         _meta: { claudeCode: { toolName: "Write" } },
       },
       state,
@@ -267,10 +271,10 @@ describe("tool_call / tool_call_update lifecycle", () => {
     expect(start?.ev).toMatchObject({ name: "Write", risk: "write" });
   });
 
-  it("drops intermediate pending/in_progress tool_call_update (no wire equivalent)", () => {
+  it("drops intermediate pending/in_progress tool_call_update carrying no new args", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    evs({ sessionUpdate: "tool_call", toolCallId: "call-3" }, state);
+    evs({ sessionUpdate: "tool_call", toolCallId: "call-3", rawInput: { c: 1 } }, state);
     expect(
       evs(
         { sessionUpdate: "tool_call_update", toolCallId: "call-3", status: "in_progress" },
@@ -282,7 +286,10 @@ describe("tool_call / tool_call_update lifecycle", () => {
   it("mints a stable cuid2 per raw toolCallId across start/end", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    const [start] = evs({ sessionUpdate: "tool_call", toolCallId: "call-4" }, state);
+    const [start] = evs(
+      { sessionUpdate: "tool_call", toolCallId: "call-4", rawInput: { x: 1 } },
+      state,
+    );
     const [end] = evs(
       { sessionUpdate: "tool_call_update", toolCallId: "call-4", status: "completed" },
       state,
@@ -303,13 +310,111 @@ describe("tool_call / tool_call_update lifecycle", () => {
   });
 });
 
+describe("deferred tool-start (initial tool_call has empty rawInput — recorded adapter behavior)", () => {
+  it("buffers an args-less tool_call, emits tool-start when a refinement fills rawInput in", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    // Real trace shape: tool_call {rawInput:{}, title:"Terminal"} then
+    // refinements streaming the command in, then the terminal update.
+    expect(
+      evs(
+        {
+          sessionUpdate: "tool_call",
+          toolCallId: "toolu_1",
+          title: "Terminal",
+          kind: "execute",
+          rawInput: {},
+          _meta: { claudeCode: { toolName: "Bash" } },
+        },
+        state,
+      ),
+    ).toEqual([]);
+
+    const refined = evs(
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "toolu_1",
+        title: "echo hi",
+        kind: "execute",
+        rawInput: { command: "echo hi" },
+      },
+      state,
+    );
+    expect(refined).toHaveLength(1);
+    expect(refined[0]?.ev).toEqual({
+      t: "tool-start",
+      call: expect.any(String),
+      name: "Bash",
+      title: "echo hi",
+      args: { command: "echo hi" },
+      risk: "exec",
+    });
+
+    const [end] = evs(
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "toolu_1",
+        status: "completed",
+        rawOutput: "hi",
+      },
+      state,
+    );
+    expect(end?.ev).toMatchObject({ t: "tool-end", ok: true, output: "hi" });
+  });
+
+  it("a terminal update force-emits the buffered start (with its final refinements) before the end", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    evs({ sessionUpdate: "tool_call", toolCallId: "toolu_2", kind: "read", rawInput: {} }, state);
+    const out = evs(
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "toolu_2",
+        status: "completed",
+        rawInput: { path: "a.txt" },
+        rawOutput: "contents",
+      },
+      state,
+    );
+    expect(out).toHaveLength(2);
+    expect(out[0]?.ev).toMatchObject({ t: "tool-start", args: { path: "a.txt" } });
+    expect(out[1]?.ev).toMatchObject({ t: "tool-end", ok: true, output: "contents" });
+  });
+
+  it("turn close flushes still-buffered starts so a cancelled turn never swallows them", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    evs({ sessionUpdate: "tool_call", toolCallId: "toolu_3", kind: "execute" }, state);
+    const closed = closeAcpTurnWithStatus(state, "cancelled");
+    expect(closed).toHaveLength(2);
+    expect(closed[0]?.ev).toMatchObject({ t: "tool-start", args: {} });
+    expect(closed[1]?.ev).toEqual({ t: "turn-end", status: "cancelled" });
+  });
+
+  it("known-but-unmapped kinds (usage_update etc.) drop at debug, never warn", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    const logger = fakeLogger();
+    expect(evs({ sessionUpdate: "usage_update" }, state, logger)).toEqual([]);
+    expect(evs({ sessionUpdate: "available_commands_update" }, state, logger)).toEqual([]);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.debug).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("subagent scope via _meta.claudeCode.parentToolUseId", () => {
   it("scopes a nested tool call and its thinking to the spawning call's own id, with sub-start/sub-stop bracketing", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
 
     const [taskStart] = evs(
-      { sessionUpdate: "tool_call", toolCallId: "task-1", title: "Investigate", kind: "think" },
+      {
+        sessionUpdate: "tool_call",
+        toolCallId: "task-1",
+        title: "Investigate",
+        kind: "think",
+        rawInput: { prompt: "investigate" },
+      },
       state,
     );
     const taskCall = taskStart?.ev.t === "tool-start" ? taskStart.ev.call : undefined;
@@ -336,6 +441,7 @@ describe("subagent scope via _meta.claudeCode.parentToolUseId", () => {
         toolCallId: "read-1",
         title: "Read utils.ts",
         kind: "read",
+        rawInput: { path: "utils.ts" },
         _meta: { claudeCode: { parentToolUseId: "task-1" } },
       },
       state,
@@ -378,11 +484,12 @@ describe("subagent scope via _meta.claudeCode.parentToolUseId", () => {
   it("closeAcpTurnWithStatus flushes any still-open subagent scopes before turn-end", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    evs({ sessionUpdate: "tool_call", toolCallId: "task-1" }, state);
+    evs({ sessionUpdate: "tool_call", toolCallId: "task-1", rawInput: { p: 1 } }, state);
     evs(
       {
         sessionUpdate: "tool_call",
         toolCallId: "read-1",
+        rawInput: { path: "x" },
         _meta: { claudeCode: { parentToolUseId: "task-1" } },
       },
       state,
@@ -397,13 +504,17 @@ describe("state reset across turns", () => {
   it("clears id maps and subagent tracking when a turn closes", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    evs({ sessionUpdate: "tool_call", toolCallId: "call-1" }, state);
+    evs({ sessionUpdate: "tool_call", toolCallId: "call-1", rawInput: { a: 1 } }, state);
     closeAcpTurnWithStatus(state, "completed");
 
     startAcpTurn(state);
     const logger = fakeLogger();
     // A stale toolCallId from the previous turn resolves to a *new* cuid2 (fresh mint), not the old one.
-    const [start] = evs({ sessionUpdate: "tool_call", toolCallId: "call-1" }, state, logger);
+    const [start] = evs(
+      { sessionUpdate: "tool_call", toolCallId: "call-1", rawInput: { a: 1 } },
+      state,
+      logger,
+    );
     expect(start?.ev.t).toBe("tool-start");
     expect(logger.warn).not.toHaveBeenCalled();
   });

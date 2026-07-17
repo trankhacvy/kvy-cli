@@ -109,6 +109,22 @@
  * Callers that want lower perceived latency for long text blocks can also
  * flush explicitly via `flushAcpText` (e.g. on a timer) — each flush simply
  * ends the current run at a block boundary of its choosing.
+ *
+ * ## Deferred tool-start (fixture-recording fix — empty args)
+ *
+ * Recorded from a real adapter run (`__fixtures__/acp-tool-turn.jsonl`): the
+ * initial `tool_call` arrives with `rawInput: {}` and a placeholder title
+ * ("Terminal"); the command/args stream in via NON-terminal
+ * `tool_call_update` refinements, and only the last terminal update carries
+ * `status: "completed"` + `rawOutput`. Emitting `tool-start` at `tool_call`
+ * time would therefore persist an empty-args Bash card forever. Instead the
+ * start is buffered and emitted the moment its args are known: immediately
+ * when the initial event already has non-empty `rawInput` (agents that send
+ * complete calls up front), on the refining update that first fills
+ * `rawInput`, at the terminal update at the latest (right before its
+ * `tool-end`), or at turn close for calls that never complete. This matches
+ * v1's timing — the SDK's complete `tool_use` block likewise only existed
+ * once its input was fully assembled.
  */
 
 import { createEnvelope, type SessionEnvelope, type SessionEvent } from "@falcon/wire";
@@ -147,6 +163,24 @@ interface PendingTextRun {
   parts: string[];
 }
 
+/**
+ * A buffered, not-yet-emitted `tool-start` (file header: "Deferred
+ * tool-start"). Recorded from a real adapter run: the initial `tool_call`
+ * arrives with `rawInput: {}` and a placeholder title ("Terminal"); the
+ * actual command/args stream in via non-terminal `tool_call_update`
+ * refinements. Emitting at `tool_call` time would put an empty-args
+ * tool card on the wire forever.
+ */
+interface PendingToolStart {
+  turn: string;
+  call: string;
+  subagent?: string;
+  name: string;
+  title?: string;
+  args: Record<string, unknown>;
+  risk?: "read" | "write" | "exec" | "network";
+}
+
 /** Mutable, per-session mapper state — construct with `createAcpEnvelopeMapperState()`. */
 export interface AcpEnvelopeMapperState {
   currentTurnId: string | null;
@@ -160,6 +194,8 @@ export interface AcpEnvelopeMapperState {
   activeSubagents?: Set<string>;
   /** Open coalesced text run, if any — flushed on run break / tool emission / turn close / `flushAcpText`. */
   pendingText?: PendingTextRun | null;
+  /** call cuid -> buffered tool-start awaiting its args (insertion order = arrival order). */
+  pendingToolStarts?: Map<string, PendingToolStart>;
 }
 
 export function createAcpEnvelopeMapperState(): AcpEnvelopeMapperState {
@@ -188,6 +224,11 @@ function activeSubagents(state: AcpEnvelopeMapperState): Set<string> {
   return state.activeSubagents;
 }
 
+function pendingToolStarts(state: AcpEnvelopeMapperState): Map<string, PendingToolStart> {
+  if (!state.pendingToolStarts) state.pendingToolStarts = new Map();
+  return state.pendingToolStarts;
+}
+
 /** Mints a cuid2 for a raw ACP id the first time it's seen; stable after. */
 function mintedId(state: AcpEnvelopeMapperState, providerId: string): string {
   const map = providerIds(state);
@@ -204,6 +245,38 @@ function clearMapperState(state: AcpEnvelopeMapperState): void {
   startedSubagents(state).clear();
   activeSubagents(state).clear();
   state.pendingText = null;
+  pendingToolStarts(state).clear();
+}
+
+/** Emits one buffered tool-start (sub-start first when its scope is new) and drops it from the pending map. */
+function emitPendingToolStart(
+  state: AcpEnvelopeMapperState,
+  pending: PendingToolStart,
+  envelopes: SessionEnvelope[],
+): void {
+  pendingToolStarts(state).delete(pending.call);
+  maybeEmitSubagentStart(state, pending.turn, pending.subagent, envelopes);
+  envelopes.push(
+    createEnvelope(
+      "agent",
+      {
+        t: "tool-start",
+        call: pending.call,
+        name: pending.name,
+        ...(pending.title !== undefined ? { title: pending.title } : {}),
+        args: pending.args,
+        ...(pending.risk !== undefined ? { risk: pending.risk } : {}),
+      },
+      { turn: pending.turn, subagent: pending.subagent },
+    ),
+  );
+}
+
+/** Emits every still-buffered tool-start in arrival order — turn close (a cancelled/failed turn may never deliver args). */
+function flushPendingToolStarts(state: AcpEnvelopeMapperState, envelopes: SessionEnvelope[]): void {
+  for (const pending of [...pendingToolStarts(state).values()]) {
+    emitPendingToolStart(state, pending, envelopes);
+  }
 }
 
 /**
@@ -414,6 +487,7 @@ export function closeAcpTurnWithStatus(
   const turn = state.currentTurnId;
   const envelopes: SessionEnvelope[] = [];
   flushPendingText(state, envelopes);
+  flushPendingToolStarts(state, envelopes);
   emitActiveSubagentStops(state, turn, envelopes);
   envelopes.push(createEnvelope("agent", { t: "turn-end", status }, { turn }));
   state.currentTurnId = null;
@@ -478,6 +552,18 @@ function handleTextChunk(
   return envelopes;
 }
 
+function hasArgs(args: Record<string, unknown>): boolean {
+  return Object.keys(args).length > 0;
+}
+
+/**
+ * `tool_call` — buffer a deferred tool-start (file header: "Deferred
+ * tool-start"). It emits as soon as its args are known: immediately when the
+ * initial event already carries a non-empty `rawInput` (agents that send
+ * complete calls up front), on the refining `tool_call_update` that first
+ * fills `rawInput` in, at the terminal update at the latest, or at turn
+ * close for calls that never complete.
+ */
 function handleToolCall(
   update: AcpSessionUpdate,
   state: AcpEnvelopeMapperState,
@@ -498,26 +584,40 @@ function handleToolCall(
   const envelopes: SessionEnvelope[] = [];
   flushPendingText(state, envelopes); // wire order must match event order
   const subagent = resolveEnvelopeSubagent(update, state);
-  maybeEmitSubagentStart(state, turn, subagent, envelopes);
 
   const call = mintedId(state, toolCallId);
+  const pending: PendingToolStart = {
+    turn,
+    call,
+    subagent,
+    name: pickAcpToolName(update),
+    title: pickString(update.title),
+    args: pickAcpToolArgs(update),
+    risk: pickRisk(update),
+  };
+  pendingToolStarts(state).set(call, pending);
+  if (hasArgs(pending.args)) emitPendingToolStart(state, pending, envelopes);
+  return envelopes;
+}
+
+/** Merges a non-terminal `tool_call_update`'s refinements into the buffered start. */
+function refinePendingToolStart(
+  pending: PendingToolStart,
+  update: AcpSessionUpdate,
+): PendingToolStart {
+  const args = pickAcpToolArgs(update);
   const title = pickString(update.title);
   const risk = pickRisk(update);
-  envelopes.push(
-    createEnvelope(
-      "agent",
-      {
-        t: "tool-start",
-        call,
-        name: pickAcpToolName(update),
-        ...(title !== undefined ? { title } : {}),
-        args: pickAcpToolArgs(update),
-        ...(risk !== undefined ? { risk } : {}),
-      },
-      { turn, subagent },
-    ),
+  const claudeName = pickString(
+    isRecord(update._meta) && isRecord((update._meta as Record<string, unknown>).claudeCode)
+      ? ((update._meta as Record<string, unknown>).claudeCode as Record<string, unknown>).toolName
+      : undefined,
   );
-  return envelopes;
+  if (hasArgs(args)) pending.args = args;
+  if (title !== undefined) pending.title = title;
+  if (risk !== undefined && pending.risk === undefined) pending.risk = risk;
+  if (claudeName && pending.name === "tool") pending.name = claudeName;
+  return pending;
 }
 
 function handleToolCallUpdate(
@@ -525,13 +625,6 @@ function handleToolCallUpdate(
   state: AcpEnvelopeMapperState,
   logger: Logger | undefined,
 ): SessionEnvelope[] {
-  const status = pickString(update.status);
-  if (!isTerminalStatus(status)) {
-    // Intermediate `pending`/`in_progress` transitions have no wire
-    // equivalent — only the terminal completed/failed status closes a
-    // tool-start, matching the Claude/Codex mappers' start/end-only lifecycle.
-    return [];
-  }
   const turn = state.currentTurnId;
   if (!turn) {
     logger?.warn("acp_session_update_dropped_no_active_turn", {
@@ -544,10 +637,31 @@ function handleToolCallUpdate(
     logger?.warn("acp_tool_call_update_dropped_missing_id", {});
     return [];
   }
+  const call = mintedId(state, toolCallId);
+
+  const status = pickString(update.status);
+  if (!isTerminalStatus(status)) {
+    // Intermediate refinements (args/title streaming in — recorded from a
+    // real adapter run) update the buffered tool-start; it emits the moment
+    // its args become known. No wire equivalent otherwise.
+    const pending = pendingToolStarts(state).get(call);
+    if (!pending) return [];
+    refinePendingToolStart(pending, update);
+    if (!hasArgs(pending.args)) return [];
+    const envelopes: SessionEnvelope[] = [];
+    flushPendingText(state, envelopes); // wire order must match event order
+    emitPendingToolStart(state, pending, envelopes);
+    return envelopes;
+  }
 
   const envelopes: SessionEnvelope[] = [];
   flushPendingText(state, envelopes); // wire order must match event order
-  const call = mintedId(state, toolCallId);
+
+  // A call finishing before its args ever arrived still needs its start on
+  // the wire before its end — emit the buffered start (final refinements
+  // from this terminal update included) now.
+  const pending = pendingToolStarts(state).get(call);
+  if (pending) emitPendingToolStart(state, refinePendingToolStart(pending, update), envelopes);
 
   // If this call itself is a spawning (subagent) call, its own terminal
   // update closes that subagent's scope first — the tool-end below stays
@@ -579,6 +693,24 @@ function handleToolCallUpdate(
  * subagent tracking) so the next call sees a consistent session. Never
  * throws — a malformed or unrecognized update is logged and dropped.
  */
+/**
+ * Known ACP update kinds with no `SessionEventSchema` equivalent — dropped
+ * at debug level, NOT warn: `usage_update` alone fires several times per
+ * turn on a real adapter run (recorded), and a warn per event would flood
+ * the session log with noise about expected traffic. Truly *unknown* kinds
+ * still warn below.
+ */
+const KNOWN_UNMAPPED_KINDS = new Set([
+  "plan",
+  "plan_update",
+  "plan_removed",
+  "current_mode_update",
+  "available_commands_update",
+  "session_info_update",
+  "usage_update",
+  "config_option_update",
+]);
+
 export function mapAcpUpdateToEnvelopes(
   update: AcpSessionUpdate,
   state: AcpEnvelopeMapperState,
@@ -598,6 +730,12 @@ export function mapAcpUpdateToEnvelopes(
       // expected, known kind, not an unrecognized one.
       return [];
     default:
+      if (KNOWN_UNMAPPED_KINDS.has(update.sessionUpdate)) {
+        logger?.debug("acp_session_update_unmapped_kind_dropped", {
+          sessionUpdate: update.sessionUpdate,
+        });
+        return [];
+      }
       logger?.warn("acp_session_update_unknown_kind_dropped", {
         sessionUpdate: update.sessionUpdate,
       });
