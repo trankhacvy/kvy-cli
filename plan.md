@@ -858,6 +858,16 @@ connection pooling, no agent-id-as-identity). Design authority:
       Reference semantics: mobvibe `wal-store.ts` `claimMessageSend`/`completeMessageSend`
       (INSERT-OR-IGNORE claim + verify-claimId-then-record-result-atomically; a
       pre-existing claim with no result is *indeterminate* — never re-execute)
+      *(2026-07-17, progress tracker: confirmed landed via `P17-2.0-claim-store` — the
+      branch's own "Land send-idempotency claim store onto main" commit (`19f8c59`)
+      never reached `main` on its own (`git merge-base --is-ancestor 19f8c59 main` →
+      false before this merge); landed instead via a genuine `git merge --no-ff 19f8c59`
+      performed by this land task. `cli/src/claims/claimStore.ts` +
+      `claimStore.test.ts` (21 tests) and `task-summary/P17-2.0-claim-store.md` are now
+      present on this branch ahead of merge into `main`. Workspace-wide `pnpm build`
+      (6/6 tasks), `pnpm typecheck` (11/11 tasks), and `pnpm test` (11/11 tasks, 119
+      test files / 1146 tests passing, including the 21 `claimStore.test.ts` cases run
+      standalone) all green on the merged tree as of this verification.)*
 - [x] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
@@ -873,11 +883,13 @@ connection pooling, no agent-id-as-identity). Design authority:
       present on `main`. Workspace-wide `pnpm typecheck` (11/11 tasks) and `pnpm test`
       (11/11 tasks, 1125 CLI + full wire/crypto/server/web/e2e suites) both green on
       `main` as of this verification. The other two Phase 2.0 bullets below
-      (claim store, adapter manager) remain unflipped — their branches exist with their
-      own "Land ... onto main" commits and task-summary files, but those commits are
-      **not** ancestors of `main` (`git merge-base --is-ancestor` → false for both;
-      `git merge-base main <branch>` == `main`'s own tip, i.e. zero commits from either
-      branch have actually reached `main`) — see `progress.md` Cycle 71 for detail.)*
+      (claim store, adapter manager) remained unflipped at that time — their branches
+      existed with their own "Land ... onto main" commits and task-summary files, but
+      those commits were **not** ancestors of `main` (`git merge-base --is-ancestor` →
+      false for both; `git merge-base main <branch>` == `main`'s own tip, i.e. zero
+      commits from either branch had actually reached `main`) — see `progress.md`
+      Cycle 71 for detail. The claim store bullet above was subsequently landed via a
+      real merge; see its own note. Adapter manager remains unflipped.)*
 - [ ] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
       (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
       own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,
