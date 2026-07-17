@@ -12,13 +12,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { AdoptMode, AdoptTakeOutcome, UnmanagedActions, UnmanagedSessionItem } from "../types";
-
-type DialogState =
-  | { phase: "choose" }
-  | { phase: "confirm"; mode: AdoptMode }
-  | { phase: "success"; outcome: AdoptTakeOutcome; mode: AdoptMode }
-  | { phase: "error"; message: string };
+import {
+  type DialogState,
+  initialDialogState,
+  needsRunningConfirm,
+  resetDialogState,
+  toChoose,
+  toConfirm,
+  toError,
+  toSuccess,
+} from "../take-over-dialog-state";
+import type { AdoptMode, UnmanagedActions, UnmanagedSessionItem } from "../types";
 
 /**
  * "Take Over / Fork Instead" dialog (falcon-system-design.md §10.4/§11 UC9,
@@ -46,23 +50,20 @@ export function TakeOverDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [state, setState] = useState<DialogState>({ phase: "choose" });
+  const [state, setState] = useState<DialogState>(initialDialogState);
 
   const mutation = useMutation({
     mutationFn: (mode: AdoptMode) => actions.take(session.providerRef, mode),
   });
 
   function handleOpenChange(next: boolean) {
-    if (!next) setState({ phase: "choose" }); // reset for the next time this dialog opens
+    if (!next) setState(resetDialogState()); // reset for the next time this dialog opens
     onOpenChange(next);
   }
 
   function chooseMode(mode: AdoptMode) {
-    // A running session only needs the extra confirm step for a takeover —
-    // that's the destructive path (interrupts the live process); forking
-    // never touches it, so it goes straight to the RPC call.
-    if (mode === "takeover" && session.running) {
-      setState({ phase: "confirm", mode });
+    if (needsRunningConfirm(mode, session.running)) {
+      setState(toConfirm(mode));
       return;
     }
     submit(mode);
@@ -70,12 +71,8 @@ export function TakeOverDialog({
 
   function submit(mode: AdoptMode) {
     mutation.mutate(mode, {
-      onSuccess: (outcome) => setState({ phase: "success", outcome, mode }),
-      onError: (error) =>
-        setState({
-          phase: "error",
-          message: error instanceof Error ? error.message : String(error),
-        }),
+      onSuccess: (outcome) => setState(toSuccess(outcome, mode)),
+      onError: (error) => setState(toError(error)),
     });
   }
 
@@ -116,7 +113,7 @@ export function TakeOverDialog({
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setState({ phase: "choose" })}>
+              <Button variant="outline" onClick={() => setState(toChoose())}>
                 Back
               </Button>
               <Button variant="destructive" onClick={() => submit("takeover")}>
