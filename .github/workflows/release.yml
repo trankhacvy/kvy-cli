@@ -74,11 +74,38 @@ jobs:
     # failure in either doesn't block this rolling pointer from updating.
     needs: build-binaries
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: falcon-binaries
           path: dist-binaries
+
+      # Deliberately delete-then-create rather than relying on
+      # softprops/action-gh-release's own upsert/asset-overwrite behavior
+      # for a tag that already has a release. That behavior exists and is
+      # documented, but this repo has no way to exercise a second real run
+      # against a fixed tag in CI/sandbox to confirm it end-to-end (see
+      # task-summary's "Known limitations"), so this step removes the
+      # dependency on it entirely: `gh release delete` is the documented,
+      # first-party way to clear a tag's release, making every run of this
+      # job start from the same "no existing cli-latest release" state
+      # regardless of what any previous run left behind. The `|| echo ...`
+      # fallback is needed because the very first release ever cut has no
+      # prior `cli-latest` release to delete, and `gh release delete`
+      # exits non-zero in that case. `--cleanup-tag` also removes the git
+      # tag itself so the very next `softprops/action-gh-release` step is
+      # always creating a fresh tag + release, never editing one.
+      - name: delete previous cli-latest release/tag, if any
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete cli-latest \
+            --repo "${{ github.repository }}" \
+            --yes \
+            --cleanup-tag \
+            || echo "no existing cli-latest release to delete — first release, continuing"
 
       - name: publish rolling cli-latest release
         uses: softprops/action-gh-release@v2
