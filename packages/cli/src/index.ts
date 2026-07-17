@@ -6,6 +6,8 @@ import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
 import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
+import { runResumeCommand } from "./commands/resume.js";
+import { runSessionsListCommand } from "./commands/sessionsList.js";
 import { runShimCommand } from "./commands/shim.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
@@ -100,8 +102,8 @@ Usage:
   falcon kill daemon|sessions|all|all-force
                                      Process management escape hatches
   falcon doctor [clean]              Discover/categorize Falcon processes (clean: kill runaways)
-  falcon sessions list              List active/recent sessions on this machine
-  falcon resume <session-id>        Reattach a terminal to an existing session
+  falcon sessions list              List sessions (local, and this account's remote/other-machine)
+  falcon resume <session-id>        Reattach a terminal to an existing local or daemon-managed session
   falcon adopt [--remote] [--list]  Adopt the most recent plain claude session in this directory
   falcon --continue                 Alias for "falcon adopt" (most recent, local)
   falcon workspace config [--base-ref <ref>] [--remote <name>] [--directory <path>]
@@ -288,24 +290,38 @@ async function runShim(command: Extract<FalconCommand, { type: "shim" }>): Promi
   return runShimCommand(command.action);
 }
 
+/**
+ * `falcon sessions list` (plan.md §16 "4.2 Adoption Tier 3 + polish") — see
+ * `commands/sessionsList.ts` for the actual local+remote listing logic.
+ * `ensureDaemon()` runs first for consistency with every other
+ * agent-adjacent subcommand (PRD FR-1.2), even though the listing itself
+ * doesn't talk to this machine's daemon (only to the server, over HTTP).
+ */
 async function runSessions(command: Extract<FalconCommand, { type: "sessions" }>): Promise<number> {
   const daemon = await ensureDaemon();
   if (!daemon.ok) {
     process.stderr.write(daemon.message);
     return 1;
   }
-  process.stdout.write(`falcon sessions ${command.action}: not implemented yet\n`);
-  return 0;
+  logger.debug("sessions command", { action: command.action });
+  return runSessionsListCommand({ workingDirectory: process.cwd(), logger });
 }
 
+/**
+ * `falcon resume <session-id>` (plan.md §16 "4.2 Adoption Tier 3 + polish")
+ * — see `commands/resume.ts` for the local-vs-daemon-managed dispatch logic.
+ */
 async function runResume(command: Extract<FalconCommand, { type: "resume" }>): Promise<number> {
   const daemon = await ensureDaemon();
   if (!daemon.ok) {
     process.stderr.write(daemon.message);
     return 1;
   }
-  process.stdout.write(`falcon resume ${command.sessionId}: not implemented yet\n`);
-  return 0;
+  return runResumeCommand(command.sessionId, {
+    homeDir: resolveHomeDir(),
+    workingDirectory: process.cwd(),
+    logger,
+  });
 }
 
 /**
