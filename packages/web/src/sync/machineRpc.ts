@@ -13,8 +13,17 @@
  * `SessionRow.dek`) is unwrapped the same way a session DEK is — see
  * `features/new-session/`'s composition notes for how a caller obtains a
  * `MachineRpcCrypto` scoped to the chosen machine.
+ *
+ * `adopt.take`/`adopt.mirror` (plan.md §16 "3.3 Session adoption (UC9)")
+ * join the same method table below — the daemon-side registration
+ * (`packages/cli/src/daemon/machineRpc.ts`) already serves both; this is
+ * just the caller-side typing for `features/unmanaged-sessions/`.
  */
 import {
+  type AdoptMirrorParams,
+  AdoptMirrorResultSchema,
+  type AdoptTakeParams,
+  AdoptTakeResultSchema,
   type FsListParams,
   FsListResultSchema,
   type FsMkdirParams,
@@ -25,13 +34,15 @@ import {
 import type { ZodType } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
 
-export type { FsListParams, FsMkdirParams, SpawnParams };
+export type { AdoptMirrorParams, AdoptTakeParams, FsListParams, FsMkdirParams, SpawnParams };
 
 /** Params shape per method. */
 export interface MachineRpcParams {
   spawn: SpawnParams;
   "fs.list": FsListParams;
   "fs.mkdir": FsMkdirParams;
+  "adopt.take": AdoptTakeParams;
+  "adopt.mirror": AdoptMirrorParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -39,6 +50,8 @@ export interface MachineRpcResults {
   spawn: import("@falcon/wire").SpawnResult;
   "fs.list": import("@falcon/wire").FsListResult;
   "fs.mkdir": import("@falcon/wire").FsMkdirResult;
+  "adopt.take": import("@falcon/wire").AdoptTakeResult;
+  "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -47,6 +60,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   spawn: SpawnResultSchema,
   "fs.list": FsListResultSchema,
   "fs.mkdir": FsMkdirResultSchema,
+  "adopt.take": AdoptTakeResultSchema,
+  "adopt.mirror": AdoptMirrorResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

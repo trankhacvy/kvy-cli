@@ -42,6 +42,8 @@ export { createApiSocket } from "./apiSocket.js";
 export type { SyncEngine, SyncSocketSource } from "./engine.js";
 export { createSyncEngine } from "./engine.js";
 export type {
+  AdoptMirrorParams,
+  AdoptTakeParams,
   MachineRpcClient,
   MachineRpcCrypto,
   MachineRpcMethod,
