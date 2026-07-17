@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  CLAIMS_SCHEMA_VERSION,
   claimMessageSend,
   claimsFilePath,
   clearClaims,
@@ -219,11 +220,70 @@ describe("claimStore", () => {
     });
   });
 
+  it("an envelope id of '__proto__' round-trips instead of corrupting the claims object", async () => {
+    const dangerousEnvelopeId = ["__", "proto__"].join("");
+    const first = await claimMessageSend("sess_1", dangerousEnvelopeId, { homeDir });
+    expect(first.status).toBe("claimed");
+
+    // Re-reading from disk must see the same claim back as a real own key,
+    // and an unrelated envelope id must not spuriously resolve as
+    // claimed/completed via a polluted prototype (CWE-1321-shaped
+    // bracket-assignment hazard).
+    const claims = await readClaims("sess_1", { homeDir });
+    expect(Object.keys(claims)).toContain(dangerousEnvelopeId);
+    expect(Object.getOwnPropertyDescriptor(claims, dangerousEnvelopeId)?.value).toMatchObject({
+      status: "claimed",
+    });
+
+    const unrelated = await claimMessageSend("sess_1", "env_unrelated", { homeDir });
+    expect(unrelated.status).toBe("claimed");
+  });
+
   it("clearClaims deletes the whole file and is safe to call twice", async () => {
     await claimMessageSend("sess_1", "env_1", { homeDir });
     await clearClaims("sess_1", { homeDir });
     expect(await readClaims("sess_1", { homeDir })).toEqual({});
     await expect(clearClaims("sess_1", { homeDir })).resolves.toBeUndefined();
     await expect(readFile(claimsFilePath(homeDir, "sess_1"), "utf8")).rejects.toThrow();
+  });
+
+  it("persists the on-disk file with the current schema version and no stray lock/tmp files", async () => {
+    const first = await claimMessageSend("sess_1", "env_1", { homeDir });
+    if (first.status !== "claimed") throw new Error("unreachable");
+    await completeMessageSend("sess_1", "env_1", first.claimId, { ok: true }, { homeDir });
+
+    const raw = JSON.parse(await readFile(claimsFilePath(homeDir, "sess_1"), "utf8"));
+    expect(raw.schemaVersion).toBe(CLAIMS_SCHEMA_VERSION);
+
+    // No leftover .lock/.tmp artifacts after a clean sequence of writes.
+    const entries = await readdir(path.dirname(claimsFilePath(homeDir, "sess_1")));
+    expect(entries.sort()).toEqual(["sess_1.json"]);
+  });
+
+  it("many concurrent claims for the same envelope id: exactly one wins, the rest see in-progress", async () => {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () => claimMessageSend("sess_1", "env_1", { homeDir })),
+    );
+    const claimed = results.filter((r) => r.status === "claimed");
+    const inProgress = results.filter((r) => r.status === "in-progress");
+    expect(claimed).toHaveLength(1);
+    expect(inProgress).toHaveLength(7);
+  });
+
+  it("interleaved claim/complete across two envelope ids under concurrency both converge correctly", async () => {
+    const [a, b] = await Promise.all([
+      claimMessageSend("sess_1", "env_a", { homeDir }),
+      claimMessageSend("sess_1", "env_b", { homeDir }),
+    ]);
+    if (a.status !== "claimed" || b.status !== "claimed") throw new Error("unreachable");
+
+    await Promise.all([
+      completeMessageSend("sess_1", "env_a", a.claimId, { n: 1 }, { homeDir }),
+      completeMessageSend("sess_1", "env_b", b.claimId, { n: 2 }, { homeDir }),
+    ]);
+
+    const claims = await readClaims("sess_1", { homeDir });
+    expect(claims.env_a).toMatchObject({ status: "completed", result: { n: 1 } });
+    expect(claims.env_b).toMatchObject({ status: "completed", result: { n: 2 } });
   });
 });

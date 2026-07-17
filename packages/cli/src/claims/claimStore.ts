@@ -116,12 +116,22 @@ function normalizeEntry(value: unknown): ClaimEntry | null {
   return null;
 }
 
-/** Field-by-field extraction, same rationale as `persistence.ts`'s `normalizeSettings`: unknown/malformed entries are dropped, not fatal to the whole read. */
+/**
+ * Field-by-field extraction, same rationale as `persistence.ts`'s
+ * `normalizeSettings`: unknown/malformed entries are dropped, not fatal to
+ * the whole read. Accumulates into a null-prototype object (rather than
+ * `{}`) so an envelope id of `"__proto__"` — a real, if exotic, own key that
+ * `JSON.parse` happily round-trips — can't be silently reinterpreted as a
+ * `[[Set]]` on `Object.prototype`'s inherited accessor when written back via
+ * `claims[envelopeId] = entry`; that would drop the entry as an own key and
+ * leave `claims` with a corrupted prototype instead (CWE-1321-shaped, even
+ * though nothing calls this module with untrusted ids yet).
+ */
 function normalizeClaimsFile(raw: unknown): ClaimsFileShape {
   if (!isPlainObject(raw) || !isPlainObject(raw.claims)) {
     return { schemaVersion: CLAIMS_SCHEMA_VERSION, claims: {} };
   }
-  const claims: Record<string, ClaimEntry> = {};
+  const claims: Record<string, ClaimEntry> = Object.create(null);
   for (const [envelopeId, value] of Object.entries(raw.claims)) {
     const entry = normalizeEntry(value);
     if (entry) claims[envelopeId] = entry;
@@ -148,7 +158,9 @@ async function readClaimsFileRaw(homeDir: string, sessionId: string): Promise<Cl
  */
 function pruneExpired(file: ClaimsFileShape, now: number): ClaimsFileShape {
   const cutoff = now - CLAIM_RETENTION_MS;
-  const claims: Record<string, ClaimEntry> = {};
+  // Null-prototype accumulator — same `"__proto__"`-key rationale as
+  // `normalizeClaimsFile` above.
+  const claims: Record<string, ClaimEntry> = Object.create(null);
   for (const [envelopeId, entry] of Object.entries(file.claims)) {
     if (entry.status === "completed" && entry.completedAt < cutoff) continue;
     claims[envelopeId] = entry;
