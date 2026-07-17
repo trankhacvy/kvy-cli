@@ -119,6 +119,52 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it("round-trips an adopt.take call and result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ sessionId: "sess-new", warning: "mid-turn interrupt" }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("adopt.take", {
+      idempotencyKey: "idem-4",
+      providerSessionId: "prov-1",
+      mode: "takeover",
+    });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:adopt.take",
+      "adopt.take",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({ sessionId: "sess-new", warning: "mid-turn interrupt" });
+  });
+
+  it("round-trips an adopt.mirror call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ chunk: "hello", nextCursor: 5, done: false }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("adopt.mirror", {
+      idempotencyKey: "idem-5",
+      providerSessionId: "prov-1",
+      cursor: 0,
+    });
+
+    expect(result).toEqual({ chunk: "hello", nextCursor: 5, done: false });
+  });
+
   it("throws MachineRpcError when the transport reports failure", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: false, error: "target-offline" })),
