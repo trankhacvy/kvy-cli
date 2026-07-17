@@ -1,0 +1,62 @@
+name: provider-contract
+
+# Daily provider contract check (falcon-system-design.md §13 item 2,
+# plan.md §16 "4.4 Hardening & release gate"): installs the *latest*
+# published Claude Code CLI and runs it against a small fixture-prompt
+# corpus (packages/cli/scripts/provider-contract-test.ts), asserting that
+# the on-disk JSONL transcript shape, SessionStart/Notification/Stop hook
+# events, and `--resume` behavior still match what
+# packages/cli/src/claude/scanner.ts (the transcript tailer) and
+# hookServer.ts assume. A provider-side format change should be caught
+# here, loudly, before it silently corrupts mirrored sessions for real
+# users.
+#
+# "Page/fail loudly": this job has no bespoke alerting integration on
+# purpose — GitHub's own scheduled-workflow-failure notification is the
+# paging mechanism here. A failing scheduled run automatically emails
+# whoever last edited this file's `cron:` line (plus any other repo
+# watchers with Actions email notifications enabled); see
+# https://docs.github.com/actions/using-workflows/events-that-trigger-workflows#schedule.
+# `workflow_dispatch` is included so the same check can be run on demand
+# (e.g. right after bumping to a new @anthropic-ai/claude-code release)
+# without waiting for the next cron tick.
+on:
+  schedule:
+    - cron: "17 6 * * *" # once daily, 06:17 UTC — arbitrary off-peak minute
+  workflow_dispatch: {}
+
+jobs:
+  provider-contract:
+    name: claude CLI transcript / hook / resume contract
+    runs-on: ubuntu-latest
+    # Runs inside a plain node container (rather than directly on the bare
+    # runner) so this job's OS-level environment — and therefore the
+    # installed `claude` CLI's own behavior — is pinned and reproducible run
+    # to run, independent of whatever image ubuntu-latest happens to ship.
+    container:
+      image: node:20-bookworm
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable corepack (pnpm)
+        run: corepack enable
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install latest Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@latest
+
+      - name: claude --version
+        run: claude --version
+
+      - name: Run provider contract tests
+        working-directory: packages/cli
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: pnpm run contract:provider

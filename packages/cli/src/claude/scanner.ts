@@ -37,8 +37,16 @@ import { type RawJSONLines, RawJSONLinesSchema } from "./types.js";
  * Known internal Claude Code event types written to session JSONL files
  * that are not actual conversation messages — internal state/tracking
  * events silently skipped rather than surfaced or logged as errors.
+ *
+ * Exported so `scripts/provider-contract-test.ts` (falcon-system-design.md
+ * §13 item 2) validates transcript lines against this exact same skip-list
+ * instead of maintaining a second copy that could silently drift from it.
  */
-const INTERNAL_CLAUDE_EVENT_TYPES = new Set(["file-history-snapshot", "change", "queue-operation"]);
+export const INTERNAL_CLAUDE_EVENT_TYPES = new Set([
+  "file-history-snapshot",
+  "change",
+  "queue-operation",
+]);
 
 const noopLogger: Logger = {
   debug: () => {},
