@@ -6,6 +6,7 @@ import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
 import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
+import { runShimCommand } from "./commands/shim.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
   runWorkspaceListCommand,
@@ -40,6 +41,7 @@ import {
 } from "./daemon/kill.js";
 import { resolveHomeDir } from "./home.js";
 import { createLogger } from "./logger.js";
+import { maybePromptShimOptIn } from "./shim/onboardingPrompt.js";
 
 // Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
 // this module still wires up arg parsing + a stub dispatcher. `auth` is now
@@ -107,6 +109,8 @@ Usage:
   falcon workspace list             List registered workspace directories
   falcon workspace unregister [--directory <path>]
   falcon workspace sync             (coming soon)
+  falcon shim install|uninstall|status
+                                     Manage the claude/codex PATH shim (Tier 3 adoption)
   falcon notify -p <message>        Send a test push notification
   falcon --help, -h                 Show this help
   falcon --version, -v              Show the CLI version
@@ -252,6 +256,12 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
  * auth login`, and that should still trigger the daemon auto-start — even
  * though the auth flow itself talks to the backend/browser directly and
  * doesn't otherwise depend on the daemon being up.
+ *
+ * A successful `login` additionally offers the FR-9.6 shell-shim opt-in
+ * prompt (`./shim/onboardingPrompt.js`) — the first moment a fresh install
+ * has proven there's a real account behind it. `logout`/`status` never
+ * trigger it, and it's a no-op past the first successful login regardless
+ * (see `maybePromptShimOptIn`'s own `onboardingCompleted` gate).
  */
 async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promise<number> {
   const daemon = await ensureDaemon();
@@ -259,7 +269,23 @@ async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promi
     process.stderr.write(daemon.message);
     return 1;
   }
-  return runAuthCommand(command.action, logger);
+  const code = await runAuthCommand(command.action, logger);
+  if (command.action === "login" && code === 0) {
+    await maybePromptShimOptIn();
+  }
+  return code;
+}
+
+/**
+ * `falcon shim install|uninstall|status` (falcon-prd.md FR-9.6, plan.md §16
+ * "4.2 Adoption Tier 3 + polish") — see `commands/shim.ts` for the actual
+ * bin/PATH-block logic. Deliberately does **not** call `ensureDaemon()`,
+ * same rationale as `workspace config`/`workspace register`: no daemon
+ * interaction at all, just local filesystem writes under `~/.falcon/bin`
+ * and the user's shell rc file.
+ */
+async function runShim(command: Extract<FalconCommand, { type: "shim" }>): Promise<number> {
+  return runShimCommand(command.action);
 }
 
 async function runSessions(command: Extract<FalconCommand, { type: "sessions" }>): Promise<number> {
@@ -374,6 +400,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runResume(command);
     case "adopt":
       return runAdopt(command);
+    case "shim":
+      return runShim(command);
     case "workspace-config":
       return runWorkspaceConfig(command);
     case "workspace-register":
