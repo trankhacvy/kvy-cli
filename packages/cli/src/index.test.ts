@@ -332,6 +332,33 @@ describe("main()", () => {
     vi.doUnmock("./commands/shim.js");
   });
 
+  it("wires `adapters install/upgrade` to commands/adapters.js", async () => {
+    vi.doMock("./commands/adapters.js", () => ({
+      runAdaptersInstallCommand: vi.fn(async () => {
+        process.stdout.write("adapters install called\n");
+        return 0;
+      }),
+      runAdaptersUpgradeCommand: vi.fn(async () => {
+        process.stdout.write("adapters upgrade called\n");
+        return 1;
+      }),
+    }));
+    const adaptersModule = await import("./commands/adapters.js");
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    expect(await main(["adapters", "install"])).toBe(0);
+    expect(adaptersModule.runAdaptersInstallCommand).toHaveBeenCalledOnce();
+    expect(stdout).toHaveBeenCalledWith("adapters install called\n");
+
+    expect(await main(["adapters", "upgrade"])).toBe(1);
+    expect(adaptersModule.runAdaptersUpgradeCommand).toHaveBeenCalledOnce();
+    expect(stdout).toHaveBeenCalledWith("adapters upgrade called\n");
+
+    stdout.mockRestore();
+    vi.doUnmock("./commands/adapters.js");
+  });
+
   it("wires `daemon service install/uninstall/status` to commands/serviceInstall.js", async () => {
     vi.doMock("./commands/serviceInstall.js", () => ({
       runDaemonServiceCommand: vi.fn(async (action: string) => {

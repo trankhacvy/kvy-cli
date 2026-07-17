@@ -12,6 +12,15 @@
  * either), plus the locally-recorded daemon state and how many sessions are
  * resumable from `sessions.json`. It never sends a signal to anything.
  *
+ * It also reports ACP adapter health and provider CLI detection (design
+ * §7.9: "`falcon doctor` reports adapter presence/version/integrity and the
+ * underlying provider CLI detection (`claude` binary, `codex` binary)") —
+ * `checkAllAdaptersHealth` (`../adapters/health.ts`) re-verifies every
+ * pinned adapter's install against `ADAPTER_MANIFEST`, and
+ * `detectClaudeCode`/`detectCodex` (the same `ProviderAdapter.detect()`
+ * implementations `falcon claude`/`falcon codex` themselves use) report
+ * whether the underlying provider CLI is even findable.
+ *
  * `falcon doctor clean` is the destructive half: it targets **runaway**
  * processes — every daemon-classified process (`kind: "daemon"`) plus every
  * daemon-*spawned* session (`kind: "session"` with `spawnedByDaemon: true`)
@@ -23,7 +32,13 @@
  * kill sessions`/`all` remain the blunter, "kill everything" escape hatches
  * for that case.
  */
+import { type AdapterHealth, checkAllAdaptersHealth } from "../adapters/health.js";
+import { detectCodex } from "../codex/codexProviderAdapter.js";
 import type { Logger } from "../logger.js";
+import {
+  detectClaudeCode,
+  type ProviderDetectionResult,
+} from "../provider/claudeProviderAdapter.js";
 import { createKillDeps, type KillDeps, type KillOutcome, killGraceful } from "./kill.js";
 import { isProcessAlive } from "./lock.js";
 import { type ClassifiedProcess, classifyProcesses } from "./markers.js";
@@ -38,10 +53,17 @@ export interface DoctorDaemonSummary {
   version?: string;
 }
 
+export interface DoctorProviderSummary {
+  claude: ProviderDetectionResult;
+  codex: ProviderDetectionResult;
+}
+
 export interface DoctorReport {
   daemon: DoctorDaemonSummary;
   resumableSessionCount: number;
   processes: ClassifiedProcess[];
+  adapters: AdapterHealth[];
+  providers: DoctorProviderSummary;
 }
 
 export interface DoctorDeps {
@@ -49,16 +71,23 @@ export interface DoctorDeps {
   listProcesses: () => Promise<ProcessEntry[]>;
   isProcessAlive: (pid: number) => boolean;
   currentPid: number;
+  /** Defaults to `checkAllAdaptersHealth` — injectable so tests never touch a real `~/.falcon/adapters` install. */
+  checkAdapters?: (homeDir: string) => Promise<AdapterHealth[]>;
+  /** Defaults to `detectClaudeCode` — injectable so tests never shell out to a real `claude` on PATH. */
+  detectClaudeProvider?: () => Promise<ProviderDetectionResult>;
+  /** Defaults to `detectCodex` — injectable so tests never shell out to a real `codex` on PATH. */
+  detectCodexProvider?: () => Promise<ProviderDetectionResult>;
   logger?: Logger;
 }
 
-export function createDoctorDeps(
-  overrides: Partial<DoctorDeps> & { homeDir: string },
-): DoctorDeps {
+export function createDoctorDeps(overrides: Partial<DoctorDeps> & { homeDir: string }): DoctorDeps {
   return {
     listProcesses,
     isProcessAlive,
     currentPid: process.pid,
+    checkAdapters: checkAllAdaptersHealth,
+    detectClaudeProvider: detectClaudeCode,
+    detectCodexProvider: detectCodex,
     ...overrides,
   };
 }
@@ -69,10 +98,17 @@ function summarizeDaemon(state: DaemonState | null, alive: boolean): DoctorDaemo
 }
 
 export async function runDoctor(deps: DoctorDeps): Promise<DoctorReport> {
-  const [state, persisted, rawProcesses] = await Promise.all([
+  const checkAdapters = deps.checkAdapters ?? checkAllAdaptersHealth;
+  const detectClaudeProvider = deps.detectClaudeProvider ?? detectClaudeCode;
+  const detectCodexProvider = deps.detectCodexProvider ?? detectCodex;
+
+  const [state, persisted, rawProcesses, adapters, claude, codex] = await Promise.all([
     readDaemonState(deps.homeDir),
     readPersistedSessions(deps.homeDir),
     deps.listProcesses(),
+    checkAdapters(deps.homeDir),
+    detectClaudeProvider(),
+    detectCodexProvider(),
   ]);
 
   const processes = classifyProcesses(rawProcesses, deps.currentPid);
@@ -82,6 +118,8 @@ export async function runDoctor(deps: DoctorDeps): Promise<DoctorReport> {
     daemon,
     resumableSessionCount: Object.keys(persisted).length,
     processes,
+    adapters,
+    providers: { claude, codex },
   };
 }
 
@@ -105,7 +143,25 @@ export function describeDoctorReport(report: DoctorReport): string {
     }
   }
 
+  lines.push("");
+  lines.push("ACP adapters:");
+  for (const a of report.adapters) {
+    const detail = a.detail ? ` (${a.detail})` : "";
+    lines.push(`  ${a.id} — ${a.packageName}@${a.pinnedVersion}: ${a.status}${detail}`);
+  }
+
+  lines.push("");
+  lines.push("provider CLIs:");
+  lines.push(`  claude: ${describeProviderDetection(report.providers.claude)}`);
+  lines.push(`  codex: ${describeProviderDetection(report.providers.codex)}`);
+
   return `${lines.join("\n")}\n`;
+}
+
+function describeProviderDetection(detection: ProviderDetectionResult): string {
+  if (!detection.installed) return "not installed";
+  const version = detection.version ? ` (version ${detection.version})` : "";
+  return detection.authenticated ? `installed${version}` : `installed${version}, not authenticated`;
 }
 
 function isRunaway(p: ClassifiedProcess): boolean {
