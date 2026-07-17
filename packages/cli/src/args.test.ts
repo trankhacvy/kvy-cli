@@ -241,6 +241,43 @@ describe("parseArgs — workspace", () => {
   it("throws on an unknown workspace action", () => {
     expect(() => parseArgs(["workspace", "bogus"])).toThrow(ArgParseError);
   });
+
+  it("parses workspace register with all flags", () => {
+    expect(
+      parseArgs(["workspace", "register", "--directory", "/repo", "--name", "My Repo"]),
+    ).toEqual({ type: "workspace-register", directory: "/repo", name: "My Repo" });
+  });
+
+  it("parses a bare workspace register", () => {
+    expect(parseArgs(["workspace", "register"])).toEqual({ type: "workspace-register" });
+  });
+
+  it("throws on an unknown workspace register flag", () => {
+    expect(() => parseArgs(["workspace", "register", "--bogus", "x"])).toThrow(ArgParseError);
+  });
+
+  it("throws when a workspace register flag is missing its value", () => {
+    expect(() => parseArgs(["workspace", "register", "--directory"])).toThrow(ArgParseError);
+  });
+
+  it("parses workspace list", () => {
+    expect(parseArgs(["workspace", "list"])).toEqual({ type: "workspace-list" });
+  });
+
+  it("parses workspace unregister with --directory", () => {
+    expect(parseArgs(["workspace", "unregister", "--directory", "/repo"])).toEqual({
+      type: "workspace-unregister",
+      directory: "/repo",
+    });
+  });
+
+  it("parses a bare workspace unregister", () => {
+    expect(parseArgs(["workspace", "unregister"])).toEqual({ type: "workspace-unregister" });
+  });
+
+  it("throws on an unknown workspace unregister flag", () => {
+    expect(() => parseArgs(["workspace", "unregister", "--bogus", "x"])).toThrow(ArgParseError);
+  });
 });
 
 describe("parseArgs — adopt", () => {

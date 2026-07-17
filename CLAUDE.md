@@ -170,7 +170,30 @@ packages/
 │                             fallback and the new `falcon workspace config [--base-ref
 │                             --remote --directory]` command (`commands/workspaceConfig.ts`,
 │                             wired into `index.ts`, no daemon interaction — reads/writes
-│                             `settings.json` directly).
+│                             `settings.json` directly). `src/workspace/registry.ts` is the
+│                             real "which workspace directories does this machine know about"
+│                             store several earlier tasks left as an injected seam with no
+│                             default (`workspacePath.ts`'s `WorkspaceRootLookup`,
+│                             `transcriptIndexer.ts`'s `listWorkspaces`,
+│                             `providerSessionResolver.ts`'s `ProviderSessionResolver`) —
+│                             persisted at its own `~/.falcon/workspaces.json` (register/list/
+│                             unregister/`isWithinRegisteredWorkspace`, same atomic
+│                             lock-file + tmp-write-then-rename pattern as `persistence.ts`,
+│                             kept as a separate file/lock on purpose so this task stays
+│                             disjoint from sibling `settings.json` writers). `src/workspace/
+│                             adapters.ts` wires it into two of those three seams
+│                             (`createWorkspaceRootLookup`, `createTranscriptIndexerWorkspaceLister`
+│                             — a `workspaceId` *is* a workspace's registered real path);
+│                             `ProviderSessionResolver` still has no real default (resolving a
+│                             provider session id needs transcript-content scanning, not just
+│                             "which directories are registered" — a different, later
+│                             composition). `commands/workspaceRegister.ts` backs the new
+│                             `falcon workspace register [--directory --name]` / `list` /
+│                             `unregister` commands (wired into `index.ts`, no daemon
+│                             interaction, matching `workspace config`'s precedent). None of
+│                             the adapters are wired into a live daemon boot sequence yet —
+│                             that composition-root wiring remains a separate, later task, same
+│                             precedent as `spawn`/`resumeSession`/`adopt.*` before it.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth

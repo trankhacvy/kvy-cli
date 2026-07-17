@@ -229,14 +229,28 @@ describe("main()", () => {
       runDoctor: vi.fn(),
       runDoctorClean: vi.fn(async () => ({
         targeted: [
-          { pid: 100, ppid: 1, command: "falcon daemon start-sync", kind: "daemon", spawnedByDaemon: false },
+          {
+            pid: 100,
+            ppid: 1,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            spawnedByDaemon: false,
+          },
         ],
         outcomes: [
-          { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "none", error: "EPERM" },
+          {
+            pid: 100,
+            command: "falcon daemon start-sync",
+            kind: "daemon",
+            signal: "none",
+            error: "EPERM",
+          },
         ],
       })),
       describeDoctorReport: vi.fn(),
-      describeDoctorCleanSummary: vi.fn(() => "falcon doctor clean: 0/1 runaway process(es) terminated\n"),
+      describeDoctorCleanSummary: vi.fn(
+        () => "falcon doctor clean: 0/1 runaway process(es) terminated\n",
+      ),
     }));
     const doctorModule = await import("./daemon/doctor.js");
     const main = await importMain();
@@ -246,7 +260,9 @@ describe("main()", () => {
 
     expect(code).toBe(1);
     expect(doctorModule.runDoctorClean).toHaveBeenCalledOnce();
-    expect(stdout).toHaveBeenCalledWith("falcon doctor clean: 0/1 runaway process(es) terminated\n");
+    expect(stdout).toHaveBeenCalledWith(
+      "falcon doctor clean: 0/1 runaway process(es) terminated\n",
+    );
     stdout.mockRestore();
     vi.doUnmock("./daemon/doctor.js");
   });
@@ -409,9 +425,7 @@ describe("main()", () => {
       ]);
 
       expect(code).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(
-        expect.stringContaining("base ref: develop"),
-      );
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("base ref: develop"));
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining("remote:   origin"));
       stdout.mockRestore();
     });
@@ -438,6 +452,65 @@ describe("main()", () => {
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
       const code = await main(["workspace", "config", "--directory", homeDir]);
+
+      expect(code).toBe(0);
+      stdout.mockRestore();
+      vi.doUnmock("./daemon/ensureDaemonRunning.js");
+    });
+  });
+
+  describe("workspace register/list/unregister subcommands", () => {
+    it("registers a directory, lists it, then unregisters it", async () => {
+      const { realpath } = await import("node:fs/promises");
+      const resolvedHomeDir = await realpath(homeDir);
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const registerCode = await main([
+        "workspace",
+        "register",
+        "--directory",
+        homeDir,
+        "--name",
+        "Home",
+      ]);
+      expect(registerCode).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(`registered ${resolvedHomeDir}`));
+
+      const listCode = await main(["workspace", "list"]);
+      expect(listCode).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining(resolvedHomeDir));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("Home"));
+
+      const unregisterCode = await main(["workspace", "unregister", "--directory", homeDir]);
+      expect(unregisterCode).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("removed"));
+
+      stdout.mockRestore();
+    });
+
+    it("unregistering an unregistered directory returns exit code 1", async () => {
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["workspace", "unregister", "--directory", homeDir]);
+
+      expect(code).toBe(1);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("was not registered"));
+      stdout.mockRestore();
+    });
+
+    it("does not call ensureDaemonRunning (no daemon interaction)", async () => {
+      vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
+        ensureDaemonRunning: vi.fn(() => {
+          throw new Error("workspace register must never touch the daemon");
+        }),
+        createEnsureDaemonRunningDeps: vi.fn(() => ({})),
+      }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["workspace", "register", "--directory", homeDir]);
 
       expect(code).toBe(0);
       stdout.mockRestore();
