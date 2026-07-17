@@ -311,6 +311,25 @@ describe("main()", () => {
     vi.doUnmock("./commands/shim.js");
   });
 
+  it("wires `daemon service install/uninstall/status` to commands/serviceInstall.js", async () => {
+    vi.doMock("./commands/serviceInstall.js", () => ({
+      runDaemonServiceCommand: vi.fn(async (action: string) => {
+        process.stdout.write(`service ${action} called\n`);
+        return 0;
+      }),
+    }));
+    const serviceModule = await import("./commands/serviceInstall.js");
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    expect(await main(["daemon", "service", "status"])).toBe(0);
+    expect(serviceModule.runDaemonServiceCommand).toHaveBeenCalledWith("status");
+    expect(stdout).toHaveBeenCalledWith("service status called\n");
+
+    stdout.mockRestore();
+    vi.doUnmock("./commands/serviceInstall.js");
+  });
+
   describe("shell-shim onboarding prompt (auth login wiring)", () => {
     afterEach(() => {
       vi.doUnmock("./auth/index.js");
