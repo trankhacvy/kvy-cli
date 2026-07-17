@@ -31,7 +31,12 @@ import { createSessionRegistry } from "./sessionRegistry.js";
 import { type PersistedSession, readPersistedSessions } from "./sessionsStore.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
 
-const ENCRYPTION = { encryptionKey: "wrapped-dek-v1", seq: 7, metadataVersion: 2, agentStateVersion: 1 };
+const ENCRYPTION = {
+  encryptionKey: "wrapped-dek-v1",
+  seq: 7,
+  metadataVersion: 2,
+  agentStateVersion: 1,
+};
 
 function fakeAwaiter(sessionId: string): SpawnAwaiter {
   return {
