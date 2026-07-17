@@ -4,6 +4,7 @@ import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mintToken } from "../../auth/tokens.js";
 import { buildServer } from "../server.js";
+import { RPC_CALL_RATE_LIMIT_MAX } from "./rpcHandler.js";
 
 // Integration tests for the ported-wholesale rpcHandler (plan.md §4.2): room-based
 // registration, forwarding, and the presence-poll dead-peer race. Runs a real listening
@@ -241,4 +242,32 @@ describe("rpcHandler", () => {
       warnSpy.mockRestore();
     }
   });
+
+  it("rate-limits rpc-call beyond the per-account ceiling", async () => {
+    const token = await mintToken("acct_ratelimit");
+    const target = await connect({ token, clientType: "machine-scoped", machineId: "mrl" });
+    const caller = await connect({ token });
+
+    target.on("rpc-request", (data: { params: unknown }, cb) => cb({ echoed: data.params }));
+    await new Promise<void>((resolve) => {
+      target.emit("rpc-register", { target: "m:mrl:ping" });
+      target.once("rpc-registered", () => resolve());
+    });
+
+    function call(): Promise<{ ok: boolean; error?: string }> {
+      return new Promise((resolve) => {
+        caller.emit("rpc-call", { target: "m:mrl:ping", method: "ping", params: {} }, resolve);
+      });
+    }
+
+    // Exhaust the per-account ceiling with successful calls, then confirm the very next
+    // one over the limit is rejected without ever reaching the target.
+    for (let i = 0; i < RPC_CALL_RATE_LIMIT_MAX; i++) {
+      const response = await call();
+      expect(response.ok).toBe(true);
+    }
+
+    const limited = await call();
+    expect(limited).toEqual({ ok: false, error: "Rate limit exceeded" });
+  }, 30_000);
 });

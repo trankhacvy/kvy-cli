@@ -37,6 +37,7 @@ describe("config env parsing", () => {
     delete process.env.TELEGRAM_WEBHOOK_SECRET;
     delete process.env.NTFY_BASE_URL;
     delete process.env.PUBLIC_WEB_ORIGIN;
+    delete process.env.CORS_ALLOWED_ORIGINS;
 
     const { env } = await importFreshConfig();
 
@@ -54,6 +55,7 @@ describe("config env parsing", () => {
     expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
     expect(env.NTFY_BASE_URL).toBe("https://ntfy.sh");
     expect(env.PUBLIC_WEB_ORIGIN).toBeUndefined();
+    expect(env.CORS_ALLOWED_ORIGINS).toEqual(["http://localhost:3000"]);
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -80,6 +82,7 @@ describe("config env parsing", () => {
     process.env.TELEGRAM_WEBHOOK_SECRET = "test-webhook-secret";
     process.env.NTFY_BASE_URL = "https://ntfy.internal";
     process.env.PUBLIC_WEB_ORIGIN = "https://app.falcon.dev";
+    process.env.CORS_ALLOWED_ORIGINS = "https://app.falcon.dev, https://staging.falcon.dev";
 
     const { env } = await importFreshConfig();
 
@@ -98,7 +101,16 @@ describe("config env parsing", () => {
       TELEGRAM_WEBHOOK_SECRET: "test-webhook-secret",
       NTFY_BASE_URL: "https://ntfy.internal",
       PUBLIC_WEB_ORIGIN: "https://app.falcon.dev",
+      CORS_ALLOWED_ORIGINS: ["https://app.falcon.dev", "https://staging.falcon.dev"],
     });
+  });
+
+  it("trims whitespace and drops empty entries from CORS_ALLOWED_ORIGINS", async () => {
+    process.env.CORS_ALLOWED_ORIGINS = " https://a.falcon.dev ,, https://b.falcon.dev ";
+
+    const { env } = await importFreshConfig();
+
+    expect(env.CORS_ALLOWED_ORIGINS).toEqual(["https://a.falcon.dev", "https://b.falcon.dev"]);
   });
 
   it("throws when DATABASE_URL is an empty string", async () => {
