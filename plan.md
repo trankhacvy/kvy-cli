@@ -858,7 +858,7 @@ connection pooling, no agent-id-as-identity). Design authority:
       Reference semantics: mobvibe `wal-store.ts` `claimMessageSend`/`completeMessageSend`
       (INSERT-OR-IGNORE claim + verify-claimId-then-record-result-atomically; a
       pre-existing claim with no result is *indeterminate* — never re-execute)
-- [ ] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
+- [x] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
       + non-blocking notice; never blind-resend under a fresh id)
