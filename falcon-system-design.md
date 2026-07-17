@@ -1,9 +1,30 @@
 # Falcon — Technical System Design
 
-**Version:** 0.2 (Draft)
-**Date:** 2026-07-15
-**Companion doc:** `falcon-prd.md` (requirements; FR-x.x references below point there)
+**Version:** 0.3
+**Date:** 2026-07-17
+**Companion docs:** `falcon-prd.md` (requirements; FR-x.x references below point there),
+`docs/acp-delta-proposal.md` (v2 migration rationale, feasibility evidence, decisions)
 **Scope:** MVP = CLI + daemon + relay server + web PWA. Remote sandboxing deferred (schema hooks only).
+
+**v0.3 revision (v2 — ACP migration, approved 2026-07-17):** the headless
+provider-communication layer moves to the **Agent Client Protocol (ACP)**. Git tag `v1`
+preserves the last SDK-based build (the rollback anchor); the SDK/hand-rolled paths are
+deleted, not flag-gated.
+1. **One provider protocol.** Remote mode drives a per-provider **ACP adapter child**
+   (`@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp` — official,
+   maintained by Anthropic/OpenAI + Zed + JetBrains) over NDJSON stdio via
+   `@agentclientprotocol/sdk`, replacing both the direct Claude Agent SDK `query()`
+   integration and the hand-rolled `codex app-server` JSON-RPC client (§7.4, §7.7).
+2. **Local TUI mode unchanged.** ACP is headless; the fidelity path (real `claude` TUI,
+   launcher, transcript tailer, hooks) and the mode state machine stay as-is (§7.5).
+3. **Managed adapter installs** — pinned exact versions under `~/.falcon/adapters/`,
+   integrity-checked, spawned locally; never `npx` at session start (§7.9).
+4. **Send-time idempotency claim** — durable claim-before-execute on the `message` RPC;
+   tri-state reply (`queued | duplicate | outcome-unknown`); a retried RPC can never run
+   a turn twice (§7.10, adapted from mobvibe's `claimMessageSend`).
+5. **Wire protocol, server, crypto, web: unchanged** — ACP events map onto the existing
+   `SessionEnvelope` schema; the only wire change is the additive `message` RPC reply
+   discriminator (§4.4).
 
 **v0.2 revision (design review outcome):**
 1. **Writes moved off WebSocket onto idempotent HTTP** — WS is now read-only (updates/ephemerals) + RPC wake-ups. (Happy's own roadmap corrects this same mistake.)
@@ -38,8 +59,9 @@
 │  │ falcon CLI (session proc)   │      │ falcon daemon (1 per machine)    │   │
 │  │  • provider adapter          │◄────►│  • machine-scoped WS to server   │   │
 │  │    - claude local (spawn)    │ HTTP │  • RPC: spawn/stop/resume/git/fs │   │
-│  │    - claude remote (SDK)     │ loop-│  • process registry + liveness  │   │
-│  │    - codex (app-server RPC)  │ back │  • transcript indexer (adoption) │   │
+│  │    - remote = ACP child      │ loop-│  • process registry + liveness  │   │
+│  │      (claude-agent-acp /     │ back │  • transcript indexer (adoption) │   │
+│  │       codex-acp, stdio)      │      │                                  │   │
 │  │  • mode state machine        │      │  • session persistence (resume) │   │
 │  │  • permission pipeline       │      │  • tmux spawner                  │   │
 │  │  • E2E encrypt/decrypt       │      └───────────────┬──────────────────┘   │
@@ -242,7 +264,13 @@ RPC method names are scope-prefixed: `m:<machineId>:<method>` and `s:<sessionId>
 'adopt.take'   ({providerSessionId, mode: 'takeover'|'fork'}) → { sessionId } // FR-9.3/9.4
 
 // Session RPCs (registered by session process)
-'message'      ({envelope})   → { queued: boolean }   // remote composer input
+'message'      ({envelope})   → { status: 'queued' | 'duplicate' | 'outcome-unknown' }
+                              // remote composer input. v0.3 (additive): the reply is a
+                              // tri-state — 'duplicate' replays a send whose claim already
+                              // completed; 'outcome-unknown' means a prior claim for this
+                              // envelope id exists with no recorded result (e.g. crash
+                              // mid-turn) — the client reconciles from the transcript and
+                              // MUST NOT blind-resend under a fresh id (§7.10)
 'perm.answer'  ({reqId, decision: PermDecision}) → { ok }
 'interrupt'    ()             → { ok }
 'takeControl'  ()             → { ok }                // triggers local→remote switch
@@ -475,6 +503,10 @@ settings.json        # schema-versioned; atomic write via lock file (O_CREAT|O_E
 access.key           # {token, masterSecret | contentKey bundle} — 0600
 daemon.state.json    # {pid, controlPort, version, startedAt, logPath} + .lock
 sessions.json        # finished/active session records incl. wrapped DEKs (resume survival)
+adapters/            # managed ACP adapter installs — own npm prefix, pinned exact
+                     #   versions, integrity-checked (§7.9). Never npx at session start.
+claims/<sessionId>.json  # send-idempotency claims + terminal results (§7.10);
+                     #   atomic tmp-write+rename, bounded retention window
 logs/…               # file-only logging; NEVER stdout (would corrupt provider TUI)
 bin/                 # optional shims (Tier 3 adoption): claude, codex → falcon
 ```
@@ -501,6 +533,20 @@ interface RemoteHandle {
 }
 ```
 
+**v0.3:** `startRemote` has exactly one implementation — `AcpRemote` — shared by every
+provider. A provider adapter contributes only its ACP spawn spec (adapter package id +
+pinned version, resolved by the adapter manager §7.9, plus provider-specific `_meta`
+options at `session/new`) and its local-mode pieces. There are no per-provider remote
+protocol clients or per-provider remote permission handlers anymore. The ACP →
+`SessionEnvelope` mapper (`acpToEnvelope`) is likewise single and shared: ACP
+`session/update` notification kinds map 1:1 onto the existing envelope events
+(`agent_message_chunk`→`text`, `agent_thought_chunk`→`text{thinking}`,
+`tool_call`/`tool_call_update`→`tool-start`/`tool-end`, `session/request_permission`→
+`perm-request`/`perm-resolve`, `session/prompt` call/return→`turn-start`/`turn-end`,
+tool-call `_meta.claudeCode.parentToolUseId`→`subagent` scope). Unknown ACP update kinds
+are logged and dropped (or surfaced as `service` when user-visible) — the wire schema is
+closed and stays provider-agnostic.
+
 ### 7.4 Claude adapter
 
 **Local mode (fidelity path):**
@@ -509,7 +555,20 @@ interface RemoteHandle {
 - **Transcript tailer:** watch `~/.claude/projects/<slug>/<uuid>.jsonl`; on each appended line → `sessionProtocolMapper` → `SessionEnvelope[]` → **coalescing buffer (flush every 300 ms or 20 envelopes)** → encrypt one batch → `POST /sessions/:id/messages {localId}` via a **disk-backed outbox** (retry with backoff until 2xx; localId makes blind retries safe). Dedup by provider record uuid (`processedKeys` set seeded on start). The mapper implements the Claude→envelope rules: assistant text → `text`; thinking → `text{thinking}`; non-Task `tool_use` → `tool-start`; **Task `tool_use` → subagent registration (no parent tool card)** + orphan buffering until parent known; `tool_result` → `tool-end`; sidechain user strings → subagent `text`.
 - Local mode **cannot answer permissions remotely** (prompts live on the provider's TTY). Provider hooks (`Notification`/`Stop` hooks in the temp settings) still fire attention events → dashboard shows "waiting at the terminal" (FR-3.6).
 
-**Remote mode:** `query()` from `@anthropic-ai/claude-agent-sdk` with `resume: providerSessionId`; prompts pushed via an async iterable; `canUseTool` callback = the permission pipeline (§7.6); SDK stream → `SDKToEnvelope` converter → **ordered outgoing queue** (strict incremental order; tool-start release may be delayed until stable). Terminal shows the Ink status view ("controlled from web — Ctrl-T to take back").
+**Remote mode (v0.3 — ACP):** spawn the managed `claude-agent-acp` child (§7.9) and drive
+it via `@agentclientprotocol/sdk` over NDJSON stdio: `initialize` → `session/new` with
+`_meta.systemPrompt: {type:'preset', preset:'claude_code', append: FALCON_SYSTEM_PROMPT}`
+and `_meta.claudeCode.options.resume: providerSessionId` (or `session/load` when history
+replay is wanted — adoption). Each user turn is one `session/prompt` request;
+`session/cancel` = interrupt; `session/set_mode` = permission-mode sync. The adapter's ACP
+sessionId **is** the Claude Code session UUID (verified: the adapter passes it as the
+SDK's `options.sessionId` and reuses the given id on resume), so remote→local
+`claude --resume <id>` handoff is id-compatible by construction. `session/update`
+notifications → `acpToEnvelope` mapper → **ordered outgoing queue** (strict incremental
+order, unchanged). `session/request_permission` server→client requests = the permission
+pipeline (§7.6). Adapter stderr is ring-buffered and attached to connect/exit errors so
+spawn failures surface legibly. Terminal shows the Ink status view ("controlled from
+web — Ctrl-T to take back").
 
 ### 7.5 Mode state machine
 
@@ -518,7 +577,7 @@ interface RemoteHandle {
         ▼                                                                                       │
    ┌─────────┐   remote msg arrives / takeControl RPC     ┌──────────┐                          │
    │  LOCAL   │ ────────────────────────────────────────► │  REMOTE  │                          │
-   │ real TUI │   1. graceful-stop provider process       │ SDK-driven│                         │
+   │ real TUI │   1. graceful-stop provider process       │ ACP-driven│                         │
    │ tailer on│   2. mode-switch envelope emitted         │ Ink status│                         │
    └─────────┘   3. startRemote({resume})                 └──────────┘                          │
         ▲                                                        │                              │
@@ -528,14 +587,14 @@ interface RemoteHandle {
               3. mode-switch envelope                                                           │
    Exit paths: Ctrl-C/SIGTERM ⇒ session stays `active` (resumable). Explicit archive ⇒ archived.
    Crash ⇒ status `failed` + error surfaced. Loss-less guarantee: cross-mode dedup ring buffer
-   (message text + ids, 5-min window) — SDK writes app prompts to disk too, so the tailer must
-   not re-send them.
+   (message text + ids, 5-min window) — the ACP adapter's Claude Code subprocess writes app
+   prompts to the on-disk transcript too, so the tailer must not re-send them.
 ```
 
 ### 7.6 Permission pipeline (remote mode)
 
 ```
-SDK canUseTool(name, args)
+ACP session/request_permission {toolCall, options}   ← server→client request from adapter
   → auto-rules: plan-mode read-only tools ⇒ allow; acceptEdits ⇒ edits allow;
                 bypassPermissions ⇒ allow; AskUserQuestion/ExitPlanMode ⇒ ALWAYS prompt
   → else: reqId = cuid2
@@ -544,20 +603,74 @@ SDK canUseTool(name, args)
       3. push notification (kind: perm)
       4. await decision promise
   ← decision arrives via s:<id>:perm.answer RPC (or local timeout policy: re-notify ×3, keep waiting)
-  → emit perm-resolve envelope; clear agentState.requests[reqId]; return mapped decision to SDK
+  → emit perm-resolve envelope; clear agentState.requests[reqId];
+    respond with the mapped ACP option (allow-once/always, reject, or mode-switch via session/set_mode)
 ```
+
+ACP itself imposes no timeout or default on a pending permission — the request blocks
+until answered or the turn is cancelled; Falcon's re-notify policy above sits on top.
+One shared handler serves every provider (Claude and Codex `exec`/`patch` approvals
+arrive through the same ACP method); the first-wins rule below is unchanged.
 
 **First-wins across devices:** two clients may answer the same request concurrently. The session process resolves each `reqId` exactly once (atomic check-and-delete on the pending map); the losing `perm.answer` gets `{ok: false, reason: 'already-answered', decision}` and the client renders "answered on another device" instead of an error.
 
-### 7.7 Codex adapter (M3)
+### 7.7 Codex adapter (v0.3 — ACP)
 
-`codex app-server` child, JSON-RPC 2.0 over stdio (hand-rolled client — official SDK lacks approval support). Approvals (`exec:request`, `patch:request`) → same permission pipeline. No local TUI mode: `falcon codex` always runs the programmatic path with the Ink status view; `startLocal()` returns null and the CLI prints an honest note. Thread lifecycle: `newConversation`/`resumeConversation`; events mapped by `codexEnvelopeMapper`.
+Same `AcpRemote` as Claude, spawning the managed `codex-acp` adapter (§7.9) — which
+itself runs `codex app-server` (the user's install via `CODEX_PATH`/PATH, bundled
+`@openai/codex` fallback) and translates it to ACP, with `exec`/`patch` approvals
+surfaced through the standard `session/request_permission` → same permission pipeline
+(§7.6). The v1 hand-rolled `codex app-server` JSON-RPC client, Codex-specific envelope
+mapper, and Codex-specific permission handler are deleted — that protocol drift is now
+maintained upstream by OpenAI/Zed/JetBrains. No local TUI mode: `falcon codex` always
+runs the programmatic path with the Ink status view; `startLocal()` returns null and the
+CLI prints an honest note.
 
 ### 7.8 Adoption module (`src/adopt/`, FR-9.x)
 
 - `falcon adopt [--remote] [--list]`: enumerate provider transcripts in cwd's workspace (`listRecentSessions`), preselect most recent, import history (stream `importTranscript` envelopes with a `imported: true` meta flag), then continue via local `claude --resume` (default) or remote SDK (`--remote`).
 - Identity mapping: resume mints a new provider session id → session metadata records `providerSessionLineage: [old, new, …]`; the tailer switches files accordingly.
 - Takeover-from-phone: daemon RPC `adopt.take` → find owning pid (process scan matching transcript file handles / cwd) → if running: SIGTERM, wait ≤ 5 s, SIGKILL fallback → spawn `falcon claude --starting-mode remote --continue-from <id>`. `mode: 'fork'` skips the kill and copies the transcript to a fresh lineage.
+
+### 7.9 ACP adapter manager (v0.3)
+
+The two adapter packages are **installed, pinned, and verified** — never fetched at
+session start.
+
+- **Layout:** `~/.falcon/adapters/` is Falcon's own npm prefix; each adapter is installed
+  at an exact version recorded in a Falcon-shipped manifest (package id + version +
+  integrity hash). Spawn = `node <adapters>/node_modules/<pkg>/dist/index.js` (stdio
+  pipes, env passthrough per provider needs).
+- **Install/upgrade:** `falcon adapters install|upgrade` (explicit user command; also run
+  automatically once at `falcon auth login`/first `falcon <provider>` when missing).
+  Post-install integrity check against the manifest hash; a mismatch refuses to spawn.
+  Upgrades are never implicit — a Falcon release bumps the pinned versions, the user
+  upgrades deliberately. Rationale: no npx cold-start latency, works offline, and the
+  supply chain is exactly the code Falcon's release tested against.
+- **Diagnostics:** `falcon doctor` reports adapter presence/version/integrity and the
+  underlying provider CLI detection (`claude` binary, `codex` binary); adapter spawn
+  failures carry the ring-buffered stderr tail (§7.4).
+
+### 7.10 Send-idempotency claim (v0.3)
+
+Protects the `message` session RPC end-to-end: a retried or duplicated RPC must never
+cause the agent to run a turn twice for one logical send. (The display-layer id-based
+reconcile already prevents double *rendering*; this prevents double *execution*.)
+
+- **Store:** `~/.falcon/claims/<sessionId>.json` — atomic tmp-write+rename under the
+  existing lock-file pattern; entries `{envelopeId → {claimedAt} | {result, completedAt}}`
+  with a bounded retention window (claims are one-per-human-send; volume is tiny).
+- **Flow (claim-before-execute):** on `message {envelope}`: ① look up `envelopeId` —
+  a recorded result replays as `status:'duplicate'`; a live claim with no result returns
+  `status:'outcome-unknown'` (crash window: prompt may have partially run — never
+  re-execute an unknown outcome). ② Otherwise durably write the claim, *then* push the
+  prompt to the ACP session. ③ On turn end, atomically record the terminal result and
+  clear the claim. Reply `status:'queued'`.
+- **Client contract:** the web composer treats `duplicate` as success (echo reconciles by
+  envelope id), and `outcome-unknown` as "reconcile from the transcript, surface a
+  non-blocking notice" — never blind-resend under a fresh id.
+- Same pattern the mutating machine RPCs already use (spawn idempotency keys + result
+  replay); this extends it to the highest-frequency mutating session RPC.
 
 ---
 
@@ -634,23 +747,26 @@ user: falcon
 ### 10.2 Remote permission approval (UC2)
 
 ```
-[remote mode] SDK canUseTool → pipeline: agentState CAS + perm-request envelope + push
+[remote mode] ACP session/request_permission → pipeline: agentState CAS + perm-request envelope + push
  phone: notification → open session → PermCard → Allow(session)
  web ── rpc-call s:<sid>:perm.answer {reqId, decision} ─► server ─► session proc
- session: resolve promise → perm-resolve envelope → SDK continues
+ session: resolve promise → perm-resolve envelope → respond to ACP request → agent continues
  SLO: decision→continue p95 < 2 s
 ```
 
 ### 10.3 Remote message while local (UC3 → mode switch)
 
 ```
-web composer → rpc-call s:<sid>:message
+web composer → rpc-call s:<sid>:message {envelope}
+ session proc: claim check (§7.10) — duplicate/outcome-unknown replies short-circuit here
  session proc (LOCAL): queue non-empty ⇒ initiate switch:
    graceful-stop claude (SIGINT; transcript already on disk)
    emit mode-switch{control:remote, by:client}
-   startRemote({resume: providerSessionId}) → drain queue → turn runs
+   startRemote({resume: providerSessionId})  — ACP session/new with resume meta (§7.4)
+   → drain queue (one session/prompt per queued send) → turn runs
  terminal: Ink status view replaces TUI
  user back at desk: Ctrl-T → remoteHandle.stop() → claude --resume <newId> → mode-switch{local}
+ (id-compatible: the ACP sessionId IS the provider session UUID — §7.4)
 ```
 
 ### 10.4 Takeover of a plain claude session (UC9)
@@ -660,7 +776,7 @@ daemon indexer: unmanaged row visible on phone (live read-only mirror via chunke
  phone: "Take over" → confirm (mid-turn warning if running)
  web ── rpc-call m:<mid>:adopt.take {providerRef, mode:'takeover'}
  daemon: find pid → SIGTERM (≤5 s) → spawn falcon claude --starting-mode remote --continue-from <ref>
- new session proc: import transcript (imported envelopes) → resume via SDK → sessionId back to web
+ new session proc: import transcript (imported envelopes) → resume via ACP (§7.4) → sessionId back to web
  web: navigates to new managed session; unmanaged row marked adopted (lineage link)
 ```
 
@@ -685,7 +801,9 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 | Server down | WS drop, REST 5xx | CLI disk outbox keeps retrying POSTs (10 MB cap, backoff); web shows offline banner; Query retries reads | delayed sync only |
 | Double perm answer (two devices) | session proc atomic resolve | loser gets `already-answered` + decision; UI shows "answered elsewhere" | none |
 | RPC retry after timeout | idempotency key on mutating RPCs | daemon replays stored result; no double-spawn | none |
-| Laptop sleeps mid-turn | heartbeat gap ⇒ machine offline | on wake: reconnect, tailer catches up from file offset | in-flight SDK turn aborted ⇒ turn-end{cancelled} |
+| Laptop sleeps mid-turn | heartbeat gap ⇒ machine offline | on wake: reconnect, tailer catches up from file offset | in-flight remote turn aborted ⇒ turn-end{cancelled} |
+| ACP adapter child dies mid-turn | connection-closed + child exit (stderr tail captured) | turn-end{failed} + service envelope; claim stays open ⇒ retried send = `outcome-unknown`; restart remote handle with resume | current turn only |
+| `message` RPC retried/duplicated | claim store hit (§7.10) | reply `duplicate` (replay) or `outcome-unknown` (never re-execute) | none — at-most-once turn execution |
 | Mode-switch race (remote msg + local typing) | state machine serializes via single mode owner | queue holds remote msg until switch completes; dedup buffer kills doubles | none |
 | Version mismatch (CAS) | `version-mismatch` response | re-read current, re-apply, retry ×3 | none |
 | Wedged provider process | takeover/stop timeout | SIGKILL fallback; `falcon kill sessions` escape hatch | current turn only |
@@ -710,7 +828,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 
 **Testing strategy:**
 1. **Golden-trace reducer tests** — recorded real Claude/Codex transcripts → expected render trees.
-2. **Provider contract tests (CI, daily)** — run latest Claude Code against fixture prompts in a container; assert transcript format assumptions (JSONL fields, hook events, resume behavior). Breakage pages the team before users see it.
+2. **Provider contract tests (CI, daily)** — run latest Claude Code against fixture prompts in a container; assert transcript format assumptions (JSONL fields, hook events, resume behavior). Breakage pages the team before users see it. **v0.3 addition:** the same harness exercises the *pinned* ACP adapters (initialize handshake, session/new meta options, update kinds, permission round-trip) — and, separately, the *latest* adapter versions, so an upstream ACP change is caught before Falcon bumps its pins.
 3. **Conformance harness (`e2e/`)** — scripted 20-step session exercising every primitive (perm allow/deny/allow-session, question, interrupt, mode switch ×2, adoption takeover, reconnect) against a real local stack; run pre-release.
 4. **Chaos suite** — kill daemon mid-turn, kill server mid-send, sleep/wake simulation, double-takeover race.
 5. **RPC integration tests** — dead-peer fast-fail (<2 s), reconnect grace, presence flap.
@@ -741,6 +859,15 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 | R6 | Web stack | Next.js static-export PWA + shadcn/ui + Tailwind + TanStack React Query |
 | R7 | Notification reliability | Fallback channels (Telegram/ntfy) alongside Web Push at MVP |
 | R8 | Socket.IO vs native ws | Socket.IO stays (RPC design depends on rooms; it no longer carries writes, shrinking the blast radius) |
+
+**Resolved in v0.3 (v2 — ACP migration, 2026-07-17; evidence in `docs/acp-delta-proposal.md`):**
+
+| # | Decision | Resolution |
+|---|---|---|
+| R9 | Headless provider protocol | **ACP** via official adapters (`claude-agent-acp`, `codex-acp`); one `AcpRemote` + one `acpToEnvelope` mapper replaces the direct Claude Agent SDK integration and the hand-rolled `codex app-server` client. Local TUI mode untouched |
+| R10 | Migration style | **Hard cut** — old paths deleted as each phase lands; rollback = git tag `v1`. No transport flag |
+| R11 | Adapter distribution | **Managed installs**: pinned exact versions + integrity manifest under `~/.falcon/adapters/`; explicit upgrades; `falcon doctor` coverage. Never npx at session start |
+| R12 | CLI-local durability | **Send-idempotency claim only** (§7.10) — no local event WAL; the server (Postgres + msgSeq + outbox) remains the single durable event store. (mobvibe's local SQLite WAL exists because its gateway is ephemeral — inverted topology, doesn't transfer) |
 
 **Still open:**
 

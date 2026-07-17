@@ -1,8 +1,16 @@
 # Falcon — Implementation Plan
 
-**Version:** 0.1
-**Date:** 2026-07-15
-**Companion docs:** `falcon-prd.md` (what/why), `falcon-system-design.md` (architecture)
+**Version:** 0.2
+**Date:** 2026-07-17
+**Companion docs:** `falcon-prd.md` (what/why), `falcon-system-design.md` (architecture — v0.3 reflects the v2 ACP migration), `docs/acp-delta-proposal.md` (v2 rationale + decisions)
+
+> **v2 status (2026-07-17):** the v1 plan below (§1–§16) is ~98% complete and shipped —
+> git tag **`v1`** marks the last fully-working build of it. The active workstream is
+> **§17: v2 — ACP migration**, which replaces the headless provider layer (Claude Agent
+> SDK remote mode + hand-rolled Codex app-server client) with the Agent Client Protocol.
+> §§1–16 are kept as the historical record; where a v1 section is superseded by v2 it
+> carries a **⚠ v2** note pointing at §17. Design authority: `falcon-system-design.md`
+> v0.3 (§7.3/7.4/7.6/7.7/7.9/7.10, decisions R9–R12).
 **Grounding:** This plan is written against the **Happy** codebase (`happy/packages/*`, MIT), which is the closest working implementation of Falcon's architecture and the declared reference in the system design. Every "reference" snippet below is quoted from a real Happy source file with its path; every "Falcon" snippet is the adaptation we write. Deltas from Happy (there are five deliberate ones) are called out inline with **⚠ DELTA**.
 
 > **Why base on Happy?** There is no Falcon code yet. Happy already implements: the CLI wrapper + local/remote mode loop, transcript-tailing session mirror, SDK-driven remote mode, the permission pipeline, the daemon with control server + machine RPC, the Socket.IO relay with room-based RPC and the presence-poll dead-peer trick, the event router, and the E2E crypto. We reuse its proven patterns and change only what the design review flagged.
@@ -407,6 +415,11 @@ class Outbox {
 
 ### 6.6 Remote mode — port `claudeRemote.ts` + SDK (M2)
 
+> **⚠ v2 (superseded — see §17):** the SDK `query()` transport this section describes is
+> deleted in v2 and replaced by the shared ACP path (`AcpRemote` + `acpToEnvelope`). The
+> surrounding structure — launcher shell, Ink status view, ordered outgoing queue,
+> permission pipeline, mode loop (§6.7) — carries over unchanged.
+
 Port Happy's remote launcher: drive `@anthropic-ai/claude-agent-sdk` `query()` with `resume: providerSessionId`, render an Ink status view ("controlled from web — Ctrl-T to take back"), convert SDK messages → envelopes → outbox, and route `canUseTool` through the permission handler (§9).
 
 ### 6.7 Mode switching — port the trigger logic (M2)
@@ -560,6 +573,10 @@ machine.registerHandler('adopt.take', async ({ providerRef, mode, idempotencyKey
 ---
 
 ## 12. Codex adapter (M3)
+
+> **⚠ v2 (superseded — see §17):** the hand-rolled app-server client this section
+> describes is deleted in v2; Codex runs through the shared ACP path (`codex-acp`
+> adapter). Kept for the historical record of what v1 built.
 
 Port Happy's `happy-cli/src/codex/`: spawn `codex app-server --listen stdio://`, hand-rolled JSON-RPC 2.0 client (the official SDK lacks approval support — Happy documents this). Approvals (`exec:request`, `patch:request`) → the same permission pipeline (§9). No local TUI mode — `startLocal()` returns null, print an honest note, always run the programmatic path with the Ink status view.
 
@@ -812,6 +829,96 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [ ] Failure-matrix scenarios (design §11) each get a regression test when first encountered
 - [x] MIT attribution headers on every ported Happy file *(P0-cross-cutting-mit-attribution-headers, 2026-07-16: reconciled the worktree branch (tip `b67ad71`) with `main`'s drift by merging `main` into it in-worktree (clean auto-merge, no conflicts — the one flagged overlap, `packages/cli/src/daemon/state.ts`, merged cleanly since main's `unlink`-import change and this branch's header-comment addition touched disjoint regions); re-verified `pnpm build`/`typecheck`/`test` green on the merged tree. Adds/upgrades MIT attribution headers crediting Happy (`https://github.com/slopus/happy`, MIT) on 11 files: `packages/crypto/{box.ts,box.web.ts,dek.ts,dek.web.ts,keys.ts}`, `packages/cli/src/daemon/{lock.ts,markers.ts,kill.ts,state.ts}`, `packages/server/src/app/routes/{auth.ts,oauth.ts}` — comment-only diff, no logic changes. This is the reconciliation step; the actual fast-forward of shared `main` to this result is a separate land step.)* **Cycle 48, 2026-07-16 (progress tracker): confirmed landed.** `git merge-base --is-ancestor b67ad71 main` (the branch's real tip) → **true**; merge commit `ddf374b` ("merge: land P0-cross-cutting-mit-attribution-headers onto main") is in `main`'s direct history (`main` HEAD `3aff9e5`). All 11 attributed files verified present with their `slopus/happy`/MIT marker on `main`'s actual tree. `pnpm typecheck`/`pnpm test` both green (9/9 tasks each) on `main`. Fully landed, no follow-up remaining.
 - [ ] `docs/` updated in the same PR as any protocol/crypto change
+
+---
+
+## 17. v2 — ACP migration (active workstream)
+
+**Grounding:** like §1–§16 were written against Happy, this section is written against
+**mobvibe** (`mobvibe/apps/mobvibe-cli/`, the ACP-based reference) — with the deltas from
+it argued in `docs/acp-delta-proposal.md` (feasibility evidence, capability verification
+of the official adapters, and the deliberate non-adoptions: no local SQLite WAL, no
+connection pooling, no agent-id-as-identity). Design authority:
+`falcon-system-design.md` v0.3 — §7.3 (single `AcpRemote`), §7.4 (Claude via
+`claude-agent-acp`), §7.6 (ACP permission pipeline), §7.7 (Codex via `codex-acp`),
+§7.9 (adapter manager), §7.10 (send claim), decisions R9–R12.
+
+**Ground rules (user-approved, 2026-07-17):**
+- **Hard cut** — replaced modules are deleted in the same change that lands their ACP
+  successor; no transport flag. Rollback anchor = git tag `v1`.
+- **Quality-first scope** — adjacent layers (wire, web) are touched where the migration
+  exposes real improvements (tri-state `message` reply), with the additive-only wire
+  policy respected.
+- Local TUI mode, mode loop, tailer, launcher, outbox, daemon, server, crypto: unchanged.
+
+### Phase 2.0 — foundation (lands first, protects both eras)
+- [ ] Send-idempotency claim store (`cli/src/claims/claimStore.ts`, design §7.10):
+      claim-before-execute, tri-state (`claimed`/`completed`/`in-progress`), atomic
+      tmp-write+rename per session under `~/.falcon/claims/`, bounded retention.
+      Reference semantics: mobvibe `wal-store.ts` `claimMessageSend`/`completeMessageSend`
+      (INSERT-OR-IGNORE claim + verify-claimId-then-record-result-atomically; a
+      pre-existing claim with no result is *indeterminate* — never re-execute)
+- [ ] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
+      in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
+      (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
+      + non-blocking notice; never blind-resend under a fresh id)
+- [ ] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
+      (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
+      own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,
+      `falcon doctor` adapter checks. No npx at session start
+- [ ] Wire schema: no new envelope types needed (verified mapping, proposal §3 A4) —
+      assert via golden fixtures rather than schema change
+
+### Phase 2.1 — ACP core
+- [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`
+      client over NDJSON stdio — initialize handshake (client capabilities: no fs, no
+      terminal initially), `session/new|load|resume`, `session/prompt` (one per turn,
+      cancellation-signal wired), `session/cancel`, `session/set_mode`,
+      `session/request_permission` handler seam, session-update listener registered
+      *before* session creation with pre-ready buffering, stderr ring-buffer attached to
+      connect/exit errors (mobvibe `acp-connection.ts` is the porting reference, minus
+      its fs/terminal capabilities and payload-sanitization breadth — adopt its
+      `_meta`-bounds checks where cheap)
+- [ ] `cli/src/acp/acpToEnvelope.ts`: single shared mapper, ACP `session/update` →
+      `SessionEnvelope` (mapping table in design §7.3); unknown kinds logged + dropped;
+      subagent scope from `_meta.claudeCode.parentToolUseId`; turn-start/turn-end
+      synthesized around `session/prompt` call/return (stopReason → status)
+- [ ] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
+      existing reducer test corpus
+- [ ] Unified ACP permission handler: `session/request_permission` → existing §7.6
+      pipeline (auto-rules, first-wins `resolve()`, `perm.answer` RPC) → mapped ACP
+      option response; mode-switch decisions call `session/set_mode`
+
+### Phase 2.2 — Claude remote on ACP (delete SDK path)
+- [ ] `claudeRemoteLauncher` inner transport → `AcpRemote` (`session/new` with
+      `_meta.systemPrompt` preset+append + `_meta.claudeCode.options.resume`); **delete**
+      `remote/claudeRemote.ts` + `remote/sdkToEnvelope.ts` (+ drop the
+      `@anthropic-ai/claude-agent-sdk` dependency) in the same change
+- [ ] Claim store wired into `deliverMessage()` (claim → send → complete on turn-end)
+- [ ] Verification gate (manual E2E matrix, all must pass): web message → reply streams
+      to web + terminal; perm approve/deny/allow-session/mode-switch from phone;
+      interrupt; local↔remote switch both directions (id-compatible resume verified);
+      `falcon resume`; session exit paths; adapter-kill mid-turn ⇒ turn-end{failed} +
+      `outcome-unknown` on retry
+- [ ] Failure-matrix regression tests: adapter-child-dies-mid-turn, duplicated
+      `message` RPC (design §11 new rows)
+
+### Phase 2.3 — Codex on ACP (delete hand-rolled client)
+- [ ] `falcon codex` spawning wired through the same `AcpRemote` (`codex-acp` adapter;
+      exec/patch approvals arrive via standard `session/request_permission`); **delete**
+      `codex/codexAppServerClient.ts`, `codexAppServerTypes.ts`, `codexRemote.ts`,
+      `codex/envelopeMapper.ts`, `codex/permissionHandler.ts`
+- [ ] Codex E2E: spawn from web, message round-trip, exec/patch approval from phone,
+      interrupt, resume (`codexProviderAdapter.detect()` + honest no-TUI note retained)
+
+### Phase 2.4 — quality sweep
+- [ ] ACP adapter contract tests in the daily provider-contract CI job (pinned versions
+      + latest-versions canary, design §13.2)
+- [ ] Docs: `docs/protocol.md` ACP section; `CLAUDE.md` package-layout refresh;
+      uninstall doc gains `~/.falcon/adapters` + `~/.falcon/claims`
+- [ ] Remove dead provider-specific seams exposed by the deletions (mapper/permission
+      indirections that now have a single implementation); `pnpm build/typecheck/test/lint`
+      green; conformance harness (`e2e/`) re-run against the ACP stack
 
 ---
 
