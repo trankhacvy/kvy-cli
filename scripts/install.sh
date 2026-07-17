@@ -103,22 +103,27 @@ esac
 if [ "$already_on_path" = "1" ]; then
   say "==> $BIN_DIR is already on PATH"
 else
+  # EXPORT_LINE is built from the actual $BIN_DIR (which already honors
+  # FALCON_HOME_DIR) rather than a hardcoded "$HOME/.falcon/bin" literal, so
+  # a FALCON_HOME_DIR override installs the binary and points PATH at the
+  # same directory. $PATH itself stays unexpanded (escaped) so it's
+  # resolved dynamically when the rc file is sourced.
   case "$(basename "${SHELL:-}")" in
     zsh)
       RC_FILE="$HOME/.zshrc"
-      EXPORT_LINE='export PATH="$HOME/.falcon/bin:$PATH"'
+      EXPORT_LINE="export PATH=\"$BIN_DIR:\$PATH\""
       ;;
     bash)
       RC_FILE="$HOME/.bashrc"
-      EXPORT_LINE='export PATH="$HOME/.falcon/bin:$PATH"'
+      EXPORT_LINE="export PATH=\"$BIN_DIR:\$PATH\""
       ;;
     fish)
       RC_FILE="$HOME/.config/fish/config.fish"
-      EXPORT_LINE='set -gx PATH "$HOME/.falcon/bin" $PATH'
+      EXPORT_LINE="set -gx PATH \"$BIN_DIR\" \$PATH"
       ;;
     *)
       RC_FILE="$HOME/.profile"
-      EXPORT_LINE='export PATH="$HOME/.falcon/bin:$PATH"'
+      EXPORT_LINE="export PATH=\"$BIN_DIR:\$PATH\""
       ;;
   esac
 
