@@ -398,10 +398,10 @@ export class AcpConnection {
     additionalDirectories?: readonly string[],
     meta?: Record<string, unknown> | null,
   ): Promise<LoadSessionResponse> {
+    const connection = this.requireReady();
     if (!this.supportsSessionLoad()) {
       throw new Error("ACP agent does not support session/load");
     }
-    const connection = this.requireReady();
     return connection.agent.request(methods.agent.session.load, {
       sessionId,
       cwd,
@@ -420,10 +420,10 @@ export class AcpConnection {
     additionalDirectories?: readonly string[],
     meta?: Record<string, unknown> | null,
   ): Promise<ResumeSessionResponse> {
+    const connection = this.requireReady();
     if (!this.supportsSessionResume()) {
       throw new Error("ACP agent does not support session/resume");
     }
-    const connection = this.requireReady();
     return connection.agent.request(methods.agent.session.resume, {
       sessionId,
       cwd,

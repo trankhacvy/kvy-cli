@@ -157,6 +157,12 @@ describe("AcpConnection session lifecycle", () => {
     await expect(connection.prompt("sess-1", [])).rejects.toThrow(/not ready/);
     await expect(connection.setMode("sess-1", "plan")).rejects.toThrow(/not ready/);
   });
+
+  it("surfaces 'not ready' (not a misleading capability error) for loadSession/resumeSession before connect()", async () => {
+    const connection = createConnection();
+    await expect(connection.loadSession("sess-1", "/tmp")).rejects.toThrow(/not ready/);
+    await expect(connection.resumeSession("sess-1", "/tmp")).rejects.toThrow(/not ready/);
+  });
 });
 
 describe("AcpConnection.prompt", () => {
