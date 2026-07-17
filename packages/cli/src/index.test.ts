@@ -113,19 +113,24 @@ describe("main()", () => {
     stderr.mockRestore();
   });
 
-  it("describes a codex passthrough start with the honest no-local-mode note", async () => {
+  it("routes `falcon codex` to the real remote-only Codex command (fails fast when not logged in)", async () => {
+    // v2 (ACP): `falcon codex` no longer prints a stub — it runs
+    // `runStartCodexCommand`, which (with an empty temp FALCON_HOME_DIR)
+    // fails the credentials pre-flight first, exactly like `falcon claude`.
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
     const code = await main(["codex"]);
 
-    expect(code).toBe(0);
-    expect(stdout.mock.calls[0]?.[0]).toContain("would start a codex session");
-    expect(stdout.mock.calls[0]?.[0]).toContain("Codex has no local terminal mode");
+    expect(code).toBe(1);
+    expect(stderr.mock.calls[0]?.[0]).toContain("not logged in");
+    expect(stdout).not.toHaveBeenCalled();
     stdout.mockRestore();
+    stderr.mockRestore();
   });
 
-  it("does not print the codex no-local-mode note for a claude start", async () => {
+  it("fails `falcon claude` the same way when not logged in", async () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -133,7 +138,7 @@ describe("main()", () => {
     const code = await main(["claude"]);
 
     expect(code).toBe(1);
-    expect(stderr.mock.calls[0]?.[0]).not.toContain("no local terminal mode");
+    expect(stderr.mock.calls[0]?.[0]).toContain("not logged in");
     expect(stdout).not.toHaveBeenCalled();
     stdout.mockRestore();
     stderr.mockRestore();
@@ -477,13 +482,13 @@ describe("main()", () => {
       vi.doUnmock("./daemon/ensureDaemonRunning.js");
     });
 
-    it("calls ensureDaemonRunning before describing a start, and proceeds when it succeeds", async () => {
+    it("calls ensureDaemonRunning before the start command, and proceeds when it succeeds", async () => {
       // `codex` here (not `claude`) deliberately: this test is about the
-      // ensureDaemonRunning gating that runs ahead of every provider, not
-      // about `claude`'s own (now real) local-session wiring — `codex` stays
-      // on the honest `describeStart` stub (see index.ts's `runStart` doc
-      // comment), so it's a credentials-free way to prove "proceeds past the
-      // daemon check" without exercising commands/start.js at all.
+      // ensureDaemonRunning gating that runs ahead of every provider. With an
+      // empty temp FALCON_HOME_DIR the real `runStartCodexCommand` then fails
+      // its credentials pre-flight (exit 1, "not logged in") — which proves
+      // the daemon check ran first and control proceeded into the command,
+      // without needing a full logged-in stack.
       delete process.env.FALCON_NO_SERVICE;
       const ensureDaemonRunning = vi.fn(async () => ({
         ok: true,
@@ -495,13 +500,16 @@ describe("main()", () => {
       }));
       const main = await importMain();
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
       const code = await main(["codex"]);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(ensureDaemonRunning).toHaveBeenCalledOnce();
-      expect(stdout.mock.calls[0]?.[0]).toContain("would start a codex session");
+      expect(stderr.mock.calls[0]?.[0]).toContain("not logged in");
+      expect(stdout).not.toHaveBeenCalled();
       stdout.mockRestore();
+      stderr.mockRestore();
     });
 
     it("exits 1 and never describes the start when ensureDaemonRunning fails to bring up the daemon", async () => {
@@ -556,20 +564,23 @@ describe("main()", () => {
     });
 
     it("calls maybeTriggerAutoUpdate alongside the daemon auto-start check", async () => {
-      // `codex`, not `claude` — same reasoning as the ensureDaemonRunning
-      // test above: this is about `ensureDaemon()`'s own side effect, not
-      // `claude`'s real (now credential-requiring) session wiring.
+      // `codex`: the auto-update side effect fires from `ensureDaemon()`
+      // regardless of the (now credential-requiring) command that follows —
+      // with an empty temp home the codex command then exits 1 (not logged
+      // in), which is fine; we only assert the update trigger ran.
       delete process.env.FALCON_NO_UPDATE;
       const maybeTriggerAutoUpdate = vi.fn(async () => {});
       vi.doMock("./update/autoUpdateTrigger.js", () => ({ maybeTriggerAutoUpdate }));
       const main = await importMain();
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
       const code = await main(["codex"]);
 
-      expect(code).toBe(0);
+      expect(code).toBe(1);
       expect(maybeTriggerAutoUpdate).toHaveBeenCalledOnce();
       stdout.mockRestore();
+      stderr.mockRestore();
     });
 
     it("never throws main() even if maybeTriggerAutoUpdate rejects unexpectedly", async () => {

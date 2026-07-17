@@ -58,6 +58,7 @@
  */
 import type { PermissionMode, SessionEnvelope } from "@falcon/wire";
 import { createEnvelope } from "@falcon/wire";
+import type { AdapterId } from "../adapters/index.js";
 import { FALCON_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
 import type { Logger } from "../logger.js";
 import { OrderedEnvelopeQueue } from "../remote/outgoingQueue.js";
@@ -76,6 +77,15 @@ import {
 } from "./acpToEnvelope.js";
 
 export interface AcpRemoteOptions {
+  /**
+   * Which managed ACP adapter to spawn (design §7.3 "single `AcpRemote`
+   * shared by every provider"). Defaults to `claude-code`. `codex` spawns the
+   * `codex-acp` adapter and skips the Claude-only `_meta.systemPrompt`/
+   * `claudeCode` payload (codex-acp ignores those — verified against the
+   * installed adapter's `newSession`, which reads only `additionalDirectories`
+   * off `_meta`).
+   */
+  adapterId?: AdapterId;
   /** cwd for the ACP session (must exist — the adapter validates it). */
   workingDirectory: string;
   /** Provider session id to resume, or null/undefined for a fresh session. */
@@ -156,10 +166,11 @@ interface QueuedTurn {
 /** Starts one ACP-backed remote session and returns the handle that drives it. */
 export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {}): AcpRemoteHandle {
   const logger = opts.logger ?? noopLogger;
+  const adapterId: AdapterId = opts.adapterId ?? "claude-code";
   const connection: AcpRemoteConnection =
     deps.createConnection?.({ homeDir: opts.homeDir, logger }) ??
     new AcpConnection({
-      adapterId: "claude-code",
+      adapterId,
       homeDir: opts.homeDir,
       clientInfo: deps.clientInfo ?? DEFAULT_CLIENT_INFO,
       logger,
@@ -209,23 +220,32 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
     );
   });
 
-  // Session startup — connect + session/new with the Claude meta payload
-  // (design §7.4). `ready` is awaited by the turn drain; a startup failure
-  // surfaces once as a service envelope and fails subsequent sends fast.
+  // Provider-specific `session/new` `_meta`. Claude Code takes the preset
+  // system-prompt + `claudeCode.options` payload (design §7.4); codex-acp
+  // ignores those (it reads only `additionalDirectories`), so Codex sends no
+  // `_meta` — its resume/model/approval config live in its own thread APIs.
+  const sessionMeta: Record<string, unknown> | null =
+    adapterId === "claude-code"
+      ? {
+          systemPrompt: { type: "preset", preset: "claude_code", append: FALCON_SYSTEM_PROMPT },
+          claudeCode: {
+            options: {
+              ...(opts.resume ? { resume: opts.resume } : {}),
+              ...(opts.model ? { model: opts.model } : {}),
+              permissionMode: opts.permissionMode,
+            },
+          },
+        }
+      : null;
+
+  // Session startup — connect + session/new. `ready` is awaited by the turn
+  // drain; a startup failure surfaces once as a service envelope and fails
+  // subsequent sends fast.
   const ready: Promise<string> = (async () => {
     await connection.connect();
     const session = await connection.createSession({
       cwd: opts.workingDirectory,
-      meta: {
-        systemPrompt: { type: "preset", preset: "claude_code", append: FALCON_SYSTEM_PROMPT },
-        claudeCode: {
-          options: {
-            ...(opts.resume ? { resume: opts.resume } : {}),
-            ...(opts.model ? { model: opts.model } : {}),
-            permissionMode: opts.permissionMode,
-          },
-        },
-      },
+      meta: sessionMeta,
     });
     providerSessionId = session.sessionId;
     opts.onProviderSessionId?.(session.sessionId);

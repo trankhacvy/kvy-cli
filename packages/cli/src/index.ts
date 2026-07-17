@@ -4,7 +4,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
-import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import { runAdaptersInstallCommand, runAdaptersUpgradeCommand } from "./commands/adapters.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import { runResumeCommand } from "./commands/resume.js";
@@ -12,6 +11,7 @@ import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
 import { runShimCommand } from "./commands/shim.js";
 import { runStartClaudeCommand } from "./commands/start.js";
+import { runStartCodexCommand } from "./commands/startCodex.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
   runWorkspaceListCommand,
@@ -159,23 +159,6 @@ Usage:
 Environment: FALCON_BACKEND_URL, FALCON_FRONTEND_URL, FALCON_HOME_DIR,
 FALCON_DEBUG=1, FALCON_NO_UPDATE=1, FALCON_NO_SERVICE=1
 `;
-
-/**
- * Codex has no local-interactive mode (design §7.7, plan.md §16 "3.4 Codex
- * adapter": "`startLocal()` = null with honest CLI note") — `falcon codex`
- * always runs the programmatic `codex app-server` path, never a real Codex
- * TUI the way `falcon claude` can. Surfaced here, ahead of the (still
- * unimplemented) provider spawn itself, so the honest note reaches the user
- * regardless of how much of `runStart` is wired up yet.
- */
-function describeStart(command: Extract<FalconCommand, { type: "start" }>): string {
-  const parts = [`falcon: would start a ${command.provider} session`];
-  if (command.branch !== undefined) parts.push(`on branch "${command.branch}"`);
-  if (command.providerArgs.length > 0) parts.push(`with args: ${command.providerArgs.join(" ")}`);
-  parts.push("(provider spawning not implemented yet)");
-  const note = command.provider === "codex" ? `\n${CODEX_NO_LOCAL_MODE_NOTE}\n` : "";
-  return `${parts.join(" ")}\n${note}`;
-}
 
 /**
  * Auto-starts the background daemon ahead of every agent-invoking
@@ -356,8 +339,12 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
       logger,
     });
   }
-  process.stdout.write(describeStart(command));
-  return 0;
+  return runStartCodexCommand({
+    homeDir: resolveHomeDir(),
+    workingDirectory: process.cwd(),
+    codexArgs: command.providerArgs,
+    logger,
+  });
 }
 
 /**

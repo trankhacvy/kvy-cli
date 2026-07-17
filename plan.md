@@ -1160,12 +1160,26 @@ connection pooling, no agent-id-as-identity). Design authority:
       (`outcome-unknown`, no re-emit).)*
 
 ### Phase 2.3 — Codex on ACP (delete hand-rolled client)
-- [ ] `falcon codex` spawning wired through the same `AcpRemote` (`codex-acp` adapter;
+- [x] `falcon codex` spawning wired through the same `AcpRemote` (`codex-acp` adapter;
       exec/patch approvals arrive via standard `session/request_permission`); **delete**
       `codex/codexAppServerClient.ts`, `codexAppServerTypes.ts`, `codexRemote.ts`,
       `codex/envelopeMapper.ts`, `codex/permissionHandler.ts`
+      *(2026-07-18, direct: `AcpRemote` generalized with an `adapterId` option +
+      provider-aware `session/new` `_meta` (codex-acp ignores the Claude preset, verified
+      against its installed `newSession`). New `commands/startCodex.ts` is a remote-only
+      session process — no `loop()`/local child — reusing the exact bootstrap/outbox/
+      session-client/claim-store scaffolding, routing message/interrupt/setMode/perm.answer
+      into the `AcpRemoteHandle` (`takeControl` → honest `{ok:false}`; nothing to take back
+      to). Wired into `index.ts`'s `runStart`, deleting the `describeStart` codex stub.
+      Deleted all five hand-rolled modules (~1450 lines); kept `codexProviderAdapter.ts`
+      (detect + honest no-local-mode note, still used by `daemon/doctor.ts`). Unit-tested
+      via `startCodex.test.ts` with fakes.)*
 - [ ] Codex E2E: spawn from web, message round-trip, exec/patch approval from phone,
       interrupt, resume (`codexProviderAdapter.detect()` + honest no-TUI note retained)
+      *(pending — needs a real Codex login (OPENAI_API_KEY / `codex login`) this machine
+      may not have; also wants a Codex golden-trace fixture through `acpToEnvelope` (the
+      mapper is defensive, but Codex's `session/update` shapes aren't fixture-pinned yet).
+      Same live-gate honesty as Claude's Phase 2.2 manual matrix.)*
 
 ### Phase 2.4 — quality sweep
 - [ ] ACP adapter contract tests in the daily provider-contract CI job (pinned versions
