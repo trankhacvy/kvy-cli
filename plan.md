@@ -941,6 +941,25 @@ connection pooling, no agent-id-as-identity). Design authority:
       task-summary exist on `main`'s tree. Same "worktree never actually merged onto the
       shared `main` ref" shape as the claim-store/adapter-manager bullets above; not
       flipped. See `progress.md` Cycle 73.)*
+      *(2026-07-17, progress tracker, cycle 74: **still `[ ]` — the "real" landing task
+      also false-landed.** Reviewed `task-summary/
+      P17-land-2.0-wire-envelope-verification-real.md` (present only in worktree
+      `.worktrees/P17-land-2.0-wire-envelope-verification-real`, tip `ed8024e`, branched
+      off `main` at `1707258`). The summary claims `git cherry-pick -n 83826d5` applied
+      cleanly and that "plan.md line 917's checkbox was flipped to `[x]`... as part of
+      this same commit" — but that edit exists only inside the worktree's own branch.
+      `git merge-base --is-ancestor ed8024e main` → **false**; `git cat-file -e
+      main:packages/web/src/sync/reducer/__testdata__/trace_acp_turn_lifecycle.json` and
+      `main:task-summary/P17-land-2.0-wire-envelope-verification-real.md` both fail —
+      neither the fixtures nor the task-summary exist on the real `main` tree. This is the
+      exact same false-landing shape flagged for claim-store/adapter-manager in cycles
+      72–73, this time recurring in the task that was supposed to be the fix. By contrast,
+      this cycle re-verified `P17-land-2.0-claim-store-real` (merge commit `ef62007`, an
+      ancestor of `main`; `main:packages/cli/src/claims/claimStore.ts` exists) and
+      `P17-land-2.0-adapter-manager-real` (merge commit `2b98138`, an ancestor of `main`;
+      `main:packages/cli/src/adapters/manifest.ts` exists) as genuinely landed — those two
+      checkboxes were already correctly `[x]` above and needed no further change. Not
+      flipped for wire-envelope-verification. See `progress.md` Cycle 74.)*
 
 ### Phase 2.1 — ACP core
 - [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`

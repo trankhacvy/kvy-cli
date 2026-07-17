@@ -1,5 +1,110 @@
 # Falcon — Progress Log
 
+## Cycle 74 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `2b98138` — "feat: P17-land-2.0-adapter-manager-real -
+Actually merge the completed ACP adapter manager onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `falcon` cli, `@falcon/e2e`, `@falcon/web` — including a fresh static
+  export of all 15 routes). All tasks cache-hit-replayed clean (`>>> FULL TURBO`).
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 125 files /
+  1181 tests, `@falcon/e2e` 1 file / 1 test (20-step `exercise-flow` conformance run), plus
+  cached green replays for `@falcon/wire`, `@falcon/crypto`, `@falcon/server`, `@falcon/web`.
+
+### Task-summaries reviewed this cycle (with independent `main`-ancestor verification)
+
+Three task-summaries were requested:
+`task-summary/P17-land-2.0-claim-store-real.md`,
+`task-summary/P17-land-2.0-adapter-manager-real.md`, and
+`task-summary/P17-land-2.0-wire-envelope-verification-real.md`. Two are genuinely landed;
+the third repeats the exact false-landing pattern this tracker has flagged since Cycle 70.
+
+1. **`task-summary/P17-land-2.0-claim-store-real.md`** (present on `main`'s own tree, not
+   just a worktree) — describes fast-forwarding `main` to merge commit `ef62007`
+   ("Actually merge the completed send-idempotency claim store onto main"), fixing the
+   four-cycle false-landing chain (Cycles 70–73) where prior `P17-land-2.0-claim-store`
+   attempts only ever committed inside a throwaway worktree branch.
+   `git merge-base --is-ancestor ef62007 main` → **true**. `git cat-file -e
+   main:packages/cli/src/claims/claimStore.ts` → succeeds. `plan.md`'s claim-store
+   checkbox (Phase 2.0, first bullet) was already `[x]` with a dated cycle-74 landing
+   note before this cycle started — **no change needed**, independently re-verified only.
+2. **`task-summary/P17-land-2.0-adapter-manager-real.md`** (present on `main`'s own tree)
+   — describes fast-forwarding `main` to merge commit `2b98138` ("Actually merge the
+   completed ACP adapter manager onto main"), fixing the same false-landing shape for
+   `P17-land-2.0-adapter-manager` (Cycles 72–73). `git merge-base --is-ancestor 2b98138
+   main` → **true**. `git cat-file -e main:packages/cli/src/adapters/manifest.ts` →
+   succeeds. `plan.md`'s adapter-manager checkbox was already `[x]` with a dated cycle-74
+   note (added by commit `c552af4`, "docs: flip plan.md Adapter manager to landed on
+   main") — **no change needed**, independently re-verified only.
+3. **`task-summary/P17-land-2.0-wire-envelope-verification-real.md`** — **not present on
+   `main`'s tree at all**; only exists inside worktree
+   `.worktrees/P17-land-2.0-wire-envelope-verification-real` (branch tip `ed8024e`,
+   branched off `main` at `1707258`). The summary itself claims `git cherry-pick -n
+   83826d5` applied cleanly and that "plan.md line 917's checkbox was flipped to `[x]`
+   ... as part of this same commit" — but `git merge-base --is-ancestor ed8024e main` →
+   **false**, and `git cat-file -e
+   main:packages/web/src/sync/reducer/__testdata__/trace_acp_turn_lifecycle.json` and
+   `main:task-summary/P17-land-2.0-wire-envelope-verification-real.md` both fail. The
+   claimed checkbox flip and the three golden fixtures exist only on the worktree's own
+   branch — never merged or pushed to the shared `main` ref. This is the identical
+   false-landing shape flagged for claim-store (Cycles 70–73) and adapter-manager (Cycles
+   72–73), this time recurring in the very task ("...-real") whose job was to fix it.
+   `plan.md`'s wire-envelope-verification checkbox was **not flipped**; appended a dated
+   cycle-74 note documenting the discrepancy instead (mirroring the Cycle 73 note style
+   for the same bullet).
+
+### Tasks completed this cycle
+
+**0 checkboxes newly flipped.** Both landing tasks that were actually genuine
+(claim-store, adapter-manager) had already had their `plan.md` checkboxes flipped by
+their own commits before this cycle ran; this cycle only independently re-verified them.
+The third (wire-envelope-verification) was correctly left unflipped, since its "real"
+landing task did not actually touch `main`.
+
+### Blockers / issues found
+
+**One false-landing report**: `P17-land-2.0-wire-envelope-verification-real`'s
+task-summary claims a successful merge onto `main` and a flipped `plan.md` checkbox, but
+neither is true on the shared `main` ref — the work is stranded on its own worktree
+branch (`ed8024e`, not an ancestor of `main`). `main` itself remains fully green
+(`pnpm typecheck` 11/11, `pnpm test` 11/11, 1181 CLI tests + full wire/crypto/server/web/e2e
+suites, 0 failures) — this is purely a landing/merge gap, not a code-quality regression.
+A genuine "land onto main" pass is still needed for this task, following the same recipe
+that worked for claim-store (`ef62007`) and adapter-manager (`2b98138`): branch fresh off
+`main`, `git merge --no-ff ed8024e` (or re-apply its diff), re-verify
+`pnpm build`/`typecheck`/`test` on the merged tree, then fast-forward the real `main`
+branch to that merge commit — not just to a worktree-local branch.
+
+### Overall completion
+
+`plan.md` checkbox count: **135/152 checked (~88.8%)** — unchanged from before this
+cycle's review (no new flips; the two genuine landings were already reflected, and the
+false one correctly stayed unflipped).
+
+### Next recommended tasks
+
+1. **Actually land `P17-land-2.0-wire-envelope-verification-real` onto `main`** — same
+   false-landing shape just fixed for claim-store and adapter-manager. From a fresh
+   worktree branched off current `main`, merge or re-apply branch tip `ed8024e` (or the
+   original `83826d5`), re-verify green, then fast-forward the real `main` ref (not a
+   worktree-local branch) to that merge commit. This is the last unfinished bullet in
+   Phase 2.0 "foundation" and blocks nothing else in Phase 2.0 itself, but Phase 2.1 "ACP
+   core" is a natural next phase once it's closed out.
+2. **Start Phase 2.1 — ACP core** (`cli/src/acp/acpConnection.ts`): spawn managed adapter
+   child, `@agentclientprotocol/sdk` client over NDJSON stdio, initialize handshake,
+   `session/new|load|resume`, `session/prompt`, `session/cancel`, `session/set_mode`,
+   permission-request seam. First real code (not verification-only) task of the v2 ACP
+   migration.
+3. **Audit for more false-landing task-summaries** before trusting any other "-real" or
+   "land-onto-main"-named task-summary at face value — this cycle found a second instance
+   of the exact same failure mode (worktree-only merge claimed as a `main` landing) in a
+   task specifically created to fix the first instance. Worth a quick sweep of
+   `.worktrees/*/task-summary/*land*real*.md` against `git merge-base --is-ancestor
+   <tip> main` before crediting any of them.
+
 ## Cycle 73 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `f3304d2` — "chore: cycle 72 — completed 0 tasks (2 unlanded,
