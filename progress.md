@@ -1,5 +1,106 @@
 # Falcon — Progress Log
 
+## Cycle 62 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `16d38b4` — "merge: land P3-web-codex-provider-picker onto main")
+
+### Note on tooling hazard (re-confirmed this cycle)
+
+An early `git log -1 --format=... main` call (via the `rtk`-hooked `git`) returned a stale SHA
+(`789ba40`) that does **not** match `main`'s real tip — the exact fabrication hazard this file's
+own §1.1/Cycle-61 narrative has flagged before. Re-ran every ancestry/HEAD check with
+`/usr/bin/git` (bypassing the `rtk` proxy) before trusting anything: `main` HEAD is genuinely
+`16d38b4`, and `refs/heads/main`'s worktree is the one checked out here (not a stale/detached
+copy). All ancestor checks below are from the `/usr/bin/git` pass.
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/server` 33 files/233 tests,
+  `falcon` cli 91 files/912 tests, both fresh (no cache); `@falcon/crypto`/`@falcon/wire`/
+  `@falcon/web` cache-hit-replayed clean (`@falcon/web` build itself ran fresh: static export,
+  14 routes). 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested task-summaries exist on `main`, each backed by a `merge: land <task-id> onto
+main` commit — the top three commits on `main` itself:
+
+1. **`task-summary/P3-daemon-boot-machine-wiring.md`** — wires the already-built
+   `startMachineClient`/`registerMachineRpcHandlers` into `runDaemonStartSync`'s actual boot
+   sequence (new `packages/cli/src/daemon/machineIntegration.ts`), binds `spawn`/`resumeSession`/
+   `adopt.take`/`adopt.mirror` to their real engines, and wires `spawnAwaiter`+`onSessionStarted`
+   so a spawned session's self-report actually resolves the RPC instead of timing out at 15s.
+   Also fixes (found during the task's own code review) `machineId`/wrapped-DEK not surviving
+   daemon restarts. Merge commit `4afdb5a` ("merge: land P3-daemon-boot-machine-wiring onto
+   main") — `git merge-base --is-ancestor 4afdb5a main` → **true** (`/usr/bin/git`). No dedicated
+   `plan.md` checkbox exists for this internal wiring gap (the parent bullet, "Machine-scoped WS
+   client" at line 696, was already `[x]`) — **appended a dated addendum note to that bullet**
+   instead of inventing a checkbox, documenting that its "RPC handler registration is explicitly
+   out of scope" caveat no longer applies.
+2. **`task-summary/P3-workspace-registration-store.md`** — new
+   `packages/cli/src/workspace/{registry,adapters}.ts` (`~/.falcon/workspaces.json`, symlink-
+   resolved paths as `workspaceId`) + `commands/workspaceRegister.ts` (`falcon workspace
+   register/list/unregister`). Merge commit `db47244` ("merge: land
+   P3-workspace-registration-store onto main") — `git merge-base --is-ancestor db47244 main` →
+   **true**. Additive only, per the task's own scope note — no existing call site (daemon boot,
+   `machineRpc.ts`, `transcriptIndexer.ts` startup) was rewired to pass the real adapters in yet.
+   No dedicated `plan.md` checkbox exists for this either — **appended a dated addendum note** to
+   the §3.1 spawn-RPC workspace-path-validation bullet (line 752), the closest already-`[x]`
+   bullet this store services.
+3. **`task-summary/P3-web-codex-provider-picker.md`** — new
+   `packages/web/src/features/new-session/provider-meta.ts` view-model wired into
+   `options-step.tsx` (real `Badge variant="warning"` "Beta" banner, not just select-option text)
+   and `new-session-screen.tsx`'s review step. Merge commit `16d38b4` ("merge: land
+   P3-web-codex-provider-picker onto main", = `main`'s current HEAD) — `git merge-base
+   --is-ancestor 16d38b4 main` → **true**, trivially. This was the last unchecked §3.4 bullet
+   (`falcon codex` CLI itself already landed via `P3-3.4-codex-adapter`) — **`plan.md` line 776
+   flipped `[ ]` → `[x]`** this cycle, closing out §3.4 entirely.
+
+### Tasks completed this cycle
+
+**1 checkbox newly flipped** (§3.4 line 776, `P3-web-codex-provider-picker`) plus **2 dated
+addendum notes** appended to already-`[x]` bullets that these tasks close internal gaps in
+(§1.5 line 696 for `P3-daemon-boot-machine-wiring`, §3.1 line 752 for
+`P3-workspace-registration-store`) — neither of the latter two had a dedicated unchecked
+checkbox to flip, since both close internal "seam has no real default yet" gaps noted inside
+already-checked parent bullets rather than being standalone roadmap items. All three merges
+independently confirmed via `/usr/bin/git merge-base --is-ancestor` against the real `main` ref,
+not taken on the strength of the task-summary files alone.
+
+### Blockers / issues found
+
+None in the code/tests — `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9
+tasks each, 233 + 912 tests, 0 failures). One tooling hazard noted and worked around: the
+`rtk`-hooked `git log` returned a stale/wrong SHA for `main`'s tip on first call this cycle;
+every ancestry claim in this entry is from a `/usr/bin/git` re-check, not that first call.
+
+### Overall completion
+
+`plan.md` checkbox count: **118/135 checked (~87.4%)** — up from 117/135 (~86.7%) last cycle
+(+1 net new checked line; the other two landed tasks close internal gaps inside already-`[x]`
+bullets rather than flipping new boxes, per the counts above).
+
+### Next recommended tasks
+
+1. **Wire the new workspace-registration-store's real adapters into the actual call sites** —
+   `daemon/commands.ts`'s boot sequence, `daemon/machineRpc.ts`'s handler construction, and
+   `daemon/transcriptIndexer.ts`'s startup call all still take `resolveWorkspaceRoot`/
+   `resolveProviderSession`/`listWorkspaces` as injected seams with no real default passed in
+   (per `P3-workspace-registration-store`'s own scope note). This is the last piece connecting
+   spawn/resume/adopt/git-panel validation to a real "which directories are registered" answer
+   instead of an honest-but-permanently-empty stub.
+2. **§4.2 Adoption Tier 3 + polish** (plan.md lines 788–790, all still `[ ]`): shell shim
+   (`falcon shim install/uninstall/status`, `~/.falcon/bin` PATH block, onboarding opt-in),
+   session import in the New-Session flow ("continue from recent CLI session" via `adopt.list`),
+   and `falcon sessions list`/`falcon resume <id>` terminal commands — the next unclaimed
+   roadmap section now that §3.1–§3.4 and §4.1 are fully checked off.
+3. **§4.3 Distribution & self-host** (plan.md lines 793–798, all still `[ ]`): standalone
+   `bun build --compile` binaries + installer, CLI self-update, launchd/systemd service install,
+   `docker-compose.yml` for self-host, blob storage (presigned upload/download + S3/local-disk
+   drivers) — needed before any real external user can install Falcon end-to-end.
+
 ## Cycle 61 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `c3cc9a4` — "refactor: P4-4.1-git-diff-panel - code review fixes")
