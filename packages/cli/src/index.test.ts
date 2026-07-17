@@ -421,7 +421,12 @@ describe("main()", () => {
 
       expect(await main(["auth", "status"])).toBe(0);
       expect(await main(["sessions", "list"])).toBe(0);
-      expect(await main(["resume", "abc123"])).toBe(0);
+      // "disabled" only means "don't auto-start the daemon" — the command
+      // still runs for real afterward; `abc123` isn't a local transcript nor
+      // a known daemon-managed session in this isolated FALCON_HOME_DIR, so
+      // it honestly fails (exit 1), rather than being blocked before it even
+      // got a chance to run.
+      expect(await main(["resume", "abc123"])).toBe(1);
 
       expect(ensureDaemonRunning).toHaveBeenCalledTimes(3);
       stdout.mockRestore();
