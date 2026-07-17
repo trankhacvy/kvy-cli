@@ -119,6 +119,32 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it("round-trips an adopt.list call and result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ items: [{ providerSessionId: "prov-1", lastActivityAt: 1_000 }] }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("adopt.list", {
+      idempotencyKey: "idem-list",
+      workspaceId: "/repo",
+    });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:adopt.list",
+      "adopt.list",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({ items: [{ providerSessionId: "prov-1", lastActivityAt: 1_000 }] });
+  });
+
   it("round-trips an adopt.take call and result", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({

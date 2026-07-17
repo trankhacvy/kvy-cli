@@ -52,4 +52,17 @@ describe("createMockNewSessionActions", () => {
     const listing = await actions.browseDirectory("/Users/vy/projects");
     expect(listing.entries.map((e) => e.name)).toContain("brand-new");
   });
+
+  it("listImportCandidates returns seeded candidates for a directory that has them", async () => {
+    const actions = createMockNewSessionActions("mach-1");
+    const candidates = await actions.listImportCandidates("/Users/vy/projects/falcon");
+    expect(candidates.length).toBeGreaterThan(0);
+    expect(candidates.some((c) => c.running)).toBe(true);
+  });
+
+  it("listImportCandidates returns an empty array for a directory with none", async () => {
+    const actions = createMockNewSessionActions("mach-1");
+    const candidates = await actions.listImportCandidates("/Users/vy/Documents");
+    expect(candidates).toEqual([]);
+  });
 });

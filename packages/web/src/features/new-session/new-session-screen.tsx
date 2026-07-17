@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { DirectoryStep } from "./components/directory-step";
+import { ImportStep } from "./components/import-step";
 import { MachineStep } from "./components/machine-step";
 import { OptionsStep } from "./components/options-step";
 import { useMockNewSessionActions, useMockNewSessionMachines } from "./mock-source";
@@ -27,6 +28,7 @@ import {
 const STEP_LABEL: Record<WizardStep, string> = {
   machine: "Machine",
   directory: "Directory",
+  import: "Continue session",
   options: "Options",
   review: "Review",
 };
@@ -135,7 +137,15 @@ export function NewSessionScreen({
             <DirectoryStep
               actions={actions}
               directory={form.directory}
-              onSelect={(directory) => patchForm({ directory })}
+              onSelect={(directory) => patchForm({ directory, importCandidate: null })}
+            />
+          )}
+          {step === "import" && form.directory && (
+            <ImportStep
+              actions={actions}
+              directory={form.directory}
+              selected={form.importCandidate}
+              onSelect={(importCandidate) => patchForm({ importCandidate })}
             />
           )}
           {step === "options" && <OptionsStep form={form} onChange={patchForm} />}
@@ -147,6 +157,12 @@ export function NewSessionScreen({
               </p>
               <p>
                 <span className="text-muted-foreground">Directory:</span> {form.directory}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Continuing from:</span>{" "}
+                {form.importCandidate
+                  ? form.importCandidate.title?.trim() || form.importCandidate.providerSessionId
+                  : "Starting fresh"}
               </p>
               <p className="flex items-center gap-2">
                 <span className="text-muted-foreground">Provider:</span>{" "}
