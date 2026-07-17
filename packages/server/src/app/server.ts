@@ -14,9 +14,9 @@ import {
   type OAuthVerifier,
 } from "../auth/index.js";
 import {
+  type BlobStorageDriver,
   buildBlobStorage,
   resolveLocalDriverConfig,
-  type BlobStorageDriver,
 } from "../blobStorage/index.js";
 import type { LocalDriverConfig } from "../blobStorage/localDriver.js";
 import { env } from "../config.js";
@@ -83,7 +83,8 @@ export async function buildServer(
   const eventRouter = deps.eventRouter ?? defaultEventRouter;
   const blobStorage = deps.blobStorage ?? buildBlobStorage(env);
   const blobLocalConfig =
-    deps.blobLocalConfig ?? (blobStorage.kind === "local" ? resolveLocalDriverConfig(env) : undefined);
+    deps.blobLocalConfig ??
+    (blobStorage.kind === "local" ? resolveLocalDriverConfig(env) : undefined);
   // Deliberately built from `defaultEventRouter` (the real, presence-capable
   // singleton), not the possibly-fake `eventRouter` above — `EventRouterPort`
   // (what `deps.eventRouter` is typed as) doesn't carry `hasActiveVisibleClient`,
