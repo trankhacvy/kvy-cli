@@ -1,5 +1,34 @@
 # P3-workspace-registration-wiring — Wire workspace-registration-store adapters into daemon call sites
 
+## Landing addendum (2026-07-17)
+
+This branch (tip `b781297`, cut from cycle-63 `main` tip `c82ef94`) had a real, unmerged
+commit sitting in its own worktree/branch — not yet an ancestor of `main`
+(`git merge-base --is-ancestor P3-workspace-registration-wiring main` → false at the start
+of this pass, since `main` had moved on to `61c2822` via the two `P4-4.2-*` landings in the
+meantime). Landed it:
+
+- `git merge main --no-edit -m "merge: land P3-workspace-registration-wiring onto main"`
+  from inside the branch — **zero conflicts**. `main` had not touched any of this branch's
+  four files (`daemon/commands.ts`, `daemon/machineIntegration.ts`, `workspace/adapters.ts`,
+  `CLAUDE.md`) since the `c82ef94` fork point (`git diff c82ef94 main --stat -- <those
+  files>` was empty pre-merge); the only overlap in the merge's file list was additive
+  churn from `P4-4.2-session-import`/`P4-4.2-sessions-cli` touching unrelated files
+  (`commands/{resume,sessionsList}.ts`, `features/new-session/`, etc.).
+- Resulting merge commit: `fe5258e` ("merge: land P3-workspace-registration-wiring onto
+  main"), parents `b781297` (this branch) and `61c2822` (`main`'s prior tip).
+- Re-ran the full workspace suite post-merge: `pnpm typecheck` — 9/9 turbo tasks green;
+  `pnpm test` — 9/9 turbo tasks green, 100 `falcon` cli test files / 976 tests, 0 failures,
+  no regressions from either side of the merge; `pnpm build` — 5/5 packages, `FULL TURBO`
+  cache hit, green.
+- `main` was fast-forwarded to `fe5258e` in the primary checkout (not this worktree, which
+  cannot itself check out `main`).
+
+This also unblocks the daemon-side half of `adopt.list`, which `P4-4.2-session-import`'s
+web wizard step already speaks the wire contract for but has no live handler for yet — that
+remains separate follow-up work (a new `adopt.list` machine RPC handler), not something this
+wiring task's scope covered.
+
 ## Scope recap
 
 `P3-workspace-registration-store` landed `packages/cli/src/workspace/{registry,adapters}.ts`
