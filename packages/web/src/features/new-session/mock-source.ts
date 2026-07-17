@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type {
   DirectoryListing,
+  ImportCandidate,
   NewSessionActions,
   NewSessionMachine,
   SpawnOutcome,
@@ -38,6 +39,31 @@ function seedFakeFs(): Map<string, string[]> {
     ["/Users/vy/Downloads", []],
   ]);
 }
+
+/**
+ * `directory` → simulated `adopt.list` candidates — only `/Users/vy/projects/falcon`
+ * has any, so the import step's "no recent CLI sessions found here" empty
+ * state is exercisable for every other seeded directory.
+ */
+const MOCK_IMPORT_CANDIDATES: Map<string, ImportCandidate[]> = new Map([
+  [
+    "/Users/vy/projects/falcon",
+    [
+      {
+        providerSessionId: "prov-running-1",
+        title: "Fix the flaky durability chaos test",
+        lastActivityAt: Date.now() - 4 * 60_000,
+        running: true,
+      },
+      {
+        providerSessionId: "prov-finished-1",
+        title: "Wire up the git diff panel",
+        lastActivityAt: Date.now() - 2 * 60 * 60_000,
+        running: false,
+      },
+    ],
+  ],
+]);
 
 function parentOf(path: string): string | null {
   if (path === "/") return null;
@@ -91,6 +117,11 @@ export function createMockNewSessionActions(_machineId: string): NewSessionActio
       }
       const outcome: SpawnOutcome = { type: "success", sessionId: `sess-${Date.now()}` };
       return outcome;
+    },
+
+    async listImportCandidates(directory) {
+      await delay(LATENCY_MS);
+      return MOCK_IMPORT_CANDIDATES.get(directory) ?? [];
     },
   };
 }

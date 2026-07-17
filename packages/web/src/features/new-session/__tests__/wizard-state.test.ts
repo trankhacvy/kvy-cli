@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ImportCandidate } from "../types";
 import {
   buildSpawnRequest,
   canAdvance,
@@ -6,6 +7,13 @@ import {
   nextStep,
   previousStep,
 } from "../wizard-state";
+
+const CANDIDATE: ImportCandidate = {
+  providerSessionId: "prov-1",
+  title: "Fix the flaky test",
+  lastActivityAt: 1_000,
+  running: true,
+};
 
 describe("canAdvance", () => {
   it("blocks the machine step until a machine is picked", () => {
@@ -18,6 +26,12 @@ describe("canAdvance", () => {
     expect(canAdvance("directory", { ...INITIAL_FORM, machineId: "m1", directory: "/tmp" })).toBe(
       true,
     );
+  });
+
+  it("import step is always advanceable — selecting a candidate is optional", () => {
+    const base = { ...INITIAL_FORM, machineId: "m1", directory: "/tmp" };
+    expect(canAdvance("import", base)).toBe(true);
+    expect(canAdvance("import", { ...base, importCandidate: CANDIDATE })).toBe(true);
   });
 
   it("options step: fine when branch is disabled, requires a non-blank name when enabled", () => {
@@ -36,16 +50,18 @@ describe("canAdvance", () => {
 });
 
 describe("nextStep / previousStep", () => {
-  it("walks forward through machine -> directory -> options -> review and clamps at the end", () => {
+  it("walks forward through machine -> directory -> import -> options -> review and clamps at the end", () => {
     expect(nextStep("machine")).toBe("directory");
-    expect(nextStep("directory")).toBe("options");
+    expect(nextStep("directory")).toBe("import");
+    expect(nextStep("import")).toBe("options");
     expect(nextStep("options")).toBe("review");
     expect(nextStep("review")).toBe("review");
   });
 
   it("walks backward and clamps at the start", () => {
     expect(previousStep("review")).toBe("options");
-    expect(previousStep("options")).toBe("directory");
+    expect(previousStep("options")).toBe("import");
+    expect(previousStep("import")).toBe("directory");
     expect(previousStep("directory")).toBe("machine");
     expect(previousStep("machine")).toBe("machine");
   });
@@ -69,6 +85,7 @@ describe("buildSpawnRequest", () => {
       permissionMode: "default",
       model: undefined,
       branch: undefined,
+      continueFrom: undefined,
     });
   });
 
@@ -88,6 +105,7 @@ describe("buildSpawnRequest", () => {
       permissionMode: "default",
       model: "opus",
       branch: { name: "task-1", createWorktree: true },
+      continueFrom: undefined,
     });
   });
 
@@ -99,5 +117,24 @@ describe("buildSpawnRequest", () => {
       provider: "codex",
     });
     expect(request.provider).toBe("codex");
+  });
+
+  it("includes continueFrom when an import candidate was picked", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      importCandidate: CANDIDATE,
+    });
+    expect(request.continueFrom).toEqual({ providerSessionId: "prov-1" });
+  });
+
+  it("omits continueFrom when no import candidate was picked", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+    });
+    expect(request.continueFrom).toBeUndefined();
   });
 });
