@@ -6,6 +6,7 @@ import {
   closeAcpTurnWithStatus,
   createAcpEnvelopeMapperState,
   endAcpTurn,
+  flushAcpText,
   mapAcpStopReasonToTurnStatus,
   mapAcpUpdateToEnvelopes,
   startAcpTurn,
@@ -74,36 +75,111 @@ describe("turn lifecycle (synthesized around session/prompt)", () => {
   });
 });
 
-describe("text chunks", () => {
-  it("maps agent_message_chunk to text", () => {
+describe("text chunks (coalesced — one envelope per run, not per delta)", () => {
+  it("accumulates consecutive agent_message_chunks and emits ONE text envelope at turn end", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    const [ev] = evs(
-      { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hello" } },
-      state,
-    );
-    expect(ev?.ev).toEqual({ t: "text", md: "Hello" });
-    expect(ev?.role).toBe("agent");
+    expect(
+      evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hel" } }, state),
+    ).toEqual([]);
+    expect(
+      evs(
+        { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "lo wo" } },
+        state,
+      ),
+    ).toEqual([]);
+    expect(
+      evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "rld" } }, state),
+    ).toEqual([]);
+
+    const closed = endAcpTurn(state, "end_turn");
+    expect(closed).toHaveLength(2);
+    expect(closed[0]?.ev).toEqual({ t: "text", md: "Hello world" });
+    expect(closed[0]?.role).toBe("agent");
+    expect(closed[1]?.ev).toEqual({ t: "turn-end", status: "completed" });
   });
 
-  it("maps agent_thought_chunk to text{thinking:true}", () => {
+  it("agent_thought_chunk runs coalesce with thinking:true, and a thinking<->text flip breaks the run", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    const [ev] = evs(
-      { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hmm" } },
+    evs({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hm" } }, state);
+    evs({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "m..." } }, state);
+
+    // Flip to a plain message chunk: the thinking run flushes first.
+    const flushed = evs(
+      { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Answer" } },
       state,
     );
-    expect(ev?.ev).toEqual({ t: "text", md: "hmm", thinking: true });
+    expect(flushed).toHaveLength(1);
+    expect(flushed[0]?.ev).toEqual({ t: "text", md: "hmm...", thinking: true });
+
+    const closed = endAcpTurn(state, "end_turn");
+    expect(closed[0]?.ev).toEqual({ t: "text", md: "Answer" });
   });
 
-  it("drops non-text content blocks (logged, not thrown)", () => {
+  it("a messageId change breaks the run (distinct assistant messages become distinct envelopes)", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    evs(
+      {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "first" },
+        messageId: "msg-1",
+      },
+      state,
+    );
+    const flushed = evs(
+      {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "second" },
+        messageId: "msg-2",
+      },
+      state,
+    );
+    expect(flushed).toHaveLength(1);
+    expect(flushed[0]?.ev).toEqual({ t: "text", md: "first" });
+
+    const closed = endAcpTurn(state, "end_turn");
+    expect(closed[0]?.ev).toEqual({ t: "text", md: "second" });
+  });
+
+  it("a tool_call flushes the open text run first (wire order matches event order)", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    evs(
+      { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Let me check." } },
+      state,
+    );
+    const out = evs({ sessionUpdate: "tool_call", toolCallId: "call-1", kind: "read" }, state);
+    expect(out).toHaveLength(2);
+    expect(out[0]?.ev).toEqual({ t: "text", md: "Let me check." });
+    expect(out[1]?.ev).toMatchObject({ t: "tool-start", name: "read" });
+  });
+
+  it("flushAcpText force-flushes the open run (timer-driven latency control for long blocks)", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "part" } }, state);
+    const flushed = flushAcpText(state);
+    expect(flushed).toHaveLength(1);
+    expect(flushed[0]?.ev).toEqual({ t: "text", md: "part" });
+    // Nothing left pending afterwards.
+    expect(flushAcpText(state)).toEqual([]);
+    expect(endAcpTurn(state, "end_turn")).toHaveLength(1); // just turn-end
+  });
+
+  it("drops non-text content blocks (logged, not thrown) without breaking the open run", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
     const logger = fakeLogger();
+    evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "a" } }, state);
     expect(
       evs({ sessionUpdate: "agent_message_chunk", content: { type: "image" } }, state, logger),
     ).toEqual([]);
     expect(logger.warn).toHaveBeenCalled();
+    evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "b" } }, state);
+    const closed = endAcpTurn(state, "end_turn");
+    expect(closed[0]?.ev).toEqual({ t: "text", md: "ab" });
   });
 
   it("drops user_message_chunk silently (no log) — the caller already emitted the prompt", () => {
@@ -239,22 +315,21 @@ describe("subagent scope via _meta.claudeCode.parentToolUseId", () => {
     const taskCall = taskStart?.ev.t === "tool-start" ? taskStart.ev.call : undefined;
     expect(taskCall).toBeTruthy();
 
-    // First child-scoped update: lazily opens the subagent scope (sub-start),
-    // and the subagent id equals the spawning call's own minted id.
-    const thinking = evs(
-      {
-        sessionUpdate: "agent_thought_chunk",
-        content: { type: "text", text: "Reasoning..." },
-        _meta: { claudeCode: { parentToolUseId: "task-1" } },
-      },
-      state,
-    );
-    expect(thinking).toHaveLength(2);
-    expect(thinking[0]?.ev).toEqual({ t: "sub-start" });
-    expect(thinking[0]?.subagent).toBe(taskCall);
-    expect(thinking[1]?.ev).toEqual({ t: "text", md: "Reasoning...", thinking: true });
-    expect(thinking[1]?.subagent).toBe(taskCall);
+    // Child-scoped thinking buffers into a coalesced run (no emission yet).
+    expect(
+      evs(
+        {
+          sessionUpdate: "agent_thought_chunk",
+          content: { type: "text", text: "Reasoning..." },
+          _meta: { claudeCode: { parentToolUseId: "task-1" } },
+        },
+        state,
+      ),
+    ).toEqual([]);
 
+    // The nested tool call flushes the run: sub-start (lazily opening the
+    // subagent scope, id = the spawning call's own minted id) precedes the
+    // coalesced thinking text, which precedes the nested tool-start.
     const nestedStart = evs(
       {
         sessionUpdate: "tool_call",
@@ -265,9 +340,18 @@ describe("subagent scope via _meta.claudeCode.parentToolUseId", () => {
       },
       state,
     );
-    expect(nestedStart).toHaveLength(1); // subagent already started, no duplicate sub-start
+    expect(nestedStart).toHaveLength(3);
+    expect(nestedStart[0]?.ev).toEqual({ t: "sub-start" });
     expect(nestedStart[0]?.subagent).toBe(taskCall);
-    const nestedCall = nestedStart[0]?.ev.t === "tool-start" ? nestedStart[0].ev.call : undefined;
+    expect(nestedStart[1]?.ev).toEqual({ t: "text", md: "Reasoning...", thinking: true });
+    expect(nestedStart[1]?.subagent).toBe(taskCall);
+    expect(nestedStart[2]?.ev).toMatchObject({
+      t: "tool-start",
+      name: "read",
+      title: "Read utils.ts",
+    });
+    expect(nestedStart[2]?.subagent).toBe(taskCall);
+    const nestedCall = nestedStart[2]?.ev.t === "tool-start" ? nestedStart[2].ev.call : undefined;
 
     // Nested tool_call_update omits _meta — scope must still be remembered from creation.
     const nestedEnd = evs(

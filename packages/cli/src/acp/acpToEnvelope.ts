@@ -23,8 +23,8 @@
  * task) ever adds the SDK as a real dependency.
  *
  * Session/update kinds handled (design §7.3's mapping table):
- *  - `agent_message_chunk`      -> `text`
- *  - `agent_thought_chunk`      -> `text{thinking:true}`
+ *  - `agent_message_chunk`      -> `text` (coalesced — see below)
+ *  - `agent_thought_chunk`      -> `text{thinking:true}` (coalesced)
  *  - `tool_call`                -> `tool-start`
  *  - `tool_call_update`         -> `tool-end`, only once `status` reaches a
  *    terminal value (`completed`/`failed`) — ACP has no wire equivalent for
@@ -86,6 +86,29 @@
  *    unrecognized future value) -> `failed` — the turn stopped without
  *    reaching a natural or user-requested end, which is closer to a failure
  *    than either other status for `SessionEventSchema`'s three-way enum.
+ *
+ * ## Text-chunk coalescing (v2 review fix — fragmentation)
+ *
+ * The Claude adapter runs the SDK with `includePartialMessages: true`
+ * (verified in `@agentclientprotocol/claude-agent-acp@0.59.0`'s published
+ * source), so `agent_message_chunk`/`agent_thought_chunk` arrive as
+ * **per-delta fragments** — a few characters each — not whole text blocks.
+ * Emitting one wire envelope per chunk would fragment the web timeline into
+ * an item per fragment (the reducer renders one `RenderItem` per `text`
+ * envelope, `web/src/sync/reducer/reduce.ts` — it never merges) and persist
+ * every fragment as a row-sized envelope in Postgres forever. Instead,
+ * consecutive chunks accumulate in `state.pendingText` and emit as ONE
+ * `text` envelope when the run breaks:
+ *  - a chunk with a different (turn, subagent, thinking, messageId) key —
+ *    `messageId` is the adapter's own top-level per-assistant-message id
+ *    stamp (its `applyMessageId`), so distinct assistant messages become
+ *    distinct envelopes exactly like v1's per-SDK-message granularity;
+ *  - a `tool_call` / terminal `tool_call_update` emission (envelope order
+ *    on the wire must match event order);
+ *  - the turn closing (`closeAcpTurnWithStatus`/`endAcpTurn`).
+ * Callers that want lower perceived latency for long text blocks can also
+ * flush explicitly via `flushAcpText` (e.g. on a timer) — each flush simply
+ * ends the current run at a block boundary of its choosing.
  */
 
 import { createEnvelope, type SessionEnvelope, type SessionEvent } from "@falcon/wire";
@@ -110,7 +133,18 @@ export interface AcpSessionUpdate {
   status?: unknown;
   rawInput?: unknown;
   rawOutput?: unknown;
+  /** Adapter-stamped per-assistant-message id on message/thought chunks (see "Text-chunk coalescing" in the file header). */
+  messageId?: unknown;
   _meta?: unknown;
+}
+
+/** An open, not-yet-emitted run of coalesced text/thinking chunks (file header: "Text-chunk coalescing"). */
+interface PendingTextRun {
+  turn: string;
+  subagent?: string;
+  thinking: boolean;
+  messageId?: string;
+  parts: string[];
 }
 
 /** Mutable, per-session mapper state — construct with `createAcpEnvelopeMapperState()`. */
@@ -124,6 +158,8 @@ export interface AcpEnvelopeMapperState {
   startedSubagents?: Set<string>;
   /** Subagent cuids currently open (no `sub-stop` emitted yet) in the current turn. */
   activeSubagents?: Set<string>;
+  /** Open coalesced text run, if any — flushed on run break / tool emission / turn close / `flushAcpText`. */
+  pendingText?: PendingTextRun | null;
 }
 
 export function createAcpEnvelopeMapperState(): AcpEnvelopeMapperState {
@@ -167,6 +203,39 @@ function clearMapperState(state: AcpEnvelopeMapperState): void {
   subagentByCall(state).clear();
   startedSubagents(state).clear();
   activeSubagents(state).clear();
+  state.pendingText = null;
+}
+
+/**
+ * Emits the open text run (if any) as one `text` envelope, preceded by its
+ * subagent's `sub-start` when that scope hasn't opened yet. A run whose
+ * accumulated text is empty emits nothing. Always clears the run.
+ */
+function flushPendingText(state: AcpEnvelopeMapperState, envelopes: SessionEnvelope[]): void {
+  const run = state.pendingText;
+  state.pendingText = null;
+  if (!run) return;
+  const md = run.parts.join("");
+  if (md.length === 0) return;
+  maybeEmitSubagentStart(state, run.turn, run.subagent, envelopes);
+  envelopes.push(
+    createEnvelope(
+      "agent",
+      { t: "text", md, ...(run.thinking ? { thinking: true } : {}) },
+      { turn: run.turn, subagent: run.subagent },
+    ),
+  );
+}
+
+/**
+ * Public flush for the open text run — lets the transport layer (Phase 2.2's
+ * `AcpRemote`) end a long-running text block early (e.g. on a timer) instead
+ * of waiting for the next natural run break. Safe to call any time.
+ */
+export function flushAcpText(state: AcpEnvelopeMapperState): SessionEnvelope[] {
+  const envelopes: SessionEnvelope[] = [];
+  flushPendingText(state, envelopes);
+  return envelopes;
 }
 
 // --- narrow, defensive accessors onto AcpSessionUpdate ---
@@ -338,6 +407,7 @@ export function closeAcpTurnWithStatus(
   if (!state.currentTurnId) return [];
   const turn = state.currentTurnId;
   const envelopes: SessionEnvelope[] = [];
+  flushPendingText(state, envelopes);
   emitActiveSubagentStops(state, turn, envelopes);
   envelopes.push(createEnvelope("agent", { t: "turn-end", status }, { turn }));
   state.currentTurnId = null;
@@ -379,16 +449,26 @@ function handleTextChunk(
     });
     return [];
   }
-  const envelopes: SessionEnvelope[] = [];
+
+  // Coalescing (file header): append to the open run when the key matches;
+  // otherwise flush it and start a new run. Nothing is emitted until a run
+  // breaks — chunk-per-delta input must not become envelope-per-delta output.
   const subagent = resolveEnvelopeSubagent(update, state);
-  maybeEmitSubagentStart(state, turn, subagent, envelopes);
-  envelopes.push(
-    createEnvelope(
-      "agent",
-      { t: "text", md: text, ...(thinking ? { thinking: true } : {}) },
-      { turn, subagent },
-    ),
-  );
+  const messageId = pickString(update.messageId);
+  const run = state.pendingText;
+  if (
+    run &&
+    run.turn === turn &&
+    run.subagent === subagent &&
+    run.thinking === thinking &&
+    run.messageId === messageId
+  ) {
+    run.parts.push(text);
+    return [];
+  }
+  const envelopes: SessionEnvelope[] = [];
+  flushPendingText(state, envelopes);
+  state.pendingText = { turn, subagent, thinking, messageId, parts: [text] };
   return envelopes;
 }
 
@@ -410,6 +490,7 @@ function handleToolCall(
     return [];
   }
   const envelopes: SessionEnvelope[] = [];
+  flushPendingText(state, envelopes); // wire order must match event order
   const subagent = resolveEnvelopeSubagent(update, state);
   maybeEmitSubagentStart(state, turn, subagent, envelopes);
 
@@ -459,6 +540,7 @@ function handleToolCallUpdate(
   }
 
   const envelopes: SessionEnvelope[] = [];
+  flushPendingText(state, envelopes); // wire order must match event order
   const call = mintedId(state, toolCallId);
 
   // If this call itself is a spawning (subagent) call, its own terminal
