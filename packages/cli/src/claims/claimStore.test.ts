@@ -239,6 +239,16 @@ describe("claimStore", () => {
     expect(unrelated.status).toBe("claimed");
   });
 
+  it("rejects a sessionId that would escape the claims directory", async () => {
+    await expect(claimMessageSend("../../etc", "env_1", { homeDir })).rejects.toThrow(
+      /unsafe sessionId/,
+    );
+    await expect(claimMessageSend("a/b", "env_1", { homeDir })).rejects.toThrow(
+      /unsafe sessionId/,
+    );
+    await expect(readClaims("..", { homeDir })).rejects.toThrow(/unsafe sessionId/);
+  });
+
   it("clearClaims deletes the whole file and is safe to call twice", async () => {
     await claimMessageSend("sess_1", "env_1", { homeDir });
     await clearClaims("sess_1", { homeDir });

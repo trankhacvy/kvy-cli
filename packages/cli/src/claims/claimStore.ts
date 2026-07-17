@@ -95,7 +95,32 @@ function homeDirFrom(options: ClaimStoreOptions): string {
   return options.homeDir ?? resolveHomeDir(options.env ?? process.env);
 }
 
+/**
+ * `sessionId` becomes a filename component below (unlike `sessionsStore.ts`'s
+ * `sessions.json`, where session ids are only ever object *keys*, this is the
+ * first place in this package that interpolates one into a path) — reject
+ * anything that could escape the `claims/` directory (path separators, `.`,
+ * `..`, or empty) rather than silently resolving outside it. Session ids are
+ * server-minted UUIDs in every caller today, but this module is explicitly
+ * designed to eventually sit behind the `message` RPC (design §7.10), so the
+ * id can't be assumed trustworthy forever — same defense-in-depth reasoning
+ * as `normalizeClaimsFile`'s `"__proto__"` guard above.
+ */
+function assertSafeSessionId(sessionId: string): void {
+  if (
+    sessionId.length === 0 ||
+    sessionId === "." ||
+    sessionId === ".." ||
+    sessionId.includes("/") ||
+    sessionId.includes("\\") ||
+    sessionId.includes("\0")
+  ) {
+    throw new Error(`claim store: unsafe sessionId ${JSON.stringify(sessionId)}`);
+  }
+}
+
 export function claimsFilePath(homeDir: string, sessionId: string): string {
+  assertSafeSessionId(sessionId);
   return path.join(homeDir, "claims", `${sessionId}.json`);
 }
 
