@@ -992,6 +992,12 @@ connection pooling, no agent-id-as-identity). Design authority:
       `pnpm --filter @falcon/web test` 44/44 files, 383/383 tests, including
       `golden.test.ts` 10/10. Checkbox flipped for real — fourth attempt at this exact
       task, first one to actually reach `main`.)*
+      *(2026-07-18, progress tracker, cycle 75: independently re-verified —
+      `git merge-base --is-ancestor 521d92b main` → **true** (main HEAD now `ee98d78`,
+      past both `07cacb4` and the follow-up test-fix commit); `git cat-file -e
+      main:packages/web/src/sync/reducer/__testdata__/trace_acp_turn_lifecycle.json`
+      and `main:task-summary/P17-land-2.0-wire-envelope-verification.md` both succeed.
+      Already correctly `[x]` — no change needed this cycle.)*
 
 ### Phase 2.1 — ACP core
 - [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`
@@ -1003,10 +1009,35 @@ connection pooling, no agent-id-as-identity). Design authority:
       connect/exit errors (mobvibe `acp-connection.ts` is the porting reference, minus
       its fs/terminal capabilities and payload-sanitization breadth — adopt its
       `_meta`-bounds checks where cheap)
+      *(2026-07-18, progress tracker, cycle 75: reviewed `task-summary/
+      P17-2.1-acp-connection.md` (worktree `.worktrees/P17-2.1-acp-connection`, tip
+      `38c9471`, `merge-base` with `main` at `487ac17`). Describes a real, tested
+      `AcpConnection` class (20 tests, all against a real spawned NDJSON fixture child)
+      implementing every item this bullet lists. Reported green in-worktree
+      (`pnpm --filter falcon typecheck`, `pnpm --filter falcon test` 126 files/1201 tests,
+      `pnpm build` 6/6). However, **not landed on `main`**: `git merge-base --is-ancestor
+      38c9471 main` → **false**; `git cat-file -e main:packages/cli/src/acp/
+      acpConnection.ts` fails — the file does not exist on `main`'s tree at all. Same
+      "worktree never actually merged onto the shared `main` ref" shape flagged
+      repeatedly for Phase 2.0's bullets above (cycles 70–74); not flipped. A genuine
+      land pass (fresh worktree off current `main`, merge/re-apply `38c9471`, re-verify,
+      fast-forward the real `main` ref) is still needed. See `progress.md` Cycle 75.)*
 - [ ] `cli/src/acp/acpToEnvelope.ts`: single shared mapper, ACP `session/update` →
       `SessionEnvelope` (mapping table in design §7.3); unknown kinds logged + dropped;
       subagent scope from `_meta.claudeCode.parentToolUseId`; turn-start/turn-end
       synthesized around `session/prompt` call/return (stopReason → status)
+      *(2026-07-18, progress tracker, cycle 75: reviewed `task-summary/
+      P17-2.1-acp-to-envelope.md` (worktree `.worktrees/P17-2.1-acp-to-envelope`, tip
+      `16815af`, `merge-base` with `main` at `ee98d78`, i.e. branched after the
+      wire-envelope-verification landing). Describes a real, tested
+      `mapAcpUpdateToEnvelopes` mapper (22 unit tests) covering every mapping this bullet
+      lists, decoupled from the ACP SDK per the same pattern as `remote/sdkToEnvelope.ts`.
+      Reported green in-worktree (`pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test`
+      11/11, 126 files/1203 tests including the new `acpToEnvelope.test.ts` 22/22).
+      However, **not landed on `main`**: `git merge-base --is-ancestor 16815af main` →
+      **false**; `git cat-file -e main:packages/cli/src/acp/acpToEnvelope.ts` fails — the
+      file does not exist on `main`'s tree. Same worktree-only shape as
+      `acpConnection.ts` above; not flipped. See `progress.md` Cycle 75.)*
 - [ ] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
       existing reducer test corpus
 - [ ] Unified ACP permission handler: `session/request_permission` → existing §7.6

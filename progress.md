@@ -1,5 +1,113 @@
 # Falcon — Progress Log
 
+## Cycle 75 — 2026-07-18
+
+**Branch checked:** `main` (HEAD `ee98d78` — "fix: P17-land-2.0-wire-envelope-verification -
+resolve test failures", the tip of the merge that finally landed the wire-envelope
+fixtures for real, per Cycle 74's flagged follow-up).
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `falcon` cli, `@falcon/e2e`, `@falcon/web` — including a fresh static
+  export of all 15 routes). All tasks cache-hit-replayed clean (`>>> FULL TURBO`).
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 125 files /
+  1181 tests, `@falcon/e2e` 1 file / 1 test (20-step `exercise-flow` conformance run), plus
+  cached green replays for `@falcon/wire`, `@falcon/crypto`, `@falcon/server`, `@falcon/web`.
+
+### Task-summaries reviewed this cycle (with independent `main`-ancestor verification)
+
+Three task-summaries were requested:
+`task-summary/P17-land-2.0-wire-envelope-verification.md`,
+`task-summary/P17-2.1-acp-connection.md`, and `task-summary/P17-2.1-acp-to-envelope.md`.
+One is genuinely landed (and had already been flipped by a prior merge/land step before
+this cycle started); the other two are real, green, tested worktree-local work that has
+**not** reached `main` yet — the now-familiar "built and tested, never merged" gap this
+tracker has flagged since Cycle 70, this time in fresh Phase 2.1 code rather than a
+repeat of the Phase 2.0 saga.
+
+1. **`task-summary/P17-land-2.0-wire-envelope-verification.md`** — describes the fourth
+   (and first successful) attempt at landing the ACP golden-trace fixtures: worktree
+   commit `521d92b` (cherry-picked cleanly from `83826d5`), which a subsequent follow-up
+   step with real merge/push access fast-forwarded onto `main` via `git merge --no-ff`
+   (merge commit `07cacb4`), followed by a small test-fix commit `ee98d78` that is
+   `main`'s current HEAD. `git merge-base --is-ancestor 521d92b main` → **true**;
+   `git cat-file -e main:packages/web/src/sync/reducer/__testdata__/
+   trace_acp_turn_lifecycle.json` and `main:task-summary/
+   P17-land-2.0-wire-envelope-verification.md` both succeed. `plan.md`'s "Wire schema"
+   checkbox (Phase 2.0) was already `[x]` with a dated landing note before this cycle
+   started — **no change needed**; appended a short dated confirmation note only.
+2. **`task-summary/P17-2.1-acp-connection.md`** (worktree
+   `.worktrees/P17-2.1-acp-connection`, tip `38c9471`, `merge-base` with `main` at
+   `487ac17`) — describes a real `AcpConnection` class (`packages/cli/src/acp/
+   acpConnection.ts`): ACP transport core over NDJSON stdio via `@agentclientprotocol/sdk`,
+   spawning through the already-landed adapter manager's verify-before-spawn seam,
+   implementing every plan.md sub-item (initialize handshake with no fs/terminal,
+   session new/load/resume with capability gating, one-in-flight-per-session prompt +
+   cancel, set_mode, permission-request seam, pre-ready update buffering, stderr
+   ring-buffer). 20 tests, all against a real spawned NDJSON fixture child process (not a
+   mocked SDK object). Reported green in-worktree: `pnpm --filter falcon typecheck` clean,
+   `pnpm --filter falcon test` 126 files / 1201 tests, `pnpm build` 6/6.
+   **Not landed on `main`**: `git merge-base --is-ancestor 38c9471 main` → **false**;
+   `git cat-file -e main:packages/cli/src/acp/acpConnection.ts` fails — the file (and the
+   whole `packages/cli/src/acp/` directory) does not exist on `main`'s tree at all.
+   `plan.md`'s `acpConnection.ts` checkbox was **not flipped**; appended a dated cycle-75
+   note documenting the gap instead.
+3. **`task-summary/P17-2.1-acp-to-envelope.md`** (worktree
+   `.worktrees/P17-2.1-acp-to-envelope`, tip `16815af`, `merge-base` with `main` at
+   `ee98d78`, i.e. branched *after* the wire-envelope-verification landing) — describes a
+   real, provider-agnostic `mapAcpUpdateToEnvelopes` mapper (`packages/cli/src/acp/
+   acpToEnvelope.ts`): ACP `session/update` → `SessionEnvelope`, turn lifecycle synthesis
+   around `session/prompt`, subagent scoping via `_meta.claudeCode.parentToolUseId`,
+   unknown-kind logging, decoupled from the ACP SDK (structural input type, matching
+   `remote/sdkToEnvelope.ts`'s existing pattern). 22 unit tests. Reported green
+   in-worktree: `pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 11/11 (126 files /
+   1203 tests, including the new file's 22/22).
+   **Not landed on `main`**: `git merge-base --is-ancestor 16815af main` → **false**;
+   `git cat-file -e main:packages/cli/src/acp/acpToEnvelope.ts` fails. `plan.md`'s
+   `acpToEnvelope.ts` checkbox was **not flipped**; appended a dated cycle-75 note.
+
+### Tasks completed this cycle
+
+**0 checkboxes newly flipped.** The one genuinely-landed task (wire-envelope-verification)
+had its `plan.md` checkbox flipped by an earlier merge/land step, before this cycle ran;
+this cycle only independently re-verified it and left a confirmation note. The two Phase
+2.1 tasks (`acpConnection.ts`, `acpToEnvelope.ts`) are real, tested, green work sitting in
+their own worktrees, but neither has been merged onto the shared `main` ref yet, so
+neither checkbox was flipped — flipping them now would repeat the exact false-landing
+mistake this tracker has been correcting since Cycle 70.
+
+### Blockers / issues found
+
+None code-quality-wise — `main` itself remains fully green (`pnpm typecheck` 11/11,
+`pnpm test` 11/11, 0 failures). The only issue is a **landing/merge gap**: two real,
+tested Phase 2.1 deliverables (`acpConnection.ts`, `acpToEnvelope.ts`) exist only in
+their worktrees and need an actual `git merge --no-ff <branch>` + fast-forward of the
+real `main` ref, following the same recipe that finally worked for wire-envelope-
+verification (`ee98d78`), claim-store (`ef62007`), and adapter-manager (`2b98138`).
+
+### Overall completion
+
+`plan.md` checkbox count: **136/152 checked (~89.5%)** — unchanged from before this
+cycle (the one genuine landing reviewed this cycle was already reflected; the two Phase
+2.1 tasks correctly stayed unflipped pending an actual merge to `main`).
+
+### Next recommended tasks
+
+1. **Land `P17-2.1-acp-connection` onto `main`** (worktree
+   `.worktrees/P17-2.1-acp-connection`, tip `38c9471`) — fresh worktree off current
+   `main`, `git merge --no-ff 38c9471` (or re-apply its diff), re-verify
+   `pnpm build`/`typecheck`/`test` green, then fast-forward the real `main` ref. First
+   real (non-verification-only) Phase 2.1 deliverable ready to land.
+2. **Land `P17-2.1-acp-to-envelope` onto `main`** (worktree
+   `.worktrees/P17-2.1-acp-to-envelope`, tip `16815af`) — same recipe. Depends on nothing
+   from `acpConnection.ts` (its `AcpSessionUpdate` input type is intentionally decoupled
+   from the ACP SDK), so the two can land in either order or even be merged together.
+3. **Start `cli/src/acp/` golden-trace fixtures / unified ACP permission handler**
+   (Phase 2.1's remaining two bullets) once the above two are actually on `main` — the
+   permission handler in particular depends on `acpConnection.ts`'s
+   `setPermissionHandler` seam existing in the shared tree, not just a worktree.
+
 ## Cycle 74 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `2b98138` — "feat: P17-land-2.0-adapter-manager-real -
