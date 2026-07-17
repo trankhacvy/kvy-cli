@@ -1,5 +1,72 @@
 # Falcon — Progress Log
 
+## Cycle 63 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `d140f28` — "merge: land P4-4.2-shell-shim onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks; all
+  cache-hit-replayed clean). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green (all cache-hit-replayed): `falcon` cli
+  98 files/963 tests, 0 failures. `@falcon/web`'s `build` task ran its Next.js static export
+  fresh (14 routes) as part of the cached-task graph. 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+1. **`task-summary/P4-4.2-shell-shim.md`** — new `packages/cli/src/shim/` module
+   (`paths.ts`, `rcBlock.ts`, `install.ts`, `uninstall.ts`, `status.ts`,
+   `onboardingPrompt.ts`) plus `commands/shim.ts` + `args.ts`/`index.ts` wiring. Implements
+   `falcon shim install/uninstall/status`, writing `~/.falcon/bin/{claude,codex}` shim
+   scripts and an idempotent, round-trip-safe PATH block in the user's rc file
+   (zsh/bash/fish/`.profile`), plus an interactive-only onboarding opt-in prompt (gated on
+   `Settings.onboardingCompleted`, run once after a successful `falcon auth login`, never
+   throws on a failed install). 37 new tests. No literal branch/tag named
+   `P4-4.2-shell-shim` exists, so ancestry was verified against the two real commits that
+   carry that task id in their message: feat commit `3456723` ("feat: P4-4.2-shell-shim -
+   Shell shim") and merge commit `d140f28` ("merge: land P4-4.2-shell-shim onto main", =
+   `main`'s current HEAD). `/usr/bin/git merge-base --is-ancestor 3456723 main` → **true**;
+   `/usr/bin/git merge-base --is-ancestor d140f28 main` → **true** (trivially, it's HEAD).
+   Used `/usr/bin/git` throughout (not the `rtk`-hooked `git`) per the tooling hazard noted
+   in prior cycles.
+
+### Tasks completed this cycle
+
+**1 checkbox flipped**: plan.md line 788, §4.2 "Shell shim: `falcon shim
+install/uninstall/status`, `~/.falcon/bin` PATH block, onboarding opt-in prompt — §11"
+`[ ]` → `[x]`, with a dated confirmation note, plus an addendum on the §4.2 section header
+itself summarizing what landed. Confirmed via `git merge-base --is-ancestor` against the
+real `main` ref, not taken on the strength of the task-summary file alone.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each,
+963 cli tests, 0 failures).
+
+### Overall completion
+
+`plan.md` checkbox count: **119/135 checked (~88.1%)** — up from 118/135 (~87.4%) last cycle
+(+1 net new checked line).
+
+### Next recommended tasks
+
+1. **§4.2 remainder** (plan.md lines 789–790, still `[ ]`): session import in the
+   New-Session flow ("continue from recent CLI session", reuses `adopt.list`) and
+   `falcon sessions list` / `falcon resume <id>` terminal commands — the two remaining
+   items in the section the shell shim just partially closed out.
+2. **Wire the workspace-registration-store's real adapters into the actual call sites**
+   (carried over from last cycle, still outstanding) — `daemon/commands.ts`'s boot
+   sequence, `daemon/machineRpc.ts`'s handler construction, and
+   `daemon/transcriptIndexer.ts`'s startup call all still take `resolveWorkspaceRoot`/
+   `resolveProviderSession`/`listWorkspaces` as injected seams with no real default passed
+   in (per `P3-workspace-registration-store`'s own scope note).
+3. **§4.3 Distribution & self-host** (plan.md lines 793–798, all still `[ ]`): standalone
+   `bun build --compile` binaries + installer, CLI self-update, launchd/systemd service
+   install, `docker-compose.yml` for self-host, blob storage (presigned upload/download +
+   S3/local-disk drivers) — needed before any real external user can install Falcon
+   end-to-end.
+
 ## Cycle 62 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `16d38b4` — "merge: land P3-web-codex-provider-picker onto main")

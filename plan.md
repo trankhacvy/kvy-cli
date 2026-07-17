@@ -784,8 +784,8 @@ Conventions: `[ ]` = not started. Tasks are ordered within a phase; a task lists
 - [x] Web: changed-files list + unified diff viewer (shiki-highlighted); read-only for MVP *(2026-07-17, progress tracker — `P4-4.1-git-diff-panel`, confirmed ancestor of `main`)*
 - [x] `falcon workspace config --base-ref/--remote` command *(2026-07-17, progress tracker — `P4-4.1-git-diff-panel`, confirmed ancestor of `main`)*
 
-**4.2 Adoption Tier 3 + polish**
-- [ ] Shell shim: `falcon shim install/uninstall/status`, `~/.falcon/bin` PATH block, onboarding opt-in prompt — §11
+**4.2 Adoption Tier 3 + polish** *(shell shim landed 2026-07-17, progress tracker, via `P4-4.2-shell-shim` — merge commit `d140f28` ("merge: land P4-4.2-shell-shim onto main"), confirmed via `git merge-base --is-ancestor d140f28 main` → **true** (feat commit `3456723` also confirmed an ancestor). New `packages/cli/src/shim/{paths,rcBlock,install,uninstall,status,onboardingPrompt}.ts` + `commands/shim.ts`/`args.ts`/`index.ts` wiring: `falcon shim install/uninstall/status`, an idempotent/round-trip-safe `~/.falcon/bin` PATH block across zsh/bash/fish/.profile, and an interactive-only onboarding opt-in prompt gated on `Settings.onboardingCompleted`, run after a successful `falcon auth login`. 37 new tests; see `task-summary/P4-4.2-shell-shim.md` for full detail.)*
+- [x] Shell shim: `falcon shim install/uninstall/status`, `~/.falcon/bin` PATH block, onboarding opt-in prompt — §11 *(2026-07-17, progress tracker — `P4-4.2-shell-shim`, confirmed ancestor of `main`)*
 - [ ] Session import in New-Session flow ("continue from recent CLI session") — reuses `adopt.list`
 - [ ] `falcon sessions list` / `falcon resume <id>` terminal commands
 
