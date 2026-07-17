@@ -162,4 +162,46 @@ describe("startSocket (/v1/stream handshake)", () => {
 
     expect(await eventRouter.hasActiveNonMachineSocket("acct_appstate_2")).toBe(true);
   });
+
+  // Prometheus ws_connections_active/ws_connections_total wiring (metrics.ts's
+  // recordWsConnectionOpened/recordWsConnectionClosed, called from this file's
+  // "connection"/"disconnect" handlers). Scrapes the real /metrics route via
+  // app.inject() around a real socket.io-client connect + disconnect so the gauge/
+  // counter assertions exercise the actual wiring rather than calling the metrics
+  // functions directly.
+  it("increments ws_connections_active/ws_connections_total on connect and decrements the gauge on disconnect", async () => {
+    const scrape = async () => {
+      const response = await app.inject({ method: "GET", url: "/metrics" });
+      return response.body;
+    };
+
+    const before = await scrape();
+    const activeBeforeMatch = before.match(
+      /ws_connections_active\{scope="user-scoped"\} (\d+)/,
+    );
+    const totalBeforeMatch = before.match(/ws_connections_total\{scope="user-scoped"\} (\d+)/);
+    const activeBefore = activeBeforeMatch ? Number(activeBeforeMatch[1]) : 0;
+    const totalBefore = totalBeforeMatch ? Number(totalBeforeMatch[1]) : 0;
+
+    const token = await mintToken("acct_metrics_1");
+    const client = connect({ token });
+    await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+    const afterConnect = await scrape();
+    expect(afterConnect).toContain(`ws_connections_active{scope="user-scoped"} ${activeBefore + 1}`);
+    expect(afterConnect).toContain(`ws_connections_total{scope="user-scoped"} ${totalBefore + 1}`);
+
+    const disconnected = new Promise<void>((resolve) => client.once("disconnect", () => resolve()));
+    client.close();
+    await disconnected;
+    // socket.io's server-side "disconnect" handler (where recordWsConnectionClosed is
+    // called) fires on its own tick after the client-side event above, so give it a
+    // beat before scraping again.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    const afterDisconnect = await scrape();
+    expect(afterDisconnect).toContain(`ws_connections_active{scope="user-scoped"} ${activeBefore}`);
+    // The counter is cumulative — it must never decrease.
+    expect(afterDisconnect).toContain(`ws_connections_total{scope="user-scoped"} ${totalBefore + 1}`);
+  });
 });
