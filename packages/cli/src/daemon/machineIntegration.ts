@@ -32,6 +32,16 @@
  * socket `startMachineClient` creates internally, rather than modifying
  * `machineClient.ts`'s own public surface for a single caller's need.
  *
+ * **DEK survives restarts.** `POST /v1/machines`'s CAS-update path (a
+ * resumed `machineId`) never re-sends or rotates `dek` — the server keeps
+ * whatever was stored at first registration forever (`machines.ts`'s own
+ * doc comment). So this module persists its wrapped DEK into
+ * `daemon.state.json` (`state.ts`'s `wrappedDek`, alongside `machineId`)
+ * and unwraps it back on every later boot instead of minting a fresh one —
+ * otherwise a restarted daemon would silently start encrypting/decrypting
+ * every machine RPC under a key that no longer matches what the server (and
+ * any other real client unwrapping the same row) actually uses.
+ *
  * **Workspace/provider-session registries don't exist yet.** `spawn`'s
  * `resolveWorkspaceRoot` and `adopt.take`/`adopt.mirror`'s
  * `resolveProviderSession` are the same injected, no-real-default seams
@@ -42,7 +52,14 @@
  * genuinely run end-to-end once that registry lands, rather than being a
  * silent no-op today.
  */
-import { decodeBase64, deriveKeyTree, encodeBase64, getRandomBytes, wrapDek } from "@falcon/crypto";
+import {
+  decodeBase64,
+  deriveKeyTree,
+  encodeBase64,
+  getRandomBytes,
+  unwrapDek,
+  wrapDek,
+} from "@falcon/crypto";
 import type {
   AdoptMirrorParams,
   AdoptMirrorResult,
@@ -66,6 +83,7 @@ import {
 import type { PersistedSession } from "./sessionsStore.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
 import { type SpawnEngineDeps, spawnSession as spawnSessionCore } from "./spawnEngine.js";
+import { readDaemonState, writeDaemonState } from "./state.js";
 import { handleAdoptMirror } from "./transcriptMirror.js";
 import type { WorkspaceRootLookup } from "./workspacePath.js";
 
@@ -158,8 +176,31 @@ export async function startMachineIntegration(
   }
   const keyTree = deriveKeyTree(masterSecret);
 
-  const dek = getRandomBytes(DEK_LENGTH_BYTES);
-  const wrappedDek = encodeBase64(wrapDek(dek, keyTree.content.publicKey));
+  // Reuse the DEK persisted by a previous boot (`state.ts`'s `wrappedDek`),
+  // when there is one, instead of always minting a fresh one. `POST
+  // /v1/machines`'s CAS-update path (a resumed `machineId`) never re-sends
+  // or rotates `dek` — the server keeps whatever was stored on first
+  // registration forever (see `machines.ts`'s own doc comment) — so a
+  // restarted daemon that minted a *different* local DEK here would
+  // silently desync from the one the server (and any other real client
+  // unwrapping the machine row with this same masterSecret) actually uses,
+  // breaking every machine RPC's decrypt after the very next restart.
+  // `unwrapDek` is null-safe (never throws), so a corrupted/foreign value
+  // just falls back to minting fresh rather than crashing the daemon.
+  const previousState = await readDaemonState(deps.homeDir);
+  const previousWrappedDek = previousState?.wrappedDek;
+  const reusedDek = previousWrappedDek
+    ? unwrapDek(decodeBase64(previousWrappedDek), keyTree.content.secretKey)
+    : null;
+  let dek: Uint8Array;
+  let wrappedDek: string;
+  if (reusedDek && previousWrappedDek) {
+    dek = reusedDek;
+    wrappedDek = previousWrappedDek;
+  } else {
+    dek = getRandomBytes(DEK_LENGTH_BYTES);
+    wrappedDek = encodeBase64(wrapDek(dek, keyTree.content.publicKey));
+  }
 
   let capturedSocket: Socket | undefined;
   const machineDeps = createMachineClientDeps(
@@ -190,6 +231,15 @@ export async function startMachineIntegration(
     return null;
   }
   const machineId = started.handle.identity.machineId;
+
+  // Persist the (possibly freshly-minted) wrapped DEK so the NEXT boot
+  // recovers this exact same one above, instead of minting a mismatched
+  // fresh one — mirrors `machineClient.ts`'s own `persistMachineId` merge
+  // (read-modify-write, no-op if the file is missing or already current).
+  const stateAfterRegister = await readDaemonState(deps.homeDir);
+  if (stateAfterRegister && stateAfterRegister.wrappedDek !== wrappedDek) {
+    await writeDaemonState(deps.homeDir, { ...stateAfterRegister, wrappedDek });
+  }
 
   if (!capturedSocket) {
     // Unreachable in practice — `startMachineClient` always calls `ioFactory`

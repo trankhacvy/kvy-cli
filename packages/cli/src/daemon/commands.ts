@@ -336,11 +336,23 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     logger,
   });
 
+  // Carry over any previously-registered `machineId`/`wrappedDek`
+  // (`machineClient.ts`'s `persistMachineId`, `machineIntegration.ts`'s own
+  // DEK persistence) so `startMachineIntegration` below actually resumes the
+  // same server-side machine row under the same DEK, instead of registering
+  // a brand new machine (and minting a mismatched fresh DEK) on every single
+  // boot — without this, overwriting the whole state file with a
+  // `machineId`/`wrappedDek`-less payload before `startMachineIntegration`
+  // runs would erase both first and make every restart look like a fresh
+  // machine.
+  const previousState = await readDaemonState(homeDir);
   const payload: DaemonState = {
     pid: process.pid,
     port: controlServer.port,
     version: deps.version,
     startedAt: deps.now(),
+    machineId: previousState?.machineId,
+    wrappedDek: previousState?.wrappedDek,
   };
 
   const lockResult = await acquireDaemonLock(homeDir, payload);

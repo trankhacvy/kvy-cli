@@ -107,22 +107,24 @@ vitest runs it on its own account).
   doc comments. `DaemonCommandDeps` exposes all three as overridable so whichever task
   builds that store only has to change `index.ts`'s call to `createDaemonCommandDeps`, not
   this wiring.
-- **DEK persistence across daemon restarts is unchanged from `machineClient.ts`'s existing
-  behavior** (out of scope for a wiring task): this module mints a fresh random DEK once
-  per daemon *process* lifetime and passes it as `dek` on every `registerOrResumeMachine`
-  call. `POST /v1/machines` only consumes/stores that field on first registration (a
-  resume's CAS-update never resends or rotates it, by design — see `machines.ts`'s own doc
-  comment: "rotating a machine's DEK is out of scope for this route"), so a daemon that
-  restarts *without* wiping `daemon.state.json`'s `machineId` (i.e. a crash, not a graceful
-  `falcon daemon stop`, which currently clears the whole state file including `machineId`)
-  would re-encrypt subsequent `metadata`/`daemonState` writes under a DEK that no longer
-  matches the row's originally-wrapped one. Nothing in this codebase yet decrypts a
-  machine's `metadata`/`daemonState` from any other client (the web app's machine
-  online/offline badge is presence-only, not a decrypt of these fields, per this repo's own
-  `CLAUDE.md`), so this is a real but currently-inert gap — flagged here rather than
-  silently worked around, since fixing it (e.g. recovering the DEK by unwrapping the
-  existing row's `dek` before the first CAS-update on a resumed machineId) is a
-  cross-cutting `machineClient.ts` design change beyond "wire the existing modules in."
+- **`machineId`/DEK now both survive daemon restarts** (fixed during code review — the
+  original version of this task left two related gaps): `runDaemonStartSync`'s own
+  `payload` write (pre-existing code, unrelated to this task's diff) unconditionally
+  overwrote `daemon.state.json` with a `machineId`-less object *before* calling
+  `startMachineIntegration`, so `startMachineClient`'s `readDaemonState`-based resume check
+  (inside `machineClient.ts`) never actually saw a prior `machineId` — **every single
+  boot**, not just crash-restarts, registered a brand new machine row, orphaning the
+  previous one. `commands.ts` now reads the previous `daemon.state.json` first and carries
+  `machineId` forward into the new payload. That, in turn, made the DEK gap live (not
+  "currently inert" as originally assessed): `registerMachineRpcHandlers` seals/opens every
+  machine RPC — `spawn`/`resumeSession`/`adopt.*`/`git.*`, not just the metadata/daemonState
+  fields — under this same DEK, so a resumed machine that started encrypting with a
+  *freshly minted* DEK would silently desync from whatever any other real client (e.g. the
+  web app) unwraps from the server-stored row, breaking remote control after every restart.
+  `machineIntegration.ts` now persists its wrapped DEK into `daemon.state.json` (`state.ts`'s
+  new `wrappedDek` field, alongside `machineId`) and unwraps it back on later boots instead
+  of minting fresh — `unwrapDek` is null-safe, so a corrupted/foreign value just falls back
+  to minting fresh rather than crashing the daemon.
 - **`falcon adopt`'s local/`--remote` terminal-side flow, Codex adapter provider spawning,
   and the web control surface's live wiring are all untouched** — none of that is in this
   task's scope (daemon boot sequence only).
