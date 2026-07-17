@@ -165,6 +165,61 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ chunk: "hello", nextCursor: 5, done: false });
   });
 
+  it("round-trips a git.status call and result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({
+          branch: "main",
+          ahead: 1,
+          behind: 0,
+          files: [{ path: "src/a.ts", status: "modified" }],
+        }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("git.status", {
+      idempotencyKey: "idem-6",
+      worktree: "/repo",
+    });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:git.status",
+      "git.status",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({
+      branch: "main",
+      ahead: 1,
+      behind: 0,
+      files: [{ path: "src/a.ts", status: "modified" }],
+    });
+  });
+
+  it("round-trips a git.diff call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ inline: "diff --git a/x b/x", truncated: false }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("git.diff", {
+      idempotencyKey: "idem-7",
+      worktree: "/repo",
+      baseRef: "main",
+    });
+
+    expect(result).toEqual({ inline: "diff --git a/x b/x", truncated: false });
+  });
+
   it("throws MachineRpcError when the transport reports failure", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: false, error: "target-offline" })),

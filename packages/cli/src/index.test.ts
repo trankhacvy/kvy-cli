@@ -391,4 +391,57 @@ describe("main()", () => {
       );
     });
   });
+
+  describe("workspace config subcommand", () => {
+    it("writes baseRef/remote to settings.json and prints them back", async () => {
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main([
+        "workspace",
+        "config",
+        "--base-ref",
+        "develop",
+        "--remote",
+        "origin",
+        "--directory",
+        homeDir,
+      ]);
+
+      expect(code).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(
+        expect.stringContaining("base ref: develop"),
+      );
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("remote:   origin"));
+      stdout.mockRestore();
+    });
+
+    it("prints '(none)' for an unconfigured workspace when no flags are given", async () => {
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["workspace", "config", "--directory", homeDir]);
+
+      expect(code).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("base ref: (none)"));
+      stdout.mockRestore();
+    });
+
+    it("does not call ensureDaemonRunning (no daemon interaction)", async () => {
+      vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
+        ensureDaemonRunning: vi.fn(() => {
+          throw new Error("workspace config must never touch the daemon");
+        }),
+        createEnsureDaemonRunningDeps: vi.fn(() => ({})),
+      }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["workspace", "config", "--directory", homeDir]);
+
+      expect(code).toBe(0);
+      stdout.mockRestore();
+      vi.doUnmock("./daemon/ensureDaemonRunning.js");
+    });
+  });
 });

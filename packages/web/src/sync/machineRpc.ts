@@ -1,13 +1,13 @@
 /**
  * Typed caller-side client for the daemon's machine-scoped RPCs (design
  * §4.4 "Machine RPCs — registered by the daemon"; plan.md §16 "3.1 Remote
- * spawn"): `spawn`, and the New Session directory picker's `fs.list`/
- * `fs.mkdir`. This is the web's counterpart to
- * `packages/cli/src/daemon/machineRpc.ts` (the daemon-side registration),
- * mirroring `sessionRpc.ts`'s shape exactly (seal params under the crypto
- * client's active key, `apiSocket.rpcCall` to `m:<machineId>:<method>`,
- * open + validate the sealed result) but targeting a *machine* instead of a
- * *session*.
+ * spawn" / "4.1 Git panel"): `spawn`, the New Session directory picker's
+ * `fs.list`/`fs.mkdir`, and the Git panel's `git.status`/`git.diff`. This is
+ * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
+ * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
+ * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
+ * `m:<machineId>:<method>`, open + validate the sealed result) but
+ * targeting a *machine* instead of a *session*.
  *
  * `MachineRow.dek` (an opaque sealed-box wrap, same convention as
  * `SessionRow.dek`) is unwrapped the same way a session DEK is — see
@@ -28,13 +28,25 @@ import {
   FsListResultSchema,
   type FsMkdirParams,
   FsMkdirResultSchema,
+  type GitDiffParams,
+  GitDiffResultSchema,
+  type GitStatusParams,
+  GitStatusResultSchema,
   type SpawnParams,
   SpawnResultSchema,
 } from "@falcon/wire";
 import type { ZodType } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
 
-export type { AdoptMirrorParams, AdoptTakeParams, FsListParams, FsMkdirParams, SpawnParams };
+export type {
+  AdoptMirrorParams,
+  AdoptTakeParams,
+  FsListParams,
+  FsMkdirParams,
+  GitDiffParams,
+  GitStatusParams,
+  SpawnParams,
+};
 
 /** Params shape per method. */
 export interface MachineRpcParams {
@@ -43,6 +55,8 @@ export interface MachineRpcParams {
   "fs.mkdir": FsMkdirParams;
   "adopt.take": AdoptTakeParams;
   "adopt.mirror": AdoptMirrorParams;
+  "git.status": GitStatusParams;
+  "git.diff": GitDiffParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -52,6 +66,8 @@ export interface MachineRpcResults {
   "fs.mkdir": import("@falcon/wire").FsMkdirResult;
   "adopt.take": import("@falcon/wire").AdoptTakeResult;
   "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
+  "git.status": import("@falcon/wire").GitStatusResult;
+  "git.diff": import("@falcon/wire").GitDiffResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -62,6 +78,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "fs.mkdir": FsMkdirResultSchema,
   "adopt.take": AdoptTakeResultSchema,
   "adopt.mirror": AdoptMirrorResultSchema,
+  "git.status": GitStatusResultSchema,
+  "git.diff": GitDiffResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

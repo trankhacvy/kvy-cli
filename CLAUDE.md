@@ -155,7 +155,22 @@ packages/
 │                             still [planned] — this task, like the Claude adapter's own
 │                             pieces before it, lands the adapter modules themselves ahead of
 │                             the `falcon claude`/`falcon codex` orchestration that spawns and
-│                             drives them.
+│                             drives them. Git panel (design §4.4, plan.md §16 "4.1 Git
+│                             panel", falcon-prd.md FR-7.7) is also landed: the `git.status`/
+│                             `git.diff` machine RPCs (`daemon/gitStatus.ts` parses `git
+│                             status --porcelain=v2 --branch`; `daemon/gitDiff.ts` runs `git
+│                             diff <baseRef>` — two-dot, so uncommitted changes are included —
+│                             truncating inline at a safe line boundary with `truncated: true`
+│                             past a 60KB budget rather than a real blob upload, since that
+│                             subsystem doesn't exist yet; `daemon/gitExec.ts` is the shared
+│                             `execFile` wrapper both use), registered in `machineRpc.ts`
+│                             alongside the rest; `src/workspaceConfig.ts` (`~/.falcon/
+│                             settings.json`'s new `workspaces` map, keyed by real/symlink-
+│                             resolved directory path) backs both `git.diff`'s base-ref
+│                             fallback and the new `falcon workspace config [--base-ref
+│                             --remote --directory]` command (`commands/workspaceConfig.ts`,
+│                             wired into `index.ts`, no daemon interaction — reads/writes
+│                             `settings.json` directly).
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -248,7 +263,26 @@ packages/
                               wiring the sync engine into the Home screen and timeline (gap
                               detection, TanStack Query invalidation, FR-7.2 live session
                               timeline) plus the real per-session crypto client, and
-                              auth-gating the Home route, are still [planned].
+                              auth-gating the Home route, are still [planned]. The Git panel
+                              (`src/features/git-diff/`, plan.md §16 "4.1 Git panel",
+                              falcon-prd.md FR-7.7) is landed as its own feature area,
+                              read-only for the MVP: `ChangedFilesList` + `UnifiedDiffViewer`
+                              (parses `git diff` unified-diff text via the new
+                              `lib/unifiedDiff.ts`, shiki-highlights each line via the new
+                              `lib/diffHighlight.ts` — `codeToTokens` rendered to plain
+                              `<span>`s, same no-`dangerouslySetInnerHTML` rule as
+                              `markdown.ts`), composed by `GitDiffPanel` and driven by
+                              `use-git-panel.ts` (two `@tanstack/react-query` queries:
+                              `git.status` once per worktree, `git.diff` re-fetched on file
+                              selection). `sync/machineRpc.ts` gained `git.status`/`git.diff`
+                              alongside `spawn`/`fs.*`. Mounted at the new `/session/[id]/git/`
+                              route (linked from the timeline header's "Files changed"
+                              button) and, like every other feature here, takes an injectable
+                              `UseGitDiffActions` seam (`live-actions.ts`'s
+                              `machineRpcToGitDiffActions` vs. the default
+                              `mock-source.ts`) — no live `apiSocket`/per-machine crypto
+                              client wired in yet, same not-yet-wired state as everything
+                              else in this list.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
