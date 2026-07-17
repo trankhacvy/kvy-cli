@@ -263,7 +263,10 @@ function isTerminalStatus(status: string | undefined): status is "completed" | "
  * `tool_call`/`tool_call_update` — remembers the association by the call's
  * own minted id so a later update lacking `_meta` still resolves correctly.
  */
-function resolveEnvelopeSubagent(update: AcpSessionUpdate, state: AcpEnvelopeMapperState): string | undefined {
+function resolveEnvelopeSubagent(
+  update: AcpSessionUpdate,
+  state: AcpEnvelopeMapperState,
+): string | undefined {
   const parentProviderId = pickParentToolUseId(update);
   if (parentProviderId !== undefined) {
     const subagent = mintedId(state, parentProviderId);
@@ -306,7 +309,11 @@ function maybeEmitSubagentStop(
   active.delete(subagent);
 }
 
-function emitActiveSubagentStops(state: AcpEnvelopeMapperState, turn: string, envelopes: SessionEnvelope[]): void {
+function emitActiveSubagentStops(
+  state: AcpEnvelopeMapperState,
+  turn: string,
+  envelopes: SessionEnvelope[],
+): void {
   const active = activeSubagents(state);
   for (const subagent of active) {
     envelopes.push(createEnvelope("agent", { t: "sub-stop" }, { turn, subagent }));
@@ -360,19 +367,27 @@ function handleTextChunk(
 ): SessionEnvelope[] {
   const turn = state.currentTurnId;
   if (!turn) {
-    logger?.warn("acp_session_update_dropped_no_active_turn", { sessionUpdate: update.sessionUpdate });
+    logger?.warn("acp_session_update_dropped_no_active_turn", {
+      sessionUpdate: update.sessionUpdate,
+    });
     return [];
   }
   const text = pickContentText(update.content);
   if (text === undefined) {
-    logger?.warn("acp_session_update_dropped_unsupported_content", { sessionUpdate: update.sessionUpdate });
+    logger?.warn("acp_session_update_dropped_unsupported_content", {
+      sessionUpdate: update.sessionUpdate,
+    });
     return [];
   }
   const envelopes: SessionEnvelope[] = [];
   const subagent = resolveEnvelopeSubagent(update, state);
   maybeEmitSubagentStart(state, turn, subagent, envelopes);
   envelopes.push(
-    createEnvelope("agent", { t: "text", md: text, ...(thinking ? { thinking: true } : {}) }, { turn, subagent }),
+    createEnvelope(
+      "agent",
+      { t: "text", md: text, ...(thinking ? { thinking: true } : {}) },
+      { turn, subagent },
+    ),
   );
   return envelopes;
 }
@@ -384,7 +399,9 @@ function handleToolCall(
 ): SessionEnvelope[] {
   const turn = state.currentTurnId;
   if (!turn) {
-    logger?.warn("acp_session_update_dropped_no_active_turn", { sessionUpdate: update.sessionUpdate });
+    logger?.warn("acp_session_update_dropped_no_active_turn", {
+      sessionUpdate: update.sessionUpdate,
+    });
     return [];
   }
   const toolCallId = pickToolCallId(update);
@@ -430,7 +447,9 @@ function handleToolCallUpdate(
   }
   const turn = state.currentTurnId;
   if (!turn) {
-    logger?.warn("acp_session_update_dropped_no_active_turn", { sessionUpdate: update.sessionUpdate });
+    logger?.warn("acp_session_update_dropped_no_active_turn", {
+      sessionUpdate: update.sessionUpdate,
+    });
     return [];
   }
   const toolCallId = pickToolCallId(update);
@@ -491,7 +510,9 @@ export function mapAcpUpdateToEnvelopes(
       // expected, known kind, not an unrecognized one.
       return [];
     default:
-      logger?.warn("acp_session_update_unknown_kind_dropped", { sessionUpdate: update.sessionUpdate });
+      logger?.warn("acp_session_update_unknown_kind_dropped", {
+        sessionUpdate: update.sessionUpdate,
+      });
       return [];
   }
 }

@@ -2,13 +2,13 @@ import type { SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import {
+  type AcpSessionUpdate,
   closeAcpTurnWithStatus,
   createAcpEnvelopeMapperState,
   endAcpTurn,
   mapAcpStopReasonToTurnStatus,
   mapAcpUpdateToEnvelopes,
   startAcpTurn,
-  type AcpSessionUpdate,
 } from "./acpToEnvelope.js";
 
 function fakeLogger(): Logger {
@@ -60,9 +60,13 @@ describe("turn lifecycle (synthesized around session/prompt)", () => {
   it("drops session/update events with no active turn instead of minting one implicitly", () => {
     const state = createAcpEnvelopeMapperState();
     const logger = fakeLogger();
-    expect(evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } }, state, logger)).toEqual(
-      [],
-    );
+    expect(
+      evs(
+        { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } },
+        state,
+        logger,
+      ),
+    ).toEqual([]);
     expect(logger.warn).toHaveBeenCalledWith(
       "acp_session_update_dropped_no_active_turn",
       expect.objectContaining({ sessionUpdate: "agent_message_chunk" }),
@@ -74,7 +78,10 @@ describe("text chunks", () => {
   it("maps agent_message_chunk to text", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    const [ev] = evs({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hello" } }, state);
+    const [ev] = evs(
+      { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "Hello" } },
+      state,
+    );
     expect(ev?.ev).toEqual({ t: "text", md: "Hello" });
     expect(ev?.role).toBe("agent");
   });
@@ -82,7 +89,10 @@ describe("text chunks", () => {
   it("maps agent_thought_chunk to text{thinking:true}", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
-    const [ev] = evs({ sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hmm" } }, state);
+    const [ev] = evs(
+      { sessionUpdate: "agent_thought_chunk", content: { type: "text", text: "hmm" } },
+      state,
+    );
     expect(ev?.ev).toEqual({ t: "text", md: "hmm", thinking: true });
   });
 
@@ -90,7 +100,9 @@ describe("text chunks", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
     const logger = fakeLogger();
-    expect(evs({ sessionUpdate: "agent_message_chunk", content: { type: "image" } }, state, logger)).toEqual([]);
+    expect(
+      evs({ sessionUpdate: "agent_message_chunk", content: { type: "image" } }, state, logger),
+    ).toEqual([]);
     expect(logger.warn).toHaveBeenCalled();
   });
 
@@ -99,7 +111,11 @@ describe("text chunks", () => {
     startAcpTurn(state);
     const logger = fakeLogger();
     expect(
-      evs({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "hi" } }, state, logger),
+      evs(
+        { sessionUpdate: "user_message_chunk", content: { type: "text", text: "hi" } },
+        state,
+        logger,
+      ),
     ).toEqual([]);
     expect(logger.warn).not.toHaveBeenCalled();
   });
@@ -144,10 +160,20 @@ describe("tool_call / tool_call_update lifecycle", () => {
     const startCall = start?.ev.t === "tool-start" ? start.ev.call : undefined;
 
     const [end] = evs(
-      { sessionUpdate: "tool_call_update", toolCallId: "call-1", status: "failed", rawOutput: { stderr: "boom" } },
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-1",
+        status: "failed",
+        rawOutput: { stderr: "boom" },
+      },
       state,
     );
-    expect(end?.ev).toEqual({ t: "tool-end", call: startCall, ok: false, output: { stderr: "boom" } });
+    expect(end?.ev).toEqual({
+      t: "tool-end",
+      call: startCall,
+      ok: false,
+      output: { stderr: "boom" },
+    });
   });
 
   it("prefers _meta.claudeCode.toolName for name when present", () => {
@@ -169,16 +195,22 @@ describe("tool_call / tool_call_update lifecycle", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
     evs({ sessionUpdate: "tool_call", toolCallId: "call-3" }, state);
-    expect(evs({ sessionUpdate: "tool_call_update", toolCallId: "call-3", status: "in_progress" }, state)).toEqual(
-      [],
-    );
+    expect(
+      evs(
+        { sessionUpdate: "tool_call_update", toolCallId: "call-3", status: "in_progress" },
+        state,
+      ),
+    ).toEqual([]);
   });
 
   it("mints a stable cuid2 per raw toolCallId across start/end", () => {
     const state = createAcpEnvelopeMapperState();
     startAcpTurn(state);
     const [start] = evs({ sessionUpdate: "tool_call", toolCallId: "call-4" }, state);
-    const [end] = evs({ sessionUpdate: "tool_call_update", toolCallId: "call-4", status: "completed" }, state);
+    const [end] = evs(
+      { sessionUpdate: "tool_call_update", toolCallId: "call-4", status: "completed" },
+      state,
+    );
     const startCall = start?.ev.t === "tool-start" ? start.ev.call : undefined;
     const endCall = end?.ev.t === "tool-end" ? end.ev.call : undefined;
     expect(startCall).toBeTruthy();
@@ -238,14 +270,20 @@ describe("subagent scope via _meta.claudeCode.parentToolUseId", () => {
     const nestedCall = nestedStart[0]?.ev.t === "tool-start" ? nestedStart[0].ev.call : undefined;
 
     // Nested tool_call_update omits _meta — scope must still be remembered from creation.
-    const nestedEnd = evs({ sessionUpdate: "tool_call_update", toolCallId: "read-1", status: "completed" }, state);
+    const nestedEnd = evs(
+      { sessionUpdate: "tool_call_update", toolCallId: "read-1", status: "completed" },
+      state,
+    );
     expect(nestedEnd).toHaveLength(1);
     expect(nestedEnd[0]?.ev).toEqual({ t: "tool-end", call: nestedCall, ok: true });
     expect(nestedEnd[0]?.subagent).toBe(taskCall);
 
     // The spawning call's own terminal update closes the subagent scope
     // (sub-stop) before its own turn-scoped tool-end.
-    const taskEnd = evs({ sessionUpdate: "tool_call_update", toolCallId: "task-1", status: "completed" }, state);
+    const taskEnd = evs(
+      { sessionUpdate: "tool_call_update", toolCallId: "task-1", status: "completed" },
+      state,
+    );
     expect(taskEnd).toHaveLength(2);
     expect(taskEnd[0]?.ev).toEqual({ t: "sub-stop" });
     expect(taskEnd[0]?.subagent).toBe(taskCall);
