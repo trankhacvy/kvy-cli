@@ -862,6 +862,22 @@ connection pooling, no agent-id-as-identity). Design authority:
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
       + non-blocking notice; never blind-resend under a fresh id)
+      *(2026-07-17, progress tracker, cycle 71: confirmed landed via
+      `P17-2.0-message-rpc-tristate` — merge commit `87af845` ("merge: land
+      P17-2.0-message-rpc-tristate onto main") confirmed via `git merge-base
+      --is-ancestor 87af845 main` → **true**; the checkbox itself was already flipped by
+      a same-branch follow-up commit `f61fb41` ("docs: flip plan.md
+      P17-2.0-message-rpc-tristate to landed"), also confirmed an ancestor of `main`.
+      `MessageRpcStatusSchema`/optional `status` field verified present in
+      `main:packages/wire/src/rpc.ts`; `task-summary/P17-2.0-message-rpc-tristate.md`
+      present on `main`. Workspace-wide `pnpm typecheck` (11/11 tasks) and `pnpm test`
+      (11/11 tasks, 1125 CLI + full wire/crypto/server/web/e2e suites) both green on
+      `main` as of this verification. The other two Phase 2.0 bullets below
+      (claim store, adapter manager) remain unflipped — their branches exist with their
+      own "Land ... onto main" commits and task-summary files, but those commits are
+      **not** ancestors of `main` (`git merge-base --is-ancestor` → false for both;
+      `git merge-base main <branch>` == `main`'s own tip, i.e. zero commits from either
+      branch have actually reached `main`) — see `progress.md` Cycle 71 for detail.)*
 - [ ] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
       (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
       own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,

@@ -1,5 +1,113 @@
 # Falcon — Progress Log
 
+## Cycle 71 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `f61fb41` — "docs: flip plan.md P17-2.0-message-rpc-tristate
+to landed")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `falcon` cli, `@falcon/e2e`, `@falcon/web` — including a fresh static export
+  of all 15 routes). All cache-hit-replayed clean (`>>> FULL TURBO`). No errors.
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures across the whole workspace:
+  `@falcon/wire` 6 files / 90 tests, `@falcon/crypto` 8 files / 71 tests, `@falcon/web` 44 files /
+  380 tests, `@falcon/server` 42 files / 302 tests, `@falcon/e2e` 1 file / 1 test (the 20-step
+  `exercise-flow` conformance run), `falcon` cli 118 files / 1125 tests. Totals: 219 test files /
+  1969 tests, all green.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+1. **`task-summary/P17-2.0-message-rpc-tristate.md`** (present on `main`'s own tree) —
+   `message` session RPC reply → tri-state (`@falcon/wire`'s `MessageRpcResultSchema` gains an
+   optional `status` field, additive-only compat lint passes) + web composer reconciliation
+   (`reconcileByStatus`/`deliveryNotice`). Since Cycle 70 (which found this unlanded), the task
+   was actually merged: `git merge-base --is-ancestor 87af845 main` → **true** (merge commit
+   `87af845`, "merge: land P17-2.0-message-rpc-tristate onto main"), followed by a same-branch
+   docs commit `f61fb41` ("docs: flip plan.md ... to landed") that is `main`'s current HEAD and
+   already flipped `plan.md` line 861 to `[x]` on its own. Independently re-verified rather than
+   newly credited: `main:packages/wire/src/rpc.ts` contains `MessageRpcStatusSchema` and the
+   optional `status` field; `git cat-file -e main:task-summary/P17-2.0-message-rpc-tristate.md`
+   succeeds. Appended a dated confirmation note to `plan.md` line 861 (checkbox itself was
+   already `[x]`, no flip needed — annotation only, matching this log's established precedent
+   for post-hoc confirmation of an already-flipped item, e.g. Cycle 48's
+   `P0-cross-cutting-mit-attribution-headers` note).
+2. **`task-summary/P17-2.0-claim-store.md`** (not on `main` — read from
+   `.worktrees/P17-2.0-claim-store/task-summary/P17-2.0-claim-store.md`, tip `41834e0`, with a
+   later `19f8c59` "Land send-idempotency claim store onto main" commit on the same branch) —
+   send-idempotency claim store (`cli/src/claims/claimStore.ts`), tri-state
+   (`claimed`/`completed`/`in-progress`), atomic tmp-write+rename per session under
+   `~/.falcon/claims/`, 21 passing tests reported in its own worktree. **`git merge-base
+   --is-ancestor 19f8c59 main` → false.** `git cat-file -e
+   main:packages/cli/src/claims/claimStore.ts` fails ("does not exist in 'main'") — the code is
+   genuinely absent from `main`'s tree, not just an unflipped checkbox. The task-summary's own
+   "Landing" section is explicit that this worktree only *prepared* the branch for merge and
+   flipped `plan.md` **in its own worktree commit**; "the actual `git merge` ... onto `main` is
+   performed by the outer landing/orchestration step" — which never happened. `plan.md` line 855
+   stays `[ ]` — **not flipped**.
+3. **`task-summary/P17-2.0-adapter-manager.md`** (not on `main` — read from
+   `.worktrees/P17-2.0-adapter-manager/task-summary/P17-2.0-adapter-manager.md`, tip `3aac937`,
+   with a later `66a469e` "Land ACP adapter manager onto main" commit on the same branch) —
+   pinned-version ACP adapter manager (`cli/src/adapters/`), `falcon adapters install|upgrade`,
+   `falcon doctor` integration; 33 new tests reported in its own worktree. **`git merge-base
+   --is-ancestor 66a469e main` → false.** `git cat-file -e
+   main:packages/cli/src/adapters/manifest.ts` fails ("does not exist in 'main'"). Same failure
+   mode as claim-store: a branch-local commit *titled* "Land ... onto main" that never actually
+   became part of `main`'s history (`git merge-base main P17-2.0-adapter-manager` == `main`'s own
+   current tip — zero commits from this branch are reachable from `main`). `plan.md` line 865
+   stays `[ ]` — **not flipped**.
+
+Per the standing instruction (no checkbox flip on the strength of a task-summary file alone —
+only after a successful ancestor check), only the message-rpc-tristate confirmation note was
+added; claim-store and adapter-manager were left untouched in `plan.md`, matching exactly the
+precedent Cycle 70 set for these same two tasks one cycle ago — the situation is unchanged for
+both since then.
+
+### Tasks completed this cycle
+
+**0 checkboxes newly flipped** (1 confirmation note appended to an already-`[x]` line). The one
+task genuinely landed since Cycle 70 (`P17-2.0-message-rpc-tristate`) had already been flipped
+by its own commit before this cycle ran, so there was nothing left to flip — only to verify and
+annotate. `P17-2.0-claim-store` and `P17-2.0-adapter-manager` remain exactly as unlanded as
+Cycle 70 found them: complete and green within their own worktrees, but their "land" commits
+never reached `main`.
+
+### Blockers / issues found
+
+**Blocker (process, not code), carried forward unchanged from Cycle 70:** `P17-2.0-claim-store`
+(worktree tip `41834e0`, "land" commit `19f8c59`) and `P17-2.0-adapter-manager` (worktree tip
+`3aac937`, "land" commit `66a469e`) both have a commit on their own branch *claiming* to land
+onto `main` in its message, but neither commit is actually reachable from `main` — this is the
+same false-landing failure mode `plan.md` line 826 documents from Cycles 24–25 ("prior land
+attempts only ever merged into their own throwaway branch/worktree and never touched `main`").
+Each still needs a real `git merge`/PR that lands its branch tip as an ancestor of `main` before
+a future cycle can verify and flip its checkbox. `main` itself is fully healthy — `pnpm
+typecheck` and `pnpm test` are both green (11/11 turbo tasks each, 1969 tests, 0 failures) — this
+is purely a "next step is a land task" situation for two of the three requested tasks, not a
+code defect.
+
+### Overall completion
+
+`plan.md` checkbox count: **133/152 checked (~87.5%)** — unchanged from Cycle 70's 132/152 plus
+the one flip (`message-rpc-tristate`) that had already happened by the time this cycle started;
+no new flips occurred this cycle. §17 "v2 — ACP migration": 1/17 checked
+(`message-rpc-tristate`); claim store and adapter manager remain the two blockers to closing out
+Phase 2.0.
+
+### Next recommended tasks
+
+1. **Land `P17-2.0-claim-store`** onto `main` for real (worktree `.worktrees/P17-2.0-claim-store`,
+   tip `41834e0`) — a genuine `git merge`/PR this time, not another branch-local commit titled
+   "Land ... onto main". Standalone module, zero dependency on the other two Phase 2.0 tasks.
+2. **Land `P17-2.0-adapter-manager`** onto `main` for real (worktree
+   `.worktrees/P17-2.0-adapter-manager`, tip `3aac937`) — same fix needed: an actual merge onto
+   `main`, not a same-branch commit. Also standalone, can land independently/in parallel with
+   claim-store.
+3. **Once both land**, pick up Phase 2.0's remaining bullet ("wire schema: no new envelope types
+   needed... assert via golden fixtures") and start Phase 2.1 "ACP core"
+   (`cli/src/acp/acpConnection.ts` + `acpToEnvelope.ts`), now unblocked by all three Phase 2.0
+   foundation pieces being in place.
+
 ## Cycle 70 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `1d56810` — "docs: system design v0.3 + plan v0.2 — v2 ACP
