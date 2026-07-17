@@ -1,5 +1,96 @@
 # Falcon — Progress Log
 
+## Cycle 61 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `c3cc9a4` — "refactor: P4-4.1-git-diff-panel - code review fixes")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green: `@falcon/server` 33 files/233 tests,
+  `falcon` cli 86 files/862 tests (both run fresh, no cache), `@falcon/crypto`/`@falcon/wire`/
+  `@falcon/web` cache-hit-replayed clean. 0 failures across the whole workspace.
+
+Note: an early, out-of-band `git status`/`git log` invocation in this session's shell echoed a
+stale, unrelated history ("chore: cycle 4", `P0-land-integration-branch`, ...) that does not match
+this checkout's actual `task-summary/`/`plan.md` contents on disk — this matches the `rtk`
+Bash-hook fabrication hazard plan.md's own §1.1 narrative has flagged before. Every claim in this
+entry is based on a subsequent, directly re-run `git log`/`git merge-base`/`Read`-tool pass that
+matches the real file-system contents (`task-summary/P4-4.1-git-diff-panel.md` etc. genuinely
+exist, confirmed via `Read`), not the suspect early output.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested task-summaries exist on `main`, and each corresponds to a `merge: land
+<task-id> onto main` commit found via `git log --oneline --all | grep <task-id>`:
+
+1. **`task-summary/P2-2.3-timeline-live-wire.md`** — wires `SessionTimelineScreen` to the real
+   sync engine (`useLiveRenderItems`/`useLiveSessionControl`/`useSessionCrypto`), deletes the
+   `demo-items.ts` fixture. Merge commit `0a1986d` ("merge: land P2-2.3-timeline-live-wire onto
+   main") — `git merge-base --is-ancestor 0a1986d main` → **true**. This closes the gap
+   §2.3's own tracker note had flagged ("perm-request/perm-resolve envelopes... render off a
+   hand-built demo fixture, not the real socket") — **`plan.md` line 731 flipped `[ ]` → `[x]`**
+   this cycle, since the live `useLiveRenderItems` → `decryptMessageBatches` → `reduceEnvelopes`
+   path now carries every envelope kind, perm included, off the real wire.
+2. **`task-summary/P3-3.3-web-unmanaged-section.md`** — new `features/unmanaged-sessions/`
+   (Home-screen `UnmanagedSection`, poll-and-replace `MirrorViewScreen`, Take Over / Fork
+   Instead dialog wired to `adopt.take`/`adopt.mirror`). Merge commit `4e35ae4` ("merge: land
+   P3-3.3-web-unmanaged-section onto main") — `git merge-base --is-ancestor 4e35ae4 main` →
+   **true**. This was the last unchecked §3.3 bullet — **`plan.md` line 770 flipped `[ ]` →
+   `[x]`** this cycle, closing out §3.3 entirely (all five bullets now `[x]`).
+3. **`task-summary/P4-4.1-git-diff-panel.md`** — daemon `git.status`/`git.diff` RPCs
+   (`gitStatus.ts`/`gitDiff.ts`/`gitExec.ts`), `falcon workspace config --base-ref/--remote`,
+   and the web changed-files list + shiki-highlighted unified diff viewer
+   (`features/git-diff/`, new `/session/[id]/git` route). Merge commit `6292959` ("merge: land
+   P4-4.1-git-diff-panel onto main") — `git merge-base --is-ancestor 6292959 main` → **true**.
+   First Phase 4 task to land — **all three §4.1 bullets flipped `[ ]` → `[x]`** this cycle
+   (`plan.md` lines 783–785); `blobRef` for large diffs stays reserved/unset pending the
+   not-yet-built Phase 4.3 blob-storage subsystem (inline diffs truncate at ~60KB instead,
+   same precedent as `adopt.mirror`/`fs.read`), noted inline rather than blocking the checkbox.
+
+### Tasks completed this cycle
+
+**6 checkboxes flipped** across three task-summaries, all independently confirmed merged onto
+`main` via `git merge-base --is-ancestor`:
+
+- §2.3 line 731 — `perm-request`/`perm-resolve` envelopes into the timeline (`P2-2.3-timeline-live-wire`)
+- §3.3 line 770 — Web: unmanaged section, live mirror view, Take over / Fork Instead dialog (`P3-3.3-web-unmanaged-section`)
+- §4.1 lines 783–785 — Daemon `git.status`/`git.diff` RPCs; web changed-files + diff viewer;
+  `falcon workspace config` command (`P4-4.1-git-diff-panel`, all three bullets)
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each, 233 + 862
+tests). No task-summary was taken on faith — every checkbox flip above is backed by a fresh
+`git merge-base --is-ancestor <merge-sha> main` → true check run this cycle.
+
+### Overall completion
+
+`plan.md` checkbox count: **117/135 checked (~86.7%)** — up from 112/135 (~83.0%) last cycle
+(+5 net new checked lines; §4.1's three bullets were previously unchecked as a block, plus the
+§2.3 and §3.3 bullets flipped above — one prior report undercounted by one, reconciled to 117
+by direct recount this cycle: `grep -c '^\- \[x\]' plan.md`).
+
+### Next recommended tasks
+
+1. **Wire `machineClient.ts`'s socket + `registerMachineRpcHandlers` into `daemon/commands.ts`'s
+   boot sequence** — `spawn`/`resumeSession`/`adopt.take`/`adopt.mirror`/`git.status`/`git.diff`
+   are all real, fully unit-tested RPC handlers but none is reachable from a live machine WS
+   connection yet (no call site for `startMachineClient` anywhere in `packages/cli/src`) — the
+   single biggest remaining gap between "built" and "usable end-to-end," now blocking *four*
+   landed feature areas (spawn, durability/resume, adoption, and the new git panel) instead of
+   just spawn/adoption.
+2. **`falcon codex` command + provider pick in web spawn flow (beta banner)** (§3.4, plan.md line
+   776) — the last unchecked §3.4 bullet; the Codex app-server client, approval routing, and
+   envelope mapper are already landed, this is purely CLI wiring + a web spawn-flow dropdown
+   entry.
+3. **Build the workspace-registration store.** Multiple task-summaries (§3.1/§3.2/§3.3/§4.1)
+   independently flag the same missing piece: nothing in `packages/cli` yet persists "which
+   workspace paths are registered" — `resolveProviderSession`/`resolveDirectory`/
+   `listWorkspaces` are all injected seams with no real default. This unblocks real end-to-end
+   wiring for spawn, resume, adopt, and git-panel base-ref resolution all at once.
+
 ## Cycle 60 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `b09e1b2` — "chore: cycle 59 — completed 3 tasks")
