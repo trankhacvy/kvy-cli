@@ -1,0 +1,73 @@
+{
+  "description": "ACP mapping verification (falcon-system-design.md §7.3/§7.6, docs/acp-delta-proposal.md §3 A4): the server→client ACP `session/request_permission` request maps 1:1 onto the existing perm-request envelope, and the client's mapped ACP option response (allow-once/always, reject, or mode-switch) maps onto the existing perm-resolve envelope carrying the same @falcon/wire PermDecision shape used today. No new envelope type or PermDecision variant is needed to drive the ACP permission pipeline.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 6000,
+      "role": "agent",
+      "turn": "turn-acp-2",
+      "ev": {
+        "t": "perm-request",
+        "reqId": "acp-req-1",
+        "call": "acp-call-2",
+        "name": "Write",
+        "args": { "path": "src/utils.ts" },
+        "modes": ["default", "acceptEdits"]
+      }
+    },
+    {
+      "id": "e2",
+      "time": 6001,
+      "role": "agent",
+      "turn": "turn-acp-2",
+      "ev": {
+        "t": "tool-start",
+        "call": "acp-call-2",
+        "name": "Write",
+        "title": "Write src/utils.ts",
+        "args": { "path": "src/utils.ts" },
+        "risk": "write"
+      }
+    },
+    {
+      "id": "e3",
+      "time": 6002,
+      "role": "agent",
+      "turn": "turn-acp-2",
+      "ev": {
+        "t": "perm-resolve",
+        "reqId": "acp-req-1",
+        "decision": { "kind": "allow", "scope": "once" }
+      }
+    },
+    {
+      "id": "e4",
+      "time": 6003,
+      "role": "agent",
+      "turn": "turn-acp-2",
+      "ev": { "t": "tool-end", "call": "acp-call-2", "ok": true, "output": { "bytesWritten": 42 } }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e2",
+      "time": 6001,
+      "role": "agent",
+      "turn": "turn-acp-2",
+      "kind": "tool",
+      "call": "acp-call-2",
+      "name": "Write",
+      "title": "Write src/utils.ts",
+      "args": { "path": "src/utils.ts" },
+      "risk": "write",
+      "status": "done",
+      "ok": true,
+      "output": { "bytesWritten": 42 },
+      "permission": {
+        "reqId": "acp-req-1",
+        "modes": ["default", "acceptEdits"],
+        "decision": { "kind": "allow", "scope": "once" }
+      }
+    }
+  ]
+}

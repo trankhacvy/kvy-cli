@@ -960,6 +960,28 @@ connection pooling, no agent-id-as-identity). Design authority:
       `main:packages/cli/src/adapters/manifest.ts` exists) as genuinely landed — those two
       checkboxes were already correctly `[x]` above and needed no further change. Not
       flipped for wire-envelope-verification. See `progress.md` Cycle 74.)*
+      *(2026-07-17, `P17-land-2.0-wire-envelope-verification` (this pass): fresh worktree
+      branched off `main`'s real current tip `487ac17` (past both the claim-store-real and
+      adapter-manager-real fast-forwards). Confirmed zero drift first —
+      `git diff 487ac17 83826d5~1 -- packages/web/src/sync/reducer/golden.test.ts` is
+      empty, i.e. `main`'s copy of that file is byte-identical to `83826d5`'s parent — then
+      `git cherry-pick -n 83826d5` applied cleanly with no conflicts (commit `521d92b` on
+      branch `P17-land-2.0-wire-envelope-verification`). Re-verified green on the merged
+      tree: `pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 11/11 (`golden.test.ts`
+      10/10, including the three new `trace_acp_*.json` fixtures). **Leaving this checkbox
+      `[ ]` rather than flipping it**: per this subagent's own sandboxing rules ("Do NOT
+      merge or push — just commit in the worktree"), commit `521d92b` exists only on the
+      worktree-local branch — `git merge-base --is-ancestor 521d92b main` is still
+      **false** from here, same as every prior attempt at this point in their own
+      lifecycle. Flipping the box now, before the shared `main` ref is actually
+      fast-forwarded to `521d92b`, would repeat the exact false-landing mistake this task
+      exists to fix (see `ed8024e`'s premature flip two notes above). The checkbox should
+      be flipped to `[x]` — with a fresh `git merge-base --is-ancestor 521d92b main` →
+      **true** check run against the real `main` ref — only once a step with actual
+      merge/push access (outside this subagent's tool scope) fast-forwards `main` to
+      `521d92b` or a merge commit containing it, mirroring how the claim-store and
+      adapter-manager bullets above were each flipped only after their own real
+      fast-forward landed. See `task-summary/P17-land-2.0-wire-envelope-verification.md`.)*
 
 ### Phase 2.1 — ACP core
 - [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`

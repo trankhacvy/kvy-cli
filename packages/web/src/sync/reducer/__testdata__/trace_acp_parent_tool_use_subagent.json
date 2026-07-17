@@ -1,0 +1,117 @@
+{
+  "description": "ACP mapping verification (falcon-system-design.md §7.3, docs/acp-delta-proposal.md §3 A4): a tool-call update carrying ACP's `_meta.claudeCode.parentToolUseId` maps onto the existing envelope `subagent` field, using the same convention as local mode — the subagent id equals the spawning Task-like call's id. No new envelope type is needed to represent ACP subagent scope.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 7000,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "ev": {
+        "t": "tool-start",
+        "call": "acp-task-1",
+        "name": "Task",
+        "title": "Investigate the type error",
+        "args": { "prompt": "find and fix the type mismatch" }
+      }
+    },
+    {
+      "id": "e2",
+      "time": 7001,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "subagent": "acp-task-1",
+      "ev": { "t": "sub-start" }
+    },
+    {
+      "id": "e3",
+      "time": 7002,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "subagent": "acp-task-1",
+      "ev": { "t": "text", "md": "Reasoning about the type signature.", "thinking": true }
+    },
+    {
+      "id": "e4",
+      "time": 7003,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "subagent": "acp-task-1",
+      "ev": {
+        "t": "tool-start",
+        "call": "acp-call-3",
+        "name": "Read",
+        "args": { "path": "src/utils.ts" }
+      }
+    },
+    {
+      "id": "e5",
+      "time": 7004,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "subagent": "acp-task-1",
+      "ev": { "t": "tool-end", "call": "acp-call-3", "ok": true, "output": { "lines": 12 } }
+    },
+    {
+      "id": "e6",
+      "time": 7005,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "subagent": "acp-task-1",
+      "ev": { "t": "sub-stop" }
+    },
+    {
+      "id": "e7",
+      "time": 7006,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "ev": {
+        "t": "tool-end",
+        "call": "acp-task-1",
+        "ok": true,
+        "output": { "summary": "the return type was widened" }
+      }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e1",
+      "time": 7000,
+      "role": "agent",
+      "turn": "turn-acp-3",
+      "kind": "tool",
+      "call": "acp-task-1",
+      "name": "Task",
+      "title": "Investigate the type error",
+      "args": { "prompt": "find and fix the type mismatch" },
+      "status": "done",
+      "ok": true,
+      "output": { "summary": "the return type was widened" },
+      "subagent": [
+        { "id": "e2", "time": 7001, "role": "agent", "turn": "turn-acp-3", "kind": "sub-start" },
+        {
+          "id": "e3",
+          "time": 7002,
+          "role": "agent",
+          "turn": "turn-acp-3",
+          "kind": "text",
+          "md": "Reasoning about the type signature.",
+          "thinking": true
+        },
+        {
+          "id": "e4",
+          "time": 7003,
+          "role": "agent",
+          "turn": "turn-acp-3",
+          "kind": "tool",
+          "call": "acp-call-3",
+          "name": "Read",
+          "args": { "path": "src/utils.ts" },
+          "status": "done",
+          "ok": true,
+          "output": { "lines": 12 }
+        },
+        { "id": "e6", "time": 7005, "role": "agent", "turn": "turn-acp-3", "kind": "sub-stop" }
+      ]
+    }
+  ]
+}

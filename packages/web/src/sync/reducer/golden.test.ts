@@ -11,6 +11,15 @@ import { reduceEnvelopes } from "./reduce.js";
  * `RenderItem[]` the reducer must produce for it. This is Happy's
  * `trace_*.json` convention, ported — grow this directory with every new
  * provider quirk found, per plan.md's cross-cutting rule.
+ *
+ * The `trace_acp_*.json` fixtures (plan.md §17 Phase 2.0, falcon-system-design.md
+ * §7.3, docs/acp-delta-proposal.md §3 A4) double as the verification that the
+ * ACP `session/update` → `SessionEnvelope` mapping needs no new `@falcon/wire`
+ * envelope types: each fixture models the envelopes the future
+ * `acpToEnvelope` mapper (Phase 2.1) will emit for a given ACP update kind,
+ * built entirely from variants `SessionEventSchema` already defines, and
+ * proves — by parsing and reducing successfully like every other fixture
+ * here — that the existing schema is sufficient.
  */
 
 const testdataDir = path.join(import.meta.dirname, "__testdata__");
