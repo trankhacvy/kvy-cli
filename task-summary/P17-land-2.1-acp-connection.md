@@ -76,3 +76,40 @@ pass.
 - `main` will be fast-forwarded to (or merged from) this branch's tip by a later
   orchestration step, at which point `git merge-base --is-ancestor <this-branch-tip>
   main` becomes true and plan.md's checkbox can be flipped.
+
+## Follow-up: real merge onto `main` (2026-07-18)
+
+The step above only committed to the isolated `P17-land-2.1-acp-connection` branch.
+This follow-up, run from the `main` worktree with real merge/push access, did the
+actual landing:
+
+1. Confirmed drift since this branch's base (`cc3e9ae`): `main` had advanced to
+   `8caa157`, but `git diff cc3e9ae main --stat` showed only `plan.md`/`progress.md`
+   changed (128 insertions, two files) — no overlap with `packages/cli/src/acp/`, so
+   no rebase was needed before merging.
+2. `git merge --no-ff P17-land-2.1-acp-connection` from `main` (merge commit
+   `62aa148`) — applied with **zero conflicts**, pulling in `115e474`/`e4d38f3`/
+   `92c93d0`/`ca93f9f` (7 files, 1464 insertions including this task-summary and the
+   original `task-summary/P17-2.1-acp-connection.md`).
+3. `git merge-base --is-ancestor 62aa148 main` → **true** (trivially, `HEAD == main`
+   post-merge). `git cat-file -e main:packages/cli/src/acp/acpConnection.ts` succeeds.
+4. Re-verified on the real merged `main` tree (after `pnpm install --frozen-lockfile`):
+   - `pnpm build --force` (cache bypassed for a genuine non-cached run) — 6/6 packages
+     clean.
+   - `pnpm typecheck` — 11/11 clean.
+   - `pnpm test` — **127 files / 1228 tests** passing (up from the branch's own
+     126/1206 — `main` had gained more landed work in the interim); isolated run of
+     `acpConnection.test.ts` alone: 25/25 passing.
+   - `biome check packages/cli/src/acp/` (via `rtk proxy`, since the `rtk` shell hook
+     was mangling direct biome invocations the same way the prior task-summary
+     documented) — 0 errors, 0 warnings.
+5. Flipped plan.md's `cli/src/acp/acpConnection.ts` checkbox to `[x]` (Phase 2.1 — ACP
+   core, first bullet) and appended a matching progress note, now that the ancestry
+   check is genuinely true against the shared `main` ref.
+
+Note on tooling: several plain `git log`/`git status` invocations in this session were
+silently truncated/reordered by the `rtk` shell hook (e.g. dropping the merge commit
+from `git log --oneline`'s output entirely, even though `git rev-parse HEAD` reported
+it correctly). Re-running the same commands via the real `/usr/bin/git` binary showed
+the accurate history. Worth flagging since it could otherwise cause a future landing
+pass to misjudge whether a merge actually happened.

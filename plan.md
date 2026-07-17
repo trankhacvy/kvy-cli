@@ -1000,7 +1000,7 @@ connection pooling, no agent-id-as-identity). Design authority:
       Already correctly `[x]` — no change needed this cycle.)*
 
 ### Phase 2.1 — ACP core
-- [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`
+- [x] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`
       client over NDJSON stdio — initialize handshake (client capabilities: no fs, no
       terminal initially), `session/new|load|resume`, `session/prompt` (one per turn,
       cancellation-signal wired), `session/cancel`, `session/set_mode`,
@@ -1039,6 +1039,21 @@ connection pooling, no agent-id-as-identity). Design authority:
       real `main` ref by a step with merge/push access, mirroring the `-real` follow-up
       that finally landed `P17-land-2.0-adapter-manager`/`P17-land-2.0-claim-store`/
       `P17-land-2.0-wire-envelope-verification`. See `progress.md` Cycle 76.)*
+      *(2026-07-18, follow-up step with real merge/push access: ran `git merge --no-ff
+      P17-land-2.1-acp-connection` from the `main` worktree — merge commit `62aa148`,
+      containing `115e474`/`e4d38f3`/`92c93d0`/`ca93f9f`, the cherry-pick of
+      `487ac17..38c9471` onto a fresh worktree off `main` at `cc3e9ae`. No conflicts —
+      `main` had only gained `plan.md`/`progress.md` commits since that base, no overlap
+      with `packages/cli/src/acp/`. `git merge-base --is-ancestor 62aa148 main` → **true**
+      post-merge (trivially, since `HEAD == main`); `git cat-file -e
+      main:packages/cli/src/acp/acpConnection.ts` and
+      `main:task-summary/P17-land-2.1-acp-connection.md` both succeed — the connection
+      module and task-summary now exist on the real `main` tree. Re-verified green on the
+      merged tree from a forced (non-cached) `pnpm build --force`: 6/6 packages;
+      `pnpm typecheck`: 11/11; `pnpm test`: 127 files/1228 tests, including
+      `acpConnection.test.ts` 25/25 against the real spawned NDJSON fixture child; scoped
+      `biome check packages/cli/src/acp/`: 0 errors/0 warnings. Checkbox flipped for real,
+      same two-step shape that closed out the sibling `acpToEnvelope.ts` bullet below.)*
 - [x] `cli/src/acp/acpToEnvelope.ts`: single shared mapper, ACP `session/update` →
       `SessionEnvelope` (mapping table in design §7.3); unknown kinds logged + dropped;
       subagent scope from `_meta.claudeCode.parentToolUseId`; turn-start/turn-end
