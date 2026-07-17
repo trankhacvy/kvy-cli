@@ -923,7 +923,7 @@ connection pooling, no agent-id-as-identity). Design authority:
       `git merge-base --is-ancestor 0e171d8 main` → **true** once this branch is fast-
       forwarded onto `main`, and `main:packages/cli/src/adapters/manifest.ts` now exists.
       Checkbox flipped for real.)*
-- [ ] Wire schema: no new envelope types needed (verified mapping, proposal §3 A4) —
+- [x] Wire schema: no new envelope types needed (verified mapping, proposal §3 A4) —
       assert via golden fixtures rather than schema change
       *(2026-07-17, progress tracker, cycle 73: reviewed `task-summary/
       P17-2.0-wire-envelope-verification.md` (worktree `.worktrees/
@@ -982,6 +982,16 @@ connection pooling, no agent-id-as-identity). Design authority:
       `521d92b` or a merge commit containing it, mirroring how the claim-store and
       adapter-manager bullets above were each flipped only after their own real
       fast-forward landed. See `task-summary/P17-land-2.0-wire-envelope-verification.md`.)*
+      *(2026-07-17, follow-up step with real merge/push access: ran `git merge --no-ff
+      P17-land-2.0-wire-envelope-verification` from the `main` worktree (merge commit
+      `07cacb4`, containing `521d92b`/`bf21f28`). `git merge-base --is-ancestor 521d92b
+      main` → **true**; `git cat-file -e main:packages/web/src/sync/reducer/__testdata__/
+      trace_acp_turn_lifecycle.json` and `main:task-summary/
+      P17-land-2.0-wire-envelope-verification.md` both succeed — the fixtures and
+      task-summary now exist on the real `main` tree. Re-verified green post-merge:
+      `pnpm --filter @falcon/web test` 44/44 files, 383/383 tests, including
+      `golden.test.ts` 10/10. Checkbox flipped for real — fourth attempt at this exact
+      task, first one to actually reach `main`.)*
 
 ### Phase 2.1 — ACP core
 - [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`
