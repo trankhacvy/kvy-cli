@@ -277,7 +277,12 @@ function pickContentText(content: unknown): string | undefined {
   return typeof content.text === "string" ? content.text : undefined;
 }
 
-function pickToolName(update: AcpSessionUpdate): string {
+/**
+ * Provider-native tool name resolution (file header assumption 2), shared
+ * with `acpPermissionHandler.ts` — a `session/request_permission`'s
+ * `toolCall` payload is structurally the same shape this reads.
+ */
+export function pickAcpToolName(update: AcpSessionUpdate): string {
   const claudeName = pickClaudeCodeToolName(update);
   if (claudeName) return claudeName;
   const kind = pickString(update.kind);
@@ -285,7 +290,8 @@ function pickToolName(update: AcpSessionUpdate): string {
   return "tool";
 }
 
-function pickToolArgs(update: AcpSessionUpdate): unknown {
+/** Structural `rawInput` extraction, shared with `acpPermissionHandler.ts`. */
+export function pickAcpToolArgs(update: AcpSessionUpdate): Record<string, unknown> {
   return isRecord(update.rawInput) ? update.rawInput : {};
 }
 
@@ -503,9 +509,9 @@ function handleToolCall(
       {
         t: "tool-start",
         call,
-        name: pickToolName(update),
+        name: pickAcpToolName(update),
         ...(title !== undefined ? { title } : {}),
-        args: pickToolArgs(update),
+        args: pickAcpToolArgs(update),
         ...(risk !== undefined ? { risk } : {}),
       },
       { turn, subagent },
