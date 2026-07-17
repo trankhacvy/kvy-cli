@@ -49,6 +49,77 @@ describe("buildServer", () => {
   });
 });
 
+// Split-origin self-host shape (falcon-system-design.md §5.3/§9, plan.md §16 "4.3
+// Distribution & self-host"): the web static export is served from a different origin
+// than this API, so plain HTTP routes — not just the Socket.IO `/v1/stream` path — need a
+// real CORS allowlist too. `CORS_ALLOWED_ORIGINS` defaults to `http://localhost:3000`
+// (config.ts) when unset, which is what these tests exercise.
+describe("buildServer CORS (HTTP routes)", () => {
+  let app: FastifyInstance;
+
+  beforeEach(async () => {
+    app = await buildServer({ logger: false });
+  });
+
+  afterEach(async () => {
+    await app.close();
+  });
+
+  it("reflects an allowlisted Origin on a simple GET", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "http://localhost:3000" },
+    });
+    expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+  });
+
+  it("omits the CORS header for a non-allowlisted Origin", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "https://evil.example" },
+    });
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("never sets Access-Control-Allow-Credentials (bearer-token auth, no cookies to leak)", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/health",
+      headers: { origin: "http://localhost:3000" },
+    });
+    expect(response.headers["access-control-allow-credentials"]).toBeUndefined();
+  });
+
+  it("answers an allowlisted preflight OPTIONS with the allowed methods/headers", async () => {
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/health",
+      headers: {
+        origin: "http://localhost:3000",
+        "access-control-request-method": "GET",
+        "access-control-request-headers": "authorization",
+      },
+    });
+    expect(response.statusCode).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    expect(response.headers["access-control-allow-headers"]).toContain("Authorization");
+  });
+
+  it("rejects a preflight OPTIONS from a non-allowlisted origin", async () => {
+    const response = await app.inject({
+      method: "OPTIONS",
+      url: "/health",
+      headers: {
+        origin: "https://evil.example",
+        "access-control-request-method": "GET",
+      },
+    });
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+});
+
 describe("buildServer rate limiting", () => {
   let pglite: PGlite;
   let db: Awaited<ReturnType<typeof createTestDb>>["db"];
