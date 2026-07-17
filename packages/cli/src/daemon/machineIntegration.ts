@@ -42,15 +42,31 @@
  * every machine RPC under a key that no longer matches what the server (and
  * any other real client unwrapping the same row) actually uses.
  *
- * **Workspace/provider-session registries don't exist yet.** `spawn`'s
- * `resolveWorkspaceRoot` and `adopt.take`/`adopt.mirror`'s
- * `resolveProviderSession` are the same injected, no-real-default seams
- * `spawnEngine.ts`/`workspacePath.ts`/`providerSessionResolver.ts` already
- * document (a workspace registry is a separate, later task) — this module
- * does not invent one. Passing through honest "unregistered" answers by
- * default means every one of these RPCs is genuinely reachable and will
- * genuinely run end-to-end once that registry lands, rather than being a
- * silent no-op today.
+ * **Workspace registry is caller-injected, not invented here.** `spawn`'s
+ * `resolveWorkspaceRoot` and the transcript indexer's `listWorkspaces` are
+ * the same injected seams `spawnEngine.ts`/`workspacePath.ts`/
+ * `transcriptIndexer.ts` already document — this module still does not
+ * hard-code a specific registry implementation, it just wires whatever
+ * `deps` supplies into `spawnSession`/`startTranscriptIndexer`.
+ * `daemon/commands.ts` is the composition root that now supplies the real
+ * `~/.falcon/workspaces.json`-backed registry (`workspace/adapters.ts`) as
+ * both of these defaults; `createMachineIntegrationDeps` here still
+ * defaults to the honest "nothing registered" stand-in so this module's own
+ * unit tests never depend on that store.
+ *
+ * `adopt.take`/`adopt.mirror`'s `resolveProviderSession` remains a
+ * no-real-default seam (`providerSessionResolver.ts`'s own doc comment) —
+ * resolving a bare provider session id needs transcript-content scanning,
+ * a different, later composition than "which directories are registered".
+ *
+ * **Transcript indexer starts here too.** Once the machine RPC handlers are
+ * registered, this module also starts the adoption Tier-1 transcript
+ * indexer (`transcriptIndexer.ts`) against the same `machineId` and
+ * `deps.listWorkspaces`, upserting via a fresh `unmanagedSessionClient.ts`
+ * client built from this boot's credentials/DEK — mirroring the RPC
+ * handlers' own "reachable but previously never started" gap: the module
+ * existed, fully tested, with nothing calling `startTranscriptIndexer` from
+ * a live daemon boot until now.
  */
 import {
   decodeBase64,
@@ -84,7 +100,17 @@ import type { PersistedSession } from "./sessionsStore.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
 import { type SpawnEngineDeps, spawnSession as spawnSessionCore } from "./spawnEngine.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
+import {
+  createTranscriptIndexerDeps,
+  type RegisteredWorkspace,
+  startTranscriptIndexer,
+  type TranscriptIndexerHandle,
+} from "./transcriptIndexer.js";
 import { handleAdoptMirror } from "./transcriptMirror.js";
+import {
+  createUnmanagedSessionClientDeps,
+  upsertUnmanagedSession,
+} from "./unmanagedSessionClient.js";
 import type { WorkspaceRootLookup } from "./workspacePath.js";
 
 const DEK_LENGTH_BYTES = 32;
@@ -101,8 +127,10 @@ export interface MachineIntegrationDeps {
   ioFactory: (url: string, opts: Record<string, unknown>) => Socket;
   /** Reads `~/.falcon/access.key`; `null` means "not logged in" (local-only mode). */
   readCredentials: () => FalconCredentials | null;
-  /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory; `null` for anything unregistered (design §12: no arbitrary-directory execution from remote). No real default yet — see module header. */
+  /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory; `null` for anything unregistered (design §12: no arbitrary-directory execution from remote). Defaults to "nothing registered" here — `daemon/commands.ts` supplies the real registry. See module header. */
   resolveWorkspaceRoot: WorkspaceRootLookup;
+  /** Lists every registered workspace, for the transcript indexer's boot-time (and periodic re-scan) fs-watch. Defaults to "nothing registered" here — `daemon/commands.ts` supplies the real registry. See module header. */
+  listWorkspaces: () => Promise<RegisteredWorkspace[]>;
   /** Resolves `adopt.take`/`adopt.mirror`'s bare provider session id back to a registered workspace. No real default yet — see module header. */
   resolveProviderSession: ProviderSessionResolver;
   /** Resolves the working directory to relaunch a `resumeSession` RPC's target in, from its persisted record. No real default yet (matches `resumeSession.ts`'s own doc comment: honestly fail rather than guess). */
@@ -140,6 +168,7 @@ export function createMachineIntegrationDeps(
     },
     readCredentials: () => null,
     resolveWorkspaceRoot: () => null,
+    listWorkspaces: async () => [],
     resolveProviderSession: async () => null,
     resolveResumeDirectory: () => undefined,
     heartbeatIntervalMs: 60_000,
@@ -299,9 +328,30 @@ export async function startMachineIntegration(
 
   deps.logger.info("[machine-integration] machine client + RPC handlers ready", { machineId });
 
+  // Adoption Tier 1 (design §8/§11 UC9): fs-watch every registered
+  // workspace's transcript dir for plain (non-Falcon) provider sessions.
+  // Reuses this same boot's credentials/DEK to upsert against
+  // `POST /v1/unmanaged-sessions` — a fresh per-row DEK per upsert
+  // (`unmanagedSessionClient.ts`'s own contract), unrelated to `dek` above.
+  const unmanagedSessionDeps = createUnmanagedSessionClientDeps(
+    { token: credentials.token, contentPublicKey: keyTree.content.publicKey },
+    { serverUrl: deps.serverUrl, fetchImpl: deps.fetchImpl, logger: deps.logger },
+  );
+  const transcriptIndexerHandle: TranscriptIndexerHandle = startTranscriptIndexer(
+    createTranscriptIndexerDeps(
+      {
+        machineId,
+        listWorkspaces: deps.listWorkspaces,
+        upsert: (params) => upsertUnmanagedSession(unmanagedSessionDeps, params),
+      },
+      { logger: deps.logger },
+    ),
+  );
+
   return {
     machineId,
     stop: () => {
+      transcriptIndexerHandle.stop();
       rpcHandle.stop();
       started.handle.stop();
     },

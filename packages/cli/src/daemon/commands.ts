@@ -10,6 +10,10 @@ import {
 } from "../auth/credentials.js";
 import { resolveHomeDir } from "../home.js";
 import { createLogger, type Logger } from "../logger.js";
+import {
+  createTranscriptIndexerWorkspaceLister,
+  createWorkspaceRootLookup,
+} from "../workspace/adapters.js";
 import { startControlServer } from "./controlServer.js";
 import { acquireDaemonLock, isProcessAlive } from "./lock.js";
 import {
@@ -28,6 +32,7 @@ import type { PersistedSession } from "./sessionsStore.js";
 import { createSpawnAwaiter } from "./spawnAwaiter.js";
 import type { SpawnEngineDeps } from "./spawnEngine.js";
 import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState } from "./state.js";
+import type { RegisteredWorkspace } from "./transcriptIndexer.js";
 import type { SessionEncryptionData } from "./types.js";
 import type { WorkspaceRootLookup } from "./workspacePath.js";
 
@@ -75,13 +80,22 @@ import type { WorkspaceRootLookup } from "./workspacePath.js";
  * this module now wires for real; see `P3-3.1-daemon-spawn-rpc`'s
  * task-summary for why it was deliberately left untouched.
  *
- * The machine RPC handlers' `resolveWorkspaceRoot`/`resolveProviderSession`/
- * `resolveResumeDirectory` seams have no real default yet (no on-disk
- * "registered workspaces" store exists in this package) — they honestly
- * report "unregistered"/"unresolved" rather than guessing, exactly like
- * `spawnEngine.ts`/`providerSessionResolver.ts`/`resumeSession.ts` already
- * document. `DaemonCommandDeps` exposes them as overridable so a later task
- * can plug a real store in without touching this wiring again.
+ * The machine RPC handlers' `resolveWorkspaceRoot`/`listWorkspaces` seams
+ * default to the real `~/.falcon/workspaces.json`-backed registry
+ * (`workspace/registry.ts`, adapted in `workspace/adapters.ts`) — a `spawn`
+ * RPC's `workspaceId` is validated against an actually-registered directory
+ * (`workspacePath.ts`'s `validateSpawnWorkspace`, via
+ * `machineIntegration.ts`), and the transcript indexer
+ * (`transcriptIndexer.ts`, started from within `machineIntegration.ts` once
+ * a machine client is up) fs-watches actually-registered workspaces instead
+ * of nothing. `resolveProviderSession`/`resolveResumeDirectory` still have
+ * no real default (resolving a bare provider session id back to a
+ * workspace needs transcript-content scanning, a different, later
+ * composition — see `providerSessionResolver.ts`'s own doc comment) — they
+ * honestly report "unresolved" rather than guessing. `DaemonCommandDeps`
+ * exposes all of these as overridable so tests (and any future real
+ * `resolveProviderSession`) can plug in a different implementation without
+ * touching this wiring again.
  */
 
 export interface DaemonCommandDeps {
@@ -133,8 +147,10 @@ export interface DaemonCommandDeps {
   machineIoFactory: (url: string, opts: Record<string, unknown>) => Socket;
   /** How often the machine client sends its `machine-alive` heartbeat. Defaults to 60s (design §8). */
   machineHeartbeatIntervalMs: number;
-  /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory. No real default yet — see this module's own doc comment. */
+  /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory. Defaults to the real `workspaces.json`-backed registry — see this module's own doc comment. */
   resolveWorkspaceRoot: WorkspaceRootLookup;
+  /** Lists every registered workspace for the transcript indexer's boot-time fs-watch (`transcriptIndexer.ts`). Defaults to the same real registry as `resolveWorkspaceRoot`. */
+  listWorkspaces: () => Promise<RegisteredWorkspace[]>;
   /** Resolves `adopt.take`/`adopt.mirror`'s bare provider session id to a registered workspace. No real default yet — see this module's own doc comment. */
   resolveProviderSession: ProviderSessionResolver;
   /** Resolves the working directory to relaunch a `resumeSession` RPC's target in. No real default yet — see this module's own doc comment. */
@@ -219,8 +235,15 @@ function defaultSpawnStartSync(): void {
 export function createDaemonCommandDeps(
   overrides: Partial<DaemonCommandDeps> = {},
 ): DaemonCommandDeps {
+  // Resolved ahead of the returned object (honoring an override, same as
+  // the final value the `homeDir` field below will actually carry) so the
+  // registry-backed defaults constructed here read/write the SAME
+  // `~/.falcon` (or overridden test tmpdir) the rest of this deps object
+  // uses — never a mismatched real-home-dir default under a test's
+  // overridden `homeDir`.
+  const homeDir = overrides.homeDir ?? resolveHomeDir();
   return {
-    homeDir: resolveHomeDir(),
+    homeDir,
     version: readCliVersion(),
     logger: createLogger(),
     now: () => Date.now(),
@@ -240,7 +263,8 @@ export function createDaemonCommandDeps(
     readAuthCredentials: (homeDir) => readAuthCredentialsDefault(homeDir),
     machineIoFactory: (url, opts) => ioClientDefault(url, opts),
     machineHeartbeatIntervalMs: 60_000,
-    resolveWorkspaceRoot: () => null,
+    resolveWorkspaceRoot: createWorkspaceRootLookup({ homeDir }),
+    listWorkspaces: createTranscriptIndexerWorkspaceLister({ homeDir }),
     resolveProviderSession: async () => null,
     resolveResumeDirectory: () => undefined,
     ...overrides,
@@ -385,6 +409,7 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
       ioFactory: deps.machineIoFactory,
       readCredentials: () => deps.readAuthCredentials(homeDir),
       resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
+      listWorkspaces: deps.listWorkspaces,
       resolveProviderSession: deps.resolveProviderSession,
       resolveResumeDirectory: deps.resolveResumeDirectory,
       heartbeatIntervalMs: deps.machineHeartbeatIntervalMs,

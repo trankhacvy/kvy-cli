@@ -15,10 +15,15 @@
  * provider session id back to a workspace additionally requires scanning
  * transcript contents (which workspace's transcript directory contains this
  * session id), not just "which directories are registered"; that's a
- * different, later composition, not this registry's job. Wiring any of
- * these adapters into a live daemon boot sequence (`daemon/commands.ts`) is
- * also out of scope, matching the precedent already set by
- * `P3-3.1-daemon-spawn-rpc`/`P3-3.3-session-adoption-indexer`.
+ * different, later composition, not this registry's job.
+ *
+ * **Wired in** (P3-workspace-registration-wiring): `daemon/commands.ts`'s
+ * `createDaemonCommandDeps` now defaults `resolveWorkspaceRoot`/
+ * `listWorkspaces` to the two adapters below (homeDir-scoped), which flow
+ * through `daemon/machineIntegration.ts` into the `spawn` machine RPC's
+ * workspace-path validation and into the transcript indexer's boot-time
+ * `startTranscriptIndexer` call — both previously honest-but-always-empty
+ * stubs, now backed by this real registry.
  */
 import type { RegisteredWorkspace } from "../daemon/transcriptIndexer.js";
 import type { WorkspaceRootLookup } from "../daemon/workspacePath.js";

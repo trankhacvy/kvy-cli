@@ -190,10 +190,19 @@ packages/
 │                             composition). `commands/workspaceRegister.ts` backs the new
 │                             `falcon workspace register [--directory --name]` / `list` /
 │                             `unregister` commands (wired into `index.ts`, no daemon
-│                             interaction, matching `workspace config`'s precedent). None of
-│                             the adapters are wired into a live daemon boot sequence yet —
-│                             that composition-root wiring remains a separate, later task, same
-│                             precedent as `spawn`/`resumeSession`/`adopt.*` before it.
+│                             interaction, matching `workspace config`'s precedent).
+│                             `daemon/commands.ts`'s `createDaemonCommandDeps` now defaults
+│                             `resolveWorkspaceRoot`/`listWorkspaces` to those two adapters
+│                             (homeDir-scoped, so a test's overridden `homeDir` is honored
+│                             rather than reading the real `~/.falcon`), flowing through
+│                             `daemon/machineIntegration.ts` into the `spawn` machine RPC's
+│                             workspace-path validation and into a new
+│                             `startTranscriptIndexer` call made once the machine client is
+│                             up — the transcript indexer module existed and was fully
+│                             tested but had no live boot-time caller until now. Both were
+│                             previously honest-but-always-empty stubs; `resolveProviderSession`
+│                             (`adopt.take`/`adopt.mirror`) still has no real default, same
+│                             reasoning as above.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
