@@ -8,11 +8,11 @@
  * params/results sealed under the owning DEK), adapted to the
  * machine-scoped `m:<machineId>:<method>` target namespace. `spawn`,
  * `resumeSession`, the New Session directory picker's `fs.list`/`fs.mkdir`,
- * and session adoption's `adopt.take`/`adopt.mirror` are in scope here —
- * `stopSession`/`listSessions`/`git.*`/`fs.read`/`adopt.list` are separate,
- * later plan bullets (§3.2/§4.1) and can be added to
- * `MACHINE_RPC_METHODS`/`methods` the same way without touching this
- * module's dispatch shape.
+ * session adoption's `adopt.take`/`adopt.mirror`, and the Git panel's
+ * `git.status`/`git.diff` (plan.md §16 "4.1 Git panel") are in scope here —
+ * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
+ * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
+ * the same way without touching this module's dispatch shape.
  *
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
  * double-spawn"; the same rationale extends to `adopt.take`'s kill+spawn
@@ -28,7 +28,14 @@
  * pattern via `withIdempotencyCache` (keyed on `idempotencyKey` + a JSON
  * snapshot of `params` — see that helper's own doc comment for why).
  * `fs.list`/`fs.mkdir` need no such cache — listing is naturally
- * idempotent, and `mkdir -p` succeeds identically on retry.
+ * idempotent, and `mkdir -p` succeeds identically on retry. `git.status`/
+ * `git.diff` need none either, for the same reason as `fs.list`: they only
+ * read current repository state, so a retry just re-reads it — unlike
+ * `adopt.mirror`'s "re-reading a file mid-write twice" hazard, there's no
+ * mid-write file here to race. Both still carry `idempotencyKey` on the
+ * wire (design: "every caller-retriable machine RPC carries a caller-minted
+ * key") for uniformity with the rest of this RPC family, it's just unused
+ * by these two handlers.
  * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
  * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
  * retried resume of the same session is not a "double spawn" risk:
@@ -56,6 +63,14 @@ import {
   FsMkdirParamsSchema,
   type FsMkdirResult,
   FsMkdirResultSchema,
+  type GitDiffParams,
+  GitDiffParamsSchema,
+  type GitDiffResult,
+  GitDiffResultSchema,
+  type GitStatusParams,
+  GitStatusParamsSchema,
+  type GitStatusResult,
+  GitStatusResultSchema,
   ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
   type SpawnParams,
@@ -66,6 +81,8 @@ import {
 import type { Socket } from "socket.io-client";
 import type { ZodType } from "zod";
 import type { Logger } from "../logger.js";
+import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
+import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import {
   createDirectory as createDirectoryDefault,
   listDirectory as listDirectoryDefault,
@@ -76,6 +93,8 @@ export const MACHINE_RPC_METHODS = [
   "resumeSession",
   "fs.list",
   "fs.mkdir",
+  "git.status",
+  "git.diff",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -94,6 +113,10 @@ export interface MachineRpcDeps {
   listDirectory?: (params: FsListParams) => Promise<FsListResult>;
   /** Backs the `fs.mkdir` create-directory-approval RPC. Injectable for tests; defaults to `fsBrowse.ts`'s real `mkdir -p`. Throws on failure. */
   createDirectory?: (params: FsMkdirParams) => Promise<FsMkdirResult>;
+  /** Backs the `git.status` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitStatus.ts`'s real `git status --porcelain=v2` parse. Throws on failure (e.g. `worktree` isn't a git repo). */
+  getGitStatus?: (params: GitStatusParams) => Promise<GitStatusResult>;
+  /** Backs the `git.diff` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitDiff.ts`'s real `git diff` against the resolved base ref. Throws on failure. */
+  getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -179,6 +202,8 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const spawnResults = new Map<string, SpawnResult>();
   const listDirectory = deps.listDirectory ?? listDirectoryDefault;
   const createDirectory = deps.createDirectory ?? createDirectoryDefault;
+  const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
+  const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const cachedAdoptTake = withIdempotencyCache(deps.adoptTake);
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
 
@@ -227,6 +252,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: FsMkdirParamsSchema,
       resultSchema: FsMkdirResultSchema,
       handle: createDirectory as (params: unknown) => Promise<unknown>,
+    },
+    "git.status": {
+      paramsSchema: GitStatusParamsSchema,
+      resultSchema: GitStatusResultSchema,
+      handle: getGitStatus as (params: unknown) => Promise<unknown>,
+    },
+    "git.diff": {
+      paramsSchema: GitDiffParamsSchema,
+      resultSchema: GitDiffResultSchema,
+      handle: getGitDiff as (params: unknown) => Promise<unknown>,
     },
     "adopt.take": {
       paramsSchema: AdoptTakeParamsSchema,

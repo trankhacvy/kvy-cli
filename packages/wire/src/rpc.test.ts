@@ -5,13 +5,16 @@ import {
   AdoptMirrorResultSchema,
   AdoptTakeParamsSchema,
   AdoptTakeResultSchema,
+  FileStatusSchema,
   FsListParamsSchema,
   FsListResultSchema,
   FsMkdirParamsSchema,
   FsMkdirResultSchema,
   FsReadParamsSchema,
   GitDiffParamsSchema,
+  GitDiffResultSchema,
   GitStatusParamsSchema,
+  GitStatusResultSchema,
   PermAnswerParamsSchema,
   PermAnswerResultSchema,
   RpcCallSchema,
@@ -102,6 +105,34 @@ describe("adopt.take / adopt.mirror result shapes", () => {
     ).toBe(true);
     expect(
       AdoptMirrorResultSchema.safeParse({ chunk: "{}\n", nextCursor: null, done: true }).success,
+    ).toBe(true);
+  });
+});
+
+describe("git.status / git.diff result shapes", () => {
+  it("GitStatusResultSchema carries branch/ahead/behind and a list of FileStatus", () => {
+    expect(
+      GitStatusResultSchema.safeParse({
+        branch: "main",
+        ahead: 1,
+        behind: 0,
+        files: [{ path: "src/a.ts", status: "modified" }],
+      }).success,
+    ).toBe(true);
+    expect(FileStatusSchema.safeParse({ path: "src/b.ts", status: "untracked" }).success).toBe(
+      true,
+    );
+    expect(FileStatusSchema.safeParse({ path: "src/b.ts", status: "bogus" }).success).toBe(false);
+  });
+
+  it("GitDiffResultSchema requires `truncated`; `inline`/`blobRef` stay optional", () => {
+    expect(GitDiffResultSchema.safeParse({ inline: "diff --git a/x b/x" }).success).toBe(false);
+    expect(
+      GitDiffResultSchema.safeParse({ inline: "diff --git a/x b/x", truncated: false }).success,
+    ).toBe(true);
+    expect(GitDiffResultSchema.safeParse({ truncated: true }).success).toBe(true);
+    expect(
+      GitDiffResultSchema.safeParse({ blobRef: "blob-1", truncated: false }).success,
     ).toBe(true);
   });
 });

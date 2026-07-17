@@ -1,6 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 import {
   deriveAttention,
   deriveControlMode,
@@ -110,6 +112,9 @@ function SessionTimelineBody({
             {controlMode === "local" ? "Local control" : "Remote control"}
           </p>
         </div>
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
+        </Button>
       </header>
       <ControlBar mode="default" controlMode={controlMode} working={working} />
       <Timeline items={mergedItems} />

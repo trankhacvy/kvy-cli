@@ -105,6 +105,17 @@ export interface Settings {
    * of a series of unrelated sessions.
    */
   adoptedSessions?: Record<string, string[]>;
+  /**
+   * Per-workspace git settings written by `falcon workspace config
+   * [--base-ref/--remote/--directory]` (falcon-prd.md line 148, plan.md §16
+   * "4.1 Git panel") — keyed by the workspace's real (symlink-resolved)
+   * absolute directory path, same key shape `daemon/gitDiff.ts`'s
+   * `resolveConfiguredBaseRef` looks up when a `git.diff` RPC omits an
+   * explicit `baseRef`. `remote` is stored for a future `git push`/PR
+   * fast-follow (falcon-prd.md FR-7.7) — unused by the read-only MVP diff
+   * viewer.
+   */
+  workspaces?: Record<string, { baseRef?: string; remote?: string }>;
 }
 
 const defaultSettings: Settings = {
@@ -136,6 +147,17 @@ function normalizeSettings(raw: Record<string, unknown>): Settings {
       }
     }
     settings.adoptedSessions = adoptedSessions;
+  }
+  if (isPlainObject(raw.workspaces)) {
+    const workspaces: Record<string, { baseRef?: string; remote?: string }> = {};
+    for (const [key, value] of Object.entries(raw.workspaces)) {
+      if (!isPlainObject(value)) continue;
+      const entry: { baseRef?: string; remote?: string } = {};
+      if (typeof value.baseRef === "string") entry.baseRef = value.baseRef;
+      if (typeof value.remote === "string") entry.remote = value.remote;
+      workspaces[key] = entry;
+    }
+    settings.workspaces = workspaces;
   }
   return settings;
 }

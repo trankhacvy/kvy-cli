@@ -9,7 +9,7 @@ import type {
   SpawnResult,
 } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
-import { type MachineRpcDeps, registerMachineRpcHandlers } from "./machineRpc.js";
+import { MACHINE_RPC_METHODS, type MachineRpcDeps, registerMachineRpcHandlers } from "./machineRpc.js";
 
 /** Minimal fake standing in for a socket.io-client `Socket` (mirrors rpc/sessionRpc.test.ts's FakeSocket). */
 class FakeSocket {
@@ -116,6 +116,14 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:git.status" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:git.diff" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -129,7 +137,7 @@ describe("registerMachineRpcHandlers", () => {
     socket.connected = true;
     register(socket);
 
-    expect(socket.emitted).toHaveLength(6);
+    expect(socket.emitted).toHaveLength(MACHINE_RPC_METHODS.length);
   });
 
   describe("spawn", () => {
@@ -374,6 +382,75 @@ describe("registerMachineRpcHandlers", () => {
         socket,
         "fs.mkdir",
         seal({ idempotencyKey: "idem_mk_2" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+  });
+
+  describe("git.status", () => {
+    it("decrypts params, calls getGitStatus, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGitStatus = vi.fn(async () => ({
+        branch: "main",
+        ahead: 1,
+        behind: 0,
+        files: [{ path: "src/a.ts", status: "modified" as const }],
+      }));
+      register(socket, { getGitStatus });
+
+      const params = { idempotencyKey: "idem_git_status_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "git.status", seal(params, DEK));
+
+      expect(getGitStatus).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        branch: "main",
+        ahead: 1,
+        behind: 0,
+        files: [{ path: "src/a.ts", status: "modified" }],
+      });
+    });
+
+    it("replies with a sealed error when getGitStatus throws (e.g. not a git repo)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getGitStatus: vi.fn(async () => {
+          throw new Error("fatal: not a git repository");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.status",
+        seal({ idempotencyKey: "idem_git_status_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+    });
+  });
+
+  describe("git.diff", () => {
+    it("decrypts params, calls getGitDiff, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGitDiff = vi.fn(async () => ({
+        inline: "diff --git a/x b/x",
+        truncated: false,
+      }));
+      register(socket, { getGitDiff });
+
+      const params = { idempotencyKey: "idem_git_diff_1", worktree: "/repo", baseRef: "main" };
+      const response = await callAndAwaitAck(socket, "git.diff", seal(params, DEK));
+
+      expect(getGitDiff).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ inline: "diff --git a/x b/x", truncated: false });
+    });
+
+    it("replies with a sealed error when params fail schema validation (missing worktree)", async () => {
+      const socket = new FakeSocket();
+      register(socket, { getGitDiff: vi.fn() });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.diff",
+        seal({ idempotencyKey: "idem_git_diff_2" }, DEK),
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
     });

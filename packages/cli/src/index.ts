@@ -6,6 +6,7 @@ import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
 import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
+import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
   createDaemonCommandDeps,
   runDaemonStart,
@@ -38,8 +39,11 @@ import { createLogger } from "./logger.js";
 // Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
 // this module still wires up arg parsing + a stub dispatcher. `auth` is now
 // a real implementation (`./auth/`, falcon-plan.md §2.2); daemon control is
-// real too (`./daemon/`); provider spawning and the rest of the network
-// calls are later 1.3/1.5 work — every other branch below is an honest
+// real too (`./daemon/`); `workspace-config` is real too (`./commands/
+// workspaceConfig.js`, plan.md §16 "4.1 Git panel"); `workspace-sync` is a
+// deliberate, permanent stub (falcon-prd.md line 149: "cloud sync coming
+// soon" — sandboxing is out of scope); provider spawning and the rest of
+// the network calls are later work — every other branch below is an honest
 // placeholder, not a half-implementation.
 //
 // Help text, `--version`, and error messages are ordinary CLI output and go
@@ -290,6 +294,24 @@ async function runAdopt(command: Extract<FalconCommand, { type: "adopt" }>): Pro
   );
 }
 
+/**
+ * `falcon workspace config [--base-ref/--remote/--directory]` (plan.md §16
+ * "4.1 Git panel") — reads/writes `~/.falcon/settings.json` directly (see
+ * `commands/workspaceConfig.ts`). Deliberately does **not** call
+ * `ensureDaemon()`: unlike `adopt`/`start`/`auth`, this command has no
+ * daemon interaction at all — the daemon's `git.diff` RPC handler reads the
+ * same store straight off disk the next time it runs, same rationale as
+ * `doctor` skipping the daemon-auto-start step.
+ */
+async function runWorkspaceConfig(
+  command: Extract<FalconCommand, { type: "workspace-config" }>,
+): Promise<number> {
+  return runWorkspaceConfigCommand(
+    { baseRef: command.baseRef, remote: command.remote, directory: command.directory },
+    { workingDirectory: process.cwd() },
+  );
+}
+
 function run(command: FalconCommand): number | Promise<number> {
   switch (command.type) {
     case "help":
@@ -315,8 +337,7 @@ function run(command: FalconCommand): number | Promise<number> {
     case "adopt":
       return runAdopt(command);
     case "workspace-config":
-      process.stdout.write("falcon workspace config: not implemented yet\n");
-      return 0;
+      return runWorkspaceConfig(command);
     case "workspace-sync":
       process.stdout.write("cloud sync coming soon\n");
       return 0;

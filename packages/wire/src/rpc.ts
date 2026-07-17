@@ -100,6 +100,7 @@ export const GitStatusParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),
 });
+export type GitStatusParams = z.infer<typeof GitStatusParamsSchema>;
 
 export const FileStatusSchema = z.object({
   path: z.string(),
@@ -113,6 +114,7 @@ export const GitStatusResultSchema = z.object({
   behind: z.number(),
   files: z.array(FileStatusSchema),
 });
+export type GitStatusResult = z.infer<typeof GitStatusResultSchema>;
 
 export const GitDiffParamsSchema = z.object({
   idempotencyKey: z.string(),
@@ -120,11 +122,21 @@ export const GitDiffParamsSchema = z.object({
   path: z.string().optional(),
   baseRef: z.string().optional(),
 });
+export type GitDiffParams = z.infer<typeof GitDiffParamsSchema>;
 
+// `truncated` mirrors `FsReadResultSchema`'s own field below — same "no blob
+// subsystem yet" contract (design §4.4 "payload size rule"): a diff that
+// would blow the 64KB RPC control-plane budget is truncated inline rather
+// than dropped, and `truncated: true` tells the caller more content exists.
+// `blobRef` is the reserved extension point for the eventual blob-storage
+// fallback (plan.md §16 "4.3 Distribution & self-host") — unset until that
+// subsystem lands, same as `adopt.mirror`'s own not-yet-wired `blobRef`.
 export const GitDiffResultSchema = z.object({
   inline: z.string().optional(),
   blobRef: z.string().optional(),
+  truncated: z.boolean(),
 });
+export type GitDiffResult = z.infer<typeof GitDiffResultSchema>;
 
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
@@ -137,12 +149,14 @@ export const FsReadParamsSchema = z.object({
     })
     .optional(),
 });
+export type FsReadParams = z.infer<typeof FsReadParamsSchema>;
 
 export const FsReadResultSchema = z.object({
   inline: z.string().optional(),
   blobRef: z.string().optional(),
   truncated: z.boolean(),
 });
+export type FsReadResult = z.infer<typeof FsReadResultSchema>;
 
 // `fs.list`/`fs.mkdir` — the New Session directory picker's daemon-provided
 // browsing RPCs (falcon-prd.md FR-7.5 "workspace/directory picker
