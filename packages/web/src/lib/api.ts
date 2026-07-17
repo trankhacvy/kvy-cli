@@ -6,6 +6,7 @@
  * response surfaces as a thrown `ApiError` either way.
  */
 import type { PushSubscribeBody, SessionRow } from "@falcon/wire";
+import type { MessagesPage, SyncSnapshot } from "@/sync";
 import { API_URL } from "./config.js";
 
 export class ApiError extends Error {
@@ -153,4 +154,25 @@ export function setSessionMuted(
   muted: boolean,
 ): Promise<{ muted: boolean }> {
   return putJson(`/v1/sessions/${sessionId}/notifications-mute`, { muted }, token);
+}
+
+/** `GET /v1/sync?since=0` — full account snapshot (design §4.3/§6.2): every
+ * session/machine/unmanaged-session row, each still carrying its opaque
+ * `EncryptedBox` metadata + `dek` wrap. Always requests the full snapshot —
+ * the route's own doc comment notes there's no incremental-resync support
+ * yet ("not an incremental delta from `since`"), so there's no benefit to
+ * threading a real cursor through here. */
+export function getSync(token: string): Promise<SyncSnapshot> {
+  return getJson("/v1/sync?since=0", token);
+}
+
+/** `GET /v1/sessions/:id/messages` — one page of a session's encrypted
+ * message batches, newest first (`before` pages backward by `seq`). */
+export function getSessionMessages(
+  token: string,
+  sessionId: string,
+  before?: number,
+): Promise<MessagesPage> {
+  const qs = before !== undefined ? `?before=${before}` : "";
+  return getJson(`/v1/sessions/${sessionId}/messages${qs}`, token);
 }
