@@ -124,6 +124,25 @@ const EnvSchema = z
     // *control-plane* cap this subsystem exists to route around, not a
     // blob-size cap).
     BLOB_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(64 * 1024 * 1024),
+    // Explicit CORS allowlist (falcon-system-design.md §12, plan.md §16 "4.4
+    // Hardening": "wildcard-CORS removal" — one of the reported Happy vuln
+    // classes). Comma-separated list of exact browser origins (scheme +
+    // host + port, no path) allowed to open the `/v1/stream` WebSocket —
+    // e.g. `https://app.falcon.dev,https://staging.falcon.dev`. Defaults to
+    // the Next.js dev server's own origin so local dev keeps working
+    // out of the box; every real deployment should set this explicitly to
+    // its actual web origin(s), same "safe default, must-override in prod"
+    // stance as `FALCON_MASTER_SECRET` above (see `app/security/cors.ts`).
+    CORS_ALLOWED_ORIGINS: z
+      .string()
+      .min(1)
+      .default("http://localhost:3000")
+      .transform((value) =>
+        value
+          .split(",")
+          .map((origin) => origin.trim())
+          .filter((origin) => origin.length > 0),
+      ),
   })
   // Belt-and-suspenders against shipping the dev-only secret to production: a silent
   // fallback there would let anyone who has read this source mint tokens for any

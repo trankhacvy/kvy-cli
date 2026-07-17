@@ -66,6 +66,12 @@ export function buildAuthRoutes(db: Database): FastifyPluginAsyncZod {
     app.post(
       "/v1/auth",
       {
+        // Unauthenticated route (no account yet) — keyed by IP via the global default
+        // (server.ts's `keyGenerator: (req) => req.accountId || req.ip`), tighter than
+        // the app-wide 300/min so a single client can't hammer signature verification
+        // (falcon-system-design.md §12: "Rate limits: auth endpoints", plan.md §16
+        // "4.4 Hardening": one of the reported Happy vuln classes).
+        config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
         schema: {
           body: AuthRequestSchema,
           response: {

@@ -48,6 +48,7 @@ describe("config env parsing", () => {
     delete process.env.BLOB_LOCAL_TOKEN_SECRET;
     delete process.env.BLOB_URL_EXPIRY_SECONDS;
     delete process.env.BLOB_MAX_SIZE_BYTES;
+    delete process.env.CORS_ALLOWED_ORIGINS;
 
     const { env } = await importFreshConfig();
 
@@ -73,6 +74,7 @@ describe("config env parsing", () => {
     expect(env.BLOB_LOCAL_TOKEN_SECRET).toBeUndefined();
     expect(env.BLOB_URL_EXPIRY_SECONDS).toBe(300);
     expect(env.BLOB_MAX_SIZE_BYTES).toBe(64 * 1024 * 1024);
+    expect(env.CORS_ALLOWED_ORIGINS).toEqual(["http://localhost:3000"]);
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -110,6 +112,7 @@ describe("config env parsing", () => {
     process.env.BLOB_LOCAL_TOKEN_SECRET = "test-blob-token-secret";
     process.env.BLOB_URL_EXPIRY_SECONDS = "120";
     process.env.BLOB_MAX_SIZE_BYTES = "1048576";
+    process.env.CORS_ALLOWED_ORIGINS = "https://app.falcon.dev, https://staging.falcon.dev";
 
     const { env } = await importFreshConfig();
 
@@ -139,7 +142,16 @@ describe("config env parsing", () => {
       BLOB_LOCAL_TOKEN_SECRET: "test-blob-token-secret",
       BLOB_URL_EXPIRY_SECONDS: 120,
       BLOB_MAX_SIZE_BYTES: 1048576,
+      CORS_ALLOWED_ORIGINS: ["https://app.falcon.dev", "https://staging.falcon.dev"],
     });
+  });
+
+  it("trims whitespace and drops empty entries from CORS_ALLOWED_ORIGINS", async () => {
+    process.env.CORS_ALLOWED_ORIGINS = " https://a.falcon.dev ,, https://b.falcon.dev ";
+
+    const { env } = await importFreshConfig();
+
+    expect(env.CORS_ALLOWED_ORIGINS).toEqual(["https://a.falcon.dev", "https://b.falcon.dev"]);
   });
 
   it("throws when DATABASE_URL is an empty string", async () => {

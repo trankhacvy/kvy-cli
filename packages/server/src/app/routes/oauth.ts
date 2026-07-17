@@ -91,6 +91,10 @@ export function buildOAuthRoutes(
     app.post(
       "/v1/auth/oauth/github/exchange",
       {
+        // Unauthenticated (no account yet), and it holds this server's own client
+        // secret behind it — keep it tight (falcon-system-design.md §12, plan.md §16
+        // "4.4 Hardening").
+        config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         schema: {
           body: z.object({ code: z.string().min(1), redirectUri: z.string().min(1) }),
           response: {
@@ -114,6 +118,9 @@ export function buildOAuthRoutes(
     app.post(
       "/v1/auth/register",
       {
+        // Unauthenticated route (no account yet) — same rationale as `auth.ts`'s
+        // `POST /v1/auth` (falcon-system-design.md §12, plan.md §16 "4.4 Hardening").
+        config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
         schema: {
           body: RegisterRequestSchema,
           response: {

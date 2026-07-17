@@ -43,6 +43,11 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     "/v1/auth/pair",
     {
+      // Unauthenticated, polled repeatedly by a waiting CLI — allow enough headroom for
+      // legitimate polling (a few requests/second) while still bounding abuse
+      // (falcon-system-design.md §12: "Rate limits: ... pair polling", plan.md §16
+      // "4.4 Hardening": one of the reported Happy vuln classes).
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
       schema: {
         body: z.object({ ephPub: EphPubSchema }),
         response: {
@@ -100,6 +105,8 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     "/v1/auth/pair/status",
     {
+      // Cheap read-only poll, same headroom rationale as `POST /v1/auth/pair` above.
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
       schema: {
         querystring: z.object({ ephPub: EphPubSchema }),
         response: {
@@ -130,6 +137,9 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
     "/v1/auth/pair/approve",
     {
       preHandler: app.authenticate,
+      // Authenticated write that mints a token for the requesting device — tighter than
+      // the poll routes above.
+      config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
       schema: {
         body: z.object({ ephPub: EphPubSchema, response: z.string().min(1) }),
         response: {

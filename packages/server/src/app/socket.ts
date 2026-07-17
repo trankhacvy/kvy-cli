@@ -1,12 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { verifyToken } from "../auth/tokens.js";
+import { env } from "../config.js";
 import {
   buildMachinePresenceEphemeral,
   buildSessionActivityEphemeral,
   type ClientConnection,
   eventRouter,
 } from "./events/eventRouter.js";
+import { buildCorsOriginValidator } from "./security/cors.js";
 import { rpcHandler } from "./socket/rpcHandler.js";
 
 type ClientType = "session-scoped" | "machine-scoped" | "user-scoped";
@@ -21,8 +23,13 @@ type ClientType = "session-scoped" | "machine-scoped" | "user-scoped";
 // (sessionUpdateHandler/usageHandler/machineUpdateHandler/etc. — out of scope for this task).
 export function startSocket(app: FastifyInstance): Server {
   const io = new Server(app.server, {
+    // Explicit allowlist, not a wildcard (falcon-system-design.md §12, plan.md §16 "4.4
+    // Hardening": "wildcard-CORS removal"). `origin: "*"` combined with
+    // `credentials: true` is a standing vuln class — no real browser honors that
+    // combination for credentialed requests, so it only ever gave a false sense of
+    // protection. See `security/cors.ts` for the allowlist semantics.
     cors: {
-      origin: "*",
+      origin: buildCorsOriginValidator(env.CORS_ALLOWED_ORIGINS),
       methods: ["GET", "POST", "OPTIONS"],
       credentials: true,
       allowedHeaders: ["*"],

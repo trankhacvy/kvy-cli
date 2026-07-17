@@ -24,12 +24,20 @@ describe("buildLoggerOptions", () => {
     expect(buildLoggerOptions().level).toBe("debug");
   });
 
-  it("redacts authorization and cookie headers", async () => {
+  it("redacts bearer/session credentials from headers and structured log fields", async () => {
     const { buildLoggerOptions } = await importFreshLogger();
     const options = buildLoggerOptions();
 
     expect(options.redact).toEqual({
-      paths: ["req.headers.authorization", "req.headers.cookie"],
+      paths: [
+        "req.headers.authorization",
+        "req.headers.cookie",
+        'req.headers["x-telegram-bot-api-secret-token"]',
+        "token",
+        "accessToken",
+        "*.token",
+        "*.accessToken",
+      ],
       censor: "[redacted]",
     });
   });

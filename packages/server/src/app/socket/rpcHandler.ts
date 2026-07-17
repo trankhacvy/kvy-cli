@@ -1,5 +1,6 @@
 import { Counter, Histogram, register } from "prom-client";
 import type { DefaultEventsMap, RemoteSocket, Server, Socket } from "socket.io";
+import { RpcRateLimiter } from "./rpcRateLimiter.js";
 
 // Ported wholesale from Happy's `happy-server/sources/app/api/socket/rpcHandler.ts`
 // (plan.md §4.2: "copy it wholesale" — this is the postmortem-hardened dead-peer-detection
@@ -35,6 +36,21 @@ const RPC_PRESENCE_FETCH_TIMEOUT_MS = 500;
 // budget — fewer requests under load while still catching a target mid-reconnect.
 const RPC_RECONNECT_GRACE_MS = 15_000;
 const RPC_RECONNECT_POLL_MS = 200;
+
+// Per-account rpc-call ceiling (falcon-system-design.md §12, plan.md §16 "4.4
+// Hardening": rate limiting on "RPC endpoints" — one of the reported Happy vuln
+// classes). Matches server.ts's global HTTP default (300/min) so RPC traffic gets the
+// same baseline throughput budget as everything else.
+export const RPC_CALL_RATE_LIMIT_MAX = 300;
+const RPC_CALL_RATE_LIMIT_WINDOW_MS = 60_000;
+
+// Module-level singleton (not per-connection) so the window is tracked per accountId
+// across that account's whole set of sockets/reconnects, not reset every time a new
+// socket connects.
+const defaultRpcRateLimiter = new RpcRateLimiter({
+  max: RPC_CALL_RATE_LIMIT_MAX,
+  windowMs: RPC_CALL_RATE_LIMIT_WINDOW_MS,
+});
 
 const rpcCallCounter = new Counter({
   name: "rpc_calls_total",
@@ -140,7 +156,12 @@ interface RpcRegisterData {
   target?: unknown;
 }
 
-export function rpcHandler(accountId: string, socket: Socket, io: Server): void {
+export function rpcHandler(
+  accountId: string,
+  socket: Socket,
+  io: Server,
+  rateLimiter: RpcRateLimiter = defaultRpcRateLimiter,
+): void {
   socket.on("rpc-register", (data: RpcRegisterData) => {
     try {
       const { target } = data ?? {};
@@ -186,6 +207,12 @@ export function rpcHandler(accountId: string, socket: Socket, io: Server): void 
       if (!target || typeof target !== "string" || !method || typeof method !== "string") {
         finish("invalid_params");
         callback?.({ ok: false, error: "Invalid parameters: target and method are required" });
+        return;
+      }
+
+      if (!rateLimiter.tryConsume(accountId)) {
+        finish("rate_limited");
+        callback?.({ ok: false, error: "Rate limit exceeded" });
         return;
       }
 
