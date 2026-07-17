@@ -1,5 +1,103 @@
 # Falcon — Progress Log
 
+## Cycle 69 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `e361e83` — "merge: land P4-4.4-rpc-integration-tests onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire` typecheck+build,
+  `@falcon/crypto` typecheck+build, `@falcon/server` typecheck+build, `falcon` cli typecheck+build,
+  `@falcon/e2e` typecheck, `@falcon/web` build+typecheck — including a fresh static export of
+  all 14 routes). All cache-hit-replayed clean (`>>> FULL TURBO`). No errors.
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 116 files / 1094
+  tests, `@falcon/server` 42 files / 298 tests, `@falcon/e2e` 1 file / 1 test (the 20-step
+  `exercise-flow` conformance run), full workspace green across `@falcon/{crypto,wire,web}` as
+  well.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested task_ids were verified as real ancestors of `main` via `git merge-base
+--is-ancestor <commit> main`, checked against both each task's own merge commit (all three are
+already properly merged onto `main` with a `"merge: land ... onto main"` commit) and its
+underlying feat/fix/refactor commits:
+
+1. **`task-summary/P4-4.4-provider-contract-tests.md`** — daily-cron (+`workflow_dispatch`)
+   GitHub Actions workflow (`.github/workflows/provider-contract.yml`, pinned `node:20-bookworm`
+   container) running `packages/cli/scripts/provider-contract-test.ts` against a fixture-prompt
+   corpus, asserting transcript JSONL shape, `SessionStart`/`Stop` hook events, and `--resume`
+   session-id continuity; fails loudly via GitHub's built-in scheduled-workflow-failure email
+   (no other alerting integration exists in this repo). Merge commit `67411f6` → `git merge-base
+   --is-ancestor 67411f6 main` = **true**; feat commit `126eb33` also confirmed an ancestor.
+   `plan.md` line 801 was `[ ]` — **flipped to `[x]` this cycle** with a dated confirmation note.
+2. **`task-summary/P4-4.4-conformance-harness.md`** — new `e2e/` workspace package
+   (`@falcon/e2e`) driving a real `@falcon/server` + real daemon boot + a `FakeSessionProcess`
+   (real session-RPC handlers/`PermissionHandler`/`Outbox`) through all 20 named steps (perm
+   allow/deny/allow-session, question, interrupt, mode switch ×2, adoption takeover via real
+   `adopt.take`, reconnect ×2), asserting against the real decrypted server-persisted transcript.
+   Runnable via `pnpm --filter @falcon/e2e exercise-flow` as a pre-release gate and wired into
+   `pnpm test` for CI. Merge commit `4df5a51` → `git merge-base --is-ancestor 4df5a51 main` =
+   **true**; feat commit `382f477` also confirmed an ancestor. `plan.md` line 802 was `[ ]` —
+   **flipped to `[x]` this cycle** with a dated confirmation note.
+3. **`task-summary/P4-4.4-rpc-integration-tests.md`** — new `rpcHandler.integration.test.ts`
+   (dead-daemon fast-fail measured 1483ms, under the <2s SLO — required tuning
+   `RPC_PRESENCE_POLL_MS` 2000ms→700ms; plus a 25-iteration reconnect-storm test) and
+   `machineRpc.takeoverRace.test.ts` (four concurrent-`adopt.take` scenarios). Required two
+   production fixes to hold under real concurrency: `withIdempotencyCache`/`handleSpawn` now
+   cache the in-flight `Promise` instead of the settled result, and a new
+   `withProviderSessionGuard` closes the cross-device double-takeover race, enforcing design
+   FR-9.4. Merge commit `e361e83` → `git merge-base --is-ancestor e361e83 main` = **true**;
+   feat/refactor commits `2626610`/`e50ce62` also confirmed ancestors. `plan.md` line 803 was
+   `[ ]` — **flipped to `[x]` this cycle** with a dated confirmation note.
+
+All ancestry checks were re-confirmed directly against `main`'s current tip (`e361e83`).
+
+### Tasks completed this cycle
+
+**3 checkboxes newly flipped**, all genuinely merged onto `main` with proper `"merge: land ...
+onto main"` commits and now correctly reflected in `plan.md`:
+
+- Provider contract tests in CI (`P4-4.4-provider-contract-tests`) — plan.md line 801
+- 20-step conformance script / `exercise-flow` (`P4-4.4-conformance-harness`) — plan.md line 802
+- RPC integration tests: dead-daemon fast-fail, reconnect storm, double-takeover race
+  (`P4-4.4-rpc-integration-tests`) — plan.md line 803
+
+Per the standing instruction, no checkbox was flipped on the strength of a task-summary file
+alone — each flip above followed a successful `git merge-base --is-ancestor <merge-commit>
+main` check.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (11/11 turbo tasks each,
+1094 `falcon` CLI tests + 298 `@falcon/server` tests + the 1 `@falcon/e2e` conformance test, all
+passing).
+
+### Overall completion
+
+`plan.md` checkbox count: **132/135 checked (~97.8%)** — up from 129/135 (~95.6%) last cycle;
++3 from this cycle's three flips. All of §4.4 "Hardening & release gate"'s one-shot bullets are
+now `[x]`; the only remaining unchecked items (plan.md lines 811, 812, 814) are ongoing-discipline
+cross-cutting process bullets ("grows with every provider quirk found", "each get a regression
+test when first encountered", "updated in the same PR as any protocol/crypto change") rather than
+one-shot landings — Phase 4's discrete task list is now fully closed out.
+
+### Next recommended tasks
+
+1. **Docs site quickstart + <5min onboarding-time measurement** — the other half of
+   `P4-4.4-prometheus-metrics`'s line (plan.md line 805 only required the `/metrics` endpoint
+   itself to flip; the docs-site-quickstart and onboarding-time-measurement clauses read as
+   already satisfied by existing `docs/`/`deploy/README.md` content per that task-summary, but
+   worth a dedicated pass to explicitly time a stranger's onboarding and confirm <5min).
+2. **§4.5 cross-cutting process bullets** (plan.md lines 811, 812, 814): grow the golden-trace
+   corpus with provider quirks found so far; add a regression test for each design-§11
+   failure-matrix scenario as first encountered; keep `docs/` updated alongside any
+   protocol/crypto change. These are ongoing-discipline bullets, not one-shot landings.
+3. **Phase 4 exit review** — with all discrete §4.1–§4.4 tasks now `[x]`, do a final pass
+   confirming "public beta installable via one command; magic-moment demo reproducible by a
+   stranger from the README" (plan.md's stated Phase 4 exit criterion) actually holds
+   end-to-end, since no single task in this history has explicitly exercised that exact
+   phrasing as its own acceptance test.
+
 ## Cycle 68 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `5e99acc` — "merge: land P4-4.4-prometheus-metrics onto main")
