@@ -1,5 +1,97 @@
 # Falcon — Progress Log
 
+## Cycle 70 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `1d56810` — "docs: system design v0.3 + plan v0.2 — v2 ACP
+migration")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire` build+typecheck,
+  `@falcon/crypto` build+typecheck, `@falcon/server` build+typecheck, `falcon` cli
+  build+typecheck, `@falcon/e2e` typecheck, `@falcon/web` build+typecheck — including a fresh
+  static export of all 15 routes). All cache-hit-replayed clean (`>>> FULL TURBO`). No errors.
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 118 files / 1125
+  tests, `@falcon/server` 42 files / 302 tests, `@falcon/e2e` 1 file / 1 test (the 20-step
+  `exercise-flow` conformance run), full workspace green across `@falcon/{crypto,wire,web}` as
+  well.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+`plan.md` v0.2 (landed this same HEAD commit) opened a new §17 "v2 — ACP migration" with a
+Phase 2.0 foundation checklist. Three task-summary files exist for it, but **all three live only
+in their own separate worktree branches, never merged onto `main`**:
+
+1. **`task-summary/P17-2.0-claim-store.md`** (found at
+   `.worktrees/P17-2.0-claim-store/task-summary/...`, tip `41834e0`) — send-idempotency claim
+   store (`cli/src/claims/claimStore.ts`), tri-state (`claimed`/`completed`/`in-progress`),
+   atomic tmp-write+rename per session under `~/.falcon/claims/`, 17 passing tests reported in
+   its own worktree. `git merge-base --is-ancestor 41834e0 main` → **false**.
+   `git merge-base main P17-2.0-claim-store` == `main`'s own current tip (`1d56810`) — the branch
+   contains zero commits beyond what's already on `main`'s history point; it was cut from this
+   same HEAD and has not been merged back. `plan.md`'s corresponding bullet (line 855, "Send-
+   idempotency claim store") stays `[ ]` — **not flipped**, no merge to point at.
+2. **`task-summary/P17-2.0-adapter-manager.md`** (`.worktrees/P17-2.0-adapter-manager/`, tip
+   `3aac937`) — pinned-version ACP adapter manager (`cli/src/adapters/`: manifest, install,
+   verify, health, spawn-resolution), `falcon adapters install|upgrade` command, `falcon doctor`
+   integration; 33 new tests reported in its own worktree, full monorepo build/typecheck/test
+   green there. `git merge-base --is-ancestor 3aac937 main` → **false**, same "branch = HEAD,
+   zero extra commits landed" situation. `plan.md` line 865 ("Adapter manager") stays `[ ]` —
+   **not flipped**.
+3. **`task-summary/P17-2.0-message-rpc-tristate.md`** (`.worktrees/P17-2.0-message-rpc-tristate/`,
+   tip `2bd4d8d`) — `message` session RPC reply → tri-state (`@falcon/wire`'s
+   `MessageRpcResultSchema` gains an optional `status` field, additive-only compat lint passes)
+   + web composer reconciliation (`reconcileByStatus`/`deliveryNotice`); 90 wire tests + 380 web
+   tests + 1125 CLI tests (unaffected) reported passing in its own worktree.
+   `git merge-base --is-ancestor 2bd4d8d main` → **false**, same situation. `plan.md` line 861
+   ("`message` session RPC reply → tri-state") stays `[ ]` — **not flipped**.
+
+Per the standing instruction ("no checkbox flipped on the strength of a task-summary file alone
+— only after a successful ancestor check"), none of the three were credited this cycle: each
+branch's merge-base against `main` is `main`'s own current tip, meaning the work exists only in
+an unlanded worktree and is not reachable from `main` by any path. This is the same failure
+mode `plan.md` line 826 documents from Cycles 24–25 ("prior land attempts only ever merged into
+their own throwaway branch/worktree and never touched `main`") — each of these three needs an
+explicit `merge: land P17-2.0-... onto main` step before a future cycle can verify and flip its
+checkbox.
+
+### Tasks completed this cycle
+
+**0 checkboxes flipped.** All three reviewed tasks are genuinely complete-and-verified *within
+their own worktrees* (each reports green build/typecheck/test independently), but none has been
+merged onto the shared `main` ref, so none qualifies for a `[ ]` → `[x]` flip under this
+project's verification discipline.
+
+### Blockers / issues found
+
+**Blocker (process, not code):** the three Phase 2.0 foundation tasks
+(`P17-2.0-claim-store`, `P17-2.0-adapter-manager`, `P17-2.0-message-rpc-tristate`) are sitting
+complete in their own worktrees but unlanded. `main` itself is healthy — `pnpm typecheck` and
+`pnpm test` are both fully green (11/11 turbo tasks each, 1125 CLI + 302 server + 1 e2e tests,
+0 failures) — this is purely a "next step is a land task" situation, not a code defect.
+
+### Overall completion
+
+`plan.md` checkbox count: **132/152 checked (~86.8%)** — the v0.2 rewrite (this cycle's HEAD
+commit) added 17 new unchecked boxes under the new §17 "v2 — ACP migration" section while
+preserving §1–§16 unchanged (still 132/135 checked, ~97.8%, from Cycle 69); the drop in overall
+percentage reflects new scope being added, not regression. None of §17's 17 checkboxes are
+checked yet; 0/17 for the new active workstream.
+
+### Next recommended tasks
+
+1. **Land `P17-2.0-claim-store`** onto `main` (worktree `.worktrees/P17-2.0-claim-store`, tip
+   `41834e0`) — standalone module, zero dependency on the other two Phase 2.0 tasks, cleanest to
+   land first.
+2. **Land `P17-2.0-adapter-manager`** onto `main` (worktree `.worktrees/P17-2.0-adapter-manager`,
+   tip `3aac937`) — also standalone (zero dependency on the claim store or any wire schema
+   change per its own task-summary), can land independently/in parallel with claim-store.
+3. **Land `P17-2.0-message-rpc-tristate`** onto `main` (worktree
+   `.worktrees/P17-2.0-message-rpc-tristate`, tip `2bd4d8d`) — touches `@falcon/wire` and
+   `@falcon/web` only (no CLI changes per its own task-summary), independent of the other two;
+   once all three are landed, Phase 2.0's remaining bullet ("wire schema: no new envelope types
+   needed... assert via golden fixtures") and Phase 2.1 "ACP core" become unblocked.
+
 ## Cycle 69 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `e361e83` — "merge: land P4-4.4-rpc-integration-tests onto main")
