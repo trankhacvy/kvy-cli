@@ -31,7 +31,7 @@
  * contract for the same not-yet-blob-backed situation.
  */
 import type { GitDiffParams, GitDiffResult } from "@falcon/wire";
-import { type GitExec, runGit } from "./gitExec.js";
+import { GitExecError, type GitExec, runGit } from "./gitExec.js";
 import { readWorkspaceGitConfig } from "../workspaceConfig.js";
 
 /** Stays well under the 64KB RPC control-plane cap (design §4.4) after JSON envelope + encryption overhead. */
@@ -61,13 +61,31 @@ function truncateToByteBudget(text: string, maxBytes: number): { text: string; t
   return { text: `${safe}\n\n… (diff truncated at ${maxBytes} bytes)\n`, truncated: true };
 }
 
-/** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws `GitExecError` on any `git` failure (not a repo, unknown ref, etc.) — no silent empty-diff fallback. */
+/**
+ * A `baseRef` passed straight through as `git diff <baseRef>` with no
+ * disambiguating `--` before it (unlike `params.path`, which always gets
+ * one — see below) would let a ref starting with `-` be parsed as a `git
+ * diff` *option* instead of a revision — e.g. `--output=<file>` writes the
+ * diff to an arbitrary file instead of returning it. `baseRef` comes
+ * straight off the wire (`GitDiffParams.baseRef`) or `workspaceConfig.ts`'s
+ * stored `--base-ref`, neither of which constrains its shape, so this is
+ * checked the same way `gitWorktree.ts`'s `assertSafeBranchName` guards its
+ * own user-controlled ref-like string.
+ */
+function isSafeRevision(ref: string): boolean {
+  return ref.trim() !== "" && !ref.startsWith("-");
+}
+
+/** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws `GitExecError` on any `git` failure (not a repo, unknown ref, etc.) or an unsafe `baseRef` — no silent empty-diff fallback. */
 export async function getGitDiff(params: GitDiffParams, deps: GitDiffDeps = {}): Promise<GitDiffResult> {
   const git = deps.git ?? runGit;
   const resolveConfiguredBaseRef = deps.resolveConfiguredBaseRef ?? defaultResolveConfiguredBaseRef;
   const maxInlineBytes = deps.maxInlineBytes ?? MAX_INLINE_BYTES;
 
   const baseRef = params.baseRef ?? (await resolveConfiguredBaseRef(params.worktree));
+  if (baseRef !== undefined && !isSafeRevision(baseRef)) {
+    throw new GitExecError(`unsafe base ref: ${baseRef}`);
+  }
 
   const args = baseRef ? ["diff", baseRef] : ["diff", "HEAD"];
   if (params.path) args.push("--", params.path);

@@ -78,6 +78,30 @@ describe("getGitDiff", () => {
     expect(result).toEqual({ inline: "small diff", truncated: false });
   });
 
+  it("rejects a baseRef that looks like a git option (e.g. `--output=...`) instead of passing it through", async () => {
+    const git = vi.fn(async (args: string[]) => `diff against ${args.join(" ")}`);
+
+    await expect(
+      getGitDiff(
+        { idempotencyKey: "idem-8", worktree: "/repo", baseRef: "--output=/tmp/pwned" },
+        { git, resolveConfiguredBaseRef: async () => undefined },
+      ),
+    ).rejects.toThrow("unsafe base ref");
+    expect(git).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsafe configured base ref the same way as an explicit one", async () => {
+    const git = vi.fn(async (args: string[]) => `diff against ${args.join(" ")}`);
+
+    await expect(
+      getGitDiff(
+        { idempotencyKey: "idem-9", worktree: "/repo" },
+        { git, resolveConfiguredBaseRef: async () => "-x" },
+      ),
+    ).rejects.toThrow("unsafe base ref");
+    expect(git).not.toHaveBeenCalled();
+  });
+
   it("propagates a git failure (e.g. unknown baseRef) rather than returning an empty diff", async () => {
     const git = vi.fn(async () => {
       throw new Error("fatal: bad revision 'nonexistent-ref'");
