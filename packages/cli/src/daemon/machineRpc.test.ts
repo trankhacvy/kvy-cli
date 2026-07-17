@@ -207,6 +207,36 @@ describe("registerMachineRpcHandlers", () => {
       expect(open(second, DEK)).toEqual({ sessionId: "sess_3" });
     });
 
+    it("collapses two concurrent calls with the same idempotencyKey into a single spawn attempt", async () => {
+      // Regression coverage for handleSpawn's in-flight-promise caching (mirrors
+      // machineRpc.takeoverRace.test.ts's adopt.take coverage of the same "concurrency,
+      // not just retry-after-the-fact" fix, see this module's header comment): two
+      // calls arriving back-to-back — before spawnSession has resolved — must collapse
+      // into one real spawn, not each see a cache miss and independently spawn.
+      const socket = new FakeSocket();
+      let resolveSpawn!: (result: SpawnResult) => void;
+      const spawnSession = vi.fn(
+        () =>
+          new Promise<SpawnResult>((resolve) => {
+            resolveSpawn = resolve;
+          }),
+      );
+      register(socket, { spawnSession });
+
+      const params = spawnParams();
+      const first = callAndAwaitAck(socket, "spawn", seal(params, DEK));
+      const second = callAndAwaitAck(socket, "spawn", seal(params, DEK));
+
+      expect(spawnSession).toHaveBeenCalledTimes(1);
+
+      resolveSpawn({ sessionId: "sess_concurrent" });
+      const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+      expect(spawnSession).toHaveBeenCalledTimes(1);
+      expect(open(firstResponse, DEK)).toEqual({ sessionId: "sess_concurrent" });
+      expect(open(secondResponse, DEK)).toEqual({ sessionId: "sess_concurrent" });
+    });
+
     it("distinguishes idempotency keys — a different key always spawns fresh", async () => {
       const socket = new FakeSocket();
       const spawnSession = vi
