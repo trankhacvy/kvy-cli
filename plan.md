@@ -1039,7 +1039,7 @@ connection pooling, no agent-id-as-identity). Design authority:
       real `main` ref by a step with merge/push access, mirroring the `-real` follow-up
       that finally landed `P17-land-2.0-adapter-manager`/`P17-land-2.0-claim-store`/
       `P17-land-2.0-wire-envelope-verification`. See `progress.md` Cycle 76.)*
-- [ ] `cli/src/acp/acpToEnvelope.ts`: single shared mapper, ACP `session/update` →
+- [x] `cli/src/acp/acpToEnvelope.ts`: single shared mapper, ACP `session/update` →
       `SessionEnvelope` (mapping table in design §7.3); unknown kinds logged + dropped;
       subagent scope from `_meta.claudeCode.parentToolUseId`; turn-start/turn-end
       synthesized around `session/prompt` call/return (stopReason → status)
@@ -1073,6 +1073,18 @@ connection pooling, no agent-id-as-identity). Design authority:
       land in either order relative to `acpConnection.ts` (no dependency between them —
       `AcpSessionUpdate` is intentionally decoupled from the ACP SDK). See `progress.md`
       Cycle 76.)*
+      *(2026-07-18, follow-up step with real merge/push access: ran `git merge --no-ff
+      P17-land-2.1-acp-to-envelope` from the `main` worktree (merge commit contains
+      `b303ae3`/`6f25a93`, the cherry-pick of `16815af` onto a fresh worktree off `main`
+      at `cc3e9ae`). Resolved the expected `plan.md` conflict (both branches had appended
+      their own cycle-76 progress notes to this same bullet) by keeping both notes above
+      and appending this one. `git merge-base --is-ancestor 6f25a93 main` → **true** post-
+      merge; `git cat-file -e main:packages/cli/src/acp/acpToEnvelope.ts` and
+      `main:task-summary/P17-land-2.1-acp-to-envelope.md` both succeed — the mapper and
+      task-summary now exist on the real `main` tree. Re-verified green on the merged
+      tree: `pnpm build` 6/6, `pnpm typecheck` 11/11, `pnpm test` 126 files/1203 tests
+      (`acpToEnvelope.test.ts` 22/22). Checkbox flipped for real, same two-step shape that
+      closed out the sibling `wire-envelope-verification` bullet in Phase 2.0.)*
 - [ ] Golden-trace fixtures recorded from real adapter runs (both providers) feeding the
       existing reducer test corpus
 - [ ] Unified ACP permission handler: `session/request_permission` → existing §7.6
