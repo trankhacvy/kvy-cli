@@ -852,7 +852,7 @@ connection pooling, no agent-id-as-identity). Design authority:
 - Local TUI mode, mode loop, tailer, launcher, outbox, daemon, server, crypto: unchanged.
 
 ### Phase 2.0 — foundation (lands first, protects both eras)
-- [ ] Send-idempotency claim store (`cli/src/claims/claimStore.ts`, design §7.10):
+- [x] Send-idempotency claim store (`cli/src/claims/claimStore.ts`, design §7.10):
       claim-before-execute, tri-state (`claimed`/`completed`/`in-progress`), atomic
       tmp-write+rename per session under `~/.falcon/claims/`, bounded retention.
       Reference semantics: mobvibe `wal-store.ts` `claimMessageSend`/`completeMessageSend`
@@ -875,6 +875,18 @@ connection pooling, no agent-id-as-identity). Design authority:
       `git cat-file -e main:packages/cli/src/claims/claimStore.ts` still fails. `main`
       itself is healthy (`pnpm typecheck`/`pnpm test` both green, 11/11 turbo tasks).
       Not flipped — same blocker, fourth cycle running. See `progress.md` Cycle 73.)*
+      *(2026-07-17, progress tracker, cycle 74: **actually landed on `main` this time.**
+      `P17-land-2.0-claim-store-real` (created off `main` at `1707258`) ran
+      `git merge --no-ff ed64101` (the `P17-land-2.0-claim-store` branch tip, itself
+      `git merge --no-ff 19f8c59` of the original `P17-2.0-claim-store` branch plus a
+      code-review follow-up commit adding `assertSafeSessionId` path-traversal
+      hardening) directly into a branch that was then merged into the real `main` ref
+      — not left stranded on a throwaway worktree branch like cycles 71–73. Verified
+      post-merge: `git merge-base --is-ancestor <merge-sha> main` → **true**;
+      `git cat-file -e main:packages/cli/src/claims/claimStore.ts` → succeeds.
+      Workspace-wide `pnpm build`/`pnpm typecheck`/`pnpm test` all green on the merged
+      tree. See `task-summary/P17-land-2.0-claim-store-real.md` for the full
+      before/after verification transcript.)*
 - [x] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
@@ -890,11 +902,13 @@ connection pooling, no agent-id-as-identity). Design authority:
       present on `main`. Workspace-wide `pnpm typecheck` (11/11 tasks) and `pnpm test`
       (11/11 tasks, 1125 CLI + full wire/crypto/server/web/e2e suites) both green on
       `main` as of this verification. The other two Phase 2.0 bullets below
-      (claim store, adapter manager) remain unflipped — their branches exist with their
-      own "Land ... onto main" commits and task-summary files, but those commits are
-      **not** ancestors of `main` (`git merge-base --is-ancestor` → false for both;
-      `git merge-base main <branch>` == `main`'s own tip, i.e. zero commits from either
-      branch have actually reached `main`) — see `progress.md` Cycle 71 for detail.)*
+      (claim store, adapter manager) remained unflipped at that time — their branches
+      existed with their own "Land ... onto main" commits and task-summary files, but
+      those commits were **not** ancestors of `main` (`git merge-base --is-ancestor` →
+      false for both; `git merge-base main <branch>` == `main`'s own tip, i.e. zero
+      commits from either branch had actually reached `main`) — see `progress.md`
+      Cycle 71 for detail. Both bullets were subsequently landed via real merges; see
+      their own notes below.)*
 - [x] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
       (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
       own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,
