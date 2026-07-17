@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -9,6 +10,7 @@ import { DirectoryStep } from "./components/directory-step";
 import { MachineStep } from "./components/machine-step";
 import { OptionsStep } from "./components/options-step";
 import { useMockNewSessionActions, useMockNewSessionMachines } from "./mock-source";
+import { PROVIDER_META } from "./provider-meta";
 import { runSpawnFlow } from "./spawn-flow";
 import type { UseNewSessionActions, UseNewSessionMachines } from "./types";
 import {
@@ -146,8 +148,10 @@ export function NewSessionScreen({
               <p>
                 <span className="text-muted-foreground">Directory:</span> {form.directory}
               </p>
-              <p>
-                <span className="text-muted-foreground">Provider:</span> {form.provider}
+              <p className="flex items-center gap-2">
+                <span className="text-muted-foreground">Provider:</span>{" "}
+                {PROVIDER_META[form.provider].label}
+                {PROVIDER_META[form.provider].beta && <Badge variant="warning">Beta</Badge>}
               </p>
               <p>
                 <span className="text-muted-foreground">Permission mode:</span>{" "}

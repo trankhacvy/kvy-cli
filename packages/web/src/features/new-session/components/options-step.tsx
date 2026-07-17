@@ -1,6 +1,8 @@
 "use client";
 
 import type { PermissionMode } from "@falcon/wire";
+import { Badge } from "@/components/ui/badge";
+import { PROVIDER_META, PROVIDER_OPTIONS, shouldShowBetaBanner } from "../provider-meta";
 import type { NewSessionForm } from "../wizard-state";
 
 const SELECT_CLASS =
@@ -15,6 +17,8 @@ export function OptionsStep({
   form: NewSessionForm;
   onChange: (patch: Partial<NewSessionForm>) => void;
 }) {
+  const selectedProviderMeta = PROVIDER_META[form.provider];
+
   return (
     <div className="flex flex-col gap-4">
       <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -24,10 +28,21 @@ export function OptionsStep({
           onChange={(e) => onChange({ provider: e.target.value as NewSessionForm["provider"] })}
           className={SELECT_CLASS}
         >
-          <option value="claude-code">Claude Code</option>
-          <option value="codex">Codex (beta)</option>
+          {PROVIDER_OPTIONS.map(([value, meta]) => (
+            <option key={value} value={value}>
+              {meta.label}
+              {meta.beta ? " (beta)" : ""}
+            </option>
+          ))}
         </select>
       </label>
+
+      {shouldShowBetaBanner(selectedProviderMeta) && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <Badge variant="warning">Beta</Badge>
+          <p className="text-muted-foreground">{selectedProviderMeta.betaNote}</p>
+        </div>
+      )}
 
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Permission mode
