@@ -18,8 +18,17 @@
  * join the same method table below — the daemon-side registration
  * (`packages/cli/src/daemon/machineRpc.ts`) already serves both; this is
  * just the caller-side typing for `features/unmanaged-sessions/`.
+ *
+ * `adopt.list` (falcon-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9) is the New Session
+ * wizard's session-import step's data source (`features/new-session/`).
+ * `@falcon/wire`'s `rpc.ts` defines its params/result schemas but, unlike
+ * every sibling method here, doesn't export paired `AdoptListParams`/
+ * `AdoptListResult` type aliases — so those two are derived locally via
+ * `z.infer` instead of imported, same values either way.
  */
 import {
+  AdoptListParamsSchema,
+  AdoptListResultSchema,
   type AdoptMirrorParams,
   AdoptMirrorResultSchema,
   type AdoptTakeParams,
@@ -35,7 +44,7 @@ import {
   type SpawnParams,
   SpawnResultSchema,
 } from "@falcon/wire";
-import type { ZodType } from "zod";
+import type { z, ZodType } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
 
 export type {
@@ -48,11 +57,15 @@ export type {
   SpawnParams,
 };
 
+export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
+export type AdoptListResult = z.infer<typeof AdoptListResultSchema>;
+
 /** Params shape per method. */
 export interface MachineRpcParams {
   spawn: SpawnParams;
   "fs.list": FsListParams;
   "fs.mkdir": FsMkdirParams;
+  "adopt.list": AdoptListParams;
   "adopt.take": AdoptTakeParams;
   "adopt.mirror": AdoptMirrorParams;
   "git.status": GitStatusParams;
@@ -64,6 +77,7 @@ export interface MachineRpcResults {
   spawn: import("@falcon/wire").SpawnResult;
   "fs.list": import("@falcon/wire").FsListResult;
   "fs.mkdir": import("@falcon/wire").FsMkdirResult;
+  "adopt.list": AdoptListResult;
   "adopt.take": import("@falcon/wire").AdoptTakeResult;
   "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
   "git.status": import("@falcon/wire").GitStatusResult;
@@ -76,6 +90,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   spawn: SpawnResultSchema,
   "fs.list": FsListResultSchema,
   "fs.mkdir": FsMkdirResultSchema,
+  "adopt.list": AdoptListResultSchema,
   "adopt.take": AdoptTakeResultSchema,
   "adopt.mirror": AdoptMirrorResultSchema,
   "git.status": GitStatusResultSchema,

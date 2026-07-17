@@ -1,5 +1,112 @@
 # Falcon — Progress Log
 
+## Cycle 64 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `89a9c22` — "merge: land P4-4.2-session-import onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`,
+  `@falcon/server`, `falcon` cli, `@falcon/web`, plus their `build` dependency tasks; all
+  cache-hit-replayed clean). No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green (all cache-hit-replayed): `falcon` cli
+  100 files/976 tests, 0 failures. `@falcon/web`'s `build` task ran its Next.js static export
+  fresh (14 routes) as part of the cached-task graph. 0 failures across the whole workspace.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+1. **`task-summary/P4-4.2-sessions-cli.md`** — new `packages/cli/src/commands/
+   {sessionsList,resume}.ts`, wired into `index.ts`'s existing `runSessions`/`runResume`
+   handlers (replacing "not implemented yet" stubs). `falcon sessions list` merges local
+   `adopt/listSessions.ts`'s `listAdoptableSessions` with remote `GET /v1/sessions`
+   (skips the remote half cleanly when not logged in; reports network/HTTP failures
+   inline without hard-failing). `falcon resume <id>` spawns `claude --resume <id>` for a
+   local transcript match, or calls `daemon/resumeSession.ts`'s `resumeSession()` for a
+   daemon-managed session — guarded by a live-daemon check (via the control server's
+   `POST /list`) that refuses if a running daemon already tracks the session, avoiding a
+   double-ownership race on the session's DEK/seq. 13 new tests (5 in
+   `sessionsList.test.ts`, 8 in `resume.test.ts`), plus one pre-existing `index.test.ts`
+   assertion updated to reflect the stub no longer always returning `0`. Verified via
+   `/usr/bin/git merge-base --is-ancestor 764b61b main` → **true** (feat commit) and
+   `/usr/bin/git merge-base --is-ancestor 1888d35 main` → **true** (merge commit
+   "merge: land P4-4.2-sessions-cli onto main").
+2. **`task-summary/P4-4.2-session-import.md`** — new "Continue session" step
+   (`packages/web/src/features/new-session/components/import-step.tsx`) added to the web
+   New-Session wizard between "Directory" and "Options", speaking the already-landed
+   `adopt.list` wire contract (`ProviderSessionSummary`). `wizard-state.ts` gained the
+   `"import"` step and an `importCandidate` field (default `null`, always optional to
+   advance past); `live-actions.ts`'s `listImportCandidates` calls the `adopt.list`
+   machine RPC and `spawn` now forwards `continueFrom`; `mock-source.ts` seeds two fake
+   candidates for one directory. Required a one-line extension to
+   `packages/web/src/sync/machineRpc.ts` to type `"adopt.list"` as a callable method
+   (`MachineRpcParams`/`MachineRpcResults`/`RESULT_SCHEMAS`), following the existing
+   `adopt.take`/`adopt.mirror` precedent; no daemon-side handler was wired (documented as
+   later work, consistent with every other `features/*` RPC caller in this codebase not
+   yet hitting a live `apiSocket`). Verified via `/usr/bin/git merge-base --is-ancestor
+   45a4081 main` → **true** (feat commit) and `/usr/bin/git merge-base --is-ancestor
+   89a9c22 main` → **true** (merge commit "merge: land P4-4.2-session-import onto main",
+   = `main`'s current HEAD).
+
+   Used `/usr/bin/git` throughout (not the `rtk`-hooked `git`) per the tooling hazard
+   noted in prior cycles — the same hazard also showed up this cycle on plain `ls`/`find`/
+   `grep` (empty or mangled output, one outright `rtk: ... does not support compound
+   predicates` error on `find -o`); worked around by calling `/bin/ls`, `/usr/bin/grep`
+   directly for filesystem/text inspection, same pattern as the existing git workaround.
+
+### Tasks completed this cycle
+
+**2 checkboxes flipped** in plan.md §4.2 "Adoption Tier 3 + polish":
+- Line 789: "Session import in New-Session flow (\"continue from recent CLI session\") —
+  reuses `adopt.list`" `[ ]` → `[x]`.
+- Line 790: "`falcon sessions list` / `falcon resume <id>` terminal commands" `[ ]` → `[x]`.
+
+Both dated 2026-07-17 with a confirmation note citing the specific merge/feat commit SHAs
+and the `git merge-base --is-ancestor` result, not taken on the strength of the
+task-summary files alone. The §4.2 section header was also rewritten from
+"shell shim landed" to "fully landed" now that all three bullets in the section are
+checked, summarizing all three landed pieces (shell shim, session import, sessions CLI)
+with their respective merge commits.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 tasks each,
+976 cli tests, 0 failures). The `rtk`-hook tooling hazard (see above) continues to be a
+minor friction item for this tracker's own operation, not a project blocker — worked
+around as in prior cycles by calling real binaries under `/usr/bin/` and `/bin/` directly.
+
+### Overall completion
+
+`plan.md` checkbox count: **121/135 checked (~89.6%)** — up from 119/135 (~88.1%) last
+cycle (+2 net new checked lines). §4.2 "Adoption Tier 3 + polish" is now **fully landed**
+(3/3 bullets checked).
+
+### Next recommended tasks
+
+1. **§4.3 Distribution & self-host** (plan.md lines 793–798, all still `[ ]`): standalone
+   `bun build --compile` binaries (darwin-arm64/x64, linux-x64) + `curl | sh` installer +
+   npm publish pipeline, CLI self-update (`cli-latest` rolling tag, atomic replace),
+   launchd/systemd-user service install, `deploy/docker-compose.yml` self-host stack, blob
+   storage (presigned upload/download + S3/local-disk drivers), uninstall docs — this is
+   now the largest fully-unchecked block and is needed before any real external user can
+   install Falcon end-to-end. With §4.2 now fully closed out, this is the natural next
+   section.
+2. **Wire the workspace-registration-store's real adapters into the actual call sites**
+   (carried over from prior cycles, still outstanding) — `daemon/commands.ts`'s boot
+   sequence, `daemon/machineRpc.ts`'s handler construction, and
+   `daemon/transcriptIndexer.ts`'s startup call all still take `resolveWorkspaceRoot`/
+   `resolveProviderSession`/`listWorkspaces` as injected seams with no real default passed
+   in (per `P3-workspace-registration-store`'s own scope note). This also blocks a live
+   daemon-side `adopt.list` handler, which `P4-4.2-session-import`'s task-summary notes is
+   still needed to make the new wizard step's RPC call actually resolve against a live
+   daemon rather than the mock source.
+3. **§4.4 Hardening & release gate** (plan.md lines 801–805, all still `[ ]`): provider
+   contract tests in CI, the 20-step conformance script, RPC integration tests
+   (dead-daemon fast-fail, reconnect storm, double-takeover race), the security pass (the
+   7 reported Happy vuln classes as a checklist), and Prometheus metrics/docs quickstart —
+   worth starting in parallel with §4.3 since several of these (especially the
+   double-takeover race test) directly exercise the safety guard `P4-4.2-sessions-cli`'s
+   `resume` command just added.
+
 ## Cycle 63 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `d140f28` — "merge: land P4-4.2-shell-shim onto main")

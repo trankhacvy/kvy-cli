@@ -16,7 +16,8 @@ import type { NewSessionActions, SpawnOutcome } from "./types";
  * that's separate, later work), so the directory a user picks here stands
  * in as its own stable workspace identity, matching `mock-source.ts`'s
  * arbitrary workspace-id strings elsewhere in this codebase
- * (`features/session-list/mock-source.ts`).
+ * (`features/session-list/mock-source.ts`). `listImportCandidates` reuses
+ * the same convention for `adopt.list`'s own `workspaceId` param.
  */
 export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
   return {
@@ -37,6 +38,7 @@ export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
         permissionMode: request.permissionMode,
         model: request.model,
         branch: request.branch,
+        continueFrom: request.continueFrom,
       });
 
       if (result.sessionId) {
@@ -51,6 +53,14 @@ export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
         return outcome;
       }
       throw new Error("spawn RPC result carried neither a sessionId nor requiresApproval");
+    },
+
+    async listImportCandidates(directory) {
+      const result = await rpc.call("adopt.list", {
+        idempotencyKey: crypto.randomUUID(),
+        workspaceId: directory,
+      });
+      return result.items;
     },
   };
 }

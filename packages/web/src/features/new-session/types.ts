@@ -44,6 +44,29 @@ export interface SpawnRequest {
   model?: string;
   /** P1 — falcon-prd.md FR-1.2 "`falcon -b <branch>`". */
   branch?: BranchOption;
+  /** Set when the session-import step (falcon-prd.md FR-7.8 UC7 "continue
+   * from a recent CLI session") picked a candidate to continue instead of
+   * starting fresh — mirrors `@falcon/wire`'s `SpawnParams.continueFrom`. */
+  continueFrom?: { providerSessionId: string };
+}
+
+/**
+ * One recent plain (non-Falcon) CLI session the daemon's `adopt.list`
+ * machine RPC surfaced for a chosen directory — the session-import step's
+ * view-model, mirroring `@falcon/wire`'s `ProviderSessionSummary` (design
+ * §4.4, falcon-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9). Same "decrypted upstream"
+ * convention as the rest of this file's view-models — there's nothing to
+ * decrypt here (the daemon computes this straight from local transcript
+ * files), but the shape stays a plain view-model for consistency with
+ * `DirectoryListing`/`NewSessionMachine`.
+ */
+export interface ImportCandidate {
+  providerSessionId: string;
+  /** Best-effort title derived from the transcript's first user message; absent when the daemon couldn't determine one. */
+  title?: string;
+  lastActivityAt: number;
+  /** Best-effort liveness from the daemon's process scan — absent means "unknown", not "not running" (design §8). */
+  running?: boolean;
 }
 
 /** Mirrors `@falcon/wire`'s `SpawnResult`, flattened into a discriminated union — easier for the screen to branch on than the wire's "exactly one of two optional fields" shape. */
@@ -65,6 +88,8 @@ export interface NewSessionActions {
   /** Creates `path` (and any missing parents) on the machine. Throws on failure. */
   createDirectory(path: string): Promise<void>;
   spawn(request: SpawnRequest): Promise<SpawnOutcome>;
+  /** Lists recent plain `claude`/`codex` sessions for `directory` (the daemon's `adopt.list` RPC, keyed by workspace — `directory` doubles as the workspace id, same convention `spawn`'s `workspaceId` already uses in `live-actions.ts`) — the session-import step's data source (falcon-prd.md FR-7.8 UC7). Throws on failure (unreachable machine, ...); an empty array means "none found", not an error. */
+  listImportCandidates(directory: string): Promise<ImportCandidate[]>;
 }
 
 /** One machine RPC actions client per chosen machine — mirrors `UseSessionControl = (sessionId) => SessionControlActions`. */

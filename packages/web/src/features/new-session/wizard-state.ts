@@ -1,5 +1,5 @@
 import type { PermissionMode } from "@falcon/wire";
-import type { NewSessionProvider, SpawnRequest } from "./types";
+import type { ImportCandidate, NewSessionProvider, SpawnRequest } from "./types";
 
 /**
  * Pure step/form logic for the New Session wizard — no React, no RPC calls,
@@ -8,7 +8,7 @@ import type { NewSessionProvider, SpawnRequest } from "./types";
  * pattern). `new-session-screen.tsx` is the only caller.
  */
 
-export const WIZARD_STEPS = ["machine", "directory", "options", "review"] as const;
+export const WIZARD_STEPS = ["machine", "directory", "import", "options", "review"] as const;
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
 export interface NewSessionForm {
@@ -21,6 +21,8 @@ export interface NewSessionForm {
   branchEnabled: boolean;
   branchName: string;
   createWorktree: boolean;
+  /** The session-import step's pick (falcon-prd.md FR-7.8 UC7), or `null` to start fresh — the default, and always a valid choice (the step is optional). */
+  importCandidate: ImportCandidate | null;
 }
 
 export const INITIAL_FORM: NewSessionForm = {
@@ -32,6 +34,7 @@ export const INITIAL_FORM: NewSessionForm = {
   branchEnabled: false,
   branchName: "",
   createWorktree: true,
+  importCandidate: null,
 };
 
 /** Whether the wizard can move past `step` given the current form state. */
@@ -41,6 +44,9 @@ export function canAdvance(step: WizardStep, form: NewSessionForm): boolean {
       return form.machineId !== null;
     case "directory":
       return form.directory !== null;
+    case "import":
+      // Optional step — "start a new session" (importCandidate: null) is a valid choice.
+      return true;
     case "options":
       return !form.branchEnabled || form.branchName.trim() !== "";
     case "review":
@@ -71,6 +77,9 @@ export function buildSpawnRequest(form: NewSessionForm): SpawnRequest {
     model: model === "" ? undefined : model,
     branch: form.branchEnabled
       ? { name: form.branchName.trim(), createWorktree: form.createWorktree }
+      : undefined,
+    continueFrom: form.importCandidate
+      ? { providerSessionId: form.importCandidate.providerSessionId }
       : undefined,
   };
 }

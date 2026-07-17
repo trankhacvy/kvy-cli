@@ -1,4 +1,5 @@
 export { DirectoryStep } from "./components/directory-step";
+export { ImportStep } from "./components/import-step";
 export { MachineStep } from "./components/machine-step";
 export { OptionsStep } from "./components/options-step";
 export { machineRpcToActions } from "./live-actions";
@@ -13,6 +14,7 @@ export type {
   BranchOption,
   DirectoryEntry,
   DirectoryListing,
+  ImportCandidate,
   NewSessionActions,
   NewSessionMachine,
   NewSessionProvider,

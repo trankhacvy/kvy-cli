@@ -62,4 +62,33 @@ describe("machineRpcToActions", () => {
       actions.spawn({ directory: "/repo", provider: "claude-code", permissionMode: "default" }),
     ).rejects.toThrow(/neither/);
   });
+
+  it("spawn forwards continueFrom when an import candidate was picked", async () => {
+    const call = vi.fn(async () => ({ sessionId: "sess-1" }));
+    const actions = machineRpcToActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+
+    await actions.spawn({
+      directory: "/repo",
+      provider: "claude-code",
+      permissionMode: "default",
+      continueFrom: { providerSessionId: "prov-1" },
+    });
+    expect(call).toHaveBeenCalledWith(
+      "spawn",
+      expect.objectContaining({ continueFrom: { providerSessionId: "prov-1" } }),
+    );
+  });
+
+  it("listImportCandidates calls adopt.list with the directory as workspaceId and returns the items", async () => {
+    const items = [{ providerSessionId: "prov-1", lastActivityAt: 1_000, running: true }];
+    const call = vi.fn(async () => ({ items }));
+    const actions = machineRpcToActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+
+    const result = await actions.listImportCandidates("/repo");
+    expect(result).toEqual(items);
+    expect(call).toHaveBeenCalledWith(
+      "adopt.list",
+      expect.objectContaining({ workspaceId: "/repo" }),
+    );
+  });
 });
