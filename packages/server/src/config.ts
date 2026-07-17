@@ -39,6 +39,12 @@ const EnvSchema = z
     // — GitHub sign-in simply refuses exchanges (401) until both are configured.
     GITHUB_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+    // Local-testing-only sign-up path that skips real Google/GitHub verification
+    // entirely (`auth/oauth.ts`'s "dev" provider always succeeds when this is on) —
+    // for a fresh self-host box with no OAuth app registered yet. Defaults to off,
+    // and the `.refine()` below makes it structurally impossible to boot with this
+    // on in production, same belt-and-suspenders stance as `FALCON_MASTER_SECRET`.
+    FALCON_DEV_AUTH: z.coerce.boolean().default(false),
     // Web Push (VAPID) — falcon-system-design.md §6.4/§3 "Push | Web Push (VAPID)
     // via `web-push`". Optional: unset simply means the `webpush` channel logs and
     // skips sending (src/app/push/channels/webpush.ts) rather than failing closed —
@@ -155,6 +161,12 @@ const EnvSchema = z
       path: ["FALCON_MASTER_SECRET"],
     },
   )
+  // Same fail-fast stance as the master-secret check above: a fake, always-succeeding
+  // sign-up path must never be reachable outside local dev/self-host testing.
+  .refine((parsed) => !(parsed.NODE_ENV === "production" && parsed.FALCON_DEV_AUTH), {
+    message: "FALCON_DEV_AUTH must not be enabled when NODE_ENV=production",
+    path: ["FALCON_DEV_AUTH"],
+  })
   // A bucket name with no credentials is a half-configured S3 driver, not a
   // "fall back to local disk" signal — that fallback is only for the fully
   // unset case (see `S3_BUCKET`'s own comment). Failing fast here beats

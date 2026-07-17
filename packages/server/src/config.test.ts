@@ -123,6 +123,7 @@ describe("config env parsing", () => {
       LOG_LEVEL: "warn",
       DATABASE_URL: "postgres://user:pass@db.internal:5432/falcon_prod",
       FALCON_MASTER_SECRET: "a".repeat(32),
+      FALCON_DEV_AUTH: false,
       VAPID_PUBLIC_KEY: "test-vapid-public-key",
       VAPID_PRIVATE_KEY: "test-vapid-private-key",
       VAPID_SUBJECT: "mailto:ops@falcon.dev",
@@ -210,6 +211,23 @@ describe("config env parsing", () => {
     const { env } = await importFreshConfig();
 
     expect(env.NODE_ENV).toBe("production");
+  });
+
+  it("throws when NODE_ENV=production and FALCON_DEV_AUTH is enabled", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+    process.env.FALCON_DEV_AUTH = "1";
+
+    await expect(importFreshConfig()).rejects.toThrow(/FALCON_DEV_AUTH/);
+  });
+
+  it("allows NODE_ENV=production when FALCON_DEV_AUTH is left unset", async () => {
+    process.env.NODE_ENV = "production";
+    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+
+    const { env } = await importFreshConfig();
+
+    expect(env.FALCON_DEV_AUTH).toBe(false);
   });
 
   it("throws when S3_BUCKET is set without S3 credentials (half-configured S3 driver)", async () => {

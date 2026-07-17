@@ -1,13 +1,37 @@
-import { SessionListScreen } from "@/features/session-list";
+"use client";
 
-// The Home screen (design §9.2 "Home" row, falcon-prd.md FR-7.1). Backed by
-// a mock data source for now — the sync engine (`src/sync/engine.ts`) is
-// landed on `main` but not yet wired into this screen; see
-// `SessionListScreen`'s doc comment for the injectable seam that swaps in
-// the real hook later. Auth pages exist under /signin, /auth, /pair, and
-// /settings/recovery, but this route isn't auth-gated yet, so it's reachable
-// unauthenticated for now — both are tracked as still [planned] in
-// CLAUDE.md.
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { SessionListScreen } from "@/features/session-list";
+import { isSignedIn } from "@/lib/session";
+
+/**
+ * The Home screen (design §9.2 "Home" row, falcon-prd.md FR-7.1). Renders
+ * real, live session/machine data by default now — `SessionListScreen`'s
+ * `useData` defaults to `useLiveSessionListSnapshot`
+ * (`features/session-list/live-source.ts`), which reads the sync engine's
+ * `['sync']` snapshot and decrypts each session/machine's title client-side.
+ *
+ * Auth-gated: mirrors `settings/notifications/page.tsx`'s plain
+ * `isSignedIn()` check + `router.replace("/signin/")` (this screen doesn't
+ * need the crypto bridge itself — only its live data source does, lazily,
+ * once mounted). `checked` gates the render so an unauthenticated visitor
+ * never sees even a flash of the (empty) session-list UI before being sent
+ * to sign in.
+ */
 export default function Home() {
+  const router = useRouter();
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn()) {
+      router.replace("/signin/");
+      return;
+    }
+    setChecked(true);
+  }, [router]);
+
+  if (!checked) return null;
+
   return <SessionListScreen />;
 }

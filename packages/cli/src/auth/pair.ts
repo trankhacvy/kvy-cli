@@ -34,6 +34,16 @@ import { z } from "zod";
 // that silently drops every poll) doesn't wait forever regardless.
 const PAIRING_TIMEOUT_MS = 15 * 60 * 1000;
 
+// Mirrors the approver's own payload format exactly (packages/web/src/crypto/
+// worker-handler.ts's `sealForPeer`: `payload[0] = PAIR_PAYLOAD_VERSION;
+// payload.set(masterSecret, 1)`) — the sealed box's plaintext is `[version(1) |
+// masterSecret(32)]`, not the bare 32-byte masterSecret. Skipping this strip left
+// every real pairing login one byte too long for any later 32-byte content-key
+// derivation to accept (surfaced as "reduced-custody pairing?" for what was
+// actually just a normal login).
+const PAIR_PAYLOAD_VERSION = 0x00;
+const MASTER_SECRET_LENGTH_BYTES = 32;
+
 export interface PairOptions {
   backendUrl: string;
   frontendUrl: string;
@@ -160,8 +170,15 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
   if (state.state !== "authorized") return { ok: false, reason: "expired" };
 
   const sealedBox = decodeBase64(state.response);
-  const masterSecret = libsodiumDecryptWithSecretKey(sealedBox, keypair.secretKey);
-  if (!masterSecret) return { ok: false, reason: "decrypt-failed" };
+  const payload = libsodiumDecryptWithSecretKey(sealedBox, keypair.secretKey);
+  if (
+    !payload ||
+    payload.length !== 1 + MASTER_SECRET_LENGTH_BYTES ||
+    payload[0] !== PAIR_PAYLOAD_VERSION
+  ) {
+    return { ok: false, reason: "decrypt-failed" };
+  }
+  const masterSecret = payload.slice(1);
 
   return { ok: true, result: { token: state.token, masterSecret } };
 }

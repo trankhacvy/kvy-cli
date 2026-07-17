@@ -62,12 +62,36 @@ export function buildFileEnvelope(
 
 /** Drops any pending message that has already landed in `items` (matched by
  * `RenderItem.id === localId`) — the reconciliation half of "optimistic
- * insert, reconciled by echo update". Returns the same array reference when
- * nothing changed, so callers can skip a re-render via referential equality. */
+ * insert, reconciled by echo update". Falls back to matching by exact
+ * `(role: user, text)` content when the id doesn't match — a defense-in-depth
+ * borrowed from Omnara's `web_ui_messages` content-set (their CLI wrapper
+ * has no id-threading step to drop in the first place, since it injects web
+ * text straight into the same PTY the local process reads from; Falcon's
+ * dual local/remote-mode design has several hops — RPC handler, local
+ * pub-sub, the mode loop, the SDK wrapper — any one of which silently
+ * dropping the id would otherwise leave a permanent duplicate on screen
+ * rather than a self-healing one). Each landed text item can satisfy at most
+ * one pending entry, claimed in send order, so two genuinely distinct
+ * pending sends with identical text don't both collapse onto one echo.
+ * Returns the same array reference when nothing changed, so callers can skip
+ * a re-render via referential equality. */
 export function reconcilePending(pending: PendingMessage[], items: RenderItem[]): PendingMessage[] {
   if (pending.length === 0) return pending;
-  const landed = new Set(items.map((item) => item.id));
-  const next = pending.filter((p) => !landed.has(p.localId));
+  const landedIds = new Set(items.map((item) => item.id));
+  const landedUserTexts = items.filter(
+    (item): item is TextItem => item.role === "user" && item.kind === "text",
+  );
+  const claimed = new Set<string>();
+
+  const next = pending.filter((p) => {
+    if (landedIds.has(p.localId)) return false;
+    if (p.kind !== "text") return true; // fallback only applies to text sends — attachments always carry a real blob ref
+    const match = landedUserTexts.find((item) => !claimed.has(item.id) && item.md === p.text);
+    if (!match) return true;
+    claimed.add(match.id);
+    return false;
+  });
+
   return next.length === pending.length ? pending : next;
 }
 

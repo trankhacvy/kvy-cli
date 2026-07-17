@@ -32,7 +32,7 @@ export type OAuthSignInOutcome =
 
 export async function completeOAuthSignIn(
   bridge: CryptoBridgeClient,
-  provider: "google" | "github",
+  provider: "google" | "github" | "dev",
   oauthProof: string,
 ): Promise<OAuthSignInOutcome> {
   let identity = await bridge.getIdentity();

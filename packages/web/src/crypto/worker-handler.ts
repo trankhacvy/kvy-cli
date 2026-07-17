@@ -191,7 +191,12 @@ export function createCryptoWorkerHandler(storage: KeyStorage): CryptoWorkerHand
           if (!keyTree) {
             return { id: request.id, ok: false, error: "not-initialized" };
           }
-          const ephPub = decodeBase64(request.ephPub);
+          // The CLI mints this fragment with `encodeBase64Url` (falcon-plan.md
+          // §2.2 — URL-safe, no padding), never plain base64: must decode with
+          // the matching variant or `-`/`_` chars get silently dropped
+          // (`decodeBase64`'s own "never throw" contract) and the key comes
+          // out short, failing the length check below for a spurious reason.
+          const ephPub = decodeBase64(request.ephPub, "base64url");
           if (ephPub.length !== X25519_PUBLIC_KEY_BYTES) {
             return { id: request.id, ok: false, error: "invalid-eph-pub" };
           }

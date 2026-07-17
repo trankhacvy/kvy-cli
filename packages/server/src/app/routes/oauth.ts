@@ -27,7 +27,10 @@ import { toHex } from "./hex.js";
 type Database = PgDatabase<any, any>;
 
 const RegisterRequestSchema = z.object({
-  oauthProvider: z.enum(["google", "github"]),
+  // "dev" is the `FALCON_DEV_AUTH` local-testing bypass (auth/oauth.ts) — accepted
+  // here unconditionally; `verifier.verify()` is what actually fails it closed when
+  // the flag is off, same as an unconfigured google/github provider.
+  oauthProvider: z.enum(["google", "github", "dev"]),
   // Google: an OpenID Connect ID token (JWT). GitHub: an OAuth access token. Verified
   // server-side by `auth/oauth.ts` — never trusted at face value.
   oauthProof: z.string().min(1),

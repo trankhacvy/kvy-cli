@@ -419,6 +419,38 @@ describe("claudeLocal", () => {
       await expect(promise).resolves.not.toThrow();
     });
 
+    it("resolves cleanly when Node's spawn({signal}) emits an AbortError 'error' event before 'exit' (the abort race)", async () => {
+      // Node's child_process.spawn({ signal }) kills the child AND emits this
+      // 'error' the instant the AbortSignal fires — often before the resulting
+      // 'exit' event lands. An intentional abort (mode switch) must resolve
+      // cleanly here, exactly like the "SIGTERM + aborted" exit-path test
+      // above, not reject and crash the whole CLI (regression: previously did).
+      const { child, emitError, emitExit } = createFakeChild(false);
+      const spawnImpl = vi.fn(() => child);
+      const abort = new AbortController();
+      const promise = claudeLocal(baseOptions({ abort: abort.signal }), buildDeps(spawnImpl));
+      abort.abort();
+      const abortError = Object.assign(new Error("The operation was aborted"), {
+        name: "AbortError",
+        code: "ABORT_ERR",
+      });
+      emitError(abortError);
+      emitExit(null, "SIGTERM"); // fires after 'error' in practice — must be a no-op, already settled
+      await expect(promise).resolves.not.toThrow();
+    });
+
+    it("rejects a spawn-time AbortError 'error' event when the signal was NOT aborted (not a real abort)", async () => {
+      const { child, emitError } = createFakeChild(false);
+      const spawnImpl = vi.fn(() => child);
+      const promise = claudeLocal(baseOptions(), buildDeps(spawnImpl));
+      const abortError = Object.assign(new Error("The operation was aborted"), {
+        name: "AbortError",
+        code: "ABORT_ERR",
+      });
+      emitError(abortError);
+      await expect(promise).rejects.toBe(abortError);
+    });
+
     it("rejects on SIGTERM when the abort signal was NOT aborted (unexpected termination)", async () => {
       const { child, emitExit } = createFakeChild(false);
       const spawnImpl = vi.fn(() => child);

@@ -128,8 +128,17 @@ function getClaudeCliPath() {
  * Run the resolved Claude CLI. Mirrors the JS-file branch of Happy's
  * `runClaudeCli`: dynamic `import()` loads the CLI in this same process, so
  * the fetch/fd3 interceptors above stay active inside its module scope.
- * Binary-path spawning + signal forwarding belongs to the full CLI-path
- * resolver bullet, not this stub.
+ *
+ * Claude Code's native-binary installs (the standalone installer's
+ * `~/.local/share/claude/versions/<ver>` — no `.js`/`.cjs` extension) can't
+ * be `import()`-ed in-process, so for those this spawns the binary as a
+ * child instead and forwards its exit code/signal. That's a real,
+ * documented capability loss versus the JS-file path: a separate compiled
+ * process can't have its `fetch` calls intercepted from out here, so binary
+ * installs never get the fd3 "thinking" indicator. Args come from this
+ * script's own `process.argv` (`claudeLocal.ts` spawns
+ * `node falcon_claude_launcher.cjs <claude args...>`, so `argv.slice(2)` is
+ * exactly the passthrough args either branch needs).
  * @param {string} cliPath - Path to the Claude CLI entrypoint.
  */
 function runClaudeCli(cliPath) {
@@ -140,10 +149,20 @@ function runClaudeCli(cliPath) {
     import(importUrl);
     return;
   }
-  throw new Error(
-    `falcon_claude_launcher: cannot launch non-JS CLI path "${cliPath}" yet ` +
-      "(binary spawn support lands with the full CLI-path resolver bullet).",
-  );
+
+  const { spawnSync } = require("node:child_process");
+  const result = spawnSync(cliPath, process.argv.slice(2), { stdio: "inherit" });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.signal) {
+    // Re-raise the same signal on ourselves rather than inventing an exit
+    // code — matches how a shell reports a signal-killed child (128+signum),
+    // and lets the parent's own signal handling (if any) behave normally.
+    process.kill(process.pid, result.signal);
+    return;
+  }
+  process.exit(result.status ?? 1);
 }
 
 // Only launch when run directly (`node falcon_claude_launcher.cjs`), not

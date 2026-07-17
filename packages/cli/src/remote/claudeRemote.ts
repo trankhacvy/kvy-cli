@@ -90,8 +90,17 @@ export interface ClaudeRemoteOptions {
 }
 
 export interface ClaudeRemoteHandle {
-  /** Pushes a new user turn onto the live query — queued if a turn is in progress. */
-  send(prompt: string): void;
+  /**
+   * Pushes a new user turn onto the live query — queued if a turn is in
+   * progress. `id`, when given, becomes the emitted envelope's id instead of
+   * a freshly-minted one — required whenever `prompt` originated from a
+   * `message` RPC (design §4.4: `{envelope: SessionEnvelope}`), so the web
+   * Composer's optimistic pending entry (tracked under that same id,
+   * `optimistic-composer.ts`'s `reconcilePending`) actually reconciles
+   * against the real echo instead of leaving a duplicate: the pending entry
+   * and the sealed transcript entry must carry the identical id.
+   */
+  send(prompt: string, id?: string): void;
   interrupt(): Promise<void>;
   setMode(mode: PermissionMode): Promise<void>;
   /** First-wins resolution for a pending `perm-request` (design §7.6's "Falcon add"). */
@@ -191,13 +200,13 @@ export function startClaudeRemote(
 
   const pumped = pump();
 
-  function send(prompt: string): void {
+  function send(prompt: string, id?: string): void {
     // The turn this closes (if any) belongs to the PREVIOUS user message;
     // the human-typed prompt envelope is emitted here directly rather than
     // waiting for the SDK to (maybe) echo it back — see sdkToEnvelope.ts's
     // file header for why.
     outgoing.pushAll(converter.closeTurn("completed"));
-    outgoing.push(createEnvelope("user", { t: "text", md: prompt }));
+    outgoing.push(createEnvelope("user", { t: "text", md: prompt }, { id }));
 
     prompts.push({
       type: "user",

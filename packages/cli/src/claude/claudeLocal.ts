@@ -513,7 +513,26 @@ export async function claudeLocal(
           error: error instanceof Error ? error.message : String(error),
         });
         if (settled) return;
+        // Node's `child_process.spawn({ signal })` kills the child AND emits
+        // this 'error' (an AbortError, message "The operation was aborted")
+        // the instant the signal fires — which races ahead of, and often
+        // wins against, the 'exit' handler's own "SIGTERM + aborted -> clean
+        // switch" path below (both are listening on the same `settled`
+        // guard, first one wins). Left unhandled, every local->remote mode
+        // switch rejected this promise with a generic AbortError that
+        // propagated all the way to `main()` and crashed the whole `falcon
+        // claude` process — an intentional abort must resolve the same way
+        // the 'exit' handler's clean path does, not be treated as a real
+        // spawn failure.
+        const isAbortError =
+          opts.abort.aborted &&
+          error instanceof Error &&
+          (error.name === "AbortError" || (error as NodeJS.ErrnoException).code === "ABORT_ERR");
         settled = true;
+        if (isAbortError) {
+          resolvePromise();
+          return;
+        }
         reject(error);
       });
 

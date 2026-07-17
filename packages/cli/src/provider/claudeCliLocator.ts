@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { shimBinDir } from "../shim/paths.js";
 
 /**
  * Locates the globally-installed Claude Code CLI across every install method
@@ -133,8 +134,12 @@ export function findNpmGlobalCliPath(): string | null {
 /**
  * Find Claude CLI using the system PATH (`which`/`where`). Respects the
  * user's own shell configuration and works across all platforms.
+ *
+ * `env` is threaded through only to resolve `shimBinDir()` below (which
+ * honors `FALCON_HOME_DIR`) — `which`/`where` themselves always read the
+ * real process PATH, not `env`.
  */
-export function findClaudeInPath(): ClaudeCliLocation | null {
+export function findClaudeInPath(env: NodeJS.ProcessEnv = process.env): ClaudeCliLocation | null {
   try {
     const command = process.platform === "win32" ? "where claude" : "which claude";
     const result = execSync(command, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
@@ -144,6 +149,17 @@ export function findClaudeInPath(): ClaudeCliLocation | null {
 
     // Check existence BEFORE resolving.
     if (!existsSync(claudePath)) return null;
+
+    // `falcon shim install` (FR-9.6) prepends `~/.falcon/bin` to PATH so a
+    // bare `claude` runs under Falcon — but that means Falcon's OWN locator
+    // must not find that shim and mistake it for a real install: the shim's
+    // script is `exec falcon claude "$@"`, and spawning it back into itself
+    // either loops or (when `falcon` isn't a global command, e.g. running
+    // from a local checkout via `node bin/falcon.mjs`) fails outright with
+    // "falcon: not found". Skip it here so the caller's fallback chain
+    // (`findGlobalClaudeCliPath`) proceeds to npm/Bun/Homebrew/native-installer
+    // detection, which finds the real binary independently of PATH.
+    if (path.dirname(claudePath) === shimBinDir({ env })) return null;
 
     const resolvedPath = resolvePathSafe(claudePath) ?? claudePath;
 
@@ -428,7 +444,7 @@ export function findGlobalClaudeCliPath(
   }
 
   // 2. Check PATH (respects the user's shell config).
-  const pathResult = findClaudeInPath();
+  const pathResult = findClaudeInPath(env);
   if (pathResult) return pathResult;
 
   // 3. Fall back to package-manager-specific detection.

@@ -85,7 +85,7 @@ function sendJson<T>(
 
 /** `POST /v1/auth/register` — sign-up: binds a freshly-generated identity to an OAuth proof. */
 export function register(body: {
-  oauthProvider: "google" | "github";
+  oauthProvider: "google" | "github" | "dev";
   oauthProof: string;
   signPubKey: string;
   contentPubKey: string;

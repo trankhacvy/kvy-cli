@@ -1,3 +1,4 @@
+import childProcess from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -232,5 +233,79 @@ describe("falcon_claude_launcher.cjs — getClaudeCliPath stub", () => {
     const { getClaudeCliPath } = loadLauncher();
     expect(getClaudeCliPath()).toBe("/opt/custom/claude/cli.js");
     delete process.env.FALCON_CLAUDE_PATH;
+  });
+});
+
+describe("falcon_claude_launcher.cjs — runClaudeCli binary-spawn path", () => {
+  let originalArgv: string[];
+  let exitSpy: ReturnType<typeof vi.spyOn>;
+  let killSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    delete require.cache[require.resolve(MODULE_PATH)];
+    originalArgv = process.argv;
+    process.argv = ["node", "falcon_claude_launcher.cjs", "--resume", "abc123"];
+    exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
+  });
+
+  afterEach(() => {
+    process.argv = originalArgv;
+    vi.restoreAllMocks();
+  });
+
+  it("spawns a native-binary CLI path (no .js/.cjs extension) directly, forwarding argv and stdio", () => {
+    const spawnSyncSpy = vi
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({ status: 0, signal: null, error: undefined } as never);
+
+    const { runClaudeCli } = loadLauncher();
+    runClaudeCli("/Users/x/.local/share/claude/versions/2.1.212");
+
+    expect(spawnSyncSpy).toHaveBeenCalledWith(
+      "/Users/x/.local/share/claude/versions/2.1.212",
+      ["--resume", "abc123"],
+      { stdio: "inherit" },
+    );
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("exits with the spawned binary's non-zero status", () => {
+    vi.spyOn(childProcess, "spawnSync").mockReturnValue({
+      status: 7,
+      signal: null,
+      error: undefined,
+    } as never);
+
+    const { runClaudeCli } = loadLauncher();
+    runClaudeCli("/opt/claude-native");
+
+    expect(exitSpy).toHaveBeenCalledWith(7);
+  });
+
+  it("re-raises the child's signal on this process instead of calling exit", () => {
+    vi.spyOn(childProcess, "spawnSync").mockReturnValue({
+      status: null,
+      signal: "SIGTERM",
+      error: undefined,
+    } as never);
+
+    const { runClaudeCli } = loadLauncher();
+    runClaudeCli("/opt/claude-native");
+
+    expect(killSpy).toHaveBeenCalledWith(process.pid, "SIGTERM");
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
+  it("throws when spawnSync itself reports an error (e.g. ENOENT)", () => {
+    const spawnError = new Error("spawnSync /opt/claude-native ENOENT");
+    vi.spyOn(childProcess, "spawnSync").mockReturnValue({
+      status: null,
+      signal: null,
+      error: spawnError,
+    } as never);
+
+    const { runClaudeCli } = loadLauncher();
+    expect(() => runClaudeCli("/opt/claude-native")).toThrow(spawnError);
   });
 });

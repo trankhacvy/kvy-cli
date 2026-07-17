@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ApiError } from "@/lib/api";
 import { completeChallengeSignIn } from "@/lib/complete-challenge-sign-in";
-import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
+import { DEV_AUTH_ENABLED, GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
 import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
 
@@ -102,10 +102,19 @@ export default function SignInPage() {
           >
             Continue with GitHub
           </Button>
-          {!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && (
+          {!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && !DEV_AUTH_ENABLED && (
             <p className="text-xs text-muted-foreground">
               No OAuth provider is configured for this deployment.
             </p>
+          )}
+          {DEV_AUTH_ENABLED && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/auth/callback/dev/")}
+            >
+              Continue without OAuth (dev only)
+            </Button>
           )}
         </div>
       )}

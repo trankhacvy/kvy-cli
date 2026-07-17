@@ -133,6 +133,47 @@ describe("startClaudeRemote", () => {
     });
   });
 
+  it("send(prompt, id) emits the envelope with the given id instead of a freshly-minted one", async () => {
+    // Regression: the web Composer's optimistic pending entry is tracked
+    // under the id it mints client-side and only reconciles (drops the
+    // pending copy) once a real transcript item with that SAME id lands
+    // (optimistic-composer.ts's reconcilePending). A freshly-minted id here
+    // means the pending entry never reconciles and duplicates on screen.
+    const fakeQuery = new FakeQuery([]);
+    const queryImpl = vi.fn(() => fakeQuery as unknown as Query);
+    const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
+
+    const handle = startClaudeRemote(
+      { workingDirectory: "/tmp/work", permissionMode: "default", onEnvelopes },
+      { queryImpl },
+    );
+
+    handle.send("from the web", "web-minted-id-123");
+    await flushMicrotasks();
+
+    const delivered = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
+    expect(delivered).toEqual([
+      expect.objectContaining({ id: "web-minted-id-123", ev: { t: "text", md: "from the web" } }),
+    ]);
+  });
+
+  it("send(prompt) with no id still mints a fresh one (local-terminal-typed messages, unchanged behavior)", async () => {
+    const fakeQuery = new FakeQuery([]);
+    const queryImpl = vi.fn(() => fakeQuery as unknown as Query);
+    const onEnvelopes = vi.fn<(e: SessionEnvelope[]) => void>();
+
+    const handle = startClaudeRemote(
+      { workingDirectory: "/tmp/work", permissionMode: "default", onEnvelopes },
+      { queryImpl },
+    );
+
+    handle.send("typed locally");
+    await flushMicrotasks();
+
+    const delivered = onEnvelopes.mock.calls.flatMap(([envs]) => envs);
+    expect(delivered[0]?.id).toBeTruthy();
+  });
+
   it("interrupt() delegates to the underlying query's interrupt()", async () => {
     const fakeQuery = new FakeQuery([]);
     const queryImpl = vi.fn(() => fakeQuery as unknown as Query);

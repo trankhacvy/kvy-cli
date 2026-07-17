@@ -12,7 +12,7 @@ import {
 } from "@/features/unmanaged-sessions";
 import { WorkspaceSection } from "./components/workspace-section";
 import { groupSessionsByWorkspace } from "./group";
-import { useMockSessionListData } from "./mock-source";
+import { useLiveSessionListSnapshot } from "./live-source";
 import type { UseSessionListSnapshot } from "./types";
 
 /**
@@ -23,15 +23,21 @@ import type { UseSessionListSnapshot } from "./types";
  * underneath — plain claude/codex sessions the daemon's transcript indexer
  * found but Falcon never spawned.
  *
- * `useData`/`useUnmanagedSnapshot`/`useUnmanagedActions` are the injectable
- * seams: `apiSocket` and the sync engine aren't landed on `main` yet (plan.md
- * 1.6), so these default to static mock snapshots. Once the real
- * sync-engine-backed hooks exist they satisfy the same signatures and swap
- * in with no other change here — the same pattern the (unlanded) sync-engine
- * work uses for `SyncSocketSource`.
+ * `useData` defaults to the real sync-engine-backed `useLiveSessionListSnapshot`
+ * (`live-source.ts`) — the hand-built `mock-source.ts` fixture this screen
+ * used to default to is retired from this call site (still exported, for
+ * tests/Storybook-less component review, from `features/session-list`),
+ * mirroring `SessionTimelineScreen`'s own `useControl` swap. `useData` stays
+ * an injectable prop so a test can still pass `useMockSessionListData`
+ * without touching `WorkspaceSection`/`SessionCard`.
+ *
+ * `useUnmanagedSnapshot`/`useUnmanagedActions` are still mock-backed — wiring
+ * the unmanaged-sessions section to live data is separate, not-yet-landed
+ * follow-up work (out of scope here: this task only wires the managed
+ * session list).
  */
 export function SessionListScreen({
-  useData = useMockSessionListData,
+  useData = useLiveSessionListSnapshot,
   useUnmanagedSnapshot = useMockUnmanagedSessions,
   useUnmanagedActions = useMockUnmanagedActions,
 }: {

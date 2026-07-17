@@ -291,6 +291,25 @@ describe("findClaudeInPath", () => {
     expect(result).not.toBeNull();
     expect(result?.path).toBe(realpathSync(realBinary));
   });
+
+  it("skips Falcon's own shim on PATH instead of resolving to it (regression: falcon claude self-referentially exec'd the shim)", () => {
+    if (process.platform === "win32") return;
+
+    // Mirrors `falcon shim install`'s layout exactly: `<FALCON_HOME_DIR>/bin/claude`.
+    const falconHomeDir = path.join(root, "falcon-home");
+    const shimDir = path.join(falconHomeDir, "bin");
+    mkdirSync(shimDir, { recursive: true });
+    const shimPath = path.join(shimDir, "claude");
+    writeFileSync(shimPath, '#!/usr/bin/env sh\nexec falcon claude "$@"\n');
+    chmodSync(shimPath, 0o755);
+
+    // Shim dir wins the PATH race, same as after `falcon shim install`
+    // prepends it — no real claude install anywhere else on PATH here, so a
+    // buggy locator would return the shim itself.
+    process.env.PATH = `${shimDir}:${originalPath ?? ""}`;
+
+    expect(findClaudeInPath({ FALCON_HOME_DIR: falconHomeDir })).toBeNull();
+  });
 });
 
 describe("findGlobalClaudeCliPath", () => {

@@ -255,3 +255,28 @@ describe("exchangeGithubCode", () => {
     expect(token).toBeNull();
   });
 });
+
+describe("defaultOAuthVerifier — dev provider (FALCON_DEV_AUTH bypass)", () => {
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("fails closed (returns null) when FALCON_DEV_AUTH isn't set, same as an unconfigured real provider", async () => {
+    delete process.env.FALCON_DEV_AUTH;
+    vi.resetModules();
+    const { defaultOAuthVerifier } = await import("./oauth.js");
+
+    expect(await defaultOAuthVerifier.verify("dev", "anything")).toBeNull();
+  });
+
+  it("returns a dev identity bound to the given proof when FALCON_DEV_AUTH=1", async () => {
+    process.env = { ...ORIGINAL_ENV, FALCON_DEV_AUTH: "1" };
+    vi.resetModules();
+    const { defaultOAuthVerifier } = await import("./oauth.js");
+
+    expect(await defaultOAuthVerifier.verify("dev", "some-proof")).toEqual({
+      provider: "dev",
+      subject: "some-proof",
+    });
+  });
+});

@@ -23,7 +23,7 @@ export function OAuthCallbackPage({
   provider,
   resolveProof,
 }: {
-  provider: "google" | "github";
+  provider: "google" | "github" | "dev";
   /** Resolves the `oauthProof` string this provider's redirect handed back, or throws/returns an error message. */
   resolveProof: () => Promise<{ ok: true; value: string } | { ok: false; error: string }>;
 }) {

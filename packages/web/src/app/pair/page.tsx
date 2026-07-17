@@ -1,6 +1,6 @@
 "use client";
 
-import { decodeBase64 } from "@falcon/crypto/web";
+import { decodeBase64, encodeBase64 } from "@falcon/crypto/web";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,12 +29,22 @@ export default function PairPage() {
 
   useEffect(() => {
     if (!bridge) return;
-    const ephPub = window.location.hash.slice(1);
+    const ephPubUrlSafe = window.location.hash.slice(1);
 
-    if (!ephPub || decodeBase64(ephPub).length !== X25519_PUBLIC_KEY_BYTES) {
+    // The CLI mints this fragment with `encodeBase64Url` (falcon-plan.md §2.2
+    // — URL-safe, no padding) — a different STRING than the plain-base64
+    // `ephPub` the CLI sent when it created the pairing request
+    // (`POST /v1/auth/pair`, plain `encodeBase64`). The server identifies a
+    // pairing request by that plain-base64 string (`pair.ts`'s `eq(pairRequests.ephPub, ...)`
+    // is a string comparison, not a byte comparison), so every downstream
+    // call here (sealForPeer, approvePairing) must use the re-encoded plain
+    // form, not the URL-safe one, or the server will never find a match.
+    const ephPubBytes = ephPubUrlSafe ? decodeBase64(ephPubUrlSafe, "base64url") : new Uint8Array(0);
+    if (ephPubBytes.length !== X25519_PUBLIC_KEY_BYTES) {
       setStatus({ kind: "invalid-link" });
       return;
     }
+    const ephPub = encodeBase64(ephPubBytes);
 
     let cancelled = false;
     (async () => {

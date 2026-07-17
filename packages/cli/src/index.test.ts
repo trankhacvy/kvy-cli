@@ -94,16 +94,23 @@ describe("main()", () => {
     }
   });
 
-  it("describes a claude passthrough start without executing anything", async () => {
+  it("exits 1 with an honest not-logged-in error for a claude start when no credentials exist", async () => {
+    // `runStart` now wires `claude` to `commands/start.js`'s real local-mode
+    // launch (index.ts's `runStart` doc comment) instead of the old
+    // `describeStart` stub — this isolated `FALCON_HOME_DIR` has no
+    // `access.key`, so it must fail fast on the credentials check (step 1)
+    // rather than attempting any network call.
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
     const code = await main(["claude", "--resume", "abc123"]);
 
-    expect(code).toBe(0);
-    expect(stdout.mock.calls[0]?.[0]).toContain("would start a claude session");
-    expect(stdout.mock.calls[0]?.[0]).toContain("--resume abc123");
+    expect(code).toBe(1);
+    expect(stderr.mock.calls[0]?.[0]).toContain("not logged in");
+    expect(stdout).not.toHaveBeenCalled();
     stdout.mockRestore();
+    stderr.mockRestore();
   });
 
   it("describes a codex passthrough start with the honest no-local-mode note", async () => {
@@ -121,12 +128,15 @@ describe("main()", () => {
   it("does not print the codex no-local-mode note for a claude start", async () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
     const code = await main(["claude"]);
 
-    expect(code).toBe(0);
-    expect(stdout.mock.calls[0]?.[0]).not.toContain("no local terminal mode");
+    expect(code).toBe(1);
+    expect(stderr.mock.calls[0]?.[0]).not.toContain("no local terminal mode");
+    expect(stdout).not.toHaveBeenCalled();
     stdout.mockRestore();
+    stderr.mockRestore();
   });
 
   it("prints a usage error and exits 1 for a malformed Falcon subcommand", async () => {
@@ -441,6 +451,12 @@ describe("main()", () => {
     });
 
     it("calls ensureDaemonRunning before describing a start, and proceeds when it succeeds", async () => {
+      // `codex` here (not `claude`) deliberately: this test is about the
+      // ensureDaemonRunning gating that runs ahead of every provider, not
+      // about `claude`'s own (now real) local-session wiring — `codex` stays
+      // on the honest `describeStart` stub (see index.ts's `runStart` doc
+      // comment), so it's a credentials-free way to prove "proceeds past the
+      // daemon check" without exercising commands/start.js at all.
       delete process.env.FALCON_NO_SERVICE;
       const ensureDaemonRunning = vi.fn(async () => ({
         ok: true,
@@ -453,11 +469,11 @@ describe("main()", () => {
       const main = await importMain();
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-      const code = await main(["claude"]);
+      const code = await main(["codex"]);
 
       expect(code).toBe(0);
       expect(ensureDaemonRunning).toHaveBeenCalledOnce();
-      expect(stdout.mock.calls[0]?.[0]).toContain("would start a claude session");
+      expect(stdout.mock.calls[0]?.[0]).toContain("would start a codex session");
       stdout.mockRestore();
     });
 
@@ -513,13 +529,16 @@ describe("main()", () => {
     });
 
     it("calls maybeTriggerAutoUpdate alongside the daemon auto-start check", async () => {
+      // `codex`, not `claude` — same reasoning as the ensureDaemonRunning
+      // test above: this is about `ensureDaemon()`'s own side effect, not
+      // `claude`'s real (now credential-requiring) session wiring.
       delete process.env.FALCON_NO_UPDATE;
       const maybeTriggerAutoUpdate = vi.fn(async () => {});
       vi.doMock("./update/autoUpdateTrigger.js", () => ({ maybeTriggerAutoUpdate }));
       const main = await importMain();
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-      const code = await main(["claude"]);
+      const code = await main(["codex"]);
 
       expect(code).toBe(0);
       expect(maybeTriggerAutoUpdate).toHaveBeenCalledOnce();

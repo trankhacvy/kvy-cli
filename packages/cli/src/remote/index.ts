@@ -18,3 +18,4 @@ export type {
   RemoteModeKeypressState,
 } from "./remoteModeKeypress.js";
 export { SdkToEnvelopeConverter } from "./sdkToEnvelope.js";
+export { cleanupStdinAfterInk } from "./terminalStdinCleanup.js";

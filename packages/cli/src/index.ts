@@ -10,6 +10,7 @@ import { runResumeCommand } from "./commands/resume.js";
 import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
 import { runShimCommand } from "./commands/shim.js";
+import { runStartClaudeCommand } from "./commands/start.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
   runWorkspaceListCommand,
@@ -54,9 +55,11 @@ import { runUpdateCommand } from "./update/runUpdateCommand.js";
 // real too (`./daemon/`); `workspace-config` is real too (`./commands/
 // workspaceConfig.js`, plan.md §16 "4.1 Git panel"); `workspace-sync` is a
 // deliberate, permanent stub (falcon-prd.md line 149: "cloud sync coming
-// soon" — sandboxing is out of scope); provider spawning and the rest of
-// the network calls are later work — every other branch below is an honest
-// placeholder, not a half-implementation.
+// soon" — sandboxing is out of scope); `falcon claude` now spawns a real
+// local session (`./commands/start.js`, see `runStart()` below) — every
+// other provider (`codex` has no local-interactive mode, see
+// `CODEX_NO_LOCAL_MODE_NOTE`) still goes through the honest `describeStart`
+// placeholder below, not a half-implementation.
 //
 // Help text, `--version`, and error messages are ordinary CLI output and go
 // straight to stdout/stderr, same as any CLI. That's unrelated to the
@@ -102,6 +105,17 @@ function readVersion(): string {
  */
 function resolveBundlePath(): string {
   return path.join(packageRootDir(), "dist", "index.mjs");
+}
+
+/**
+ * `scripts/falcon_claude_launcher.cjs` — same bundle-vs-dev path resolution
+ * as `resolveBundlePath()` above (one level below the package root either
+ * way), and for the same reason: a nested module's own `import.meta.url`
+ * would resolve to `dist/index.mjs` itself once pkgroll inlines everything
+ * into that single file, not to wherever the *source* module used to live.
+ */
+function resolveClaudeLauncherPath(): string {
+  return path.join(packageRootDir(), "scripts", "falcon_claude_launcher.cjs");
 }
 
 /** `true` for a `bun build --compile` standalone binary — see `readVersion()`'s doc comment above for why this identifier only exists at all in a compiled build. Shared with `update/installKind.ts`, which can't reference `__FALCON_CLI_VERSION__` directly since it's declared in this module's scope only. */
@@ -316,16 +330,29 @@ async function runUpdate(): Promise<number> {
 
 /**
  * `falcon` / `falcon claude` / `falcon codex` — the primary agent-invoking
- * entrypoint. Provider spawning itself is still a stub (see
- * `describeStart`), but the daemon auto-start it depends on (PRD FR-1.2)
- * is real: this is the first place a fresh install actually touches the
- * daemon.
+ * entrypoint. `claude` spawns a real local session (`./commands/start.js`,
+ * wiring `session/bootstrap.ts` + `api/outbox.ts` + `claude/loop.ts` — every
+ * one of those was already built and unit-tested in isolation before this
+ * function existed to call them); `codex` (no local-interactive mode, see
+ * `CODEX_NO_LOCAL_MODE_NOTE`) and any other provider still go through the
+ * honest `describeStart` stub. The daemon auto-start this depends on (PRD
+ * FR-1.2) is real either way: this is the first place a fresh install
+ * actually touches the daemon.
  */
 async function runStart(command: Extract<FalconCommand, { type: "start" }>): Promise<number> {
   const daemon = await ensureDaemon();
   if (!daemon.ok) {
     process.stderr.write(daemon.message);
     return 1;
+  }
+  if (command.provider === "claude") {
+    return runStartClaudeCommand({
+      homeDir: resolveHomeDir(),
+      workingDirectory: process.cwd(),
+      claudeArgs: command.providerArgs,
+      launcherPath: resolveClaudeLauncherPath(),
+      logger,
+    });
   }
   process.stdout.write(describeStart(command));
   return 0;

@@ -88,7 +88,12 @@ describe("pairDevice", () => {
       if (statusCalls === 0) {
         return jsonResponse({ state: "pending" });
       }
-      const sealed = libsodiumEncryptForPublicKey(masterSecret, decodeBase64(body.ephPub));
+      // Matches the real approver's wire format exactly (packages/web/src/crypto/
+      // worker-handler.ts's `sealForPeer`: `[version(1) | masterSecret(32)]`) — sealing
+      // the bare masterSecret here would let this test pass while the real pairing
+      // flow (which has the version-byte prefix) still failed to decode.
+      const versionedPayload = new Uint8Array([0x00, ...masterSecret]);
+      const sealed = libsodiumEncryptForPublicKey(versionedPayload, decodeBase64(body.ephPub));
       return jsonResponse({
         state: "authorized",
         token: "jwt-token",
@@ -125,6 +130,38 @@ describe("pairDevice", () => {
       const other = getRandomBytes(32);
       const bogusRecipient = getRandomBytes(32);
       const sealed = libsodiumEncryptForPublicKey(other, bogusRecipient);
+      return jsonResponse({
+        state: "authorized",
+        token: "jwt-token",
+        response: encodeBase64(sealed),
+      });
+    });
+
+    const outcome = await pairDevice({
+      backendUrl: "http://example.invalid",
+      frontendUrl: "http://web.invalid",
+      pollIntervalMs: 0,
+      onPairingUrlReady: () => {},
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: "decrypt-failed" });
+  });
+
+  it("returns decrypt-failed when the decrypted payload has the wrong version byte or length", async () => {
+    let posts = 0;
+    global.fetch = vi.fn(async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/v1/auth/pair/status")) {
+        return jsonResponse({ status: "authorized" });
+      }
+      posts++;
+      if (posts === 1) return jsonResponse({ state: "pending" });
+      const body = JSON.parse((init?.body as string) ?? "{}") as { ephPub: string };
+      // Opens fine (correct recipient), but isn't the expected `[version | masterSecret]`
+      // shape — a bare 32-byte payload with no version prefix, exactly the bug this test
+      // guards against regressing to.
+      const bareMasterSecret = getRandomBytes(32);
+      const sealed = libsodiumEncryptForPublicKey(bareMasterSecret, decodeBase64(body.ephPub));
       return jsonResponse({
         state: "authorized",
         token: "jwt-token",

@@ -1,6 +1,8 @@
 # Reference-only codebases (not part of Falcon's own history)
 happy/
 superset/
+omnara/
+mobvibe/
 
 # OS
 .DS_Store

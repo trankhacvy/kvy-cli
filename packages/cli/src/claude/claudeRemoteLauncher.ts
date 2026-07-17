@@ -43,20 +43,49 @@
  * itself — same shape `claudeLocalLauncher.ts` uses.
  *
  * ## Scope note
- * This module does not own the RPC/keypress transport that decides *when*
+ * This module does not own the RPC transport that decides *when*
  * `deliverMessage()`/`requestSwitchToLocal()`/`requestExit()` get called
- * (that's `loop.ts`'s job — it wires the session `message`/`takeControl`
- * RPCs and `RemoteModeDisplay`'s Ctrl-T/double-space/double-Ctrl-C gestures
- * into these three calls), the HTTP outbox (`onEnvelopes` is a plain
- * callback the caller wires to `Outbox.enqueue`), or the real permission
- * pipeline (`canUseTool` defaults to `claudeRemote.ts`'s own fail-closed
- * stub, same as it already does — plan.md §2.3, a separate task).
+ * from the web (that's `loop.ts`/the session-RPC wiring's job) — but it DOES
+ * own `RemoteModeDisplay`'s Ctrl-T/double-space/double-Ctrl-C local-terminal
+ * gestures, same as Happy's own `claudeRemoteLauncher.ts`: they call the same
+ * `requestSwitchToLocal`/`requestExit` a remote RPC would. The HTTP outbox
+ * (`onEnvelopes` is a plain callback the caller wires to `Outbox.enqueue`)
+ * and the real permission pipeline (`canUseTool` defaults to
+ * `claudeRemote.ts`'s own fail-closed stub, same as it already does —
+ * plan.md §2.3, a separate task) are still out of scope here.
+ *
+ * ## Terminal UI (ported from Happy's own claudeRemoteLauncher.ts)
+ * Renders the already-ported `RemoteModeDisplay` Ink component when stdout/
+ * stdin are both a TTY (never in a non-interactive/piped/test context —
+ * `hasTTY` gates all of the below, matching Happy exactly), feeding it the
+ * same `SessionEnvelope`s the outbox gets via `MessageBuffer`/
+ * `pushEnvelopeToBuffer` (`remote/messageBuffer.ts`) rather than re-deriving
+ * a second summary of the raw SDK stream. On the way out, `cleanupStdinAfterInk`
+ * (ported verbatim from Happy — see its own file header) drains any stray
+ * keystrokes and deliberately leaves raw mode ON, because the next consumer
+ * on a switch-to-local is `claude` itself via `stdio: 'inherit'`, which
+ * expects to inherit a raw-mode-capable stdin — resetting to cooked mode
+ * here would open a race window where the kernel echoes in-flight bytes at
+ * wherever Ink last left the cursor (visible garbage / a "second cursor").
  */
 import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
+import { render as inkRenderDefault } from "ink";
+import React from "react";
 import type { Logger } from "../logger.js";
+import { MessageBuffer, pushEnvelopeToBuffer } from "../remote/messageBuffer.js";
 import { startClaudeRemote as startClaudeRemoteDefault } from "../remote/claudeRemote.js";
+import { RemoteModeDisplay } from "../remote/RemoteModeDisplay.js";
+import { cleanupStdinAfterInk } from "../remote/terminalStdinCleanup.js";
 import type { ModeSwitchDedupe, QueuedMessage } from "./loop.js";
+
+/** Minimal surface this module needs from an Ink render instance — matches what `ink`'s `render()` returns. */
+interface InkInstance {
+  unmount: () => void;
+}
+
+/** Injectable so tests never actually mount Ink or touch real stdin/stdout. Defaults to `ink`'s real `render`. */
+type InkRender = (element: React.ReactElement, options?: Record<string, unknown>) => InkInstance;
 
 export interface ClaudeRemoteLauncherOptions {
   workingDirectory: string;
@@ -77,9 +106,27 @@ export interface ClaudeRemoteLauncherOptions {
   logger?: Logger;
 }
 
+/** Minimal stdin/stdout surface this module needs — matches the real `process.stdin`/`process.stdout`, injectable so tests never touch the real terminal. */
+interface TerminalStdio {
+  stdout: { isTTY?: boolean };
+  stdin: {
+    isTTY?: boolean;
+    on: (event: "data", listener: (chunk: unknown) => void) => unknown;
+    off: (event: "data", listener: (chunk: unknown) => void) => unknown;
+    resume: () => void;
+    pause: () => void;
+    setEncoding?: (encoding: BufferEncoding) => unknown;
+    setRawMode?: (value: boolean) => void;
+  };
+}
+
 export interface ClaudeRemoteLauncherDeps {
   /** Injectable for tests; defaults to the real `startClaudeRemote()`. */
   startClaudeRemote?: typeof startClaudeRemoteDefault;
+  /** Injectable for tests; defaults to `ink`'s real `render`. Never called unless `hasTTY` (see file header). */
+  render?: InkRender;
+  /** Injectable for tests; defaults to the real `process.stdout`/`process.stdin`. */
+  terminal?: TerminalStdio;
   logger?: Logger;
 }
 
@@ -115,41 +162,14 @@ export function startClaudeRemoteLauncher(
 ): ClaudeRemoteLauncherHandle {
   const logger = deps.logger ?? opts.logger ?? noopLogger;
   const start = deps.startClaudeRemote ?? startClaudeRemoteDefault;
+  const inkRender = deps.render ?? (inkRenderDefault as InkRender);
+  const terminal: TerminalStdio = deps.terminal ?? { stdout: process.stdout, stdin: process.stdin };
 
   let outcome: "switch" | "exit" | null = null;
   let resolveSettled!: () => void;
   const settled = new Promise<void>((resolve) => {
     resolveSettled = resolve;
   });
-
-  const handle = start(
-    {
-      workingDirectory: opts.workingDirectory,
-      resume: opts.providerSessionId,
-      permissionMode: opts.permissionMode,
-      model: opts.model,
-      canUseTool: opts.canUseTool,
-      onEnvelopes: (envelopes) => {
-        const forwarded = envelopes.filter((envelope) => !opts.dedupe.isDuplicate(envelope));
-        if (forwarded.length > 0) opts.onEnvelopes(forwarded);
-      },
-      onProviderSessionId: opts.onProviderSessionId,
-      logger,
-    },
-    {},
-  );
-
-  for (const message of opts.initialMessages ?? []) handle.send(message.text);
-
-  function deliverMessage(message: QueuedMessage): void {
-    if (outcome) {
-      logger.debug("[claude-remote-launcher] dropping message delivered after settle", {
-        id: message.id,
-      });
-      return;
-    }
-    handle.send(message.text);
-  }
 
   function requestSwitchToLocal(): void {
     if (outcome) return;
@@ -165,9 +185,73 @@ export function startClaudeRemoteLauncher(
     resolveSettled();
   }
 
+  // Terminal UI — see file header. Never touches the real terminal outside a
+  // real interactive TTY session (both this repo's tests and any piped/
+  // non-interactive invocation naturally take `hasTTY === false`, matching
+  // Happy's own gate exactly).
+  const messageBuffer = new MessageBuffer();
+  const hasTTY = Boolean(terminal.stdout.isTTY && terminal.stdin.isTTY);
+  let inkInstance: InkInstance | null = null;
+
+  if (hasTTY) {
+    console.clear();
+    inkInstance = inkRender(
+      React.createElement(RemoteModeDisplay, {
+        messageBuffer,
+        onExit: requestExit,
+        onSwitchToLocal: requestSwitchToLocal,
+      }),
+      { exitOnCtrlC: false, patchConsole: false },
+    );
+    terminal.stdin.resume();
+    if (terminal.stdin.isTTY) terminal.stdin.setRawMode?.(true);
+    terminal.stdin.setEncoding?.("utf8");
+  }
+
+  const handle = start(
+    {
+      workingDirectory: opts.workingDirectory,
+      resume: opts.providerSessionId,
+      permissionMode: opts.permissionMode,
+      model: opts.model,
+      canUseTool: opts.canUseTool,
+      onEnvelopes: (envelopes) => {
+        const forwarded = envelopes.filter((envelope) => !opts.dedupe.isDuplicate(envelope));
+        if (forwarded.length === 0) return;
+        for (const envelope of forwarded) pushEnvelopeToBuffer(messageBuffer, envelope);
+        opts.onEnvelopes(forwarded);
+      },
+      onProviderSessionId: opts.onProviderSessionId,
+      logger,
+    },
+    {},
+  );
+
+  for (const message of opts.initialMessages ?? []) handle.send(message.text, message.id);
+
+  function deliverMessage(message: QueuedMessage): void {
+    if (outcome) {
+      logger.debug("[claude-remote-launcher] dropping message delivered after settle", {
+        id: message.id,
+      });
+      return;
+    }
+    handle.send(message.text, message.id);
+  }
+
   async function run(): Promise<ClaudeRemoteLauncherResult> {
     await settled;
     const { providerSessionId } = await handle.stop();
+
+    // Hand the terminal back cleanly before returning — see file header for
+    // why this must happen for every outcome (exit or switch-to-local), not
+    // just the switch path: an `exit` still needs the terminal restored to
+    // whatever comes next (the shell prompt).
+    if (inkInstance) {
+      inkInstance.unmount();
+      await cleanupStdinAfterInk({ stdin: terminal.stdin, drainMs: 150 });
+    }
+    messageBuffer.clear();
 
     if (outcome === "exit") {
       return { type: "exit" };

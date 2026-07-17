@@ -82,6 +82,14 @@ export function createSessionClientDeps(
 
 export interface SessionClientHandle {
   readonly connected: boolean;
+  /**
+   * The underlying socket.io-client `Socket` this client opened — exposed so
+   * a caller can layer another protocol over the same session-scoped
+   * connection (namely `rpc/sessionRpc.ts`'s `registerSessionRpcHandlers`,
+   * which needs a live `Socket` to join `rpc-register` rooms on and listen
+   * for `rpc-request` on) without opening a second, redundant connection.
+   */
+  readonly socket: Socket;
   stop: () => void;
 }
 
@@ -154,6 +162,7 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
     get connected() {
       return connected;
     },
+    socket,
     stop: () => {
       stopped = true;
       connected = false;

@@ -82,6 +82,48 @@ describe("reconcilePending", () => {
     expect(reconcilePending([], [])).toEqual([]);
   });
 
+  it("falls back to matching by (role: user, text) when the id doesn't match (dropped-id regression)", () => {
+    // Simulates the CLI dropping the RPC-delivered id somewhere in its
+    // send chain: the landed item's id ("echo-99") has nothing to do with
+    // the pending entry's localId ("p1"), but the text matches exactly.
+    const items: RenderItem[] = [
+      { id: "echo-99", time: 5, role: "user", kind: "text", md: "one", thinking: false },
+    ];
+    const result = reconcilePending(pending, items);
+    expect(result.map((p) => p.localId)).toEqual(["p2"]);
+  });
+
+  it("does not content-match a non-text pending entry (attachments always carry a real ref)", () => {
+    const filePending: PendingMessage[] = [
+      { kind: "file", localId: "p3", name: "x.png", size: 10, sentAt: 3, queued: false },
+    ];
+    const items: RenderItem[] = [
+      // Same name by coincidence, wrong id, and not even the same RenderItem kind — must not match.
+      { id: "unrelated", time: 3, role: "user", kind: "text", md: "x.png", thinking: false },
+    ];
+    expect(reconcilePending(filePending, items)).toEqual(filePending);
+  });
+
+  it("claims each landed text item for at most one pending entry (two identical pending sends, one echo)", () => {
+    const duplicateText: PendingMessage[] = [
+      { kind: "text", localId: "a", text: "same", sentAt: 1, queued: false },
+      { kind: "text", localId: "b", text: "same", sentAt: 2, queued: false },
+    ];
+    const items: RenderItem[] = [
+      { id: "echo-1", time: 3, role: "user", kind: "text", md: "same", thinking: false },
+    ];
+    const result = reconcilePending(duplicateText, items);
+    // Exactly one of the two reconciles — the other stays pending until its own echo lands.
+    expect(result).toHaveLength(1);
+  });
+
+  it("does not content-match an assistant message even if the text happens to be identical", () => {
+    const items: RenderItem[] = [
+      { id: "unrelated", time: 5, role: "agent", kind: "text", md: "one", thinking: false },
+    ];
+    expect(reconcilePending(pending, items)).toBe(pending);
+  });
+
   it("reconciles a pending file entry the same way as a pending text entry", () => {
     const filePending: PendingMessage[] = [
       { kind: "file", localId: "p3", name: "x.png", size: 10, sentAt: 3, queued: false },
