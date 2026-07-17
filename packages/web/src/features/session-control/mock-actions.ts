@@ -23,7 +23,7 @@ export function createMockSessionControl(_sessionId: string): SessionControlActi
   return {
     async sendMessage() {
       await delay(LATENCY_MS);
-      return { queued: false };
+      return { queued: false, status: "queued" };
     },
     async answerPermission(reqId) {
       await delay(LATENCY_MS);

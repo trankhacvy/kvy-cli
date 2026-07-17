@@ -23,12 +23,16 @@ export function Composer({
   isSending,
   isQueued,
   error,
+  notice,
 }: {
   onSend: (text: string) => void;
   onAttach: (file: File) => void;
   isSending: boolean;
   isQueued: boolean;
   error: string | null;
+  /** Non-blocking `outcome-unknown` delivery notice (design §7.10) — shown
+   * alongside, never instead of, the composer's normal controls. */
+  notice: string | null;
 }) {
   const [text, setText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -52,6 +56,7 @@ export function Composer({
           Queued — the agent is finishing its current turn
         </Badge>
       )}
+      {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex items-end gap-2">
         <input

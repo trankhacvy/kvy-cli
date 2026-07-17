@@ -2858,8 +2858,27 @@
       "queued": {
         "kind": "leaf",
         "type": "boolean"
+      },
+      "status": {
+        "kind": "optional",
+        "inner": {
+          "kind": "enum",
+          "options": [
+            "duplicate",
+            "outcome-unknown",
+            "queued"
+          ]
+        }
       }
     }
+  },
+  "MessageRpcStatusSchema": {
+    "kind": "enum",
+    "options": [
+      "duplicate",
+      "outcome-unknown",
+      "queued"
+    ]
   },
   "PermAnswerParamsSchema": {
     "kind": "object",

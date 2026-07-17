@@ -102,7 +102,7 @@ function SessionTimelineBody({
   controlMode: "local" | "remote";
   working: boolean;
 }) {
-  const { mergedItems, send, sendAttachment, isSending, isQueued, error } =
+  const { mergedItems, send, sendAttachment, isSending, isQueued, error, notice } =
     useComposerState(items);
 
   return (
@@ -127,6 +127,7 @@ function SessionTimelineBody({
         isSending={isSending}
         isQueued={isQueued}
         error={error}
+        notice={notice}
       />
     </div>
   );

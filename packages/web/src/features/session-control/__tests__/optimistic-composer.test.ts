@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { RenderItem } from "@/sync/reducer";
+import type { MessageRpcResult } from "@/sync/sessionRpc";
 import {
   buildFileEnvelope,
   buildMessageEnvelope,
+  deliveryNotice,
   type PendingMessage,
   pendingToRenderItem,
+  reconcileByStatus,
   reconcilePending,
 } from "../optimistic-composer.js";
 
@@ -172,5 +175,53 @@ describe("pendingToRenderItem", () => {
       name: "diagram.png",
       size: 2048,
     });
+  });
+});
+
+describe("reconcileByStatus (tri-state message RPC reply, design §7.10)", () => {
+  const pending: PendingMessage[] = [
+    { kind: "text", localId: "p1", text: "one", sentAt: 1, queued: false },
+    { kind: "text", localId: "p2", text: "two", sentAt: 2, queued: false },
+  ];
+
+  it("status: 'queued' updates the matching entry's `queued` flag, same as legacy behavior", () => {
+    const result: MessageRpcResult = { queued: true, status: "queued" };
+    const next = reconcileByStatus(pending, "p1", result);
+    expect(next).toEqual([
+      { kind: "text", localId: "p1", text: "one", sentAt: 1, queued: true },
+      { kind: "text", localId: "p2", text: "two", sentAt: 2, queued: false },
+    ]);
+  });
+
+  it("a legacy reply with no `status` field behaves exactly like 'queued'", () => {
+    const result: MessageRpcResult = { queued: true };
+    const next = reconcileByStatus(pending, "p1", result);
+    expect(next.find((p) => p.localId === "p1")).toMatchObject({ queued: true });
+  });
+
+  it("status: 'duplicate' drops the pending entry immediately (reconciled as success) and creates no new entry", () => {
+    const result: MessageRpcResult = { queued: false, status: "duplicate" };
+    const next = reconcileByStatus(pending, "p1", result);
+    expect(next.map((p) => p.localId)).toEqual(["p2"]);
+  });
+
+  it("status: 'outcome-unknown' leaves every pending entry untouched (never resent, never dropped)", () => {
+    const result: MessageRpcResult = { queued: false, status: "outcome-unknown" };
+    const next = reconcileByStatus(pending, "p1", result);
+    expect(next).toBe(pending);
+  });
+});
+
+describe("deliveryNotice (tri-state message RPC reply, design §7.10)", () => {
+  it("returns a non-blocking notice only for 'outcome-unknown'", () => {
+    expect(deliveryNotice({ queued: false, status: "outcome-unknown" })).toEqual(
+      expect.any(String),
+    );
+  });
+
+  it("returns null for 'queued', 'duplicate', and the legacy status-less shape", () => {
+    expect(deliveryNotice({ queued: true, status: "queued" })).toBeNull();
+    expect(deliveryNotice({ queued: false, status: "duplicate" })).toBeNull();
+    expect(deliveryNotice({ queued: true })).toBeNull();
   });
 });
