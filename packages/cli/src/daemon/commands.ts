@@ -2,16 +2,34 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { io as ioClientDefault, type Socket } from "socket.io-client";
+import { resolveBackendUrl } from "../auth/config.js";
+import {
+  type FalconCredentials,
+  readCredentials as readAuthCredentialsDefault,
+} from "../auth/credentials.js";
 import { resolveHomeDir } from "../home.js";
 import { createLogger, type Logger } from "../logger.js";
 import { startControlServer } from "./controlServer.js";
 import { acquireDaemonLock, isProcessAlive } from "./lock.js";
 import {
+  createMachineIntegrationDeps,
+  type MachineIntegrationDeps,
+  startMachineIntegration,
+} from "./machineIntegration.js";
+import type { ProviderSessionResolver } from "./providerSessionResolver.js";
+import type { ResumeSessionDeps } from "./resumeSession.js";
+import {
   captureBundleMtimeMs as captureBundleMtimeMsDefault,
   hasBundleBeenReplaced as hasBundleBeenReplacedDefault,
 } from "./selfUpdate.js";
 import { createSessionRegistry } from "./sessionRegistry.js";
+import type { PersistedSession } from "./sessionsStore.js";
+import { createSpawnAwaiter } from "./spawnAwaiter.js";
+import type { SpawnEngineDeps } from "./spawnEngine.js";
 import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState } from "./state.js";
+import type { SessionEncryptionData } from "./types.js";
+import type { WorkspaceRootLookup } from "./workspacePath.js";
 
 /**
  * Wires the singleton lock (`lock.ts`), the control server (`controlServer.ts`),
@@ -25,8 +43,13 @@ import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState }
  *                   `markers.ts` — this is the exact argv `falcon kill`
  *                   recognizes as the daemon). Acquires the lock, restores
  *                   `sessions.json` into the session registry, boots the
- *                   control server, writes state, then blocks until shutdown
- *                   is requested (SIGINT/SIGTERM, the control server's own
+ *                   control server, writes state, then — if this machine
+ *                   has stored credentials (`falcon auth login` already
+ *                   ran) — opens the machine-scoped `/v1/stream` socket and
+ *                   registers the real `spawn`/`resumeSession`/`git.*`/
+ *                   `fs.*`/`adopt.*` RPC handlers (`machineIntegration.ts`,
+ *                   design §4.4/§8). Then blocks until shutdown is
+ *                   requested (SIGINT/SIGTERM, the control server's own
  *                   `/stop`, or its own heartbeat's self-update handoff —
  *                   see below), then cleans up. A 60s heartbeat runs
  *                   throughout: it prunes dead session pids
@@ -46,10 +69,19 @@ import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState }
  *                   (a reused pid after reboot would otherwise look "alive").
  *
  * `spawnSession` (the HTTP loopback `/spawn-session` path) stays an honest
- * stand-in here — actual tmux/detached spawning-from-a-remote-RPC
- * (`spawnEngine.ts`) needs a registered-workspace lookup
- * (`workspacePath.ts`'s `WorkspaceRootLookup`) that doesn't exist yet
- * either; wiring that end-to-end is separate, later integration work.
+ * stand-in here — it's a disjoint, separate feature (no `workspaceId`/
+ * `idempotencyKey` in its body, a `sessionId` field belonging to a
+ * different resume contract) from the machine-RPC `spawn`/`resumeSession`
+ * this module now wires for real; see `P3-3.1-daemon-spawn-rpc`'s
+ * task-summary for why it was deliberately left untouched.
+ *
+ * The machine RPC handlers' `resolveWorkspaceRoot`/`resolveProviderSession`/
+ * `resolveResumeDirectory` seams have no real default yet (no on-disk
+ * "registered workspaces" store exists in this package) — they honestly
+ * report "unregistered"/"unresolved" rather than guessing, exactly like
+ * `spawnEngine.ts`/`providerSessionResolver.ts`/`resumeSession.ts` already
+ * document. `DaemonCommandDeps` exposes them as overridable so a later task
+ * can plug a real store in without touching this wiring again.
  */
 
 export interface DaemonCommandDeps {
@@ -90,6 +122,29 @@ export interface DaemonCommandDeps {
   captureBundleMtimeMs: (entryPath: string) => number | null;
   /** Injectable for tests; defaults to `selfUpdate.ts`'s real, `fs`-backed implementation. */
   hasBundleBeenReplaced: (entryPath: string, initialMtimeMs: number | null) => boolean;
+
+  // --- Machine-scoped WS client + RPC handler wiring (machineIntegration.ts) ---
+
+  /** The backend origin `startMachineClient` registers against and opens `/v1/stream` to. Defaults to `resolveBackendUrl()` (`FALCON_BACKEND_URL`, or the production default). */
+  machineServerUrl: string;
+  /** Reads `~/.falcon/access.key`; `null` means "not logged in", in which case `start-sync` runs local-only and never opens a machine-scoped socket. Defaults to `auth/credentials.ts`'s real reader. */
+  readAuthCredentials: (homeDir: string) => FalconCredentials | null;
+  /** Builds the socket.io-client transport for the machine-scoped connection. Injectable so tests can point at a fake/local server; defaults to the real `socket.io-client`. */
+  machineIoFactory: (url: string, opts: Record<string, unknown>) => Socket;
+  /** How often the machine client sends its `machine-alive` heartbeat. Defaults to 60s (design §8). */
+  machineHeartbeatIntervalMs: number;
+  /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory. No real default yet — see this module's own doc comment. */
+  resolveWorkspaceRoot: WorkspaceRootLookup;
+  /** Resolves `adopt.take`/`adopt.mirror`'s bare provider session id to a registered workspace. No real default yet — see this module's own doc comment. */
+  resolveProviderSession: ProviderSessionResolver;
+  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in. No real default yet — see this module's own doc comment. */
+  resolveResumeDirectory: (
+    session: PersistedSession,
+  ) => string | null | undefined | Promise<string | null | undefined>;
+  /** Test-only escape hatch: extra overrides merged into `spawnEngine.ts`'s deps (e.g. a fake process launcher, so tests never actually spawn `tmux`/a provider CLI). Unset in production. */
+  spawnEngineOverrides?: Partial<SpawnEngineDeps>;
+  /** Same, for `resumeSession.ts`. */
+  resumeSessionOverrides?: Partial<ResumeSessionDeps>;
 }
 
 function readCliVersion(): string {
@@ -181,6 +236,13 @@ export function createDaemonCommandDeps(
     heartbeatIntervalMs: 60_000,
     captureBundleMtimeMs: captureBundleMtimeMsDefault,
     hasBundleBeenReplaced: hasBundleBeenReplacedDefault,
+    machineServerUrl: resolveBackendUrl(),
+    readAuthCredentials: (homeDir) => readAuthCredentialsDefault(homeDir),
+    machineIoFactory: (url, opts) => ioClientDefault(url, opts),
+    machineHeartbeatIntervalMs: 60_000,
+    resolveWorkspaceRoot: () => null,
+    resolveProviderSession: async () => null,
+    resolveResumeDirectory: () => undefined,
     ...overrides,
   };
 }
@@ -241,6 +303,27 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     logger.info("daemon start-sync: restored persisted sessions", { count: restoredCount });
   }
 
+  // Matches the launched process's pid to its `/session-started` webhook —
+  // shared by both the `spawn` and `resumeSession` machine RPCs
+  // (`spawnEngine.ts`/`resumeSession.ts`, via `machineIntegration.ts` below).
+  const spawnAwaiter = createSpawnAwaiter();
+
+  // The one place a spawned/resumed session's self-report actually lands:
+  // feeds the durable registry AND resolves whichever RPC is waiting on this
+  // pid. Without the second half, `spawn`/`resumeSession` would always time
+  // out after 15s — the awaiter would exist but nothing would ever feed it.
+  function onSessionStarted(
+    sessionId: string,
+    metadata: unknown,
+    encryption?: SessionEncryptionData,
+    pid?: number,
+  ): void {
+    registry.onSessionStarted(sessionId, metadata, encryption, pid);
+    if (pid !== undefined) {
+      spawnAwaiter.resolve({ sessionId, metadata, encryption, pid });
+    }
+  }
+
   const controlServer = await startControlServer({
     getSessions: registry.getSessions,
     stopSession: registry.stopSession,
@@ -249,15 +332,27 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
       errorMessage: "falcon daemon: session spawning is not implemented yet",
     }),
     requestShutdown: () => triggerShutdown(),
-    onSessionStarted: registry.onSessionStarted,
+    onSessionStarted,
     logger,
   });
 
+  // Carry over any previously-registered `machineId`/`wrappedDek`
+  // (`machineClient.ts`'s `persistMachineId`, `machineIntegration.ts`'s own
+  // DEK persistence) so `startMachineIntegration` below actually resumes the
+  // same server-side machine row under the same DEK, instead of registering
+  // a brand new machine (and minting a mismatched fresh DEK) on every single
+  // boot — without this, overwriting the whole state file with a
+  // `machineId`/`wrappedDek`-less payload before `startMachineIntegration`
+  // runs would erase both first and make every restart look like a fresh
+  // machine.
+  const previousState = await readDaemonState(homeDir);
   const payload: DaemonState = {
     pid: process.pid,
     port: controlServer.port,
     version: deps.version,
     startedAt: deps.now(),
+    machineId: previousState?.machineId,
+    wrappedDek: previousState?.wrappedDek,
   };
 
   const lockResult = await acquireDaemonLock(homeDir, payload);
@@ -276,6 +371,28 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
 
   await writeDaemonState(homeDir, payload);
   logger.info("daemon start-sync: ready", { pid: payload.pid, port: payload.port });
+
+  // Open the machine-scoped WS client + register the real machine RPC
+  // handlers (design §4.4/§8, plan.md §16 "3.1"/"3.2"/"3.3") now that the
+  // lock is held and the registry is restored — a `null` result just means
+  // "not logged in yet", not a boot failure (see machineIntegration.ts).
+  const machineIntegrationDeps: MachineIntegrationDeps = createMachineIntegrationDeps(
+    { homeDir, registry, awaiter: spawnAwaiter },
+    {
+      logger,
+      serverUrl: deps.machineServerUrl,
+      fetchImpl: deps.fetchImpl,
+      ioFactory: deps.machineIoFactory,
+      readCredentials: () => deps.readAuthCredentials(homeDir),
+      resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
+      resolveProviderSession: deps.resolveProviderSession,
+      resolveResumeDirectory: deps.resolveResumeDirectory,
+      heartbeatIntervalMs: deps.machineHeartbeatIntervalMs,
+      spawnEngineOverrides: deps.spawnEngineOverrides,
+      resumeSessionOverrides: deps.resumeSessionOverrides,
+    },
+  );
+  const machineIntegration = await startMachineIntegration(machineIntegrationDeps);
 
   // Self-update detection (§8: "watch installed artifact mtime ... restart
   // when idle") shares this same heartbeat with dead-session pruning (§8:
@@ -307,6 +424,10 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   clearInterval(heartbeat);
   unregisterSignals();
 
+  // Stop taking new machine RPCs / heartbeats before tearing down the
+  // control server and releasing the lock, mirroring the boot order above
+  // (machine client started last, stopped first).
+  machineIntegration?.stop();
   await controlServer.stop();
   await lockResult.handle.release();
   await clearDaemonState(homeDir);

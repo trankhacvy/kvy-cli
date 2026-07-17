@@ -8,13 +8,17 @@
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  // `bootstrap.integration.test.ts` imports `@falcon/server`'s TS source
-  // directly (a private, unpublished app package with no subpath `exports`
-  // for its test utilities — see that file's own comment) purely so vitest
-  // can run a real end-to-end idempotency check. Those files pull in
-  // dependencies (drizzle-orm, @electric-sql/pglite, …) this package never
-  // declares and sit outside `rootDir`, so they're excluded from `tsc
-  // --noEmit` here; vitest transpiles and runs the file on its own account
-  // (its `include` glob is independent of this file's `include`/`exclude`).
-  "exclude": ["src/session/bootstrap.integration.test.ts"]
+  // `bootstrap.integration.test.ts`/`commands.machineWiring.integration.test.ts`
+  // import `@falcon/server`'s TS source directly (a private, unpublished app
+  // package with no subpath `exports` for its test utilities — see those
+  // files' own comments) purely so vitest can run a real end-to-end check.
+  // Those files pull in dependencies (drizzle-orm, @electric-sql/pglite, …)
+  // this package never declares and sit outside `rootDir`, so they're
+  // excluded from `tsc --noEmit` here; vitest transpiles and runs each file
+  // on its own account (its `include` glob is independent of this file's
+  // `include`/`exclude`).
+  "exclude": [
+    "src/session/bootstrap.integration.test.ts",
+    "src/daemon/commands.machineWiring.integration.test.ts"
+  ]
 }

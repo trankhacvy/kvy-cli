@@ -32,6 +32,19 @@ export interface DaemonState {
    * time it boots.
    */
   machineId?: string;
+  /**
+   * This machine's DEK, wrapped to the account's content public key (base64
+   * — `@falcon/crypto`'s `wrapDek`), once minted (`machineIntegration.ts`).
+   * `POST /v1/machines`'s CAS-update path never re-sends or rotates `dek`
+   * (see `machines.ts`'s own doc comment) — it's only consumed server-side
+   * on a brand new machine's first registration. Round-tripping the same
+   * wrapped value through this file (alongside `machineId`) is what lets a
+   * restarted daemon recover the SAME raw DEK it minted before, rather than
+   * minting a fresh, mismatched one that no longer decrypts what the
+   * server-stored row (and any other real client unwrapping it with the
+   * same masterSecret) actually uses.
+   */
+  wrappedDek?: string;
 }
 
 export function daemonStatePath(homeDir: string): string {
@@ -46,7 +59,8 @@ function isDaemonState(value: unknown): value is DaemonState {
     typeof candidate.port === "number" &&
     typeof candidate.version === "string" &&
     typeof candidate.startedAt === "number" &&
-    (candidate.machineId === undefined || typeof candidate.machineId === "string")
+    (candidate.machineId === undefined || typeof candidate.machineId === "string") &&
+    (candidate.wrappedDek === undefined || typeof candidate.wrappedDek === "string")
   );
 }
 
