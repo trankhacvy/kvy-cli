@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSessionRegistry } from "./sessionRegistry.js";
 import { persistSession, readPersistedSessions } from "./sessionsStore.js";
 
-const ENCRYPTION = { encryptionKey: "wrapped-dek", seq: 1, metadataVersion: 1, agentStateVersion: 1 };
+const ENCRYPTION = {
+  encryptionKey: "wrapped-dek",
+  seq: 1,
+  metadataVersion: 1,
+  agentStateVersion: 1,
+};
 
 describe("sessionRegistry", () => {
   let homeDir: string;
@@ -15,7 +20,14 @@ describe("sessionRegistry", () => {
   });
 
   afterEach(async () => {
-    await rm(homeDir, { recursive: true, force: true });
+    // Several tests above trigger `onSessionStarted`'s fire-and-forget
+    // `persistSession()` write without awaiting it — by design, that write
+    // races this cleanup. `maxRetries`/`retryDelay` (Node's own documented
+    // knob for exactly this class of transient `ENOTEMPTY`/`EBUSY` during a
+    // recursive `rm`, since a rename can still be landing inside `homeDir`)
+    // absorbs that instead of flaking under CPU contention (e.g. `turbo`
+    // running every package's tests in parallel).
+    await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   });
 
   it("restore() is a no-op count of 0 when sessions.json doesn't exist", async () => {
@@ -42,7 +54,13 @@ describe("sessionRegistry", () => {
     registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
 
     expect(registry.getSessions()).toEqual([
-      { startedBy: "terminal", sessionId: "sess_1", metadata: { title: "x" }, encryption: ENCRYPTION, pid: 4242 },
+      {
+        startedBy: "terminal",
+        sessionId: "sess_1",
+        metadata: { title: "x" },
+        encryption: ENCRYPTION,
+        pid: 4242,
+      },
     ]);
   });
 
@@ -77,7 +95,11 @@ describe("sessionRegistry", () => {
   });
 
   it("a fresh onSessionStarted for a sessionId clears any stale resumable record for it", async () => {
-    await persistSession(homeDir, { sessionId: "sess_1", encryption: ENCRYPTION, savedAt: Date.now() });
+    await persistSession(homeDir, {
+      sessionId: "sess_1",
+      encryption: ENCRYPTION,
+      savedAt: Date.now(),
+    });
     const registry = createSessionRegistry({ homeDir });
     await registry.restore();
     expect(registry.findResumable("sess_1")).not.toBeNull();
@@ -151,7 +173,11 @@ describe("sessionRegistry", () => {
   });
 
   it("hasLiveSessions reflects the pid-tracked map only, not the resumable set", async () => {
-    await persistSession(homeDir, { sessionId: "sess_1", encryption: ENCRYPTION, savedAt: Date.now() });
+    await persistSession(homeDir, {
+      sessionId: "sess_1",
+      encryption: ENCRYPTION,
+      savedAt: Date.now(),
+    });
     const registry = createSessionRegistry({ homeDir });
     await registry.restore();
 

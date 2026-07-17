@@ -28,16 +28,47 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resumeSession } from "./resumeSession.js";
 import { createSessionRegistry } from "./sessionRegistry.js";
-import { readPersistedSessions } from "./sessionsStore.js";
+import { type PersistedSession, readPersistedSessions } from "./sessionsStore.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
 
-const ENCRYPTION = { encryptionKey: "wrapped-dek-v1", seq: 7, metadataVersion: 2, agentStateVersion: 1 };
+const ENCRYPTION = {
+  encryptionKey: "wrapped-dek-v1",
+  seq: 7,
+  metadataVersion: 2,
+  agentStateVersion: 1,
+};
 
 function fakeAwaiter(sessionId: string): SpawnAwaiter {
   return {
     waitFor: vi.fn(async (pid: number) => ({ sessionId, pid })),
     resolve: vi.fn(() => true),
   };
+}
+
+/**
+ * `onSessionStarted`'s `persistSession()` call is intentionally
+ * fire-and-forget (the webhook handler responds before the disk write
+ * lands — see `sessionRegistry.ts`). A fixed `setTimeout` guess at how long
+ * that write takes is inherently racy: it passed reliably in isolation but
+ * flaked under `turbo`'s parallel test execution (real CPU contention
+ * pushing the write past a 20ms guess), producing `restoredCount === 0` and
+ * "not tracked" failures below. Poll the actual on-disk state instead of
+ * guessing a delay.
+ */
+async function waitForPersisted(
+  homeDir: string,
+  predicate: (persisted: Record<string, PersistedSession>) => boolean,
+  timeoutMs = 2000,
+): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    const persisted = await readPersistedSessions(homeDir);
+    if (predicate(persisted)) return;
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("timed out waiting for sessions.json to reflect the expected state");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
 }
 
 describe("chaos: daemon durability recovery (failure matrix, design §11)", () => {
@@ -48,16 +79,18 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
   });
 
   afterEach(async () => {
-    await rm(homeDir, { recursive: true, force: true });
+    // Same fire-and-forget-write-vs-cleanup race `sessionRegistry.test.ts`
+    // guards against — retry instead of flaking on a transient `ENOTEMPTY`.
+    await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   });
 
   it("kill daemon mid-turn: a brand new daemon process rebuilds the session from sessions.json alone", async () => {
     // --- "Before": the original daemon process, mid-turn ---
     const daemon1 = createSessionRegistry({ homeDir });
     daemon1.onSessionStarted("sess_1", { path: "/tmp/proj" }, ENCRYPTION, 4242);
-    // Give the fire-and-forget persistSession() call inside onSessionStarted
-    // a moment to land on disk before the "crash".
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // Wait for the fire-and-forget persistSession() call inside
+    // onSessionStarted to actually land on disk before the "crash".
+    await waitForPersisted(homeDir, (p) => p.sess_1 !== undefined);
 
     // --- The daemon process is killed outright: no graceful shutdown, no
     // clearDaemonState, no chance for daemon1 to do anything else. A
@@ -109,7 +142,7 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
   it("server restart: local resume works purely off sessions.json — no network dependency at all", async () => {
     const registry = createSessionRegistry({ homeDir });
     registry.onSessionStarted("sess_1", { path: "/tmp/proj" }, ENCRYPTION, 4242);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForPersisted(homeDir, (p) => p.sess_1 !== undefined);
     registry.pruneDeadSessions(() => false); // the process died along with (or independent of) the server outage
 
     // A fresh daemon boots — this never touches a server URL, a fetch impl,
@@ -154,7 +187,7 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
   it("end-to-end: crash -> restart -> resume leaves exactly one durable record, not a duplicate", async () => {
     const original = createSessionRegistry({ homeDir });
     original.onSessionStarted("sess_1", { path: "/tmp/proj" }, ENCRYPTION, 100);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForPersisted(homeDir, (p) => p.sess_1 !== undefined);
 
     const restarted = createSessionRegistry({ homeDir });
     await restarted.restore();
@@ -169,7 +202,7 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
 
     // The resumed process reports back exactly like any other session start.
     restarted.onSessionStarted("sess_1", { path: "/tmp/proj" }, { ...ENCRYPTION, seq: 8 }, 200);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitForPersisted(homeDir, (p) => p.sess_1?.encryption.seq === 8);
 
     const persisted = await readPersistedSessions(homeDir);
     expect(Object.keys(persisted)).toEqual(["sess_1"]);

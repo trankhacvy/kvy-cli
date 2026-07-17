@@ -262,7 +262,33 @@ export type AdoptMirrorResult = z.infer<typeof AdoptMirrorResultSchema>;
 // ---------------------------------------------------------------------------
 
 export const MessageRpcParamsSchema = z.object({ envelope: SessionEnvelopeSchema });
-export const MessageRpcResultSchema = z.object({ queued: z.boolean() });
+
+// Tri-state reply (design §7.10 "Send-idempotency claim", v0.3): protects
+// the highest-frequency mutating session RPC end-to-end — a retried or
+// duplicated `message` call must never cause the agent to run a turn twice.
+// - 'queued': normal accept path (today's only outcome).
+// - 'duplicate': a claim for this envelope id already recorded a terminal
+//   result — this call is a replay; the caller reconciles as success.
+// - 'outcome-unknown': a claim for this envelope id exists with no recorded
+//   result (crash mid-turn — the prompt may have partially run). The caller
+//   MUST NOT re-execute: reconcile from the transcript instead.
+export const MessageRpcStatusSchema = z.enum(["queued", "duplicate", "outcome-unknown"]);
+export type MessageRpcStatus = z.infer<typeof MessageRpcStatusSchema>;
+
+// `queued` (unchanged, required) stays exactly as it shipped — the
+// additive-only wire policy (design §5.3) forbids retyping an
+// already-shipped required field, and the CLI's `message` RPC handler
+// (packages/cli/src/commands/start.ts) still only ever sets it: wiring the
+// send-idempotency claim store into `deliverMessage()` so the producer can
+// actually compute `status` is Phase 2.2 (plan.md §17 "17. v2 — ACP
+// migration"), not this change. `status` is therefore additive *and*
+// optional — a reply that omits it (every producer today) is still valid,
+// and the web composer falls back to the pre-existing `queued`-only
+// behavior when it's absent (`optimistic-composer.ts`).
+export const MessageRpcResultSchema = z.object({
+  queued: z.boolean(),
+  status: MessageRpcStatusSchema.optional(),
+});
 
 export const PermAnswerParamsSchema = z.object({
   reqId: z.string(),

@@ -15,6 +15,7 @@ import {
   GitDiffResultSchema,
   GitStatusParamsSchema,
   GitStatusResultSchema,
+  MessageRpcResultSchema,
   PermAnswerParamsSchema,
   PermAnswerResultSchema,
   RpcCallSchema,
@@ -195,5 +196,24 @@ describe("session RPC schemas", () => {
       }).success,
     ).toBe(true);
     expect(PermAnswerResultSchema.safeParse({ ok: true }).success).toBe(true);
+  });
+
+  it("message RPC result accepts the legacy queued-only shape (pre-claim-store producers, design §7.10)", () => {
+    expect(MessageRpcResultSchema.safeParse({ queued: true }).success).toBe(true);
+    expect(MessageRpcResultSchema.safeParse({ queued: false }).success).toBe(true);
+  });
+
+  it("message RPC result accepts the tri-state `status` field additively", () => {
+    for (const status of ["queued", "duplicate", "outcome-unknown"] as const) {
+      expect(MessageRpcResultSchema.safeParse({ queued: true, status }).success).toBe(true);
+    }
+  });
+
+  it("message RPC result rejects an unrecognized status value", () => {
+    expect(MessageRpcResultSchema.safeParse({ queued: true, status: "sent" }).success).toBe(false);
+  });
+
+  it("message RPC result still requires `queued` (unchanged, additive-only)", () => {
+    expect(MessageRpcResultSchema.safeParse({ status: "queued" }).success).toBe(false);
   });
 });

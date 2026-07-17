@@ -17,6 +17,7 @@ import {
   InterruptResultSchema,
   type MessageRpcParamsSchema,
   MessageRpcResultSchema,
+  type MessageRpcStatusSchema,
   type PermAnswerParamsSchema,
   PermAnswerResultSchema,
   type SetModeParamsSchema,
@@ -28,6 +29,10 @@ import type { ApiSocket } from "./apiSocket.js";
 
 export type MessageRpcParams = z.infer<typeof MessageRpcParamsSchema>;
 export type MessageRpcResult = z.infer<typeof MessageRpcResultSchema>;
+/** The tri-state `message` RPC reply's `status` field (design §7.10) — re-exported
+ * here for callers (`features/session-control/optimistic-composer.ts`) that branch
+ * on it without importing `@falcon/wire` directly. */
+export type MessageRpcStatus = z.infer<typeof MessageRpcStatusSchema>;
 export type PermAnswerParams = z.infer<typeof PermAnswerParamsSchema>;
 export type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;
 export type SetModeParams = z.infer<typeof SetModeParamsSchema>;

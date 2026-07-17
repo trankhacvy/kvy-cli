@@ -8,8 +8,10 @@ import type { RenderItem } from "@/sync/reducer";
 import {
   buildFileEnvelope,
   buildMessageEnvelope,
+  deliveryNotice,
   type PendingMessage,
   pendingToRenderItem,
+  reconcileByStatus,
   reconcilePending,
 } from "./optimistic-composer";
 import { useSessionControl } from "./session-control-context";
@@ -30,6 +32,9 @@ export interface ComposerState {
    * current turn (the `message` RPC's own `{queued: boolean}` result). */
   isQueued: boolean;
   error: string | null;
+  /** Non-blocking notice from an `outcome-unknown` `message` reply (design
+   * §7.10) — never blocks the composer, and clears itself on the next send. */
+  notice: string | null;
 }
 
 /**
@@ -51,6 +56,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
   const { actions, sessionId } = useSessionControl();
   const cryptoBridge = useSessionCrypto(sessionId);
   const [pending, setPending] = useState<PendingMessage[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // Drop any pending entry once the real echo has landed in `items`.
   useEffect(() => {
@@ -61,17 +67,15 @@ export function useComposerState(items: RenderItem[]): ComposerState {
     mutationFn: async (text: string) => {
       const envelope = buildMessageEnvelope(text);
       const localId = envelope.id;
+      setNotice(null);
       setPending((prev) => [
         ...prev,
         { kind: "text", localId, text, sentAt: envelope.time, queued: false },
       ]);
       try {
         const result = await actions.sendMessage(envelope);
-        if (result.queued) {
-          setPending((prev) =>
-            prev.map((p) => (p.localId === localId ? { ...p, queued: true } : p)),
-          );
-        }
+        setPending((prev) => reconcileByStatus(prev, localId, result));
+        setNotice(deliveryNotice(result));
         return result;
       } catch (error) {
         setPending((prev) => prev.filter((p) => p.localId !== localId));
@@ -84,6 +88,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
     mutationFn: async (file: File) => {
       const localId = globalThis.crypto.randomUUID();
       const sentAt = Date.now();
+      setNotice(null);
       setPending((prev) => [
         ...prev,
         { kind: "file", localId, name: file.name, size: file.size, sentAt, queued: false },
@@ -103,11 +108,8 @@ export function useComposerState(items: RenderItem[]): ComposerState {
           { time: sentAt, id: localId },
         );
         const result = await actions.sendMessage(envelope);
-        if (result.queued) {
-          setPending((prev) =>
-            prev.map((p) => (p.localId === localId ? { ...p, queued: true } : p)),
-          );
-        }
+        setPending((prev) => reconcileByStatus(prev, localId, result));
+        setNotice(deliveryNotice(result));
         return result;
       } catch (error) {
         setPending((prev) => prev.filter((p) => p.localId !== localId));
@@ -129,6 +131,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
     isSending: mutation.isPending || attachMutation.isPending,
     isQueued: pending.some((p) => p.queued),
     error: describeError(mutation) ?? describeError(attachMutation),
+    notice,
   };
 }
 
