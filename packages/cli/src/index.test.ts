@@ -58,6 +58,31 @@ describe("main()", () => {
     stdout.mockRestore();
   });
 
+  it("prefers a bun-compile-baked __FALCON_CLI_VERSION__ over reading package.json", async () => {
+    // scripts/build-binaries.sh bakes this identifier in via
+    // `bun build --compile --define:__FALCON_CLI_VERSION__=...` (see
+    // index.ts's readVersion() doc comment) since a compiled standalone
+    // binary has no on-disk package.json sibling to fall back to. Simulate
+    // that by defining the global the same way `--define` would splice a
+    // literal into the bundle, then confirm readVersion() takes the
+    // short-circuit branch instead of the filesystem read.
+    // biome-ignore lint/suspicious/noExplicitAny: test-only global stub
+    (globalThis as any).__FALCON_CLI_VERSION__ = "9.9.9-baked";
+    try {
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["--version"]);
+
+      expect(code).toBe(0);
+      expect(stdout.mock.calls[0]?.[0]).toBe("falcon 9.9.9-baked\n");
+      stdout.mockRestore();
+    } finally {
+      // biome-ignore lint/performance/noDelete: restoring global test stub
+      delete (globalThis as any).__FALCON_CLI_VERSION__;
+    }
+  });
+
   it("describes a claude passthrough start without executing anything", async () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
