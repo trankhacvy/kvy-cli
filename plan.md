@@ -869,6 +869,12 @@ connection pooling, no agent-id-as-identity). Design authority:
       false-landing shape flagged in cycles 70–71, now one hop further along a chain of
       worktrees that never actually touches the shared `main` ref. See `progress.md`
       Cycle 72.)*
+      *(2026-07-17, progress tracker, cycle 73: re-verified, still `[ ]` — not landed.
+      No change since Cycle 72: `.worktrees/P17-land-2.0-claim-store` tip is still
+      `ed64101`; `git merge-base --is-ancestor ed64101 main` → **false**;
+      `git cat-file -e main:packages/cli/src/claims/claimStore.ts` still fails. `main`
+      itself is healthy (`pnpm typecheck`/`pnpm test` both green, 11/11 turbo tasks).
+      Not flipped — same blocker, fourth cycle running. See `progress.md` Cycle 73.)*
 - [x] `message` session RPC reply → `{status: 'queued'|'duplicate'|'outcome-unknown'}`
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
@@ -903,8 +909,29 @@ connection pooling, no agent-id-as-identity). Design authority:
       P17-land-2.0-adapter-manager main` → **false**;
       `git cat-file -e main:packages/cli/src/adapters/manifest.ts` still fails. Same
       false-landing shape as the claim-store bullet above. See `progress.md` Cycle 72.)*
+      *(2026-07-17, progress tracker, cycle 73: re-verified, still `[ ]` — not landed.
+      No change since Cycle 72: `.worktrees/P17-land-2.0-adapter-manager` tip is still
+      `43d01f1`; `git merge-base --is-ancestor 43d01f1 main` → **false**;
+      `git cat-file -e main:packages/cli/src/adapters/manifest.ts` still fails. Not
+      flipped — same blocker, fourth cycle running. See `progress.md` Cycle 73.)*
 - [ ] Wire schema: no new envelope types needed (verified mapping, proposal §3 A4) —
       assert via golden fixtures rather than schema change
+      *(2026-07-17, progress tracker, cycle 73: reviewed `task-summary/
+      P17-2.0-wire-envelope-verification.md` (worktree `.worktrees/
+      P17-2.0-wire-envelope-verification`, tip `83826d5`) — a verification-only task, no
+      `@falcon/wire` schema changes, adding three new golden-trace fixtures
+      (`trace_acp_turn_lifecycle.json`, `trace_acp_request_permission.json`,
+      `trace_acp_parent_tool_use_subagent.json`) to `packages/web/src/sync/reducer/
+      __testdata__/` demonstrating every ACP `session/update` kind maps onto an existing
+      `SessionEnvelope` variant, per design §7.3 / `docs/acp-delta-proposal.md` §3 row A4.
+      Reported green in-worktree (`pnpm build`/`typecheck`/`test`, `golden.test.ts` 10/10).
+      However, **not landed on `main`**: `git merge-base --is-ancestor 83826d5 main` →
+      **false**; `git cat-file -e main:packages/web/src/sync/reducer/__testdata__/
+      trace_acp_turn_lifecycle.json` and `main:task-summary/
+      P17-2.0-wire-envelope-verification.md` both fail — neither the fixtures nor the
+      task-summary exist on `main`'s tree. Same "worktree never actually merged onto the
+      shared `main` ref" shape as the claim-store/adapter-manager bullets above; not
+      flipped. See `progress.md` Cycle 73.)*
 
 ### Phase 2.1 — ACP core
 - [ ] `cli/src/acp/acpConnection.ts`: spawn managed adapter child, `@agentclientprotocol/sdk`

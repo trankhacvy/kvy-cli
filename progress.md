@@ -1,5 +1,109 @@
 # Falcon — Progress Log
 
+## Cycle 73 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `f3304d2` — "chore: cycle 72 — completed 0 tasks (2 unlanded,
+blocked on merge)")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 11/11 turbo tasks green (`@falcon/wire`, `@falcon/crypto`,
+  `@falcon/server`, `falcon` cli, `@falcon/e2e`, `@falcon/web` — including a fresh static export
+  of all 15 routes). All cache-hit-replayed clean (`>>> FULL TURBO`).
+- `pnpm test` → **PASSED** — 11/11 turbo tasks green, 0 failures: `falcon` cli 118 files / 1125
+  tests, `@falcon/e2e` 1 file / 1 test (20-step `exercise-flow` conformance run), plus cached
+  green replays for `@falcon/wire`, `@falcon/crypto`, `@falcon/server`, `@falcon/web`.
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+Three files were requested: `task-summary/P17-2.0-claim-store.md`,
+`task-summary/P17-2.0-adapter-manager.md`, `task-summary/P17-2.0-wire-envelope-verification.md`.
+**None of the three exist on `main`** (`git cat-file -e main:task-summary/<name>.md` fails for
+all three) — confirmed both via `/bin/ls task-summary/` (only `P17-2.0-message-rpc-tristate.md`
+present under the `P17-2.0-*` prefix) and via `git cat-file -e`. Read instead from their own
+worktrees:
+
+1. **`.worktrees/P17-2.0-claim-store/task-summary/P17-2.0-claim-store.md`** (branch
+   `P17-2.0-claim-store`, tip `19f8c59`) and its downstream land attempt,
+   **`.worktrees/P17-land-2.0-claim-store/task-summary/P17-land-2.0-claim-store.md`** (branch
+   `P17-land-2.0-claim-store`, tip `ed64101`). No change since Cycle 72: the land worktree's tip
+   is still `ed64101`, and its own "Assumptions / notes" section still states the merge was
+   committed only to its own worktree branch, per instructions ("Do NOT merge or push — just
+   commit in the worktree"). Confirmed independently: `git merge-base --is-ancestor ed64101 main`
+   → **false**; `git cat-file -e main:packages/cli/src/claims/claimStore.ts` → fails, still does
+   not exist on `main`. `plan.md` line 855 stays `[ ]` — **not flipped**, dated cycle-73
+   confirmation note appended instead.
+2. **`.worktrees/P17-2.0-adapter-manager/task-summary/P17-2.0-adapter-manager.md`** (branch
+   `P17-2.0-adapter-manager`, tip `3d185f2`) and its land attempt,
+   **`.worktrees/P17-land-2.0-adapter-manager/task-summary/P17-land-2.0-adapter-manager.md`**
+   (branch `P17-land-2.0-adapter-manager`, tip `43d01f1`). Same shape, no change since Cycle 72:
+   `git merge-base --is-ancestor 43d01f1 main` → **false**; `git cat-file -e
+   main:packages/cli/src/adapters/manifest.ts` → fails. `plan.md` line 881 stays `[ ]` — **not
+   flipped**, dated cycle-73 confirmation note appended.
+3. **`.worktrees/P17-2.0-wire-envelope-verification/task-summary/
+   P17-2.0-wire-envelope-verification.md`** (branch `P17-2.0-wire-envelope-verification`, tip
+   `83826d5`) — **new to this cycle**, not previously reviewed. A verification-only task per
+   plan.md §17's last Phase 2.0 bullet ("Wire schema: no new envelope types needed ... assert via
+   golden fixtures rather than schema change"): no `@falcon/wire` changes; adds three new
+   golden-trace fixtures under `packages/web/src/sync/reducer/__testdata__/`
+   (`trace_acp_turn_lifecycle.json`, `trace_acp_request_permission.json`,
+   `trace_acp_parent_tool_use_subagent.json`) demonstrating every ACP `session/update` kind maps
+   onto an existing `SessionEnvelope` variant (design §7.3 / `docs/acp-delta-proposal.md` §3 row
+   A4), plus a docstring update to `golden.test.ts`. Task's own report: `pnpm build`/`typecheck`
+   green, `pnpm test` green (`golden.test.ts` up to 10/10 tests), `pnpm lint` blocked by the
+   documented pre-existing `biome`/OOM environmental flake (reproduces on untouched files too, not
+   a defect in this change). Independently verified: `git merge-base --is-ancestor 83826d5 main`
+   → **false**; `git cat-file -e main:packages/web/src/sync/reducer/__testdata__/
+   trace_acp_turn_lifecycle.json` and `main:task-summary/P17-2.0-wire-envelope-verification.md`
+   both fail — same "complete, self-verified work sitting only in a worktree, never merged onto
+   the shared `main` ref" shape as the other two bullets. `plan.md` line 906 stays `[ ]` — **not
+   flipped**, dated cycle-73 note appended (first review of this bullet).
+
+Per the standing instruction (no checkbox flip without a successful ancestor check against the
+real `main`), all three were left unflipped, each with a dated note documenting this cycle's
+verification.
+
+### Tasks completed this cycle
+
+**0 checkboxes newly flipped.** All three requested tasks are genuinely complete, tested, and
+self-verified-green *within their own worktrees*, but none has a commit that is an ancestor of
+`main` — the claim-store and adapter-manager blockers are unchanged from Cycles 70–72 (now a
+fourth consecutive cycle); the wire-envelope-verification task is a first-time review that hits
+the identical unlanded shape.
+
+### Blockers / issues found
+
+**Blocker (process, not code), now four cycles running (70 → 71 → 72 → 73) for claim-store and
+adapter-manager, plus a third task in the same state:** none of `P17-2.0-claim-store`,
+`P17-2.0-adapter-manager`, or `P17-2.0-wire-envelope-verification` has a commit that is an
+ancestor of `main`. `main` itself remains fully healthy (`pnpm typecheck`/`pnpm test` both green,
+11/11 turbo tasks, 0 failures) — this is purely a "the actual `git merge`/PR onto `main` has never
+been performed" gap for all three, not a code defect in any of them. All three implementations sit
+ready in `.worktrees/P17-land-2.0-claim-store` (tip `ed64101`), `.worktrees/
+P17-land-2.0-adapter-manager` (tip `43d01f1`), and `.worktrees/P17-2.0-wire-envelope-verification`
+(tip `83826d5`). This progress-tracker role has no merge/push capability by design (see Cycles
+70–72's own notes) — the fix belongs to whatever step in the pipeline is meant to perform the real
+merge onto `main`, which has not run for any of Phase 2.0's remaining three bullets across four
+cycles.
+
+### Overall completion
+
+`plan.md` checkbox count: **133/152 checked (~87.5%)** — unchanged from Cycle 72. No new flips
+this cycle; claim store, adapter manager, and wire-envelope-verification remain the three
+blockers to closing out Phase 2.0.
+
+### Next recommended tasks
+
+1. **Actually merge `P17-land-2.0-claim-store` (tip `ed64101`) onto the real `main`** — a `git
+   merge`/PR that lands this worktree's tip as a true ancestor of `main`. Code, tests, and
+   checkbox flip are all already prepared and verified; only the final merge onto the shared ref
+   is missing. Now the oldest of the three blockers (flagged since Cycle 70).
+2. **Actually merge `P17-land-2.0-adapter-manager` (tip `43d01f1`) onto the real `main`** — same
+   fix needed, independent of claim-store, can land in parallel.
+3. **Actually merge `P17-2.0-wire-envelope-verification` (tip `83826d5`) onto the real `main`** —
+   smallest of the three (test-fixtures-only, no source changes), likely the fastest to land and
+   would close out Phase 2.0's foundation bullets alongside the other two.
+
 ## Cycle 72 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `efcff70` — "chore: cycle 71 — completed 1 task")
