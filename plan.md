@@ -862,7 +862,7 @@ connection pooling, no agent-id-as-identity). Design authority:
       in `@falcon/wire` (additive; schema-compat lint must pass) + web composer handling
       (`duplicate` = reconcile-as-success; `outcome-unknown` = reconcile from transcript
       + non-blocking notice; never blind-resend under a fresh id)
-- [ ] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
+- [x] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
       (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
       own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,
       `falcon doctor` adapter checks. No npx at session start
