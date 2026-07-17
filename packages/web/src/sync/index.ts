@@ -49,6 +49,8 @@ export type {
   MachineRpcResults,
 } from "./machineRpc.js";
 export { createMachineRpcClient, MachineRpcError } from "./machineRpc.js";
+export type { MessageDecryptor } from "./messages.js";
+export { decryptMessageBatches } from "./messages.js";
 export {
   isSyncQueryKey,
   messagesQueryKey,

@@ -10,14 +10,14 @@ import {
   SessionControlProvider,
   type UseSessionControl,
   useComposerState,
-  useMockSessionControl,
+  useLiveRenderItems,
+  useLiveSessionControl,
   useSessionEphemerals,
   useTabAttention,
 } from "@/features/session-control";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ControlBar } from "./ControlBar";
-import { demoRenderItems } from "./demo-items";
 import { Timeline } from "./Timeline";
 
 /**
@@ -29,23 +29,25 @@ import { Timeline } from "./Timeline";
  * `PermCard`s inline in the transcript, live working/attention indicators,
  * and a tab title + favicon reflecting the max attention state.
  *
- * `useControl` is the injectable seam for the session RPC actions — mirrors
- * `features/session-list`'s `UseSessionListSnapshot`: `apiSocket` and a
- * per-session crypto client (to unwrap the session's DEK) aren't wired into
- * this screen yet (it still runs off `demo-items.ts`, a separate in-flight
- * task), so this defaults to `useMockSessionControl`. Swapping in
- * `(id) => sessionRpcToActions(createSessionRpcClient({...}))` once that
- * data layer lands is a one-line change here — no other change needed
- * anywhere in `Composer`/`PermCard`/`ControlBar`.
+ * `items`/`useControl` both come from the real sync engine + session-scoped
+ * crypto worker by default (`useLiveRenderItems`/`useLiveSessionControl`,
+ * `features/session-control/use-session-crypto.ts`) — the hand-built
+ * `demo-items.ts` fixture and `useMockSessionControl` this screen used to
+ * default to are retired from this call site (still exported, for tests/
+ * standalone review, from `features/session-control`). `useControl` stays
+ * an injectable prop, mirroring `features/session-list`'s
+ * `UseSessionListSnapshot` seam, so a test can still swap in
+ * `useMockSessionControl` without touching `Composer`/`PermCard`/
+ * `ControlBar`.
  */
 export function SessionTimelineScreen({
   sessionId,
-  useControl = useMockSessionControl,
+  useControl = useLiveSessionControl,
 }: {
   sessionId: string;
   useControl?: UseSessionControl;
 }) {
-  const items = demoRenderItems;
+  const items = useLiveRenderItems(sessionId);
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -60,9 +62,9 @@ export function SessionTimelineScreen({
   // Recomputed every render rather than `useMemo`d: `items` is a small,
   // cheap-to-walk array (design principle #3: derived, never stored/cached
   // as a stale flag), and re-deriving on every render is correct regardless
-  // of whether the caller's `items` reference is stable (today's demo
-  // fixture) or a fresh array each update (the real sync-engine-backed data
-  // source this screen will eventually take).
+  // of whether the caller's `items` reference is stable or a fresh array
+  // each update (which `useLiveRenderItems` produces on every decrypt+reduce
+  // pass, live-updated by the sync engine).
   const controlMode = deriveControlMode(items);
   const attention = deriveAttention({
     items,

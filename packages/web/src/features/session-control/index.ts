@@ -24,6 +24,8 @@ export { computeTabTitle, faviconColor, faviconDataUri } from "./tab-attention";
 export type { SessionControlActions, UseSessionControl } from "./types";
 export type { ComposerState } from "./use-composer-state";
 export { useComposerState } from "./use-composer-state";
+export { useLiveRenderItems } from "./use-live-render-items";
+export { useLiveSessionControl } from "./use-live-session-control";
 export {
   type EphemeralSource,
   type SessionEphemeralState,

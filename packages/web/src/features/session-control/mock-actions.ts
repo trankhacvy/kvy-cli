@@ -5,19 +5,19 @@ const LATENCY_MS = 350;
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * The screen's default data source for `SessionControlActions` — mirrors
- * `features/session-list/mock-source.ts`'s role: `apiSocket`/a live
- * per-session crypto client aren't wired into this screen yet (this
- * screen still runs off `demo-items.ts`, a separate in-flight task), so
- * this simulates the five session RPCs with realistic latency, kept to the
- * same call signature (`UseSessionControl`) so swapping in
- * `sessionRpcToActions(createSessionRpcClient({...}))` later is a one-line
- * change at the call site.
+ * A `SessionControlActions` source that simulates the five session RPCs
+ * with realistic latency instead of calling the real ones — mirrors
+ * `features/session-list/mock-source.ts`'s role. No longer
+ * `SessionTimelineScreen`'s default (`useLiveSessionControl` is, since the
+ * real sync engine + per-session crypto client are wired in), but kept
+ * around, to the same call signature (`UseSessionControl`), for tests/
+ * standalone review that want to exercise the control surface without a
+ * live server.
  *
- * `demo-items.ts`'s standalone pending permission (`reqId: "req-1"`) always
- * resolves as "answered on another device" here — a deliberate demo
- * showcase of design §7.6's first-wins-across-devices case, which is
- * otherwise a rare race to hit by hand. Every other `reqId` "wins" normally.
+ * The standalone pending permission `reqId: "req-1"` always resolves as
+ * "answered on another device" here — a deliberate demo showcase of design
+ * §7.6's first-wins-across-devices case, which is otherwise a rare race to
+ * hit by hand. Every other `reqId` "wins" normally.
  */
 export function createMockSessionControl(_sessionId: string): SessionControlActions {
   return {
