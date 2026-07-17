@@ -852,7 +852,7 @@ connection pooling, no agent-id-as-identity). Design authority:
 - Local TUI mode, mode loop, tailer, launcher, outbox, daemon, server, crypto: unchanged.
 
 ### Phase 2.0 — foundation (lands first, protects both eras)
-- [ ] Send-idempotency claim store (`cli/src/claims/claimStore.ts`, design §7.10):
+- [x] Send-idempotency claim store (`cli/src/claims/claimStore.ts`, design §7.10):
       claim-before-execute, tri-state (`claimed`/`completed`/`in-progress`), atomic
       tmp-write+rename per session under `~/.falcon/claims/`, bounded retention.
       Reference semantics: mobvibe `wal-store.ts` `claimMessageSend`/`completeMessageSend`
