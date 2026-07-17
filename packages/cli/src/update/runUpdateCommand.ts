@@ -15,7 +15,7 @@
  */
 import type { Logger } from "../logger.js";
 import { type ApplyUpdateOptions, applyUpdate } from "./applyUpdate.js";
-import { resolveUpdateRepo } from "./config.js";
+import { isBackgroundUpdateRun, resolveUpdateRepo } from "./config.js";
 import { fetchLatestVersion } from "./fetchLatestVersion.js";
 import { detectInstallKind } from "./installKind.js";
 import { isNewerVersion } from "./versionCompare.js";
@@ -40,7 +40,7 @@ export interface RunUpdateCommandResult {
 }
 
 export async function runUpdateCommand(deps: RunUpdateCommandDeps): Promise<RunUpdateCommandResult> {
-  const silent = deps.silent ?? deps.env.FALCON_UPDATE_SILENT === "1";
+  const silent = deps.silent ?? isBackgroundUpdateRun(deps.env);
   const say = (message: string): string => (silent ? "" : message);
 
   const installKind = detectInstallKind({
