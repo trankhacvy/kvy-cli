@@ -8,6 +8,7 @@ import {
   type ClientConnection,
   eventRouter,
 } from "./events/eventRouter.js";
+import { recordWsConnectionClosed, recordWsConnectionOpened } from "./routes/metrics.js";
 import { buildCorsOriginValidator } from "./security/cors.js";
 import { rpcHandler } from "./socket/rpcHandler.js";
 
@@ -115,6 +116,7 @@ export function startSocket(app: FastifyInstance): Server {
     }
 
     eventRouter.addConnection(accountId, connection);
+    recordWsConnectionOpened(connection.connectionType);
 
     // Machine online broadcast (plan.md §4.1 item 4): only user-scoped/session-scoped
     // clients (e.g. the web app) care — the machine's own socket doesn't need to hear
@@ -161,6 +163,7 @@ export function startSocket(app: FastifyInstance): Server {
 
     socket.on("disconnect", () => {
       eventRouter.removeConnection(accountId, connection);
+      recordWsConnectionClosed(connection.connectionType);
       app.log.info({ module: "websocket" }, `socket disconnected: account=${accountId}`);
 
       if (connection.connectionType === "machine-scoped") {
