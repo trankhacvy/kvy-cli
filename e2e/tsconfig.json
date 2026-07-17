@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    // No `rootDir`: this package's entire point is to drive `packages/cli`'s
+    // and `packages/server`'s TS *source* directly (they're private,
+    // unpublished packages with no built subpath for the internals this
+    // harness needs — same "reach the source" convention
+    // `packages/cli/src/daemon/commands.machineWiring.integration.test.ts`
+    // and `packages/cli/src/session/bootstrap.integration.test.ts` already
+    // established). Setting `rootDir: "src"` would make `tsc` reject every
+    // such import with TS6059 ("file is not under 'rootDir'") even though
+    // `noEmit` makes the diagnostic moot for actual output.
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
