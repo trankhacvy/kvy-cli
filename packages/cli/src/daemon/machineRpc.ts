@@ -42,6 +42,30 @@
  * `resumeSession.ts` itself always stops any still-live process for that
  * session before relaunching, so a second call just relaunches again rather
  * than creating a duplicate.
+ *
+ * **Concurrency, not just retry-after-the-fact** (plan.md §16 "4.4
+ * Hardening": "double-takeover race"): both the idempotency cache above and
+ * `handleSpawn`'s own cache key on *settled* results, not in-flight
+ * attempts. Two calls with the same `idempotencyKey` that arrive back to
+ * back — before the first has finished running — must still collapse into a
+ * single real attempt with both callers sharing its outcome, not just a
+ * retry *after* the first one already resolved. Every cache in this module
+ * therefore stores the in-flight `Promise` itself (set synchronously, before
+ * any `await`), not the eventual value — the second caller finds the first
+ * caller's promise already in the map and joins it. A rejected attempt is
+ * still evicted (never cached), same as before.
+ *
+ * That covers same-key concurrency, but `adopt.take`'s divergence guard
+ * (design FR-9.4: "never two live continuations of the same history") needs
+ * one more guard: two *different* devices adopting the same
+ * `providerSessionId` mint two different `idempotencyKey`s, so the
+ * idempotency cache alone never sees them as the same call.
+ * `withProviderSessionGuard` below adds a second, resource-keyed (not
+ * request-keyed) in-flight map on top: whichever `adopt.take` call reaches a
+ * given `providerSessionId` first "owns" the takeover; any concurrent call
+ * for the same `providerSessionId` — regardless of its `idempotencyKey` —
+ * joins that same in-flight attempt and gets its exact result (including any
+ * mid-turn `warning`) instead of racing its own independent kill+spawn.
  */
 import { open, seal } from "@falcon/crypto";
 import {
@@ -163,7 +187,7 @@ function isMachineRpcMethod(method: unknown): method is MachineRpcMethod {
 
 /**
  * Wraps a handler with idempotency-key replay: a retried call with the
- * same key *and the same params* returns the cached result instead of
+ * same key *and the same params* joins/replays the same attempt instead of
  * re-running the handler. Never caches a rejected call.
  *
  * Keyed on `idempotencyKey` + a JSON snapshot of `params` (both methods'
@@ -174,18 +198,54 @@ function isMachineRpcMethod(method: unknown): method is MachineRpcMethod {
  * still get each cursor's own chunk rather than silently replaying
  * whichever chunk happened to be cached first for that key. A genuine
  * retry — same key, same params — still replays as intended.
+ *
+ * Caches the in-flight `Promise`, set synchronously before `fn` is ever
+ * awaited — a second call for the same key that arrives *while the first is
+ * still running* joins that same promise instead of starting its own
+ * redundant attempt (this module's header comment: "concurrency, not just
+ * retry-after-the-fact").
  */
 function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
   fn: (params: P) => Promise<R>,
 ): (params: P) => Promise<R> {
-  const cache = new Map<string, R>();
-  return async (params: P) => {
+  const cache = new Map<string, Promise<R>>();
+  return (params: P) => {
     const cacheKey = `${params.idempotencyKey}:${JSON.stringify(params)}`;
     const cached = cache.get(cacheKey);
-    if (cached !== undefined) return cached;
-    const result = await fn(params);
-    cache.set(cacheKey, result);
-    return result;
+    if (cached) return cached;
+    const attempt = fn(params).catch((error: unknown) => {
+      cache.delete(cacheKey);
+      throw error;
+    });
+    cache.set(cacheKey, attempt);
+    return attempt;
+  };
+}
+
+/**
+ * Resource-keyed in-flight guard for `adopt.take` (design FR-9.4: "never two
+ * live continuations of the same history"): unlike `withIdempotencyCache`
+ * above (keyed on the *request* — `idempotencyKey`), this is keyed on the
+ * *target* — `providerSessionId`. Two `adopt.take` calls for the same
+ * provider session that arrive concurrently, even with two different
+ * `idempotencyKey`s (the realistic "two devices both hit take-over"
+ * shape — each mints its own key), join the same in-flight kill+spawn
+ * attempt and both get its exact result rather than each running its own
+ * independent takeover. Never caches a rejected attempt — the map entry is
+ * always removed once the attempt settles, success or failure, so the next
+ * genuinely-new takeover of that provider session runs fresh.
+ */
+function withProviderSessionGuard(
+  fn: (params: AdoptTakeParams) => Promise<AdoptTakeResult>,
+): (params: AdoptTakeParams) => Promise<AdoptTakeResult> {
+  const inFlight = new Map<string, Promise<AdoptTakeResult>>();
+  return (params: AdoptTakeParams) => {
+    const key = params.providerSessionId;
+    const existing = inFlight.get(key);
+    if (existing) return existing;
+    const attempt = fn(params).finally(() => inFlight.delete(key));
+    inFlight.set(key, attempt);
+    return attempt;
   };
 }
 
@@ -199,31 +259,42 @@ function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
  */
 export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHandle {
   const logger = deps.logger ?? noopLogger;
-  const spawnResults = new Map<string, SpawnResult>();
+  const spawnResults = new Map<string, Promise<SpawnResult>>();
   const listDirectory = deps.listDirectory ?? listDirectoryDefault;
   const createDirectory = deps.createDirectory ?? createDirectoryDefault;
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
-  const cachedAdoptTake = withIdempotencyCache(deps.adoptTake);
+  const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
 
-  async function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
+  function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
     const cached = spawnResults.get(params.idempotencyKey);
     if (cached) {
-      logger.info("[machine-rpc] replaying cached spawn result", {
+      logger.info("[machine-rpc] replaying/joining cached spawn attempt", {
         idempotencyKey: params.idempotencyKey,
       });
       return cached;
     }
-    const result = await deps.spawnSession(params);
-    // Only a genuine spawn (a `sessionId` was actually launched) is worth
-    // replaying. `requiresApproval` means no process was started — caching
-    // it would replay a stale "directory doesn't exist" answer forever once
-    // the caller creates the directory and retries with the same key.
-    if (result.sessionId) {
-      spawnResults.set(params.idempotencyKey, result);
-    }
-    return result;
+    const attempt = deps.spawnSession(params).then(
+      (result) => {
+        // Only a genuine spawn (a `sessionId` was actually launched) is worth
+        // replaying. `requiresApproval` means no process was started —
+        // keeping it cached would replay a stale "directory doesn't exist"
+        // answer forever once the caller creates the directory and retries
+        // with the same key, so it's evicted immediately instead.
+        if (!result.sessionId) spawnResults.delete(params.idempotencyKey);
+        return result;
+      },
+      (error: unknown) => {
+        spawnResults.delete(params.idempotencyKey);
+        throw error;
+      },
+    );
+    // Set synchronously, before `attempt` is ever awaited, so a concurrent
+    // call with the same idempotencyKey (arriving before this one finishes)
+    // joins this same in-flight attempt instead of double-spawning.
+    spawnResults.set(params.idempotencyKey, attempt);
+    return attempt;
   }
 
   /** No idempotency-key replay here — see this module's header comment for why `resumeSession` doesn't need one. */

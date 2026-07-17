@@ -126,9 +126,9 @@ describe("rpcHandler", () => {
       caller.emit("rpc-call", { target: "m:m5:hang", method: "hang", params: {} }, resolve);
     });
 
-    // Disconnect the target shortly after the call starts so the presence poll (every
-    // 2s) sees it missing twice and aborts the call fast instead of waiting the full
-    // 30s ack timeout.
+    // Disconnect the target shortly after the call starts so the presence poll sees it
+    // missing twice and aborts the call fast instead of waiting the full 30s ack timeout.
+    // See rpcHandler.integration.test.ts for the dedicated <2s SLO assertion.
     setTimeout(() => target.close(), 100);
 
     const response = await responsePromise;
