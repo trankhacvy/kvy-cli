@@ -8,8 +8,8 @@
  *
  * Two parsing modes coexist:
  *  - Falcon's own subcommands (`auth`, `daemon`, `kill`, `doctor`,
- *    `sessions`, `resume`, `workspace`, `notify`, `--help`, `--version`) are
- *    parsed and validated below.
+ *    `sessions`, `resume`, `workspace`, `notify`, `shim`, `--help`,
+ *    `--version`) are parsed and validated below.
  *  - `falcon claude [args...]` / `falcon codex [args...]` — and the
  *    default `falcon [args...]` form — never inspect `args`; they are
  *    forwarded verbatim as `providerArgs`.
@@ -33,7 +33,8 @@ export type FalconCommand =
   | { type: "workspace-unregister"; directory?: string }
   | { type: "workspace-sync" }
   | { type: "notify"; message: string }
-  | { type: "adopt"; list: boolean; remote: boolean };
+  | { type: "adopt"; list: boolean; remote: boolean }
+  | { type: "shim"; action: "install" | "uninstall" | "status" };
 
 /** Thrown for malformed Falcon-level commands. Never thrown for provider passthrough. */
 export class ArgParseError extends Error {
@@ -97,6 +98,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseNotify(rest);
     case "adopt":
       return parseAdopt(rest);
+    case "shim":
+      return parseShim(rest);
     default:
       // Not a known Falcon subcommand: the whole argv is passthrough to the
       // default provider (claude), same as `falcon claude [args...]` minus
@@ -296,6 +299,17 @@ function parseAdopt(rest: string[]): FalconCommand {
     else throw new ArgParseError(`Unknown "falcon adopt" flag: ${arg}`, ADOPT_USAGE);
   }
   return { type: "adopt", list, remote };
+}
+
+function parseShim(rest: string[]): FalconCommand {
+  const action = rest[0];
+  if (action === "install" || action === "uninstall" || action === "status") {
+    return { type: "shim", action };
+  }
+  throw new ArgParseError(
+    `Unknown "falcon shim" action: ${action ?? "(none)"}`,
+    "falcon shim install|uninstall|status",
+  );
 }
 
 function requireValue(flag: string, value: string | undefined, usage: string): string {

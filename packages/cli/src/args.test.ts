@@ -300,6 +300,20 @@ describe("parseArgs — adopt", () => {
   });
 });
 
+describe("parseArgs — shim", () => {
+  it.each(["install", "uninstall", "status"] as const)("parses shim %s", (action) => {
+    expect(parseArgs(["shim", action])).toEqual({ type: "shim", action });
+  });
+
+  it("throws on an unknown shim action", () => {
+    expect(() => parseArgs(["shim", "bogus"])).toThrow(ArgParseError);
+  });
+
+  it("throws when no shim action is given", () => {
+    expect(() => parseArgs(["shim"])).toThrow(ArgParseError);
+  });
+});
+
 describe("parseArgs — --continue alias", () => {
   it("aliases a bare `falcon --continue` to adopt (local, non-list)", () => {
     expect(parseArgs(["--continue"])).toEqual({ type: "adopt", list: false, remote: false });

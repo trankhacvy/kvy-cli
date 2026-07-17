@@ -267,6 +267,76 @@ describe("main()", () => {
     vi.doUnmock("./daemon/doctor.js");
   });
 
+  it("wires `shim install/uninstall/status` to commands/shim.js", async () => {
+    vi.doMock("./commands/shim.js", () => ({
+      runShimCommand: vi.fn(async (action: string) => {
+        process.stdout.write(`shim ${action} called\n`);
+        return 0;
+      }),
+    }));
+    const shimModule = await import("./commands/shim.js");
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    expect(await main(["shim", "status"])).toBe(0);
+    expect(shimModule.runShimCommand).toHaveBeenCalledWith("status");
+    expect(stdout).toHaveBeenCalledWith("shim status called\n");
+
+    stdout.mockRestore();
+    vi.doUnmock("./commands/shim.js");
+  });
+
+  describe("shell-shim onboarding prompt (auth login wiring)", () => {
+    afterEach(() => {
+      vi.doUnmock("./auth/index.js");
+      vi.doUnmock("./shim/onboardingPrompt.js");
+    });
+
+    it("offers the shim opt-in prompt after a successful `auth login`", async () => {
+      vi.doMock("./auth/index.js", () => ({ runAuthCommand: vi.fn(async () => 0) }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({
+        maybePromptShimOptIn: vi.fn(async () => {}),
+      }));
+      const onboardingModule = await import("./shim/onboardingPrompt.js");
+      const main = await importMain();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["auth", "login"]);
+
+      expect(code).toBe(0);
+      expect(onboardingModule.maybePromptShimOptIn).toHaveBeenCalledOnce();
+    });
+
+    it("does not offer the prompt when `auth login` fails", async () => {
+      vi.doMock("./auth/index.js", () => ({ runAuthCommand: vi.fn(async () => 1) }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({
+        maybePromptShimOptIn: vi.fn(async () => {}),
+      }));
+      const onboardingModule = await import("./shim/onboardingPrompt.js");
+      const main = await importMain();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["auth", "login"]);
+
+      expect(code).toBe(1);
+      expect(onboardingModule.maybePromptShimOptIn).not.toHaveBeenCalled();
+    });
+
+    it("does not offer the prompt for `auth status`/`auth logout`", async () => {
+      vi.doMock("./auth/index.js", () => ({ runAuthCommand: vi.fn(async () => 0) }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({
+        maybePromptShimOptIn: vi.fn(async () => {}),
+      }));
+      const onboardingModule = await import("./shim/onboardingPrompt.js");
+      const main = await importMain();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      expect(await main(["auth", "status"])).toBe(0);
+      expect(await main(["auth", "logout"])).toBe(0);
+      expect(onboardingModule.maybePromptShimOptIn).not.toHaveBeenCalled();
+    });
+  });
+
   it("never writes CLI-level output through the file logger's channel", async () => {
     // Help/version/errors are direct stdout/stderr writes from index.ts
     // itself (legitimate CLI UX) — distinct from the logger, which this
