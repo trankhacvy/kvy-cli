@@ -93,6 +93,70 @@ describe("createCryptoWorkerHandler", () => {
     expect(openRes).toEqual({ id: "5", ok: true, result: null });
   });
 
+  it("sealBlob() fails before any session key is set", async () => {
+    const res = await handler.handle(req("1", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }));
+    expect(res).toEqual({ id: "1", ok: false, error: "no-active-session-key" });
+  });
+
+  it("init -> setSessionKey -> sealBlob/openBlob round-trips binary data", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
+
+    const plaintext = new Uint8Array([10, 20, 30, 40, 250]);
+    const sealRes = await handler.handle(req("3", { type: "sealBlob", data: plaintext }));
+    expect(sealRes.ok).toBe(true);
+    if (!sealRes.ok) throw new Error("unreachable");
+    expect(sealRes.result).toBeInstanceOf(Uint8Array);
+    // The wire format is [nonce(24)][ciphertext+tag] — strictly longer than the plaintext.
+    expect((sealRes.result as Uint8Array).length).toBeGreaterThan(plaintext.length);
+
+    const openRes = await handler.handle(
+      req("4", { type: "openBlob", bundle: sealRes.result as Uint8Array }),
+    );
+    expect(openRes.ok).toBe(true);
+    if (!openRes.ok) throw new Error("unreachable");
+    expect(openRes.result).toEqual(plaintext);
+  });
+
+  it("openBlob() resolves ok:true, result:null (never throws) for a bundle sealed under a different DEK", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
+    const sealRes = await handler.handle(
+      req("3", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }),
+    );
+    if (!sealRes.ok) throw new Error("unreachable");
+
+    const otherDek = getRandomBytes(32);
+    const otherWrapped = wrapDek(otherDek, tree.content.publicKey);
+    await handler.handle(req("4", { type: "setSessionKey", wrappedDek: otherWrapped }));
+
+    const openRes = await handler.handle(
+      req("5", { type: "openBlob", bundle: sealRes.result as Uint8Array }),
+    );
+    expect(openRes).toEqual({ id: "5", ok: true, result: null });
+  });
+
+  it("sealBlob output is independent of seal()'s output for the same DEK (blob key isolation)", async () => {
+    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
+
+    // A blob encrypted then "opened" as if it were a seal()-produced EncryptedBox
+    // must not decrypt — they're sealed under cryptographically independent keys
+    // (design §5.1: blob key = HKDF(DEK, "falcon-blobs"), isolated from the DEK
+    // seal()/open() use directly).
+    const sealBlobRes = await handler.handle(
+      req("3", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }),
+    );
+    if (!sealBlobRes.ok) throw new Error("unreachable");
+    const asBox: EncryptedBox = {
+      t: "enc",
+      v: 1,
+      c: encodeBase64(sealBlobRes.result as Uint8Array),
+    };
+    const openRes = await handler.handle(req("4", { type: "open", box: asBox }));
+    expect(openRes).toEqual({ id: "4", ok: true, result: null });
+  });
+
   it("clear() wipes in-memory keys and persisted storage — a later call requires init again", async () => {
     const storage = createMemoryKeyStorage();
     handler = createCryptoWorkerHandler(storage);

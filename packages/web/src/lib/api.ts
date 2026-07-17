@@ -5,7 +5,12 @@
  * pulled in for this: the shapes are small and fixed, and a malformed
  * response surfaces as a thrown `ApiError` either way.
  */
-import type { PushSubscribeBody, SessionRow } from "@falcon/wire";
+import type {
+  BlobRequestDownloadResult,
+  BlobRequestUploadResult,
+  PushSubscribeBody,
+  SessionRow,
+} from "@falcon/wire";
 import type { MessagesPage, SyncSnapshot } from "@/sync";
 import { API_URL } from "./config.js";
 
@@ -175,4 +180,20 @@ export function getSessionMessages(
 ): Promise<MessagesPage> {
   const qs = before !== undefined ? `?before=${before}` : "";
   return getJson(`/v1/sessions/${sessionId}/messages${qs}`, token);
+}
+
+/** `POST /v1/blobs/request-upload` — mint an upload target for an already-encrypted blob (design §6.2; plan.md §16 "4.3 Distribution & self-host"). `size`/`contentHash` describe the *encrypted* bytes — the server never sees plaintext. */
+export function requestBlobUpload(
+  token: string,
+  body: { size: number; contentHash: string; sessionId?: string },
+): Promise<BlobRequestUploadResult> {
+  return postJson("/v1/blobs/request-upload", body, token);
+}
+
+/** `POST /v1/blobs/request-download` — mint a download target for a previously-uploaded blob owned by the caller. */
+export function requestBlobDownload(
+  token: string,
+  blobId: string,
+): Promise<BlobRequestDownloadResult> {
+  return postJson("/v1/blobs/request-download", { blobId }, token);
 }

@@ -8,6 +8,7 @@
  * retyped, only added; deprecation means ignore-on-read. This is enforced
  * by the schema-shape compat test in `src/__tests__/`.
  */
+export * from "./blobs";
 export * from "./box";
 export * from "./permissions";
 export * from "./push";

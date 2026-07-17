@@ -11,9 +11,16 @@
  * `spawnSession`/`resumeSession`/`adoptTake`/`adoptMirror` callbacks to the
  * real `spawnEngine.ts`/`resumeSession.ts`/`adoptTake.ts`/
  * `transcriptMirror.ts` implementations — replacing `commands.ts`'s old
- * literal "not implemented yet" stub. `git.status`/`git.diff`/`fs.list`/
- * `fs.mkdir` need no extra wiring here: `registerMachineRpcHandlers` already
- * has real, dependency-free defaults for all four.
+ * literal "not implemented yet" stub. `git.status`/`fs.list`/`fs.mkdir` need
+ * no extra wiring here: `registerMachineRpcHandlers` already has real,
+ * dependency-free defaults for all three. `git.diff`/`adopt.mirror` DO get
+ * extra wiring — a `deps.uploadBlob` closure (`blobClient.ts`'s
+ * `uploadBlob`, bound to this machine's server credentials and a
+ * `deriveBlobKey(dek)`-derived blob key, design §5.1) is threaded into
+ * both, so a diff/transcript too large for the 64KB RPC control-plane
+ * budget gets a real `blobRef` instead of just a truncated inline preview
+ * (plan.md §16 "4.3 Distribution & self-host" — the blob-storage subsystem
+ * both handlers' own doc comments reserved this field for).
  *
  * **No stored credentials ⇒ no machine client.** A daemon with nobody
  * logged in yet (`falcon auth login` never run) has no token/masterSecret
@@ -54,6 +61,7 @@
  */
 import {
   decodeBase64,
+  deriveBlobKey,
   deriveKeyTree,
   encodeBase64,
   getRandomBytes,
@@ -65,6 +73,8 @@ import type {
   AdoptMirrorResult,
   AdoptTakeParams,
   AdoptTakeResult,
+  GitDiffParams,
+  GitDiffResult,
   SpawnParams,
   SpawnResult,
 } from "@falcon/wire";
@@ -72,6 +82,8 @@ import type { Socket } from "socket.io-client";
 import type { FalconCredentials } from "../auth/credentials.js";
 import type { Logger } from "../logger.js";
 import { createAdoptTakeDeps, handleAdoptTake } from "./adoptTake.js";
+import { createBlobClientDeps, uploadBlob as uploadBlobToServer } from "./blobClient.js";
+import { getGitDiff } from "./gitDiff.js";
 import { createMachineClientDeps, startMachineClient } from "./machineClient.js";
 import { registerMachineRpcHandlers } from "./machineRpc.js";
 import type { ProviderSessionResolver } from "./providerSessionResolver.js";
@@ -279,10 +291,33 @@ export async function startMachineIntegration(
     return handleAdoptTake(params, adoptTakeDeps);
   }
 
+  // The blob-storage fallback (plan.md §16 "4.3 Distribution & self-host")
+  // for `git.diff`/`adopt.mirror`'s reserved `blobRef` fields: this
+  // machine's own DEK — already established above, already what every
+  // other machine RPC's params/results are sealed under — derives a blob
+  // key the same way any session's DEK would (design §5.1: `HKDF(DEK,
+  // "falcon-blobs")`), and `uploadBlobToServer` is bound to this machine's
+  // own server credentials. Best-effort by contract (never throws — see
+  // `blobClient.ts`'s header comment), so a network hiccup here just costs
+  // the blobRef efficiency win, not the RPC itself.
+  const blobKey = deriveBlobKey(dek);
+  const blobClientDeps = createBlobClientDeps(
+    { token: credentials.token },
+    { serverUrl: deps.serverUrl, fetchImpl: deps.fetchImpl, logger: deps.logger },
+  );
+  async function uploadBlobHandler(plaintext: Uint8Array): Promise<string | null> {
+    return uploadBlobToServer(plaintext, blobKey, blobClientDeps);
+  }
+
+  async function getGitDiffHandler(params: GitDiffParams): Promise<GitDiffResult> {
+    return getGitDiff(params, { uploadBlob: uploadBlobHandler });
+  }
+
   async function adoptMirrorHandler(params: AdoptMirrorParams): Promise<AdoptMirrorResult> {
     return handleAdoptMirror(params, {
       resolveProviderSession: deps.resolveProviderSession,
       logger: deps.logger,
+      uploadBlob: uploadBlobHandler,
     });
   }
 
@@ -294,6 +329,7 @@ export async function startMachineIntegration(
     resumeSession: resumeSessionHandler,
     adoptTake: adoptTakeHandler,
     adoptMirror: adoptMirrorHandler,
+    getGitDiff: getGitDiffHandler,
     logger: deps.logger,
   });
 

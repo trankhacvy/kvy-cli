@@ -3,7 +3,7 @@ import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AdoptMirrorParams } from "@falcon/wire";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getProjectPath } from "../claude/scanner.js";
 import type { ResolvedProviderSession } from "./providerSessionResolver.js";
 import { findChunkEnd, handleAdoptMirror, type TranscriptMirrorDeps } from "./transcriptMirror.js";
@@ -146,5 +146,68 @@ describe("handleAdoptMirror", () => {
     await writeFile(join(projectDir, "prov_1.jsonl"), "");
     const result = await handleAdoptMirror(params(), deps());
     expect(result).toEqual({ chunk: "", nextCursor: null, done: true });
+  });
+
+  describe("blobRef (blob-storage fallback)", () => {
+    it("uploads the full transcript and sets blobRef on the first page when it doesn't fit in one chunk", async () => {
+      const contents = `${"a".repeat(20)}\n${"b".repeat(20)}\n${"c".repeat(20)}\n`;
+      await writeFile(join(projectDir, "prov_1.jsonl"), contents);
+      const uploadBlob = vi.fn(async (plaintext: Uint8Array) => {
+        expect(new TextDecoder().decode(plaintext)).toBe(contents);
+        return "blob-xyz";
+      });
+
+      const result = await handleAdoptMirror(params({ maxBytes: 25 }), deps({ uploadBlob }));
+
+      expect(uploadBlob).toHaveBeenCalledTimes(1);
+      expect(result.done).toBe(false);
+      expect(result.blobRef).toBe("blob-xyz");
+    });
+
+    it("does not call uploadBlob when the whole transcript already fits in one chunk", async () => {
+      await writeFile(join(projectDir, "prov_1.jsonl"), "line one\nline two\n");
+      const uploadBlob = vi.fn(async () => "should-not-be-called");
+
+      const result = await handleAdoptMirror(params(), deps({ uploadBlob }));
+
+      expect(uploadBlob).not.toHaveBeenCalled();
+      expect(result.blobRef).toBeUndefined();
+    });
+
+    it("does not re-upload on subsequent (non-first) pages of the same paginated mirror", async () => {
+      const contents = `${"a".repeat(20)}\n${"b".repeat(20)}\n${"c".repeat(20)}\n`;
+      await writeFile(join(projectDir, "prov_1.jsonl"), contents);
+      const uploadBlob = vi.fn(async () => "blob-xyz");
+
+      const first = await handleAdoptMirror(params({ maxBytes: 25 }), deps({ uploadBlob }));
+      expect(first.blobRef).toBe("blob-xyz");
+      expect(uploadBlob).toHaveBeenCalledTimes(1);
+
+      await handleAdoptMirror(
+        params({ maxBytes: 25, cursor: first.nextCursor ?? undefined }),
+        deps({ uploadBlob }),
+      );
+      // Still just the one call from the first page above.
+      expect(uploadBlob).toHaveBeenCalledTimes(1);
+    });
+
+    it("leaves blobRef unset when uploadBlob resolves null (best-effort failure)", async () => {
+      const contents = `${"a".repeat(20)}\n${"b".repeat(20)}\n${"c".repeat(20)}\n`;
+      await writeFile(join(projectDir, "prov_1.jsonl"), contents);
+      const uploadBlob = vi.fn(async () => null);
+
+      const result = await handleAdoptMirror(params({ maxBytes: 25 }), deps({ uploadBlob }));
+
+      expect(result.blobRef).toBeUndefined();
+    });
+
+    it("leaves blobRef unset when uploadBlob is not wired at all", async () => {
+      const contents = `${"a".repeat(20)}\n${"b".repeat(20)}\n${"c".repeat(20)}\n`;
+      await writeFile(join(projectDir, "prov_1.jsonl"), contents);
+
+      const result = await handleAdoptMirror(params({ maxBytes: 25 }), deps());
+
+      expect(result.blobRef).toBeUndefined();
+    });
   });
 });

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Paperclip } from "lucide-react";
+import { useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -10,24 +11,38 @@ import { Button } from "@/components/ui/button";
  * insert, and reconciliation live in `useComposerState`
  * (`@/features/session-control`) so `Timeline` and this component can share
  * the same merged item list without threading it through props twice.
+ *
+ * The attach button (plan.md §16 "4.3 Distribution & self-host": "encrypted
+ * attachment path in the web composer") is a plain hidden `<input
+ * type="file">` triggered by the paperclip button — `onAttach` does the
+ * actual encrypt+upload+send, this component just hands it the raw `File`.
  */
 export function Composer({
   onSend,
+  onAttach,
   isSending,
   isQueued,
   error,
 }: {
   onSend: (text: string) => void;
+  onAttach: (file: File) => void;
   isSending: boolean;
   isQueued: boolean;
   error: string | null;
 }) {
   const [text, setText] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   function submit() {
     if (text.trim().length === 0) return;
     onSend(text);
     setText("");
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file consecutively
+    if (file) onAttach(file);
   }
 
   return (
@@ -39,6 +54,23 @@ export function Composer({
       )}
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex items-end gap-2">
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={handleFileChange}
+          aria-hidden
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          disabled={isSending}
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Attach a file"
+        >
+          <Paperclip className="size-4" />
+        </Button>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}

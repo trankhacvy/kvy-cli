@@ -3144,5 +3144,90 @@
         "type": "string"
       }
     }
+  },
+  "BlobRequestUploadBodySchema": {
+    "kind": "object",
+    "fields": {
+      "contentHash": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "sessionId": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "size": {
+        "kind": "leaf",
+        "type": "number"
+      }
+    }
+  },
+  "BlobRequestUploadResultSchema": {
+    "kind": "object",
+    "fields": {
+      "blobId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "headers": {
+        "kind": "record",
+        "key": {
+          "kind": "leaf",
+          "type": "string"
+        },
+        "value": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "method": {
+        "kind": "enum",
+        "options": [
+          "PUT"
+        ]
+      },
+      "uploadUrl": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "BlobRequestDownloadBodySchema": {
+    "kind": "object",
+    "fields": {
+      "blobId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "BlobRequestDownloadResultSchema": {
+    "kind": "object",
+    "fields": {
+      "downloadUrl": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "headers": {
+        "kind": "record",
+        "key": {
+          "kind": "leaf",
+          "type": "string"
+        },
+        "value": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "method": {
+        "kind": "enum",
+        "options": [
+          "GET"
+        ]
+      }
+    }
   }
 }

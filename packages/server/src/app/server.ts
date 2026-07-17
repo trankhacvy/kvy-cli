@@ -12,6 +12,13 @@ import {
   type GithubCodeExchanger,
   type OAuthVerifier,
 } from "../auth/index.js";
+import {
+  buildBlobStorage,
+  resolveLocalDriverConfig,
+  type BlobStorageDriver,
+} from "../blobStorage/index.js";
+import type { LocalDriverConfig } from "../blobStorage/localDriver.js";
+import { env } from "../config.js";
 import { db as defaultDb } from "../db/client.js";
 import type { Database } from "../db/types.js";
 import { buildLoggerOptions } from "../logger.js";
@@ -21,6 +28,7 @@ import { eventRouter as defaultEventRouter, type EventRouterPort } from "./event
 import { buildPushDispatcher } from "./push/dispatch.js";
 import type { PushDispatcherPort } from "./push/types.js";
 import { buildAuthRoutes } from "./routes/auth.js";
+import { buildBlobsRoutes } from "./routes/blobs.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
 import { buildNotificationSettingsRoutes } from "./routes/notificationSettings.js";
@@ -63,10 +71,17 @@ export async function buildServer(
     githubExchanger?: GithubCodeExchanger;
     eventRouter?: EventRouterPort;
     pushDispatcher?: PushDispatcherPort;
+    /** Injectable so tests never need real S3 creds or a writable disk; defaults to `buildBlobStorage(env)` (S3 if `S3_BUCKET` is set, else local-disk). */
+    blobStorage?: BlobStorageDriver;
+    /** Only consulted when `blobStorage.kind === "local"`; defaults to `resolveLocalDriverConfig(env)`. Tests inject a throwaway temp dir here instead of touching `~/.falcon/server/blobs` or process env. */
+    blobLocalConfig?: LocalDriverConfig;
   } = {},
 ) {
   const db = deps.db ?? defaultDb;
   const eventRouter = deps.eventRouter ?? defaultEventRouter;
+  const blobStorage = deps.blobStorage ?? buildBlobStorage(env);
+  const blobLocalConfig =
+    deps.blobLocalConfig ?? (blobStorage.kind === "local" ? resolveLocalDriverConfig(env) : undefined);
   // Deliberately built from `defaultEventRouter` (the real, presence-capable
   // singleton), not the possibly-fake `eventRouter` above — `EventRouterPort`
   // (what `deps.eventRouter` is typed as) doesn't carry `hasActiveVisibleClient`,
@@ -128,6 +143,13 @@ export async function buildServer(
   await app.register(buildMachinesRoutes(db, eventRouter));
   await app.register(buildUnmanagedSessionsRoutes(db, eventRouter));
   await app.register(buildPushRoutes(db));
+  await app.register(
+    buildBlobsRoutes(db, blobStorage, {
+      maxSizeBytes: env.BLOB_MAX_SIZE_BYTES,
+      publicApiOrigin: env.PUBLIC_API_ORIGIN,
+      local: blobLocalConfig,
+    }),
+  );
   await app.register(buildTelegramLinkRoutes(db));
   await app.register(buildNotificationSettingsRoutes(db, eventRouter));
 

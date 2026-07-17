@@ -69,6 +69,23 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
+ * Per-session/per-machine blob key — falcon-system-design.md §5.1:
+ *
+ *   • blob key: HKDF(DEK, "falcon-blobs")   → attachments isolated from text
+ *
+ * Unlike `deriveKeyTree`'s domains (all rooted in `masterSecret`), this one
+ * is rooted in a *DEK* (a session's or machine's row-level data-encryption
+ * key, already held by whichever client unwrapped it) — same
+ * `deriveDomainSeed` construction, different input, so blob ciphertext for a
+ * given session/machine is cryptographically independent of that session's
+ * own message/metadata ciphertext even though both ultimately trace back to
+ * the same DEK. Feed the result to `encryptBlob`/`decryptBlob`.
+ */
+export function deriveBlobKey(dek: Uint8Array): Uint8Array {
+  return deriveDomainSeed(dek, "falcon-blobs");
+}
+
+/**
  * Derive the full Falcon key hierarchy from a client-held masterSecret.
  * Deterministic: the same masterSecret always yields the same tree.
  */

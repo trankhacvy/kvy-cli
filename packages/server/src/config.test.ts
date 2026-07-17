@@ -37,6 +37,17 @@ describe("config env parsing", () => {
     delete process.env.TELEGRAM_WEBHOOK_SECRET;
     delete process.env.NTFY_BASE_URL;
     delete process.env.PUBLIC_WEB_ORIGIN;
+    delete process.env.PUBLIC_API_ORIGIN;
+    delete process.env.S3_BUCKET;
+    delete process.env.S3_REGION;
+    delete process.env.S3_ENDPOINT;
+    delete process.env.S3_ACCESS_KEY_ID;
+    delete process.env.S3_SECRET_ACCESS_KEY;
+    delete process.env.S3_FORCE_PATH_STYLE;
+    delete process.env.BLOB_LOCAL_DIR;
+    delete process.env.BLOB_LOCAL_TOKEN_SECRET;
+    delete process.env.BLOB_URL_EXPIRY_SECONDS;
+    delete process.env.BLOB_MAX_SIZE_BYTES;
 
     const { env } = await importFreshConfig();
 
@@ -54,6 +65,14 @@ describe("config env parsing", () => {
     expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
     expect(env.NTFY_BASE_URL).toBe("https://ntfy.sh");
     expect(env.PUBLIC_WEB_ORIGIN).toBeUndefined();
+    expect(env.PUBLIC_API_ORIGIN).toBeUndefined();
+    expect(env.S3_BUCKET).toBeUndefined();
+    expect(env.S3_REGION).toBe("auto");
+    expect(env.S3_FORCE_PATH_STYLE).toBe(false);
+    expect(env.BLOB_LOCAL_DIR).toContain(".falcon/server/blobs");
+    expect(env.BLOB_LOCAL_TOKEN_SECRET).toBeUndefined();
+    expect(env.BLOB_URL_EXPIRY_SECONDS).toBe(300);
+    expect(env.BLOB_MAX_SIZE_BYTES).toBe(64 * 1024 * 1024);
   });
 
   it("coerces PORT from a numeric string", async () => {
@@ -80,6 +99,17 @@ describe("config env parsing", () => {
     process.env.TELEGRAM_WEBHOOK_SECRET = "test-webhook-secret";
     process.env.NTFY_BASE_URL = "https://ntfy.internal";
     process.env.PUBLIC_WEB_ORIGIN = "https://app.falcon.dev";
+    process.env.PUBLIC_API_ORIGIN = "https://api.falcon.dev";
+    process.env.S3_BUCKET = "falcon-blobs-prod";
+    process.env.S3_REGION = "us-east-1";
+    process.env.S3_ENDPOINT = "https://s3.us-east-1.amazonaws.com";
+    process.env.S3_ACCESS_KEY_ID = "test-access-key-id";
+    process.env.S3_SECRET_ACCESS_KEY = "test-secret-access-key";
+    process.env.S3_FORCE_PATH_STYLE = "true";
+    process.env.BLOB_LOCAL_DIR = "/data/blobs";
+    process.env.BLOB_LOCAL_TOKEN_SECRET = "test-blob-token-secret";
+    process.env.BLOB_URL_EXPIRY_SECONDS = "120";
+    process.env.BLOB_MAX_SIZE_BYTES = "1048576";
 
     const { env } = await importFreshConfig();
 
@@ -98,6 +128,17 @@ describe("config env parsing", () => {
       TELEGRAM_WEBHOOK_SECRET: "test-webhook-secret",
       NTFY_BASE_URL: "https://ntfy.internal",
       PUBLIC_WEB_ORIGIN: "https://app.falcon.dev",
+      PUBLIC_API_ORIGIN: "https://api.falcon.dev",
+      S3_BUCKET: "falcon-blobs-prod",
+      S3_REGION: "us-east-1",
+      S3_ENDPOINT: "https://s3.us-east-1.amazonaws.com",
+      S3_ACCESS_KEY_ID: "test-access-key-id",
+      S3_SECRET_ACCESS_KEY: "test-secret-access-key",
+      S3_FORCE_PATH_STYLE: true,
+      BLOB_LOCAL_DIR: "/data/blobs",
+      BLOB_LOCAL_TOKEN_SECRET: "test-blob-token-secret",
+      BLOB_URL_EXPIRY_SECONDS: 120,
+      BLOB_MAX_SIZE_BYTES: 1048576,
     });
   });
 
@@ -157,5 +198,25 @@ describe("config env parsing", () => {
     const { env } = await importFreshConfig();
 
     expect(env.NODE_ENV).toBe("production");
+  });
+
+  it("throws when S3_BUCKET is set without S3 credentials (half-configured S3 driver)", async () => {
+    process.env.S3_BUCKET = "falcon-blobs";
+    delete process.env.S3_ACCESS_KEY_ID;
+    delete process.env.S3_SECRET_ACCESS_KEY;
+
+    await expect(importFreshConfig()).rejects.toThrow(
+      /S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required/,
+    );
+  });
+
+  it("allows S3_BUCKET when both credentials are set", async () => {
+    process.env.S3_BUCKET = "falcon-blobs";
+    process.env.S3_ACCESS_KEY_ID = "key";
+    process.env.S3_SECRET_ACCESS_KEY = "secret";
+
+    const { env } = await importFreshConfig();
+
+    expect(env.S3_BUCKET).toBe("falcon-blobs");
   });
 });

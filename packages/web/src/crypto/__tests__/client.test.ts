@@ -51,6 +51,42 @@ describe("crypto-bridge client <-> worker RPC", () => {
     expect(opened).toBeNull();
   });
 
+  it("sealBlob/openBlob round-trips binary attachment data through the postMessage boundary", async () => {
+    const masterSecret = getRandomBytes(32);
+    const tree = deriveKeyTree(masterSecret);
+    const dek = getRandomBytes(32);
+    const wrappedDek = wrapDek(dek, tree.content.publicKey);
+
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    await client.init(masterSecret);
+    expect(await client.setSessionKey(wrappedDek)).toBe(true);
+
+    const attachment = new Uint8Array([1, 2, 3, 4, 5, 250, 251, 252]);
+    const bundle = await client.sealBlob(attachment);
+    expect(bundle).toBeInstanceOf(Uint8Array);
+    expect(bundle.length).toBeGreaterThan(attachment.length);
+
+    const opened = await client.openBlob(bundle);
+    expect(opened).toEqual(attachment);
+  });
+
+  it("openBlob() resolves null for a corrupted bundle instead of rejecting", async () => {
+    const masterSecret = getRandomBytes(32);
+    const tree = deriveKeyTree(masterSecret);
+    const dek = getRandomBytes(32);
+    const wrappedDek = wrapDek(dek, tree.content.publicKey);
+
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+    await client.init(masterSecret);
+    await client.setSessionKey(wrappedDek);
+
+    const opened = await client.openBlob(new Uint8Array([1, 2, 3]));
+    expect(opened).toBeNull();
+  });
+
   it("rejects the caller's promise when the worker reports an RPC-level error", async () => {
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
@@ -72,6 +108,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
     await client.setSessionKey(wrappedDek);
     await client.seal({ some: "plaintext", more: [1, 2, 3] });
     await client.open(await client.seal("round-trip-me"));
+    await client.openBlob(await client.sealBlob(new Uint8Array([9, 9, 9])));
     await client.clear();
 
     const secrets = [masterSecret, tree.signing.secretKey, tree.content.secretKey, dek];

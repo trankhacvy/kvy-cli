@@ -4,6 +4,7 @@ export { getLastSeenAt, markSeenNow } from "./last-seen";
 export { sessionRpcToActions } from "./live-actions";
 export { createMockSessionControl, useMockSessionControl } from "./mock-actions";
 export {
+  buildFileEnvelope,
   buildMessageEnvelope,
   type PendingMessage,
   pendingToRenderItem,
@@ -26,6 +27,7 @@ export type { ComposerState } from "./use-composer-state";
 export { useComposerState } from "./use-composer-state";
 export { useLiveRenderItems } from "./use-live-render-items";
 export { useLiveSessionControl } from "./use-live-session-control";
+export { useSessionCrypto } from "./use-session-crypto";
 export {
   type EphemeralSource,
   type SessionEphemeralState,

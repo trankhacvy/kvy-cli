@@ -1,7 +1,7 @@
 import tweetnacl from "tweetnacl";
 import { describe, expect, it } from "vitest";
-import { getRandomBytes } from "../encryption.js";
-import { deriveKeyTree, signDetached } from "../keys.js";
+import { decryptBlob, encryptBlob, getRandomBytes } from "../encryption.js";
+import { deriveBlobKey, deriveKeyTree, signDetached } from "../keys.js";
 
 describe("deriveKeyTree", () => {
   it("is deterministic for a given masterSecret", () => {
@@ -58,6 +58,38 @@ describe("deriveKeyTree", () => {
   it("blobMasterKey is 32 bytes (usable as a secretbox key)", () => {
     const tree = deriveKeyTree(getRandomBytes(32));
     expect(tree.blobMasterKey.length).toBe(32);
+  });
+});
+
+describe("deriveBlobKey", () => {
+  it("is deterministic for a given DEK", () => {
+    const dek = getRandomBytes(32);
+    expect(deriveBlobKey(dek)).toEqual(deriveBlobKey(dek));
+  });
+
+  it("is 32 bytes, usable as an encryptBlob/decryptBlob secretbox key", () => {
+    const dek = getRandomBytes(32);
+    const blobKey = deriveBlobKey(dek);
+    expect(blobKey.length).toBe(32);
+
+    const plaintext = new TextEncoder().encode("attachment bytes");
+    const bundle = encryptBlob(plaintext, blobKey);
+    expect(decryptBlob(bundle, blobKey)).toEqual(plaintext);
+  });
+
+  it("different DEKs produce different blob keys", () => {
+    const a = deriveBlobKey(getRandomBytes(32));
+    const b = deriveBlobKey(getRandomBytes(32));
+    expect(a).not.toEqual(b);
+  });
+
+  it("is independent from deriveKeyTree's domains for the same input bytes", () => {
+    const secret = getRandomBytes(32);
+    const blobKey = deriveBlobKey(secret);
+    const tree = deriveKeyTree(secret);
+    expect(Buffer.from(blobKey).toString("hex")).not.toBe(
+      Buffer.from(tree.blobMasterKey).toString("hex"),
+    );
   });
 });
 

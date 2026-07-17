@@ -21,14 +21,20 @@
  * "everything I've changed so far" panel wants, not just what's already
  * committed.
  *
- * **Truncation, not a blob upload:** the wire's `blobRef` is a reserved
- * extension point for the eventual blob-storage subsystem (plan.md §16
- * "4.3 Distribution & self-host", not yet built — same "unset until that
- * subsystem lands" state as `adopt.mirror`'s own `blobRef`). Until then, a
- * diff that would blow the 64KB RPC control-plane budget (design §4.4
- * "payload size rule") is truncated inline at a safe line boundary with
- * `truncated: true`, mirroring `fs.read`'s own `{inline, truncated}`
- * contract for the same not-yet-blob-backed situation.
+ * **Truncation, plus a best-effort blob upload:** a diff that would blow
+ * the 64KB RPC control-plane budget (design §4.4 "payload size rule") is
+ * always truncated inline at a safe line boundary with `truncated: true`
+ * (mirroring `fs.read`'s own `{inline, truncated}` contract) — that inline
+ * preview is served unconditionally so the panel always has *something* to
+ * show immediately, with no round trip. When `deps.uploadBlob` is wired
+ * (`machineIntegration.ts`, once a live machine DEK/server connection
+ * exists), the *full* untruncated diff is also encrypted and uploaded via
+ * the blob-storage subsystem (plan.md §16 "4.3 Distribution & self-host")
+ * and its `blobId` set as `blobRef` — the caller can then fetch the
+ * complete diff instead of settling for the truncated preview. Best-effort:
+ * `deps.uploadBlob` never throws (see `blobClient.ts`'s own contract), so a
+ * failed/unwired upload just leaves `blobRef` unset, same as before this
+ * subsystem existed.
  */
 import type { GitDiffParams, GitDiffResult } from "@falcon/wire";
 import { GitExecError, type GitExec, runGit } from "./gitExec.js";
@@ -43,6 +49,8 @@ export interface GitDiffDeps {
   /** Looks up the workspace's configured base ref for `worktree`; defaults to `workspaceConfig.ts`'s real `~/.falcon/settings.json`-backed lookup. Returns `undefined` when none is configured. */
   resolveConfiguredBaseRef?: (worktree: string) => Promise<string | undefined>;
   maxInlineBytes?: number;
+  /** Encrypts+uploads the full diff and resolves its `blobId`, or `null` on any failure — see `blobClient.ts`'s `uploadBlob`. No default: unset (the state every caller had before this subsystem existed) means `blobRef` simply stays unset, never a thrown error. Only ever called when the diff was actually truncated — a diff that already fits inline has no need for a blob. */
+  uploadBlob?: (plaintext: Uint8Array) => Promise<string | null>;
 }
 
 async function defaultResolveConfiguredBaseRef(worktree: string): Promise<string | undefined> {
@@ -93,5 +101,10 @@ export async function getGitDiff(params: GitDiffParams, deps: GitDiffDeps = {}):
   const output = await git(args, params.worktree);
   const { text, truncated } = truncateToByteBudget(output, maxInlineBytes);
 
-  return { inline: text, truncated };
+  let blobRef: string | undefined;
+  if (truncated && deps.uploadBlob) {
+    blobRef = (await deps.uploadBlob(new TextEncoder().encode(output))) ?? undefined;
+  }
+
+  return { inline: text, truncated, blobRef };
 }
