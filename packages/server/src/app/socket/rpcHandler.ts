@@ -21,15 +21,23 @@ import { RpcRateLimiter } from "./rpcRateLimiter.js";
 
 const RPC_ROOM_PREFIX = "rpc:";
 const RPC_CALL_TIMEOUT_MS = 30_000;
-const RPC_PRESENCE_POLL_MS = 2_000;
+// falcon-system-design.md §13 / plan.md §16 "4.4 Hardening": "dead-peer fast-fail
+// (<2s)" — the SLO Happy's own postmortem-hardened design measured at ~1.6s against a
+// real 2-replica cluster (happy-research.md §7/§11.3: "presence-poll race for fast
+// dead-peer detection ... pod-kill fast-fail: 1.6s vs 30s"). Two consecutive misses are
+// still required (below) to avoid false positives from a single transient adapter
+// timeout, so this must stay comfortably under 1000ms for the worst case (two full
+// poll intervals) to land under the 2s SLO.
+const RPC_PRESENCE_POLL_MS = 700;
 // Timeouts for cross-replica fetchSockets during the reconnect grace window. Exponential
 // backoff: 2s -> 4s -> 8s. Reduces stream pressure under load (fewer timed-out requests)
 // while giving later attempts more time to succeed when the adapter is slow.
 const RPC_LOOKUP_FETCH_TIMEOUTS_MS = [2_000, 4_000, 8_000];
-// Timeout for in-flight presence-poll fetchSockets. Must be << RPC_CALL_TIMEOUT_MS so a
-// dead replica doesn't stall each poll for the full adapter heartbeat timeout. 500ms keeps
-// daemon-death detection responsive (~1s).
-const RPC_PRESENCE_FETCH_TIMEOUT_MS = 500;
+// Timeout for in-flight presence-poll fetchSockets. Must be << RPC_CALL_TIMEOUT_MS (and
+// << RPC_PRESENCE_POLL_MS) so a dead replica doesn't stall each poll for the full adapter
+// heartbeat timeout — keeps the <2s dead-peer SLO above intact even if one poll's fetch
+// itself times out.
+const RPC_PRESENCE_FETCH_TIMEOUT_MS = 400;
 // How long an rpc-call waits for the target socket to appear in the room when the room is
 // empty at call time (e.g. a brief daemon reconnect window). With exponential backoff
 // (2s, 4s, 8s) + 200ms sleep between polls, this gives ~3 iterations of increasing timeout
