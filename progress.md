@@ -1,5 +1,91 @@
 # Falcon — Progress Log
 
+## Cycle 67 — 2026-07-17
+
+**Branch checked:** `main` (HEAD `c1454475` — "merge: land P4-4.3-docker-compose-selfhost onto main")
+
+### Verification run on `main`
+
+- `pnpm typecheck` → **PASSED** — 9/9 turbo tasks green (`@falcon/crypto`, `@falcon/wire`
+  (typecheck+build), `@falcon/server` (typecheck+build), `falcon` cli (typecheck), `@falcon/web`
+  (build+typecheck)); all cache-hit-replayed clean (`>>> FULL TURBO`), including a fresh
+  `@falcon/web` static export of all 14 routes. No errors.
+- `pnpm test` → **PASSED** — 9/9 turbo tasks green, 0 failures across the whole workspace:
+  `@falcon/crypto` 8 files/71 tests, `@falcon/wire` 6 files/85 tests, `@falcon/web` 44 files/370
+  tests, `@falcon/server` 40 files/289 tests, `falcon` cli 105 files/1029 tests — **203 test
+  files / 1844 tests total, all passing.**
+
+### Task-summaries reviewed this cycle (with independent ancestor verification)
+
+All three requested task_ids were verified as real ancestors of `main` via `git merge-base
+--is-ancestor <commit> main` (checked against each task's `feat`/`fix`/`refactor` commits, since
+none of the three requested task_ids are literal git refs any more — feature branches deleted
+post-merge, normal cleanup):
+
+1. **`task-summary/P4-4.3-daemon-service-install.md`** — `falcon daemon service
+   install|uninstall|status` (launchd plist on macOS via `launchctl bootstrap`, systemd-user unit
+   on Linux via `systemctl --user enable --now`; both point at `falcon daemon start-sync`).
+   `git merge-base --is-ancestor eff3983 main` → **true** (feat commit); `9559623` (code-review
+   fixes) also confirmed an ancestor. `plan.md` line 795 already `[x]` with a dated confirmation
+   note from the landing agent's own commit (`e87a0a7`) — no edit needed, note content
+   independently re-verified accurate.
+2. **`task-summary/P4-4.3-standalone-binaries.md`** — `bun build --compile` standalone binaries
+   (darwin-arm64/x64, linux-x64), `curl | sh` installer, npm publish pipeline, compile-time
+   `__FALCON_CLI_VERSION__` short-circuit. `git merge-base --is-ancestor a9f7851 main` → **true**
+   (feat commit); `1d8eaad` (test-failure fix) also confirmed an ancestor. `plan.md` line 793
+   already `[x]` with a dated note from the landing agent's own commit (`32ab7c9`) — no edit
+   needed.
+3. **`task-summary/P4-4.3-docker-compose-selfhost.md`** — `deploy/docker-compose.yml`
+   (server+postgres+optional minio profile), migrate-on-boot (already implicit in `main.ts`),
+   split-origin web served by nginx with strict CSP+SRI, new `@fastify/cors` registration on
+   `@falcon/server` reusing the `P4-4.4-security-pass` origin-allowlist. `git merge-base
+   --is-ancestor 0fc6ad3 main` → **true** (feat commit); `db61bff` (test-failure fix) and
+   `251e3bc` (code-review fixes) also confirmed ancestors. `plan.md` line 796 already `[x]` with
+   a dated note — no edit needed.
+
+All three commits' ancestry was re-confirmed directly against `main`'s current tip
+(`c1454475`), not just against some older intermediate `main` state, since `main` is also the
+branch this progress tracker is running on.
+
+### Tasks completed this cycle
+
+**0 new checkboxes flipped.** All three requested tasks were already fully and correctly
+reflected in `plan.md` — each landing agent flipped its own checkbox (with a dated,
+ancestor-confirmed note) in the same commit that merged the branch onto `main`, ahead of this
+progress-tracker cycle picking it up. This cycle's job was limited to independently
+re-verifying: (a) the ancestor claims still hold against `main`'s current tip, (b) the
+task-summary files exist and describe what's actually on `main`, and (c) the two required
+workspace-wide checks are green. Per the standing instruction, no checkbox is flipped on the
+strength of a task-summary file alone — flips only follow a successful `git merge-base
+--is-ancestor` check, which is exactly what already backs all three pre-existing `[x]` marks.
+
+### Blockers / issues found
+
+None. `pnpm typecheck` and `pnpm test` are both fully green on `main` (9/9 turbo tasks each,
+1844/1844 tests across the whole workspace). No flakiness observed this run.
+
+### Overall completion
+
+`plan.md` checkbox count: **126/135 checked (~93.3%)** — up from 123/135 (~91.1%) last cycle;
+the +3 came from the three tasks above, credited by their own landing commits rather than this
+cycle (this cycle only re-verified and logged them).
+
+### Next recommended tasks
+
+1. **§4.3 Distribution & self-host, remaining bullets** (plan.md lines 794, 798): CLI self-update
+   (`cli-latest` rolling tag, atomic replace, `FALCON_NO_UPDATE`); uninstall docs + `rm -rf
+   ~/.falcon` cleanup guide (platform service removal — pairs naturally with the just-landed
+   `daemon service uninstall` command).
+2. **§4.4 Hardening & release gate, remaining bullets** (plan.md lines 801–803, 805):
+   fixture-prompt regression pass against latest Claude Code; 20-step conformance script
+   (`exercise-flow`); dead-daemon/reconnect-storm/double-takeover RPC integration tests;
+   Prometheus `/metrics` + docs site quickstart + <5min onboarding-time measurement.
+3. **§4.5 cross-cutting process bullets** (plan.md lines 811, 812, 814): grow the golden-trace
+   corpus with provider quirks found so far; add a regression test for each design-§11
+   failure-matrix scenario as first encountered; keep `docs/` updated alongside any
+   protocol/crypto change. Process/discipline bullets rather than one-shot tasks — worth folding
+   into whichever of #1/#2 above gets picked up next rather than tackled standalone.
+
 ## Cycle 66 — 2026-07-17
 
 **Branch checked:** `main` (HEAD `c5423c5` — "chore: cycle 65 — completed 2 tasks")
