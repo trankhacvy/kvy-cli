@@ -116,6 +116,13 @@ export interface Settings {
    * viewer.
    */
   workspaces?: Record<string, { baseRef?: string; remote?: string }>;
+  /**
+   * Epoch-ms timestamp of the last auto-update-on-start background check
+   * (`update/autoUpdateTrigger.ts`, plan.md §16 "4.3 Distribution &
+   * self-host") — rate-limits how often `falcon` spawns a background
+   * `falcon update` child so a stream of invocations doesn't hammer GitHub.
+   */
+  lastUpdateCheckAt?: number;
 }
 
 const defaultSettings: Settings = {
@@ -158,6 +165,9 @@ function normalizeSettings(raw: Record<string, unknown>): Settings {
       workspaces[key] = entry;
     }
     settings.workspaces = workspaces;
+  }
+  if (typeof raw.lastUpdateCheckAt === "number" && Number.isFinite(raw.lastUpdateCheckAt)) {
+    settings.lastUpdateCheckAt = raw.lastUpdateCheckAt;
   }
   return settings;
 }

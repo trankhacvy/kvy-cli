@@ -45,6 +45,8 @@ import {
 import { resolveHomeDir } from "./home.js";
 import { createLogger } from "./logger.js";
 import { maybePromptShimOptIn } from "./shim/onboardingPrompt.js";
+import { maybeTriggerAutoUpdate } from "./update/autoUpdateTrigger.js";
+import { runUpdateCommand } from "./update/runUpdateCommand.js";
 
 // Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
 // this module still wires up arg parsing + a stub dispatcher. `auth` is now
@@ -102,6 +104,11 @@ function resolveBundlePath(): string {
   return path.join(packageRootDir(), "dist", "index.mjs");
 }
 
+/** `true` for a `bun build --compile` standalone binary — see `readVersion()`'s doc comment above for why this identifier only exists at all in a compiled build. Shared with `update/installKind.ts`, which can't reference `__FALCON_CLI_VERSION__` directly since it's declared in this module's scope only. */
+function isCompiledBinary(): boolean {
+  return typeof __FALCON_CLI_VERSION__ !== "undefined";
+}
+
 const HELP_TEXT = `falcon — wrapper CLI for Claude Code / Codex agent sessions
 
 Usage:
@@ -128,6 +135,7 @@ Usage:
   falcon workspace sync             (coming soon)
   falcon shim install|uninstall|status
                                      Manage the claude/codex PATH shim (Tier 3 adoption)
+  falcon update                     Check for and install a newer falcon version
   falcon notify -p <message>        Send a test push notification
   falcon --help, -h                 Show this help
   falcon --version, -v              Show the CLI version
@@ -165,6 +173,22 @@ async function ensureDaemon(): Promise<{ ok: true } | { ok: false; message: stri
   const result = await ensureDaemonRunning(
     createEnsureDaemonRunningDeps({ version: readVersion() }),
   );
+
+  // Auto-update-on-start (plan.md §16 "4.3 Distribution & self-host") shares
+  // this same "runs ahead of every agent-invoking subcommand" entry point as
+  // the daemon auto-start above (PRD FR-1.2). `maybeTriggerAutoUpdate` does
+  // no network I/O itself — it only rate-limits via a local timestamp and
+  // spawns a detached background child — so awaiting it here adds no
+  // meaningful latency and can never block on a failed/slow update check;
+  // it also never throws, so this is safe unconditionally.
+  await maybeTriggerAutoUpdate({
+    isCompiledBinary: isCompiledBinary(),
+    bundlePath: resolveBundlePath(),
+    env: process.env,
+    homeDir: resolveHomeDir(),
+    logger,
+  });
+
   if (result.ok || result.reason === "disabled") return { ok: true };
   return { ok: false, message: result.message };
 }
@@ -264,6 +288,30 @@ async function runDaemonService(
   command: Extract<FalconCommand, { type: "daemon-service" }>,
 ): Promise<number> {
   return runDaemonServiceCommand(command.action);
+}
+
+/**
+ * `falcon update` (plan.md §16 "4.3 Distribution & self-host") — checks the
+ * `cli-latest` rolling release tag and, if a newer version is published,
+ * downloads and atomically replaces the running standalone binary (or
+ * shells out to `npm install -g falcon@<version>` for an npm install).
+ * Deliberately does **not** call `ensureDaemon()`: unlike `start`/`auth`/
+ * etc., updating the CLI itself has no daemon interaction, and running it
+ * ahead of a daemon auto-start would also re-trigger the very
+ * auto-update-on-start check this command *is* — the background variant of
+ * this same code path (`update/autoUpdateTrigger.ts`'s detached child).
+ */
+async function runUpdate(): Promise<number> {
+  const { code, message } = await runUpdateCommand({
+    currentVersion: readVersion(),
+    isCompiledBinary: isCompiledBinary(),
+    bundlePath: resolveBundlePath(),
+    execPath: process.execPath,
+    env: process.env,
+    logger,
+  });
+  if (message) process.stdout.write(message);
+  return code;
 }
 
 /**
@@ -453,6 +501,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runAdopt(command);
     case "shim":
       return runShim(command);
+    case "update":
+      return runUpdate();
     case "workspace-config":
       return runWorkspaceConfig(command);
     case "workspace-register":

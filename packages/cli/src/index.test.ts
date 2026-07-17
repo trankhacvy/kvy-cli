@@ -14,18 +14,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // so tests that aren't specifically exercising the daemon-auto-start wiring
 // set it to keep those subcommands side-effect-free; the dedicated tests below
 // unset it and mock `./daemon/ensureDaemonRunning.js` instead.
+//
+// `ensureDaemon()` also fires `maybeTriggerAutoUpdate()` (plan.md §16 "4.3
+// Distribution & self-host") right alongside it — left unchecked, that would
+// spawn a real detached `falcon update` child (and, past the rate-limit
+// check, a real network call) during every test run here too.
+// `FALCON_NO_UPDATE=1` is that feature's own documented opt-out, set for the
+// same reason `FALCON_NO_SERVICE` is: no test in this file exercises the
+// auto-update trigger itself (see `update/autoUpdateTrigger.test.ts` for
+// that), so every test here should stay side-effect-free by default.
 let homeDir: string;
 
 beforeEach(() => {
   homeDir = mkdtempSync(path.join(tmpdir(), "falcon-index-test-"));
   process.env.FALCON_HOME_DIR = homeDir;
   process.env.FALCON_NO_SERVICE = "1";
+  process.env.FALCON_NO_UPDATE = "1";
   vi.resetModules();
 });
 
 afterEach(() => {
   delete process.env.FALCON_HOME_DIR;
   delete process.env.FALCON_NO_SERVICE;
+  delete process.env.FALCON_NO_UPDATE;
   rmSync(homeDir, { recursive: true, force: true });
 });
 
@@ -330,6 +341,25 @@ describe("main()", () => {
     vi.doUnmock("./commands/serviceInstall.js");
   });
 
+  it("wires `update` to update/runUpdateCommand.js and prints its message", async () => {
+    vi.doMock("./update/runUpdateCommand.js", () => ({
+      runUpdateCommand: vi.fn(async () => ({
+        code: 0,
+        message: "falcon: already up to date (0.1.0)\n",
+      })),
+    }));
+    const updateModule = await import("./update/runUpdateCommand.js");
+    const main = await importMain();
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    expect(await main(["update"])).toBe(0);
+    expect(updateModule.runUpdateCommand).toHaveBeenCalledOnce();
+    expect(stdout).toHaveBeenCalledWith("falcon: already up to date (0.1.0)\n");
+
+    stdout.mockRestore();
+    vi.doUnmock("./update/runUpdateCommand.js");
+  });
+
   describe("shell-shim onboarding prompt (auth login wiring)", () => {
     afterEach(() => {
       vi.doUnmock("./auth/index.js");
@@ -474,6 +504,45 @@ describe("main()", () => {
 
       expect(ensureDaemonRunning).toHaveBeenCalledTimes(3);
       stdout.mockRestore();
+    });
+  });
+
+  describe("auto-update wiring (maybeTriggerAutoUpdate)", () => {
+    afterEach(() => {
+      vi.doUnmock("./update/autoUpdateTrigger.js");
+    });
+
+    it("calls maybeTriggerAutoUpdate alongside the daemon auto-start check", async () => {
+      delete process.env.FALCON_NO_UPDATE;
+      const maybeTriggerAutoUpdate = vi.fn(async () => {});
+      vi.doMock("./update/autoUpdateTrigger.js", () => ({ maybeTriggerAutoUpdate }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const code = await main(["claude"]);
+
+      expect(code).toBe(0);
+      expect(maybeTriggerAutoUpdate).toHaveBeenCalledOnce();
+      stdout.mockRestore();
+    });
+
+    it("never throws main() even if maybeTriggerAutoUpdate rejects unexpectedly", async () => {
+      delete process.env.FALCON_NO_UPDATE;
+      vi.doMock("./update/autoUpdateTrigger.js", () => ({
+        maybeTriggerAutoUpdate: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+      }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      const code = await main(["claude"]);
+
+      expect(code).toBe(1);
+      expect(stderr.mock.calls[0]?.[0]).toContain("unexpected error");
+      stdout.mockRestore();
+      stderr.mockRestore();
     });
   });
 

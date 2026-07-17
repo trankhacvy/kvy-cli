@@ -35,7 +35,8 @@ export type FalconCommand =
   | { type: "workspace-sync" }
   | { type: "notify"; message: string }
   | { type: "adopt"; list: boolean; remote: boolean }
-  | { type: "shim"; action: "install" | "uninstall" | "status" };
+  | { type: "shim"; action: "install" | "uninstall" | "status" }
+  | { type: "update" };
 
 /** Thrown for malformed Falcon-level commands. Never thrown for provider passthrough. */
 export class ArgParseError extends Error {
@@ -101,6 +102,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseAdopt(rest);
     case "shim":
       return parseShim(rest);
+    case "update":
+      return { type: "update" };
     default:
       // Not a known Falcon subcommand: the whole argv is passthrough to the
       // default provider (claude), same as `falcon claude [args...]` minus
