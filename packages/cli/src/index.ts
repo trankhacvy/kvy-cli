@@ -8,6 +8,11 @@ import { CODEX_NO_LOCAL_MODE_NOTE } from "./codex/index.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
+  runWorkspaceListCommand,
+  runWorkspaceRegisterCommand,
+  runWorkspaceUnregisterCommand,
+} from "./commands/workspaceRegister.js";
+import {
   createDaemonCommandDeps,
   runDaemonStart,
   runDaemonStartSync,
@@ -98,6 +103,9 @@ Usage:
   falcon adopt [--remote] [--list]  Adopt the most recent plain claude session in this directory
   falcon --continue                 Alias for "falcon adopt" (most recent, local)
   falcon workspace config [--base-ref <ref>] [--remote <name>] [--directory <path>]
+  falcon workspace register [--directory <path>] [--name <display-name>]
+  falcon workspace list             List registered workspace directories
+  falcon workspace unregister [--directory <path>]
   falcon workspace sync             (coming soon)
   falcon notify -p <message>        Send a test push notification
   falcon --help, -h                 Show this help
@@ -312,6 +320,36 @@ async function runWorkspaceConfig(
   );
 }
 
+/**
+ * `falcon workspace register|list|unregister` (plan.md §16 "3.1 Remote
+ * spawn" / "3.3 Session adoption (UC9)") — reads/writes
+ * `~/.falcon/workspaces.json` directly (see `commands/workspaceRegister.ts`
+ * / `workspace/registry.ts`). Same rationale as `workspace-config` for
+ * skipping `ensureDaemon()`: no daemon interaction, a real daemon reads the
+ * same store off disk whenever it next needs it.
+ */
+async function runWorkspaceRegister(
+  command: Extract<FalconCommand, { type: "workspace-register" }>,
+): Promise<number> {
+  return runWorkspaceRegisterCommand(
+    { directory: command.directory, name: command.name },
+    { workingDirectory: process.cwd() },
+  );
+}
+
+async function runWorkspaceList(): Promise<number> {
+  return runWorkspaceListCommand({ workingDirectory: process.cwd() });
+}
+
+async function runWorkspaceUnregister(
+  command: Extract<FalconCommand, { type: "workspace-unregister" }>,
+): Promise<number> {
+  return runWorkspaceUnregisterCommand(
+    { directory: command.directory },
+    { workingDirectory: process.cwd() },
+  );
+}
+
 function run(command: FalconCommand): number | Promise<number> {
   switch (command.type) {
     case "help":
@@ -338,6 +376,12 @@ function run(command: FalconCommand): number | Promise<number> {
       return runAdopt(command);
     case "workspace-config":
       return runWorkspaceConfig(command);
+    case "workspace-register":
+      return runWorkspaceRegister(command);
+    case "workspace-list":
+      return runWorkspaceList();
+    case "workspace-unregister":
+      return runWorkspaceUnregister(command);
     case "workspace-sync":
       process.stdout.write("cloud sync coming soon\n");
       return 0;

@@ -28,6 +28,9 @@ export type FalconCommand =
   | { type: "sessions"; action: "list" }
   | { type: "resume"; sessionId: string }
   | { type: "workspace-config"; baseRef?: string; remote?: string; directory?: string }
+  | { type: "workspace-register"; directory?: string; name?: string }
+  | { type: "workspace-list" }
+  | { type: "workspace-unregister"; directory?: string }
   | { type: "workspace-sync" }
   | { type: "notify"; message: string }
   | { type: "adopt"; list: boolean; remote: boolean };
@@ -199,9 +202,12 @@ function parseWorkspace(rest: string[]): FalconCommand {
   const [action, ...opts] = rest;
   if (action === "sync") return { type: "workspace-sync" };
   if (action === "config") return parseWorkspaceConfig(opts);
+  if (action === "register") return parseWorkspaceRegister(opts);
+  if (action === "list") return { type: "workspace-list" };
+  if (action === "unregister") return parseWorkspaceUnregister(opts);
   throw new ArgParseError(
     `Unknown "falcon workspace" action: ${action ?? "(none)"}`,
-    "falcon workspace config|sync",
+    "falcon workspace config|register|list|unregister|sync",
   );
 }
 
@@ -226,6 +232,48 @@ function parseWorkspaceConfig(opts: string[]): FalconCommand {
   }
 
   return { type: "workspace-config", ...result };
+}
+
+const WORKSPACE_REGISTER_USAGE =
+  "falcon workspace register [--directory <path>] [--name <display-name>]";
+
+function parseWorkspaceRegister(opts: string[]): FalconCommand {
+  const result: { directory?: string; name?: string } = {};
+
+  for (let i = 0; i < opts.length; i++) {
+    const flag = opts[i] as string;
+    const value = requireValue(flag, opts[i + 1], WORKSPACE_REGISTER_USAGE);
+    i++;
+    if (flag === "--directory") result.directory = value;
+    else if (flag === "--name") result.name = value;
+    else
+      throw new ArgParseError(
+        `Unknown "falcon workspace register" flag: ${flag}`,
+        WORKSPACE_REGISTER_USAGE,
+      );
+  }
+
+  return { type: "workspace-register", ...result };
+}
+
+const WORKSPACE_UNREGISTER_USAGE = "falcon workspace unregister [--directory <path>]";
+
+function parseWorkspaceUnregister(opts: string[]): FalconCommand {
+  const result: { directory?: string } = {};
+
+  for (let i = 0; i < opts.length; i++) {
+    const flag = opts[i] as string;
+    const value = requireValue(flag, opts[i + 1], WORKSPACE_UNREGISTER_USAGE);
+    i++;
+    if (flag === "--directory") result.directory = value;
+    else
+      throw new ArgParseError(
+        `Unknown "falcon workspace unregister" flag: ${flag}`,
+        WORKSPACE_UNREGISTER_USAGE,
+      );
+  }
+
+  return { type: "workspace-unregister", ...result };
 }
 
 function parseNotify(rest: string[]): FalconCommand {
