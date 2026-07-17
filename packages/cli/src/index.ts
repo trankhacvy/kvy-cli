@@ -68,7 +68,19 @@ function packageRootDir(): string {
   return path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
+/**
+ * `bun build --compile` standalone binaries (scripts/build-binaries.sh,
+ * plan.md §16 "4.3 Distribution & self-host") have no on-disk
+ * `package.json` sibling to read at runtime — the compile step bakes this
+ * identifier in via `--define:__FALCON_CLI_VERSION__` instead. Plain
+ * Node/npm installs (dev, and `npm install -g falcon`) never define it, so
+ * `typeof` sees "undefined" there and falls through to the normal
+ * package.json read below unchanged.
+ */
+declare const __FALCON_CLI_VERSION__: string | undefined;
+
 function readVersion(): string {
+  if (typeof __FALCON_CLI_VERSION__ !== "undefined") return __FALCON_CLI_VERSION__;
   const pkgPath = path.join(packageRootDir(), "package.json");
   try {
     const pkg = JSON.parse(readFileSync(pkgPath, "utf8")) as { version?: string };

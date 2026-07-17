@@ -12,6 +12,9 @@ build/
 .turbo/
 *.tsbuildinfo
 
+# scripts/build-binaries.sh output (bun-compiled standalone CLI binaries)
+dist-binaries/
+
 # Next.js
 .next/
 out/
