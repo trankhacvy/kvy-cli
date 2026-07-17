@@ -55,4 +55,8 @@ export const schemaRegistry: Record<string, z.ZodTypeAny> = {
   PushSubscribeBodySchema: wire.PushSubscribeBodySchema,
   PushUnsubscribeBodySchema: wire.PushUnsubscribeBodySchema,
   PushPayloadSchema: wire.PushPayloadSchema,
+  BlobRequestUploadBodySchema: wire.BlobRequestUploadBodySchema,
+  BlobRequestUploadResultSchema: wire.BlobRequestUploadResultSchema,
+  BlobRequestDownloadBodySchema: wire.BlobRequestDownloadBodySchema,
+  BlobRequestDownloadResultSchema: wire.BlobRequestDownloadResultSchema,
 };

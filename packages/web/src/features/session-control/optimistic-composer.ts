@@ -1,5 +1,5 @@
 import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
-import type { RenderItem, TextItem } from "@/sync/reducer";
+import type { FileItem, RenderItem, TextItem } from "@/sync/reducer";
 
 /**
  * A composer message sent but not yet confirmed by the canonical transcript
@@ -8,25 +8,56 @@ import type { RenderItem, TextItem } from "@/sync/reducer";
  * `message` RPC's own result (design §4.4: `{queued: boolean}`) — true while
  * the session process is still finishing a turn, so the composer can show
  * "queued" rather than implying the agent is already reading it.
+ *
+ * A discriminated union (not just text) since the composer's attach-file
+ * path (plan.md §16 "4.3 Distribution & self-host": "encrypted attachment
+ * path in the web composer") optimistically inserts a `FileItem`-shaped
+ * pending entry the same way a text send inserts a `TextItem`-shaped one.
  */
-export interface PendingMessage {
-  localId: string;
-  text: string;
-  sentAt: number;
-  queued: boolean;
-}
+export type PendingMessage =
+  | { kind: "text"; localId: string; text: string; sentAt: number; queued: boolean }
+  | {
+      kind: "file";
+      localId: string;
+      name: string;
+      size: number;
+      sentAt: number;
+      queued: boolean;
+    };
 
 /**
- * Mints the envelope a composer send becomes (design §4.4 `message` RPC:
- * `{envelope: SessionEnvelope}`). The envelope's `id` — cuid2, minted here,
- * not server-assigned — doubles as the reconciliation key: the session
- * process is expected to carry it through unchanged into the canonical
- * transcript, the same way the CLI's own tailer preserves an envelope's id
- * from capture to broadcast. If a future landing changes that assumption,
- * `reconcilePending`'s id-match below is the only line that needs updating.
+ * Mints the envelope a composer text send becomes (design §4.4 `message`
+ * RPC: `{envelope: SessionEnvelope}`). The envelope's `id` — cuid2, minted
+ * here, not server-assigned — doubles as the reconciliation key: the
+ * session process is expected to carry it through unchanged into the
+ * canonical transcript, the same way the CLI's own tailer preserves an
+ * envelope's id from capture to broadcast. If a future landing changes that
+ * assumption, `reconcilePending`'s id-match below is the only line that
+ * needs updating.
  */
 export function buildMessageEnvelope(text: string, now: number = Date.now()): SessionEnvelope {
   return createEnvelope("user", { t: "text", md: text }, { time: now });
+}
+
+/**
+ * Mints the envelope an already-uploaded attachment becomes — `ref` is the
+ * blob-storage `blobId` (`lib/blobs.ts`'s `uploadAttachment`), same
+ * id-doubles-as-reconciliation-key contract as `buildMessageEnvelope`.
+ * `opts.id`, when given, lets the caller mint the optimistic pending
+ * entry's id *before* the (async, upload-then-envelope) send completes and
+ * have the final envelope carry that same id — otherwise a fresh cuid2 id
+ * minted only after the upload finishes wouldn't match whatever id the
+ * pending UI entry was tracked under while the upload was in flight.
+ */
+export function buildFileEnvelope(
+  file: { ref: string; name: string; size: number },
+  opts: { time?: number; id?: string } = {},
+): SessionEnvelope {
+  return createEnvelope(
+    "user",
+    { t: "file", ref: file.ref, name: file.name, size: file.size },
+    { time: opts.time ?? Date.now(), id: opts.id },
+  );
 }
 
 /** Drops any pending message that has already landed in `items` (matched by
@@ -40,17 +71,14 @@ export function reconcilePending(pending: PendingMessage[], items: RenderItem[])
   return next.length === pending.length ? pending : next;
 }
 
-/** Renders a still-pending message as the `TextItem` it will become once
- * the real echo lands — same shape a `text` envelope from this user reduces
- * to, so it slots into the timeline indistinguishably except for whatever
- * "sending…"/"queued" chrome the caller layers on top. */
-export function pendingToRenderItem(pending: PendingMessage): TextItem {
-  return {
-    id: pending.localId,
-    time: pending.sentAt,
-    role: "user",
-    kind: "text",
-    md: pending.text,
-    thinking: false,
-  };
+/** Renders a still-pending message/attachment as the `TextItem`/`FileItem`
+ * it will become once the real echo lands — same shape the corresponding
+ * envelope reduces to, so it slots into the timeline indistinguishably
+ * except for whatever "sending…"/"queued" chrome the caller layers on top. */
+export function pendingToRenderItem(pending: PendingMessage): TextItem | FileItem {
+  const base = { id: pending.localId, time: pending.sentAt, role: "user" as const };
+  if (pending.kind === "file") {
+    return { ...base, kind: "file", ref: pending.localId, name: pending.name, size: pending.size };
+  }
+  return { ...base, kind: "text", md: pending.text, thinking: false };
 }

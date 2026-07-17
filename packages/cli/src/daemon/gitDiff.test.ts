@@ -67,6 +67,53 @@ describe("getGitDiff", () => {
     expect(result.blobRef).toBeUndefined();
   });
 
+  it("uploads the full untruncated diff as a blob and sets blobRef when the diff was truncated", async () => {
+    const bigDiff = Array.from({ length: 200 }, (_, i) => `+line ${i}`).join("\n");
+    const git = vi.fn(async () => bigDiff);
+    const uploadBlob = vi.fn(async (plaintext: Uint8Array) => {
+      expect(new TextDecoder().decode(plaintext)).toBe(bigDiff);
+      return "blob-123";
+    });
+
+    const result = await getGitDiff(
+      { idempotencyKey: "idem-10", worktree: "/repo", baseRef: "main" },
+      { git, resolveConfiguredBaseRef: async () => undefined, maxInlineBytes: 50, uploadBlob },
+    );
+
+    expect(uploadBlob).toHaveBeenCalledTimes(1);
+    expect(result.truncated).toBe(true);
+    expect(result.blobRef).toBe("blob-123");
+    // The truncated inline preview is still served alongside the blobRef.
+    expect(result.inline).toContain("truncated");
+  });
+
+  it("does not call uploadBlob for a diff that already fits inline", async () => {
+    const git = vi.fn(async () => "small diff");
+    const uploadBlob = vi.fn(async () => "blob-should-not-be-called");
+
+    const result = await getGitDiff(
+      { idempotencyKey: "idem-11", worktree: "/repo", baseRef: "main" },
+      { git, resolveConfiguredBaseRef: async () => undefined, uploadBlob },
+    );
+
+    expect(uploadBlob).not.toHaveBeenCalled();
+    expect(result.blobRef).toBeUndefined();
+  });
+
+  it("leaves blobRef unset when uploadBlob resolves null (best-effort failure)", async () => {
+    const bigDiff = Array.from({ length: 200 }, (_, i) => `+line ${i}`).join("\n");
+    const git = vi.fn(async () => bigDiff);
+    const uploadBlob = vi.fn(async () => null);
+
+    const result = await getGitDiff(
+      { idempotencyKey: "idem-12", worktree: "/repo", baseRef: "main" },
+      { git, resolveConfiguredBaseRef: async () => undefined, maxInlineBytes: 50, uploadBlob },
+    );
+
+    expect(result.truncated).toBe(true);
+    expect(result.blobRef).toBeUndefined();
+  });
+
   it("does not truncate a diff within the inline byte budget", async () => {
     const git = vi.fn(async () => "small diff");
 

@@ -12,13 +12,18 @@
  * starts a new line — a caller pages through by re-requesting with
  * `cursor: nextCursor` until `done`.
  *
- * `blobRef` (see `AdoptMirrorResultSchema`) is a reserved field for the
- * eventual blob-storage fallback for very large transcripts — this
- * handler never sets it, matching the wire schema's own precedent (`git.diff`/
- * `fs.read` ship the same field with no handler behind it yet at all); the
- * chunked path here already serves transcripts of any size correctly, just
- * over more round-trips, so the fallback is an efficiency improvement for
- * later, not a correctness gap today.
+ * `blobRef` (see `AdoptMirrorResultSchema`) is the blob-storage fallback for
+ * very large transcripts (plan.md §16 "4.3 Distribution & self-host"): on
+ * the *first* page of a mirror (`params.cursor === undefined`) only, when
+ * the transcript doesn't fit in one chunk, this handler also encrypts+
+ * uploads the whole file via `deps.uploadBlob` (best-effort — never throws,
+ * see `blobClient.ts`) and includes the resulting `blobId` alongside that
+ * first chunk. The chunked path itself is unconditional and correct on its
+ * own (this is still "an efficiency improvement," not a correctness fix) —
+ * a caller with `deps.uploadBlob` unwired, or an upload that fails, just
+ * keeps paging chunk-by-chunk exactly as before this subsystem existed.
+ * Only uploaded once per mirror session (not re-uploaded on every
+ * subsequent `cursor` page) since the file doesn't change mid-mirror.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -42,6 +47,8 @@ export interface TranscriptMirrorDeps {
   resolveProviderSession: ProviderSessionResolver;
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
+  /** Encrypts+uploads the full transcript and resolves its `blobId`, or `null` on any failure — see `blobClient.ts`'s `uploadBlob`. No default: unset means `blobRef` simply stays unset, same as before this subsystem existed. Only ever called for the first page of a transcript that doesn't fit in one chunk. */
+  uploadBlob?: (plaintext: Uint8Array) => Promise<string | null>;
 }
 
 /**
@@ -125,5 +132,10 @@ export async function handleAdoptMirror(
   const chunk = buf.subarray(cursor, end).toString("utf8");
   const done = end >= buf.length;
 
-  return { chunk, nextCursor: done ? null : end, done };
+  let blobRef: string | undefined;
+  if (params.cursor === undefined && !done && deps.uploadBlob) {
+    blobRef = (await deps.uploadBlob(new Uint8Array(buf))) ?? undefined;
+  }
+
+  return { chunk, nextCursor: done ? null : end, done, blobRef };
 }

@@ -102,7 +102,8 @@ function SessionTimelineBody({
   controlMode: "local" | "remote";
   working: boolean;
 }) {
-  const { mergedItems, send, isSending, isQueued, error } = useComposerState(items);
+  const { mergedItems, send, sendAttachment, isSending, isQueued, error } =
+    useComposerState(items);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -120,7 +121,13 @@ function SessionTimelineBody({
       </header>
       <ControlBar mode="default" controlMode={controlMode} working={working} />
       <Timeline items={mergedItems} />
-      <Composer onSend={send} isSending={isSending} isQueued={isQueued} error={error} />
+      <Composer
+        onSend={send}
+        onAttach={sendAttachment}
+        isSending={isSending}
+        isQueued={isQueued}
+        error={error}
+      />
     </div>
   );
 }

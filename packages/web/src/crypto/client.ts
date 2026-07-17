@@ -38,6 +38,10 @@ export interface CryptoBridgeClient {
   seal(data: unknown): Promise<EncryptedBox>;
   /** Open `box` with the active session key. Resolves `null` on any decryption failure. */
   open<T = unknown>(box: EncryptedBox): Promise<T | null>;
+  /** Encrypt binary `data` (e.g. a composer attachment) under the active session's blob key — the encrypted attachment path (falcon-system-design.md §5.1, plan.md §16 "4.3 Distribution & self-host"). Result is ready to `PUT` at a blob-storage upload target. */
+  sealBlob(data: Uint8Array): Promise<Uint8Array>;
+  /** Decrypt a downloaded blob's bytes under the active session's blob key. Resolves `null` on any decryption failure. */
+  openBlob(bundle: Uint8Array): Promise<Uint8Array | null>;
   /** Wipe in-memory keys and persisted key material (logout). */
   clear(): Promise<void>;
   /** The account identity provisioned on this device, or `null` if none yet. */
@@ -109,6 +113,8 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     setSessionKey: (wrappedDek) => call<boolean>({ type: "setSessionKey", wrappedDek }),
     seal: (data) => call<EncryptedBox>({ type: "seal", data }),
     open: <T>(box: EncryptedBox) => call<T | null>({ type: "open", box }),
+    sealBlob: (data) => call<Uint8Array>({ type: "sealBlob", data }),
+    openBlob: (bundle) => call<Uint8Array | null>({ type: "openBlob", bundle }),
     clear: () => call<null>({ type: "clear" }).then(() => undefined),
     getIdentity: () => call<DeviceIdentity | null>({ type: "getIdentity" }),
     signInChallenge: () => call<SignInChallengeResult>({ type: "signInChallenge" }),

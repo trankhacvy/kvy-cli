@@ -14,9 +14,12 @@
 import type { KeyTree } from "@falcon/crypto/web";
 import {
   decodeBase64,
+  decryptBlob,
+  deriveBlobKey,
   deriveKeyTree,
   encodeBase64,
   encodeRecoveryCode,
+  encryptBlob,
   getRandomBytes,
   libsodiumEncryptForPublicKey,
   open,
@@ -98,6 +101,26 @@ export function createCryptoWorkerHandler(storage: KeyStorage): CryptoWorkerHand
             return { id: request.id, ok: false, error: "no-active-session-key" };
           }
           const result = await open(request.box, activeDek);
+          return { id: request.id, ok: true, result };
+        }
+
+        case "sealBlob": {
+          await ensureStartupLoaded();
+          if (!activeDek) {
+            return { id: request.id, ok: false, error: "no-active-session-key" };
+          }
+          const blobKey = deriveBlobKey(activeDek);
+          const bundle = encryptBlob(request.data, blobKey);
+          return { id: request.id, ok: true, result: bundle };
+        }
+
+        case "openBlob": {
+          await ensureStartupLoaded();
+          if (!activeDek) {
+            return { id: request.id, ok: false, error: "no-active-session-key" };
+          }
+          const blobKey = deriveBlobKey(activeDek);
+          const result = decryptBlob(request.bundle, blobKey);
           return { id: request.id, ok: true, result };
         }
 

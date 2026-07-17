@@ -36,6 +36,27 @@ export interface OpenRequest {
   box: EncryptedBox;
 }
 
+/**
+ * Encrypt binary `data` under the active session's blob key —
+ * `deriveBlobKey(activeDek)` (falcon-system-design.md §5.1: "blob key:
+ * HKDF(DEK, "falcon-blobs") → attachments isolated from text"), never the
+ * DEK itself — backing the composer's encrypted attachment path (plan.md
+ * §16 "4.3 Distribution & self-host"). Result is raw `encryptBlob` output
+ * bytes, ready to `PUT` at a blob-storage upload target.
+ */
+export interface SealBlobRequest {
+  id: string;
+  type: "sealBlob";
+  data: Uint8Array;
+}
+
+/** Inverse of `SealBlobRequest`: decrypt a downloaded blob's bytes under the same session blob key. */
+export interface OpenBlobRequest {
+  id: string;
+  type: "openBlob";
+  bundle: Uint8Array;
+}
+
 /** Wipe in-memory keys and cached IndexedDB key material (logout). */
 export interface ClearRequest {
   id: string;
@@ -91,6 +112,8 @@ export type CryptoWorkerRequest =
   | SetSessionKeyRequest
   | SealRequest
   | OpenRequest
+  | SealBlobRequest
+  | OpenBlobRequest
   | ClearRequest
   | GetIdentityRequest
   | SignInChallengeRequest
@@ -119,6 +142,8 @@ export interface CryptoWorkerResults {
   setSessionKey: boolean;
   seal: EncryptedBox;
   open: unknown | null;
+  sealBlob: Uint8Array;
+  openBlob: Uint8Array | null;
   clear: null;
   getIdentity: DeviceIdentity | null;
   signInChallenge: SignInChallengeResult;

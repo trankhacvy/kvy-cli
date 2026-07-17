@@ -1,8 +1,12 @@
+import { homedir } from "node:os";
+import path from "node:path";
 import { z } from "zod";
 
 // The default is only safe for local dev/test; every real deployment MUST override it,
 // since anyone holding this value can mint tokens for any account.
 const DEV_ONLY_MASTER_SECRET = "dev-only-insecure-master-secret-change-me!!";
+
+const DEFAULT_BLOB_LOCAL_DIR = path.join(homedir(), ".falcon", "server", "blobs");
 
 // All server configuration comes from the environment (design §6.5: "config
 // via env only" — required for the docker-compose self-host shape). Parsed
@@ -74,6 +78,52 @@ const EnvSchema = z
     // unset just omits the link, matching this file's "missing config, not a
     // crash" stance throughout.
     PUBLIC_WEB_ORIGIN: z.string().url().optional(),
+    // Public origin THIS server (the API, not the web app) is reachable at —
+    // only needed by the local-disk blob driver to build absolute upload/
+    // download URLs pointing back at its own `/v1/blobs/local/:id` sink
+    // (design §6.5 "self-host … blobs fall back to local disk when
+    // unset"). Optional: unset falls back to reflecting the incoming
+    // request's own protocol/host (fine for a direct connection or a
+    // transparent reverse proxy); set this explicitly when a proxy rewrites
+    // the host header in a way that would produce a wrong origin otherwise.
+    PUBLIC_API_ORIGIN: z.string().url().optional(),
+    // S3-compatible blob storage (falcon-system-design.md §3 "Blobs |
+    // S3-compatible (MinIO in dev/self-host, R2/S3 in prod)", §6.5). Presence
+    // of `S3_BUCKET` selects the S3 driver; its absence selects the
+    // local-disk driver — "blobs fall back to local disk when unset" is a
+    // capability tier, not an error state, same stance as VAPID/Telegram
+    // above. `S3_ENDPOINT`/`S3_FORCE_PATH_STYLE` only matter for
+    // MinIO/R2-style S3-compatible endpoints; unset on real AWS S3.
+    S3_BUCKET: z.string().min(1).optional(),
+    S3_REGION: z.string().min(1).default("auto"),
+    S3_ENDPOINT: z.string().url().optional(),
+    S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    S3_FORCE_PATH_STYLE: z.coerce.boolean().default(false),
+    // Where the local-disk driver writes encrypted blob bytes when no S3
+    // bucket is configured. Defaults under `~/.falcon/`, matching every
+    // other Falcon-owned local-state path (CLI's `~/.falcon/settings.json`
+    // etc.) — self-host docker-compose overrides this to a mounted volume
+    // (e.g. `/data/blobs`).
+    BLOB_LOCAL_DIR: z.string().min(1).default(DEFAULT_BLOB_LOCAL_DIR),
+    // HMAC key signing the local driver's short-lived upload/download URL
+    // tokens (`blobStorage/localToken.ts`) — the local-disk equivalent of an
+    // S3 presigned URL's SigV4 signature. Falls back to
+    // `FALCON_MASTER_SECRET` (already required, already secret) rather than
+    // demanding yet another env var for the common case; set this
+    // separately only if you want blob-URL forgery and auth-token forgery
+    // to require compromising two different secrets instead of one.
+    BLOB_LOCAL_TOKEN_SECRET: z.string().min(1).optional(),
+    // How long a presigned/local blob upload or download URL stays valid.
+    BLOB_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(300),
+    // Hard cap on a single blob's encrypted byte size, enforced by
+    // `POST /v1/blobs/request-upload` before any storage driver is even
+    // asked for a target — refuses oversized requests up front rather than
+    // discovering the problem mid-upload. 64 MiB comfortably covers large
+    // diffs/transcripts/attachments (design §4.4's 64KB figure is the RPC
+    // *control-plane* cap this subsystem exists to route around, not a
+    // blob-size cap).
+    BLOB_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(64 * 1024 * 1024),
   })
   // Belt-and-suspenders against shipping the dev-only secret to production: a silent
   // fallback there would let anyone who has read this source mint tokens for any
@@ -84,6 +134,18 @@ const EnvSchema = z
     {
       message: "FALCON_MASTER_SECRET must be set to a real secret when NODE_ENV=production",
       path: ["FALCON_MASTER_SECRET"],
+    },
+  )
+  // A bucket name with no credentials is a half-configured S3 driver, not a
+  // "fall back to local disk" signal — that fallback is only for the fully
+  // unset case (see `S3_BUCKET`'s own comment). Failing fast here beats
+  // booting into a driver that will 500 on the first real upload.
+  .refine(
+    (parsed) =>
+      !parsed.S3_BUCKET || (parsed.S3_ACCESS_KEY_ID && parsed.S3_SECRET_ACCESS_KEY),
+    {
+      message: "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required when S3_BUCKET is set",
+      path: ["S3_BUCKET"],
     },
   );
 
