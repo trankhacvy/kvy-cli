@@ -1,0 +1,133 @@
+{
+  "description": "ACP mapping verification (falcon-system-design.md §7.3, docs/acp-delta-proposal.md §3 A4): a full ACP-driven turn using only existing @falcon/wire envelope variants — session/prompt call/return brackets the turn (→ turn-start/turn-end), agent_thought_chunk streams onto text{thinking:true}, agent_message_chunk streams onto plain text, and tool_call/tool_call_update map onto tool-start/tool-end. No new envelope type is needed for any of these ACP update kinds.",
+  "envelopes": [
+    {
+      "id": "e1",
+      "time": 5000,
+      "role": "user",
+      "ev": { "t": "text", "md": "What's failing in the build?" }
+    },
+    {
+      "id": "e2",
+      "time": 5001,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": { "t": "turn-start" }
+    },
+    {
+      "id": "e3",
+      "time": 5002,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": { "t": "text", "md": "Let me check the type errors first.", "thinking": true }
+    },
+    {
+      "id": "e4",
+      "time": 5003,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": { "t": "text", "md": "Checking the build output now." }
+    },
+    {
+      "id": "e5",
+      "time": 5004,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": {
+        "t": "tool-start",
+        "call": "acp-call-1",
+        "name": "Bash",
+        "title": "pnpm build",
+        "args": { "command": "pnpm build" },
+        "risk": "exec"
+      }
+    },
+    {
+      "id": "e6",
+      "time": 5005,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": {
+        "t": "tool-end",
+        "call": "acp-call-1",
+        "ok": false,
+        "output": { "stderr": "TS2322: Type 'string' is not assignable to type 'number'." }
+      }
+    },
+    {
+      "id": "e7",
+      "time": 5006,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": { "t": "text", "md": "Found it — a type mismatch in `utils.ts`." }
+    },
+    {
+      "id": "e8",
+      "time": 5007,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "ev": { "t": "turn-end", "status": "completed" }
+    }
+  ],
+  "expected": [
+    {
+      "id": "e1",
+      "time": 5000,
+      "role": "user",
+      "kind": "text",
+      "md": "What's failing in the build?",
+      "thinking": false
+    },
+    { "id": "e2", "time": 5001, "role": "agent", "turn": "turn-acp-1", "kind": "turn-start" },
+    {
+      "id": "e3",
+      "time": 5002,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "kind": "text",
+      "md": "Let me check the type errors first.",
+      "thinking": true
+    },
+    {
+      "id": "e4",
+      "time": 5003,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "kind": "text",
+      "md": "Checking the build output now.",
+      "thinking": false
+    },
+    {
+      "id": "e5",
+      "time": 5004,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "kind": "tool",
+      "call": "acp-call-1",
+      "name": "Bash",
+      "title": "pnpm build",
+      "args": { "command": "pnpm build" },
+      "risk": "exec",
+      "status": "done",
+      "ok": false,
+      "output": { "stderr": "TS2322: Type 'string' is not assignable to type 'number'." }
+    },
+    {
+      "id": "e7",
+      "time": 5006,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "kind": "text",
+      "md": "Found it — a type mismatch in `utils.ts`.",
+      "thinking": false
+    },
+    {
+      "id": "e8",
+      "time": 5007,
+      "role": "agent",
+      "turn": "turn-acp-1",
+      "kind": "turn-end",
+      "status": "completed"
+    }
+  ]
+}
