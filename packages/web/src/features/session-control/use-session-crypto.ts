@@ -70,13 +70,24 @@ export function useSessionCrypto(sessionId: string): CryptoBridgeClient | null {
     setReady(false);
     if (!bridge || dek === null) return;
     let cancelled = false;
-    bridge.setSessionKey(decodeBase64(dek)).then((ok) => {
-      if (cancelled) return;
-      if (!ok) {
-        console.error(`useSessionCrypto: session ${sessionId}'s DEK failed to unwrap`);
-      }
-      setReady(ok);
-    });
+    bridge
+      .setSessionKey(decodeBase64(dek))
+      .then((ok) => {
+        if (cancelled) return;
+        if (!ok) {
+          console.error(`useSessionCrypto: session ${sessionId}'s DEK failed to unwrap`);
+        }
+        setReady(ok);
+      })
+      .catch((err) => {
+        // A rejected (not just `false`-resolved) `setSessionKey` call means the
+        // worker itself errored/crashed mid-call (`client.ts`'s `rejectAllPending`)
+        // — still visible (design principle: no silent failures), not just an
+        // unhandled rejection swallowed by the effect.
+        if (cancelled) return;
+        console.error(`useSessionCrypto: session ${sessionId}'s setSessionKey call failed`, err);
+        setReady(false);
+      });
     return () => {
       cancelled = true;
     };

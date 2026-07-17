@@ -53,9 +53,20 @@ export function useLiveRenderItems(sessionId: string): RenderItem[] {
   useEffect(() => {
     if (!crypto || !messagesQuery.data) return;
     let cancelled = false;
-    decryptMessageBatches(messagesQuery.data.pages, crypto).then((envelopes) => {
-      if (!cancelled) setItems(reduceEnvelopes(envelopes));
-    });
+    decryptMessageBatches(messagesQuery.data.pages, crypto)
+      .then((envelopes) => {
+        if (!cancelled) setItems(reduceEnvelopes(envelopes));
+      })
+      .catch((err) => {
+        // `decryptMessageBatches` itself already logs + drops any individual
+        // bad row (design principle: no silent failures) — this only fires
+        // for a total failure (e.g. the crypto worker crashing mid-batch,
+        // `client.ts`'s `rejectAllPending`), which must stay visible too
+        // rather than becoming an unhandled rejection under this effect.
+        if (!cancelled) {
+          console.error(`useLiveRenderItems: failed to decrypt session ${sessionId}'s messages`, err);
+        }
+      });
     return () => {
       cancelled = true;
     };
