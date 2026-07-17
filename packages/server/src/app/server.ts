@@ -31,6 +31,7 @@ import type { PushDispatcherPort } from "./push/types.js";
 import { buildAuthRoutes } from "./routes/auth.js";
 import { buildBlobsRoutes } from "./routes/blobs.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
+import { metricsRoutes, recordHttpRequest } from "./routes/metrics.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
 import { buildNotificationSettingsRoutes } from "./routes/notificationSettings.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
@@ -157,7 +158,22 @@ export async function buildServer(
   // `{ preHandler: app.authenticate }`.
   await app.register(authPlugin);
 
+  // `onResponse` (not a route-level hook) so every route registered below —
+  // present and future — is covered without each one remembering to
+  // instrument itself, mirroring how `rpcHandler.ts` instruments every RPC
+  // call from one shared `finish()` closure rather than per-method. Reads
+  // `request.routeOptions.url` (the matched *pattern*, e.g.
+  // `/v1/sessions/:id/messages`) rather than `request.url` (the literal
+  // path) to keep the `route` label's cardinality bounded — see
+  // `routes/metrics.ts`'s `recordHttpRequest` doc comment. Falls back to
+  // `"unmatched"` for 404s, where no route pattern exists yet.
+  app.addHook("onResponse", async (request, reply) => {
+    const route = request.routeOptions.url ?? "unmatched";
+    recordHttpRequest(request.method, route, reply.statusCode, reply.elapsedTime / 1000);
+  });
+
   await app.register(healthRoutes);
+  await app.register(metricsRoutes);
   await app.register(buildAuthRoutes(db));
   await app.register(
     buildOAuthRoutes(
