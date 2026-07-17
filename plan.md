@@ -895,7 +895,10 @@ connection pooling, no agent-id-as-identity). Design authority:
       **not** ancestors of `main` (`git merge-base --is-ancestor` → false for both;
       `git merge-base main <branch>` == `main`'s own tip, i.e. zero commits from either
       branch have actually reached `main`) — see `progress.md` Cycle 71 for detail.)*
-- [ ] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
+- [x] Adapter manager (`cli/src/adapters/`, design §7.9): pinned-version manifest
+      *(2026-07-17: landed via `P17-land-2.0-adapter-manager` — merged
+      `P17-2.0-adapter-manager` (tip `66a469e`) onto `main`; `pnpm build`/`typecheck`/
+      `test` re-verified green on the merged tree.)*
       (package id + exact version + integrity hash), install into `~/.falcon/adapters/`
       own npm prefix, verify-before-spawn, `falcon adapters install|upgrade` command,
       `falcon doctor` adapter checks. No npx at session start

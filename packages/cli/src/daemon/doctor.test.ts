@@ -21,6 +21,21 @@ const FIXTURE_PROCESSES: ProcessEntry[] = [
   { pid: 999, ppid: 1, command: "falcon doctor" }, // the invoking process
 ];
 
+/** Fake adapter/provider deps — every `runDoctor()` call below injects these so tests never touch a real `~/.falcon/adapters` install or shell out to a real `claude`/`codex` on PATH. */
+const FAKE_HEALTH_DEPS = {
+  checkAdapters: async () => [],
+  detectClaudeProvider: async () => ({
+    installed: false,
+    authenticated: false,
+    error: "not installed",
+  }),
+  detectCodexProvider: async () => ({
+    installed: false,
+    authenticated: false,
+    error: "not installed",
+  }),
+};
+
 describe("runDoctor", () => {
   let homeDir: string;
 
@@ -38,6 +53,7 @@ describe("runDoctor", () => {
       listProcesses: async () => [],
       isProcessAlive: () => false,
       currentPid: 999,
+      ...FAKE_HEALTH_DEPS,
     });
 
     expect(report.daemon).toEqual({ running: false });
@@ -58,6 +74,7 @@ describe("runDoctor", () => {
       listProcesses: async () => FIXTURE_PROCESSES,
       isProcessAlive: (pid) => pid === 100,
       currentPid: 999,
+      ...FAKE_HEALTH_DEPS,
     });
 
     expect(report.daemon).toEqual({ running: true, pid: 100, port: 4242, version: "0.1.0" });
@@ -73,9 +90,54 @@ describe("runDoctor", () => {
       listProcesses: async () => [],
       isProcessAlive: () => false,
       currentPid: 999,
+      ...FAKE_HEALTH_DEPS,
     });
 
     expect(report.daemon).toEqual({ running: false });
+  });
+
+  it("includes adapter health and provider CLI detection in the report", async () => {
+    const report = await runDoctor({
+      homeDir,
+      listProcesses: async () => [],
+      isProcessAlive: () => false,
+      currentPid: 999,
+      checkAdapters: async () => [
+        {
+          id: "claude-code",
+          label: "Claude Code",
+          packageName: "@agentclientprotocol/claude-agent-acp",
+          pinnedVersion: "0.59.0",
+          status: "ok",
+        },
+      ],
+      detectClaudeProvider: async () => ({
+        installed: true,
+        authenticated: true,
+        version: "2.1.0",
+      }),
+      detectCodexProvider: async () => ({
+        installed: false,
+        authenticated: false,
+        error: "not installed",
+      }),
+    });
+
+    expect(report.adapters).toEqual([
+      {
+        id: "claude-code",
+        label: "Claude Code",
+        packageName: "@agentclientprotocol/claude-agent-acp",
+        pinnedVersion: "0.59.0",
+        status: "ok",
+      },
+    ]);
+    expect(report.providers.claude).toEqual({
+      installed: true,
+      authenticated: true,
+      version: "2.1.0",
+    });
+    expect(report.providers.codex.installed).toBe(false);
   });
 });
 
@@ -87,11 +149,35 @@ describe("describeDoctorReport", () => {
       processes: [
         { pid: 200, ppid: 100, command: "falcon claude", kind: "session", spawnedByDaemon: true },
       ],
+      adapters: [
+        {
+          id: "claude-code",
+          label: "Claude Code",
+          packageName: "@agentclientprotocol/claude-agent-acp",
+          pinnedVersion: "0.59.0",
+          status: "ok",
+        },
+        {
+          id: "codex",
+          label: "Codex",
+          packageName: "@agentclientprotocol/codex-acp",
+          pinnedVersion: "1.1.4",
+          status: "not-installed",
+        },
+      ],
+      providers: {
+        claude: { installed: true, authenticated: true, version: "2.1.0" },
+        codex: { installed: false, authenticated: false, error: "not installed" },
+      },
     });
 
     expect(text).toContain("daemon: running (pid 100, port 4242, version 0.1.0)");
     expect(text).toContain("resumable sessions (sessions.json): 2");
     expect(text).toContain("pid 200 [session] [daemon-spawned] — falcon claude");
+    expect(text).toContain("claude-code — @agentclientprotocol/claude-agent-acp@0.59.0: ok");
+    expect(text).toContain("codex — @agentclientprotocol/codex-acp@1.1.4: not-installed");
+    expect(text).toContain("claude: installed (version 2.1.0)");
+    expect(text).toContain("codex: not installed");
   });
 
   it("renders a friendly message when no processes are found", () => {
@@ -99,6 +185,11 @@ describe("describeDoctorReport", () => {
       daemon: { running: false },
       resumableSessionCount: 0,
       processes: [],
+      adapters: [],
+      providers: {
+        claude: { installed: false, authenticated: false, error: "not installed" },
+        codex: { installed: false, authenticated: false, error: "not installed" },
+      },
     });
 
     expect(text).toContain("daemon: not running");
@@ -142,7 +233,13 @@ describe("describeDoctorCleanSummary", () => {
   it("summarizes success/failure counts per pid", () => {
     const text = describeDoctorCleanSummary({
       targeted: [
-        { pid: 100, ppid: 1, command: "falcon daemon start-sync", kind: "daemon", spawnedByDaemon: false },
+        {
+          pid: 100,
+          ppid: 1,
+          command: "falcon daemon start-sync",
+          kind: "daemon",
+          spawnedByDaemon: false,
+        },
       ],
       outcomes: [
         { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
