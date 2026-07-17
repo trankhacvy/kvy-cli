@@ -31,3 +31,14 @@ export const PROVIDER_OPTIONS: Array<[NewSessionProvider, ProviderMeta]> = [
   ["claude-code", PROVIDER_META["claude-code"]],
   ["codex", PROVIDER_META.codex],
 ];
+
+/**
+ * Pure predicate for the options-step picker's conditional banner render (`beta && betaNote`
+ * inlined in JSX there). Extracted so the gating logic itself — not just the underlying data —
+ * has direct unit coverage without needing a jsdom/React-rendering harness (this package's
+ * vitest config runs a plain `node` environment and only collects `*.test.ts`, no component
+ * test setup exists yet).
+ */
+export function shouldShowBetaBanner(meta: ProviderMeta): boolean {
+  return meta.beta && Boolean(meta.betaNote);
+}

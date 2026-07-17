@@ -2,7 +2,7 @@
 
 import type { PermissionMode } from "@falcon/wire";
 import { Badge } from "@/components/ui/badge";
-import { PROVIDER_META, PROVIDER_OPTIONS } from "../provider-meta";
+import { PROVIDER_META, PROVIDER_OPTIONS, shouldShowBetaBanner } from "../provider-meta";
 import type { NewSessionForm } from "../wizard-state";
 
 const SELECT_CLASS =
@@ -37,7 +37,7 @@ export function OptionsStep({
         </select>
       </label>
 
-      {selectedProviderMeta.beta && selectedProviderMeta.betaNote && (
+      {shouldShowBetaBanner(selectedProviderMeta) && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           <Badge variant="warning">Beta</Badge>
           <p className="text-muted-foreground">{selectedProviderMeta.betaNote}</p>
