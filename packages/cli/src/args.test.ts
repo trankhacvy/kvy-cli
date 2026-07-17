@@ -328,6 +328,12 @@ describe("parseArgs — shim", () => {
   });
 });
 
+describe("parseArgs — update", () => {
+  it("parses `falcon update`", () => {
+    expect(parseArgs(["update"])).toEqual({ type: "update" });
+  });
+});
+
 describe("parseArgs — --continue alias", () => {
   it("aliases a bare `falcon --continue` to adopt (local, non-list)", () => {
     expect(parseArgs(["--continue"])).toEqual({ type: "adopt", list: false, remote: false });

@@ -62,6 +62,33 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
 
+  publish-cli-latest:
+    # The rolling self-update pointer (`falcon update` / auto-update-on-start,
+    # plan.md §16 "4.3 Distribution & self-host"): re-publishes this run's
+    # binaries + VERSION file under a fixed `cli-latest` tag, on every real
+    # release, so `packages/cli/src/update/` can always find "the current
+    # version" and its assets at one stable URL
+    # (github.com/<repo>/releases/download/cli-latest/...) without needing
+    # to know the exact vX.Y.Z tag ahead of time. Independent of
+    # `github-release`/`publish-npm` (needs only `build-binaries`) so a
+    # failure in either doesn't block this rolling pointer from updating.
+    needs: build-binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: falcon-binaries
+          path: dist-binaries
+
+      - name: publish rolling cli-latest release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cli-latest
+          name: "cli-latest (rolling self-update pointer)"
+          body: "Rolling pointer to the most recently released falcon CLI — consumed by `falcon update` / auto-update-on-start, not meant for direct human download. See the versioned release for changelog/notes."
+          files: dist-binaries/*
+          fail_on_unmatched_files: true
+
   publish-npm:
     needs: build-binaries
     runs-on: ubuntu-latest

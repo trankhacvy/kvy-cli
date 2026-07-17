@@ -66,5 +66,11 @@ for pair in $TARGETS; do
   ( cd "$OUT_DIR" && sha256_file "falcon-$suffix" > "falcon-$suffix.sha256" )
 done
 
+# Plain-text version marker (falcon-system-design.md §13 / plan.md §16 "4.3
+# Distribution & self-host": CLI self-update reads this off the `cli-latest`
+# rolling release tag to decide whether an installed falcon is out of date,
+# without needing to know the exact vX.Y.Z tag up front).
+echo "$VERSION" > "$OUT_DIR/VERSION"
+
 echo "==> built binaries in $OUT_DIR:"
 ls -la "$OUT_DIR"
