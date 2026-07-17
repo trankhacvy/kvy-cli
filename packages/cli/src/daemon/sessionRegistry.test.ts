@@ -15,7 +15,14 @@ describe("sessionRegistry", () => {
   });
 
   afterEach(async () => {
-    await rm(homeDir, { recursive: true, force: true });
+    // Several tests above trigger `onSessionStarted`'s fire-and-forget
+    // `persistSession()` write without awaiting it — by design, that write
+    // races this cleanup. `maxRetries`/`retryDelay` (Node's own documented
+    // knob for exactly this class of transient `ENOTEMPTY`/`EBUSY` during a
+    // recursive `rm`, since a rename can still be landing inside `homeDir`)
+    // absorbs that instead of flaking under CPU contention (e.g. `turbo`
+    // running every package's tests in parallel).
+    await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
   });
 
   it("restore() is a no-op count of 0 when sessions.json doesn't exist", async () => {
