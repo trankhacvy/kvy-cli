@@ -87,6 +87,8 @@ const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 /** The submit keystroke — a carriage return, the same byte a real Enter sends on a TTY. */
 const SUBMIT_KEY = "\r";
+/** Shift+Tab — Claude Code's own permission-mode cycle keystroke (plan-v2.md W4.3). */
+const SHIFT_TAB_KEY = "[Z";
 
 /** The minimal `IPty` surface this module drives — node-pty's `IPty` satisfies it structurally. */
 export interface PtyLike {
@@ -215,6 +217,18 @@ export interface PtyClaudeSessionHandle {
   setPromptOpen(open: boolean): void;
   /** Sends a single Escape into the PTY — the TUI's own cancel gesture (plan-v2.md W1.5). */
   sendInterrupt(): boolean;
+  /**
+   * Types `presses` Shift+Tab keystrokes into the live PTY — Claude Code's
+   * own permission-mode cycle gesture (plan-v2.md W4.3 "Real setMode for the
+   * PTY path"). Gated by the SAME idle/no-prompt rule as message injection
+   * (`InjectionController.canInjectNow`) — a synthetic keystroke mid-turn or
+   * into an open dialog carries the identical TUI-corruption risk a queued
+   * message would. Returns `false` (and sends nothing) when the gate is
+   * closed or the child hasn't spawned yet; the caller (`start.ts`'s
+   * `setMode` RPC handler) reports that as an honest `{ok:false}` rather
+   * than pretending the switch happened.
+   */
+  sendModeCycle(presses: number): boolean;
   /** Terminates the session (SIGTERM to the pty child). Safe to call once. */
   stop(): void;
 }
@@ -505,6 +519,15 @@ export function startPtyClaudeSession(
     sendInterrupt: () => {
       if (!ptyProcess) return false;
       ptyProcess.write("\u001b"); // ESC, the TUI's own cancel gesture
+      return true;
+    },
+    sendModeCycle: (presses) => {
+      if (!ptyProcess || presses <= 0) return false;
+      // Same idle/no-prompt gate message injection uses — a mode-cycle
+      // keystroke mid-turn or into an open dialog is exactly as unsafe as
+      // typing a message would be (plan-v2.md W4.3).
+      if (!controller.canInjectNow) return false;
+      for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
       return true;
     },
     stop: () => {

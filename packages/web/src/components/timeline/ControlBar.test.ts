@@ -18,12 +18,19 @@ describe("shouldShowTakeControl (W2.4 — hide Take-control in PTY mode)", () =>
 });
 
 describe("canMutateMode (W2.4 — hide mode mutation until U4.5)", () => {
-  it("disallows mutating the mode selector for a PTY/local session — setMode always returns {ok:false} there", () => {
+  it("disallows mutating the mode selector for a PTY/local session by default (flag off)", () => {
     expect(canMutateMode("local")).toBe(false);
   });
 
-  it("allows mutating the mode selector for a remote-loop session — its setMode is real", () => {
+  it("allows mutating the mode selector for a remote-loop session — its setMode is real, flag or not", () => {
     expect(canMutateMode("remote")).toBe(true);
+    expect(canMutateMode("remote", false)).toBe(true);
+    expect(canMutateMode("remote", true)).toBe(true);
+  });
+
+  it("W4.3: un-hides the PTY/local mode selector once ptySetModeEnabled is true", () => {
+    expect(canMutateMode("local", true)).toBe(true);
+    expect(canMutateMode("local", false)).toBe(false);
   });
 });
 

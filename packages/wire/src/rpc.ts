@@ -326,4 +326,14 @@ export const TakeControlParamsSchema = z.object({});
 export const TakeControlResultSchema = z.object({ ok: z.boolean() });
 
 export const SetModeParamsSchema = z.object({ mode: PermissionModeSchema });
-export const SetModeResultSchema = z.object({ ok: z.boolean() });
+export const SetModeResultSchema = z.object({
+  ok: z.boolean(),
+  // Additive (plan-v2.md W4.3 "Real setMode for the PTY path"): the PTY
+  // path can't blindly trust its own Shift+Tab keystrokes landed — it
+  // verifies via the next hook input's `permission_mode` echo and reports
+  // whatever it actually observed here, so the caller can revert an
+  // optimistic UI update to the true mode on a failed/unverified switch.
+  // Absent from the remote-loop path (its `setMode` is a real, synchronous
+  // ACP call with no separate echo to report) — `ok` alone stays authoritative there.
+  observedMode: PermissionModeSchema.optional(),
+});

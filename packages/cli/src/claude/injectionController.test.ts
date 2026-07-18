@@ -392,3 +392,91 @@ describe("InjectionController", () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 });
+
+describe("InjectionController.canInjectNow (W4.3 — the mode-cycle keystroke gate)", () => {
+  it("is false before markReady(), even with an empty queue", () => {
+    const { controller } = setup();
+    expect(controller.canInjectNow).toBe(false);
+  });
+
+  it("is true once ready, busy/prompt/draft/cooldown are all clear — regardless of queue depth", () => {
+    const { controller } = setup();
+    controller.markReady();
+    expect(controller.canInjectNow).toBe(true); // empty queue — unlike canInject's own private gate
+  });
+
+  it("goes false while busy, true again once idle", () => {
+    const { controller } = setup();
+    controller.markReady();
+    controller.setBusy(true);
+    expect(controller.canInjectNow).toBe(false);
+    controller.setBusy(false);
+    expect(controller.canInjectNow).toBe(true);
+  });
+
+  it("goes false while a TUI dialog is open", () => {
+    const { controller } = setup();
+    controller.markReady();
+    controller.setPromptOpen(true);
+    expect(controller.canInjectNow).toBe(false);
+    controller.setPromptOpen(false);
+    expect(controller.canInjectNow).toBe(true);
+  });
+
+  it("goes false while the human has a local draft in progress", () => {
+    const { controller } = setup();
+    controller.markReady();
+    controller.setLocalDraft(true);
+    expect(controller.canInjectNow).toBe(false);
+    controller.setLocalDraft(false);
+    expect(controller.canInjectNow).toBe(true);
+  });
+
+  it("goes false immediately on enqueue (mid-injection), true again once the full submit+cooldown cycle drains", () => {
+    const { controller, timers } = setup();
+    controller.markReady();
+    controller.enqueue({ id: "a", text: "hi" });
+    expect(controller.canInjectNow).toBe(false); // injecting — set synchronously by tryFlush
+
+    // `runAll()` drains the submit timer AND the cooldown timer it schedules
+    // (the harness's own doc comment: "The controller only ever chains a
+    // cooldown timer off a submit timer"), so this single call crosses both gates.
+    timers.runAll();
+    expect(controller.canInjectNow).toBe(true);
+  });
+
+  it("stays false through the post-submit cooldown specifically, isolated from the injecting flag", () => {
+    // A hand-rolled, single-step timer harness (unlike `setup()`'s `runAll`,
+    // which drains every scheduled timer including ones a callback itself
+    // schedules) so the submit timer and the cooldown timer it chains can be
+    // fired one at a time.
+    const scheduled: Array<() => void> = [];
+    const controller = new InjectionController({
+      writeText: vi.fn(),
+      submit: vi.fn(),
+      submitDelayMs: 10,
+      postSubmitCooldownMs: 20,
+      setTimeoutImpl: (fn) => {
+        scheduled.push(fn);
+        return scheduled.length as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimeoutImpl: () => {},
+    });
+    controller.markReady();
+    controller.enqueue({ id: "a", text: "hi" });
+    expect(controller.canInjectNow).toBe(false); // injecting
+
+    scheduled.shift()?.(); // fires the submit timer: submits, opens the cooldown
+    expect(controller.canInjectNow).toBe(false); // cooldown, no longer "injecting"
+
+    scheduled.shift()?.(); // fires the cooldown timer
+    expect(controller.canInjectNow).toBe(true);
+  });
+
+  it("is false once disposed", () => {
+    const { controller } = setup();
+    controller.markReady();
+    controller.dispose();
+    expect(controller.canInjectNow).toBe(false);
+  });
+});

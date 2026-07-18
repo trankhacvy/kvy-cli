@@ -42,3 +42,17 @@ export const DEV_AUTH_ENABLED: boolean = process.env.NEXT_PUBLIC_FALCON_DEV_AUTH
  */
 export const VAPID_PUBLIC_KEY: string | undefined =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || undefined;
+
+/**
+ * Mirrors the CLI's own `FALCON_PTY_SETMODE` flag (`commands/start.ts`'s
+ * `PTY_SET_MODE_ENV_VAR`) — the PTY path's real `setMode` (a version-coupled
+ * Shift+Tab keystroke cycle, plan-v2.md W4.3) stays behind a flag on both
+ * sides until it's been live-soaked. This is purely cosmetic here (it only
+ * un-hides `ControlBar`'s mode-selector mutating affordance for a
+ * `controlMode === "local"` session — `ControlBar.canMutateMode`); the CLI
+ * independently fails safe (`{ok: false}`) if this is on but the session's
+ * own process doesn't also have `FALCON_PTY_SETMODE=1` set. Set
+ * `NEXT_PUBLIC_FALCON_PTY_SETMODE=1` only against a stack you know has the
+ * matching CLI flag on too.
+ */
+export const PTY_SET_MODE_ENABLED: boolean = process.env.NEXT_PUBLIC_FALCON_PTY_SETMODE === "1";

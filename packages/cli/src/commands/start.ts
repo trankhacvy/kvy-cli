@@ -47,8 +47,13 @@
  * (`setPromptOpen`, fed by `onAttention`/`onPromptLikely` and cleared by the
  * tailer's next `tool-end` envelope or a 120s failsafe — plan-v2.md W1.3).
  * `interrupt` sends the TUI's own Escape cancel gesture (plan-v2.md W1.5);
- * `setMode` stays honestly not-supported on this path — the live TUI owns its
- * own permission mode.
+ * `setMode` sends the live TUI's own Shift+Tab mode-cycle keystroke, gated
+ * idle+no-prompt and verified via the bridge's `permission_mode` hook echo
+ * (plan-v2.md W4.3) — flag-gated behind `FALCON_PTY_SETMODE=1`
+ * (`PTY_SET_MODE_ENV_VAR` below) until live-soaked, since it's the one
+ * deliberately-keystroke, version-coupled feature on this path; unset, it
+ * stays the prior honest `{ok:false}` ("the live TUI owns its own permission
+ * mode").
  *
  * The legacy `loop()` path (with the ACP remote transport) is kept ONLY for
  * the daemon-spawned, no-terminal `falcon claude --starting-mode remote`
@@ -99,6 +104,7 @@ import {
   type QueuedMessage,
   type RemoteControls,
 } from "../claude/loop.js";
+import { permissionModeCyclePresses } from "../claude/pretoolPermissionBridge.js";
 import {
   type PtyClaudeSessionHandle,
   startPtyClaudeSession as startPtyClaudeSessionDefault,
@@ -128,6 +134,18 @@ import {
 
 const MASTER_SECRET_LENGTH_BYTES = 32;
 const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
+
+/**
+ * `setMode` on the PTY path (plan-v2.md W4.3 "Real setMode for the PTY
+ * path") is version-coupled TUI behavior — a Shift+Tab keystroke cycle whose
+ * exact effect depends on the pinned Claude Code build matching what this
+ * bridge verified against. Kept behind this flag until the feature has been
+ * live-soaked (plan-v2.md U4.5's `[human]` sub-task); unset/anything else
+ * keeps the prior honest `{ok:false}` behavior.
+ */
+const PTY_SET_MODE_ENV_VAR = "FALCON_PTY_SETMODE";
+/** Max wait for the next hook input's `permission_mode` echo before treating a mode switch as unverified. */
+const PTY_SET_MODE_VERIFY_TIMEOUT_MS = 5000;
 
 /** The minimal `Outbox` surface this module depends on — the real `Outbox` satisfies it structurally; a test fake can capture `enqueue` calls without a disk queue/HTTP client. */
 export interface OutboxLike {
@@ -556,9 +574,49 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // the turn, at an idle prompt it's a no-op, inside a menu it closes the
       // menu (recoverable) — plan-v2.md W1.5.
       interrupt: async () => ({ ok: ptySession.sendInterrupt() }),
-      // The live TUI owns its own permission mode; there is no remote turn to
-      // retune. Honest not-supported, never faked.
-      setMode: async () => ({ ok: false }),
+      // Real PTY setMode (plan-v2.md W4.3), flag-gated behind
+      // `FALCON_PTY_SETMODE=1` (see the module-level doc comment on
+      // `PTY_SET_MODE_ENV_VAR`). Computes the forward Shift+Tab press count
+      // from the bridge's cached `permission_mode` (the live TUI's own,
+      // authoritative state — there is no other channel to ask it) to the
+      // requested mode, sends it gated idle+no-prompt via
+      // `ptySession.sendModeCycle` (the same rule message injection uses),
+      // then verifies via the next hook input's own `permission_mode` echo
+      // before reporting success. Every early-out is an honest `{ok:false}`
+      // (optionally carrying the best `observedMode` available) rather than
+      // a faked success — same "never fake it" rule the old always-`false`
+      // handler followed.
+      setMode: async ({ mode }) => {
+        if (env[PTY_SET_MODE_ENV_VAR] !== "1") return { ok: false };
+
+        const current = permHook?.getCurrentPermissionMode() ?? null;
+        if (current === null) {
+          logger.debug(
+            "[start-claude] setMode: no permission_mode observed from a hook yet — can't compute a cycle",
+          );
+          return { ok: false };
+        }
+        if (current === mode) return { ok: true, observedMode: current };
+
+        const presses = permissionModeCyclePresses(current, mode);
+        if (!ptySession.sendModeCycle(presses)) {
+          logger.debug("[start-claude] setMode: injection gate closed — not sending keystrokes", {
+            current,
+            requested: mode,
+            presses,
+          });
+          return { ok: false, observedMode: current };
+        }
+
+        const observed = (await permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS)) ?? null;
+        if (observed === mode) return { ok: true, observedMode: observed };
+
+        logger.warn("[start-claude] setMode: hook echo did not confirm the switch", {
+          requested: mode,
+          observed,
+        });
+        return { ok: false, observedMode: observed ?? current };
+      },
       // Remote answering of the live TUI's tool-permission prompt (design
       // §7.6): route into the `PreToolUse` hook bridge (first-wins). Only when
       // the hook server failed to install is this honestly not-supported.

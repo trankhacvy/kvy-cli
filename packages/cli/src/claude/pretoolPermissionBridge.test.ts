@@ -6,10 +6,12 @@ import {
   type CancelableTimer,
   composeAskAnswerReason,
   isAskUserQuestion,
+  PERMISSION_MODE_CYCLE,
   type PermissionRequestHookOutput,
   PreToolPermissionBridge,
   type PreToolPermissionBridgeDeps,
   type PreToolUseHookOutput,
+  permissionModeCyclePresses,
 } from "./pretoolPermissionBridge.js";
 
 /** Collects emitted envelopes + gives a manual timer trigger for the timeout path. */
@@ -564,5 +566,94 @@ describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion speci
       "Do not attempt this action another way.",
     );
     expect(bridge.pendingCount).toBe(0);
+  });
+});
+
+describe("permissionModeCyclePresses (W4.3 — fixed 4-state Shift+Tab cycle)", () => {
+  it("is 0 when already at the target mode", () => {
+    for (const mode of PERMISSION_MODE_CYCLE) {
+      expect(permissionModeCyclePresses(mode, mode)).toBe(0);
+    }
+  });
+
+  it("counts forward-only presses around the fixed cycle order", () => {
+    expect(permissionModeCyclePresses("default", "acceptEdits")).toBe(1);
+    expect(permissionModeCyclePresses("default", "plan")).toBe(2);
+    expect(permissionModeCyclePresses("default", "bypassPermissions")).toBe(3);
+    // Wraps forward past the end of the cycle rather than going "backward".
+    expect(permissionModeCyclePresses("bypassPermissions", "default")).toBe(1);
+    expect(permissionModeCyclePresses("plan", "default")).toBe(2);
+  });
+
+  it("N presses from any mode returns to that same mode (a full cycle)", () => {
+    for (const mode of PERMISSION_MODE_CYCLE) {
+      expect(permissionModeCyclePresses(mode, mode) % PERMISSION_MODE_CYCLE.length).toBe(0);
+    }
+  });
+});
+
+describe("PreToolPermissionBridge — permission_mode cache (W4.3)", () => {
+  it("starts with no cached mode", () => {
+    const { bridge } = makeBridge();
+    expect(bridge.currentPermissionMode).toBeNull();
+  });
+
+  it("caches permission_mode from handlePreToolUse (both the deferred and the AskUserQuestion path)", async () => {
+    const { bridge } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    expect(bridge.currentPermissionMode).toBe("acceptEdits");
+  });
+
+  it("caches permission_mode from handlePermissionRequest, on both the local and web path", async () => {
+    const local = makeBridge({ isWebTurnActive: () => false });
+    await local.bridge.handlePermissionRequest({ tool_name: "Bash", permission_mode: "plan" });
+    expect(local.bridge.currentPermissionMode).toBe("plan");
+
+    const web = makeBridge({ isWebTurnActive: () => true });
+    const pending = web.bridge.handlePermissionRequest({
+      tool_name: "Bash",
+      permission_mode: "bypassPermissions",
+    });
+    expect(web.bridge.currentPermissionMode).toBe("bypassPermissions");
+    web.bridge.reset(); // settle the still-pending web request so the test doesn't hang
+    await pending;
+  });
+
+  it("ignores an unrecognized permission_mode value instead of corrupting the cache", async () => {
+    const { bridge } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "some-future-mode" });
+    expect(bridge.currentPermissionMode).toBe("acceptEdits");
+  });
+
+  it("leaves the cache untouched when a hook input omits permission_mode entirely", async () => {
+    const { bridge } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "plan" });
+    await bridge.handlePreToolUse({ tool_name: "Bash" });
+    expect(bridge.currentPermissionMode).toBe("plan");
+  });
+});
+
+describe("PreToolPermissionBridge — waitForModeEcho (W4.3 verify-via-hook-echo)", () => {
+  it("resolves with the mode observed on the very next hook input", async () => {
+    const { bridge } = makeBridge();
+    const echo = bridge.waitForModeEcho(5000);
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    await expect(echo).resolves.toBe("acceptEdits");
+  });
+
+  it("resolves null on timeout when no hook input arrives in time", async () => {
+    const { bridge, triggerTimeout } = makeBridge();
+    const echo = bridge.waitForModeEcho(5000);
+    triggerTimeout();
+    await expect(echo).resolves.toBeNull();
+  });
+
+  it("only settles once — a late hook input after timeout doesn't re-resolve, and a late timeout after resolution doesn't override it", async () => {
+    const { bridge, triggerTimeout } = makeBridge();
+    const echo = bridge.waitForModeEcho(5000);
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "plan" });
+    triggerTimeout(); // fires after the watcher already settled — must be a no-op
+    await expect(echo).resolves.toBe("plan");
   });
 });

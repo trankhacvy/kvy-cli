@@ -282,4 +282,31 @@ describe("installRemotePermissionHook", () => {
       await handle.stop();
     });
   });
+
+  describe("permission_mode cache forwarding (W4.3 — real PTY setMode)", () => {
+    it("getCurrentPermissionMode is null before any hook fires, then reflects the latest permission_mode", async () => {
+      const h = makeHarness();
+      const handle = await h.install();
+      expect(handle.getCurrentPermissionMode()).toBeNull();
+
+      await h.captured.onPreToolUse?.({ tool_name: "Bash", permission_mode: "acceptEdits" });
+      expect(handle.getCurrentPermissionMode()).toBe("acceptEdits");
+
+      await h.captured.onPermissionRequest?.({ tool_name: "Bash", permission_mode: "plan" });
+      expect(handle.getCurrentPermissionMode()).toBe("plan");
+
+      await handle.stop();
+    });
+
+    it("waitForModeEcho resolves with the mode observed on the next hook input", async () => {
+      const h = makeHarness();
+      const handle = await h.install();
+
+      const echo = handle.waitForModeEcho(5000);
+      await h.captured.onPreToolUse?.({ tool_name: "Bash", permission_mode: "bypassPermissions" });
+      await expect(echo).resolves.toBe("bypassPermissions");
+
+      await handle.stop();
+    });
+  });
 });

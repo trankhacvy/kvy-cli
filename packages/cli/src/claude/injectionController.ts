@@ -213,7 +213,16 @@ export class InjectionController {
     return dropped;
   }
 
-  private canInject(): boolean {
+  /**
+   * True exactly when a queued message WOULD be injected right now — the
+   * same idle/no-prompt predicate {@link canInject} uses, minus the
+   * queue-length check. Exposed for the mode-cycle keystroke feature
+   * (plan-v2.md W4.3, `ptyClaudeSession.ts`'s `sendModeCycle`): those
+   * synthetic Shift+Tab presses carry the identical TUI-corruption risk as
+   * typing a message mid-turn or into an open dialog, so they must be gated
+   * by the identical rule, not a looser one.
+   */
+  get canInjectNow(): boolean {
     return (
       !this.disposed &&
       this.ready &&
@@ -221,9 +230,12 @@ export class InjectionController {
       !this.injecting &&
       !this.cooldown &&
       !this.promptOpen &&
-      !this.localDraft &&
-      this.queue.length > 0
+      !this.localDraft
     );
+  }
+
+  private canInject(): boolean {
+    return this.canInjectNow && this.queue.length > 0;
   }
 
   private tryFlush(): void {

@@ -649,4 +649,67 @@ describe("startPtyClaudeSession", () => {
       expect(handle.sendInterrupt()).toBe(false);
     });
   });
+
+  describe("sendModeCycle (W4.3 — real setMode's Shift+Tab keystroke cycle)", () => {
+    const shiftTab = `${String.fromCharCode(0x1b)}[Z`;
+
+    it("writes N Shift+Tab keystrokes and reports success when the gate is open", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendModeCycle(3)).toBe(true);
+      expect(h.fakePty.writes).toEqual([shiftTab, shiftTab, shiftTab]);
+
+      handle.stop();
+    });
+
+    it("returns false and writes nothing for zero or negative presses", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendModeCycle(0)).toBe(false);
+      expect(handle.sendModeCycle(-1)).toBe(false);
+      expect(h.fakePty.writes).toEqual([]);
+
+      handle.stop();
+    });
+
+    it("is gated closed while a TUI dialog is open — same rule as message injection", async () => {
+      const h = makeHarness();
+      // Manual timers: `makeHarness()`'s default `setTimeoutImpl` fires
+      // synchronously, which would immediately fire `setPromptOpen(true)`'s
+      // own 120s failsafe timer too (same reasoning as the `setPromptOpen
+      // (W1.3)` describe block above) — drain the readyDelay timer once via
+      // `runAll()`, then everything after stays manually controlled.
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      handle.setPromptOpen(true);
+      expect(handle.sendModeCycle(1)).toBe(false);
+      expect(h.fakePty.writes).toEqual([]);
+
+      handle.setPromptOpen(false);
+      expect(handle.sendModeCycle(1)).toBe(true);
+      expect(h.fakePty.writes).toEqual([shiftTab]);
+
+      handle.stop();
+    });
+
+    it("reports failure when the pty never spawned", async () => {
+      const h = makeHarness();
+      h.spawnPty.mockImplementation(() => {
+        throw new Error("spawn failed");
+      });
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendModeCycle(2)).toBe(false);
+    });
+  });
 });

@@ -79,6 +79,7 @@ function fakePtyHandle(overrides: Partial<PtyClaudeSessionHandle> = {}): PtyClau
     notifyProviderSessionId: vi.fn(),
     setPromptOpen: vi.fn(),
     sendInterrupt: vi.fn(() => true),
+    sendModeCycle: vi.fn(() => true),
     stop: vi.fn(),
     ...overrides,
   };
@@ -98,6 +99,8 @@ function fakeRemotePermissionHook(
     settingsEnv: {},
     port: 12345,
     resolvePermission: () => ({ ok: false }),
+    getCurrentPermissionMode: () => null,
+    waitForModeEcho: async () => null,
     isWebTurnActive: () => false,
     markWebTurnStart: () => {},
     markTurnEnd: () => {},
@@ -702,7 +705,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(false);
   });
 
-  it("answers takeControl as a no-op success, interrupt as a real ESC write, setMode as not-supported, and routes perm.answer into the hook bridge", async () => {
+  it("answers takeControl as a no-op success, interrupt as a real ESC write, setMode as not-supported (flag off), and routes perm.answer into the hook bridge", async () => {
     const resolvePermission = vi.fn(() => ({ ok: true as const }));
     const installRemotePermissionHook = (async () =>
       fakeRemotePermissionHook({
@@ -719,6 +722,10 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
     await runStartClaudeCommand(
       baseDeps({
+        // `FALCON_PTY_SETMODE` deliberately absent — setMode must stay
+        // `{ok:false}` by default regardless of what the host's own
+        // process.env happens to have (plan-v2.md W4.3, flag-gated).
+        env: {},
         registerSessionRpcHandlers,
         installRemotePermissionHook,
         startPtyClaudeSession,
@@ -740,6 +747,116 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(resolvePermission).toHaveBeenCalledExactlyOnceWith({
       reqId: "req_1",
       decision: { kind: "allow", scope: "once" },
+    });
+  });
+
+  describe("setMode (W4.3 — real PTY setMode, flag-gated behind FALCON_PTY_SETMODE=1)", () => {
+    async function setup(overrides: {
+      getCurrentPermissionMode?: () =>
+        | "default"
+        | "acceptEdits"
+        | "plan"
+        | "bypassPermissions"
+        | null;
+      waitForModeEcho?: () => Promise<
+        "default" | "acceptEdits" | "plan" | "bypassPermissions" | null
+      >;
+      sendModeCycle?: ReturnType<typeof vi.fn>;
+      env?: Record<string, string>;
+    }) {
+      const sendModeCycle = overrides.sendModeCycle ?? vi.fn(() => true);
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendModeCycle }));
+      const installRemotePermissionHook = (async () =>
+        fakeRemotePermissionHook({
+          getCurrentPermissionMode: overrides.getCurrentPermissionMode ?? (() => null),
+          waitForModeEcho: overrides.waitForModeEcho ?? (async () => null),
+        })) as unknown as typeof installRemotePermissionHookType;
+
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
+
+      await runStartClaudeCommand(
+        baseDeps({
+          env: { FALCON_PTY_SETMODE: "1", ...overrides.env },
+          installRemotePermissionHook,
+          startPtyClaudeSession,
+          registerSessionRpcHandlers,
+        }),
+      );
+
+      return { handlers: capturedHandlers as unknown as SessionRpcHandlers, sendModeCycle };
+    }
+
+    it("stays {ok:false} when the flag is off, even with a cached mode available", async () => {
+      const { handlers } = await setup({
+        getCurrentPermissionMode: () => "default",
+        env: { FALCON_PTY_SETMODE: "0" },
+      });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({ ok: false });
+    });
+
+    it("is {ok:false} when no permission_mode has been observed yet", async () => {
+      const { handlers, sendModeCycle } = await setup({ getCurrentPermissionMode: () => null });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({ ok: false });
+      expect(sendModeCycle).not.toHaveBeenCalled();
+    });
+
+    it("is a same-mode no-op — {ok:true} with the current mode, no keystrokes sent", async () => {
+      const { handlers, sendModeCycle } = await setup({ getCurrentPermissionMode: () => "plan" });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+        ok: true,
+        observedMode: "plan",
+      });
+      expect(sendModeCycle).not.toHaveBeenCalled();
+    });
+
+    it("sends the correct forward press count and reports success once the hook echo confirms it", async () => {
+      const { handlers, sendModeCycle } = await setup({
+        getCurrentPermissionMode: () => "default",
+        waitForModeEcho: async () => "plan",
+      });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+        ok: true,
+        observedMode: "plan",
+      });
+      expect(sendModeCycle).toHaveBeenCalledExactlyOnceWith(2); // default -> acceptEdits -> plan
+    });
+
+    it("is {ok:false} (carrying the pre-switch mode) when the injection gate is closed", async () => {
+      const sendModeCycle = vi.fn(() => false);
+      const { handlers } = await setup({
+        getCurrentPermissionMode: () => "default",
+        sendModeCycle,
+      });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+        ok: false,
+        observedMode: "default",
+      });
+    });
+
+    it("is {ok:false} carrying the observed mode when the hook echo doesn't confirm the switch", async () => {
+      const { handlers } = await setup({
+        getCurrentPermissionMode: () => "default",
+        waitForModeEcho: async () => "acceptEdits", // not the requested "plan"
+      });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+        ok: false,
+        observedMode: "acceptEdits",
+      });
+    });
+
+    it("is {ok:false} carrying the prior mode when the hook echo never arrives (verification timeout)", async () => {
+      const { handlers } = await setup({
+        getCurrentPermissionMode: () => "default",
+        waitForModeEcho: async () => null,
+      });
+      await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+        ok: false,
+        observedMode: "default",
+      });
     });
   });
 
