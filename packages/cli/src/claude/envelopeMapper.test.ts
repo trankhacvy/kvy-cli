@@ -399,6 +399,76 @@ describe("mapClaudeToEnvelopes — image blocks", () => {
     );
     expect(envelopes).toHaveLength(0);
   });
+
+  it("maps a top-level image sibling in the mixed tool-result loop to an 'agent'-role file envelope (not 'user')", () => {
+    // Distinct from the plain (non-tool-result) user loop tested above, which
+    // pushes a "user"-role file envelope — a top-level image block that sits
+    // alongside a `tool_result` in the same content array takes the mixed
+    // loop's branch instead (envelopeMapper.ts:778), which always pushes as
+    // "agent" and inside the open turn/subagent scope.
+    const state = createClaudeEnvelopeMapperState();
+    mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "a-sibling-1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_sibling", name: "Bash", input: { command: "ls" } },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "u-sibling-1",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: [
+            { type: "tool_result", tool_use_id: "toolu_sibling", content: "ok" },
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/png", data: "sibling-data" },
+            },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    const fileEnvelope = envelopes.find((e) => e.ev.t === "file");
+    expect(fileEnvelope).toBeDefined();
+    expect(fileEnvelope?.role).toBe("agent");
+    expect(fileEnvelope?.turn).toBe(state.currentTurnId);
+    expect(fileEnvelope?.ev).toMatchObject({ t: "file", ref: "inline:sibling-data" });
+  });
+
+  it.each([
+    ["image/png", "image.png"],
+    ["image/jpeg", "image.jpg"],
+    ["image/gif", "image.gif"],
+    ["image/webp", "image.webp"],
+    ["image/bmp", "image.png"], // unrecognized media type -> png default
+  ] as const)("names the inline file %s -> %s", (mediaType, expectedName) => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: `u-ext-${mediaType}`,
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: [{ type: "image", source: { type: "base64", media_type: mediaType, data: "x" } }],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]?.ev).toMatchObject({ t: "file", name: expectedName });
+  });
 });
 
 describe("mapClaudeToEnvelopes — Task subagent registration", () => {

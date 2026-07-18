@@ -53,4 +53,17 @@ describe("InlineImageAttachment", () => {
     });
     expect(element.props.src).toBe("data:image/png;base64,Zm9v");
   });
+
+  // Mirrors envelopeMapper.ts's IMAGE_EXTENSION_BY_MEDIA_TYPE / imageFileName —
+  // every extension the CLI can mint for an inline image must round-trip back
+  // to the right MIME type here, or the browser renders the <img> as broken.
+  it.each([
+    ["image.gif", "image/gif"],
+    ["image.webp", "image/webp"],
+  ] as const)("infers %s -> %s", (name, expectedMime) => {
+    const element = InlineImageAttachment({
+      item: fileItem({ ref: "inline:Zm9v", name }),
+    });
+    expect(element.props.src).toBe(`data:${expectedMime};base64,Zm9v`);
+  });
 });
