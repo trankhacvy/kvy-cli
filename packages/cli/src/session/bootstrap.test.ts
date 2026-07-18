@@ -231,4 +231,84 @@ describe("bootstrapSession", () => {
 
     await expect(bootstrapSession(deps, params)).rejects.toThrow(/could not unwrap/);
   });
+
+  describe("FALCON_RECONNECT_SESSION_ID re-attach (plan-v2.md W3.7)", () => {
+    it("re-attaches to the existing session by unwrapping the reconnect DEK, with no network call", async () => {
+      const contentKeyPair = deriveKeyTree(getRandomBytes(32)).content;
+      const originalDek = getRandomBytes(32);
+      const wrappedDek = wrapDek(originalDek, contentKeyPair.publicKey);
+      const fetchImpl = vi.fn() as unknown as typeof fetch;
+      const deps: BootstrapSessionDeps = {
+        serverUrl: "http://server.test",
+        fetchImpl,
+        getAuthToken: () => "test-token",
+      };
+      const params = baseParams({
+        contentKeyPair,
+        env: {
+          FALCON_RECONNECT_SESSION_ID: "sess_existing",
+          FALCON_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
+        },
+      });
+
+      const result = await bootstrapSession(deps, params);
+
+      expect(result).toEqual({
+        sessionId: "sess_existing",
+        dek: originalDek,
+        tag: "",
+        created: false,
+      });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("throws when FALCON_RECONNECT_SESSION_ID is set without FALCON_RECONNECT_ENCRYPTION_KEY", async () => {
+      const fetchImpl = vi.fn() as unknown as typeof fetch;
+      const deps: BootstrapSessionDeps = {
+        serverUrl: "http://server.test",
+        fetchImpl,
+        getAuthToken: () => "test-token",
+      };
+      const params = baseParams({ env: { FALCON_RECONNECT_SESSION_ID: "sess_existing" } });
+
+      await expect(bootstrapSession(deps, params)).rejects.toThrow(
+        /without FALCON_RECONNECT_ENCRYPTION_KEY/,
+      );
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+
+    it("throws when the reconnect DEK cannot be unwrapped with the supplied content key", async () => {
+      const wrongKeyPair = deriveKeyTree(getRandomBytes(32)).content;
+      const wrappedDek = wrapDek(getRandomBytes(32), wrongKeyPair.publicKey);
+      const fetchImpl = vi.fn() as unknown as typeof fetch;
+      const deps: BootstrapSessionDeps = {
+        serverUrl: "http://server.test",
+        fetchImpl,
+        getAuthToken: () => "test-token",
+      };
+      const params = baseParams({
+        env: {
+          FALCON_RECONNECT_SESSION_ID: "sess_existing",
+          FALCON_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
+        },
+      });
+
+      await expect(bootstrapSession(deps, params)).rejects.toThrow(/could not unwrap/);
+    });
+
+    it("takes the ordinary create-or-get path when no reconnect env is present", async () => {
+      const params = baseParams({ env: {} });
+      const row = fakeSessionRow({ tag: buildSessionTag(params) });
+      const fetchImpl = fakeFetch({ status: 201, body: row });
+      const deps: BootstrapSessionDeps = {
+        serverUrl: "http://server.test",
+        fetchImpl,
+        getAuthToken: () => "test-token",
+      };
+
+      const result = await bootstrapSession(deps, params);
+      expect(result.created).toBe(true);
+      expect(fetchImpl).toHaveBeenCalledOnce();
+    });
+  });
 });

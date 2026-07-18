@@ -233,6 +233,21 @@ export async function resumeSession(
     throw new ResumeSessionError("could not resolve the falcon entrypoint to re-invoke");
   }
 
+  // Headless-vs-terminal decision (plan-v2.md W3.7): this module ALWAYS
+  // relaunches with `--starting-mode remote`, deliberately, regardless of
+  // whatever mode the original session ran in. The daemon has no controlling
+  // TTY to hand a re-spawned process — there is no terminal here to run a
+  // PTY-injection session on — so "headless" is the only honest choice for
+  // *this* relaunch path. A resumed *terminal* session (a human re-running
+  // `falcon claude` themselves) is a different call path entirely and is not
+  // routed through here: it goes straight through `commands/start.ts`'s PTY
+  // flow, which re-attaches via the `FALCON_RECONNECT_SESSION_ID`/
+  // `FALCON_RECONNECT_ENCRYPTION_KEY` env this function already sets below
+  // (honored by `session/bootstrap.ts`) plus, when available,
+  // `FALCON_RECONNECT_PROVIDER_SESSION_ID` to resume the provider transcript
+  // itself — this module has no provider session id to offer (persisted
+  // sessions only carry the opaque `metadata` blob), so it doesn't set that
+  // one.
   const providerCliName = PROVIDER_CLI_NAME[persisted.provider ?? "claude-code"];
   const args = [
     ...prefixArgs,

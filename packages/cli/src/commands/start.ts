@@ -65,6 +65,17 @@
  * `onInjected` — the moment the message is typed + submitted; the remote path
  * on `onTurnSettled`). A retried RPC can never run the agent twice for one
  * logical send.
+ *
+ * Resume (plan-v2.md W3.7): both flows share one `bootstrapSession()` call,
+ * which itself honors `FALCON_RECONNECT_SESSION_ID`/
+ * `FALCON_RECONNECT_ENCRYPTION_KEY` (re-attaching to the existing
+ * server-side session row instead of minting a fresh one — see
+ * `session/bootstrap.ts`'s doc comment). The terminal PTY flow additionally
+ * reads `FALCON_RECONNECT_PROVIDER_SESSION_ID` to resume the underlying
+ * `claude` provider transcript itself (`--resume`, composed by
+ * `resolveSessionFlags`/`ptyClaudeSession.ts`) — absent on an ordinary fresh
+ * start, so both env reads are no-ops unless a caller arranged them ahead of
+ * this spawn.
  */
 import path from "node:path";
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
@@ -315,6 +326,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           title: path.basename(deps.workingDirectory) || deps.workingDirectory,
           path: deps.workingDirectory,
         },
+        env,
       },
     );
   } catch (error) {
@@ -475,7 +487,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         launcherPath: deps.launcherPath,
         claudeCliPath: claudeCliPath,
         claudeArgs: deps.claudeArgs,
-        providerSessionId: null,
+        // Resumes the provider transcript on the terminal PTY flow
+        // (`resolveSessionFlags`/`ptyClaudeSession.ts` already handle
+        // `--resume` composition from this) — set only when a caller
+        // arranged the reconnect env ahead of this spawn (plan-v2.md W3.7);
+        // ordinarily absent, i.e. a fresh provider session.
+        providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID ?? null,
         homeDir: deps.homeDir,
         env,
         // The single shared hook server's `--settings` file + env — so the
