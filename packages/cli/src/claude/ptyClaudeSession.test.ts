@@ -620,7 +620,9 @@ describe("startPtyClaudeSession", () => {
 
       expect(h.fakePty.writes).toEqual(["in flight"]); // submit (\r) never sent
       expect(onInjected).not.toHaveBeenCalled();
-      expect(onDroppedInjections).toHaveBeenCalledExactlyOnceWith([{ id: "m1", text: "in flight" }]);
+      expect(onDroppedInjections).toHaveBeenCalledExactlyOnceWith([
+        { id: "m1", text: "in flight" },
+      ]);
     });
   });
 
