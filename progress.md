@@ -8524,3 +8524,31 @@ before the next cycle picks a unit.
 - U1.6 `[bundle]` "web-safety" (W1.9+W1.10) — worktree already exists at
   `.worktrees/U1.6` (`wf/U1.6`, tip `ecb1f32`); inspect before deciding whether
   to resume or restart it.
+
+## v2-pty-injection Cycle 5 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U1.5 `[bundle]` "timeline-fixes" (W1.6+W1.8) — sha `ff002a29a93fa36ead57f0ea38e4e999a3b5d5e5`
+- U1.6 `[bundle]` "web-safety" (W1.9+W1.10) — sha `cb6c8d312c9144d4f5b58dab04e626b3d7374e06`
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) — still
+  failed/parked from prior cycle. Worktree `.worktrees/U1.4` (`wf/U1.4`, tip
+  `0754076`) left in place for human inspection per the false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor <sha> v2-pty-injection` held for
+both U1.5 (`ff002a2`) and U1.6 (`cb6c8d3`) — confirmed real ancestry, not just
+branch presence. Their worktrees (`.worktrees/U1.5`, `.worktrees/U1.6`) and
+branches (`wf/U1.5`, `wf/U1.6`) were removed post-verification. plan-v2.md's
+Master TODO had U1.5's and U1.6's unit boxes and all non-`[human]` sub-boxes
+flipped to `[x]` (neither unit has a `[human]` sub-box). `pnpm typecheck` on
+`v2-pty-injection` — all 11 turbo tasks successful (cache-hit, `>>> FULL
+TURBO`).
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `0754076`) — figure out
+  why it failed and either fix forward or restart the unit.
+- U1.7 `[human]` Wave-1 exit — once U1.4 lands, run the full live checklist
+  ("Testing & verification" § Wave 1), `pnpm --filter falcon build` first.

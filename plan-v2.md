@@ -1388,17 +1388,17 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [ ] Web: Home chip + timeline banner + disabled controls when not `active`
   - [ ] Tests: CLI body/mapping; server enum; web snapshots
   - [ ] `[human]` live: Ctrl-C and `kill -TERM` → web "Ended" in seconds
-- [ ] **U1.5 `[bundle]` "timeline-fixes"** (W1.6+W1.8 — `components/timeline/`)
-  - [ ] W1.6: `following` state + `scrollToIndex` effect (+rAF re-call) + "Jump to
+- [x] **U1.5 `[bundle]` "timeline-fixes"** (W1.6+W1.8 — `components/timeline/`)
+  - [x] W1.6: `following` state + `scrollToIndex` effect (+rAF re-call) + "Jump to
         latest" + `working` prop + screen pass-through
-  - [ ] W1.8: pulse activity row under the list when `working`
-  - [ ] Tests: follow/pause/resume behaviors
-- [ ] **U1.6 `[bundle]` "web-safety"** (W1.9+W1.10)
-  - [ ] W1.9: `RequireAuth` + wrap `/session/[id]`, `/session/[id]/git`,
+  - [x] W1.8: pulse activity row under the list when `working`
+  - [x] Tests: follow/pause/resume behaviors
+- [x] **U1.6 `[bundle]` "web-safety"** (W1.9+W1.10)
+  - [x] W1.9: `RequireAuth` + wrap `/session/[id]`, `/session/[id]/git`,
         `/session/new`
-  - [ ] W1.10: `app/error.tsx` + `app/not-found.tsx`; `use-live-render-items`
+  - [x] W1.10: `app/error.tsx` + `app/not-found.tsx`; `use-live-render-items`
         `{items,error}` + banner + retry-invalidate
-  - [ ] Tests: redirect; boundary; decrypt-fail banner
+  - [x] Tests: redirect; boundary; decrypt-fail banner
 - [ ] **U1.7 `[human]`** Wave-1 exit: full live checklist ("Testing & verification"
       § Wave 1); `pnpm --filter falcon build` first
 
