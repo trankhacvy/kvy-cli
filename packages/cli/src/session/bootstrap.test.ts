@@ -149,16 +149,42 @@ describe("bootstrapSession", () => {
     expect(unwrapped).toEqual(result.dek);
 
     // The metadata EncryptedBox sent to the server decrypts under the
-    // returned DEK to the title/path/providerSessionId placeholder.
-    const opened = open<{ title: string; path: string; providerSessionId: string | null }>(
-      sentBody.metadata as EncryptedBox,
-      result.dek,
-    );
+    // returned DEK to the title/path/providerSessionId/model placeholder.
+    const opened = open<{
+      title: string;
+      path: string;
+      providerSessionId: string | null;
+      model: string | null;
+    }>(sentBody.metadata as EncryptedBox, result.dek);
     expect(opened).toEqual({
       title: "my session",
       path: "/home/user/project",
       providerSessionId: null,
+      model: null,
     });
+  });
+
+  it("seals the caller's model override into the metadata box when given", async () => {
+    const params = baseParams({
+      metadata: { title: "my session", path: "/home/user/project", model: "sonnet" },
+    });
+    const row = fakeSessionRow({ tag: buildSessionTag(params) });
+    const fetchImpl = fakeFetch({ status: 201, body: row });
+    const deps: BootstrapSessionDeps = {
+      serverUrl: "http://server.test",
+      fetchImpl,
+      getAuthToken: () => "test-token",
+    };
+
+    const result = await bootstrapSession(deps, params);
+
+    const [, requestInit] = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
+    const sentBody = JSON.parse(requestInit.body as string);
+    const opened = open<{ model: string | null }>(sentBody.metadata as EncryptedBox, result.dek);
+    expect(opened?.model).toBe("sonnet");
   });
 
   it("recovers the original DEK on an idempotent replay (created: false)", async () => {

@@ -24,18 +24,26 @@ import { useSessionCrypto } from "./use-session-crypto";
  * `useInfiniteQuery` observes that cache entry directly, so a new envelope
  * flows through this hook's decrypt effect with no extra plumbing.
  *
- * Only the most recent page is fetched — older history ("load more") isn't
- * wired into `Timeline` yet, matching its current read-only, non-paginated
- * scroll container.
- *
  * `error` (W1.10, plan.md §16 wave 1) surfaces a page-level decrypt failure
  * — previously only `console.error`'d — so `SessionTimelineScreen` can show
  * an inline destructive banner with a "Retry" instead of silently rendering
  * an empty/stale transcript.
+ *
+ * Pagination (plan-v2.md W4.2 "Load earlier" button): `hasMore`/
+ * `isLoadingMore`/`loadEarlier` pass `useInfiniteQuery`'s own
+ * `hasNextPage`/`isFetchingNextPage`/`fetchNextPage` straight through —
+ * `getSessionMessages`'s `before` cursor (`nextBefore` on the previous page)
+ * already supported paging backward, this hook just didn't expose the means
+ * to trigger it yet. `decryptMessageBatches`/`reduceEnvelopes` don't care
+ * about page order (see `messages.ts`'s own doc comment), so a newly-fetched
+ * older page decrypts and merges in with no special-casing here.
  */
 export function useLiveRenderItems(sessionId: string): {
   items: RenderItem[];
   error: string | null;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  loadEarlier: () => void;
 } {
   const crypto = useSessionCrypto(sessionId);
   const messagesQuery = useInfiniteQuery({
@@ -92,5 +100,13 @@ export function useLiveRenderItems(sessionId: string): {
     };
   }, [crypto, messagesQuery.data, sessionId]);
 
-  return { items, error };
+  return {
+    items,
+    error,
+    hasMore: messagesQuery.hasNextPage,
+    isLoadingMore: messagesQuery.isFetchingNextPage,
+    loadEarlier: () => {
+      void messagesQuery.fetchNextPage();
+    },
+  };
 }
