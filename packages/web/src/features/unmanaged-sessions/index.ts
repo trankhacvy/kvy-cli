@@ -3,6 +3,7 @@ export { TakeOverDialog } from "./components/take-over-dialog";
 export { UnmanagedSection } from "./components/unmanaged-section";
 export { UnmanagedSessionCard } from "./components/unmanaged-session-card";
 export { machineRpcToUnmanagedActions } from "./live-actions";
+export { useLiveUnmanagedSessions } from "./live-source";
 export { fetchFullTranscript, type MirrorLine, parseMirrorLines } from "./mirror";
 export { useMockUnmanagedActions, useMockUnmanagedSessions } from "./mock-source";
 export type {

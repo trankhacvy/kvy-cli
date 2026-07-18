@@ -22,3 +22,8 @@ export type {
   SessionListWorkspace,
   UseSessionListSnapshot,
 } from "./types";
+export {
+  deriveMachineOnline,
+  MACHINE_ONLINE_WINDOW_MS,
+  useMachinePresence,
+} from "./use-machine-presence";
