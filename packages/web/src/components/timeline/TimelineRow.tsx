@@ -6,6 +6,7 @@ import { PermPlaceholder } from "./PermPlaceholder";
 import { ServiceLine } from "./ServiceLine";
 import { SubagentGroup } from "./SubagentGroup";
 import { ToolCard } from "./tool-cards/registry";
+import { UsageChip } from "./UsageChip";
 
 /** Dispatches a single `RenderItem` to its component, by `kind` (the
  * reducer's discriminated union — falcon-system-design.md §9.1). Every kind
@@ -51,6 +52,9 @@ export function TimelineRow({ item }: { item: RenderItem }) {
 
     case "sub-stop":
       return <ServiceLine label="Subagent finished" tone="hairline" />;
+
+    case "usage":
+      return <UsageChip item={item} />;
 
     case "perm-placeholder":
       return <PermPlaceholder item={item} />;

@@ -79,6 +79,12 @@ export const SessionEventSchema = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("sub-stop"),
   }),
+  z.object({
+    t: z.literal("usage"),
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+    costUsd: z.number().optional(),
+  }),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

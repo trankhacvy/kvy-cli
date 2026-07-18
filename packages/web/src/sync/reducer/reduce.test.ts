@@ -309,3 +309,36 @@ describe("reduceEnvelopes — misc event pass-through", () => {
     ]);
   });
 });
+
+describe("reduceEnvelopes — usage (W4.6)", () => {
+  it("maps a usage envelope straight through, costUsd omitted when absent", () => {
+    const env = createEnvelope(
+      "agent",
+      { t: "usage", inputTokens: 120, outputTokens: 45 },
+      { id: "u1", time: 1, turn: "t1" },
+    );
+    const items = reduceEnvelopes([env]);
+    expect(items).toEqual([
+      {
+        id: "u1",
+        time: 1,
+        role: "agent",
+        turn: "t1",
+        kind: "usage",
+        inputTokens: 120,
+        outputTokens: 45,
+        costUsd: undefined,
+      },
+    ]);
+  });
+
+  it("carries costUsd through when the adapter supplies it", () => {
+    const env = createEnvelope(
+      "agent",
+      { t: "usage", inputTokens: 4, outputTokens: 5, costUsd: 0.0021 },
+      { id: "u2", time: 1 },
+    );
+    const items = reduceEnvelopes([env]);
+    expect(items[0]).toMatchObject({ kind: "usage", costUsd: 0.0021 });
+  });
+});

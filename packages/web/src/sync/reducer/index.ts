@@ -21,4 +21,5 @@ export type {
   ToolItem,
   TurnEndItem,
   TurnStartItem,
+  UsageItem,
 } from "./types.js";

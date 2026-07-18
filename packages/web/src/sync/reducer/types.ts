@@ -64,6 +64,18 @@ export interface SubStopItem extends RenderItemBase {
   kind: "sub-stop";
 }
 
+/** Per-message token usage (plan-v2.md W4.6, AI Elements `Context` pattern)
+ * — one per assistant transcript record that reported `usage`, rendered as
+ * a quiet per-turn token chip. `costUsd` is optional: no provider surfaces
+ * it in Falcon's transcript source today, so it's always absent for now,
+ * but the wire event reserves the field for a future pricing lookup. */
+export interface UsageItem extends RenderItemBase {
+  kind: "usage";
+  inputTokens: number;
+  outputTokens: number;
+  costUsd?: number;
+}
+
 /** Live state of a permission request, shared by reference between whatever
  * item currently represents it (a placeholder or the tool it matched) so a
  * later `perm-resolve` updates the right place regardless of match order. */
@@ -132,6 +144,7 @@ export type RenderItem =
   | ModeSwitchItem
   | SubStartItem
   | SubStopItem
+  | UsageItem
   | PermPlaceholderItem
   | ToolItem
   | OrphanToolEndItem
