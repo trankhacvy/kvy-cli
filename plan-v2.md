@@ -1380,7 +1380,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [x] Tests: watchdog/local-submit; gate matrix + failsafe; ESC write + RPC
   - [ ] `[human]` live: inject-while-prompt-open blocked; draft survives; interrupt
         cancels a turn
-- [ ] **U1.4 `[solo]` "lifecycle-status"** (W1.4+B15 — cross-package CLI/SRV/WEB)
+- [x] **U1.4 `[solo]` "lifecycle-status"** (W1.4+B15 — cross-package CLI/SRV/WEB)
   - [ ] `api/sessionStatus.ts` → `reportSessionStatus` (`failed`|`ended`)
   - [ ] Server status route: additive `"ended"` + fan-out
   - [ ] `start.ts`: `reportStatusOnce`, SIGTERM/SIGHUP handlers, exit-code mapping
@@ -1480,7 +1480,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [ ] Bridge `permission_mode` cache; `sendModeCycle(n)` gated idle+no-prompt;
         `setMode` RPC verify-via-hook-echo; web re-enable behind flag
   - [ ] `[human]` live soak: 20 switches, no TUI corruption
-- [ ] **U4.6 `[bundle]` "session-registration"** (W4.4+W4.5 — bootstrap/start)
+- [x] **U4.6 `[bundle]` "session-registration"** (W4.4+W4.5 — bootstrap/start)
   - [ ] W4.4: same-dir duplicate lock + live-pid detection + `--force-new-session`
   - [ ] W4.5: `notifyDaemonSessionStarted` from start.ts (best-effort)
   - [ ] Tests: lock; registration integration

@@ -8842,3 +8842,27 @@ to `[x]` (no sub-boxes on this unit). `pnpm typecheck` on `v2-pty-injection`
   out why they keep failing and either fix forward or restart the units.
 - U4.4 `[bundle]` "shell-polish" (W4.2c) — next unstarted Phase 4 unit after
   U4.3's composer-polish landed.
+
+## Hand-merge session — 2026-07-19 (orchestrator, Fable)
+
+U1.4 "lifecycle-status" and U4.6 "session-registration" had been parked by the
+workflow on MERGE CONFLICTS only (no code defects) — their worktrees branched
+before later units landed on the same files. Hand-resolved and merged:
+
+- U1.4 → merge commit 7363d5c (ancestry-proven). Union with U2.3/U2.2/U4.2/U4.3;
+  completed U2.3's noted gap: the web `stop` RPC now reports "ended" BEFORE
+  SIGTERM. U1.4's tests updated to post-W2.4 semantics (take-control is
+  remote-only; local mode shows read-only mode display; Composer cryptoReady).
+- U4.6 → merge commit 2dc87cc (ancestry-proven). Union with U1.4:
+  --force-new-session stripping, sessionMetadata carries the model flag,
+  signal exit-code precedence kept, both new test suites kept.
+
+Full gate green after each merge: pnpm build / typecheck / test (11/11 tasks,
+CLI 129 files / 1385 tests, web 79 files / 601 tests). Known pre-existing
+branch debt (NOT from these merges): ~20 biome errors in
+packages/cli/scripts/*-contract-test.ts + e2e/src/fakeSessionProcess.ts
+(noConsole, unused member) — for U5.2's docs/cleanup pass.
+
+Remaining workflow-eligible: U4.4 (shell-polish), U4.5 (pty-setmode) — both
+have impl-complete worktrees; their pipelines died at the test stage on the
+session limit. Worktrees left in place for the resumed run.
