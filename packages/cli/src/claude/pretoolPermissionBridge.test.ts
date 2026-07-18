@@ -264,4 +264,64 @@ describe("PreToolPermissionBridge — resolve()/reset() share both pending maps"
     void bridge.handlePermissionRequest({ tool_name: "Write" });
     expect(bridge.pendingCount).toBe(2);
   });
+
+  it("reset() settles EVERY in-flight permRequestPending entry, not just the first", async () => {
+    const { bridge, emitted } = makeBridge();
+    const first = bridge.handlePermissionRequest({ tool_name: "Bash" });
+    const second = bridge.handlePermissionRequest({ tool_name: "Write" });
+    const third = bridge.handlePermissionRequest({ tool_name: "Edit" });
+    expect(bridge.pendingCount).toBe(3);
+
+    bridge.reset("shutting down");
+
+    const [outA, outB, outC] = (await Promise.all([first, second, third])) as (
+      | PermissionRequestHookOutput
+      | undefined
+    )[];
+    for (const out of [outA, outB, outC]) {
+      expect(out?.hookSpecificOutput.decision?.behavior).toBe("deny");
+      expect(out?.hookSpecificOutput.decision?.message).toContain(
+        "Do not attempt this action another way.",
+      );
+    }
+    expect(bridge.pendingCount).toBe(0);
+    expect(permResolves(emitted)).toHaveLength(3);
+  });
+
+  it("resolving one pending request leaves the others still pending", async () => {
+    const { bridge, emitted } = makeBridge();
+    const first = bridge.handlePermissionRequest({ tool_name: "Bash" });
+    const second = bridge.handlePermissionRequest({ tool_name: "Write" });
+    const requests = permRequests(emitted);
+    const firstReqId = (requests[0]?.ev as { reqId: string }).reqId;
+
+    const result = bridge.resolve({
+      reqId: firstReqId,
+      decision: { kind: "allow", scope: "once" },
+    });
+    expect(result).toEqual({ ok: true });
+    expect(bridge.pendingCount).toBe(1);
+
+    const firstOutput = (await first) as PermissionRequestHookOutput;
+    expect(firstOutput.hookSpecificOutput.decision?.behavior).toBe("allow");
+
+    // The second request is untouched by the first's resolution.
+    const secondReqId = (requests[1]?.ev as { reqId: string }).reqId;
+    bridge.resolve({ reqId: secondReqId, decision: { kind: "deny" } });
+    const secondOutput = (await second) as PermissionRequestHookOutput;
+    expect(secondOutput.hookSpecificOutput.decision?.behavior).toBe("deny");
+    expect(bridge.pendingCount).toBe(0);
+  });
+});
+
+describe("PreToolPermissionBridge — handlePermissionRequest — missing tool_input", () => {
+  it("defaults tool_input to {} in the emitted perm-request when the hook omits it entirely", async () => {
+    const { bridge, emitted } = makeBridge();
+    void bridge.handlePermissionRequest({ tool_name: "Bash" });
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
+    expect(ev.args).toEqual({});
+  });
 });

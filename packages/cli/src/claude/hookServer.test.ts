@@ -326,6 +326,20 @@ describe("startHookServer", () => {
     }
   });
 
+  it("POST /hook/permission-request tolerates a body that omits tool_input entirely", async () => {
+    const onPermissionRequest = vi.fn(async () => undefined);
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    try {
+      const res = await post(server.port, "/hook/permission-request", { tool_name: "Read" });
+      expect(res.status).toBe(204);
+      expect(onPermissionRequest).toHaveBeenCalledOnce();
+      const [input] = onPermissionRequest.mock.calls[0] as unknown as [{ tool_input: unknown }];
+      expect(input.tool_input).toBeUndefined();
+    } finally {
+      await server.stop();
+    }
+  });
+
   it("POST /hook/permission-request 400s a body missing tool_name", async () => {
     const onPermissionRequest = vi.fn();
     const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
