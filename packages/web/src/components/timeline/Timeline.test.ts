@@ -37,6 +37,14 @@ describe("isNearBottom (W1.6 follow/pause threshold)", () => {
     expect(isNearBottom(400, 600)).toBe(false);
     expect(isNearBottom(100, 600)).toBe(true);
   });
+
+  it("treats exactly half a viewport as past the band (strict less-than)", () => {
+    expect(isNearBottom(300, 600)).toBe(false);
+  });
+
+  it("never counts as near-bottom on a zero-height viewport (strict less-than, not <=)", () => {
+    expect(isNearBottom(0, 0)).toBe(false);
+  });
 });
 
 describe("shouldShowActivityRow (W1.8 pulse row)", () => {
@@ -58,5 +66,17 @@ describe("shouldShowActivityRow (W1.8 pulse row)", () => {
 
   it("is suppressed when the last item is already a running tool card", () => {
     expect(shouldShowActivityRow(true, [textItem("1"), toolItem("t1", "running")])).toBe(false);
+  });
+
+  it("shows when a running tool exists but is not the last item", () => {
+    // Only the last item gates suppression — an earlier running tool (e.g. a
+    // completed subagent step) shouldn't hide the row.
+    expect(shouldShowActivityRow(true, [toolItem("t1", "running"), textItem("1")])).toBe(true);
+  });
+
+  it("is suppressed by a running tool even with other items before it", () => {
+    expect(
+      shouldShowActivityRow(true, [textItem("1"), toolItem("t1", "done"), toolItem("t2", "running")]),
+    ).toBe(false);
   });
 });
