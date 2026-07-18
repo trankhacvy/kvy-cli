@@ -258,6 +258,51 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBeNull();
   });
 
+  it("extracts a --model override from claudeArgs into the session metadata (plan-v2.md W4.2 header model chip)", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+
+    await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--model", "opus", "--verbose"],
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+      }),
+    );
+
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { metadata: { model?: string } },
+    ];
+    expect(bootstrapParams.metadata.model).toBe("opus");
+  });
+
+  it("passes an undefined model into the session metadata when claudeArgs carries no --model flag", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+
+    await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--verbose"],
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+      }),
+    );
+
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { metadata: { model?: string } },
+    ];
+    expect(bootstrapParams.metadata.model).toBeUndefined();
+  });
+
   it("resumes the provider transcript from FALCON_RECONNECT_PROVIDER_SESSION_ID when set (plan-v2.md W3.7)", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
 

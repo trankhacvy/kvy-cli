@@ -153,6 +153,53 @@ describe("runStartCodexCommand", () => {
     expect(written.join("")).toContain("Codex has no local terminal mode");
   });
 
+  it("extracts a --model override from codexArgs into the session metadata (plan-v2.md W4.2 header model chip)", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_codex_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const { deps, releaseExit } = baseDeps({
+      codexArgs: ["--model", "gpt-5.1-codex"],
+      bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { metadata: { model?: string } },
+    ];
+    expect(bootstrapParams.metadata.model).toBe("gpt-5.1-codex");
+  });
+
+  it("passes an undefined model into the session metadata when codexArgs carries no --model flag", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_codex_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const { deps, releaseExit } = baseDeps({
+      codexArgs: [],
+      bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { metadata: { model?: string } },
+    ];
+    expect(bootstrapParams.metadata.model).toBeUndefined();
+  });
+
   it("routes a message RPC: claims, sends to the remote, and reports the tri-state status", async () => {
     const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
     try {
