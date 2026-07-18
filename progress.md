@@ -8866,3 +8866,34 @@ packages/cli/scripts/*-contract-test.ts + e2e/src/fakeSessionProcess.ts
 Remaining workflow-eligible: U4.4 (shell-polish), U4.5 (pty-setmode) — both
 have impl-complete worktrees; their pipelines died at the test stage on the
 session limit. Worktrees left in place for the resumed run.
+
+## v2-pty-injection Cycle 1 — 2026-07-19
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:** none this cycle.
+
+**Parked units:**
+- U1.6 `[bundle]` "web-safety" (W1.9+W1.10) — failed/parked this cycle.
+  Worktree `.worktrees/U1.6` (branch `review/U1.6-recreated`, tip `3466855`)
+  left in place for human inspection per the false-landing rule. Note:
+  plan-v2.md's Master TODO already shows U1.6's unit box and sub-boxes as
+  `[x]` from a prior cycle's landing; this cycle's re-attempt (the
+  "-recreated" branch) did not merge, so no un-ticking was done and no new
+  ticking was performed — the false-landing rule only permits ticking a box
+  after verifying `git merge-base --is-ancestor` on a SHA actually merged
+  into `v2-pty-injection` this cycle, which did not happen here.
+
+**Verification:** No units merged this cycle, so no `git merge-base
+--is-ancestor` checks apply and no plan-v2.md checkboxes were flipped.
+`pnpm typecheck` on `v2-pty-injection` — all 11 turbo tasks successful
+(cache-hit/full-turbo).
+
+**Next recommended units:**
+- Resolve `.worktrees/U1.6` (`review/U1.6-recreated`, tip `3466855`) — figure
+  out why the recreated attempt failed and either fix forward or restart the
+  unit.
+- U4.4 `[bundle]` "shell-polish" (W4.2c) and U4.5 `[solo]` "pty-setmode"
+  (W4.3) — both have impl-complete worktrees (`.worktrees/U4.4` branch
+  `wf/U4.4` tip `72bc0a1`; `.worktrees/U4.5` branch `wf/U4.5` tip `788fb7d`)
+  per the prior hand-merge session's note; still workflow-eligible.
