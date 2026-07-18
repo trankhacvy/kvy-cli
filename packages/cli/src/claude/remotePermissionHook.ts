@@ -4,10 +4,12 @@
  * pieces that already exist in isolation:
  *
  *  - {@link PreToolPermissionBridge} — the decision-routing core. `PreToolUse`
- *    always defers (`ask`); `PermissionRequest` is where the web-vs-terminal
- *    fork actually lives (local-vs-web policy, perm-request/perm-resolve
- *    emission, first-wins `perm.answer`, timeout→deny fallback) — design
- *    §7.6, plan-v2.md Wave 1.1.
+ *    defers (`ask`) for every tool except `AskUserQuestion`, which it
+ *    intercepts directly (deny-with-answer, plan-v2.md Wave 2.1);
+ *    `PermissionRequest` is where the web-vs-terminal fork for everything
+ *    else lives (local-vs-web policy, perm-request/perm-resolve emission,
+ *    first-wins `perm.answer`, timeout→deny fallback) — design §7.6,
+ *    plan-v2.md Wave 1.1.
  *  - {@link startHookServer} — the loopback server, with `onPreToolUse` and
  *    `onPermissionRequest` endpoints the generated hook forwarder POSTs to
  *    and blocks on for the decision.

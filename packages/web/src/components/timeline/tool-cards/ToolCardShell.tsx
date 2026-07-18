@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
+import { isAskUserQuestion } from "@/lib/tool-args";
 import type { ToolItem } from "@/sync/reducer";
+import { AskUserQuestionCard } from "../AskUserQuestionCard";
 import { NestedItems } from "../NestedItems";
 import { PermCard } from "../PermCard";
 import { PermissionBadge } from "../PermissionBadge";
@@ -39,13 +41,17 @@ export function ToolCardShell({
       <div className="px-3 py-2">{children}</div>
       {item.permission && item.permission.decision === undefined && (
         <div className="border-t border-border/70 px-3 py-2">
-          <PermCard
-            name={item.name}
-            args={item.args}
-            permission={item.permission}
-            showPreview={false}
-            showHeader={false}
-          />
+          {isAskUserQuestion(item.name) ? (
+            <AskUserQuestionCard args={item.args} permission={item.permission} />
+          ) : (
+            <PermCard
+              name={item.name}
+              args={item.args}
+              permission={item.permission}
+              showPreview={false}
+              showHeader={false}
+            />
+          )}
         </div>
       )}
       {item.subagent && item.subagent.length > 0 && (
