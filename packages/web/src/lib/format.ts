@@ -33,6 +33,22 @@ export function formatTokenCount(count: number): string {
     unitIndex++;
   }
 
-  const digits = value < 10 ? 1 : 0;
-  return `${value.toFixed(digits)}${units[unitIndex]}`;
+  // Re-check after rounding: toFixed() can round the displayed value up
+  // across a unit boundary (e.g. 999.95 -> "1000") or across the
+  // one-decimal/whole-number boundary (e.g. 9.999 -> "10.0") that decided
+  // `digits` in the first place. Recompute in either case so the rendered
+  // string reflects the rounded value, not the pre-rounding one.
+  let digits = value < 10 ? 1 : 0;
+  let rounded = Number(value.toFixed(digits));
+  if (rounded >= 1000 && unitIndex < units.length - 1) {
+    unitIndex++;
+    value /= 1000;
+    digits = value < 10 ? 1 : 0;
+    rounded = Number(value.toFixed(digits));
+  } else if (digits === 1 && rounded >= 10) {
+    digits = 0;
+    rounded = Number(value.toFixed(digits));
+  }
+
+  return `${rounded.toFixed(digits)}${units[unitIndex]}`;
 }
