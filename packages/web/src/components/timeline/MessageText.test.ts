@@ -26,12 +26,18 @@ describe("MessageText — CopyButton wiring", () => {
 
   it("anchors the button to the opposite side for a user bubble vs. an agent bubble", () => {
     const agentButton = (
-      (MessageText({ item: textItem("agent", "hi") }).props as { children: { props: { children: unknown[] } } })
-        .children.props.children[1] as { props: { className: string } }
+      (
+        MessageText({ item: textItem("agent", "hi") }).props as {
+          children: { props: { children: unknown[] } };
+        }
+      ).children.props.children[1] as { props: { className: string } }
     ).props.className;
     const userButton = (
-      (MessageText({ item: textItem("user", "hi") }).props as { children: { props: { children: unknown[] } } })
-        .children.props.children[1] as { props: { className: string } }
+      (
+        MessageText({ item: textItem("user", "hi") }).props as {
+          children: { props: { children: unknown[] } };
+        }
+      ).children.props.children[1] as { props: { className: string } }
     ).props.className;
 
     expect(agentButton).toContain("-right-2");
@@ -39,7 +45,14 @@ describe("MessageText — CopyButton wiring", () => {
   });
 
   it("still renders a ThinkingBlock for a thinking item, bypassing the copy-button bubble entirely", () => {
-    const item: TextItem = { id: "1", time: 0, role: "agent", kind: "text", md: "reasoning", thinking: true };
+    const item: TextItem = {
+      id: "1",
+      time: 0,
+      role: "agent",
+      kind: "text",
+      md: "reasoning",
+      thinking: true,
+    };
     const el = MessageText({ item });
     expect(el.props.md).toBe("reasoning");
   });

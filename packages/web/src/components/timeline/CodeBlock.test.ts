@@ -13,7 +13,7 @@ import { CodeBlock } from "./CodeBlock";
 describe("CodeBlock", () => {
   it("renders the wrapped `pre` untouched, plus a resting-state CopyButton alongside it", () => {
     const html = renderToStaticMarkup(
-      createElement(CodeBlock, { children: createElement("code", null, "const x = 1;") }),
+      createElement(CodeBlock, null, createElement("code", null, "const x = 1;")),
     );
     expect(html).toContain('class="group/code relative"');
     expect(html).toContain("<pre");
