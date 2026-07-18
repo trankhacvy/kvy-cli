@@ -274,6 +274,22 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBe("provider-sess-abc");
   });
 
+  it("treats a whitespace-only FALCON_RECONNECT_PROVIDER_SESSION_ID as absent, not a truthy sessionId", async () => {
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+
+    await runStartClaudeCommand(
+      baseDeps({
+        env: { FALCON_RECONNECT_PROVIDER_SESSION_ID: "   " },
+        startPtyClaudeSession,
+      }),
+    );
+
+    const [ptyOptions] = startPtyClaudeSession.mock.calls[0] as unknown as [
+      PtyClaudeSessionOptions,
+    ];
+    expect(ptyOptions.providerSessionId).toBeNull();
+  });
+
   it("passes env through to bootstrapSession so it can honor FALCON_RECONNECT_SESSION_ID", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_1",

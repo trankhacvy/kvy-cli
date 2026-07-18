@@ -492,7 +492,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // `--resume` composition from this) — set only when a caller
         // arranged the reconnect env ahead of this spawn (plan-v2.md W3.7);
         // ordinarily absent, i.e. a fresh provider session.
-        providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID ?? null,
+        providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
         homeDir: deps.homeDir,
         env,
         // The single shared hook server's `--settings` file + env — so the
