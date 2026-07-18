@@ -56,7 +56,16 @@ export function OptionsStep({
         Provider
         <Select
           value={form.provider}
-          onValueChange={(value) => onChange({ provider: value as NewSessionForm["provider"] })}
+          onValueChange={(value) => {
+            const nextProvider = value as NewSessionForm["provider"];
+            // The curated model list (and any custom string already typed)
+            // is provider-specific — carrying it across a provider switch
+            // would silently spawn the new provider with the old provider's
+            // model id (e.g. "sonnet" passed as Codex's --model). Reset to
+            // "provider default" instead of leaving a mismatched value.
+            setCustomOpen(false);
+            onChange({ provider: nextProvider, model: "" });
+          }}
         >
           <SelectTrigger id="new-session-provider" className="w-full">
             <SelectValue />
