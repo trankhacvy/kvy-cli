@@ -435,6 +435,26 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(setPromptOpen).toHaveBeenLastCalledWith(false);
   });
 
+  it("does not open the prompt gate on perm/question while a web turn is active (no local dialog rendered), but done still clears it", async () => {
+    const setPromptOpen = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ setPromptOpen }));
+    let onAttention: ((kind: "perm" | "question" | "done") => void) | undefined;
+    const installRemotePermissionHook = (async (opts: {
+      onAttention?: (kind: "perm" | "question" | "done") => void;
+    }) => {
+      onAttention = opts.onAttention;
+      return fakeRemotePermissionHook({ isWebTurnActive: () => true });
+    }) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
+
+    onAttention?.("perm");
+    onAttention?.("question");
+    expect(setPromptOpen).not.toHaveBeenCalled();
+    onAttention?.("done");
+    expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
   it("opens the prompt gate when the bridge signals a local-turn dialog is likely", async () => {
     const setPromptOpen = vi.fn();
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ setPromptOpen }));

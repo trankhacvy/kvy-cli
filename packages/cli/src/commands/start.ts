@@ -433,9 +433,20 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // message never gets typed into it; "done" (the Stop hook) means the
         // turn ended, clearing the gate. See `onEnvelopes` below for the
         // other, more precise clearing signal (a `tool-end` envelope).
+        //
+        // The Notification hook fires from Claude Code itself and can't tell
+        // us whether a TUI dialog actually rendered — during an active web
+        // turn, `PermissionRequest` is already answered remotely (the bridge's
+        // local-vs-web fork) and no dialog appears, so gate opening on
+        // "perm"/"question" is skipped while `isWebTurnActive()` is true,
+        // mirroring the bridge's own `onPromptLikely` (local-turn-only).
+        // "done" still always clears the gate unconditionally — the turn
+        // ending is safe to reflect regardless of who started it.
         onAttention: (kind) => {
           logger.debug("[start-claude] attention from hook", { kind });
-          if (kind === "perm" || kind === "question") ptyHandle?.setPromptOpen(true);
+          if ((kind === "perm" || kind === "question") && !permHook?.isWebTurnActive()) {
+            ptyHandle?.setPromptOpen(true);
+          }
           if (kind === "done") ptyHandle?.setPromptOpen(false);
         },
         // The bridge's local-turn path (a dialog may be about to render at
