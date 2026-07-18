@@ -557,6 +557,53 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
   });
 
+  it("gracefully requests loop() exit on SIGHUP too, fixing the wrapper's exit code to 1", async () => {
+    const rpcStop = vi.fn();
+    const registerSessionRpcHandlers = vi.fn(() => ({ stop: rpcStop }));
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    const loop = vi.fn(
+      async (options: LoopOptions) =>
+        await new Promise<number>((resolve) => {
+          options.onExitRequested(() => resolve(0));
+        }),
+    );
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--starting-mode", "remote"],
+        loop,
+        registerSessionRpcHandlers,
+        reportSessionStatus,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGHUP")).toBe(true);
+    });
+    const sighupCall = onSpy.mock.calls.find(([event]) => event === "SIGHUP");
+    const handler = sighupCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+
+    handler?.("SIGHUP");
+
+    const code = await resultPromise;
+
+    // SIGHUP's wrapper exit code (1) wins over the loop's own resolved 0 —
+    // same "signal exit code always wins" rule as the PTY flow's own test.
+    expect(code).toBe(1);
+    expect(rpcStop).toHaveBeenCalledTimes(1);
+    expect(exitSpy).not.toHaveBeenCalled();
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
+  });
+
   it("keeps the headless mode loop (never the PTY or a hook server) and starts it in remote mode", async () => {
     const loop = vi.fn(async (options: LoopOptions) => {
       expect(options.startingMode).toBe("remote");
@@ -791,5 +838,42 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     expect(code).toBe(0);
     expect(process.listenerCount("SIGTERM")).toBe(beforeTerm);
     expect(process.listenerCount("SIGHUP")).toBe(beforeHup);
+  });
+
+  it("never registers a SIGINT handler — Ctrl-C reaches the PTY child directly, not this wrapper", async () => {
+    const onSpy = vi.spyOn(process, "on");
+
+    const code = await runStartClaudeCommand(baseDeps());
+
+    expect(code).toBe(0);
+    expect(onSpy.mock.calls.some(([event]) => event === "SIGINT")).toBe(false);
+  });
+
+  it("only reports status once even if a signal fires after the PTY child already exited normally", async () => {
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    // A `done` that's already resolved by the time the signal fires — the
+    // guard (`statusReported`) must hold regardless of which side "wins" the
+    // race, not just the signal-first ordering the other tests exercise.
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(0) }));
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    const code = await runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, reportSessionStatus }),
+    );
+    expect(code).toBe(0);
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+
+    // The signal handler was registered and then deregistered in the outer
+    // `finally` once the command settled; invoking the captured reference
+    // directly simulates a signal landing just after normal completion —
+    // it must be a harmless no-op, never a second report.
+    const sigtermCall = onSpy.mock.calls.find(([event]) => event === "SIGTERM");
+    const handler = sigtermCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+    handler?.("SIGTERM");
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });
