@@ -34,5 +34,6 @@ describe("extractPlanMarkdown (W2.2 — ExitPlanMode plan preview)", () => {
     expect(extractPlanMarkdown("ExitPlanMode", { plan: 42 })).toBeNull();
     expect(extractPlanMarkdown("ExitPlanMode", {})).toBeNull();
     expect(extractPlanMarkdown("ExitPlanMode", undefined)).toBeNull();
+    expect(extractPlanMarkdown("ExitPlanMode", null)).toBeNull();
   });
 });
