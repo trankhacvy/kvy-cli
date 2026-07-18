@@ -1,13 +1,19 @@
 import type { SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { HookServerDeps, HookServerHandle, HookSettingsFile } from "./hookServer.js";
-import type { PreToolUseHookInput, PreToolUseHookOutput } from "./pretoolPermissionBridge.js";
+import type {
+  PermissionRequestHookInput,
+  PermissionRequestHookOutput,
+  PreToolUseHookInput,
+  PreToolUseHookOutput,
+} from "./pretoolPermissionBridge.js";
 import { HOOK_SETTINGS_ENV_VAR, installRemotePermissionHook } from "./remotePermissionHook.js";
 
 /**
  * Fakes for the two injected seams — no real Fastify server / temp files. The
- * fake `startHookServer` captures the deps so a test can drive `onPreToolUse`
- * / `onAttention` directly, exercising the REAL bridge underneath.
+ * fake `startHookServer` captures the deps so a test can drive
+ * `onPreToolUse`/`onPermissionRequest`/`onAttention` directly, exercising the
+ * REAL bridge underneath.
  */
 function makeHarness() {
   const emitted: SessionEnvelope[] = [];
@@ -52,6 +58,14 @@ const preTool = (
   tool_input,
 });
 
+const permReq = (
+  tool_name: string,
+  tool_input: Record<string, unknown> = {},
+): PermissionRequestHookInput => ({
+  tool_name,
+  tool_input,
+});
+
 function permRequestId(emitted: SessionEnvelope[]): string {
   const req = emitted.find((e) => e.ev.t === "perm-request");
   if (req?.ev.t !== "perm-request") throw new Error("no perm-request emitted");
@@ -73,12 +87,26 @@ describe("installRemotePermissionHook", () => {
     await handle.stop();
   });
 
-  it("defers to the terminal (`ask`) until a web turn is marked active", async () => {
+  it("onPreToolUse always defers to `ask`, regardless of web-turn state", async () => {
     const h = makeHarness();
     const handle = await h.install();
 
     const before = (await h.captured.onPreToolUse?.(preTool("Bash"))) as PreToolUseHookOutput;
     expect(before.hookSpecificOutput.permissionDecision).toBe("ask");
+
+    handle.markWebTurnStart();
+    const after = (await h.captured.onPreToolUse?.(preTool("Bash"))) as PreToolUseHookOutput;
+    expect(after.hookSpecificOutput.permissionDecision).toBe("ask");
+
+    await handle.stop();
+  });
+
+  it("onPermissionRequest defers to the terminal (undefined) until a web turn is marked active", async () => {
+    const h = makeHarness();
+    const handle = await h.install();
+
+    const before = await h.captured.onPermissionRequest?.(permReq("Bash"));
+    expect(before).toBeUndefined();
     expect(handle.isWebTurnActive()).toBe(false);
 
     handle.markWebTurnStart();
@@ -87,19 +115,19 @@ describe("installRemotePermissionHook", () => {
     await handle.stop();
   });
 
-  it("routes a web-turn tool call through the bridge and resolves it via perm.answer", async () => {
+  it("routes a web-turn PermissionRequest through the bridge and resolves it via perm.answer", async () => {
     const h = makeHarness();
     const handle = await h.install();
     handle.markWebTurnStart();
 
-    const pending = h.captured.onPreToolUse?.(preTool("Bash", { command: "ls" }));
+    const pending = h.captured.onPermissionRequest?.(permReq("Bash", { command: "ls" }));
     const reqId = permRequestId(h.emitted);
 
     const result = handle.resolvePermission({ reqId, decision: { kind: "allow", scope: "once" } });
     expect(result).toEqual({ ok: true });
 
-    const output = (await pending) as PreToolUseHookOutput;
-    expect(output.hookSpecificOutput.permissionDecision).toBe("allow");
+    const output = (await pending) as PermissionRequestHookOutput;
+    expect(output.hookSpecificOutput.decision?.behavior).toBe("allow");
 
     await handle.stop();
   });
@@ -138,16 +166,16 @@ describe("installRemotePermissionHook", () => {
     await handle.stop();
   });
 
-  it("stop() cleans up the settings file, stops the server, and denies dangling requests", async () => {
+  it("stop() cleans up the settings file, stops the server, and denies dangling PermissionRequests", async () => {
     const h = makeHarness();
     const handle = await h.install();
     handle.markWebTurnStart();
 
-    const pending = h.captured.onPreToolUse?.(preTool("Bash"));
+    const pending = h.captured.onPermissionRequest?.(permReq("Bash"));
     await handle.stop();
 
-    const output = (await pending) as PreToolUseHookOutput;
-    expect(output.hookSpecificOutput.permissionDecision).toBe("deny");
+    const output = (await pending) as PermissionRequestHookOutput;
+    expect(output.hookSpecificOutput.decision?.behavior).toBe("deny");
     expect(h.cleanup).toHaveBeenCalledOnce();
     expect(h.serverStop).toHaveBeenCalledOnce();
   });

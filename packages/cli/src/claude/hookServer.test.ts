@@ -262,6 +262,81 @@ describe("startHookServer", () => {
       await server.stop();
     }
   });
+
+  it("POST /hook/permission-request routes the tool payload through onPermissionRequest and returns its decision", async () => {
+    const onPermissionRequest = vi.fn(async (input: { tool_name: string }) => ({
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest" as const,
+        decision: {
+          behavior: (input.tool_name === "Bash" ? "deny" : "allow") as "allow" | "deny",
+          message: "from test",
+        },
+      },
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    try {
+      const res = await post(server.port, "/hook/permission-request", {
+        session_id: "sess_1",
+        tool_name: "Bash",
+        tool_input: { command: "rm -rf /" },
+        permission_mode: "default",
+      });
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        hookSpecificOutput: {
+          hookEventName: "PermissionRequest",
+          decision: { behavior: "deny", message: "from test" },
+        },
+      });
+      expect(onPermissionRequest).toHaveBeenCalledOnce();
+      const [input] = onPermissionRequest.mock.calls[0] as unknown as [{ tool_input: unknown }];
+      expect(input.tool_input).toEqual({ command: "rm -rf /" });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/permission-request returns 204 when no onPermissionRequest is wired", async () => {
+    const server = await startHookServer({ onSessionId: () => {} });
+    try {
+      const res = await post(server.port, "/hook/permission-request", {
+        tool_name: "Read",
+        tool_input: {},
+      });
+      expect(res.status).toBe(204);
+      const text = await res.text();
+      expect(text).toBe("");
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/permission-request returns 204 when onPermissionRequest resolves with undefined (local turn)", async () => {
+    const onPermissionRequest = vi.fn(async () => undefined);
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    try {
+      const res = await post(server.port, "/hook/permission-request", {
+        tool_name: "Bash",
+        tool_input: {},
+      });
+      expect(res.status).toBe(204);
+      expect(onPermissionRequest).toHaveBeenCalledOnce();
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/permission-request 400s a body missing tool_name", async () => {
+    const onPermissionRequest = vi.fn();
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    try {
+      const res = await post(server.port, "/hook/permission-request", { tool_input: {} });
+      expect(res.status).toBe(400);
+      expect(onPermissionRequest).not.toHaveBeenCalled();
+    } finally {
+      await server.stop();
+    }
+  });
 });
 
 describe("attentionKindFromNotificationMessage", () => {
@@ -351,6 +426,102 @@ describe("writeHookSettingsFile", () => {
       expect(hook.timeout).toBeGreaterThan(0);
     } finally {
       cleanup();
+    }
+  });
+
+  it("writes a PermissionRequest hook (the 5th settings entry) pointing at /hook/permission-request with a command timeout", () => {
+    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 54321);
+    try {
+      const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      expect(Object.keys(parsed.hooks)).toEqual([
+        "SessionStart",
+        "Notification",
+        "Stop",
+        "PreToolUse",
+        "PermissionRequest",
+      ]);
+      const hook = parsed.hooks.PermissionRequest[0].hooks[0];
+      expect(parsed.hooks.PermissionRequest[0].matcher).toBe("*");
+      expect(hook.type).toBe("command");
+      expect(hook.command).toMatch(/\/hook\/permission-request$/);
+      expect(hook.command).toContain("54321");
+      // The blocking hook must carry an explicit (seconds) timeout, same as PreToolUse.
+      expect(typeof hook.timeout).toBe("number");
+      expect(hook.timeout).toBeGreaterThan(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("end-to-end: the PermissionRequest forwarder writes the server's decision JSON to its own stdout", async () => {
+    const onPermissionRequest = vi.fn(async () => ({
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest" as const,
+        decision: { behavior: "deny" as const, message: "blocked by web" },
+      },
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
+    try {
+      const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      const command: string = parsed.hooks.PermissionRequest[0].hooks[0].command;
+      const match = command.match(/^node "(.+\.cjs)" (\d+) (\S+)$/);
+      const forwarderPath = match?.[1] as string;
+      const hookPath = match?.[3] as string;
+      expect(hookPath).toBe("/hook/permission-request");
+
+      const child = spawn(process.execPath, [forwarderPath, String(server.port), hookPath], {
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      const stdout: Buffer[] = [];
+      child.stdout.on("data", (chunk) => stdout.push(chunk));
+      child.stdin.end(JSON.stringify({ tool_name: "Bash", tool_input: { command: "x" } }));
+
+      await new Promise<void>((resolve, reject) => {
+        child.on("exit", () => resolve());
+        child.on("error", reject);
+      });
+
+      const decision = JSON.parse(Buffer.concat(stdout).toString("utf-8"));
+      expect(decision.hookSpecificOutput.decision.behavior).toBe("deny");
+      expect(onPermissionRequest).toHaveBeenCalledOnce();
+    } finally {
+      cleanup();
+      await server.stop();
+    }
+  });
+
+  it("end-to-end: a 204 (no decision) means the forwarder writes nothing to its own stdout", async () => {
+    const onPermissionRequest = vi.fn(async () => undefined);
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
+    try {
+      const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      const command: string = parsed.hooks.PermissionRequest[0].hooks[0].command;
+      const match = command.match(/^node "(.+\.cjs)" (\d+) (\S+)$/);
+      const forwarderPath = match?.[1] as string;
+      const hookPath = match?.[3] as string;
+
+      const child = spawn(process.execPath, [forwarderPath, String(server.port), hookPath], {
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      const stdout: Buffer[] = [];
+      child.stdout.on("data", (chunk) => stdout.push(chunk));
+      child.stdin.end(JSON.stringify({ tool_name: "Read", tool_input: {} }));
+
+      await new Promise<void>((resolve, reject) => {
+        child.on("exit", () => resolve());
+        child.on("error", reject);
+      });
+
+      expect(Buffer.concat(stdout).toString("utf-8")).toBe("");
+      expect(onPermissionRequest).toHaveBeenCalledOnce();
+    } finally {
+      cleanup();
+      await server.stop();
     }
   });
 
