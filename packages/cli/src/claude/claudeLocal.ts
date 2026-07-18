@@ -286,9 +286,14 @@ function forceStdinBlocking(logger: Logger): void {
  * Resolve which Claude Code session (if any) to resume, and re-derive the
  * flags to pass Claude Code, from the raw passthrough args. Mutates a copy
  * of `claudeArgs`, never the caller's array.
+ *
+ * Exported so the PTY-injection session model (`ptyClaudeSession.ts`) reuses
+ * the exact same `--resume`/`--continue`/`--session-id` resolution as the
+ * legacy `stdio:'inherit'` local spawn — narrowed to the three fields it
+ * actually reads so a caller need not synthesize a full `ClaudeLocalOptions`.
  */
-function resolveSessionFlags(
-  opts: ClaudeLocalOptions,
+export function resolveSessionFlags(
+  opts: Pick<ClaudeLocalOptions, "claudeArgs" | "sessionId" | "workingDirectory">,
   findLastSession: (workingDirectory: string, env?: NodeJS.ProcessEnv) => string | null,
   env: NodeJS.ProcessEnv,
   logger: Logger,

@@ -1,5 +1,7 @@
 import childProcess from "node:child_process";
 import fs from "node:fs";
+import { createServer, type Server, type Socket } from "node:net";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -214,6 +216,78 @@ describe("falcon_claude_launcher.cjs — fetch-patch fd3 signal", () => {
 
     expect(start.hostname).toBe("unknown");
     expect(start.path).toBe(malformed);
+  });
+});
+
+describe("falcon_claude_launcher.cjs — PTY-mode fetch signal over a unix socket", () => {
+  let server: Server | null = null;
+  const connections = new Set<Socket>();
+  let socketPath = "";
+  const originalSignalPath = process.env.FALCON_FETCH_SIGNAL_PATH;
+  let originalFetch: typeof global.fetch;
+
+  beforeEach(() => {
+    originalFetch = global.fetch;
+    delete require.cache[require.resolve(MODULE_PATH)];
+  });
+
+  afterEach(async () => {
+    global.fetch = originalFetch;
+    // The launcher holds a persistent client connection open, so force any
+    // live connections shut before close() (which otherwise waits on them).
+    for (const connection of connections) connection.destroy();
+    connections.clear();
+    if (server) {
+      await new Promise<void>((resolve) => server?.close(() => resolve()));
+      server = null;
+    }
+    if (originalSignalPath === undefined) delete process.env.FALCON_FETCH_SIGNAL_PATH;
+    else process.env.FALCON_FETCH_SIGNAL_PATH = originalSignalPath;
+    delete require.cache[require.resolve(MODULE_PATH)];
+    vi.restoreAllMocks();
+  });
+
+  it("writes fetch-start/fetch-end JSON lines to FALCON_FETCH_SIGNAL_PATH instead of fd 3", async () => {
+    socketPath = path.join(tmpdir(), `falcon-fetch-test-${process.pid}-${Date.now()}.sock`);
+    const received: unknown[] = [];
+    const gotTwoLines = new Promise<void>((resolve) => {
+      server = createServer((connection) => {
+        connections.add(connection);
+        connection.on("close", () => connections.delete(connection));
+        connection.setEncoding("utf8");
+        let buffer = "";
+        connection.on("data", (chunk: string) => {
+          buffer += chunk;
+          let newlineIndex = buffer.indexOf("\n");
+          while (newlineIndex >= 0) {
+            const line = buffer.slice(0, newlineIndex);
+            buffer = buffer.slice(newlineIndex + 1);
+            if (line.trim()) received.push(JSON.parse(line));
+            if (received.length >= 2) resolve();
+            newlineIndex = buffer.indexOf("\n");
+          }
+        });
+      });
+    });
+    await new Promise<void>((resolve) => server?.listen(socketPath, () => resolve()));
+
+    process.env.FALCON_FETCH_SIGNAL_PATH = socketPath;
+    // fd 3 must NOT be used in PTY mode.
+    const writeSyncSpy = vi.spyOn(fs, "writeSync").mockImplementation(() => 0);
+
+    const mockFetch = vi.fn(async () => new Response("ok"));
+    global.fetch = mockFetch as unknown as typeof global.fetch;
+
+    loadLauncher();
+    await global.fetch("https://api.example.com/v1/messages", { method: "POST" });
+
+    await gotTwoLines;
+
+    expect(writeSyncSpy.mock.calls.filter(([fd]) => fd === 3)).toHaveLength(0);
+    expect(received).toEqual([
+      expect.objectContaining({ type: "fetch-start", hostname: "api.example.com" }),
+      expect.objectContaining({ type: "fetch-end" }),
+    ]);
   });
 });
 

@@ -96,6 +96,11 @@ import {
 } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { Logger } from "../logger.js";
+import {
+  HOOK_COMMAND_TIMEOUT_SECONDS,
+  type PreToolUseHookInput,
+  type PreToolUseHookOutput,
+} from "./pretoolPermissionBridge.js";
 
 /** The lifecycle-signal kinds a local-mode session can honestly report —
  * the subset of `@falcon/wire`'s `LifecycleKind` that `POST
@@ -130,6 +135,40 @@ const NotificationHookBodySchema = z
 // optional/passthrough.
 const StopHookBodySchema = z.object({}).passthrough();
 
+// Claude Code's `PreToolUse` hook payload (verified against 2.1.212).
+// `tool_name` is the only strictly-required field; `tool_input`/
+// `permission_mode` are optional + everything passes through so a Claude Code
+// version that adds/renames fields never turns a real permission prompt into
+// a dropped 400.
+const PreToolUseHookBodySchema = z
+  .object({
+    tool_name: z.string().min(1),
+    tool_input: z.record(z.string(), z.unknown()).optional(),
+    permission_mode: z.string().optional(),
+  })
+  .passthrough();
+
+// The `PreToolUse` hook's stdout JSON (see `pretoolPermissionBridge.ts`). The
+// forwarder streams this response body back to Claude Code as the hook's own
+// stdout.
+const PreToolUseHookOutputSchema = z.object({
+  hookSpecificOutput: z.object({
+    hookEventName: z.literal("PreToolUse"),
+    permissionDecision: z.enum(["allow", "deny", "ask"]),
+    permissionDecisionReason: z.string().optional(),
+  }),
+  suppressOutput: z.literal(true),
+});
+
+/** When no `onPreToolUse` is wired, defer every tool to the normal TUI prompt. */
+const PRE_TOOL_USE_ASK: PreToolUseHookOutput = {
+  hookSpecificOutput: {
+    hookEventName: "PreToolUse",
+    permissionDecision: "ask",
+  },
+  suppressOutput: true,
+};
+
 const HookOkResponseSchema = z.object({ status: z.literal("ok") });
 
 /**
@@ -155,6 +194,16 @@ export interface HookServerDeps {
    * it and these hooks become no-ops beyond logging.
    */
   onAttention?: (kind: AttentionKind) => void;
+  /**
+   * Invoked when Claude Code's `PreToolUse` hook fires — a tool is about to
+   * run and Falcon gets to approve/deny/defer it (design §7.6, remote
+   * permission answering). Resolves with the `PreToolUse` output the
+   * forwarder writes back to Claude Code as the hook's stdout. Optional: when
+   * omitted, every tool is deferred to the normal TUI prompt (`ask`), so a
+   * caller that only wants the lifecycle hooks stays unaffected. May block
+   * (awaiting a web answer) up to the bridge's own timeout.
+   */
+  onPreToolUse?: (input: PreToolUseHookInput) => Promise<PreToolUseHookOutput>;
   logger?: Logger;
 }
 
@@ -169,7 +218,7 @@ export interface HookServerHandle {
  * shape exactly.
  */
 export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle> {
-  const { onSessionId, onAttention, logger } = deps;
+  const { onSessionId, onAttention, onPreToolUse, logger } = deps;
 
   return new Promise((resolve, reject) => {
     const app = fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -228,6 +277,25 @@ export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle>
       },
     );
 
+    // A tool is about to run — route it through Falcon's permission pipeline
+    // (design §7.6). This handler may block until the web answers (or the
+    // bridge times out); the forwarder holds the hook open and streams this
+    // JSON back to Claude Code as the hook's stdout.
+    app.post(
+      "/hook/pre-tool-use",
+      {
+        schema: {
+          body: PreToolUseHookBodySchema,
+          response: { 200: PreToolUseHookOutputSchema },
+        },
+      },
+      async (request) => {
+        logger?.debug("[hook-server] pre-tool-use", { toolName: request.body.tool_name });
+        if (!onPreToolUse) return PRE_TOOL_USE_ASK;
+        return onPreToolUse(request.body as PreToolUseHookInput);
+      },
+    );
+
     app.listen({ port: 0, host: "127.0.0.1" }, (err, address) => {
       if (err) {
         logger?.debug("[hook-server] failed to start", {
@@ -257,17 +325,30 @@ export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle>
 // anywhere itself. This script (written alongside the settings file so no
 // repo-checked-in script is required) reads stdin and forwards it verbatim
 // to this process's own hook server, mirroring happy-cli's
-// `session_hook_forwarder.cjs` forwarder. It's shared by all three hooks
-// (`SessionStart`/`Notification`/`Stop`) — the settings file passes each
-// hook's own endpoint path as the second argv so one script covers all
-// three. Errors are swallowed: a forwarder failure must never surface as a
-// Claude Code error to the user.
+// `session_hook_forwarder.cjs` forwarder. It's shared by all four hooks
+// (`SessionStart`/`Notification`/`Stop`/`PreToolUse`) — the settings file
+// passes each hook's own endpoint path as the second argv so one script
+// covers all of them.
+//
+// The `SessionStart`/`Notification`/`Stop` hooks are fire-and-forget: the
+// response is drained and ignored, and any error is swallowed so a forwarder
+// failure never surfaces as a Claude Code error to the user.
+//
+// The `PreToolUse` hook is DIFFERENT: it is a blocking, request/response
+// decision hook. The forwarder must (1) keep the request open until the
+// server responds (the server holds it until the web answers or its own
+// timeout), and (2) write the server's 200 response body verbatim to its OWN
+// stdout — that JSON IS the hook's decision (`permissionDecision`
+// allow/deny/ask). On any error or non-200, it writes nothing and exits 0,
+// which Claude Code treats as "no decision" → its normal TUI permission
+// prompt (a safe fallback that never wedges the tool).
 const FORWARDER_SCRIPT = `#!/usr/bin/env node
 'use strict';
 const http = require('node:http');
 const port = Number(process.argv[2]);
 const hookPath = process.argv[3];
 if (!port || Number.isNaN(port) || !hookPath) process.exit(0);
+const blocking = hookPath === '/hook/pre-tool-use';
 const chunks = [];
 process.stdin.on('data', (chunk) => chunks.push(chunk));
 process.stdin.on('end', () => {
@@ -280,7 +361,21 @@ process.stdin.on('end', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'content-length': body.length },
     },
-    (res) => res.resume(),
+    (res) => {
+      if (!blocking) {
+        res.resume();
+        return;
+      }
+      const out = [];
+      res.on('data', (chunk) => out.push(chunk));
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          try {
+            process.stdout.write(Buffer.concat(out));
+          } catch {}
+        }
+      });
+    },
   );
   req.on('error', () => {});
   req.end(body);
@@ -297,10 +392,12 @@ export interface HookSettingsFile {
 
 /**
  * Write a temp `--settings` file (design §7.4) configuring `SessionStart`,
- * `Notification`, and `Stop` hooks that all report to the hook server
- * listening on `port`, each hitting its own endpoint via one shared
+ * `Notification`, `Stop`, and `PreToolUse` hooks that all report to the hook
+ * server listening on `port`, each hitting its own endpoint via one shared
  * forwarder script written into the same directory (the hook mechanism only
- * supports shell "command" hooks, not a direct HTTP call).
+ * supports shell "command" hooks, not a direct HTTP call). The first three
+ * are fire-and-forget lifecycle signals; `PreToolUse` is the blocking
+ * remote-permission-answering hook (design §7.6).
  *
  * `dir` is caller-supplied (e.g. a `~/.falcon/tmp/hooks`-style directory)
  * rather than resolved here, keeping this module decoupled from
@@ -326,6 +423,23 @@ export function writeHookSettingsFile(dir: string, port: number): HookSettingsFi
         { matcher: "*", hooks: [{ type: "command", command: command("/hook/notification") }] },
       ],
       Stop: [{ matcher: "*", hooks: [{ type: "command", command: command("/hook/stop") }] }],
+      // The PreToolUse hook is the blocking permission-decision hook (design
+      // §7.6). `timeout` (seconds) is the outer bound Claude Code waits for
+      // the forwarder — kept comfortably above the bridge's own answer
+      // timeout so the bridge always resolves first (as a clean deny) rather
+      // than letting Claude Code's "hook did not respond" path fire.
+      PreToolUse: [
+        {
+          matcher: "*",
+          hooks: [
+            {
+              type: "command",
+              command: command("/hook/pre-tool-use"),
+              timeout: HOOK_COMMAND_TIMEOUT_SECONDS,
+            },
+          ],
+        },
+      ],
     },
   };
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2));

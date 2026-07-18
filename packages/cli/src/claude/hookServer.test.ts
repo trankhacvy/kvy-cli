@@ -199,6 +199,69 @@ describe("startHookServer", () => {
       await server.stop();
     }
   });
+
+  it("POST /hook/pre-tool-use routes the tool payload through onPreToolUse and returns its decision", async () => {
+    const onPreToolUse = vi.fn(async (input: { tool_name: string }) => ({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse" as const,
+        permissionDecision: (input.tool_name === "Bash" ? "deny" : "allow") as "allow" | "deny",
+        permissionDecisionReason: "from test",
+      },
+      suppressOutput: true as const,
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPreToolUse });
+    try {
+      const res = await post(server.port, "/hook/pre-tool-use", {
+        session_id: "sess_1",
+        tool_name: "Bash",
+        tool_input: { command: "rm -rf /" },
+        permission_mode: "default",
+      });
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: "from test",
+        },
+        suppressOutput: true,
+      });
+      expect(onPreToolUse).toHaveBeenCalledOnce();
+      const [input] = onPreToolUse.mock.calls[0] as unknown as [{ tool_input: unknown }];
+      expect(input.tool_input).toEqual({ command: "rm -rf /" });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/pre-tool-use defers to `ask` when no onPreToolUse is wired", async () => {
+    const server = await startHookServer({ onSessionId: () => {} });
+    try {
+      const res = await post(server.port, "/hook/pre-tool-use", {
+        tool_name: "Read",
+        tool_input: {},
+      });
+      expect(res.status).toBe(200);
+      await expect(res.json()).resolves.toEqual({
+        hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask" },
+        suppressOutput: true,
+      });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/pre-tool-use 400s a body missing tool_name", async () => {
+    const onPreToolUse = vi.fn();
+    const server = await startHookServer({ onSessionId: () => {}, onPreToolUse });
+    try {
+      const res = await post(server.port, "/hook/pre-tool-use", { tool_input: {} });
+      expect(res.status).toBe(400);
+      expect(onPreToolUse).not.toHaveBeenCalled();
+    } finally {
+      await server.stop();
+    }
+  });
 });
 
 describe("attentionKindFromNotificationMessage", () => {
@@ -270,6 +333,64 @@ describe("writeHookSettingsFile", () => {
       expect(forwarderOf(notificationCommand)).toBe(forwarderOf(stopCommand));
     } finally {
       cleanup();
+    }
+  });
+
+  it("writes a PreToolUse hook pointing at /hook/pre-tool-use with a command timeout", () => {
+    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 54321);
+    try {
+      const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      const hook = parsed.hooks.PreToolUse[0].hooks[0];
+      expect(parsed.hooks.PreToolUse[0].matcher).toBe("*");
+      expect(hook.type).toBe("command");
+      expect(hook.command).toMatch(/\/hook\/pre-tool-use$/);
+      expect(hook.command).toContain("54321");
+      // The blocking hook must carry an explicit (seconds) timeout.
+      expect(typeof hook.timeout).toBe("number");
+      expect(hook.timeout).toBeGreaterThan(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("end-to-end: the PreToolUse forwarder writes the server's decision JSON to its own stdout", async () => {
+    const onPreToolUse = vi.fn(async () => ({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse" as const,
+        permissionDecision: "deny" as const,
+        permissionDecisionReason: "blocked by web",
+      },
+      suppressOutput: true as const,
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPreToolUse });
+    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
+    try {
+      const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
+      const command: string = parsed.hooks.PreToolUse[0].hooks[0].command;
+      const match = command.match(/^node "(.+\.cjs)" (\d+) (\S+)$/);
+      const forwarderPath = match?.[1] as string;
+      const hookPath = match?.[3] as string;
+
+      const child = spawn(process.execPath, [forwarderPath, String(server.port), hookPath], {
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      const stdout: Buffer[] = [];
+      child.stdout.on("data", (chunk) => stdout.push(chunk));
+      child.stdin.end(JSON.stringify({ tool_name: "Bash", tool_input: { command: "x" } }));
+
+      await new Promise<void>((resolve, reject) => {
+        child.on("exit", () => resolve());
+        child.on("error", reject);
+      });
+
+      const decision = JSON.parse(Buffer.concat(stdout).toString("utf-8"));
+      expect(decision.hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(onPreToolUse).toHaveBeenCalledOnce();
+    } finally {
+      cleanup();
+      await server.stop();
     }
   });
 

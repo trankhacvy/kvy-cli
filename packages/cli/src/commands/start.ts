@@ -1,9 +1,10 @@
 /**
  * `falcon claude [args...]` (plan.md §16 "1.3 CLI skeleton + local mode" /
- * "2.2 Mode switching") — the first real (non-stub) provider spawn. Every
- * piece this wires together already existed and was already unit-tested in
- * isolation (`session/bootstrap.ts`, `api/outbox.ts`, `claude/loop.ts` +
- * `claude/claudeLocalLauncher.ts`, `provider/claudeCliLocator.ts`,
+ * "2.2 Mode switching"; plan.md §17) — the first real (non-stub) provider
+ * spawn. Every piece this wires together already existed and was already
+ * unit-tested in isolation (`session/bootstrap.ts`, `api/outbox.ts`,
+ * `claude/loop.ts` + `claude/ptyClaudeSession.ts`,
+ * `claude/remotePermissionHook.ts`, `provider/claudeCliLocator.ts`,
  * `session/sessionClient.ts`, `rpc/sessionRpc.ts`) — nothing here is new
  * logic, only composition. Codex has no local-interactive mode
  * (`codex/index.ts`'s `CODEX_NO_LOCAL_MODE_NOTE`), so `index.ts`'s `runStart`
@@ -12,27 +13,48 @@
  *
  * This module opens the session-scoped `/v1/stream` connection
  * (`session/sessionClient.ts`) and registers the five session RPCs
- * (`rpc/sessionRpc.ts`) over it, so a `message`/`takeControl` sent from the
- * web UI actually reaches `loop()`: `message`/`takeControl` are routed
- * through a tiny local pub-sub that `onMessage`/`onTakeControl` subscribe to
- * (previously no-op stubs — nothing could ever reach `loop()`, which is why
- * the web Composer's "RPC target not available" error happened: nothing on
- * the CLI side ever joined the `s:<sessionId>:<method>` room the server's
- * relay looks up).
+ * (`rpc/sessionRpc.ts`) over it, so a `message`/`takeControl`/`perm.answer`
+ * sent from the web UI actually reaches the running session: previously these
+ * were no-op stubs and nothing on the CLI side ever joined the
+ * `s:<sessionId>:<method>` room the server's relay looks up (the "RPC target
+ * not available" web error).
  *
- * v2 (ACP, plan.md §17 Phase 2.2): `interrupt`/`setMode`/`perm.answer` now
- * reach a live remote turn — `loop()`'s `onRemoteActive` hands this module
- * the running remote launcher's controls (`interrupt`/`setMode`/
- * `resolvePermission`) for the duration of each remote run, `null` in local
- * mode (where the RPCs stay honestly not-supported — a permission prompt on
- * the provider's own TTY can't be answered remotely, plan.md FR-3.6).
+ * ## Two flows (`detectStartingMode()` picks the branch)
+ *
+ * v3 (PTY injection — the omnara model): a human-run, terminal-attached
+ * `falcon claude` no longer drives the local↔remote mode-switch loop at all.
+ * It runs `claude` on a pseudo-terminal (`ptyClaudeSession.ts`): the normal
+ * TUI stays live, and a web-sent `message` is TYPED INTO that same PTY when
+ * the session is idle — no mode switch, no process kill, no Ink takeover.
+ * Remote answering of the live TUI's tool-permission prompts (design §7.4/
+ * §7.6) rides on a SINGLE hook server installed here via
+ * `installRemotePermissionHook()`, which owns all four Claude Code hooks
+ * (`SessionStart`/`Notification`/`Stop`/`PreToolUse`). Its `settingsEnv`/
+ * `settingsPath` are handed to the PTY session (so the spawned `claude` gets
+ * `--settings`), its `onSessionId` is routed to the PTY tailer, its
+ * `resolvePermission` backs the `perm.answer` RPC, and `markWebTurnStart()`
+ * fires the moment a web message is actually submitted into the PTY so that
+ * turn's `PreToolUse` prompts route to the web PermCard (a locally-typed turn
+ * shows the normal terminal prompt; `markTurnEnd()` is fired automatically by
+ * the composition off Claude Code's own `Stop` hook). `interrupt`/`setMode`
+ * stay honestly not-supported on this path — the live TUI owns its own Ctrl-C
+ * and mode.
+ *
+ * The legacy `loop()` path (with the ACP remote transport) is kept ONLY for
+ * the daemon-spawned, no-terminal `falcon claude --starting-mode remote`
+ * flow, which genuinely starts headless and has no live TUI: there
+ * `interrupt`/`setMode`/`perm.answer` reach the live remote turn via
+ * `loop()`'s `onRemoteActive`, and there is no PTY injection and no hook
+ * server (ACP owns permissions agent-side).
  *
  * Send idempotency (design §7.10): the `message` RPC claims `(sessionId,
  * envelopeId)` in the on-disk claim store BEFORE emitting — a duplicate
  * whose claim already completed replies `duplicate`, one whose claim exists
  * with no result (crash mid-turn) replies `outcome-unknown`, and a fresh
- * claim is completed when the turn settles (`onTurnSettled`). A retried RPC
- * can never run the agent twice for one logical send.
+ * claim is completed when the send settles (the PTY path completes it on
+ * `onInjected` — the moment the message is typed + submitted; the remote path
+ * on `onTurnSettled`). A retried RPC can never run the agent twice for one
+ * logical send.
  */
 import path from "node:path";
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
@@ -56,6 +78,15 @@ import {
   type QueuedMessage,
   type RemoteControls,
 } from "../claude/loop.js";
+import {
+  type PtyClaudeSessionHandle,
+  startPtyClaudeSession as startPtyClaudeSessionDefault,
+} from "../claude/ptyClaudeSession.js";
+import {
+  defaultHooksDir,
+  installRemotePermissionHook as installRemotePermissionHookDefault,
+  type RemotePermissionHookHandle,
+} from "../claude/remotePermissionHook.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import {
@@ -104,8 +135,18 @@ export interface StartClaudeCommandDeps {
   locateClaudeCli?: (env: NodeJS.ProcessEnv) => ClaudeCliLocation | null;
   /** Injectable for tests; defaults to the real `bootstrapSession()`. */
   bootstrapSession?: typeof bootstrapSessionDefault;
-  /** Injectable for tests; defaults to the real mode loop. */
+  /** Injectable for tests; defaults to the real mode loop (only reached on the `--starting-mode remote` branch). */
   loop?: (options: LoopOptions, loopDeps: LoopDeps) => Promise<number>;
+  /** Injectable for tests; defaults to the real PTY-injection session (the terminal-attached flow). */
+  startPtyClaudeSession?: typeof startPtyClaudeSessionDefault;
+  /**
+   * Injectable for tests; defaults to the real remote-permission hook
+   * installer (the single hook server owning all four hooks —
+   * `claude/remotePermissionHook.ts`). Only installed on the terminal PTY
+   * flow; the headless `--starting-mode remote` flow uses ACP's own
+   * agent-side permission pipeline instead.
+   */
+  installRemotePermissionHook?: typeof installRemotePermissionHookDefault;
   /** Injectable for tests; defaults to the real `startSessionClient()`. */
   startSessionClient?: typeof startSessionClientDefault;
   /** Injectable for tests; defaults to the real `registerSessionRpcHandlers()`. */
@@ -186,7 +227,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const fetchImpl = deps.fetchImpl ?? fetch;
   const locate = deps.locateClaudeCli ?? findGlobalClaudeCliPathDefault;
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
-  const runLoop = deps.loop ?? loopDefault;
   const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
 
@@ -203,6 +243,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     writeError(`falcon claude: ${CLAUDE_NOT_INSTALLED_MESSAGE}\n`);
     return 1;
   }
+  // Capture the narrowed path in a plain const — the null-guard's narrowing of
+  // `location` does not carry into the nested run* closures below.
+  const claudeCliPath = location.path;
 
   const masterSecret = decodeBase64(credentials.masterSecretOrContentBundle);
   if (masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
@@ -279,29 +322,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     logger,
   });
 
-  // Real cross-install-method location found above — thread it through so
-  // `falcon_claude_launcher.cjs`'s own `getClaudeCliPath()` (a deliberate
-  // local stub, per its file header: "will [be] replace[d] ... at
-  // integration time") uses the resolver instead of falling back to a bare
-  // `"claude"` PATH lookup.
-  const localLauncherDeps: ClaudeLocalLauncherDeps = {
-    launcherPath: deps.launcherPath,
-    logger,
-  };
-  // Defaults-only — `loop()` only reaches `startClaudeRemoteLauncher(...,
-  // deps.remote)` once something (the `message`/`takeControl` RPCs wired
-  // below) actually requests a local→remote switch, but it must be a real
-  // object rather than left undefined so that switch doesn't crash on a
-  // missing dep the moment it happens.
-  const remoteLauncherDeps: ClaudeRemoteLauncherDeps = {};
-
-  const permissionMode: PermissionMode = "default";
-  const noUnsubscribe = () => () => {};
-
   // The session-scoped `/v1/stream` connection `message`/`interrupt`/
   // `takeControl`/`setMode`/`perm.answer` arrive over (design §4.4). Without
   // this, nothing on the CLI side ever joins the `s:<sessionId>:<method>`
-  // room the server's RPC relay looks up — the bug this task fixes.
+  // room the server's RPC relay looks up.
   const sessionClient = startSessionClient(
     createSessionClientDeps(
       { serverUrl: backendUrl, token: credentials.token, sessionId: bootstrap.sessionId },
@@ -309,151 +333,274 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     ),
   );
 
-  // Local pub-sub `loop()`'s `onMessage`/`onTakeControl` registration
-  // functions subscribe to — the session RPC handlers below are the only
-  // producers. `currentMode` (updated via `onModeChange`) lets the
-  // `message` handler give an honest `queued` answer: true while local mode
-  // is still aborting/switching, false once a remote query can take the
-  // message directly.
-  const messageSignal = createSignal<QueuedMessage>();
-  const takeControlSignal = createSignal<void>();
-  let currentMode: ClaudeMode = "local";
-
-  // Live remote controls while a remote turn is running (`loop()`'s
-  // `onRemoteActive`), or null in local mode. The `interrupt`/`setMode`/
-  // `perm.answer` RPCs route here.
-  let activeRemote: RemoteControls | null = null;
-
   // Send-idempotency claim bookkeeping (design §7.10): envelopeId -> claimId,
-  // so the turn-settle hook can complete exactly the claim its `message`
-  // handler opened. Cleared once completed.
+  // so the completion hook can complete exactly the claim its `message`
+  // handler opened. Cleared once completed. Shared by both flows.
   const openClaims = new Map<string, string>();
-
-  const rpcHandlers: SessionRpcHandlers = {
-    message: async ({ envelope }) => {
-      if (envelope.ev.t !== "text") {
-        logger.warn("[start-claude] message RPC delivered a non-text envelope; dropping", {
-          type: envelope.ev.t,
-        });
-        return { queued: false };
-      }
-      // Claim BEFORE emitting — a retried/duplicated RPC must never run the
-      // agent twice (design §7.10). `readCreds` guaranteed a homeDir above.
-      const claim = await claimMessageSend(bootstrap.sessionId, envelope.id, {
-        homeDir: deps.homeDir,
+  const completeClaim = (messageId: string, result: unknown): void => {
+    const claimId = openClaims.get(messageId);
+    if (!claimId) return;
+    openClaims.delete(messageId);
+    void completeMessageSend(bootstrap.sessionId, messageId, claimId, result, {
+      homeDir: deps.homeDir,
+    }).catch((error: unknown) => {
+      logger.warn("[start-claude] failed to complete send claim", {
+        id: messageId,
+        error: error instanceof Error ? error.message : String(error),
       });
-      if (claim.status === "completed") {
-        logger.debug("[start-claude] message RPC replay — claim already completed", {
-          id: envelope.id,
-        });
-        return { queued: false, status: "duplicate" };
-      }
-      if (claim.status === "in-progress") {
-        logger.warn(
-          "[start-claude] message RPC outcome indeterminate — open claim, not re-running",
-          {
-            id: envelope.id,
-          },
-        );
-        return { queued: false, status: "outcome-unknown" };
-      }
-      openClaims.set(envelope.id, claim.claimId);
-      const queued = currentMode === "local";
-      messageSignal.emit({ id: envelope.id, text: envelope.ev.md });
-      return { queued, status: "queued" };
-    },
-    takeControl: async () => {
-      takeControlSignal.emit();
-      return { ok: true };
-    },
-    // Wired (v2): cancels the in-flight remote turn. In local mode there is
-    // no remote turn to interrupt — honest not-supported (the real TUI owns
-    // its own Ctrl-C).
-    interrupt: async () => {
-      if (!activeRemote) {
-        logger.debug("[start-claude] interrupt RPC in local mode — no remote turn to cancel");
-        return { ok: false };
-      }
-      await activeRemote.interrupt();
-      return { ok: true };
-    },
-    // Wired (v2): syncs the live remote session's permission mode. Local mode
-    // has no live permission pipeline to retune.
-    setMode: async ({ mode }) => {
-      if (!activeRemote) {
-        logger.debug("[start-claude] setMode RPC in local mode — no remote session");
-        return { ok: false };
-      }
-      await activeRemote.setMode(mode);
-      return { ok: true };
-    },
-    // Wired (v2): first-wins resolution against the live remote permission
-    // handler. In local mode a permission prompt lives on the provider's own
-    // TTY and can't be answered remotely (plan.md FR-3.6) — honest failure.
-    permAnswer: async ({ reqId, decision }) => {
-      if (!activeRemote) {
-        logger.debug("[start-claude] perm.answer RPC in local mode — not answerable on this path");
-        return { ok: false };
-      }
-      return activeRemote.resolvePermission({ reqId, decision });
-    },
+    });
   };
 
-  const rpcHandle = registerRpc({
-    sessionId: bootstrap.sessionId,
-    dek: bootstrap.dek,
-    socket: sessionClient.socket,
-    handlers: rpcHandlers,
-    logger,
-  });
+  // Claim a send BEFORE it reaches the agent — a retried/duplicated RPC must
+  // never run the agent twice (design §7.10). Returns either the text to
+  // deliver (fresh claim) or the honest tri-state RPC response to send back.
+  type MessageEnvelope = Parameters<SessionRpcHandlers["message"]>[0]["envelope"];
+  type MessageResult = Awaited<ReturnType<SessionRpcHandlers["message"]>>;
+  const beginSend = async (
+    envelope: MessageEnvelope,
+  ): Promise<{ proceed: true; text: string } | { proceed: false; response: MessageResult }> => {
+    if (envelope.ev.t !== "text") {
+      logger.warn("[start-claude] message RPC delivered a non-text envelope; dropping", {
+        type: envelope.ev.t,
+      });
+      return { proceed: false, response: { queued: false } };
+    }
+    const text = envelope.ev.md;
+    const claim = await claimMessageSend(bootstrap.sessionId, envelope.id, {
+      homeDir: deps.homeDir,
+    });
+    if (claim.status === "completed") {
+      logger.debug("[start-claude] message RPC replay — claim already completed", {
+        id: envelope.id,
+      });
+      return { proceed: false, response: { queued: false, status: "duplicate" } };
+    }
+    if (claim.status === "in-progress") {
+      logger.warn("[start-claude] message RPC outcome indeterminate — open claim, not re-running", {
+        id: envelope.id,
+      });
+      return { proceed: false, response: { queued: false, status: "outcome-unknown" } };
+    }
+    openClaims.set(envelope.id, claim.claimId);
+    return { proceed: true, text };
+  };
 
-  try {
-    return await runLoop(
+  /**
+   * The terminal-attached flow (the common human-run `falcon claude`): run
+   * `claude` on a PTY and type web messages into it. No mode switch ever.
+   *
+   * Installs the SINGLE hook server (`installRemotePermissionHook()`, owning
+   * all four Claude Code hooks) and hands the PTY session its
+   * `settingsPath`/`settingsEnv` (so the spawned `claude` gets `--settings`
+   * and all four hooks fire) and routes its `onSessionId` into the PTY
+   * tailer. `perm.answer` routes to the hook bridge; a web message being
+   * submitted (`onInjected`) marks the turn web-initiated so its `PreToolUse`
+   * prompts route to the web PermCard.
+   */
+  async function runLocalPty(): Promise<number> {
+    const runPtySession = deps.startPtyClaudeSession ?? startPtyClaudeSessionDefault;
+    const installRemotePermHook =
+      deps.installRemotePermissionHook ?? installRemotePermissionHookDefault;
+
+    // Assigned right below; the hook server's `onSessionId` (installed first)
+    // forwards the real provider session id into it once the TUI reports it.
+    let ptyHandle: PtyClaudeSessionHandle | null = null;
+
+    // The one hook server for this session. A failure here is non-fatal: the
+    // session still starts (the terminal TUI's own prompts still work), just
+    // without remote permission answering this run.
+    let permHook: RemotePermissionHookHandle | null = null;
+    try {
+      permHook = await installRemotePermHook({
+        hooksDir: defaultHooksDir(deps.homeDir),
+        emitEnvelope: (envelope) => outbox.enqueue([envelope]),
+        onSessionId: (id) => {
+          logger.debug("[start-claude] provider session id from SessionStart hook", { id });
+          ptyHandle?.notifyProviderSessionId(id);
+        },
+        onAttention: (kind) => logger.debug("[start-claude] attention from hook", { kind }),
+        logger,
+      });
+    } catch (error) {
+      logger.warn("[start-claude] remote permission hook unavailable", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const ptySession: PtyClaudeSessionHandle = runPtySession(
       {
         workingDirectory: deps.workingDirectory,
-        startingMode: "local",
-        permissionMode,
-        homeDir: deps.homeDir,
+        launcherPath: deps.launcherPath,
+        claudeCliPath: claudeCliPath,
         claudeArgs: deps.claudeArgs,
-        claudeEnvVars: { FALCON_CLAUDE_PATH: location.path },
+        providerSessionId: null,
+        homeDir: deps.homeDir,
+        env,
+        // The single shared hook server's `--settings` file + env — so the
+        // PTY-spawned `claude` fires all four hooks. Null when install failed.
+        settingsPath: permHook?.settingsPath ?? null,
+        settingsEnv: permHook?.settingsEnv,
         onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
-        onModeChange: (mode) => {
-          currentMode = mode;
+        // The send-claim completes the moment the message is actually typed +
+        // submitted into the PTY — from there a retry is an honest duplicate.
+        // That same submit is the "a web turn just began" signal: mark it so
+        // this turn's `PreToolUse` prompts route to the web PermCard.
+        onInjected: (id) => {
+          completeClaim(id, { status: "injected" });
+          permHook?.markWebTurnStart();
         },
-        onRemoteActive: (controls) => {
-          activeRemote = controls;
-        },
-        // Complete the send claim the moment a turn reaches a terminal
-        // stopReason (design §7.10). A turn whose prompt was REJECTED never
-        // fires this — its claim stays open so a retry sees `outcome-unknown`.
-        onTurnSettled: ({ messageId, status }) => {
-          if (!messageId) return;
-          const claimId = openClaims.get(messageId);
-          if (!claimId) return;
-          openClaims.delete(messageId);
-          void completeMessageSend(
-            bootstrap.sessionId,
-            messageId,
-            claimId,
-            { status },
-            { homeDir: deps.homeDir },
-          ).catch((error: unknown) => {
-            logger.warn("[start-claude] failed to complete send claim", {
-              id: messageId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          });
-        },
-        onMessage: (handler) => messageSignal.subscribe(handler),
-        onTakeControl: (handler) => takeControlSignal.subscribe(handler),
-        onExitRequested: noUnsubscribe,
         logger,
       },
-      { local: localLauncherDeps, remote: remoteLauncherDeps },
+      { logger },
     );
+    ptyHandle = ptySession;
+
+    const rpcHandlers: SessionRpcHandlers = {
+      message: async ({ envelope }) => {
+        const begin = await beginSend(envelope);
+        if (!begin.proceed) return begin.response;
+        ptySession.injectMessage({ id: envelope.id, text: begin.text });
+        return { queued: true, status: "queued" };
+      },
+      // The human is already at this terminal — "take control" is a no-op that
+      // succeeds (there is no remote turn to reclaim from).
+      takeControl: async () => ({ ok: true }),
+      // The live TUI owns its own Ctrl-C and permission mode; there is no
+      // remote turn to interrupt/retune. Honest not-supported, never faked.
+      interrupt: async () => ({ ok: false }),
+      setMode: async () => ({ ok: false }),
+      // Remote answering of the live TUI's tool-permission prompt (design
+      // §7.6): route into the `PreToolUse` hook bridge (first-wins). Only when
+      // the hook server failed to install is this honestly not-supported.
+      permAnswer: async ({ reqId, decision }) => {
+        if (permHook) return permHook.resolvePermission({ reqId, decision });
+        logger.debug("[start-claude] perm.answer RPC — no live permission hook to route to");
+        return { ok: false };
+      },
+    };
+    const rpcHandle = registerRpc({
+      sessionId: bootstrap.sessionId,
+      dek: bootstrap.dek,
+      socket: sessionClient.socket,
+      handlers: rpcHandlers,
+      logger,
+    });
+
+    try {
+      return await ptySession.done;
+    } finally {
+      ptySession.stop();
+      rpcHandle.stop();
+      if (permHook) await permHook.stop();
+    }
+  }
+
+  /**
+   * The daemon-spawned, no-terminal flow (`--starting-mode remote`): keep the
+   * headless local↔remote `loop()` with the ACP remote transport. A terminal
+   * session never reaches this — it uses the PTY path above. No hook server /
+   * PTY injection here: ACP owns permissions agent-side, and
+   * `interrupt`/`setMode`/`perm.answer` reach the live remote turn via
+   * `onRemoteActive`.
+   */
+  async function runRemoteLoop(): Promise<number> {
+    const runLoop = deps.loop ?? loopDefault;
+    const localLauncherDeps: ClaudeLocalLauncherDeps = { launcherPath: deps.launcherPath, logger };
+    // Defaults-only, but a real object — a mid-run switch calls
+    // `startClaudeRemoteLauncher(..., deps.remote)`.
+    const remoteLauncherDeps: ClaudeRemoteLauncherDeps = {};
+    const permissionMode: PermissionMode = "default";
+    const noUnsubscribe = () => () => {};
+
+    const messageSignal = createSignal<QueuedMessage>();
+    const takeControlSignal = createSignal<void>();
+    let currentMode: ClaudeMode = "remote";
+    let activeRemote: RemoteControls | null = null;
+
+    const rpcHandlers: SessionRpcHandlers = {
+      message: async ({ envelope }) => {
+        const begin = await beginSend(envelope);
+        if (!begin.proceed) return begin.response;
+        const queued = currentMode === "local";
+        messageSignal.emit({ id: envelope.id, text: begin.text });
+        return { queued, status: "queued" };
+      },
+      takeControl: async () => {
+        takeControlSignal.emit();
+        return { ok: true };
+      },
+      interrupt: async () => {
+        if (!activeRemote) return { ok: false };
+        await activeRemote.interrupt();
+        return { ok: true };
+      },
+      setMode: async ({ mode }) => {
+        if (!activeRemote) return { ok: false };
+        await activeRemote.setMode(mode);
+        return { ok: true };
+      },
+      permAnswer: async ({ reqId, decision }) => {
+        if (!activeRemote) return { ok: false };
+        return activeRemote.resolvePermission({ reqId, decision });
+      },
+    };
+    const rpcHandle = registerRpc({
+      sessionId: bootstrap.sessionId,
+      dek: bootstrap.dek,
+      socket: sessionClient.socket,
+      handlers: rpcHandlers,
+      logger,
+    });
+
+    try {
+      return await runLoop(
+        {
+          workingDirectory: deps.workingDirectory,
+          startingMode: "remote",
+          permissionMode,
+          homeDir: deps.homeDir,
+          claudeArgs: deps.claudeArgs,
+          claudeEnvVars: { FALCON_CLAUDE_PATH: claudeCliPath },
+          onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
+          onModeChange: (mode) => {
+            currentMode = mode;
+          },
+          onRemoteActive: (controls) => {
+            activeRemote = controls;
+          },
+          onTurnSettled: ({ messageId, status }) => {
+            if (messageId) completeClaim(messageId, { status });
+          },
+          onMessage: (handler) => messageSignal.subscribe(handler),
+          onTakeControl: (handler) => takeControlSignal.subscribe(handler),
+          onExitRequested: noUnsubscribe,
+          logger,
+        },
+        { local: localLauncherDeps, remote: remoteLauncherDeps },
+      );
+    } finally {
+      rpcHandle.stop();
+    }
+  }
+
+  try {
+    return await (detectStartingMode(deps.claudeArgs) === "remote"
+      ? runRemoteLoop()
+      : runLocalPty());
   } finally {
-    rpcHandle.stop();
     sessionClient.stop();
     outbox.dispose();
   }
+}
+
+/**
+ * A daemon-spawned, no-terminal session is invoked as `falcon claude
+ * --starting-mode remote ...` (see `daemon/spawnEngine.ts`). Everything else
+ * — a human running `falcon claude` in their terminal — is the PTY-injection
+ * flow. The flag reaches here verbatim (it is passthrough `providerArgs`), so
+ * this is where the two flows fork.
+ */
+function detectStartingMode(claudeArgs: string[]): ClaudeMode {
+  const index = claudeArgs.indexOf("--starting-mode");
+  return index >= 0 && claudeArgs[index + 1] === "remote" ? "remote" : "local";
 }

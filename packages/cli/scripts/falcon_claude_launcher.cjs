@@ -34,8 +34,18 @@
  * only hostname + path are recorded, never the payload.
  *
  * stdout/stderr are deliberately never touched by this patch: fd 1/2 are
- * inherited straight through to the real Claude Code TUI, and fd 3 is the
- * only channel this script writes diagnostics to.
+ * inherited straight through to the real Claude Code TUI, and (by default)
+ * fd 3 is the only channel this script writes diagnostics to.
+ *
+ * ## PTY mode (`FALCON_FETCH_SIGNAL_PATH`)
+ * When Falcon runs `claude` on a pseudo-terminal (the omnara-style PTY-
+ * injection session — `ptyClaudeSession.ts`), there is no spare fd 3: a PTY
+ * child inherits only the pty (fds 0/1/2), so `fs.writeSync(3, ...)` would
+ * just EBADF. So if `FALCON_FETCH_SIGNAL_PATH` is set (a unix-domain socket
+ * Falcon is already listening on), the SAME `fetch-start`/`fetch-end` JSON
+ * lines are written there instead — Falcon derives its idle/busy signal
+ * (used to gate web-message injection) from them exactly as it did off fd 3.
+ * Absent that env var, behaviour is unchanged: fd 3 only.
  *
  * NOTE on `getClaudeCliPath()`: this is a small local stub, not the full
  * cross-install-method resolver (npm / Bun / Homebrew / native-installer
@@ -50,10 +60,59 @@ const fs = require("node:fs");
 // Disable autoupdater (never works really)
 process.env.DISABLE_AUTOUPDATER = "1";
 
-// Helper to write JSON messages to fd 3
-function writeMessage(message) {
+// PTY mode: when Falcon runs claude on a pseudo-terminal there is no fd 3 to
+// write to, so the fetch signal is delivered over a unix-domain socket Falcon
+// is already listening on (path in FALCON_FETCH_SIGNAL_PATH). The socket is
+// connected lazily on first use and messages are buffered until it's open;
+// every failure is swallowed so a signal hiccup can never surface to the user
+// or perturb the real Claude Code TUI. Falls back to fd 3 when unset.
+const FETCH_SIGNAL_PATH = process.env.FALCON_FETCH_SIGNAL_PATH;
+let signalSocket = null;
+let signalConnecting = false;
+const signalBacklog = [];
+
+function flushSignalBacklog() {
+  if (signalSocket?.writable !== true) return;
+  while (signalBacklog.length > 0) {
+    try {
+      signalSocket.write(signalBacklog.shift());
+    } catch (_err) {
+      // Drop on write failure — a lost thinking-indicator tick is harmless.
+    }
+  }
+}
+
+function ensureSignalSocket() {
+  if (signalSocket || signalConnecting) return;
+  signalConnecting = true;
   try {
-    fs.writeSync(3, `${JSON.stringify(message)}\n`);
+    const net = require("node:net");
+    signalSocket = net.connect(FETCH_SIGNAL_PATH);
+    signalSocket.on("connect", () => {
+      signalConnecting = false;
+      flushSignalBacklog();
+    });
+    // Never let an unhandled 'error' crash the in-process Claude Code CLI.
+    signalSocket.on("error", () => {
+      signalConnecting = false;
+    });
+  } catch (_err) {
+    signalConnecting = false;
+  }
+}
+
+// Helper to write JSON messages to the fetch-signal channel (unix socket in
+// PTY mode, else fd 3).
+function writeMessage(message) {
+  const line = `${JSON.stringify(message)}\n`;
+  if (FETCH_SIGNAL_PATH) {
+    signalBacklog.push(line);
+    ensureSignalSocket();
+    flushSignalBacklog();
+    return;
+  }
+  try {
+    fs.writeSync(3, line);
   } catch (_err) {
     // fd 3 not available, ignore
   }
