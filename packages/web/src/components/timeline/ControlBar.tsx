@@ -13,6 +13,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useSessionControl } from "@/features/session-control";
 import {
   initialStopSessionDialogState,
@@ -155,20 +162,27 @@ export function ControlBar({
       </Button>
 
       {canMutateMode(controlMode) ? (
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <label
+          className="flex items-center gap-1.5 text-xs text-muted-foreground"
+          htmlFor="control-bar-mode"
+        >
           Mode
-          <select
+          <Select
             value={selectedMode}
             disabled={setModeMutation.isPending}
-            onChange={(e) => handleModeChange(e.target.value as PermissionMode)}
-            className="rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onValueChange={(value) => handleModeChange(value as PermissionMode)}
           >
-            {MODES.map((m) => (
-              <option key={m} value={m}>
-                {MODE_LABEL[m]}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="control-bar-mode" size="sm" className="text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODES.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {MODE_LABEL[m]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </label>
       ) : (
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

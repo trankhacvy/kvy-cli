@@ -61,6 +61,14 @@ export interface SessionMetadataInput {
   title: string;
   path: string;
   providerSessionId?: string | null;
+  /** The `--model` override this session was started with, when the
+   * caller's passthrough args carried one (`modelFlag.ts`'s
+   * `extractModelFlag`) — display-only, purely for the web header's model
+   * chip (plan-v2.md W4.2); `undefined`/absent means "provider default",
+   * same "" contract `features/new-session`'s spawn wizard already uses on
+   * the web side. Never read back by anything on the CLI side — the actual
+   * `--model` flag reaches `claude`/`codex` unchanged, independent of this. */
+  model?: string | null;
 }
 
 export interface BootstrapSessionParams {
@@ -227,6 +235,7 @@ export async function bootstrapSession(
       title: params.metadata.title,
       path: params.metadata.path,
       providerSessionId: params.metadata.providerSessionId ?? null,
+      model: params.metadata.model ?? null,
     },
     dek,
   );

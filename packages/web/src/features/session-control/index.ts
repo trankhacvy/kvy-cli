@@ -8,6 +8,7 @@ export {
 } from "./ask-question-state";
 export type { AttentionMeta, AttentionState, DeriveAttentionInput } from "./attention";
 export { ATTENTION_META, deriveAttention } from "./attention";
+export { clearDraft, loadDraft, saveDraft } from "./composer-draft";
 export { formatDecryptError } from "./decrypt-error";
 export { getLastSeenAt, markSeenNow } from "./last-seen";
 export { sessionRpcToActions } from "./live-actions";
@@ -42,4 +43,5 @@ export {
   type SessionEphemeralState,
   useSessionEphemerals,
 } from "./use-session-ephemerals";
+export { useSessionModelChip } from "./use-session-model-chip";
 export { useTabAttention } from "./use-tab-attention";

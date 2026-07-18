@@ -31,6 +31,12 @@ export interface ComposerState {
   /** True while the most recently sent message is queued behind the agent's
    * current turn (the `message` RPC's own `{queued: boolean}` result). */
   isQueued: boolean;
+  /** Whether this session's crypto bridge has unwrapped its DEK yet — an
+   * attachment can't be encrypted (`sendAttachment` throws) until this is
+   * `true` (plan-v2.md W4.2 "disabled-until-crypto-ready attach button"). A
+   * text-only send doesn't depend on this — the composer's Send button is
+   * never gated on it, only the attach affordance is. */
+  cryptoReady: boolean;
   error: string | null;
   /** Non-blocking notice from an `outcome-unknown` `message` reply (design
    * §7.10) — never blocks the composer, and clears itself on the next send. */
@@ -130,6 +136,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
     },
     isSending: mutation.isPending || attachMutation.isPending,
     isQueued: pending.some((p) => p.queued),
+    cryptoReady: cryptoBridge !== null,
     error: describeError(mutation) ?? describeError(attachMutation),
     notice,
   };

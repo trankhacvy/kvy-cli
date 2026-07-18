@@ -40,8 +40,28 @@ export function shouldShowActivityRow(working: boolean, items: RenderItem[]): bo
  *
  * `working` (plan.md W1.6/W1.8) drives two things: auto-follow keeps the
  * tail visible while new items land, and a pulsing "Working…" row renders
- * below the list while a turn is in flight. */
-export function Timeline({ items, working = false }: { items: RenderItem[]; working?: boolean }) {
+ * below the list while a turn is in flight.
+ *
+ * `hasMore`/`isLoadingMore`/`onLoadEarlier` (plan-v2.md W4.2 "'Load earlier'
+ * pagination") back a plain button pinned above the virtualized list, not a
+ * scroll-triggered infinite-load — `useLiveRenderItems`'s
+ * `hasMore`/`loadEarlier` pass `useInfiniteQuery`'s own
+ * `hasNextPage`/`fetchNextPage` straight through. All three default to the
+ * no-pagination case so every existing caller (tests, the demo fixture)
+ * keeps working unchanged. */
+export function Timeline({
+  items,
+  working = false,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadEarlier,
+}: {
+  items: RenderItem[];
+  working?: boolean;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadEarlier?: () => void;
+}) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [following, setFollowing] = useState(true);
 
@@ -92,6 +112,18 @@ export function Timeline({ items, working = false }: { items: RenderItem[]; work
   return (
     <div className="relative flex-1 overflow-hidden">
       <div ref={parentRef} onScroll={onScroll} className="h-full overflow-y-auto px-4 py-4">
+        {hasMore && (
+          <div className="flex justify-center pb-3">
+            <button
+              type="button"
+              onClick={onLoadEarlier}
+              disabled={isLoadingMore}
+              className="rounded-full border border-border bg-background px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted disabled:cursor-wait disabled:opacity-70"
+            >
+              {isLoadingMore ? "Loading…" : "Load earlier"}
+            </button>
+          </div>
+        )}
         <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = items[virtualRow.index];

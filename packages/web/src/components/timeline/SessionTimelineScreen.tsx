@@ -4,6 +4,7 @@ import type { PermissionMode } from "@falcon/wire";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   deriveAttention,
@@ -18,6 +19,7 @@ import {
   useLiveRenderItems,
   useLiveSessionControl,
   useSessionEphemerals,
+  useSessionModelChip,
   useTabAttention,
 } from "@/features/session-control";
 import { messagesQueryKey } from "@/sync";
@@ -53,7 +55,14 @@ export function SessionTimelineScreen({
   sessionId: string;
   useControl?: UseSessionControl;
 }) {
-  const { items, error: decryptError } = useLiveRenderItems(sessionId);
+  const {
+    items,
+    error: decryptError,
+    hasMore,
+    isLoadingMore,
+    loadEarlier,
+  } = useLiveRenderItems(sessionId);
+  const modelChip = useSessionModelChip(sessionId);
   const queryClient = useQueryClient();
   const retryDecrypt = () =>
     queryClient.invalidateQueries({ queryKey: messagesQueryKey(sessionId) });
@@ -94,6 +103,10 @@ export function SessionTimelineScreen({
         working={working}
         decryptError={decryptError}
         onRetryDecrypt={retryDecrypt}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadEarlier={loadEarlier}
+        modelChip={modelChip}
       />
     </SessionControlProvider>
   );
@@ -110,6 +123,10 @@ function SessionTimelineBody({
   working,
   decryptError,
   onRetryDecrypt,
+  hasMore,
+  isLoadingMore,
+  onLoadEarlier,
+  modelChip,
 }: {
   sessionId: string;
   items: RenderItem[];
@@ -118,15 +135,28 @@ function SessionTimelineBody({
   working: boolean;
   decryptError: string | null;
   onRetryDecrypt: () => void;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadEarlier: () => void;
+  /** Decrypted `model` from this session's own metadata, or `null` until the
+   * CLI records one there (plan-v2.md W4.2 "header model chip"). */
+  modelChip: string | null;
 }) {
-  const { mergedItems, send, sendAttachment, isSending, isQueued, error, notice } =
+  const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
 
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div>
-          <p className="text-sm font-medium">Session {sessionId}</p>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            Session {sessionId}
+            {modelChip && (
+              <Badge variant="secondary" className="font-normal">
+                {modelChip}
+              </Badge>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground">
             {working ? "Working…" : "Idle"} ·{" "}
             {controlMode === "local" ? "Local control" : "Remote control"}
@@ -145,12 +175,20 @@ function SessionTimelineBody({
         </div>
       )}
       <ControlBar mode={permissionMode} controlMode={controlMode} working={working} />
-      <Timeline items={mergedItems} working={working} />
+      <Timeline
+        items={mergedItems}
+        working={working}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadEarlier={onLoadEarlier}
+      />
       <Composer
+        sessionId={sessionId}
         onSend={send}
         onAttach={sendAttachment}
         isSending={isSending}
         isQueued={isQueued}
+        cryptoReady={cryptoReady}
         error={error}
         notice={notice}
       />

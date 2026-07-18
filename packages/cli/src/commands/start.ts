@@ -120,6 +120,7 @@ import {
   bootstrapSession as bootstrapSessionDefault,
   createBootstrapSessionDeps,
 } from "../session/bootstrap.js";
+import { extractModelFlag } from "../session/modelFlag.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
@@ -325,6 +326,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         metadata: {
           title: path.basename(deps.workingDirectory) || deps.workingDirectory,
           path: deps.workingDirectory,
+          model: extractModelFlag(deps.claudeArgs),
         },
         env,
       },
