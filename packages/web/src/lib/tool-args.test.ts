@@ -184,6 +184,14 @@ describe("parseWebSearchArgs", () => {
       blockedDomains: ["spam.example"],
     });
   });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseWebSearchArgs("not an object")).toEqual({
+      query: undefined,
+      allowedDomains: undefined,
+      blockedDomains: undefined,
+    });
+  });
 });
 
 describe("parseWebSearchResults", () => {
@@ -213,6 +221,15 @@ describe("parseWebSearchResults", () => {
     expect(parseWebSearchResults({ results: [] })).toBeUndefined();
     expect(parseWebSearchResults(undefined)).toBeUndefined();
   });
+
+  it("returns undefined for an empty Links array or entries with neither title nor url", () => {
+    expect(parseWebSearchResults("Links: []")).toBeUndefined();
+    expect(parseWebSearchResults('Links: [{}, {"other":true}]')).toBeUndefined();
+  });
+
+  it("returns undefined rather than throwing on malformed embedded JSON", () => {
+    expect(parseWebSearchResults('Links: [{"title": "unterminated]')).toBeUndefined();
+  });
 });
 
 describe("parseNotebookEditArgs", () => {
@@ -231,6 +248,16 @@ describe("parseNotebookEditArgs", () => {
       newSource: "print('hi')",
       cellType: "code",
       editMode: "insert",
+    });
+  });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseNotebookEditArgs(undefined)).toEqual({
+      notebookPath: undefined,
+      cellId: undefined,
+      newSource: undefined,
+      cellType: undefined,
+      editMode: undefined,
     });
   });
 });
