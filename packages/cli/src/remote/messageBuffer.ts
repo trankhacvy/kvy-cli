@@ -101,6 +101,10 @@ export function summarizeEnvelope(
       return { content: "▶ Subagent started", kind: "status" };
     case "sub-stop":
       return { content: "⏹ Subagent finished", kind: "status" };
+    case "usage":
+      // Token accounting (plan-v2.md W4.6) — a web-only chip, not worth a
+      // line in this already-terse remote-mode terminal display.
+      return null;
   }
 }
 

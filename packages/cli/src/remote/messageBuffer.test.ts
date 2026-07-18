@@ -89,6 +89,11 @@ describe("summarizeEnvelope", () => {
     expect(summarizeEnvelope(envelope)).toEqual({ content: "Turn failed", kind: "status" });
   });
 
+  it("returns null for usage (web-only chip, W4.6)", () => {
+    const envelope = createEnvelope("agent", { t: "usage", inputTokens: 4, outputTokens: 5 });
+    expect(summarizeEnvelope(envelope)).toBeNull();
+  });
+
   it("pushEnvelopeToBuffer skips null summaries and appends the rest", () => {
     const buffer = new MessageBuffer();
     pushEnvelopeToBuffer(buffer, createEnvelope("agent", { t: "turn-start" }));

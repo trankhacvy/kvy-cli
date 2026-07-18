@@ -133,6 +133,16 @@ function reduceScope(envs: SessionEnvelope[]): RenderItem[] {
         items.push({ ...base, kind: "sub-stop" });
         break;
 
+      case "usage":
+        items.push({
+          ...base,
+          kind: "usage",
+          inputTokens: ev.inputTokens,
+          outputTokens: ev.outputTokens,
+          costUsd: ev.costUsd,
+        });
+        break;
+
       case "perm-request": {
         const info: PermissionInfo = { reqId: ev.reqId, modes: ev.modes };
         permInfoByReqId.set(ev.reqId, info);

@@ -113,7 +113,7 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
     expect(envelopes[2]?.ev).toEqual({ t: "text", md: "internal reasoning", thinking: true });
   });
 
-  it("does not emit envelopes for summary / system / compact-summary lines", () => {
+  it("does not emit envelopes for summary / system lines", () => {
     const state = createClaudeEnvelopeMapperState();
     state.currentTurnId = "turn-1";
 
@@ -128,6 +128,11 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
       state,
     );
     expect(system).toHaveLength(0);
+  });
+
+  it("maps a compact-summary assistant line to a quiet service marker, not the summary text, no turn opened (W4.6)", () => {
+    const state = createClaudeEnvelopeMapperState();
+    state.currentTurnId = "turn-1";
 
     const compact = mapClaudeToEnvelopes(
       {
@@ -141,8 +146,72 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
       } as unknown as RawJSONLines,
       state,
     );
-    expect(compact).toHaveLength(0);
-    expect(state.currentTurnId).toBe("turn-1"); // untouched
+    expect(compact).toHaveLength(1);
+    expect(compact[0]).toMatchObject({
+      role: "agent",
+      ev: { t: "service", text: "History compacted (/clear)" },
+    });
+    expect(compact[0]?.turn).toBeUndefined();
+    expect(state.currentTurnId).toBe("turn-1"); // untouched — no turn opened for it
+  });
+
+  it("emits a usage envelope from an assistant record's message.usage, alongside its text (W4.6)", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "a-usage-1",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "lol" }],
+          usage: {
+            input_tokens: 4,
+            cache_creation_input_tokens: 17755,
+            cache_read_input_tokens: 0,
+            output_tokens: 5,
+            service_tier: "standard",
+          },
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    expect(envelopes).toHaveLength(3);
+    expect(envelopes[0]?.ev.t).toBe("turn-start");
+    expect(envelopes[1]?.ev).toEqual({ t: "text", md: "lol" });
+    expect(envelopes[2]).toMatchObject({
+      role: "agent",
+      turn: state.currentTurnId,
+      ev: { t: "usage", inputTokens: 4, outputTokens: 5 },
+    });
+  });
+
+  it("emits no usage envelope when message.usage is missing or malformed", () => {
+    const state = createClaudeEnvelopeMapperState();
+
+    const noUsage = mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "a-no-usage",
+        message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(noUsage.some((e) => e.ev.t === "usage")).toBe(false);
+
+    const malformed = mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "a-bad-usage",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "hi again" }],
+          usage: { input_tokens: "4", output_tokens: 5 },
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(malformed.some((e) => e.ev.t === "usage")).toBe(false);
   });
 });
 
@@ -794,8 +863,11 @@ describe("golden fixtures — real Claude Code transcripts", () => {
 
     // the leading `{"type":"summary",...}` line must never surface as an
     // envelope: 2 user texts, 2 turn-starts, 1 turn-end, 1 assistant text,
-    // 1 tool-start, 1 tool-end — nothing extra leaked through for it.
-    expect(envelopes).toHaveLength(9);
+    // 1 tool-start, 1 tool-end, 3 usage envelopes (one per real assistant
+    // record in this fixture, each carrying a `message.usage`, W4.6) —
+    // nothing extra leaked through for the summary line itself.
+    expect(envelopes).toHaveLength(12);
+    expect(envelopes.filter((e) => e.ev.t === "usage")).toHaveLength(3);
 
     const starts = envelopes.filter((e) => e.ev.t === "tool-start");
     const ends = envelopes.filter((e) => e.ev.t === "tool-end");

@@ -30,9 +30,13 @@
  *    subagents). One map is kept for tool `call` ids, a second for
  *    `subagent` ids, since a Task's `tool_use.id` needs both a `call`
  *    identity (defensively, see below) and a `subagent` identity.
- *  - **No `usage` field.** `SessionEnvelope` carries no token-usage field at
- *    all, so the usage-attachment logic from Happy's mapper has no
- *    equivalent here and is dropped entirely.
+ *  - **`usage` is a sibling envelope, not an attached field** (plan-v2.md
+ *    W4.6/C21+C22). `SessionEventSchema` carries no per-message metadata slot
+ *    the way Happy's mapper attached `usage` directly onto its own message
+ *    shape, so an assistant record's `message.usage` (when present and
+ *    numeric) mints its own `{t:"usage"}` envelope in the same
+ *    turn/subagent scope instead — see `pickUsage`/the end of the
+ *    `assistant` branch below.
  *  - **No subagent title.** `sub-start` has no `title` field in
  *    `SessionEventSchema` (unlike Happy's `{t:'start', title?}`), so
  *    `pickTaskTitle`/`subagentTitles` has no equivalent here — the first
@@ -214,6 +218,29 @@ function isMetaMessage(message: RawJSONLines): boolean {
 
 function isCompactSummaryMessage(message: RawJSONLines): boolean {
   return (message as unknown as { isCompactSummary?: unknown }).isCompactSummary === true;
+}
+
+/**
+ * Reads an assistant record's `message.usage` (plan-v2.md W4.6) — Claude
+ * Code's real transcript shape (`__fixtures__/0-say-lol-session.jsonl`) is
+ * `{input_tokens, output_tokens, cache_creation_input_tokens,
+ * cache_read_input_tokens, service_tier}`; only the two counts the wire
+ * event actually carries are pulled out. Cache tokens are folded into
+ * neither count — `inputTokens` is exactly what the provider billed as
+ * "input" for this call, not an inflated total. `undefined` (not zeros) on
+ * anything malformed/missing so a line with no usage mints no envelope at
+ * all, matching every other optional-field mapping in this file.
+ */
+function pickUsage(
+  message: RawJSONLines,
+): { inputTokens: number; outputTokens: number } | undefined {
+  const raw = (message as unknown as { message?: { usage?: unknown } }).message?.usage;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const usage = raw as { input_tokens?: unknown; output_tokens?: unknown };
+  if (typeof usage.input_tokens !== "number" || typeof usage.output_tokens !== "number") {
+    return undefined;
+  }
+  return { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens };
 }
 
 function pickExplicitProviderSubagent(message: RawJSONLines): string | undefined {
@@ -573,7 +600,17 @@ export function mapClaudeToEnvelopes(
   }
 
   if (message.type === "summary" || message.type === "system") return envelopes;
-  if (message.type === "assistant" && isCompactSummaryMessage(message)) return envelopes;
+
+  // Compact boundary (plan-v2.md W4.6): a `/clear`/auto-compact replaces the
+  // conversation history with a synthetic summary Claude Code re-injects as
+  // its own assistant record. Surfaced as a quiet `service` marker rather
+  // than dropped — no turn is opened for it, matching the pre-existing
+  // "untouched `currentTurnId`" contract this line never had a turn to
+  // begin with.
+  if (message.type === "assistant" && isCompactSummaryMessage(message)) {
+    envelopes.push(createEnvelope("agent", { t: "service", text: "History compacted (/clear)" }));
+    return envelopes;
+  }
 
   if (message.type === "assistant") {
     const turnId = ensureTurn(state, envelopes);
@@ -654,6 +691,22 @@ export function mapClaudeToEnvelopes(
           envelopes.push(...mapClaudeToEnvelopes(bufferedMessage, state));
         }
       }
+    }
+
+    // Per-message token usage (plan-v2.md W4.6) — one `usage` envelope per
+    // assistant record that carries one, in the same turn/subagent scope as
+    // the content just emitted above; a web client renders it as a per-turn
+    // token chip. Emitted last so it always trails the text/tool-start
+    // envelopes it's reporting on.
+    const usage = pickUsage(message);
+    if (usage) {
+      envelopes.push(
+        createEnvelope(
+          "agent",
+          { t: "usage", inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+          { turn: turnId, subagent },
+        ),
+      );
     }
 
     return envelopes;
