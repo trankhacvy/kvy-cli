@@ -120,7 +120,7 @@ function SessionTimelineBody({
         </Button>
       </header>
       <ControlBar mode="default" controlMode={controlMode} working={working} />
-      <Timeline items={mergedItems} />
+      <Timeline items={mergedItems} working={working} />
       <Composer
         onSend={send}
         onAttach={sendAttachment}
