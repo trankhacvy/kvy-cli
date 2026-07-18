@@ -59,6 +59,7 @@ export function Timeline({ items, working = false }: { items: RenderItem[]; work
   // measured yet (a known react-virtual dynamic-measurement quirk — see
   // plan-v2.md's risk register #3); re-run it on the next frame to correct
   // for any measurement that resolved in between.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `virtualizer` is intentionally omitted — useVirtualizer returns a fresh object every render, so including it would re-fire this effect (and re-call scrollToIndex) on every parent re-render instead of only on real item-count/following changes. The effect still reads the latest `virtualizer` via closure.
   useEffect(() => {
     if (following && items.length > 0) {
       virtualizer.scrollToIndex(items.length - 1, { align: "end" });
@@ -68,7 +69,7 @@ export function Timeline({ items, working = false }: { items: RenderItem[]; work
       return () => cancelAnimationFrame(raf);
     }
     return undefined;
-  }, [items.length, following, virtualizer]);
+  }, [items.length, following]);
 
   // Leaving the bottom (by >half a viewport) pauses following; returning resumes it.
   const onScroll = () => {
