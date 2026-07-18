@@ -1450,10 +1450,10 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
         ephemeral replaces 3-min heuristic
   - [x] W3.10: unmanaged rows live (read-only, actions disabled)
   - [x] Tests: status derivation fixtures
-- [ ] **U3.5 `[solo]` "pty-resume"** (W3.7 — bootstrap/resume, risky)
-  - [ ] `bootstrap.ts` `FALCON_RECONNECT_SESSION_ID` re-attach; `start.ts` provider
+- [x] **U3.5 `[solo]` "pty-resume"** (W3.7 — bootstrap/resume, risky)
+  - [x] `bootstrap.ts` `FALCON_RECONNECT_SESSION_ID` re-attach; `start.ts` provider
         id from env; `resumeSession.ts` headless-vs-terminal decision
-  - [ ] Tests: re-attach; env consumption
+  - [x] Tests: re-attach; env consumption
   - [ ] `[human]` live: `falcon resume` continues session + transcript
 - [ ] **U3.6 `[bundle]` "tailer-and-loss"** (W3.8+W3.9 — scanner +
       injectionController + start.ts)
@@ -1465,7 +1465,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 
 ### Phase 4 — polish & platform
 
-- [ ] **U4.1 `[inline]` "wave4-trivia"** (W4.1): outbox flush 300→150ms + protocol-doc
+- [x] **U4.1 `[inline]` "wave4-trivia"** (W4.1): outbox flush 300→150ms + protocol-doc
       note on the no-streaming decision
 - [ ] **U4.2 `[bundle]` "render-polish"** (W4.2a): timestamps + `CopyButton`
       (messages/code/bash) + theme toggle + dual shiki theme (un-hardcode `dark`)
