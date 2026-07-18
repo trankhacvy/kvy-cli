@@ -80,6 +80,8 @@ const noopLogger: Logger = {
 const DEFAULT_BUSY_DEBOUNCE_MS = 500;
 /** Grace period after spawn before the first web message may be typed in (lets the TUI paint its prompt). */
 const DEFAULT_READY_DELAY_MS = 1500;
+/** How long a local draft may sit idle before the injection gate assumes it was abandoned (plan-v2.md W1.3). */
+const DRAFT_IDLE_MS = 15_000;
 const DEFAULT_PTY_NAME = "xterm-256color";
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
@@ -154,6 +156,8 @@ export interface PtyClaudeSessionOptions {
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
   /** Fires once a web-injected message has actually been submitted — the §7.10 send-claim completion hook. */
   onInjected?: (id: string) => void;
+  /** Fires when the human at the real terminal submits input (Enter outside injection) — plan-v2.md W1.2. */
+  onLocalSubmit?: () => void;
   logger?: Logger;
 }
 
@@ -193,6 +197,15 @@ export interface PtyClaudeSessionHandle {
    * `scanner.onNewSession` call.
    */
   notifyProviderSessionId(id: string): void;
+  /**
+   * Reflects "a TUI dialog is open" from the hook layer (`Notification`
+   * attention / a local-turn `PreToolUse`-or-`PermissionRequest` deferral) —
+   * gates injection so a queued web message is never typed into an open
+   * dialog (plan-v2.md W1.3).
+   */
+  setPromptOpen(open: boolean): void;
+  /** Sends a single Escape into the PTY — the TUI's own cancel gesture (plan-v2.md W1.5). */
+  sendInterrupt(): boolean;
   /** Terminates the session (SIGTERM to the pty child). Safe to call once. */
   stop(): void;
 }
@@ -404,7 +417,26 @@ export function startPtyClaudeSession(
           });
         }
       }
+      // Local-typing signals for the injection gate (plan-v2.md W1.2/W1.3),
+      // skipped entirely while a queued web message is itself mid-injection
+      // (`controller.isInjecting`) — those synthetic keystrokes are not the
+      // human at the keyboard.
+      let draftIdleTimer: ReturnType<typeof setTimeout> | null = null;
       const onStdinData = (data: Buffer): void => {
+        if (!controller.isInjecting) {
+          if (data.includes(0x0d) || data.includes(0x0a) || data.includes(0x1b)) {
+            // Enter / newline / Escape all end a draft-in-progress.
+            controller.setLocalDraft(false);
+            if (data.includes(0x0d) || data.includes(0x0a)) opts.onLocalSubmit?.();
+          } else if (data.some((b) => b >= 0x20 || b === 0x08 || b === 0x7f)) {
+            // A printable char (or backspace/DEL) means the human is composing
+            // at the real prompt — hold injection until they submit, cancel,
+            // or go quiet for DRAFT_IDLE_MS.
+            controller.setLocalDraft(true);
+            if (draftIdleTimer) clearTimeoutImpl(draftIdleTimer);
+            draftIdleTimer = setTimeoutImpl(() => controller.setLocalDraft(false), DRAFT_IDLE_MS);
+          }
+        }
         ptyProcess?.write(data.toString("utf8"));
       };
       stdin.on("data", onStdinData);
@@ -419,6 +451,9 @@ export function startPtyClaudeSession(
             // Best-effort restore only.
           }
         }
+      });
+      cleanups.push(() => {
+        if (draftIdleTimer) clearTimeoutImpl(draftIdleTimer);
       });
 
       // Terminal resize → pty resize (Node emits 'resize' on stdout when the
@@ -452,6 +487,12 @@ export function startPtyClaudeSession(
     done,
     injectMessage: (message) => controller.enqueue(message),
     notifyProviderSessionId: (id) => routeProviderSessionId(id),
+    setPromptOpen: (open) => controller.setPromptOpen(open),
+    sendInterrupt: () => {
+      if (!ptyProcess) return false;
+      ptyProcess.write("\u001b"); // ESC, the TUI's own cancel gesture
+      return true;
+    },
     stop: () => {
       if (stopped) return;
       stopped = true;

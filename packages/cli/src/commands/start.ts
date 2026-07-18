@@ -38,10 +38,17 @@
  * `resolvePermission` backs the `perm.answer` RPC, and `markWebTurnStart()`
  * fires the moment a web message is actually submitted into the PTY so that
  * turn's `PreToolUse` prompts route to the web PermCard (a locally-typed turn
- * shows the normal terminal prompt; `markTurnEnd()` is fired automatically by
- * the composition off Claude Code's own `Stop` hook). `interrupt`/`setMode`
- * stay honestly not-supported on this path — the live TUI owns its own Ctrl-C
- * and mode.
+ * shows the normal terminal prompt and clears it immediately via
+ * `markLocalActivity()`, plan-v2.md W1.2; `markTurnEnd()` is fired
+ * automatically by the composition off Claude Code's own `Stop` hook, and a
+ * `WEB_TURN_MAX_MS` watchdog self-heals a flag left stuck by a missed `Stop`
+ * hook). A web message is only ever typed in when the PTY session's
+ * injection gate is idle AND no TUI dialog is known to be open
+ * (`setPromptOpen`, fed by `onAttention`/`onPromptLikely` and cleared by the
+ * tailer's next `tool-end` envelope or a 120s failsafe — plan-v2.md W1.3).
+ * `interrupt` sends the TUI's own Escape cancel gesture (plan-v2.md W1.5);
+ * `setMode` stays honestly not-supported on this path — the live TUI owns its
+ * own permission mode.
  *
  * The legacy `loop()` path (with the ACP remote transport) is kept ONLY for
  * the daemon-spawned, no-terminal `falcon claude --starting-mode remote`
@@ -421,7 +428,30 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           logger.debug("[start-claude] provider session id from SessionStart hook", { id });
           ptyHandle?.notifyProviderSessionId(id);
         },
-        onAttention: (kind) => logger.debug("[start-claude] attention from hook", { kind }),
+        // "perm"/"question" mean Claude Code is showing (or about to show) a
+        // TUI dialog at the terminal — gate injection so a queued web
+        // message never gets typed into it; "done" (the Stop hook) means the
+        // turn ended, clearing the gate. See `onEnvelopes` below for the
+        // other, more precise clearing signal (a `tool-end` envelope).
+        //
+        // The Notification hook fires from Claude Code itself and can't tell
+        // us whether a TUI dialog actually rendered — during an active web
+        // turn, `PermissionRequest` is already answered remotely (the bridge's
+        // local-vs-web fork) and no dialog appears, so gate opening on
+        // "perm"/"question" is skipped while `isWebTurnActive()` is true,
+        // mirroring the bridge's own `onPromptLikely` (local-turn-only).
+        // "done" still always clears the gate unconditionally — the turn
+        // ending is safe to reflect regardless of who started it.
+        onAttention: (kind) => {
+          logger.debug("[start-claude] attention from hook", { kind });
+          if ((kind === "perm" || kind === "question") && !permHook?.isWebTurnActive()) {
+            ptyHandle?.setPromptOpen(true);
+          }
+          if (kind === "done") ptyHandle?.setPromptOpen(false);
+        },
+        // The bridge's local-turn path (a dialog may be about to render at
+        // the terminal) — the earlier, less certain half of the same gate.
+        onPromptLikely: () => ptyHandle?.setPromptOpen(true),
         logger,
       });
     } catch (error) {
@@ -443,7 +473,13 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // PTY-spawned `claude` fires all four hooks. Null when install failed.
         settingsPath: permHook?.settingsPath ?? null,
         settingsEnv: permHook?.settingsEnv,
-        onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
+        onEnvelopes: (envelopes) => {
+          // The tailer's next tool-result is the precise "the dialog that was
+          // open is gone" signal — clears the gate the attention/onPromptLikely
+          // wiring above set (plan-v2.md W1.3).
+          if (envelopes.some((e) => e.ev.t === "tool-end")) ptyHandle?.setPromptOpen(false);
+          outbox.enqueue(envelopes);
+        },
         // The send-claim completes the moment the message is actually typed +
         // submitted into the PTY — from there a retry is an honest duplicate.
         // That same submit is the "a web turn just began" signal: mark it so
@@ -452,6 +488,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           completeClaim(id, { status: "injected" });
           permHook?.markWebTurnStart();
         },
+        // A locally-typed Enter at the real keyboard is the human reclaiming
+        // the turn — clear the web-turn flag immediately (plan-v2.md W1.2).
+        onLocalSubmit: () => permHook?.markLocalActivity(),
         logger,
       },
       { logger },
@@ -468,9 +507,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // The human is already at this terminal — "take control" is a no-op that
       // succeeds (there is no remote turn to reclaim from).
       takeControl: async () => ({ ok: true }),
-      // The live TUI owns its own Ctrl-C and permission mode; there is no
-      // remote turn to interrupt/retune. Honest not-supported, never faked.
-      interrupt: async () => ({ ok: false }),
+      // Escape is safe to send regardless of TUI state: mid-turn it cancels
+      // the turn, at an idle prompt it's a no-op, inside a menu it closes the
+      // menu (recoverable) — plan-v2.md W1.5.
+      interrupt: async () => ({ ok: ptySession.sendInterrupt() }),
+      // The live TUI owns its own permission mode; there is no remote turn to
+      // retune. Honest not-supported, never faked.
       setMode: async () => ({ ok: false }),
       // Remote answering of the live TUI's tool-permission prompt (design
       // §7.6): route into the `PreToolUse` hook bridge (first-wins). Only when

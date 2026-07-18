@@ -22,7 +22,8 @@
  *  - `setBusy(true|false)` reflects whether `claude` is mid-turn.
  *  - A queued message is flushed only when the controller is `ready` (the TUI
  *    has painted its prompt after spawn), NOT busy, not already mid-injection,
- *    and not in the brief post-submit cooldown.
+ *    not in the brief post-submit cooldown, and neither `promptOpen` nor
+ *    `localDraft` is set (plan-v2.md W1.3 — see those setters' own docs).
  *  - Flushing writes the text, waits `submitDelayMs` (letting the TUI ingest
  *    the pasted text before the Enter — omnara's 0.25s), then submits. After
  *    submit, a `postSubmitCooldownMs` cooldown prevents a second message from
@@ -67,6 +68,13 @@ export interface InjectionControllerDeps {
 
 const DEFAULT_SUBMIT_DELAY_MS = 250;
 const DEFAULT_POST_SUBMIT_COOLDOWN_MS = 1200;
+/**
+ * A `setPromptOpen(true)` that never sees a matching `setPromptOpen(false)`
+ * (a dialog that vanished without an observed clearing signal — the TUI
+ * exited a menu some way the tailer/hook layer didn't catch) must not starve
+ * the injection queue forever. This self-clears the gate (plan-v2.md W1.3).
+ */
+const PROMPT_OPEN_FAILSAFE_MS = 120_000;
 
 /**
  * Gates web-originated message injection into a live PTY so it only happens
@@ -85,9 +93,12 @@ export class InjectionController {
   private busy = false;
   private injecting = false;
   private cooldown = false;
+  private promptOpen = false;
+  private localDraft = false;
   private disposed = false;
   private submitTimer: ReturnType<typeof setTimeout> | null = null;
   private cooldownTimer: ReturnType<typeof setTimeout> | null = null;
+  private promptOpenFailsafeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(deps: InjectionControllerDeps) {
     this.deps = deps;
@@ -128,14 +139,54 @@ export class InjectionController {
     return this.queue.length;
   }
 
+  /** True while a queued message is mid-write/submit — the local-submit-detection heuristic's own "not us" check. */
+  get isInjecting(): boolean {
+    return this.injecting;
+  }
+
+  /**
+   * A TUI dialog (permission prompt / AskUserQuestion widget / trust prompt)
+   * is on screen — never type a queued message into it. Cleared by the next
+   * observed tool-result/`Stop`, or by the {@link PROMPT_OPEN_FAILSAFE_MS}
+   * failsafe below if nothing ever clears it.
+   */
+  setPromptOpen(open: boolean): void {
+    if (this.disposed || this.promptOpen === open) return;
+    this.promptOpen = open;
+    if (open) {
+      this.promptOpenFailsafeTimer = this.setTimeoutImpl(() => {
+        this.promptOpenFailsafeTimer = null;
+        this.logger.warn(
+          "[injection] promptOpen failsafe fired — clearing a gate nothing else cleared",
+        );
+        this.setPromptOpen(false);
+      }, PROMPT_OPEN_FAILSAFE_MS);
+    } else {
+      if (this.promptOpenFailsafeTimer) {
+        this.clearTimeoutImpl(this.promptOpenFailsafeTimer);
+        this.promptOpenFailsafeTimer = null;
+      }
+      this.tryFlush();
+    }
+  }
+
+  /** The human is mid-draft at the real keyboard — don't clobber their composer. */
+  setLocalDraft(active: boolean): void {
+    if (this.disposed || this.localDraft === active) return;
+    this.localDraft = active;
+    if (!active) this.tryFlush();
+  }
+
   /** Cancels any pending timers and drops the queue. Safe to call once. */
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     if (this.submitTimer) this.clearTimeoutImpl(this.submitTimer);
     if (this.cooldownTimer) this.clearTimeoutImpl(this.cooldownTimer);
+    if (this.promptOpenFailsafeTimer) this.clearTimeoutImpl(this.promptOpenFailsafeTimer);
     this.submitTimer = null;
     this.cooldownTimer = null;
+    this.promptOpenFailsafeTimer = null;
     this.queue.length = 0;
   }
 
@@ -146,6 +197,8 @@ export class InjectionController {
       !this.busy &&
       !this.injecting &&
       !this.cooldown &&
+      !this.promptOpen &&
+      !this.localDraft &&
       this.queue.length > 0
     );
   }

@@ -28,7 +28,12 @@
  *    local-vs-web policy reads. `markWebTurnStart()` on a web-injected
  *    `message`; `markTurnEnd()` when the turn finishes (also fired
  *    automatically from Claude Code's own `Stop` hook here) or control
- *    returns to the terminal.
+ *    returns to the terminal. The flag is self-healing rather than a plain
+ *    boolean (plan-v2.md W1.2): `markLocalActivity()` — wired to a locally-
+ *    typed Enter at the real keyboard — clears it immediately (a present
+ *    human beats a remote one), and a `WEB_TURN_MAX_MS` watchdog auto-clears
+ *    a web turn that's gone quiet too long (a missed `Stop` hook, e.g. a
+ *    crash, must not wedge every future prompt onto the web forever).
  *  - `stop` — tear everything down in the session's `finally`.
  *
  * The server is a single owner of all four hooks, so if the surrounding
@@ -52,6 +57,14 @@ import { PreToolPermissionBridge } from "./pretoolPermissionBridge.js";
 /** Env var carrying the generated `--settings` path onto the spawned `claude`'s environment. */
 export const HOOK_SETTINGS_ENV_VAR = "FALCON_HOOK_SETTINGS_PATH";
 
+/**
+ * Default max quiet time before an active web turn auto-clears (plan-v2.md
+ * W1.2's watchdog). Refreshed by hook traffic while the flag is set, so this
+ * only fires on a genuinely wedged turn (e.g. a missed `Stop` hook after a
+ * crash), never on a merely-long-running one.
+ */
+export const WEB_TURN_MAX_MS = 30 * 60 * 1000;
+
 export interface RemotePermissionHookOptions {
   /** Directory to write the temp `--settings` + forwarder into (e.g. `<homeDir>/tmp/hooks`). */
   hooksDir: string;
@@ -63,8 +76,22 @@ export interface RemotePermissionHookOptions {
   onSessionId?: (sessionId: string) => void;
   /** Forwarded from Claude Code's `Notification`/`Stop` attention hooks. */
   onAttention?: (kind: AttentionKind) => void;
+  /**
+   * Fires when the bridge sees a hook decision that means a TUI dialog is (or
+   * is about to be) on screen at the terminal — a local-turn `PreToolUse`
+   * `ask` or a local-turn `PermissionRequest` deferral (plan-v2.md W1.3). The
+   * caller wires this to the PTY session's `setPromptOpen(true)` so a queued
+   * web message never gets typed into an open dialog.
+   */
+  onPromptLikely?: () => void;
   /** Max wait for a web answer before the bridge falls back to a deny. */
   answerTimeoutMs?: number;
+  /**
+   * Any web turn quiet longer than this auto-clears the web-turn flag — a
+   * missed `Stop` hook (e.g. a crash) must not wedge every future prompt onto
+   * the web forever (plan-v2.md W1.2). Default 30 minutes.
+   */
+  webTurnMaxMs?: number;
   logger?: Logger;
 }
 
@@ -73,6 +100,8 @@ export interface RemotePermissionHookDeps {
   startHookServer?: typeof startHookServerDefault;
   /** Injectable for tests; defaults to the real settings-file writer. */
   writeHookSettingsFile?: typeof writeHookSettingsFileDefault;
+  /** Injectable for tests; defaults to the global `Date.now`. */
+  now?: () => number;
 }
 
 export interface RemotePermissionHookHandle {
@@ -84,12 +113,26 @@ export interface RemotePermissionHookHandle {
   port: number;
   /** Wire into the `perm.answer` session RPC (first-wins resolution). */
   resolvePermission: (params: { reqId: string; decision: PermDecision }) => PermAnswerResult;
-  /** True once `markWebTurnStart()` has fired and `markTurnEnd()` has not — introspection/tests. */
+  /**
+   * True once `markWebTurnStart()` has fired and `markTurnEnd()`/
+   * `markLocalActivity()` has not, AND the turn hasn't gone quiet past
+   * `webTurnMaxMs` (the watchdog — plan-v2.md W1.2). Calling this refreshes
+   * the watchdog's last-activity clock, since hook traffic while the flag is
+   * set counts as evidence the turn is still genuinely alive.
+   */
   isWebTurnActive: () => boolean;
   /** Call when a web-injected message starts a turn — routes this turn's tool prompts to the web. */
   markWebTurnStart: () => void;
   /** Call when the turn ends / control returns local — stops routing to the web. */
   markTurnEnd: () => void;
+  /**
+   * Call when the human at the real terminal submits input (a locally-typed
+   * Enter outside injection) — clears the web-turn flag immediately. A
+   * present human beats a remote one (plan-v2.md W1.2's known, accepted
+   * residual: this also flips a still-genuinely-running web turn's
+   * subsequent prompts to the terminal).
+   */
+  markLocalActivity: () => void;
   /** Tear down: stop the server, remove the temp files, deny any dangling requests. */
   stop: () => Promise<void>;
 }
@@ -104,22 +147,44 @@ export async function installRemotePermissionHook(
 ): Promise<RemotePermissionHookHandle> {
   const startServer = deps.startHookServer ?? startHookServerDefault;
   const writeSettings = deps.writeHookSettingsFile ?? writeHookSettingsFileDefault;
+  const now = deps.now ?? (() => Date.now());
+  const webTurnMaxMs = opts.webTurnMaxMs ?? WEB_TURN_MAX_MS;
 
-  let webTurnActive = false;
-  const isWebTurnActive = () => webTurnActive;
+  // Epochs + a watchdog instead of a plain boolean (plan-v2.md W1.2): a
+  // missed `Stop` hook (crash) must not wedge every future prompt onto the
+  // web forever, and a locally-typed submit must be able to reclaim the
+  // turn immediately (see `markLocalActivity`'s own doc).
+  let webTurnStartedAt: number | null = null;
+  let webTurnLastActivityAt = 0;
+  const isWebTurnActive = (): boolean => {
+    if (webTurnStartedAt === null) return false;
+    if (now() - webTurnLastActivityAt > webTurnMaxMs) {
+      opts.logger?.warn("[remote-perm-hook] web-turn flag expired via watchdog");
+      webTurnStartedAt = null;
+      return false;
+    }
+    webTurnLastActivityAt = now(); // hook traffic while active keeps it alive
+    return true;
+  };
   const markWebTurnStart = () => {
-    webTurnActive = true;
+    webTurnStartedAt = now();
+    webTurnLastActivityAt = webTurnStartedAt;
     opts.logger?.debug("[remote-perm-hook] web turn started");
   };
   const markTurnEnd = () => {
-    webTurnActive = false;
+    webTurnStartedAt = null;
     opts.logger?.debug("[remote-perm-hook] turn ended");
+  };
+  const markLocalActivity = () => {
+    webTurnStartedAt = null;
+    opts.logger?.debug("[remote-perm-hook] local activity observed — clearing web-turn flag");
   };
 
   const bridge = new PreToolPermissionBridge({
     emitEnvelope: opts.emitEnvelope,
     isWebTurnActive,
     onModeChange: opts.onModeChange,
+    onPromptLikely: opts.onPromptLikely,
     answerTimeoutMs: opts.answerTimeoutMs,
     logger: opts.logger,
   });
@@ -158,6 +223,7 @@ export async function installRemotePermissionHook(
     isWebTurnActive,
     markWebTurnStart,
     markTurnEnd,
+    markLocalActivity,
     stop: async () => {
       bridge.reset();
       settings.cleanup();

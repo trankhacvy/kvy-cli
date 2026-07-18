@@ -50,6 +50,30 @@ describe("PreToolPermissionBridge — handlePreToolUse (W1.1: always defers)", (
   });
 });
 
+describe("PreToolPermissionBridge — onPromptLikely (W1.3)", () => {
+  it("fires onPromptLikely from handlePreToolUse on a local turn, not a web turn", async () => {
+    const onPromptLikely = vi.fn();
+    const local = makeBridge({ isWebTurnActive: () => false, onPromptLikely });
+    await local.bridge.handlePreToolUse({ tool_name: "Bash" });
+    expect(onPromptLikely).toHaveBeenCalledOnce();
+
+    const web = makeBridge({ isWebTurnActive: () => true, onPromptLikely });
+    await web.bridge.handlePreToolUse({ tool_name: "Bash" });
+    expect(onPromptLikely).toHaveBeenCalledOnce(); // unchanged — no second call
+  });
+
+  it("fires onPromptLikely from handlePermissionRequest's local-undefined return, not the web path", async () => {
+    const onPromptLikely = vi.fn();
+    const local = makeBridge({ isWebTurnActive: () => false, onPromptLikely });
+    await local.bridge.handlePermissionRequest({ tool_name: "Bash" });
+    expect(onPromptLikely).toHaveBeenCalledOnce();
+
+    const web = makeBridge({ isWebTurnActive: () => true, onPromptLikely });
+    void web.bridge.handlePermissionRequest({ tool_name: "Bash" });
+    expect(onPromptLikely).toHaveBeenCalledOnce(); // unchanged
+  });
+});
+
 describe("PreToolPermissionBridge — handlePermissionRequest — local vs web policy", () => {
   it("returns undefined immediately for a local turn and emits nothing", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
