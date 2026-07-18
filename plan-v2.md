@@ -1404,22 +1404,22 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 
 ### Phase 2 — approved features
 
-- [ ] **U2.1 `[solo]` "askuserquestion"** (W2.1 — CLI+WEB, gated on U0.3+U1.2)
-  - [ ] Bridge: `isAskUserQuestion`/`composeAskAnswerReason`/`ASK_FALLBACK_REASON`;
+- [x] **U2.1 `[solo]` "askuserquestion"** (W2.1 — CLI+WEB, gated on U0.3+U1.2)
+  - [x] Bridge: `isAskUserQuestion`/`composeAskAnswerReason`/`ASK_FALLBACK_REASON`;
         `handleAskUserQuestion()`; `isQuestion` pending fields; `mapDecision`
         question branch
-  - [ ] Web: `parseAskQuestions`; `AskUserQuestionCard` (single/multi/multiSelect,
+  - [x] Web: `parseAskQuestions`; `AskUserQuestionCard` (single/multi/multiSelect,
         `{kind:"allow",scope:"once",updatedInput:{answers}}`, answered/lost-race);
         dispatch in `PermPlaceholder`+`ToolCardShell`; read-only ToolCard + registry
-  - [ ] Tests: reason snapshot; bridge branches; card interactions; dispatch
+  - [x] Tests: reason snapshot; bridge branches; card interactions; dispatch
   - [ ] `[human]` live: answer single/multiSelect/multi-question; timeout → plain-text
         re-ask; local widget still mirrors
-- [ ] **U2.2 `[bundle]` "session-controls-web"** (W2.2+W2.4 — PermCard/ControlBar/
+- [x] **U2.2 `[bundle]` "session-controls-web"** (W2.2+W2.4 — PermCard/ControlBar/
       screen)
-  - [ ] W2.2: ExitPlanMode `planMd` markdown preview + button relabels
-  - [ ] W2.4: `deriveCurrentPermissionMode` + pass-through (kill hardcoded
+  - [x] W2.2: ExitPlanMode `planMd` markdown preview + button relabels
+  - [x] W2.4: `deriveCurrentPermissionMode` + pass-through (kill hardcoded
         `"default"`); hide Take-control in PTY mode; hide mode mutation until U4.5
-  - [ ] Tests: plan render; selector derivation; visibility rules
+  - [x] Tests: plan render; selector derivation; visibility rules
 - [ ] **U2.3 `[solo]` "stop-session"** (W2.3 — WIRE+CLI+WEB)
   - [ ] Wire: `StopRpcParams/ResultSchema` (additive-lint green)
   - [ ] CLI: `"stop"` in `sessionRpc.ts`; handlers in both flows

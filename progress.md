@@ -8552,3 +8552,31 @@ TURBO`).
   why it failed and either fix forward or restart the unit.
 - U1.7 `[human]` Wave-1 exit — once U1.4 lands, run the full live checklist
   ("Testing & verification" § Wave 1), `pnpm --filter falcon build` first.
+
+## v2-pty-injection Cycle 6 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U2.1 `[solo]` "askuserquestion" (W2.1 — CLI+WEB) — sha `a51a1947698ee5d97cd903a70adb1e301b28a172`
+- U2.2 `[bundle]` "session-controls-web" (W2.2+W2.4 — PermCard/ControlBar/screen) — sha `67a25ca1bd6b8b04961c249cec30c3a1b20babf1`
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) — still
+  failed/parked from prior cycles. Worktree `.worktrees/U1.4` (`wf/U1.4`, tip
+  `0754076`) left in place for human inspection per the false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor <sha> v2-pty-injection` held for
+both U2.1 (`a51a194`) and U2.2 (`67a25ca`) — confirmed real ancestry. Their
+worktrees (`.worktrees/U2.1`, `.worktrees/U2.2`) and branches (`wf/U2.1`,
+`wf/U2.2`) were removed post-verification. plan-v2.md's Master TODO had U2.1's
+and U2.2's unit boxes and all non-`[human]` sub-boxes flipped to `[x]` (U2.1's
+`[human]` live-check sub-box left unchecked). `pnpm typecheck` on
+`v2-pty-injection` — all 11 turbo tasks successful (cache-hit, `>>> FULL
+TURBO`).
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `0754076`) — figure out
+  why it failed and either fix forward or restart the unit.
+- U2.3 `[solo]` "stop-session" (W2.3 — WIRE+CLI+WEB) — next Phase-2 unit per
+  plan-v2.md Master TODO ordering.
