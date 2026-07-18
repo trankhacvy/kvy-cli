@@ -1473,7 +1473,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
       drafts + multi-file/image previews + crypto-ready gating + shadcn `Select`
       replacements + "Load earlier" pagination + model selector (spawn) + header
       model chip
-- [ ] **U4.4 `[bundle]` "shell-polish"** (W4.2c): toasts + skeletons + offline/WS
+- [x] **U4.4 `[bundle]` "shell-polish"** (W4.2c): toasts + skeletons + offline/WS
       banner + PWA icons/manifest + decrypted title in header + archive/delete
       wiring
 - [x] **U4.5 `[solo]` "pty-setmode"** (W4.3 — flag-gated, version-coupled)

@@ -8928,3 +8928,20 @@ turbo tasks successful (cache-hit, `>>> FULL TURBO`).
   unit.
 - U4.4 `[bundle]` "shell-polish" (W4.2c) — worktree `.worktrees/U4.4` (branch
   `wf/U4.4`, tip `ae11a2c`) is impl-complete and still workflow-eligible.
+
+## Hand-merge session 2 — 2026-07-19 (orchestrator, Fable)
+
+- U4.5 "pty-setmode" landed by the resumed workflow itself (878c57e, ancestry-proven).
+- U4.4 "shell-polish" was parked on a stale-branch conflict only (its own verify:
+  1949 tests green in-worktree). Hand-merged → 6e1c12e (ancestry-proven): kept
+  LifecycleBanner + disabled ControlBar alongside the TimelineSkeleton wrapper;
+  installed the sonner dep. Full gate green (1420 CLI / 636 web tests).
+- Salvaged a real fix from the stray `review/U1.6-recreated` worktree: decrypt
+  "Retry" silently no-oped (TanStack structural sharing keeps `data` identity);
+  cherry-picked as the `dataUpdatedAt` dep fix. Both leftover worktrees removed.
+- ALL 21 workflow-eligible units are now landed and ancestry-proven. Remaining:
+  [human] live gates (U0.1/U0.2 re-check, U1.7, U2.4) and Phase 5 landing
+  (U5.1 conformance, U5.2 docs + biome debt in cli/scripts + e2e, U5.3 plan.md
+  flips, U5.4 merge to main).
+- Review-noted debt: OfflineBanner may false-positive on unauthenticated pages
+  (apiSocket never connects there) — cosmetic, for U5.2's pass.

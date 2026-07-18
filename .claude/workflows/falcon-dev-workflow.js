@@ -28,6 +28,7 @@ const attempted = new Set();
 const failedOnce = new Set();
 const parked = new Set();
 let coolOff = false; // true after a cycle with agent nulls (rate limit / crash) → next cycle picks 1 unit
+let consecutiveDiscoveryFailures = 0; // 3 in a row ⇒ sustained outage ⇒ stop cleanly
 
 // agent() returns null when the sub-agent dies on a terminal API error (rate
 // limit, crash). One in-place retry absorbs transient failures; a second null
@@ -35,7 +36,9 @@ let coolOff = false; // true after a cycle with agent nulls (rate limit / crash)
 async function retryAgent(prompt, opts, attempts = 2) {
   for (let i = 1; i <= attempts; i++) {
     const label = i > 1 ? `${opts.label}-retry${i - 1}` : opts.label;
-    const result = await agent(prompt, { ...opts, label });
+    // Every workflow agent runs on Sonnet 5 — the orchestrating session model
+    // (Fable) is for the main loop only; per-call opts.model may still override.
+    const result = await agent(prompt, { ...opts, model: opts.model ?? 'sonnet', label });
     if (result) return result;
     log(`⚠️ [${opts.label}] agent returned null (attempt ${i}/${attempts}) — rate limit or crash`);
     coolOff = true;
@@ -89,7 +92,9 @@ while (cycleCount < MAX_CYCLES) {
    - if selecting 2, they must touch disjoint files/packages (the unit doc lists
      files) so their worktrees can't conflict.
 4. Prefer earlier phases; prefer unblocking units over polish.
-5. If every workflow-eligible unit is checked, return status "completed".
+5. status semantics — read carefully: "completed" means ZERO workflow-eligible
+   units remain in the ENTIRE plan; it must NEVER be returned alongside a
+   non-empty units list. If you are selecting units, status is "in-progress".
 6. For each selected unit copy its FULL sub-task list verbatim from plan-v2.md into
    tasks[] — the implementer must not need to re-derive scope.`,
     {
@@ -122,12 +127,25 @@ while (cycleCount < MAX_CYCLES) {
   );
 
   if (!discovery) {
-    log('⚠️ Unit finder unavailable this cycle (rate limited?) — trying again next cycle.');
+    consecutiveDiscoveryFailures++;
+    log(`⚠️ Unit finder unavailable (${consecutiveDiscoveryFailures} in a row) — rate limited?`);
+    if (consecutiveDiscoveryFailures >= 3) {
+      // A sustained API outage (e.g. session limit) — burning remaining cycles
+      // on null discoveries helps nobody. Exit cleanly; resume when it resets.
+      log('🛑 3 consecutive discovery failures — stopping cleanly. Resume this run after the limit resets.');
+      break;
+    }
     continue;
   }
-  if (discovery.status === 'completed') {
+  consecutiveDiscoveryFailures = 0;
+  if (discovery.status === 'completed' && discovery.units.length === 0) {
     log('✅ All workflow-eligible units complete!');
     break;
+  }
+  if (discovery.status === 'completed') {
+    // Defensive: a finder once said "completed" while returning units (cycle 4,
+    // run wf_42de52be-701) — units win over the status flag.
+    log('⚠️ Finder said "completed" but returned units — treating as in-progress.');
   }
   if (discovery.status === 'blocked' || discovery.units.length === 0) {
     log(`⏸️ No eligible units: ${discovery.reasoning}`);
@@ -162,9 +180,11 @@ For EACH of these units, run exactly:
 Units: ${JSON.stringify(units.map((u) => u.unit_id))}
 
 Then VERIFY with \`git worktree list\` that every path exists and is on its
-wf/<unit_id> branch. If a worktree/branch already exists from a dead run, remove
-it first (git worktree remove --force + git branch -D) and recreate fresh from
-${TARGET_BRANCH}. Report per unit.`,
+wf/<unit_id> branch.
+IMPORTANT: if the worktree/branch ALREADY EXISTS (a prior attempt), KEEP IT
+EXACTLY AS IS — do not recreate, reset, or rebase it; just verify it exists and
+report ok with reused=true. Prior commits there are valuable partial work the
+pipeline will resume. Only create fresh when absent. Report per unit.`,
     {
       label: 'setup-worktrees',
       phase: 'Worktree Setup',
@@ -181,6 +201,7 @@ ${TARGET_BRANCH}. Report per unit.`,
                 ok: { type: 'boolean' },
                 worktree_path: { type: 'string' },
                 branch: { type: 'string' },
+                reused: { type: 'boolean' },
                 error: { type: 'string' },
               },
               required: ['unit_id', 'ok', 'worktree_path', 'branch'],
@@ -391,6 +412,10 @@ ${u.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 Context: read plan-v2.md's matching wave section FIRST (it contains the settled
 design + code snippets grounded in the real source), then CLAUDE.md and the files
 themselves. falcon-system-design.md for architecture questions.
+PRIOR ATTEMPT: first run \`git log ${TARGET_BRANCH}..HEAD --oneline\` in the
+worktree. If commits exist, this unit was partially built before — read
+task-summary/${u.unit_id}.md and the diff, verify each sub-task against the
+code, and only fill gaps / fix recorded issues. Do NOT start over.
 Rules: follow the plan's snippets unless the code has drifted (then adapt +
 note it in the summary); additive-only wire changes; no TODOs; skip [human]
 sub-tasks. pnpm build must pass in the worktree before you finish.
@@ -452,7 +477,11 @@ do NOT fix implementation code.`,
         `Fix these issues in Falcon unit ${u.unit_id}, worktree ${u.wtPath} (cd first):
 ${test.issues_found.map((x, i) => `${i + 1}. ${x}`).join('\n')}
 Root-cause each, fix, re-run affected tests + pnpm typecheck.
-Commit: "fix: ${u.unit_id} — resolve test issues". Report anything unfixable.`,
+Commit: "fix: ${u.unit_id} — resolve test issues". Report anything unfixable.
+IMPORTANT: remaining_issues must list ONLY unfixed CODE defects in this unit.
+Environment/sandbox problems — e.g. the documented transient biome lint OOM
+(CLAUDE.md notes it; it reproduces on the untouched base branch), disk
+pressure, stale daemons — go in environment_notes and do NOT block the unit.`,
         {
           label: `fix-${u.unit_id}`,
           phase: 'Review & Fix',
@@ -461,6 +490,7 @@ Commit: "fix: ${u.unit_id} — resolve test issues". Report anything unfixable.`
             properties: {
               success: { type: 'boolean' },
               remaining_issues: { type: 'array', items: { type: 'string' } },
+              environment_notes: { type: 'array', items: { type: 'string' } },
               summary: { type: 'string' },
             },
             required: ['success', 'remaining_issues', 'summary'],
