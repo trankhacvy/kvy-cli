@@ -162,3 +162,18 @@
   border-color: var(--border);
   margin: 0.75rem 0;
 }
+
+/*
+ * Dual shiki theme (plan-v2.md W4.2, `lib/markdown.ts`'s
+ * `theme: { light, dark }`): rehype-pretty-code emits *no* literal `color`
+ * per token in multi-theme mode, only `--shiki-light`/`--shiki-dark` CSS
+ * custom properties (shiki's own dual-theme convention) — one of these two
+ * rules is what actually turns a var into a visible color, matching
+ * whichever theme `.dark` on `<html>` (`use-theme.ts`) currently selects.
+ */
+.markdown-body [data-rehype-pretty-code-figure] span {
+  color: var(--shiki-light);
+}
+.dark .markdown-body [data-rehype-pretty-code-figure] span {
+  color: var(--shiki-dark);
+}

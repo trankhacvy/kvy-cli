@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+import { CodeBlock } from "@/components/timeline/CodeBlock";
 
 /**
  * Markdown → React pipeline for assistant/user message text (design §9.1
@@ -29,11 +30,21 @@ import { unified } from "unified";
  * decrypted-but-still-adversary-controlled transcript content, design §5.3)
  * can influence *which* elements render, never inject raw markup.
  *
- * Single theme for now: the app only ever renders `.dark` (layout.tsx — no
- * appearance toggle yet, design §9.2 Settings screen). When that toggle
- * lands, switch `theme` to `{ light: ..., dark: ... }` and add the
- * `--shiki-light`/`--shiki-dark` CSS rehype-pretty-code documents for that
- * mode.
+ * Dual shiki theme (plan-v2.md W4.2): `{ light, dark }` makes shiki emit
+ * *both* themes' colors per token as `--shiki-light`/`--shiki-dark` CSS
+ * custom properties (no literal `color:` fallback — that's shiki's own
+ * dual-theme convention, see https://shiki.style/guide/dual-themes) rather
+ * than baking one theme's colors in at render time; `globals.css` picks
+ * between them with a plain `.dark` selector, same class `use-theme.ts`
+ * toggles on `<html>`. `keepBackground: false` (unchanged) means neither
+ * theme's background ever renders — markdown code blocks sit on whatever
+ * background their container already has.
+ *
+ * `components: { pre: CodeBlock }` overrides every fenced-code-block `pre`
+ * rehype-pretty-code produces with `CodeBlock` (plan-v2.md W4.2 "Copy
+ * buttons") — the one seam `rehype-react` exposes for wrapping/augmenting a
+ * specific tag, so the copy affordance rides along without a second pass
+ * over the tree.
  */
 function buildProcessor() {
   return unified()
@@ -41,10 +52,10 @@ function buildProcessor() {
     .use(remarkGfm)
     .use(remarkRehype, { allowDangerousHtml: false })
     .use(rehypePrettyCode, {
-      theme: "github-dark",
+      theme: { light: "github-light", dark: "github-dark" },
       keepBackground: false,
     })
-    .use(rehypeReact, { Fragment, jsx, jsxs });
+    .use(rehypeReact, { Fragment, jsx, jsxs, components: { pre: CodeBlock } });
 }
 
 type MarkdownProcessor = ReturnType<typeof buildProcessor>;
