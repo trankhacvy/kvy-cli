@@ -1,7 +1,7 @@
 "use client";
 
 import type { Ephemeral } from "@falcon/wire";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AttentionKind } from "@/features/session-list/types";
 import { apiSocket } from "@/sync";
 
@@ -24,6 +24,19 @@ export interface EphemeralSource {
 
 const INITIAL_STATE: SessionEphemeralState = { working: false, attentionKind: null };
 
+/** A `working:true` ephemeral older than this with no successor is treated
+ * as stale. Ephemerals are droppable by design (§4.3) — a `working:true`
+ * that never gets a matching `working:false` (daemon crash, dropped socket
+ * message, etc.) must not pin the "Working…" indicator on forever (W1.7). */
+export const WORKING_STALE_MS = 60_000;
+
+/** Whether a `working:true` signal received at `workingSince` is still
+ * fresh as of `now`. `workingSince === null` means no `working:true` is
+ * currently pending (already not-working). */
+export function isWorkingFresh(workingSince: number | null, now: number): boolean {
+  return workingSince !== null && now - workingSince < WORKING_STALE_MS;
+}
+
 /** Subscribes to the live `ephemeral` stream for one session's `activity`/
  * `attention` signals (falcon-system-design.md §4.3, plan.md §16 "2.4 Web
  * control surface"). Resets to `INITIAL_STATE` whenever `sessionId` changes
@@ -34,17 +47,44 @@ export function useSessionEphemerals(
   source: EphemeralSource = apiSocket,
 ): SessionEphemeralState {
   const [state, setState] = useState<SessionEphemeralState>(INITIAL_STATE);
+  const workingSinceRef = useRef<number | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: `source` is a stable singleton by default (apiSocket) or a test double the caller controls — re-subscribing only on sessionId change is intentional.
   useEffect(() => {
     setState(INITIAL_STATE);
-    return source.on("ephemeral", (event) => {
+    workingSinceRef.current = null;
+    let staleTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const clearStaleTimer = () => {
+      if (staleTimer !== undefined) {
+        clearTimeout(staleTimer);
+        staleTimer = undefined;
+      }
+    };
+
+    const unsubscribe = source.on("ephemeral", (event) => {
       if (event.t === "activity" && event.sessionId === sessionId) {
+        clearStaleTimer();
+        workingSinceRef.current = event.working ? Date.now() : null;
         setState((prev) => ({ ...prev, working: event.working }));
+        // No successor within WORKING_STALE_MS ⇒ this "working" was dropped
+        // somewhere upstream (crash, missed socket message); stop trusting it.
+        if (event.working) {
+          staleTimer = setTimeout(() => {
+            if (!isWorkingFresh(workingSinceRef.current, Date.now())) {
+              setState((prev) => ({ ...prev, working: false }));
+            }
+          }, WORKING_STALE_MS);
+        }
       } else if (event.t === "attention" && event.sessionId === sessionId) {
         setState((prev) => ({ ...prev, attentionKind: event.kind }));
       }
     });
+
+    return () => {
+      clearStaleTimer();
+      unsubscribe();
+    };
   }, [sessionId]);
 
   return state;
