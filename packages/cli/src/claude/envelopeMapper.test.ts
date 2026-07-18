@@ -461,7 +461,9 @@ describe("mapClaudeToEnvelopes — image blocks", () => {
         isSidechain: false,
         message: {
           role: "user",
-          content: [{ type: "image", source: { type: "base64", media_type: mediaType, data: "x" } }],
+          content: [
+            { type: "image", source: { type: "base64", media_type: mediaType, data: "x" } },
+          ],
         },
       } as unknown as RawJSONLines,
       state,
