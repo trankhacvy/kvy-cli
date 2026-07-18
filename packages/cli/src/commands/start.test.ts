@@ -621,11 +621,12 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       );
 
       expect(code).toBe(0);
-      const serviceTexts = enqueued
-        .flat()
-        .filter((e) => e.ev.t === "service")
-        .map((e) => (e.ev.t === "service" ? e.ev.text : undefined));
+      const serviceEnvelopes = enqueued.flat().filter((e) => e.ev.t === "service");
+      const serviceTexts = serviceEnvelopes.map((e) =>
+        e.ev.t === "service" ? e.ev.text : undefined,
+      );
       expect(serviceTexts).toEqual(["session started", "session ended"]);
+      expect(serviceEnvelopes.every((e) => e.role === "agent")).toBe(true);
     });
 
     it("enqueues a distinguishing 'session ended unexpectedly' note for a non-zero exit (covers spawn failures too — ptyClaudeSession.ts's own setup-failure path resolves `done` the same way)", async () => {

@@ -400,6 +400,42 @@ describe("mapClaudeToEnvelopes — image blocks", () => {
     expect(envelopes).toHaveLength(0);
   });
 
+  it("ignores an image block with an empty base64 data string instead of crashing", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "u-img-empty",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: "image/png", data: "" } },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(0);
+  });
+
+  it("ignores an image block missing media_type/data fields instead of crashing", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "u-img-missing",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: [{ type: "image", source: { type: "base64" } }],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(0);
+  });
+
   it("maps a top-level image sibling in the mixed tool-result loop to an 'agent'-role file envelope (not 'user')", () => {
     // Distinct from the plain (non-tool-result) user loop tested above, which
     // pushes a "user"-role file envelope — a top-level image block that sits
