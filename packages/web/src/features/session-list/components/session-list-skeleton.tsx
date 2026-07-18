@@ -26,7 +26,12 @@ function SessionCardSkeleton() {
  * session-card placeholders, matching `WorkspaceSection`'s own shape. */
 export function SessionListSkeleton() {
   return (
-    <div className="flex flex-col gap-6" aria-label="Loading sessions" aria-busy="true">
+    <div
+      role="status"
+      className="flex flex-col gap-6"
+      aria-label="Loading sessions"
+      aria-busy="true"
+    >
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-2">
           <Skeleton className="h-4 w-24" />

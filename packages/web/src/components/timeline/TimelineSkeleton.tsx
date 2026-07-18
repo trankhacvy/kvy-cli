@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export function TimelineSkeleton() {
   return (
     <div
+      role="status"
       className="flex flex-1 flex-col gap-4 overflow-hidden p-4"
       aria-label="Loading transcript"
       aria-busy="true"
