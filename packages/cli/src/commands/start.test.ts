@@ -557,6 +557,53 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(sendInterrupt).toHaveBeenCalledOnce();
   });
 
+  it("stop RPC (no force) calls ptySession.stop() and reports ok without scheduling a process exit", async () => {
+    const ptyStop = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ stop: ptyStop }));
+    let capturedHandlers: SessionRpcHandlers | null = null;
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
+
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, registerSessionRpcHandlers }));
+
+    const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+    // The `finally` teardown already called ptySession.stop() once by the
+    // time the command resolves (done: Promise.resolve(0), the default) —
+    // this asserts the RPC handler's OWN call on top of that.
+    const callsBeforeHandlerInvocation = ptyStop.mock.calls.length;
+    const result = await handlers.stop({});
+    expect(result).toEqual({ ok: true });
+    expect(ptyStop.mock.calls.length).toBe(callsBeforeHandlerInvocation + 1);
+  });
+
+  it("stop RPC with force schedules a process exit after the grace period", async () => {
+    vi.useFakeTimers();
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    try {
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
+
+      await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, registerSessionRpcHandlers }));
+
+      const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+      const result = await handlers.stop({ force: true });
+      expect(result).toEqual({ ok: true });
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(3000);
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      exitSpy.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it("still starts (non-fatally) with no --settings and not-supported perm.answer when the hook fails to install", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
     let capturedHandlers: SessionRpcHandlers | null = null;
@@ -644,6 +691,40 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
       // Starting mode is remote, so a send is delivered directly (not queued).
       expect(result).toEqual({ queued: false, status: "queued" });
       expect(received).toEqual([{ id: envelope.id, text: "remote hello" }]);
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("routes a stop RPC into loop()'s onExitRequested subscribers on the remote flow", async () => {
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-stop-test-"));
+    try {
+      let exitRequests = 0;
+      const loop = vi.fn(async (options: LoopOptions) => {
+        options.onExitRequested(() => {
+          exitRequests += 1;
+        });
+        return 0;
+      });
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
+
+      await runStartClaudeCommand(
+        baseDeps({
+          homeDir,
+          claudeArgs: ["--starting-mode", "remote"],
+          loop,
+          registerSessionRpcHandlers,
+        }),
+      );
+
+      const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+      const result = await handlers.stop({});
+      expect(result).toEqual({ ok: true });
+      expect(exitRequests).toBe(1);
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }

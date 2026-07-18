@@ -196,6 +196,37 @@ describe("runStartCodexCommand", () => {
     }
   });
 
+  it("stop RPC requests exit (ending the run without waitForExit ever resolving) and stops the remote", async () => {
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-test-"));
+    try {
+      let handlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
+        handlers = d.handlers;
+        return { stop: vi.fn() };
+      });
+      // A `waitForExit` that never resolves on its own — only the `stop` RPC's
+      // exit request should end the run.
+      const { deps, fakeRemote } = baseDeps({
+        homeDir,
+        registerSessionRpcHandlers,
+        waitForExit: () => new Promise<void>(() => {}),
+      });
+
+      const run = runStartCodexCommand(deps);
+      await new Promise((r) => setTimeout(r, 0));
+      const h = handlers as unknown as SessionRpcHandlers;
+
+      const result = await h.stop({});
+      expect(result).toEqual({ ok: true });
+
+      const code = await run;
+      expect(code).toBe(0);
+      expect(fakeRemote.stop).toHaveBeenCalledOnce();
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it("completes the send claim once the turn settles (a later duplicate then reports 'duplicate')", async () => {
     const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
     try {

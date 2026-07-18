@@ -224,6 +224,16 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   // claim its `message` handler opened (design §7.10).
   const openClaims = new Map<string, string>();
 
+  // "End session" from the web (plan-v2.md W2.3): there is no terminal-side
+  // exit signal here (unlike `start.ts`'s `loop()`, which already has a
+  // `requestExit()`-shaped hook) — Codex's whole lifetime is gated on
+  // `waitForExit()` (SIGINT by default), so the `stop` RPC resolves a second,
+  // manually-triggered promise raced against it below.
+  let requestExit = () => {};
+  const exitRequested = new Promise<void>((resolve) => {
+    requestExit = resolve;
+  });
+
   const remote = startAcpRemote({
     adapterId: "codex",
     workingDirectory: deps.workingDirectory,
@@ -295,6 +305,17 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
       return { ok: false };
     },
     permAnswer: ({ reqId, decision }) => remote.resolvePermission({ reqId, decision }),
+    // Same not-yet-landed status-reporting caveat as `start.ts`'s `stop`
+    // handlers (plan-v2.md U1.4 "lifecycle-status" hasn't landed on this
+    // branch — see that comment). `force` doesn't kill anything directly;
+    // it exits this whole CLI process after a grace period if `remote.stop()`
+    // hasn't already ended the session by then.
+    stop: async ({ force }) => {
+      logger.info("[start-codex] stop requested from web", { force: force ?? false });
+      requestExit();
+      if (force) setTimeout(() => process.exit(0), 3000).unref();
+      return { ok: true };
+    },
   };
 
   const rpcHandle = registerRpc({
@@ -306,7 +327,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   });
 
   try {
-    await waitForExit();
+    await Promise.race([waitForExit(), exitRequested]);
     return 0;
   } finally {
     await remote.stop();

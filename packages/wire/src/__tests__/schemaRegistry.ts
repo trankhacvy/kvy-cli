@@ -48,6 +48,8 @@ export const schemaRegistry: Record<string, z.ZodTypeAny> = {
   PermAnswerParamsSchema: wire.PermAnswerParamsSchema,
   PermAnswerResultSchema: wire.PermAnswerResultSchema,
   InterruptResultSchema: wire.InterruptResultSchema,
+  StopRpcParamsSchema: wire.StopRpcParamsSchema,
+  StopRpcResultSchema: wire.StopRpcResultSchema,
   TakeControlResultSchema: wire.TakeControlResultSchema,
   SetModeParamsSchema: wire.SetModeParamsSchema,
   SetModeResultSchema: wire.SetModeResultSchema,

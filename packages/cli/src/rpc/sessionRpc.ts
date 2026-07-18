@@ -2,7 +2,8 @@
  * Session RPC registration (plan.md §16 "2.1 Remote mode": "Session RPC
  * registration: `message`, `interrupt`, `takeControl`, `setMode`,
  * `perm.answer` handlers over the relay"; design §4.4's "Session RPCs —
- * registered by the session process" table).
+ * registered by the session process" table; `stop` added by plan-v2.md
+ * W2.3 "Stop session from the web").
  *
  * Ported (adapted) from Happy's `RpcHandlerManager`
  * (happy-cli/src/api/rpc/RpcHandlerManager.ts, MIT) and the `rpc-request`
@@ -23,8 +24,9 @@
  *    module seals/opens `{t:'enc', v:1, c}` objects via `@falcon/crypto`'s
  *    `seal`/`open` (the same session DEK the HTTP outbox encrypts messages
  *    under), not Happy's own base64-string convention.
- *  - **One handler per method, not a generic bag.** The five session RPC
- *    methods are fixed by the wire contract (design §4.4's table), so
+ *  - **One handler per method, not a generic bag.** The session RPC
+ *    methods are fixed by the wire contract (design §4.4's table, plus
+ *    `stop`), so
  *    `SessionRpcHandlers` is a closed interface instead of Happy's
  *    `registerHandler(method, fn)` free-form registry.
  *  - **Validated against the wire schemas.** Every decrypted params/result
@@ -43,6 +45,8 @@ import {
   PermAnswerResultSchema,
   SetModeParamsSchema,
   SetModeResultSchema,
+  StopRpcParamsSchema,
+  StopRpcResultSchema,
   TakeControlResultSchema,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
@@ -61,14 +65,22 @@ type SetModeParams = z.infer<typeof SetModeParamsSchema>;
 type SetModeResult = z.infer<typeof SetModeResultSchema>;
 type PermAnswerParams = z.infer<typeof PermAnswerParamsSchema>;
 type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;
+type StopRpcParams = z.infer<typeof StopRpcParamsSchema>;
+type StopRpcResult = z.infer<typeof StopRpcResultSchema>;
 
-/** The five session RPC methods design §4.4 lists as "registered by the session process". */
+/**
+ * The session RPC methods design §4.4 lists as "registered by the session
+ * process", plus `stop` (plan-v2.md W2.3 — a session RPC, not the daemon's
+ * machine-scoped `stopSession`: the session process is alive and owns its
+ * own child, so ending it doesn't need a daemon round-trip).
+ */
 export const SESSION_RPC_METHODS = [
   "message",
   "interrupt",
   "takeControl",
   "setMode",
   "perm.answer",
+  "stop",
 ] as const;
 export type SessionRpcMethod = (typeof SESSION_RPC_METHODS)[number];
 
@@ -78,6 +90,7 @@ export interface SessionRpcHandlers {
   takeControl: () => Promise<TakeControlResult> | TakeControlResult;
   setMode: (params: SetModeParams) => Promise<SetModeResult> | SetModeResult;
   permAnswer: (params: PermAnswerParams) => Promise<PermAnswerResult> | PermAnswerResult;
+  stop: (params: StopRpcParams) => Promise<StopRpcResult> | StopRpcResult;
 }
 
 export interface SessionRpcDeps {
@@ -141,6 +154,7 @@ function buildMethodTable(
       PermAnswerResultSchema,
       handlers.permAnswer,
     ),
+    stop: defineMethod(StopRpcParamsSchema, StopRpcResultSchema, handlers.stop),
   };
 }
 
