@@ -137,6 +137,26 @@ describe("acquireSessionLock", () => {
     await staleHandleRelease();
   });
 
+  it("a real stale handle's own release() does not delete a subsequent reclaimer's lock", async () => {
+    // Unlike the previous test (which seeds the stale payload directly on
+    // disk and so never actually exercises a handle's `release()` at all),
+    // this one acquires through the real `acquireSessionLock()` path first,
+    // so `stale.handle.release()` below is the actual guarded call.
+    const deadPid = await spawnAndReapDeadPid();
+    const stale = await acquireSessionLock(homeDir, KEY, payload({ pid: deadPid }));
+    expect(stale.ok).toBe(true);
+    if (!stale.ok) return;
+
+    const reclaimer = await acquireSessionLock(homeDir, KEY, payload({ sessionId: "sess_new" }));
+    expect(reclaimer.ok).toBe(true);
+    if (!reclaimer.ok) return;
+
+    await stale.handle.release();
+    await expect(readFile(sessionLockPath(homeDir, KEY), "utf8")).resolves.toContain("sess_new");
+
+    await reclaimer.handle.release();
+  });
+
   it("updateSessionId() rewrites the payload so a later contender sees the real session id", async () => {
     const first = await acquireSessionLock(homeDir, KEY, payload({ sessionId: null }));
     expect(first.ok).toBe(true);

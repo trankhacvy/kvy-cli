@@ -1152,4 +1152,49 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
     expect(code).toBe(0);
     expect(notifyDaemonSessionStarted).toHaveBeenCalledTimes(1);
   });
+
+  it("acquires the directory lock keyed by machineId + workingDirectory with this process's own pid", async () => {
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: true as const,
+      handle: fakeSessionLockHandle(),
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        workingDirectory: "/fake/workdir",
+        readDaemonState: async () => fakeDaemonState({ machineId: "machine-xyz" }),
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(acquireSessionLock).toHaveBeenCalledWith(
+      "/fake/home",
+      { machineId: "machine-xyz", workspacePath: "/fake/workdir" },
+      expect.objectContaining({ pid: process.pid, sessionId: null }),
+    );
+  });
+
+  it("also gates the daemon-spawned remote flow — a lock held by a live process blocks it before loop() ever runs", async () => {
+    const stderr: string[] = [];
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: false as const,
+      reason: "held-by-running-process" as const,
+      existing: { pid: 4242, sessionId: "sess_existing", startedAt: 1 },
+    }));
+    const loop = vi.fn(async () => 0);
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--starting-mode", "remote"],
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        loop,
+        writeError: (text) => stderr.push(text),
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(loop).not.toHaveBeenCalled();
+    expect(stderr.join("")).toContain("sess_existing");
+  });
 });
