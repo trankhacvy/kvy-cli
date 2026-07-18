@@ -202,6 +202,64 @@ describe("InjectionController", () => {
       expect(onInjected).not.toHaveBeenCalled();
       expect(onDropped).toHaveBeenCalledExactlyOnceWith([{ id: "a", text: "in flight" }]);
     });
+
+    it("dispose() during an active post-submit cooldown reports only the still-queued message, not the already-submitted one", () => {
+      // A step-at-a-time timer queue (unlike the shared `fakeTimers()`
+      // harness's `runAll()`, which drains newly-scheduled timers too — this
+      // test needs to stop exactly between the submit timer firing and the
+      // cooldown timer firing).
+      const queue: Array<() => void> = [];
+      const stepSetTimeout: NonNullable<InjectionControllerDeps["setTimeoutImpl"]> = (fn) => {
+        queue.push(fn);
+        return queue.length as unknown as ReturnType<typeof setTimeout>;
+      };
+      const stepClearTimeout: NonNullable<InjectionControllerDeps["clearTimeoutImpl"]> = () => {};
+      const runOneStep = (): void => {
+        const fn = queue.shift();
+        fn?.();
+      };
+
+      const writeText = vi.fn();
+      const submit = vi.fn();
+      const onInjected = vi.fn();
+      const onDropped = vi.fn();
+      const controller = new InjectionController({
+        writeText,
+        submit,
+        onInjected,
+        onDropped,
+        submitDelayMs: 10,
+        postSubmitCooldownMs: 999,
+        setTimeoutImpl: stepSetTimeout,
+        clearTimeoutImpl: stepClearTimeout,
+      });
+
+      controller.markReady();
+      controller.enqueue({ id: "a", text: "first" });
+      controller.enqueue({ id: "b", text: "second" });
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("first");
+
+      // Fire only the submit timer for "a": it submits and opens the
+      // cooldown, leaving "b" gated behind the (still-pending) cooldown timer.
+      runOneStep();
+      expect(submit).toHaveBeenCalledOnce();
+      expect(onInjected).toHaveBeenCalledExactlyOnceWith("a");
+      expect(writeText).toHaveBeenCalledOnce(); // "b" not yet typed — still queued
+
+      const dropped = controller.dispose();
+
+      // "b" is still queued (never injected) and must be reported; "a" was
+      // already submitted before dispose() ran and must never be reported.
+      expect(dropped).toEqual([{ id: "b", text: "second" }]);
+      expect(onDropped).toHaveBeenCalledExactlyOnceWith([{ id: "b", text: "second" }]);
+
+      // The (now-canceled-in-intent, but this fake never actually removes
+      // queued entries) cooldown timer firing after dispose must not release
+      // "b" a second time or re-report/inject anything.
+      runOneStep();
+      expect(writeText).toHaveBeenCalledOnce();
+      expect(onDropped).toHaveBeenCalledOnce();
+    });
   });
 
   it("isInjecting reflects the write-to-submit window only", () => {

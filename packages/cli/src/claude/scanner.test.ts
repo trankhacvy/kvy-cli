@@ -397,4 +397,31 @@ describe("createSessionScanner", () => {
     await sleep(200);
     expect(uuids(seen)).toContain("old-2");
   }, 10_000);
+
+  it("ignores non-.jsonl files created in the project directory (rotation fallback ignores unrelated renames)", async () => {
+    const { logger, infoRecords } = collectingLogger();
+    const seen: RawJSONLines[] = [];
+
+    scanner = await createSessionScanner({
+      sessionId: "sess-ignore-noise",
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60_000,
+      logger,
+      env,
+    });
+    await sleep(100);
+
+    // A non-`.jsonl` file (e.g. a lock/tmp file some other tool writes into
+    // the same project dir) must never be treated as a session rotation.
+    await writeFile(join(projectDir, "sess-noise.jsonl.tmp"), "not a transcript");
+    await writeFile(join(projectDir, ".DS_Store"), "");
+    await sleep(3000);
+
+    expect(seen).toEqual([]);
+    expect(infoRecords.filter((r) => r.message.includes("new transcript file detected"))).toEqual(
+      [],
+    );
+  }, 10_000);
 });
