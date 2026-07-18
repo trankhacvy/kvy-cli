@@ -14,11 +14,16 @@ import type {
   installRemotePermissionHook as installRemotePermissionHookType,
   RemotePermissionHookHandle,
 } from "../claude/remotePermissionHook.js";
+import type { notifyDaemonSessionStarted as notifyDaemonSessionStartedType } from "../daemon/notify.js";
 import type { DaemonState } from "../daemon/state.js";
 import type { ClaudeCliLocation } from "../provider/claudeCliLocator.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
 import type { SessionClientHandle } from "../session/sessionClient.js";
+import type {
+  acquireSessionLock as acquireSessionLockType,
+  SessionLockHandle,
+} from "../session/sessionLock.js";
 import { type OutboxLike, runStartClaudeCommand, type StartClaudeCommandDeps } from "./start.js";
 
 /** Captures every envelope batch handed to `outbox.enqueue()` — stands in for
@@ -107,6 +112,15 @@ function fakeRemotePermissionHook(
   };
 }
 
+/** A fake, always-succeeding session-lock handle — never touches real disk. */
+function fakeSessionLockHandle(overrides: Partial<SessionLockHandle> = {}): SessionLockHandle {
+  return {
+    release: vi.fn(async () => {}),
+    updateSessionId: vi.fn(async () => {}),
+    ...overrides,
+  };
+}
+
 function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeCommandDeps {
   const written: string[] = [];
   return {
@@ -140,6 +154,15 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     // report (W1.4) — same "no real network from a unit test" rule every
     // other injected dep here already follows.
     reportSessionStatus: vi.fn(async () => ({ type: "ok" }) as const),
+    // Never touch a real per-directory lock file or a real daemon control
+    // server from a unit test — both default to safe, always-succeeding fakes.
+    acquireSessionLock: vi.fn(async () => ({
+      ok: true,
+      handle: fakeSessionLockHandle(),
+    })) as unknown as typeof acquireSessionLockType,
+    notifyDaemonSessionStarted: vi.fn(async () => ({
+      type: "no-daemon",
+    })) as unknown as typeof notifyDaemonSessionStartedType,
     sleep: async () => {},
     now: () => 0,
     write: (text: string) => {
@@ -1429,5 +1452,213 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
 
     expect(reportSessionStatus).toHaveBeenCalledTimes(1);
     expect(exitSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("runStartClaudeCommand — same-directory duplicate session lock + daemon registration (W4.4/W4.5)", () => {
+  it("refuses to start when the directory lock is held by a live process, reporting its session id and pid", async () => {
+    const stderr: string[] = [];
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: false as const,
+      reason: "held-by-running-process" as const,
+      existing: { pid: 4242, sessionId: "sess_existing", startedAt: 1 },
+    }));
+    const bootstrapSession = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+        startPtyClaudeSession,
+        writeError: (text) => stderr.push(text),
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(stderr.join("")).toContain("sess_existing");
+    expect(stderr.join("")).toContain("4242");
+    expect(stderr.join("")).toContain("--force-new-session");
+    expect(bootstrapSession).not.toHaveBeenCalled();
+    expect(startPtyClaudeSession).not.toHaveBeenCalled();
+  });
+
+  it("reports 'unknown session id' when the lock's existing payload hasn't been updated yet", async () => {
+    const stderr: string[] = [];
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: false as const,
+      reason: "held-by-running-process" as const,
+      existing: { pid: 4242, sessionId: null, startedAt: 1 },
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        writeError: (text) => stderr.push(text),
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(stderr.join("")).toContain("unknown session id");
+  });
+
+  it("fails honestly when the directory lock is contended", async () => {
+    const stderr: string[] = [];
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: false as const,
+      reason: "contended" as const,
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        writeError: (text) => stderr.push(text),
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(stderr.join("")).toContain("contended");
+  });
+
+  it("--force-new-session bypasses the lock entirely and is stripped before reaching the real claude CLI", async () => {
+    const acquireSessionLock = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--force-new-session", "--some-claude-flag"],
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        startPtyClaudeSession,
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(acquireSessionLock).not.toHaveBeenCalled();
+    const [ptyOptions] = startPtyClaudeSession.mock.calls[0] as unknown as [
+      PtyClaudeSessionOptions,
+    ];
+    expect(ptyOptions.claudeArgs).toEqual(["--some-claude-flag"]);
+  });
+
+  it("updates the lock's sessionId and self-reports to the daemon once bootstrap resolves, then releases the lock", async () => {
+    const release = vi.fn(async () => {});
+    const updateSessionId = vi.fn(async () => {});
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: true as const,
+      handle: fakeSessionLockHandle({ release, updateSessionId }),
+    }));
+    const notifyDaemonSessionStarted = vi.fn(async () => ({ type: "ok" as const }));
+    const dek = getRandomBytes(32);
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_reported",
+      dek,
+      tag: "tag-x",
+      created: true,
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        notifyDaemonSessionStarted:
+          notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+        startPtyClaudeSession: vi.fn(() => fakePtyHandle()),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(updateSessionId).toHaveBeenCalledWith("sess_reported");
+    expect(notifyDaemonSessionStarted).toHaveBeenCalledTimes(1);
+    const [, params] = notifyDaemonSessionStarted.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; encryption?: { encryptionKey: string; seq: number } },
+    ];
+    expect(params.sessionId).toBe("sess_reported");
+    expect(typeof params.encryption?.encryptionKey).toBe("string");
+    expect(params.encryption?.seq).toBe(0);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the directory lock even when bootstrapSession fails", async () => {
+    const release = vi.fn(async () => {});
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: true as const,
+      handle: fakeSessionLockHandle({ release }),
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        bootstrapSession: vi.fn(async () => {
+          throw new Error("boom");
+        }) as unknown as typeof bootstrapSessionType,
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("never blocks session startup when the daemon self-report is unreachable (best-effort)", async () => {
+    const notifyDaemonSessionStarted = vi.fn(async () => ({
+      type: "unreachable" as const,
+      error: "ECONNREFUSED",
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        notifyDaemonSessionStarted:
+          notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+        startPtyClaudeSession: vi.fn(() => fakePtyHandle()),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(notifyDaemonSessionStarted).toHaveBeenCalledTimes(1);
+  });
+
+  it("acquires the directory lock keyed by machineId + workingDirectory with this process's own pid", async () => {
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: true as const,
+      handle: fakeSessionLockHandle(),
+    }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        workingDirectory: "/fake/workdir",
+        readDaemonState: async () => fakeDaemonState({ machineId: "machine-xyz" }),
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(acquireSessionLock).toHaveBeenCalledWith(
+      "/fake/home",
+      { machineId: "machine-xyz", workspacePath: "/fake/workdir" },
+      expect.objectContaining({ pid: process.pid, sessionId: null }),
+    );
+  });
+
+  it("also gates the daemon-spawned remote flow — a lock held by a live process blocks it before loop() ever runs", async () => {
+    const stderr: string[] = [];
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: false as const,
+      reason: "held-by-running-process" as const,
+      existing: { pid: 4242, sessionId: "sess_existing", startedAt: 1 },
+    }));
+    const loop = vi.fn(async () => 0);
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--starting-mode", "remote"],
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        loop,
+        writeError: (text) => stderr.push(text),
+      }),
+    );
+
+    expect(code).toBe(1);
+    expect(loop).not.toHaveBeenCalled();
+    expect(stderr.join("")).toContain("sess_existing");
   });
 });

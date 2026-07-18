@@ -97,7 +97,7 @@
  * child's own exit code.
  */
 import path from "node:path";
-import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
+import { decodeBase64, deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
 import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
@@ -131,6 +131,10 @@ import {
   installRemotePermissionHook as installRemotePermissionHookDefault,
   type RemotePermissionHookHandle,
 } from "../claude/remotePermissionHook.js";
+import {
+  createNotifyDaemonSessionStartedDeps,
+  notifyDaemonSessionStarted as notifyDaemonSessionStartedDefault,
+} from "../daemon/notify.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import {
@@ -148,6 +152,10 @@ import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
 } from "../session/sessionClient.js";
+import {
+  acquireSessionLock as acquireSessionLockDefault,
+  type SessionLockHandle,
+} from "../session/sessionLock.js";
 
 const MASTER_SECRET_LENGTH_BYTES = 32;
 const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
@@ -210,6 +218,16 @@ export interface StartClaudeCommandDeps {
    * best-effort `ended`/`failed` lifecycle report at every exit path (W1.4).
    */
   reportSessionStatus?: typeof reportSessionStatusDefault;
+  /**
+   * Injectable for tests; defaults to the real `acquireSessionLock()`
+   * (plan-v2.md W4.4 — same-directory duplicate session lock).
+   */
+  acquireSessionLock?: typeof acquireSessionLockDefault;
+  /**
+   * Injectable for tests; defaults to the real `notifyDaemonSessionStarted()`
+   * (plan-v2.md W4.5 — best-effort daemon self-report; never throws).
+   */
+  notifyDaemonSessionStarted?: typeof notifyDaemonSessionStartedDefault;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   write?: (text: string) => void;
@@ -290,6 +308,17 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
   const createOutbox = deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
   const doReportSessionStatus = deps.reportSessionStatus ?? reportSessionStatusDefault;
+  const doAcquireSessionLock = deps.acquireSessionLock ?? acquireSessionLockDefault;
+  const doNotifyDaemonSessionStarted =
+    deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
+
+  // W4.4: `--force-new-session` is Falcon's own flag, never Claude Code's —
+  // strip it out of the passthrough args before they ever reach the real
+  // `claude` CLI (same "intercept our own flags" precedent as
+  // `claudeLocal.ts`'s `resolveSessionFlags`, just for a flag that isn't
+  // Claude Code's to interpret at all).
+  const forceNewSession = deps.claudeArgs.includes("--force-new-session");
+  const claudeArgs = deps.claudeArgs.filter((arg) => arg !== "--force-new-session");
 
   // 1. Never touch the network without credentials (no silent failures).
   const credentials = readCreds(deps.homeDir);
@@ -336,6 +365,45 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
+  const sessionMetadata = {
+    title: path.basename(deps.workingDirectory) || deps.workingDirectory,
+    path: deps.workingDirectory,
+    model: extractModelFlag(claudeArgs),
+  };
+
+  // W4.4 (same-directory duplicate session lock): before minting a fresh
+  // nonce (below), refuse to start a second, independent PTY session in a
+  // directory a *live* Falcon session already occupies — two such processes
+  // would silently fork the transcript. `--force-new-session` bypasses this
+  // entirely (skips taking the lock at all, so it never contends with, or
+  // steals, whatever the existing session holds). A stale lock (owner
+  // process is dead — e.g. a crash the daemon's resume path is now
+  // recovering from) is reclaimed transparently by `acquireSessionLock()`
+  // itself; only a genuinely live holder blocks this start.
+  let sessionLock: SessionLockHandle | null = null;
+  if (!forceNewSession) {
+    const lockResult = await doAcquireSessionLock(
+      deps.homeDir,
+      { machineId, workspacePath: deps.workingDirectory },
+      { pid: process.pid, sessionId: null, startedAt: (deps.now ?? Date.now)() },
+    );
+    if (!lockResult.ok) {
+      if (lockResult.reason === "held-by-running-process") {
+        const { existing } = lockResult;
+        writeError(
+          `falcon claude: a Falcon session is already running in this directory ` +
+            `(${existing.sessionId ?? "unknown session id"}, pid ${existing.pid}) — ` +
+            "attach from the web, or run in another directory. Pass --force-new-session to start a second one anyway.\n",
+        );
+      } else {
+        writeError(
+          "falcon claude: could not acquire the per-directory session lock (contended) — try again\n",
+        );
+      }
+      return 1;
+    }
+    sessionLock = lockResult.handle;
+  }
 
   // 4. Bootstrap (create-or-get) the session row + its DEK.
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
@@ -353,11 +421,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         nonce: createId(),
         provider: "claude-code",
         contentKeyPair,
-        metadata: {
-          title: path.basename(deps.workingDirectory) || deps.workingDirectory,
-          path: deps.workingDirectory,
-          model: extractModelFlag(deps.claudeArgs),
-        },
+        metadata: sessionMetadata,
         env,
       },
     );
@@ -365,8 +429,40 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-claude] bootstrapSession failed", { message });
     writeError(`falcon claude: failed to start session — ${message}\n`);
+    if (sessionLock) await sessionLock.release();
     return 1;
   }
+
+  // The lock file's `sessionId` was still unknown at acquire time (see the
+  // doc comment on `sessionLock.ts`) — now that `bootstrapSession()` has
+  // resolved, a later contender can print the real id instead of "unknown".
+  if (sessionLock) await sessionLock.updateSessionId(bootstrap.sessionId);
+
+  // W4.5: self-report to the daemon (best-effort — `notifyDaemonSessionStarted`
+  // never throws, so a daemon that's absent or unreachable never blocks
+  // session startup) so `falcon doctor`/`falcon kill sessions`/durability can
+  // see this terminal-started session too, not just daemon-spawned ones.
+  // `seq`/`metadataVersion`/`agentStateVersion` start at 0 — the server-side
+  // defaults for a freshly created (or freshly reattached) row; later
+  // updates to those counters are this session's own concern, not this
+  // startup self-report's.
+  const notifyResult = await doNotifyDaemonSessionStarted(
+    createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+    {
+      sessionId: bootstrap.sessionId,
+      metadata: sessionMetadata,
+      encryption: {
+        encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
+        seq: 0,
+        metadataVersion: 0,
+        agentStateVersion: 0,
+      },
+    },
+  );
+  logger.debug("[start-claude] daemon self-report", {
+    sessionId: bootstrap.sessionId,
+    notifyResult,
+  });
 
   write(`falcon claude: starting session ${bootstrap.sessionId}\n`);
 
@@ -580,7 +676,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         workingDirectory: deps.workingDirectory,
         launcherPath: deps.launcherPath,
         claudeCliPath: claudeCliPath,
-        claudeArgs: deps.claudeArgs,
+        claudeArgs,
         // Resumes the provider transcript on the terminal PTY flow
         // (`resolveSessionFlags`/`ptyClaudeSession.ts` already handle
         // `--resume` composition from this) — set only when a caller
@@ -796,7 +892,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           startingMode: "remote",
           permissionMode,
           homeDir: deps.homeDir,
-          claudeArgs: deps.claudeArgs,
+          claudeArgs,
           claudeEnvVars: { FALCON_CLAUDE_PATH: claudeCliPath },
           onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
           onModeChange: (mode) => {
@@ -828,7 +924,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   try {
-    const code = await (detectStartingMode(deps.claudeArgs) === "remote"
+    const code = await (detectStartingMode(claudeArgs) === "remote"
       ? runRemoteLoop()
       : runLocalPty());
     // A signal's exit code (0 for SIGTERM, 1 for SIGHUP) always wins over
@@ -845,6 +941,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     if (pendingStatusReport) await pendingStatusReport;
     sessionClient.stop();
     outbox.dispose();
+    if (sessionLock) await sessionLock.release();
   }
 }
 
