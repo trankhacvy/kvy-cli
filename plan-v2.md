@@ -1350,11 +1350,11 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 
 ### Phase 1 — core-loop correctness
 
-- [ ] **U1.1 `[inline]` "wave1-trivia"** — one agent, one pass
-  - [ ] P1.0: postinstall spawn-helper chmod guard in `scripts/postinstall.cjs`
-  - [ ] W1.7a: `ThinkingBlock.tsx` collapsed label → "Thought process"
-  - [ ] W1.7b: `use-session-ephemerals.ts` 60s staleness cap on `working:true`
-  - [ ] Combined: scoped tests + `pnpm typecheck` + commit
+- [x] **U1.1 `[inline]` "wave1-trivia"** — one agent, one pass
+  - [x] P1.0: postinstall spawn-helper chmod guard in `scripts/postinstall.cjs`
+  - [x] W1.7a: `ThinkingBlock.tsx` collapsed label → "Thought process"
+  - [x] W1.7b: `use-session-ephemerals.ts` 60s staleness cap on `working:true`
+  - [x] Combined: scoped tests + `pnpm typecheck` + commit
 - [ ] **U1.2 `[solo]` "perm-routing"** (W1.1) — the permission-flood rework
   - [ ] `hookServer.ts`: forwarder blocking-path widening; PermissionRequest
         schemas/route (204 = no decision); 5th settings entry

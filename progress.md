@@ -1,5 +1,26 @@
 # Falcon — Progress Log
 
+## v2-pty-injection Cycle 1 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U1.1 `[inline]` "wave1-trivia" — `f7b2384962cbc4f583101f72d04293f1a587f9a4`
+  - P1.0: postinstall spawn-helper chmod guard in `scripts/postinstall.cjs`
+  - W1.7a: `ThinkingBlock.tsx` collapsed label → "Thought process"
+  - W1.7b: `use-session-ephemerals.ts` 60s staleness cap on `working:true`
+
+**Parked units:** none
+
+**Verification:** `git merge-base --is-ancestor f7b2384962cbc4f583101f72d04293f1a587f9a4
+v2-pty-injection` confirmed ancestry. `pnpm typecheck` — all 11 turbo tasks successful
+(cache-hit, `>>> FULL TURBO`). Worktree `.worktrees/U1.1` and branch `wf/U1.1` removed.
+
+**Next recommended units:**
+- U1.2 `[solo]` "perm-routing" (W1.1) — permission-flood rework (`hookServer.ts`,
+  `pretoolPermissionBridge.ts`, `remotePermissionHook.ts`)
+- Next inline/bundle-sized unit after U1.2 per plan-v2.md Master TODO ordering
+
 ## Cycle 76 — 2026-07-18
 
 **Branch checked:** `main` (HEAD `cc3e9ae` — "chore: cycle 75 — completed 0 tasks (2
