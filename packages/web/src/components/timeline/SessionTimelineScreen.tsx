@@ -121,14 +121,7 @@ function SessionTimelineBody({
   const { mergedItems, send, sendAttachment, isSending, isQueued, error, notice } =
     useComposerState(items);
 
-  // Once the CLI process itself is gone (W1.4's `ended`/`failed` — as
-  // opposed to `completed`/`archived`/`compacted`, which describe a turn or
-  // an explicit archive on a session that's still otherwise controllable),
-  // nothing sent from here can reach a live process anymore — disable the
-  // controls rather than let a request silently go nowhere. Only these two
-  // terminal states disable controls; `archived`/`compacted` (like
-  // `active`) leave a still-controllable session's controls enabled.
-  const isDisabled = sessionStatus === "ended" || sessionStatus === "failed";
+  const isDisabled = isSessionControlDisabled(sessionStatus);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -144,20 +137,7 @@ function SessionTimelineBody({
           <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
         </Button>
       </header>
-      {isDisabled && (
-        <div
-          className={cn(
-            "border-b border-border px-4 py-2 text-sm",
-            sessionStatus === "failed"
-              ? "bg-destructive/10 text-destructive"
-              : "bg-muted/40 text-muted-foreground",
-          )}
-        >
-          {sessionStatus === "failed"
-            ? "Session failed — this session can no longer be controlled from the web."
-            : "Session ended — this session can no longer be controlled from the web."}
-        </div>
-      )}
+      <LifecycleBanner sessionStatus={sessionStatus} />
       <ControlBar
         mode="default"
         controlMode={controlMode}
@@ -174,6 +154,44 @@ function SessionTimelineBody({
         error={error}
         notice={notice}
       />
+    </div>
+  );
+}
+
+/** Once the CLI process itself is gone (W1.4's `ended`/`failed` — as
+ * opposed to `completed`/`archived`/`compacted`, which describe a turn or
+ * an explicit archive on a session that's still otherwise controllable),
+ * nothing sent from this screen can reach a live process anymore — disable
+ * the controls rather than let a request silently go nowhere. Only these
+ * two terminal states disable controls; `archived`/`compacted` (like
+ * `active`) leave a still-controllable session's controls enabled.
+ *
+ * Exported (alongside `LifecycleBanner` below) as a plain, hook-free
+ * function/component so the actual disabled-wiring rule and banner copy
+ * have a direct render test (`SessionTimelineScreen.test.tsx`, via
+ * `react-dom/server`'s `renderToStaticMarkup` — same no-jsdom style as
+ * `lib/markdown.test.ts`) without needing to stand up this screen's full
+ * live sync/crypto hook graph. */
+export function isSessionControlDisabled(status: SessionRow["status"]): boolean {
+  return status === "ended" || status === "failed";
+}
+
+/** The ended/failed banner shown above the control bar (plan-v2.md
+ * W1.4+B15). Renders nothing for every other status. */
+export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["status"] }) {
+  if (!isSessionControlDisabled(sessionStatus)) return null;
+  return (
+    <div
+      className={cn(
+        "border-b border-border px-4 py-2 text-sm",
+        sessionStatus === "failed"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-muted/40 text-muted-foreground",
+      )}
+    >
+      {sessionStatus === "failed"
+        ? "Session failed — this session can no longer be controlled from the web."
+        : "Session ended — this session can no longer be controlled from the web."}
     </div>
   );
 }

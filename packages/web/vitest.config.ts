@@ -2,6 +2,13 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  // Only `*.test.tsx` files need this — Next.js's own SWC compiler (via
+  // `tsconfig.json`'s `"jsx": "preserve"`) handles JSX for the app itself,
+  // but vitest runs test files straight through esbuild, which needs an
+  // explicit runtime to know what a bare `<div>` compiles to.
+  esbuild: {
+    jsx: "automatic",
+  },
   resolve: {
     alias: {
       // Mirrors the `@/*` -> `./src/*` alias from tsconfig.json so modules
@@ -13,6 +20,6 @@ export default defineConfig({
   test: {
     globals: false,
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
   },
 });
