@@ -1368,16 +1368,16 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [x] Tests: bridge branches ×2 maps, hookServer 204/settings/forwarder
   - [ ] `[human]` live: ≥5-read-only-tool web turn → zero PermCards; genuine prompt →
         one PermCard
-- [ ] **U1.3 `[bundle]` "injection-gates"** (W1.2+W1.3+W1.5 — same files:
+- [x] **U1.3 `[bundle]` "injection-gates"** (W1.2+W1.3+W1.5 — same files:
       `injectionController.ts`, `ptyClaudeSession.ts`, `remotePermissionHook.ts`,
       `pretoolPermissionBridge.ts`, `start.ts`)
-  - [ ] W1.2: web-turn watchdog (`WEB_TURN_MAX_MS`) + `markLocalActivity` +
+  - [x] W1.2: web-turn watchdog (`WEB_TURN_MAX_MS`) + `markLocalActivity` +
         `isInjecting` getter + `onLocalSubmit` Enter-detection + start.ts wiring
-  - [ ] W1.3: `promptOpen`/`localDraft` gates + 120s failsafe + stdin draft
+  - [x] W1.3: `promptOpen`/`localDraft` gates + 120s failsafe + stdin draft
         classification (15s idle) + `setPromptOpen` handle + `onPromptLikely` +
         attention/`tool-end` wiring in start.ts
-  - [ ] W1.5: `sendInterrupt()` (ESC) + `interrupt` RPC → real
-  - [ ] Tests: watchdog/local-submit; gate matrix + failsafe; ESC write + RPC
+  - [x] W1.5: `sendInterrupt()` (ESC) + `interrupt` RPC → real
+  - [x] Tests: watchdog/local-submit; gate matrix + failsafe; ESC write + RPC
   - [ ] `[human]` live: inject-while-prompt-open blocked; draft survives; interrupt
         cancels a turn
 - [ ] **U1.4 `[solo]` "lifecycle-status"** (W1.4+B15 — cross-package CLI/SRV/WEB)

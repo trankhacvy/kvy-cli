@@ -8454,3 +8454,41 @@ code present in `main`'s tree.
    long ago via `P1-land-1.5-daemon-worktrees`); this worktree is superseded
    leftover, same cleanup category as `P1-1.3-cli-locator` above, not a
    pending landing task.
+
+## v2-pty-injection Cycle 3 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U1.3 `[bundle]` "injection-gates" — `589f24b5a83f76cb38b87ed7b2104f50fc028615`
+  (W1.2+W1.3+W1.5, same-file bundle: `injectionController.ts`,
+  `ptyClaudeSession.ts`, `remotePermissionHook.ts`, `pretoolPermissionBridge.ts`,
+  `start.ts`)
+  - W1.2: web-turn watchdog (`WEB_TURN_MAX_MS`) + `markLocalActivity` +
+    `isInjecting` getter + `onLocalSubmit` Enter-detection + start.ts wiring
+  - W1.3: `promptOpen`/`localDraft` gates + 120s failsafe + stdin draft
+    classification (15s idle) + `setPromptOpen` handle + `onPromptLikely` +
+    attention/`tool-end` wiring in start.ts
+  - W1.5: `sendInterrupt()` (ESC) + `interrupt` RPC → real
+  - Tests: watchdog/local-submit; gate matrix + failsafe; ESC write + RPC
+
+**Parked units:** none
+
+**Verification:** `git merge-base --is-ancestor 589f24b5a83f76cb38b87ed7b2104f50fc028615
+v2-pty-injection` confirmed ancestry. `pnpm typecheck` — all 11 turbo tasks successful
+(cache-hit, `>>> FULL TURBO`). Worktree `.worktrees/U1.3` and branch `wf/U1.3` removed.
+plan-v2.md's U1.3 non-`[human]` sub-boxes + unit box flipped to `[x]`; the `[human]`
+live-check sub-box left unchecked pending manual verification.
+
+**Note:** `.worktrees/U1.4` (`wf/U1.4`, tip `045fd56`) and `.worktrees/U1.5`
+(`wf/U1.5`, tip `c4bdfdc`) exist on disk but neither was in this cycle's
+merged/failed lists — left untouched; worth checking their state before the next
+cycle picks a unit.
+
+**Next recommended units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) — a
+  worktree already exists at `.worktrees/U1.4` (`wf/U1.4`, tip `045fd56`); inspect
+  before deciding whether to resume or restart it.
+- U1.5 `[bundle]` "timeline-fixes" (W1.6+W1.8) — a worktree already exists at
+  `.worktrees/U1.5` (`wf/U1.5`, tip `c4bdfdc`); inspect before deciding whether to
+  resume or restart it.
