@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import { createEnvelope } from "@falcon/wire";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
 import type { LoopOptions } from "../claude/loop.js";
 import type {
@@ -589,5 +589,97 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     } finally {
       await rm(homeDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W1.4)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    // Belt-and-suspenders: a test that throws before its own cleanup runs
+    // must not leave a real signal handler registered for later tests/the
+    // test-runner process itself.
+    process.removeAllListeners("SIGTERM");
+    process.removeAllListeners("SIGHUP");
+  });
+
+  it("reports 'ended' and exits 0 on SIGTERM, exactly once even if the signal races itself", async () => {
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    // Never resolves — keeps the PTY flow parked on `await ptySession.done`
+    // so the signal handler (registered earlier, before that await) fires
+    // in isolation, not racing a real exit.
+    const startPtyClaudeSession = vi.fn(() =>
+      fakePtyHandle({ done: new Promise<number>(() => {}) }),
+    );
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    void runStartClaudeCommand(baseDeps({ startPtyClaudeSession, reportSessionStatus }));
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
+    });
+    const sigtermCall = onSpy.mock.calls.find(([event]) => event === "SIGTERM");
+    const handler = sigtermCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+
+    // Fire it twice — a signal racing itself (or a duplicate delivery) must
+    // still only report once (the `statusReported` guard).
+    handler?.("SIGTERM");
+    handler?.("SIGTERM");
+
+    await vi.waitFor(() => {
+      expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    });
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+  });
+
+  it("reports 'ended' and exits 1 on SIGHUP", async () => {
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    const startPtyClaudeSession = vi.fn(() =>
+      fakePtyHandle({ done: new Promise<number>(() => {}) }),
+    );
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    void runStartClaudeCommand(baseDeps({ startPtyClaudeSession, reportSessionStatus }));
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGHUP")).toBe(true);
+    });
+    const sighupCall = onSpy.mock.calls.find(([event]) => event === "SIGHUP");
+    const handler = sighupCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+
+    handler?.("SIGHUP");
+
+    await vi.waitFor(() => {
+      expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    });
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
+    await vi.waitFor(() => {
+      expect(exitSpy).toHaveBeenCalledWith(1);
+    });
+  });
+
+  it("removes the SIGTERM/SIGHUP listeners once the session ends normally, so they never leak across runs", async () => {
+    const beforeTerm = process.listenerCount("SIGTERM");
+    const beforeHup = process.listenerCount("SIGHUP");
+
+    const code = await runStartClaudeCommand(baseDeps());
+
+    expect(code).toBe(0);
+    expect(process.listenerCount("SIGTERM")).toBe(beforeTerm);
+    expect(process.listenerCount("SIGHUP")).toBe(beforeHup);
   });
 });
