@@ -78,6 +78,7 @@ export function useLiveRenderItems(sessionId: string): {
     setError(null);
   }, [sessionId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `messagesQuery.dataUpdatedAt` isn't read in the effect body, but it must stay a dependency — see the comment on it below.
   useEffect(() => {
     if (!crypto || !messagesQuery.data) return;
     let cancelled = false;
@@ -106,7 +107,23 @@ export function useLiveRenderItems(sessionId: string): {
     return () => {
       cancelled = true;
     };
-  }, [crypto, messagesQuery.data, sessionId]);
+  }, [
+    crypto,
+    messagesQuery.data,
+    sessionId,
+    // Deliberately included even though it's unread in the body: TanStack
+    // Query's default structural sharing returns the *same* `data` object
+    // reference after a refetch whenever the refetched content is deep-equal
+    // to what's already cached — which is exactly what happens when
+    // `SessionTimelineScreen`'s "Retry" (`invalidateQueries`) re-fetches
+    // after a crypto-worker crash, since the underlying encrypted bytes
+    // haven't changed. Without this, that refetch wouldn't change
+    // `messagesQuery.data`'s identity, this effect wouldn't re-run, and
+    // "Retry" would silently do nothing. `dataUpdatedAt` changes on every
+    // resolved fetch regardless of structural sharing, so it's the signal
+    // that actually means "a fetch just completed, try decrypting again."
+    messagesQuery.dataUpdatedAt,
+  ]);
 
   return {
     items,
