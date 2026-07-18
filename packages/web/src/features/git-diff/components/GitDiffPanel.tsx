@@ -1,8 +1,8 @@
 "use client";
 
-import { useMockGitDiffActions } from "../mock-source";
 import type { UseGitDiffActions } from "../types";
 import { useGitPanel } from "../use-git-panel";
+import { useLiveGitDiffActions } from "../use-live-git-diff-actions";
 import { ChangedFilesList } from "./ChangedFilesList";
 import { UnifiedDiffViewer } from "./UnifiedDiffViewer";
 
@@ -13,17 +13,17 @@ import { UnifiedDiffViewer } from "./UnifiedDiffViewer";
  * push/PR actions here (design: fast-follow, `[P2]`).
  *
  * `useActions` is the injectable seam — mirrors `NewSessionScreen`'s
- * `useMachines`/`useActions` props: `apiSocket` and a live per-machine
- * crypto client aren't wired into any screen yet, so this defaults to
- * `useMockGitDiffActions`. Swapping in `(machineId) =>
- * machineRpcToGitDiffActions(createMachineRpcClient({...}))` once that data
- * layer lands is a one-line prop change at the call site — no other change
- * needed anywhere in `ChangedFilesList`/`UnifiedDiffViewer`.
+ * `useMachines`/`useActions` props. Defaults to the real
+ * `useLiveGitDiffActions` (`(machineId) =>
+ * machineRpcToGitDiffActions(createMachineRpcClient({...}))`, gated on the
+ * target machine's unwrapped DEK) — `mock-source.ts`'s `useMockGitDiffActions`
+ * stays exported for tests/standalone review, same precedent as
+ * `NewSessionScreen`'s mocks.
  */
 export function GitDiffPanel({
   machineId,
   worktree,
-  useActions = useMockGitDiffActions,
+  useActions = useLiveGitDiffActions,
 }: {
   machineId: string;
   worktree: string;
