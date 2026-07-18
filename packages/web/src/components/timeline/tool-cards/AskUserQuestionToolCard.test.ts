@@ -31,6 +31,11 @@ function bodyOf(item: ToolItem): ReactElement {
   return (shell.props as { children: ReactElement }).children;
 }
 
+/** Text content of a `<p>{text}</p>`-shaped element. */
+function textOf(el: ReactElement): unknown {
+  return (el.props as { children: unknown }).children;
+}
+
 describe("AskUserQuestionToolCard", () => {
   it("shows a waiting message while the permission is still pending", () => {
     const pendingPermission: PermissionInfo = { reqId: "r1", modes: [] };
@@ -46,9 +51,7 @@ describe("AskUserQuestionToolCard", () => {
       modes: [],
       decision: { kind: "deny" },
     };
-    const body = bodyOf(
-      toolItem({ permission: decidedPermission, output: { answers: {} } }),
-    );
+    const body = bodyOf(toolItem({ permission: decidedPermission, output: { answers: {} } }));
     expect(body.type).toBe("div");
   });
 
@@ -69,13 +72,15 @@ describe("AskUserQuestionToolCard", () => {
     const questionRows = children[0] as ReactElement[];
     expect(questionRows).toHaveLength(2);
 
-    const [firstQ, firstA] = (questionRows[0]?.props as { children: ReactElement[] }).children;
-    expect((firstQ?.props as { children: string }).children).toBe("Which color?");
-    expect((firstA?.props as { children: string }).children).toBe("Blue");
+    const firstRow = questionRows[0] as ReactElement;
+    const [firstQ, firstA] = (firstRow.props as { children: ReactElement[] }).children;
+    expect(textOf(firstQ as ReactElement)).toBe("Which color?");
+    expect(textOf(firstA as ReactElement)).toBe("Blue");
 
-    const [secondQ, secondA] = (questionRows[1]?.props as { children: ReactElement[] }).children;
-    expect((secondQ?.props as { children: string }).children).toBe("Which size?");
-    expect((secondA?.props as { children: string }).children).toBe("L");
+    const secondRow = questionRows[1] as ReactElement;
+    const [secondQ, secondA] = (secondRow.props as { children: ReactElement[] }).children;
+    expect(textOf(secondQ as ReactElement)).toBe("Which size?");
+    expect(textOf(secondA as ReactElement)).toBe("L");
 
     // No fallback JsonBlock once every answer was recognized.
     expect(children[1]).toBe(false);
@@ -87,8 +92,9 @@ describe("AskUserQuestionToolCard", () => {
 
     const children = (body.props as { children: unknown[] }).children;
     const questionRows = children[0] as ReactElement[];
-    const [, answerP] = (questionRows[0]?.props as { children: ReactElement[] }).children;
-    expect((answerP?.props as { children: string }).children).toBe("(no answer recorded)");
+    const row = questionRows[0] as ReactElement;
+    const [, answerP] = (row.props as { children: ReactElement[] }).children;
+    expect(textOf(answerP as ReactElement)).toBe("(no answer recorded)");
 
     const fallback = children[1] as ReactElement;
     expect(fallback.type).toBe(JsonBlock);
