@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canMutateMode, shouldShowTakeControl } from "./ControlBar";
+import { nextModeAfterSetMode } from "./mode-switch-state";
 import {
   initialStopSessionDialogState,
   resetStopSessionDialogState,
@@ -53,5 +54,36 @@ describe("End-session confirm dialog phase machine (W2.3 — dialog flow orderin
 
   it("falls back to String() for a non-Error throw", () => {
     expect(toStopError("boom")).toEqual({ phase: "error", message: "boom" });
+  });
+});
+
+describe("nextModeAfterSetMode (W4.3 — revert an unconfirmed PTY mode switch)", () => {
+  it("keeps the optimistically-selected target and clears the error on {ok:true}", () => {
+    expect(nextModeAfterSetMode("plan", "default", { ok: true })).toEqual({
+      mode: "plan",
+      error: null,
+    });
+  });
+
+  it("{ok:true} wins even if the RPC also reported an observedMode", () => {
+    expect(
+      nextModeAfterSetMode("plan", "default", { ok: true, observedMode: "acceptEdits" }),
+    ).toEqual({ mode: "plan", error: null });
+  });
+
+  it("reverts to the RPC's observedMode on {ok:false} when one was reported", () => {
+    expect(
+      nextModeAfterSetMode("plan", "default", { ok: false, observedMode: "acceptEdits" }),
+    ).toEqual({
+      mode: "acceptEdits",
+      error: "Could not confirm the mode switch — reverted.",
+    });
+  });
+
+  it("falls back to the prior selection on {ok:false} with no observedMode (verification timeout)", () => {
+    expect(nextModeAfterSetMode("plan", "default", { ok: false })).toEqual({
+      mode: "default",
+      error: "Could not confirm the mode switch — reverted.",
+    });
   });
 });

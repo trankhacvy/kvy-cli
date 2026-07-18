@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useSessionControl } from "@/features/session-control";
 import { PTY_SET_MODE_ENABLED } from "@/lib/config";
+import { nextModeAfterSetMode } from "./mode-switch-state";
 import {
   initialStopSessionDialogState,
   resetStopSessionDialogState,
@@ -93,7 +94,10 @@ export function canMutateMode(controlMode: "local" | "remote", ptySetModeEnabled
  *    `{ok:false}` (verification failed, or the injection gate was closed)
  *    reverts the selector to `observedMode` when the RPC reported one, or
  *    the prior selection otherwise — never silently keeps showing the
- *    unconfirmed target.
+ *    unconfirmed target. That revert logic is the pure, exported
+ *    `nextModeAfterSetMode` (`mode-switch-state.ts`), same extraction
+ *    pattern as the "end session" dialog's `stop-session-state.ts`, so it's
+ *    unit-tested (`ControlBar.test.ts`) without mounting the component.
  *
  * **"End session"** (plan-v2.md W2.3 "Stop session from the web") calls the
  * `stop` session RPC behind a shadcn `Dialog` confirm — unlike the other
@@ -148,9 +152,9 @@ export function ControlBar({
       // whatever mode the RPC actually observed rather than keep showing
       // the unconfirmed target.
       onSuccess: (result) => {
-        if (result.ok) return;
-        setSelectedMode(result.observedMode ?? previous);
-        setModeError("Could not confirm the mode switch — reverted.");
+        const outcome = nextModeAfterSetMode(next, previous, result);
+        setSelectedMode(outcome.mode);
+        setModeError(outcome.error);
       },
       onError: (error) => {
         setSelectedMode(previous);
