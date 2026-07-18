@@ -1,1 +1,1 @@
-export { RequireAuth, shouldRedirectToSignin, SIGNIN_PATH } from "./require-auth";
+export { RequireAuth, SIGNIN_PATH, shouldRedirectToSignin } from "./require-auth";

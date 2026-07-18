@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { shouldRedirectToSignin, SIGNIN_PATH } from "../require-auth";
+import { SIGNIN_PATH, shouldRedirectToSignin } from "../require-auth";
 
 // `next/navigation`'s `useRouter` throws ("invariant expected app router to
 // be mounted") outside a real Next.js app-router tree, and this package has
@@ -40,9 +40,7 @@ describe("RequireAuth", () => {
     // `children`, regardless of which way `isSignedIn()` will resolve.
     const { RequireAuth } = await import("../require-auth");
     const html = renderToStaticMarkup(
-      createElement(RequireAuth, {
-        children: createElement("div", null, "secret session content"),
-      }),
+      createElement(RequireAuth, null, createElement("div", null, "secret session content")),
     );
     expect(html).toBe("");
     expect(html).not.toContain("secret session content");
