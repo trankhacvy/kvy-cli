@@ -186,6 +186,45 @@ describe("InjectionController", () => {
       timers.runAll();
       expect(writeText).toHaveBeenCalledExactlyOnceWith("abandoned dialog");
     });
+
+    it("queues multiple messages behind an open dialog and flushes them in FIFO order once it clears", () => {
+      const { controller, writeText, timers } = setup();
+      controller.markReady();
+      controller.setPromptOpen(true);
+      controller.enqueue({ id: "a", text: "first" });
+      controller.enqueue({ id: "b", text: "second" });
+      expect(writeText).not.toHaveBeenCalled();
+      expect(controller.queueDepth).toBe(2);
+
+      controller.setPromptOpen(false);
+      // Only the first is typed immediately; the second stays gated behind
+      // the post-submit cooldown, same one-at-a-time discipline as the
+      // busy/cooldown gate.
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("first");
+      expect(controller.queueDepth).toBe(1);
+
+      timers.runAll();
+      expect(writeText).toHaveBeenNthCalledWith(2, "second");
+      expect(controller.queueDepth).toBe(0);
+    });
+
+    it("re-arms the failsafe on a second open/close cycle rather than leaving it disarmed", () => {
+      const { controller, writeText, timers } = setup();
+      controller.markReady();
+
+      // First cycle: opened and cleanly closed — its failsafe is canceled.
+      controller.setPromptOpen(true);
+      controller.setPromptOpen(false);
+
+      // Second cycle: opened again and abandoned — a fresh failsafe must
+      // still be armed (not left disabled by the first cycle's cleanup).
+      controller.setPromptOpen(true);
+      controller.enqueue({ id: "a", text: "abandoned on the second cycle" });
+      expect(writeText).not.toHaveBeenCalled();
+
+      timers.runAll();
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("abandoned on the second cycle");
+    });
   });
 
   describe("localDraft gate (W1.3)", () => {

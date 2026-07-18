@@ -516,6 +516,27 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
+  it("interrupt reflects sendInterrupt()'s real return value, not a hardcoded true", async () => {
+    const sendInterrupt = vi.fn(() => false);
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendInterrupt }));
+    let capturedHandlers: SessionRpcHandlers | null = null;
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
+
+    await runStartClaudeCommand(
+      baseDeps({
+        registerSessionRpcHandlers,
+        startPtyClaudeSession,
+      }),
+    );
+
+    const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+    await expect(handlers.interrupt()).resolves.toEqual({ ok: false });
+    expect(sendInterrupt).toHaveBeenCalledOnce();
+  });
+
   it("still starts (non-fatally) with no --settings and not-supported perm.answer when the hook fails to install", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
     let capturedHandlers: SessionRpcHandlers | null = null;
