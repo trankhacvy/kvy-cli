@@ -34,6 +34,18 @@ permission request/resolve, mode-switch, and subagent lifecycle.
 
 Design doc: [§4.2 Session event envelope](../falcon-system-design.md#42-session-event-envelope-provider-agnostic-flat-stream).
 
+**No token streaming (W4.1 decision):** the local (non-ACP) transcript path
+only ever emits whole `text`/`tool-*` envelopes, never partial-token deltas —
+the CLI tailer sees complete JSONL lines from `~/.claude/projects/**/*.jsonl`,
+so there is no partial text to stream in the first place. Perceived latency
+is reduced instead by making progress visible (activity row + following) and
+by coalescing outbox flushes sooner (150ms, down from 300ms — §6.5). ACP
+remote mode *does* receive real token-level `session/update` chunks from the
+adapter, but `acpToEnvelope.ts` coalesces them into the same whole-envelope
+shape before they reach this protocol — so `SessionEnvelope` itself carries no
+streaming/partial variant today. Revisit only if ACP remote becomes the
+dominant path and coalescing there is deliberately relaxed.
+
 ## 3. Server ↔ client update stream
 
 Two WS channels: `update` (persistent, seq-ordered — session/message/machine/
