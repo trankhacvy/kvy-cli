@@ -65,7 +65,15 @@
  * (Ctrl-C) isn't handled here: it reaches the PTY child directly (raw mode
  * forwards the byte to the foreground process group) and that child's own
  * exit is what settles `ptySession.done`, so it still flows through the
- * same normal-exit mapping above.
+ * same normal-exit mapping above. A `SIGTERM`/`SIGHUP` does NOT exit the
+ * wrapper process directly — that would skip both the active flow's own
+ * cleanup (`ptySession.stop()`/`rpcHandle.stop()`/`permHook.stop()`, or
+ * `runRemoteLoop`'s managed launcher teardown via `loop()`'s own
+ * `onExitRequested`) and the outer `sessionClient.stop()`/`outbox.dispose()`.
+ * Instead it requests a graceful stop of whichever flow is live and lets
+ * that flow's own `await` (and `finally` blocks) settle normally, fixing the
+ * wrapper's own final exit code to 0 (SIGTERM) / 1 (SIGHUP) regardless of the
+ * child's own exit code.
  */
 import path from "node:path";
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
@@ -356,11 +364,26 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // Ctrl-C handling) — but SIGTERM/SIGHUP land on this wrapper process
   // itself (a terminal closing, `kill -TERM`) and must still end the
   // session honestly rather than leaving it looking perpetually active.
+  //
+  // Critically, this must NOT call `process.exit()` directly — that would
+  // skip both the active flow's own cleanup (`runLocalPty`'s
+  // `ptySession.stop()` — the actual SIGTERM to the `claude` pty child —
+  // plus `rpcHandle.stop()`/`permHook.stop()`; `runRemoteLoop`'s managed
+  // local/remote launcher teardown) and the outer `sessionClient.stop()`/
+  // `outbox.dispose()` below. Instead, request a graceful stop of whichever
+  // flow is currently running (`requestGracefulStop`, wired by each flow)
+  // and let its own `await`ed promise — and both flows' `finally` blocks —
+  // settle normally; the wrapper's own exit code is fixed here (0 for
+  // SIGTERM, 1 for SIGHUP) regardless of the child's exit code, since a
+  // signal is a normal, resumable way for a terminal session to stop
+  // (never "failed").
+  let signalExitCode: number | null = null;
+  let requestGracefulStop: (() => void) | null = null;
   const onSignal = (signal: NodeJS.Signals) => {
     logger.info("[start-claude] signal — ending session", { signal });
-    void reportStatusOnce("ended").finally(() => {
-      process.exit(signal === "SIGTERM" ? 0 : 1);
-    });
+    signalExitCode = signal === "SIGTERM" ? 0 : 1;
+    void reportStatusOnce("ended");
+    requestGracefulStop?.();
   };
   process.on("SIGTERM", onSignal);
   process.on("SIGHUP", onSignal);
@@ -512,6 +535,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       { logger },
     );
     ptyHandle = ptySession;
+    // A SIGTERM/SIGHUP on the wrapper stops this PTY child the same way any
+    // other stop does — SIGTERM to the child, `ptySession.done` resolving
+    // once it actually exits — so this flow's normal completion path (below)
+    // runs, rather than the wrapper exiting out from under it.
+    requestGracefulStop = () => ptySession.stop();
 
     const rpcHandlers: SessionRpcHandlers = {
       message: async ({ envelope }) => {
@@ -575,10 +603,15 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     // `startClaudeRemoteLauncher(..., deps.remote)`.
     const remoteLauncherDeps: ClaudeRemoteLauncherDeps = {};
     const permissionMode: PermissionMode = "default";
-    const noUnsubscribe = () => () => {};
 
     const messageSignal = createSignal<QueuedMessage>();
     const takeControlSignal = createSignal<void>();
+    // `loop()`'s own double-Ctrl-C "exit the whole client" trigger — reused
+    // here as the SIGTERM/SIGHUP graceful-stop path so a signal on this
+    // wrapper causes `activeRemote.requestExit()` (loop.ts) rather than the
+    // wrapper exiting out from under the managed launcher process.
+    const exitSignal = createSignal<void>();
+    requestGracefulStop = () => exitSignal.emit();
     let currentMode: ClaudeMode = "remote";
     let activeRemote: RemoteControls | null = null;
 
@@ -638,7 +671,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           },
           onMessage: (handler) => messageSignal.subscribe(handler),
           onTakeControl: (handler) => takeControlSignal.subscribe(handler),
-          onExitRequested: noUnsubscribe,
+          onExitRequested: (handler) => exitSignal.subscribe(handler),
           logger,
         },
         { local: localLauncherDeps, remote: remoteLauncherDeps },
@@ -656,9 +689,13 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   try {
-    return await (detectStartingMode(deps.claudeArgs) === "remote"
+    const code = await (detectStartingMode(deps.claudeArgs) === "remote"
       ? runRemoteLoop()
       : runLocalPty());
+    // A signal's exit code (0 for SIGTERM, 1 for SIGHUP) always wins over
+    // whatever exit code the underlying child/loop happened to settle with —
+    // being asked to stop is a normal, resumable end, not a crash.
+    return signalExitCode ?? code;
   } finally {
     process.off("SIGTERM", onSignal);
     process.off("SIGHUP", onSignal);

@@ -125,8 +125,10 @@ function SessionTimelineBody({
   // opposed to `completed`/`archived`/`compacted`, which describe a turn or
   // an explicit archive on a session that's still otherwise controllable),
   // nothing sent from here can reach a live process anymore — disable the
-  // controls rather than let a request silently go nowhere.
-  const isActive = sessionStatus === "active";
+  // controls rather than let a request silently go nowhere. Only these two
+  // terminal states disable controls; `archived`/`compacted` (like
+  // `active`) leave a still-controllable session's controls enabled.
+  const isDisabled = sessionStatus === "ended" || sessionStatus === "failed";
 
   return (
     <div className="flex h-dvh flex-col">
@@ -142,7 +144,7 @@ function SessionTimelineBody({
           <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
         </Button>
       </header>
-      {(sessionStatus === "ended" || sessionStatus === "failed") && (
+      {isDisabled && (
         <div
           className={cn(
             "border-b border-border px-4 py-2 text-sm",
@@ -156,14 +158,19 @@ function SessionTimelineBody({
             : "Session ended — this session can no longer be controlled from the web."}
         </div>
       )}
-      <ControlBar mode="default" controlMode={controlMode} working={working} disabled={!isActive} />
+      <ControlBar
+        mode="default"
+        controlMode={controlMode}
+        working={working}
+        disabled={isDisabled}
+      />
       <Timeline items={mergedItems} />
       <Composer
         onSend={send}
         onAttach={sendAttachment}
         isSending={isSending}
         isQueued={isQueued}
-        disabled={!isActive}
+        disabled={isDisabled}
         error={error}
         notice={notice}
       />

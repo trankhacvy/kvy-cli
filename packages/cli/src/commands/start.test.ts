@@ -500,6 +500,63 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 });
 
 describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode remote)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.removeAllListeners("SIGTERM");
+    process.removeAllListeners("SIGHUP");
+  });
+
+  it("gracefully requests loop() exit on SIGTERM (via onExitRequested) instead of calling process.exit directly", async () => {
+    const rpcStop = vi.fn();
+    const registerSessionRpcHandlers = vi.fn(() => ({ stop: rpcStop }));
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    // A real `loop()` resolves once `onExitRequested`'s handler fires (see
+    // `loop.ts`'s `unsubscribeExit`/`activeRemote.requestExit()`) — faking
+    // that same shape here proves `runRemoteLoop` wires the signal into a
+    // real, subscribable `onExitRequested` rather than the old no-op stub.
+    const loop = vi.fn(
+      async (options: LoopOptions) =>
+        await new Promise<number>((resolve) => {
+          options.onExitRequested(() => resolve(0));
+        }),
+    );
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--starting-mode", "remote"],
+        loop,
+        registerSessionRpcHandlers,
+        reportSessionStatus,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
+    });
+    const sigtermCall = onSpy.mock.calls.find(([event]) => event === "SIGTERM");
+    const handler = sigtermCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+
+    handler?.("SIGTERM");
+
+    const code = await resultPromise;
+
+    expect(code).toBe(0);
+    // The loop's own `finally { rpcHandle.stop(); }` ran — proof the signal
+    // didn't short-circuit past `runRemoteLoop`'s cleanup either.
+    expect(rpcStop).toHaveBeenCalledTimes(1);
+    expect(exitSpy).not.toHaveBeenCalled();
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
+  });
+
   it("keeps the headless mode loop (never the PTY or a hook server) and starts it in remote mode", async () => {
     const loop = vi.fn(async (options: LoopOptions) => {
       expect(options.startingMode).toBe("remote");
@@ -602,18 +659,54 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     process.removeAllListeners("SIGHUP");
   });
 
-  it("reports 'ended' and exits 0 on SIGTERM, exactly once even if the signal races itself", async () => {
+  /**
+   * A signal must never short-circuit past this flow's own teardown by
+   * calling `process.exit()` directly — it has to request a graceful stop
+   * of the PTY child and let `ptySession.done` (and both flows' `finally`
+   * blocks) settle for real. `stop()` here simulates the real
+   * `ptyClaudeSession.ts` contract exactly, including its own idempotency
+   * guard ("safe to call once"): it sends SIGTERM to the pty child, and
+   * `done` only resolves once that child actually exits.
+   */
+  function fakeStoppablePtyHandle(): {
+    handle: PtyClaudeSessionHandle;
+    stop: ReturnType<typeof vi.fn>;
+  } {
+    let resolveDone: (code: number) => void = () => {};
+    const done = new Promise<number>((resolve) => {
+      resolveDone = resolve;
+    });
+    let stopped = false;
+    const stop = vi.fn(() => {
+      if (stopped) return;
+      stopped = true;
+      resolveDone(0);
+    });
+    return { handle: fakePtyHandle({ done, stop }), stop };
+  }
+
+  it("gracefully stops the PTY child and tears down every resource on SIGTERM, exiting 0 without calling process.exit", async () => {
     const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
-    // Never resolves — keeps the PTY flow parked on `await ptySession.done`
-    // so the signal handler (registered earlier, before that await) fires
-    // in isolation, not racing a real exit.
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ done: new Promise<number>(() => {}) }),
-    );
+    const { handle, stop } = fakeStoppablePtyHandle();
+    const startPtyClaudeSession = vi.fn(() => handle);
+    const rpcStop = vi.fn();
+    const permHookStop = vi.fn(async () => {});
+    const sessionClientStop = vi.fn();
     const onSpy = vi.spyOn(process, "on");
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
-    void runStartClaudeCommand(baseDeps({ startPtyClaudeSession, reportSessionStatus }));
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({
+        startPtyClaudeSession,
+        reportSessionStatus,
+        registerSessionRpcHandlers: vi.fn(() => ({ stop: rpcStop })),
+        installRemotePermissionHook: (async () =>
+          fakeRemotePermissionHook({
+            stop: permHookStop,
+          })) as unknown as typeof installRemotePermissionHookType,
+        startSessionClient: vi.fn(() => fakeSessionClientHandle({ stop: sessionClientStop })),
+      }),
+    );
 
     await vi.waitFor(() => {
       expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
@@ -623,32 +716,45 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     expect(handler).toBeDefined();
 
     // Fire it twice — a signal racing itself (or a duplicate delivery) must
-    // still only report once (the `statusReported` guard).
+    // still only report once (the `statusReported` guard). `stop()` itself
+    // is invoked more than once here (once per signal delivery, plus once
+    // more from `runLocalPty`'s own `finally`) but that's fine — the real
+    // `ptyClaudeSession.ts` implementation guards it to actually kill the
+    // child exactly once; what matters is that it's requested at all.
     handler?.("SIGTERM");
     handler?.("SIGTERM");
 
-    await vi.waitFor(() => {
-      expect(reportSessionStatus).toHaveBeenCalledTimes(1);
-    });
+    const code = await resultPromise;
+
+    // The actual fix under test: every resource the PTY flow and the outer
+    // wrapper own was torn down — nothing orphaned, nothing skipped.
+    expect(stop).toHaveBeenCalled();
+    expect(rpcStop).toHaveBeenCalledTimes(1);
+    expect(permHookStop).toHaveBeenCalledTimes(1);
+    expect(sessionClientStop).toHaveBeenCalledTimes(1);
+    // Never a direct process.exit() short-circuit — the wrapper's own
+    // return value is what carries the exit code back to `index.ts`.
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(code).toBe(0);
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
     const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
       unknown,
       { sessionId: string; status: string; error?: Error },
     ];
     expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
-    await vi.waitFor(() => {
-      expect(exitSpy).toHaveBeenCalledWith(0);
-    });
   });
 
-  it("reports 'ended' and exits 1 on SIGHUP", async () => {
+  it("gracefully stops the PTY child and resolves exit code 1 on SIGHUP", async () => {
     const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ done: new Promise<number>(() => {}) }),
-    );
+    const { handle, stop } = fakeStoppablePtyHandle();
+    const startPtyClaudeSession = vi.fn(() => handle);
     const onSpy = vi.spyOn(process, "on");
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
-    void runStartClaudeCommand(baseDeps({ startPtyClaudeSession, reportSessionStatus }));
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, reportSessionStatus }),
+    );
 
     await vi.waitFor(() => {
       expect(onSpy.mock.calls.some(([event]) => event === "SIGHUP")).toBe(true);
@@ -659,17 +765,21 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
 
     handler?.("SIGHUP");
 
-    await vi.waitFor(() => {
-      expect(reportSessionStatus).toHaveBeenCalledTimes(1);
-    });
+    const code = await resultPromise;
+
+    // Invoked at least once from the signal handler itself; `runLocalPty`'s
+    // own `finally` calls it again, harmlessly (same idempotency note as
+    // the SIGTERM test above).
+    expect(stop).toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(code).toBe(1);
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
     const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
       unknown,
       { sessionId: string; status: string; error?: Error },
     ];
     expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
-    await vi.waitFor(() => {
-      expect(exitSpy).toHaveBeenCalledWith(1);
-    });
   });
 
   it("removes the SIGTERM/SIGHUP listeners once the session ends normally, so they never leak across runs", async () => {
