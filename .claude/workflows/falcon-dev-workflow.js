@@ -1,145 +1,234 @@
 export const meta = {
   name: 'falcon-dev-loop',
-  description: 'Orchestrate Falcon implementation: task-finder → parallel worktree-isolated code-test-review → verification → cleanup',
+  description: 'plan-v2.md executor: unit-finder → sized pipelines (inline batch | bundle | solo) → real worktree merge with ancestry proof; dedupes across cycles, backs off on rate limits',
   phases: [
-    { title: 'Task Discovery', detail: 'Sonnet 5 agent finds 1-3 parallelizable tasks' },
-    { title: 'Worktree Setup', detail: 'Orchestrator creates isolated git worktree per task' },
-    { title: 'Implementation', detail: 'Sonnet 5 implements each task in its worktree' },
-    { title: 'Testing', detail: 'Sonnet 5 tests code (unit/e2e/chrome MCP)' },
-    { title: 'Review & Fix', detail: 'Sonnet 5 reviews and fixes issues' },
-    { title: 'Verification', detail: 'Orchestrator verifies task, merges worktree' },
-    { title: 'Cleanup & Progress', detail: 'Remove worktree, update plan.md, type-check main' },
+    { title: 'Task Discovery', detail: 'Find 1-2 unclaimed execution units from plan-v2.md Master TODO' },
+    { title: 'Worktree Setup', detail: 'Agent creates real git worktrees (verified, not logged)' },
+    { title: 'Implementation', detail: 'inline: one combined agent; bundle/solo: full pipeline' },
+    { title: 'Testing', detail: 'Tests written+run in the worktree' },
+    { title: 'Review & Fix', detail: 'Fix found issues, then code review' },
+    { title: 'Verification', detail: 'Independent test/typecheck pass per worktree' },
+    { title: 'Merge', detail: 'Real merge into v2-pty-injection + git merge-base --is-ancestor proof' },
+    { title: 'Cleanup & Progress', detail: 'Remove worktrees, tick plan-v2.md, update progress.md' },
   ],
 };
 
-// Core workflow loop
+// ============ Config ============
+const TARGET_BRANCH = 'v2-pty-injection'; // NOT main — main stays at the pre-PTY ACP state (plan-v2.md Phase 5)
+const WORKTREE_ROOT = '.worktrees';
+const MAX_CYCLES = 20;
+const MAX_UNITS_PER_CYCLE = 2;   // small fan-out on purpose: rate-limit pressure + review quality
+const BUDGET_FLOOR = 80_000;     // stop starting new cycles below this many remaining tokens
+
+// ============ Cross-cycle memory (fixes the duplicate-task problem) ============
+// attempted: selected at least once this run — finder must not re-propose these.
+// failedOnce: failed exactly once — released back for ONE retry in a later cycle.
+// parked: failed twice or merge-conflicted — needs a human, never auto-retried.
+const attempted = new Set();
+const failedOnce = new Set();
+const parked = new Set();
+let coolOff = false; // true after a cycle with agent nulls (rate limit / crash) → next cycle picks 1 unit
+
+// agent() returns null when the sub-agent dies on a terminal API error (rate
+// limit, crash). One in-place retry absorbs transient failures; a second null
+// is a real signal the caller must handle.
+async function retryAgent(prompt, opts, attempts = 2) {
+  for (let i = 1; i <= attempts; i++) {
+    const label = i > 1 ? `${opts.label}-retry${i - 1}` : opts.label;
+    const result = await agent(prompt, { ...opts, label });
+    if (result) return result;
+    log(`⚠️ [${opts.label}] agent returned null (attempt ${i}/${attempts}) — rate limit or crash`);
+    coolOff = true;
+  }
+  return null;
+}
+
+function recordFailure(unitId, reason) {
+  if (failedOnce.has(unitId)) {
+    parked.add(unitId);
+    log(`🅿️ [${unitId}] failed twice — PARKED for human attention (${reason})`);
+  } else {
+    failedOnce.add(unitId);
+    attempted.delete(unitId); // release for exactly one retry in a later cycle
+    log(`🔁 [${unitId}] failed once — released for one retry (${reason})`);
+  }
+}
+
+// ============ Main loop ============
 let cycleCount = 0;
-const maxCycles = 20; // safety limit
-const worktreePath = '.worktrees';
 
-while (cycleCount < maxCycles) {
+while (cycleCount < MAX_CYCLES) {
+  if (budget.total && budget.remaining() < BUDGET_FLOOR) {
+    log(`🛑 Budget floor reached (${Math.round(budget.remaining() / 1000)}k left) — stopping cleanly.`);
+    break;
+  }
   cycleCount++;
-  log(`\n=== CYCLE ${cycleCount} ===`);
+  log(`\n=== CYCLE ${cycleCount} ${coolOff ? '(cool-off: 1 unit max)' : ''} ===`);
+  const unitCap = coolOff ? 1 : MAX_UNITS_PER_CYCLE;
+  coolOff = false;
 
-  // PHASE 1: Task Discovery
+  // ---- PHASE 1: Task Discovery ----
   phase('Task Discovery');
 
-  const tasksResult = await agent(
-    `You are the task-finder for the Falcon project. Your job:
-1. Read falcon-prd.md (what/why), falcon-system-design.md (architecture), and plan.md (detailed breakdown)
-2. Read progress.md if it exists to understand what's already done
-3. Find the next 1-3 tasks from plan.md that:
-   - Are not yet started (marked [ ] in plan.md)
-   - Can be worked on in parallel (independent of each other)
-   - Have all their dependencies met
-   - Are from consecutive phases if possible (to maintain momentum)
-4. Return a JSON list of tasks with format: {task_id, section, title, description, blocking_dependencies, estimated_effort}
+  const discovery = await retryAgent(
+    `You are the unit-finder for the Falcon project, branch ${TARGET_BRANCH}.
 
-Prioritize Phase 0 (Repo & contracts) first, then Phase 1, etc.
-If you can't find 3 tasks, return 1-2.
-If ALL tasks are done, return an empty list and a "completion" status.
-
-Return ONLY valid JSON (no markdown, no explanation).`,
+1. Read plan-v2.md — ONLY the "Master TODO checklist (execution units)" section is
+   your task source (the wave sections above it are the design detail each unit
+   references). Read progress.md too if it exists.
+2. Units are the "U*.*" checkbox items, each tagged [inline], [bundle], [solo],
+   [human], or [parked].
+3. Select the next 1-${unitCap} units that are ALL of:
+   - unchecked ([ ]) in plan-v2.md
+   - NOT tagged [human] or [parked] (those need the human / are deferred)
+   - NOT in this exclusion list (already claimed this run): ${JSON.stringify([...attempted])}
+   - NOT in this parked list: ${JSON.stringify([...parked])}
+   - dependency-clean: every unit the doc says gates them is already checked [x]
+     (e.g. U2.1 is gated on U0.3+U1.2). A [human] gate that is unchecked BLOCKS
+     its dependents — skip them and say so in reasoning.
+   - if selecting 2, they must touch disjoint files/packages (the unit doc lists
+     files) so their worktrees can't conflict.
+4. Prefer earlier phases; prefer unblocking units over polish.
+5. If every workflow-eligible unit is checked, return status "completed".
+6. For each selected unit copy its FULL sub-task list verbatim from plan-v2.md into
+   tasks[] — the implementer must not need to re-derive scope.`,
     {
-      label: 'find-tasks',
+      label: 'find-units',
       phase: 'Task Discovery',
       schema: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['in-progress', 'completed'] },
-          tasks: {
+          status: { type: 'string', enum: ['in-progress', 'completed', 'blocked'] },
+          units: {
             type: 'array',
             items: {
               type: 'object',
               properties: {
-                task_id: { type: 'string' },
-                section: { type: 'string' },
+                unit_id: { type: 'string' },
+                kind: { type: 'string', enum: ['inline', 'bundle', 'solo'] },
                 title: { type: 'string' },
-                description: { type: 'string' },
-                blocking_dependencies: { type: 'array', items: { type: 'string' } },
-                estimated_effort: { type: 'string', enum: ['small', 'medium', 'large'] },
+                tasks: { type: 'array', items: { type: 'string' } },
+                files_hint: { type: 'array', items: { type: 'string' } },
+                design_refs: { type: 'array', items: { type: 'string' } },
               },
-              required: ['task_id', 'section', 'title', 'description'],
+              required: ['unit_id', 'kind', 'title', 'tasks'],
             },
           },
           reasoning: { type: 'string' },
         },
-        required: ['status', 'tasks', 'reasoning'],
+        required: ['status', 'units', 'reasoning'],
       },
-      model: 'sonnet',
-    }
+    },
   );
 
-  if (!tasksResult || !tasksResult.tasks || tasksResult.tasks.length === 0) {
-    if (tasksResult?.status === 'completed') {
-      log('✅ All tasks completed!');
-      break;
-    }
-    log('⚠️ Task finder returned no tasks, retrying next cycle...');
+  if (!discovery) {
+    log('⚠️ Unit finder unavailable this cycle (rate limited?) — trying again next cycle.');
     continue;
   }
-
-  const selectedTasks = tasksResult.tasks;
-  log(`Found ${selectedTasks.length} task(s): ${selectedTasks.map(t => t.title).join(', ')}`);
-
-  // PHASE 2: Setup worktrees (sequential, A does this)
-  phase('Worktree Setup');
-  const worktreeSetupResults = [];
-
-  for (const task of selectedTasks) {
-    const wtPath = `${worktreePath}/${task.task_id}`;
-    log(`[${task.task_id}] Creating worktree at ${wtPath}`);
-
-    const setupCmd = `git worktree add "${wtPath}" main 2>&1 || true`;
-    // Note: A orchestrator runs this via bash or delegates to an agent that can run bash
-    worktreeSetupResults.push({ task_id: task.task_id, wtPath });
-    log(`[${task.task_id}] Worktree ready`);
+  if (discovery.status === 'completed') {
+    log('✅ All workflow-eligible units complete!');
+    break;
+  }
+  if (discovery.status === 'blocked' || discovery.units.length === 0) {
+    log(`⏸️ No eligible units: ${discovery.reasoning}`);
+    log(`   Parked (needs human): ${[...parked].join(', ') || 'none'}`);
+    break; // blocked on [human] gates — looping further would spin uselessly
   }
 
-  // PHASE 3-5: Code-Test-Review for each task in parallel (with worktree paths)
-  log(`Spawning ${selectedTasks.length} parallel code-test-review workflows...`);
-  const workflowResults = await parallel(
-    selectedTasks.map((task, idx) => () =>
-      executeCodeTestReviewWorkflow(task, worktreeSetupResults[idx].wtPath)
-    )
+  // Defense-in-depth dedupe: never run a unit twice even if the finder ignores
+  // the exclusion list, and never run duplicates within one cycle.
+  const seenThisCycle = new Set();
+  const units = discovery.units.filter((u) => {
+    if (attempted.has(u.unit_id) || parked.has(u.unit_id) || seenThisCycle.has(u.unit_id)) {
+      log(`🚫 [${u.unit_id}] duplicate selection filtered out`);
+      return false;
+    }
+    seenThisCycle.add(u.unit_id);
+    return true;
+  }).slice(0, unitCap);
+  if (units.length === 0) { continue; }
+  for (const u of units) attempted.add(u.unit_id);
+  log(`Selected: ${units.map((u) => `${u.unit_id}(${u.kind})`).join(', ')}`);
+
+  // ---- PHASE 2: Worktree Setup (REAL — one agent creates and verifies all) ----
+  phase('Worktree Setup');
+
+  const setup = await retryAgent(
+    `You set up git worktrees for the Falcon repo (repo root = cwd).
+
+For EACH of these units, run exactly:
+  git worktree add -B wf/<unit_id> ${WORKTREE_ROOT}/<unit_id> ${TARGET_BRANCH}
+
+Units: ${JSON.stringify(units.map((u) => u.unit_id))}
+
+Then VERIFY with \`git worktree list\` that every path exists and is on its
+wf/<unit_id> branch. If a worktree/branch already exists from a dead run, remove
+it first (git worktree remove --force + git branch -D) and recreate fresh from
+${TARGET_BRANCH}. Report per unit.`,
+    {
+      label: 'setup-worktrees',
+      phase: 'Worktree Setup',
+      effort: 'low',
+      schema: {
+        type: 'object',
+        properties: {
+          results: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                unit_id: { type: 'string' },
+                ok: { type: 'boolean' },
+                worktree_path: { type: 'string' },
+                branch: { type: 'string' },
+                error: { type: 'string' },
+              },
+              required: ['unit_id', 'ok', 'worktree_path', 'branch'],
+            },
+          },
+        },
+        required: ['results'],
+      },
+    },
   );
 
-  const successfulTasks = workflowResults.filter(Boolean);
-  log(`\nCompleted ${successfulTasks.length}/${selectedTasks.length} tasks`);
+  const readyUnits = [];
+  for (const u of units) {
+    const r = setup?.results?.find((x) => x.unit_id === u.unit_id);
+    if (r?.ok) readyUnits.push({ ...u, wtPath: r.worktree_path, branch: r.branch });
+    else recordFailure(u.unit_id, `worktree setup failed: ${r?.error ?? 'setup agent unavailable'}`);
+  }
+  if (readyUnits.length === 0) { continue; }
 
-  // PHASE 6: Verification & merge worktrees (A does this)
+  // ---- PHASES 3-5: sized pipelines, parallel across units ----
+  log(`Running ${readyUnits.length} pipeline(s)...`);
+  const pipelineResults = await parallel(
+    readyUnits.map((u) => () => (u.kind === 'inline' ? runInlineUnit(u) : runFullPipeline(u))),
+  );
+
+  // ---- PHASE 6: Verification (independent pass, all kinds) ----
   phase('Verification');
+  const verifiedUnits = [];
+  for (let i = 0; i < readyUnits.length; i++) {
+    const u = readyUnits[i];
+    if (!pipelineResults[i]) { recordFailure(u.unit_id, 'pipeline failed'); continue; }
 
-  for (let i = 0; i < selectedTasks.length; i++) {
-    const task = selectedTasks[i];
-    const wtPath = worktreeSetupResults[i].wtPath;
-    const result = workflowResults[i];
+    const verify = await retryAgent(
+      `Independently verify Falcon unit ${u.unit_id} ("${u.title}") in worktree ${u.wtPath}
+before it merges to ${TARGET_BRANCH}.
 
-    if (!result) {
-      log(`[${task.task_id}] ⚠️ Workflow failed, skipping verification`);
-      continue;
-    }
-
-    log(`[${task.task_id}] Verifying task...`);
-
-    const verifyResult = await agent(
-      `You are verifying a completed Falcon task before merging it to main.
-
-TASK: ${task.title}
-WORKTREE: ${wtPath}
-
-Your job:
-1. Run full tests in the worktree: cd ${wtPath} && pnpm test
-2. Run typecheck: cd ${wtPath} && pnpm typecheck
-3. Verify no regressions in other packages
-4. Read the implementation summary from task-summary/${task.task_id}.md
-5. Spot-check key files for code quality
-6. Report: {verified: boolean, issues: [], summary: string}
-
-If verification passes, report verified=true.
-If issues found, report them; don't fix (A will handle).`,
+1. cd ${u.wtPath}
+2. pnpm build && pnpm typecheck && pnpm test (full, not scoped) && pnpm lint
+   (lint auto-retries once; failing twice is real — see CLAUDE.md)
+3. git log ${TARGET_BRANCH}..HEAD --oneline — confirm commits exist and messages
+   reference the unit
+4. Read task-summary/${u.unit_id}.md and spot-check the listed files against the
+   unit's sub-task list: ${JSON.stringify(u.tasks)}
+5. Confirm no sub-task was silently skipped (a skipped [human]-live check is fine
+   and expected — those are for the human).
+Report honestly; do NOT fix anything.`,
       {
-        label: `verify-${task.task_id}`,
+        label: `verify-${u.unit_id}`,
         phase: 'Verification',
         schema: {
           type: 'object',
@@ -150,109 +239,165 @@ If issues found, report them; don't fix (A will handle).`,
           },
           required: ['verified', 'issues', 'summary'],
         },
-        model: 'sonnet',
-      }
+      },
     );
 
-    if (verifyResult?.verified) {
-      log(`[${task.task_id}] ✅ Verified, merging...`);
-      // Merge: git merge ${wtPath} or cherry-pick commits
-      // For now, just log — real impl would merge commits from worktree
+    if (verify?.verified) verifiedUnits.push(u);
+    else recordFailure(u.unit_id, `verification failed: ${(verify?.issues ?? ['verifier unavailable']).join('; ')}`);
+  }
+
+  // ---- PHASE 7: Merge (REAL, sequential, ancestry-proven — the false-landing fix) ----
+  phase('Merge');
+  const mergedUnits = [];
+  for (const u of verifiedUnits) {
+    const merge = await retryAgent(
+      `Merge verified Falcon unit ${u.unit_id} into the real ${TARGET_BRANCH} ref.
+Work from the MAIN repo root (cwd), NOT the worktree.
+
+1. git checkout ${TARGET_BRANCH}  (confirm with git branch --show-current)
+2. TIP=$(git rev-parse wf/${u.unit_id})
+3. git merge --no-ff wf/${u.unit_id} -m "merge: ${u.unit_id} — ${u.title}"
+   - On CONFLICT: git merge --abort, report merged=false with the conflicting
+     files. Do NOT resolve conflicts yourself.
+4. PROVE the landing (plan.md §17 false-landing lesson — a merge you cannot
+   prove did not happen):
+   - git merge-base --is-ancestor $TIP ${TARGET_BRANCH} && echo ANCESTRY-OK
+   - only ancestry_proven=true if you saw ANCESTRY-OK
+5. pnpm typecheck (fast post-merge gate; on failure report it — do not revert)`,
+      {
+        label: `merge-${u.unit_id}`,
+        phase: 'Merge',
+        effort: 'low',
+        schema: {
+          type: 'object',
+          properties: {
+            merged: { type: 'boolean' },
+            ancestry_proven: { type: 'boolean' },
+            merge_sha: { type: 'string' },
+            typecheck_ok: { type: 'boolean' },
+            issues: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['merged', 'ancestry_proven', 'issues'],
+        },
+      },
+    );
+
+    if (merge?.merged && merge.ancestry_proven) {
+      mergedUnits.push({ ...u, mergeSha: merge.merge_sha, typecheckOk: merge.typecheck_ok });
+      log(`✅ [${u.unit_id}] merged (${merge.merge_sha}) ancestry-proven`);
     } else {
-      log(`[${task.task_id}] ❌ Verification failed: ${verifyResult?.issues?.join(', ')}`);
+      parked.add(u.unit_id); // conflicts / unprovable merges go straight to a human
+      log(`🅿️ [${u.unit_id}] merge failed/unproven — PARKED: ${(merge?.issues ?? []).join('; ')}`);
     }
   }
 
-  // PHASE 7: Cleanup & Progress update
+  // ---- PHASE 8: Cleanup & Progress ----
   phase('Cleanup & Progress');
+  await retryAgent(
+    `Falcon cycle ${cycleCount} bookkeeping, on branch ${TARGET_BRANCH} (repo root).
 
-  log(`Cleaning up ${selectedTasks.length} worktree(s)...`);
-  for (const task of selectedTasks) {
-    const wtPath = `${worktreePath}/${task.task_id}`;
-    // git worktree remove ${wtPath}
-    log(`[${task.task_id}] Removed worktree ${wtPath}`);
-  }
+MERGED units (ancestry-proven): ${JSON.stringify(mergedUnits.map((u) => ({ id: u.unit_id, sha: u.mergeSha })))}
+FAILED/PARKED this cycle: ${JSON.stringify([...parked])}
 
-  // Update progress on main
-  log(`Updating progress.md on main...`);
-  await agent(
-    `You are the progress tracker for the Falcon project (working on main branch).
-1. Run full typecheck on main: \`pnpm typecheck\`
-2. Run test suite on main: \`pnpm test\`
-3. If either fails, report the errors and note that the cycle had issues
-4. Read the task-summary files from successful tasks:
-${successfulTasks.map((r, i) => `   - task-summary/${selectedTasks[i].task_id}.md`).join('\n')}
-5. Update plan.md: for each successfully verified task, change [ ] to [x] and add a date stamp
-6. Update or create progress.md with:
-   - Cycle number and timestamp
-   - Tasks completed this cycle (with summary)
-   - Any blockers or issues found
-   - Overall completion percentage
-   - Next recommended tasks (1-3)
-7. Commit both changes with a message like "chore: cycle ${cycleCount} — completed N tasks"
-
-Report: {cycle_passed: boolean, summary: string, issues: [], completion_percent: number}`,
+1. For each MERGED unit: git worktree remove ${WORKTREE_ROOT}/<unit_id> --force
+   and git branch -d wf/<unit_id>. Leave failed units' worktrees IN PLACE for
+   human inspection.
+2. Re-verify each merged unit yourself before ticking anything:
+   git merge-base --is-ancestor <sha> ${TARGET_BRANCH} must hold. NEVER tick a
+   checkbox you did not verify this way (plan.md §17 false-landing rule).
+3. In plan-v2.md's Master TODO: flip verified-merged units' non-[human] sub-boxes
+   and the unit box to [x] (leave [human] live-check sub-boxes unchecked).
+4. Update/create progress.md: cycle number, merged units + shas, parked units with
+   reasons, next 1-2 recommended units.
+5. pnpm typecheck on ${TARGET_BRANCH}; report result.
+6. Commit plan-v2.md + progress.md: "chore: cycle ${cycleCount} — ${mergedUnits.length} unit(s) landed"`,
     {
       label: 'sync-progress',
       phase: 'Cleanup & Progress',
+      effort: 'low',
       schema: {
         type: 'object',
         properties: {
           cycle_passed: { type: 'boolean' },
           summary: { type: 'string' },
           issues: { type: 'array', items: { type: 'string' } },
-          completion_percent: { type: 'number' },
         },
-        required: ['cycle_passed', 'summary', 'issues', 'completion_percent'],
+        required: ['cycle_passed', 'summary', 'issues'],
       },
-      model: 'sonnet',
-    }
+    },
   );
 
-  log(`Cycle ${cycleCount} complete. Checking for more tasks...`);
+  log(`Cycle ${cycleCount}: ${mergedUnits.length}/${units.length} landed. Parked: ${[...parked].join(', ') || 'none'}`);
 }
 
-log(`\n✅ Workflow completed after ${cycleCount} cycles.`);
+log(`\n🏁 Done after ${cycleCount} cycle(s). Parked for human: ${[...parked].join(', ') || 'none'}`);
+return { cycles: cycleCount, parked: [...parked] };
 
-// ============ HELPER: Code-Test-Review Workflow per Task ============
+// ============ Pipelines ============
 
-async function executeCodeTestReviewWorkflow(task, worktreePath) {
-  const taskLabel = `${task.task_id}`;
-  const summaryPath = `task-summary/${task.task_id}.md`;
+// [inline] units: micro-tasks — ONE agent does implement+test+self-review in a
+// single pass. The 4-stage pipeline on these is ~95% overhead (plan-v2.md
+// "execution units" rationale).
+async function runInlineUnit(u) {
+  phase('Implementation');
+  const result = await retryAgent(
+    `You are implementing Falcon inline unit ${u.unit_id} ("${u.title}") — a batch of
+micro-tasks — in worktree ${u.wtPath}. ALL work in the worktree (cd first).
 
+SUB-TASKS (do every one; each cites its design section in plan-v2.md — read it):
+${u.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
+
+Rules: read plan-v2.md's matching wave section for the exact design + snippets;
+match surrounding code style; no TODOs; skip sub-tasks marked [human] (live
+checks — not yours). Then, in the worktree: pnpm build, run the scoped tests you
+added/affected, pnpm typecheck. Write task-summary/${u.unit_id}.md (what/why/
+assumptions). Commit: "feat: ${u.unit_id} — ${u.title}". Do NOT merge or push.`,
+    {
+      label: `inline-${u.unit_id}`,
+      phase: 'Implementation',
+      schema: {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          files_changed: { type: 'array', items: { type: 'string' } },
+          tests_run: { type: 'number' },
+          summary: { type: 'string' },
+          errors: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['success', 'files_changed', 'summary', 'errors'],
+      },
+    },
+  );
+  if (!result?.success) {
+    log(`❌ [${u.unit_id}] inline unit failed: ${(result?.errors ?? ['agent unavailable']).join('; ')}`);
+    return null;
+  }
+  return { unit_id: u.unit_id, status: 'complete', summary: result.summary };
+}
+
+// [bundle]/[solo] units: full implement → test → fix → review pipeline in one
+// worktree. A bundle's tasks are co-located by design (shared files), so one
+// pipeline covers all of them with one coherent diff.
+async function runFullPipeline(u) {
   try {
-    // IMPLEMENT (phase 3)
     phase('Implementation');
-    log(`[${taskLabel}] Starting implementation in ${worktreePath}...`);
-    const implResult = await agent(
-      `You are implementing a Falcon task in an isolated git worktree.
+    const impl = await retryAgent(
+      `You are implementing Falcon ${u.kind} unit ${u.unit_id} ("${u.title}") in
+worktree ${u.wtPath}. ALL work in the worktree (cd first).
 
-TASK: ${task.title}
-SECTION: ${task.section}
-DESCRIPTION: ${task.description}
-WORKTREE PATH: ${worktreePath}
+SUB-TASKS (all of them — they share files on purpose, one coherent change):
+${u.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 
-Your job:
-1. All work must happen IN THE WORKTREE — cd ${worktreePath} before starting
-2. Read the full context (falcon-prd.md, falcon-system-design.md, plan.md at this section)
-3. Read any referenced Happy source files for porting guidance
-4. Implement the task completely (write code, create files, update configs)
-5. Run \`pnpm build\` in the worktree to ensure it compiles
-6. Create or update the summary file at ${worktreePath}/${summaryPath} (implementation notes, what you did, assumptions)
-7. Commit your code changes to the worktree with a message like "feat: ${task.task_id} - ${task.title}"
-
-Key rules:
-- ALL file edits MUST be in ${worktreePath}/ (not the main branch)
-- Keep code clean and minimal (no over-engineering)
-- No TODOs or half-finished code
-- If the task is marked (V) verbatim port, port faithfully from Happy
-- If marked (P) port with changes, follow the design doc's deltas carefully
-- If marked (N) new code, follow the design principles (null-safe, no silent failures)
-- Do NOT merge or push — just commit in the worktree
-
-Report format: {success: boolean, files_created: [], files_modified: [], summary: string, errors: [], commit_hash: string}`,
+Context: read plan-v2.md's matching wave section FIRST (it contains the settled
+design + code snippets grounded in the real source), then CLAUDE.md and the files
+themselves. falcon-system-design.md for architecture questions.
+Rules: follow the plan's snippets unless the code has drifted (then adapt +
+note it in the summary); additive-only wire changes; no TODOs; skip [human]
+sub-tasks. pnpm build must pass in the worktree before you finish.
+Write task-summary/${u.unit_id}.md. Commit: "feat: ${u.unit_id} — ${u.title}".
+Do NOT merge or push.`,
       {
-        label: `impl-${taskLabel}`,
+        label: `impl-${u.unit_id}`,
         phase: 'Implementation',
         schema: {
           type: 'object',
@@ -262,53 +407,28 @@ Report format: {success: boolean, files_created: [], files_modified: [], summary
             files_modified: { type: 'array', items: { type: 'string' } },
             summary: { type: 'string' },
             errors: { type: 'array', items: { type: 'string' } },
-            commit_hash: { type: 'string' },
           },
           required: ['success', 'files_created', 'files_modified', 'summary', 'errors'],
         },
-        model: 'sonnet',
-      }
+      },
     );
-
-    if (!implResult?.success) {
-      log(`[${taskLabel}] ❌ Implementation failed: ${implResult?.errors?.join('; ')}`);
+    if (!impl?.success) {
+      log(`❌ [${u.unit_id}] implementation failed: ${(impl?.errors ?? ['agent unavailable']).join('; ')}`);
       return null;
     }
 
-    log(`[${taskLabel}] ✅ Implementation complete`);
-
-    // TEST (phase 4)
     phase('Testing');
-    log(`[${taskLabel}] Starting testing in ${worktreePath}...`);
-    const testResult = await agent(
-      `You are testing a Falcon implementation task in an isolated git worktree.
+    const test = await retryAgent(
+      `Test Falcon unit ${u.unit_id} in worktree ${u.wtPath} (cd first).
+Files changed: ${impl.files_created.concat(impl.files_modified).join(', ')}
+Sub-tasks it claims to implement: ${JSON.stringify(u.tasks)}
 
-TASK: ${task.title}
-WORKTREE PATH: ${worktreePath}
-FILES IMPLEMENTED: ${implResult.files_created.concat(implResult.files_modified).join(', ')}
-
-Your job:
-1. ALL work in the worktree — cd ${worktreePath} before starting
-2. Read the implemented files to understand what was built
-3. Decide the appropriate test strategy:
-   - For CLI/daemon/server code: unit tests in Vitest (in the worktree)
-   - For web components: component tests + visual inspection
-   - For integration: end-to-end tests (may need chrome MCP for web UI testing)
-4. Write comprehensive tests (or run existing tests for the modified files) in the worktree
-5. Run \`cd ${worktreePath} && pnpm test\` to ensure tests pass
-6. If testing the web UI, use chrome MCP to:
-   - Open the app in a browser
-   - Navigate to the relevant feature
-   - Interact with it as a user would
-   - Verify behavior matches implementation
-7. Report any issues found (don't fix — let the fix agent handle it)
-
-For desktop/CLI testing: you can use computer-use or bash
-For web testing: use chrome MCP
-
-Report format: {success: boolean, tests_passed: number, tests_failed: number, coverage: string, issues_found: [], summary: string}`,
+Write/extend unit tests for the changed behavior (Vitest, co-located, matching
+each package's existing test style), then run: pnpm test (full) + pnpm typecheck
+in the worktree. Commit new tests: "test: ${u.unit_id}". Report issues found —
+do NOT fix implementation code.`,
       {
-        label: `test-${taskLabel}`,
+        label: `test-${u.unit_id}`,
         phase: 'Testing',
         schema: {
           type: 'object',
@@ -316,132 +436,74 @@ Report format: {success: boolean, tests_passed: number, tests_failed: number, co
             success: { type: 'boolean' },
             tests_passed: { type: 'number' },
             tests_failed: { type: 'number' },
-            coverage: { type: 'string' },
             issues_found: { type: 'array', items: { type: 'string' } },
             summary: { type: 'string' },
           },
           required: ['success', 'tests_passed', 'tests_failed', 'issues_found', 'summary'],
         },
-        model: 'sonnet',
-      }
+      },
     );
+    if (!test) return null;
+    log(`[${u.unit_id}] tests: ${test.tests_passed}✓ ${test.tests_failed}✗`);
 
-    log(`[${taskLabel}] Tests: ${testResult?.tests_passed}✓ ${testResult?.tests_failed}✗`);
-
-    // FIX (phase 5, if issues found)
     phase('Review & Fix');
-    let fixResult = { success: true, issues_fixed: 0, remaining_issues: [] };
-    if (testResult?.issues_found?.length > 0) {
-      log(`[${taskLabel}] Found ${testResult.issues_found.length} issues, fixing in ${worktreePath}...`);
-      fixResult = await agent(
-        `You are fixing test failures in a Falcon implementation (in the worktree).
-
-TASK: ${task.title}
-WORKTREE PATH: ${worktreePath}
-ISSUES FOUND:
-${testResult.issues_found.map((i, idx) => `${idx + 1}. ${i}`).join('\n')}
-
-Your job:
-1. ALL work in the worktree — cd ${worktreePath} before starting
-2. For each issue, identify the root cause in the implementation files
-3. Fix the code (may need to modify the implementation files in the worktree)
-4. Re-run tests: \`cd ${worktreePath} && pnpm test\` (for affected tests only)
-5. Verify all issues are resolved
-6. Commit your fixes with a message like "fix: ${task.task_id} - resolve test failures"
-
-If an issue is unfixable (architectural problem), report it clearly.
-
-Report format: {success: boolean, issues_fixed: number, remaining_issues: [], summary: string}`,
+    if (test.issues_found.length > 0) {
+      const fix = await retryAgent(
+        `Fix these issues in Falcon unit ${u.unit_id}, worktree ${u.wtPath} (cd first):
+${test.issues_found.map((x, i) => `${i + 1}. ${x}`).join('\n')}
+Root-cause each, fix, re-run affected tests + pnpm typecheck.
+Commit: "fix: ${u.unit_id} — resolve test issues". Report anything unfixable.`,
         {
-          label: `fix-${taskLabel}`,
+          label: `fix-${u.unit_id}`,
           phase: 'Review & Fix',
           schema: {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              issues_fixed: { type: 'number' },
               remaining_issues: { type: 'array', items: { type: 'string' } },
               summary: { type: 'string' },
             },
-            required: ['success', 'issues_fixed', 'summary'],
+            required: ['success', 'remaining_issues', 'summary'],
           },
-          model: 'sonnet',
-        }
+        },
       );
-
-      if (fixResult?.remaining_issues?.length > 0) {
-        log(`[${taskLabel}] ⚠️ Remaining issues: ${fixResult.remaining_issues.join(', ')}`);
+      if (!fix?.success || (fix.remaining_issues?.length ?? 0) > 0) {
+        log(`❌ [${u.unit_id}] unfixed issues remain: ${(fix?.remaining_issues ?? ['fix agent unavailable']).join('; ')}`);
+        return null;
       }
     }
 
-    // REVIEW (phase 5)
-    log(`[${taskLabel}] Starting code review of ${worktreePath}...`);
-    const reviewResult = await agent(
-      `You are reviewing code for a Falcon implementation task (in the worktree).
-
-TASK: ${task.title}
-WORKTREE PATH: ${worktreePath}
-IMPLEMENTATION: ${implResult.files_created.concat(implResult.files_modified).join(', ')}
-
-Your job:
-1. ALL work in the worktree — cd ${worktreePath} before starting
-2. Read the implemented and modified files
-3. Check for:
-   - Code quality and clarity
-   - Security vulnerabilities (no command injection, XSS, SQL injection, etc.)
-   - Alignment with Falcon design principles:
-     * Null-safe operations (never throw on bad data)
-     * No silent failures (errors are visible)
-     * Faithful ports from Happy (when applicable)
-     * Minimal, no over-engineering
-   - TypeScript strictness
-   - Proper error handling
-4. For each finding, decide: fix now (high-priority issues only) or document as tech debt
-5. If fixing, apply the fix and commit with a message like "refactor: ${task.task_id} - code review fixes"
-6. DO NOT make large refactors — only fix critical issues
-
-Report format: {success: boolean, findings: [{severity: 'critical'|'high'|'medium'|'low', issue: string, fix_applied: boolean}], summary: string}`,
+    const review = await retryAgent(
+      `Code-review Falcon unit ${u.unit_id} in worktree ${u.wtPath} (cd first).
+Diff scope: git diff ${TARGET_BRANCH}...HEAD
+Check: correctness vs the unit's sub-tasks (${JSON.stringify(u.tasks)}); no
+silent failures; additive-only wire changes; injection/PTY code never writes to
+the PTY outside its gates; TypeScript strictness; matches plan-v2.md's design.
+Fix ONLY critical findings (commit "refactor: ${u.unit_id} — review fixes");
+document the rest as findings. No large refactors.`,
       {
-        label: `review-${taskLabel}`,
+        label: `review-${u.unit_id}`,
         phase: 'Review & Fix',
         schema: {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            findings: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  severity: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
-                  issue: { type: 'string' },
-                  fix_applied: { type: 'boolean' },
-                },
-              },
-            },
+            critical_unfixed: { type: 'array', items: { type: 'string' } },
+            findings: { type: 'array', items: { type: 'string' } },
             summary: { type: 'string' },
           },
-          required: ['success', 'findings', 'summary'],
+          required: ['success', 'critical_unfixed', 'findings', 'summary'],
         },
-        model: 'sonnet',
-      }
+      },
     );
+    if (!review?.success || (review.critical_unfixed?.length ?? 0) > 0) {
+      log(`❌ [${u.unit_id}] critical review findings unfixed`);
+      return null;
+    }
 
-    log(`[${taskLabel}] ✅ Review complete (${reviewResult?.findings?.length || 0} findings)`);
-
-    return {
-      task_id: task.task_id,
-      status: 'complete',
-      worktree_path: worktreePath,
-      summary: implResult.summary,
-      test_passed: testResult?.success,
-      tests_passed: testResult?.tests_passed || 0,
-      tests_failed: testResult?.tests_failed || 0,
-      review_findings: reviewResult?.findings?.length || 0,
-      critical_issues: reviewResult?.findings?.filter(f => f.severity === 'critical').length || 0,
-    };
+    return { unit_id: u.unit_id, status: 'complete', summary: impl.summary, findings: review.findings };
   } catch (err) {
-    log(`[${taskLabel}] ❌ Workflow failed: ${err.message}`);
+    log(`❌ [${u.unit_id}] pipeline threw: ${err.message}`);
     return null;
   }
 }
