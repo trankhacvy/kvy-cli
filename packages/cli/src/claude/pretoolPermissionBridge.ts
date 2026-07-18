@@ -348,6 +348,18 @@ export class PreToolPermissionBridge {
 
     return new Promise<PermissionRequestHookOutput>((resolvePromise) => {
       const settle = (decision: PermDecision): void => {
+        if (decision.kind === "allow" && decision.updatedInput !== undefined) {
+          // The `PermissionRequest` output contract has no `updatedInput`
+          // channel (unlike `PreToolUse`'s), so an edited input can't be
+          // plumbed back through the live TUI here either — same limitation
+          // `mapDecision` documents for its own (currently dead) path. Warn
+          // rather than silently discarding the edit, so an "Allow" on an
+          // edited-input PermCard is never silently a no-op.
+          this.deps.logger?.warn(
+            "[pretool-bridge] updatedInput is not applied — allowing with original input",
+            { toolName },
+          );
+        }
         const behavior = decision.kind === "deny" ? "deny" : "allow";
         const message =
           decision.kind === "deny"

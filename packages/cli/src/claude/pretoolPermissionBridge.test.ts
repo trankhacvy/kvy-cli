@@ -155,6 +155,24 @@ describe("PreToolPermissionBridge — handlePermissionRequest — decision mappi
     const output = (await pending) as PermissionRequestHookOutput;
     expect(output.hookSpecificOutput.decision?.behavior).toBe("allow");
   });
+
+  it("warns (rather than silently dropping) when an allow decision carries updatedInput", async () => {
+    const logger = { warn: vi.fn(), debug: vi.fn(), error: vi.fn() };
+    const { bridge, emitted } = makeBridge({ logger: logger as never });
+    const pending = bridge.handlePermissionRequest({ tool_name: "Bash" });
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+
+    bridge.resolve({
+      reqId: reqEv.reqId,
+      decision: { kind: "allow", scope: "once", updatedInput: { command: "safe" } },
+    });
+    await pending;
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("updatedInput is not applied"),
+      expect.objectContaining({ toolName: "Bash" }),
+    );
+  });
 });
 
 describe("PreToolPermissionBridge — handlePermissionRequest — first-wins, timeout, reset", () => {
@@ -293,7 +311,8 @@ describe("PreToolPermissionBridge — resolve()/reset() share both pending maps"
     const first = bridge.handlePermissionRequest({ tool_name: "Bash" });
     const second = bridge.handlePermissionRequest({ tool_name: "Write" });
     const requests = permRequests(emitted);
-    const firstReqId = (requests[0]?.ev as { reqId: string }).reqId;
+    const firstReqEv = requests[0]?.ev as { reqId: string };
+    const firstReqId = firstReqEv.reqId;
 
     const result = bridge.resolve({
       reqId: firstReqId,
@@ -306,7 +325,8 @@ describe("PreToolPermissionBridge — resolve()/reset() share both pending maps"
     expect(firstOutput.hookSpecificOutput.decision?.behavior).toBe("allow");
 
     // The second request is untouched by the first's resolution.
-    const secondReqId = (requests[1]?.ev as { reqId: string }).reqId;
+    const secondReqEv = requests[1]?.ev as { reqId: string };
+    const secondReqId = secondReqEv.reqId;
     bridge.resolve({ reqId: secondReqId, decision: { kind: "deny" } });
     const secondOutput = (await second) as PermissionRequestHookOutput;
     expect(secondOutput.hookSpecificOutput.decision?.behavior).toBe("deny");
