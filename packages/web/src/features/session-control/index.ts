@@ -44,4 +44,5 @@ export {
   useSessionEphemerals,
 } from "./use-session-ephemerals";
 export { useSessionModelChip } from "./use-session-model-chip";
+export { useSessionTitle } from "./use-session-title";
 export { useTabAttention } from "./use-tab-attention";

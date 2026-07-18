@@ -59,6 +59,12 @@ export interface SessionListSnapshot {
   workspaces: SessionListWorkspace[];
   machines: SessionListMachine[];
   sessions: SessionListSession[];
+  /** `true` while the initial `['sync']` account snapshot is still in
+   * flight and nothing has ever landed in cache yet (plan-v2.md W4.2
+   * "skeletons for Home … initial loads") — optional and defaulted to
+   * `false`-ish (`undefined`) by every fixture source (`mock-source.ts`,
+   * `buildSnapshot` in tests) that has no async loading phase to model. */
+  isLoading?: boolean;
 }
 
 /**

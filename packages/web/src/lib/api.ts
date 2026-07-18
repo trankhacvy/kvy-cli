@@ -182,6 +182,20 @@ export function getSessionMessages(
   return getJson(`/v1/sessions/${sessionId}/messages${qs}`, token);
 }
 
+/** `POST /v1/sessions/:id/archive` — flip a session to `status: "archived"`
+ * (design §6.2, plan-v2.md W4.2 "Archive/delete: … wire buttons on Home rows
+ * + session header"). Idempotent server-side; no CLI-side reaction (an
+ * archived live session keeps running — W2.3's `stop` is the "end it" path). */
+export function archiveSession(token: string, sessionId: string): Promise<{ status: "archived" }> {
+  return postJson(`/v1/sessions/${sessionId}/archive`, undefined, token);
+}
+
+/** `DELETE /v1/sessions/:id` — permanently deletes a session row (and, via
+ * `schema.ts`'s `onDelete: "cascade"`, its messages). */
+export function deleteSession(token: string, sessionId: string): Promise<Record<string, never>> {
+  return sendJson("DELETE", `/v1/sessions/${sessionId}`, undefined, token);
+}
+
 /** `POST /v1/blobs/request-upload` — mint an upload target for an already-encrypted blob (design §6.2; plan.md §16 "4.3 Distribution & self-host"). `size`/`contentHash` describe the *encrypted* bytes — the server never sees plaintext. */
 export function requestBlobUpload(
   token: string,

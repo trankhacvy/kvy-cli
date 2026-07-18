@@ -1,5 +1,6 @@
 export { MachineBadge } from "./components/machine-badge";
 export { SessionCard } from "./components/session-card";
+export { SessionListSkeleton } from "./components/session-list-skeleton";
 export { SessionStatusDot } from "./components/status-dot";
 export { WorkspaceSection } from "./components/workspace-section";
 export { formatRelativeTime } from "./format-relative-time";

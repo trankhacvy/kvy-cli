@@ -5,6 +5,7 @@ import { formatRelativeTime } from "../format-relative-time";
 import { deriveSessionStatus, SESSION_STATUS_META } from "../status";
 import type { SessionListMachine, SessionListSession } from "../types";
 import { MachineBadge } from "./machine-badge";
+import { SessionCardActions } from "./session-card-actions";
 import { SessionStatusDot } from "./status-dot";
 
 export function SessionCard({
@@ -23,23 +24,32 @@ export function SessionCard({
   const meta = SESSION_STATUS_META[status];
 
   return (
-    <Link href={`/session/${session.id}/`} className="block">
-      <Card className="gap-2 py-3 transition-colors hover:bg-accent/50">
-        <CardHeader className="flex-row items-center gap-2 px-3">
-          <SessionStatusDot status={status} />
-          <CardTitle className="min-w-0 flex-1 truncate">{session.title}</CardTitle>
-          <span className="shrink-0 text-xs text-muted-foreground">
-            {formatRelativeTime(session.updatedAt)}
-          </span>
-        </CardHeader>
-        <CardContent className="flex items-center gap-2 px-3">
-          <Badge variant="secondary" className="font-normal capitalize">
-            {session.provider}
-          </Badge>
-          <span className="text-xs text-muted-foreground">{meta.label}</span>
-          {machine && <MachineBadge machine={machine} />}
-        </CardContent>
-      </Card>
-    </Link>
+    // `SessionCardActions` is a sibling of the navigating `Link`, not nested
+    // inside it — its `<button>`s would otherwise be interactive elements
+    // nested inside an `<a>`, which is both invalid HTML and would need a
+    // stopPropagation dance to keep a click from also navigating.
+    <div className="group relative">
+      <Link href={`/session/${session.id}/`} className="block">
+        <Card className="gap-2 py-3 pr-20 transition-colors hover:bg-accent/50">
+          <CardHeader className="flex-row items-center gap-2 px-3">
+            <SessionStatusDot status={status} />
+            <CardTitle className="min-w-0 flex-1 truncate">{session.title}</CardTitle>
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {formatRelativeTime(session.updatedAt)}
+            </span>
+          </CardHeader>
+          <CardContent className="flex items-center gap-2 px-3">
+            <Badge variant="secondary" className="font-normal capitalize">
+              {session.provider}
+            </Badge>
+            <span className="text-xs text-muted-foreground">{meta.label}</span>
+            {machine && <MachineBadge machine={machine} />}
+          </CardContent>
+        </Card>
+      </Link>
+      <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+        <SessionCardActions sessionId={session.id} title={session.title} />
+      </div>
+    </div>
   );
 }
