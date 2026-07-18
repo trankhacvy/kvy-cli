@@ -514,6 +514,16 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           completeClaim(id, { status: "injected" });
           permHook?.markWebTurnStart();
         },
+        // No silent message loss (plan-v2.md W3.9): a message that will now
+        // never be injected (session ending with it still queued, or its
+        // submit skipped because the child exited mid-injection) still had a
+        // send-claim opened for it — complete it as a terminal, honest
+        // result instead of leaving it open. A later retry of the same
+        // envelope id then sees `duplicate` (claim already completed) rather
+        // than `outcome-unknown` for a message that never actually ran.
+        onDroppedInjections: (messages) => {
+          for (const m of messages) completeClaim(m.id, { status: "dropped-session-ended" });
+        },
         // A locally-typed Enter at the real keyboard is the human reclaiming
         // the turn — clear the web-turn flag immediately (plan-v2.md W1.2).
         onLocalSubmit: () => permHook?.markLocalActivity(),

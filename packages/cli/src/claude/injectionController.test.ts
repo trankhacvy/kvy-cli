@@ -32,18 +32,20 @@ function setup(overrides: Partial<InjectionControllerDeps> = {}) {
   const writeText = vi.fn();
   const submit = vi.fn();
   const onInjected = vi.fn();
+  const onDropped = vi.fn();
   const timers = fakeTimers();
   const controller = new InjectionController({
     writeText,
     submit,
     onInjected,
+    onDropped,
     submitDelayMs: 10,
     postSubmitCooldownMs: 20,
     setTimeoutImpl: timers.setTimeoutImpl,
     clearTimeoutImpl: timers.clearTimeoutImpl,
     ...overrides,
   });
-  return { controller, writeText, submit, onInjected, timers };
+  return { controller, writeText, submit, onInjected, onDropped, timers };
 }
 
 describe("InjectionController", () => {
@@ -133,6 +135,131 @@ describe("InjectionController", () => {
     // Post-dispose enqueue is a no-op.
     controller.enqueue({ id: "b", text: "second" });
     expect(controller.queueDepth).toBe(0);
+  });
+
+  describe("no silent message loss (W3.9)", () => {
+    it("dispose() returns still-queued (never-injected) messages and reports them via onDropped", () => {
+      const { controller, onDropped } = setup();
+      controller.markReady();
+      controller.setBusy(true); // nothing gets to inject — everything just queues
+      controller.enqueue({ id: "a", text: "first" });
+      controller.enqueue({ id: "b", text: "second" });
+
+      const dropped = controller.dispose();
+      expect(dropped).toEqual([
+        { id: "a", text: "first" },
+        { id: "b", text: "second" },
+      ]);
+      expect(onDropped).toHaveBeenCalledExactlyOnceWith([
+        { id: "a", text: "first" },
+        { id: "b", text: "second" },
+      ]);
+    });
+
+    it("dispose() called with an empty queue reports nothing and returns an empty array", () => {
+      const { controller, onDropped } = setup();
+      controller.markReady();
+      const dropped = controller.dispose();
+      expect(dropped).toEqual([]);
+      expect(onDropped).not.toHaveBeenCalled();
+    });
+
+    it("a second dispose() call is a no-op — returns an empty array and does not re-report", () => {
+      const { controller, onDropped } = setup();
+      controller.markReady();
+      controller.setBusy(true);
+      controller.enqueue({ id: "a", text: "first" });
+
+      controller.dispose();
+      expect(onDropped).toHaveBeenCalledOnce();
+      onDropped.mockClear();
+
+      const secondDispose = controller.dispose();
+      expect(secondDispose).toEqual([]);
+      expect(onDropped).not.toHaveBeenCalled();
+    });
+
+    it("child-exit-mid-inject: a message already typed but not yet submitted when dispose() runs is reported via onDropped (not by the dispose() return value)", () => {
+      const { controller, writeText, submit, onInjected, onDropped, timers } = setup();
+      controller.markReady();
+      controller.enqueue({ id: "a", text: "in flight" });
+
+      // The text has been written and the submit timer is pending — this
+      // message has already been shifted off the internal queue, so it
+      // cannot appear in dispose()'s own splice.
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("in flight");
+
+      const dropped = controller.dispose();
+      expect(dropped).toEqual([]); // not in the queue anymore — mid-injection
+      expect(onDropped).not.toHaveBeenCalled(); // not reported yet either
+
+      // The child "exits" — the submit timer still fires (mirrors a process
+      // exit racing the scheduled submit), and the submit-skip path must
+      // report the in-flight message as dropped instead of silently
+      // finishing the injection.
+      timers.runAll();
+      expect(submit).not.toHaveBeenCalled();
+      expect(onInjected).not.toHaveBeenCalled();
+      expect(onDropped).toHaveBeenCalledExactlyOnceWith([{ id: "a", text: "in flight" }]);
+    });
+
+    it("dispose() during an active post-submit cooldown reports only the still-queued message, not the already-submitted one", () => {
+      // A step-at-a-time timer queue (unlike the shared `fakeTimers()`
+      // harness's `runAll()`, which drains newly-scheduled timers too — this
+      // test needs to stop exactly between the submit timer firing and the
+      // cooldown timer firing).
+      const queue: Array<() => void> = [];
+      const stepSetTimeout: NonNullable<InjectionControllerDeps["setTimeoutImpl"]> = (fn) => {
+        queue.push(fn);
+        return queue.length as unknown as ReturnType<typeof setTimeout>;
+      };
+      const stepClearTimeout: NonNullable<InjectionControllerDeps["clearTimeoutImpl"]> = () => {};
+      const runOneStep = (): void => {
+        const fn = queue.shift();
+        fn?.();
+      };
+
+      const writeText = vi.fn();
+      const submit = vi.fn();
+      const onInjected = vi.fn();
+      const onDropped = vi.fn();
+      const controller = new InjectionController({
+        writeText,
+        submit,
+        onInjected,
+        onDropped,
+        submitDelayMs: 10,
+        postSubmitCooldownMs: 999,
+        setTimeoutImpl: stepSetTimeout,
+        clearTimeoutImpl: stepClearTimeout,
+      });
+
+      controller.markReady();
+      controller.enqueue({ id: "a", text: "first" });
+      controller.enqueue({ id: "b", text: "second" });
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("first");
+
+      // Fire only the submit timer for "a": it submits and opens the
+      // cooldown, leaving "b" gated behind the (still-pending) cooldown timer.
+      runOneStep();
+      expect(submit).toHaveBeenCalledOnce();
+      expect(onInjected).toHaveBeenCalledExactlyOnceWith("a");
+      expect(writeText).toHaveBeenCalledOnce(); // "b" not yet typed — still queued
+
+      const dropped = controller.dispose();
+
+      // "b" is still queued (never injected) and must be reported; "a" was
+      // already submitted before dispose() ran and must never be reported.
+      expect(dropped).toEqual([{ id: "b", text: "second" }]);
+      expect(onDropped).toHaveBeenCalledExactlyOnceWith([{ id: "b", text: "second" }]);
+
+      // The (now-canceled-in-intent, but this fake never actually removes
+      // queued entries) cooldown timer firing after dispose must not release
+      // "b" a second time or re-report/inject anything.
+      runOneStep();
+      expect(writeText).toHaveBeenCalledOnce();
+      expect(onDropped).toHaveBeenCalledOnce();
+    });
   });
 
   it("isInjecting reflects the write-to-submit window only", () => {

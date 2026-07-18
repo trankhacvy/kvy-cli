@@ -26,7 +26,7 @@
  * solely to feed that mapper.
  */
 
-import { readFile } from "node:fs/promises";
+import { readFile, watch } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Logger } from "../logger.js";
@@ -162,6 +162,101 @@ async function readSessionEntries(
   return entries;
 }
 
+/**
+ * How long to wait, after a new `*.jsonl` file appears in the project
+ * directory, before treating it as a genuine rotation and calling
+ * `onNewSession` (plan-v2.md W3.8). This is a fallback for when the
+ * `SessionStart` hook doesn't fire (or its wiring is absent) — e.g. `/clear`
+ * or a Claude-minted new id — so it deliberately waits a beat rather than
+ * reacting to the bare `rename` event: a brand-new file can appear empty (or
+ * with a partial first line) an instant before Claude Code finishes writing
+ * its first entry, and debouncing lets that settle.
+ */
+const NEW_SESSION_ROTATION_DEBOUNCE_MS = 2000;
+
+/**
+ * Watches a Claude Code project transcript directory for newly-created
+ * `*.jsonl` files, calling `onNewFile` with each one's session id (the
+ * filename minus extension) — debounced per id so a burst of `rename`
+ * events for the same file collapses into one call. Retries indefinitely
+ * with capped exponential backoff on any watch error (including the
+ * directory not existing yet, e.g. a session whose transcript directory
+ * Claude Code hasn't created yet) — unlike `fileWatcher.ts`'s
+ * `startFileWatcher`, there is no give-up: this watcher is meant to outlive
+ * the whole session, and the directory will exist by the time any session
+ * writes its first transcript entry.
+ */
+function watchProjectDirectoryForNewSessions(
+  projectDir: string,
+  onNewFile: (sessionId: string) => void,
+  logger: Logger,
+): () => void {
+  const abortController = new AbortController();
+  const debounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  const wait = (ms: number): Promise<void> =>
+    new Promise((resolve) => {
+      if (abortController.signal.aborted) {
+        resolve();
+        return;
+      }
+      const timer = setTimeout(() => {
+        abortController.signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, ms);
+      const onAbort = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      abortController.signal.addEventListener("abort", onAbort, { once: true });
+    });
+
+  void (async () => {
+    let failureCount = 0;
+    for (;;) {
+      if (abortController.signal.aborted) return;
+      try {
+        const watcher = watch(projectDir, { persistent: true, signal: abortController.signal });
+        failureCount = 0;
+        for await (const event of watcher) {
+          if (abortController.signal.aborted) return;
+          const fileName = event.filename;
+          if (!fileName?.endsWith(".jsonl")) continue;
+          const sessionId = fileName.slice(0, -".jsonl".length);
+          if (!sessionId) continue;
+
+          const existing = debounceTimers.get(sessionId);
+          if (existing) clearTimeout(existing);
+          debounceTimers.set(
+            sessionId,
+            setTimeout(() => {
+              debounceTimers.delete(sessionId);
+              onNewFile(sessionId);
+            }, NEW_SESSION_ROTATION_DEBOUNCE_MS),
+          );
+        }
+        // Iterator ended without an abort (rare); fall through to retry.
+      } catch (error) {
+        if (abortController.signal.aborted) return;
+        failureCount++;
+        const backoffMs = Math.min(1000 * 2 ** Math.min(failureCount - 1, 4), 15_000);
+        logger.debug("[SESSION_SCANNER] project directory watch error, retrying", {
+          projectDir,
+          message: error instanceof Error ? error.message : String(error),
+          backoffMs,
+        });
+        await wait(backoffMs);
+      }
+    }
+  })();
+
+  return () => {
+    abortController.abort();
+    for (const timer of debounceTimers.values()) clearTimeout(timer);
+    debounceTimers.clear();
+  };
+}
+
 export async function createSessionScanner(opts: SessionScannerOptions): Promise<SessionScanner> {
   const logger = opts.logger ?? noopLogger;
   const projectDir = getProjectPath(opts.workingDirectory, opts.env ?? process.env);
@@ -191,6 +286,11 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   let running = false;
   let rerunRequested = false;
   let stopped = false;
+  // Tracks the in-flight `runSyncCoalesced()` call (if any) so `cleanup()`
+  // can await it before running its own final pass, rather than racing a
+  // concurrent `readSessionEntries`/watcher-bookkeeping run (see the
+  // coalescing guard's own doc comment above).
+  let currentSyncPromise: Promise<void> | null = null;
 
   async function runSync(): Promise<void> {
     // Collect every session id worth scanning this tick: pending sessions
@@ -279,48 +379,92 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
       return;
     }
     running = true;
-    void runSyncCoalesced();
+    currentSyncPromise = runSyncCoalesced();
+  }
+
+  /**
+   * The shared body of `onNewSession` — also called by the directory-rotation
+   * fallback below, so both the caller-driven path (a `SessionStart` hook)
+   * and the fallback path (no hook fired) go through identical dedup/pending
+   * bookkeeping.
+   */
+  async function announceNewSession(
+    sessionId: string,
+    options?: { treatExistingAsProcessed?: boolean },
+  ): Promise<void> {
+    if (currentSessionId === sessionId) {
+      logger.debug("[SESSION_SCANNER] new session is already current, skipping", { sessionId });
+      return;
+    }
+    // The caller explicitly re-announces this session, so give a
+    // previously-dropped id another chance (its file may exist now).
+    if (deadSessions.delete(sessionId)) {
+      logger.debug("[SESSION_SCANNER] reviving previously-dropped session", { sessionId });
+    }
+    if (finishedSessions.has(sessionId)) {
+      logger.debug("[SESSION_SCANNER] new session already finished, skipping", { sessionId });
+      return;
+    }
+    if (pendingSessions.has(sessionId)) {
+      logger.debug("[SESSION_SCANNER] new session already pending, skipping", { sessionId });
+      return;
+    }
+    // When the caller already has these messages (e.g. reconnect, where
+    // the server holds history from prior turns), pre-mark whatever is
+    // on disk so the first sync does not replay the whole file as fresh
+    // messages.
+    if (options?.treatExistingAsProcessed) {
+      const existing = await readSessionEntries(projectDir, sessionId, logger);
+      for (const entry of existing) processedEntryKeys.add(entry.key);
+    }
+    if (currentSessionId) pendingSessions.add(currentSessionId);
+    currentSessionId = sessionId;
+    invalidate();
   }
 
   await runSync();
   const intervalId = setInterval(invalidate, pollIntervalMs);
 
+  // Rotation fallback (plan-v2.md W3.8): a new `*.jsonl` file appearing in
+  // the project directory whose id differs from the current session — e.g.
+  // `/clear` or a Claude-minted new id — is a strong signal the session
+  // rotated even when no `SessionStart` hook fired to announce it via
+  // `onNewSession` directly. Hook coverage is the primary path; this only
+  // fires when it didn't, hence the debounce + explicit log.
+  const stopDirectoryWatcher = watchProjectDirectoryForNewSessions(
+    projectDir,
+    (newSessionId) => {
+      if (stopped) return;
+      if (newSessionId === currentSessionId) return;
+      logger.info("[SESSION_SCANNER] new transcript file detected — rotating session (fallback)", {
+        newSessionId,
+        previousSessionId: currentSessionId,
+      });
+      void announceNewSession(newSessionId);
+    },
+    logger,
+  );
+
   return {
     cleanup: async () => {
       stopped = true;
       clearInterval(intervalId);
+      stopDirectoryWatcher();
+      // Let any in-flight sync settle, then run one final pass ourselves —
+      // the same body the periodic interval runs — so entries appended in
+      // the brief window right before shutdown (the "shutdown tail") are
+      // still mapped rather than lost (plan-v2.md W3.8).
+      if (currentSyncPromise) await currentSyncPromise.catch(() => {});
+      try {
+        await runSync();
+      } catch (error) {
+        logger.error("[SESSION_SCANNER] final sync pass failed", {
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
       for (const stop of watchers.values()) stop();
       watchers.clear();
     },
-    onNewSession: async (sessionId, options) => {
-      if (currentSessionId === sessionId) {
-        logger.debug("[SESSION_SCANNER] new session is already current, skipping", { sessionId });
-        return;
-      }
-      // The caller explicitly re-announces this session, so give a
-      // previously-dropped id another chance (its file may exist now).
-      if (deadSessions.delete(sessionId)) {
-        logger.debug("[SESSION_SCANNER] reviving previously-dropped session", { sessionId });
-      }
-      if (finishedSessions.has(sessionId)) {
-        logger.debug("[SESSION_SCANNER] new session already finished, skipping", { sessionId });
-        return;
-      }
-      if (pendingSessions.has(sessionId)) {
-        logger.debug("[SESSION_SCANNER] new session already pending, skipping", { sessionId });
-        return;
-      }
-      // When the caller already has these messages (e.g. reconnect, where
-      // the server holds history from prior turns), pre-mark whatever is
-      // on disk so the first sync does not replay the whole file as fresh
-      // messages.
-      if (options?.treatExistingAsProcessed) {
-        const existing = await readSessionEntries(projectDir, sessionId, logger);
-        for (const entry of existing) processedEntryKeys.add(entry.key);
-      }
-      if (currentSessionId) pendingSessions.add(currentSessionId);
-      currentSessionId = sessionId;
-      invalidate();
-    },
+    onNewSession: announceNewSession,
   };
 }

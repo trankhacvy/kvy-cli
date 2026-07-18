@@ -569,6 +569,63 @@ describe("startPtyClaudeSession", () => {
     });
   });
 
+  describe("onDroppedInjections (W3.9)", () => {
+    it("reports still-queued (never-injected) messages when the session ends while claude is busy", async () => {
+      const onDroppedInjections = vi.fn();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onDroppedInjections }), h.deps);
+      await tick();
+
+      // Mark busy via the fetch-signal path so the queued message is never
+      // typed into the PTY at all.
+      h.emitFetch({ type: "fetch-start", id: 1 });
+      handle.injectMessage({ id: "m1", text: "never delivered" });
+      expect(h.fakePty.writes).not.toContain("never delivered");
+
+      h.fakePty.emitExit(0);
+      await handle.done;
+
+      expect(onDroppedInjections).toHaveBeenCalledExactlyOnceWith([
+        { id: "m1", text: "never delivered" },
+      ]);
+    });
+
+    it("reports a message dropped mid-injection (text written, submit not yet sent) when the child exits first", async () => {
+      const onDroppedInjections = vi.fn();
+      const onInjected = vi.fn();
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(
+        baseOptions({ onDroppedInjections, onInjected }),
+        h.deps,
+      );
+      await tick();
+      timers.runAll(); // fire the ready timer
+
+      handle.injectMessage({ id: "m1", text: "in flight" });
+      // Text already written; the submit timer is pending (manual timers, not
+      // yet run) — mirrors the real "written but not yet submitted" window.
+      expect(h.fakePty.writes).toEqual(["in flight"]);
+
+      h.fakePty.emitExit(0); // the child exits before the submit keystroke
+      await handle.done;
+
+      // dispose() ran as part of teardown but the pending submit timer isn't
+      // cleared (by design — see injectionController.ts's dispose() doc) so
+      // it can still report the mid-injection message once it fires.
+      expect(onDroppedInjections).not.toHaveBeenCalled();
+      timers.runAll();
+
+      expect(h.fakePty.writes).toEqual(["in flight"]); // submit (\r) never sent
+      expect(onInjected).not.toHaveBeenCalled();
+      expect(onDroppedInjections).toHaveBeenCalledExactlyOnceWith([
+        { id: "m1", text: "in flight" },
+      ]);
+    });
+  });
+
   describe("sendInterrupt (W1.5)", () => {
     it("writes a single ESC into the PTY and reports success", async () => {
       const h = makeHarness();

@@ -490,6 +490,50 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     }
   });
 
+  it("completes a dropped injection's claim as dropped-session-ended so a retry sees an honest duplicate (W3.9)", async () => {
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-test-"));
+    try {
+      let onDroppedInjections: ((messages: { id: string; text: string }[]) => void) | undefined;
+      const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+        onDroppedInjections = opts.onDroppedInjections;
+        return fakePtyHandle();
+      });
+
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
+
+      await runStartClaudeCommand(
+        baseDeps({ homeDir, startPtyClaudeSession, registerSessionRpcHandlers }),
+      );
+
+      const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+
+      // A fresh send is claimed (never injected — the session ends with it
+      // still queued, e.g. `claude` exited before the PTY gate opened).
+      const envelope = createEnvelope("user", { t: "text", md: "never delivered" });
+      const result = await handlers.message({ envelope });
+      expect(result).toEqual({ queued: true, status: "queued" });
+
+      // The PTY session reports it as dropped (`ptyClaudeSession.ts`'s
+      // `onDroppedInjections`, threaded from `InjectionController.dispose()`
+      // or its submit-skip path) instead of leaving the claim open forever.
+      onDroppedInjections?.([{ id: envelope.id, text: "never delivered" }]);
+
+      // A retry of the exact same envelope id now sees a completed claim —
+      // an honest `duplicate`, never `outcome-unknown` for a message that
+      // never actually ran.
+      await vi.waitFor(async () => {
+        const retry = await handlers.message({ envelope });
+        expect(retry).toEqual({ queued: false, status: "duplicate" });
+      });
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it("marks the turn web-initiated when a message is submitted into the PTY", async () => {
     let webTurnStarts = 0;
     let onInjected: ((id: string) => void) | undefined;
