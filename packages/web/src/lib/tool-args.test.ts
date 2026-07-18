@@ -8,10 +8,16 @@ import {
   parseBashOutput,
   parseEditArgs,
   parseGrepGlobArgs,
+  parseLsArgs,
+  parseNotebookEditArgs,
   parseReadArgs,
   parseTodoItems,
+  parseWebFetchArgs,
+  parseWebSearchArgs,
+  parseWebSearchResults,
   readNumber,
   readString,
+  readStringArray,
 } from "./tool-args";
 
 describe("asRecord", () => {
@@ -136,6 +142,109 @@ describe("parseTodoItems", () => {
   it("returns an empty array rather than throwing when todos is missing", () => {
     expect(parseTodoItems({})).toEqual([]);
     expect(parseTodoItems(undefined)).toEqual([]);
+  });
+});
+
+describe("readStringArray", () => {
+  it("reads a string array and drops non-string entries", () => {
+    expect(readStringArray({ ignore: ["a", 1, "b"] }, "ignore")).toEqual(["a", "b"]);
+  });
+
+  it("returns undefined for a missing or empty array", () => {
+    expect(readStringArray({}, "ignore")).toBeUndefined();
+    expect(readStringArray({ ignore: [] }, "ignore")).toBeUndefined();
+    expect(readStringArray({ ignore: "not-an-array" }, "ignore")).toBeUndefined();
+  });
+});
+
+describe("parseWebFetchArgs", () => {
+  it("reads url and prompt", () => {
+    expect(parseWebFetchArgs({ url: "https://example.com", prompt: "summarize" })).toEqual({
+      url: "https://example.com",
+      prompt: "summarize",
+    });
+  });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseWebFetchArgs(undefined)).toEqual({ url: undefined, prompt: undefined });
+  });
+});
+
+describe("parseWebSearchArgs", () => {
+  it("reads query and domain filters", () => {
+    expect(
+      parseWebSearchArgs({
+        query: "typescript 5.6",
+        allowed_domains: ["microsoft.com"],
+        blocked_domains: ["spam.example"],
+      }),
+    ).toEqual({
+      query: "typescript 5.6",
+      allowedDomains: ["microsoft.com"],
+      blockedDomains: ["spam.example"],
+    });
+  });
+});
+
+describe("parseWebSearchResults", () => {
+  // Real shape from a Claude Code WebSearch tool-result (verified against
+  // `packages/cli/src/claude/__fixtures__/task_non_sdk.jsonl`): a text blob
+  // with an embedded `Links: [...]` JSON array, not structured JSON at the
+  // top level.
+  it("extracts the embedded Links array from a real tool-result text blob", () => {
+    const output =
+      'Web search results for query: "typescript 5.6"\n\n' +
+      "I'll search for information.\n\n" +
+      'Links: [{"title":"Announcing TypeScript 5.6","url":"https://devblogs.microsoft.com/typescript/announcing-typescript-5-6/"},{"title":"Releases","url":"https://github.com/microsoft/typescript/releases"}]\n\n' +
+      "Based on the search results...";
+
+    expect(parseWebSearchResults(output)).toEqual([
+      {
+        title: "Announcing TypeScript 5.6",
+        url: "https://devblogs.microsoft.com/typescript/announcing-typescript-5-6/",
+      },
+      { title: "Releases", url: "https://github.com/microsoft/typescript/releases" },
+    ]);
+  });
+
+  it("returns undefined when there is no embedded Links array, a non-array Links value, or non-string output", () => {
+    expect(parseWebSearchResults("no results found")).toBeUndefined();
+    expect(parseWebSearchResults("Links: {}")).toBeUndefined();
+    expect(parseWebSearchResults({ results: [] })).toBeUndefined();
+    expect(parseWebSearchResults(undefined)).toBeUndefined();
+  });
+});
+
+describe("parseNotebookEditArgs", () => {
+  it("reads notebook_path/cell_id/new_source/cell_type/edit_mode", () => {
+    expect(
+      parseNotebookEditArgs({
+        notebook_path: "nb.ipynb",
+        cell_id: "cell-1",
+        new_source: "print('hi')",
+        cell_type: "code",
+        edit_mode: "insert",
+      }),
+    ).toEqual({
+      notebookPath: "nb.ipynb",
+      cellId: "cell-1",
+      newSource: "print('hi')",
+      cellType: "code",
+      editMode: "insert",
+    });
+  });
+});
+
+describe("parseLsArgs", () => {
+  it("reads path and ignore", () => {
+    expect(parseLsArgs({ path: "/tmp/proj", ignore: ["*.log"] })).toEqual({
+      path: "/tmp/proj",
+      ignore: ["*.log"],
+    });
+  });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseLsArgs("not an object")).toEqual({ path: undefined, ignore: undefined });
   });
 });
 
