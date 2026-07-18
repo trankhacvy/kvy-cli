@@ -13,6 +13,35 @@ import type { RawJSONLines } from "./types.js";
 /** Lets pending microtasks (the async `run()` setup) settle. */
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
+/**
+ * A manual timer queue — unlike `makeHarness()`'s own `setTimeoutImpl` (which
+ * fires synchronously, fine for tests that only care about end-state), tests
+ * that need to observe an in-between state (a local draft still active, an
+ * injection still mid-flight, a promptOpen gate not yet self-cleared) need
+ * control over exactly when a scheduled callback runs.
+ */
+function makeManualTimers() {
+  let seq = 0;
+  const timers = new Map<number, () => void>();
+  const setTimeoutImpl = (fn: () => void): ReturnType<typeof setTimeout> => {
+    const id = ++seq;
+    timers.set(id, fn);
+    return id as unknown as ReturnType<typeof setTimeout>;
+  };
+  const clearTimeoutImpl = (handle: ReturnType<typeof setTimeout>): void => {
+    timers.delete(handle as unknown as number);
+  };
+  const runAll = (): void => {
+    let guard = 0;
+    while (timers.size > 0 && guard++ < 100) {
+      const first = timers.entries().next().value as [number, () => void];
+      timers.delete(first[0]);
+      first[1]();
+    }
+  };
+  return { setTimeoutImpl, clearTimeoutImpl, runAll };
+}
+
 function makeFakePty() {
   const dataListeners: Array<(d: string) => void> = [];
   const exitListeners: Array<(e: { exitCode: number; signal?: number }) => void> = [];
@@ -397,5 +426,170 @@ describe("startPtyClaudeSession", () => {
 
     handle.stop();
     expect(h.fakePty.kill).toHaveBeenCalledOnce();
+  });
+
+  describe("local-submit detection (W1.2)", () => {
+    it("fires onLocalSubmit on a real Enter typed at the terminal", async () => {
+      const onLocalSubmit = vi.fn();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onLocalSubmit }), h.deps);
+      await tick();
+
+      h.stdin.emitData(Buffer.from("\r", "utf8"));
+      expect(onLocalSubmit).toHaveBeenCalledOnce();
+      // Still forwarded to the PTY like any other keystroke.
+      expect(h.fakePty.writes).toContain("\r");
+
+      handle.stop();
+    });
+
+    it("also fires on a bare newline, not just carriage return", async () => {
+      const onLocalSubmit = vi.fn();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onLocalSubmit }), h.deps);
+      await tick();
+
+      h.stdin.emitData(Buffer.from("\n", "utf8"));
+      expect(onLocalSubmit).toHaveBeenCalledOnce();
+
+      handle.stop();
+    });
+
+    it("does not fire for ordinary typing", async () => {
+      const onLocalSubmit = vi.fn();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onLocalSubmit }), h.deps);
+      await tick();
+
+      h.stdin.emitData(Buffer.from("ls -la", "utf8"));
+      expect(onLocalSubmit).not.toHaveBeenCalled();
+
+      handle.stop();
+    });
+
+    it("suppresses local-submit detection while a queued web message is mid-injection", async () => {
+      const onLocalSubmit = vi.fn();
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions({ onLocalSubmit }), h.deps);
+      await tick();
+      timers.runAll(); // fire the ready timer
+
+      handle.injectMessage({ id: "m1", text: "hi" }); // text written, submit timer pending
+      h.stdin.emitData(Buffer.from("\r", "utf8")); // a real Enter racing in mid-injection
+      expect(onLocalSubmit).not.toHaveBeenCalled();
+
+      timers.runAll(); // the submit timer fires — injection completes
+      h.stdin.emitData(Buffer.from("\r", "utf8")); // now a genuine local submit
+      expect(onLocalSubmit).toHaveBeenCalledOnce();
+
+      handle.stop();
+    });
+  });
+
+  describe("local-draft gating (W1.3)", () => {
+    it("gates a queued injection while the human is composing, flushing once the draft goes idle", async () => {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll(); // ready timer
+
+      h.stdin.emitData(Buffer.from("h", "utf8")); // printable char — starts a draft
+      handle.injectMessage({ id: "m1", text: "web message" });
+      expect(h.fakePty.writes).not.toContain("web message");
+
+      timers.runAll(); // the draft-idle timer elapses
+      expect(h.fakePty.writes).toContain("web message");
+
+      handle.stop();
+    });
+
+    it("clears the draft immediately on a local Enter, releasing the queued injection", async () => {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      h.stdin.emitData(Buffer.from("done typing", "utf8"));
+      handle.injectMessage({ id: "m1", text: "web message" });
+      expect(h.fakePty.writes).not.toContain("web message");
+
+      h.stdin.emitData(Buffer.from("\r", "utf8"));
+      expect(h.fakePty.writes).toContain("web message");
+
+      handle.stop();
+    });
+
+    it("clears the draft on a local Escape too", async () => {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      h.stdin.emitData(Buffer.from("half a message", "utf8"));
+      handle.injectMessage({ id: "m1", text: "web message" });
+      expect(h.fakePty.writes).not.toContain("web message");
+
+      h.stdin.emitData(Buffer.from("\x1b", "utf8"));
+      expect(h.fakePty.writes).toContain("web message");
+
+      handle.stop();
+    });
+  });
+
+  describe("setPromptOpen (W1.3)", () => {
+    it("gates a queued injection through the controller and releases it once cleared", async () => {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      handle.setPromptOpen(true);
+      handle.injectMessage({ id: "m1", text: "blocked by dialog" });
+      expect(h.fakePty.writes).not.toContain("blocked by dialog");
+
+      handle.setPromptOpen(false);
+      expect(h.fakePty.writes).toContain("blocked by dialog");
+
+      handle.stop();
+    });
+  });
+
+  describe("sendInterrupt (W1.5)", () => {
+    it("writes a single ESC into the PTY and reports success", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendInterrupt()).toBe(true);
+      expect(h.fakePty.writes).toContain(String.fromCharCode(0x1b));
+
+      handle.stop();
+    });
+
+    it("reports failure when the pty never spawned", async () => {
+      const h = makeHarness();
+      h.spawnPty.mockImplementation(() => {
+        throw new Error("spawn failed");
+      });
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendInterrupt()).toBe(false);
+    });
   });
 });

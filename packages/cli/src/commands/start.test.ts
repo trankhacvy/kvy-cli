@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
-import { createEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
 import type { LoopOptions } from "../claude/loop.js";
@@ -61,6 +61,8 @@ function fakePtyHandle(overrides: Partial<PtyClaudeSessionHandle> = {}): PtyClau
     done: Promise.resolve(0),
     injectMessage: vi.fn(),
     notifyProviderSessionId: vi.fn(),
+    setPromptOpen: vi.fn(),
+    sendInterrupt: vi.fn(() => true),
     stop: vi.fn(),
     ...overrides,
   };
@@ -83,6 +85,7 @@ function fakeRemotePermissionHook(
     isWebTurnActive: () => false,
     markWebTurnStart: () => {},
     markTurnEnd: () => {},
+    markLocalActivity: () => {},
     stop: vi.fn(async () => {}),
     ...overrides,
   };
@@ -392,12 +395,94 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(webTurnStarts).toBe(1);
   });
 
-  it("answers takeControl as a no-op success, interrupt/setMode as not-supported, and routes perm.answer into the hook bridge", async () => {
+  it("clears the web-turn flag when the PTY reports a locally-typed submit", async () => {
+    let onLocalSubmit: (() => void) | undefined;
+    const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+      onLocalSubmit = opts.onLocalSubmit;
+      return fakePtyHandle();
+    });
+    const markLocalActivity = vi.fn();
+    const installRemotePermissionHook = (async () =>
+      fakeRemotePermissionHook({
+        markLocalActivity,
+      })) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
+
+    expect(markLocalActivity).not.toHaveBeenCalled();
+    onLocalSubmit?.();
+    expect(markLocalActivity).toHaveBeenCalledOnce();
+  });
+
+  it("gates injection on hook attention: perm/question open the prompt gate, done clears it", async () => {
+    const setPromptOpen = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ setPromptOpen }));
+    let onAttention: ((kind: "perm" | "question" | "done") => void) | undefined;
+    const installRemotePermissionHook = (async (opts: {
+      onAttention?: (kind: "perm" | "question" | "done") => void;
+    }) => {
+      onAttention = opts.onAttention;
+      return fakeRemotePermissionHook();
+    }) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
+
+    onAttention?.("perm");
+    expect(setPromptOpen).toHaveBeenLastCalledWith(true);
+    onAttention?.("question");
+    expect(setPromptOpen).toHaveBeenLastCalledWith(true);
+    onAttention?.("done");
+    expect(setPromptOpen).toHaveBeenLastCalledWith(false);
+  });
+
+  it("opens the prompt gate when the bridge signals a local-turn dialog is likely", async () => {
+    const setPromptOpen = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ setPromptOpen }));
+    let onPromptLikely: (() => void) | undefined;
+    const installRemotePermissionHook = (async (opts: { onPromptLikely?: () => void }) => {
+      onPromptLikely = opts.onPromptLikely;
+      return fakeRemotePermissionHook();
+    }) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
+
+    expect(setPromptOpen).not.toHaveBeenCalled();
+    onPromptLikely?.();
+    expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("clears the prompt gate when a tool-end envelope lands, and still forwards every envelope to the outbox", async () => {
+    const setPromptOpen = vi.fn();
+    let onEnvelopes: ((envelopes: SessionEnvelope[]) => void) | undefined;
+    const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+      onEnvelopes = opts.onEnvelopes;
+      return fakePtyHandle({ setPromptOpen });
+    });
+
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession }));
+
+    const textEnvelope = createEnvelope("agent", { t: "text", md: "hi" });
+    onEnvelopes?.([textEnvelope]);
+    expect(setPromptOpen).not.toHaveBeenCalled();
+
+    const toolEndEnvelope = createEnvelope("agent", {
+      t: "tool-end",
+      call: "call-1",
+      ok: true,
+      output: {},
+    });
+    onEnvelopes?.([toolEndEnvelope]);
+    expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
+  it("answers takeControl as a no-op success, interrupt as a real ESC write, setMode as not-supported, and routes perm.answer into the hook bridge", async () => {
     const resolvePermission = vi.fn(() => ({ ok: true as const }));
     const installRemotePermissionHook = (async () =>
       fakeRemotePermissionHook({
         resolvePermission,
       })) as unknown as typeof installRemotePermissionHookType;
+    const sendInterrupt = vi.fn(() => true);
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendInterrupt }));
 
     let capturedHandlers: SessionRpcHandlers | null = null;
     const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
@@ -406,12 +491,17 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
 
     await runStartClaudeCommand(
-      baseDeps({ registerSessionRpcHandlers, installRemotePermissionHook }),
+      baseDeps({
+        registerSessionRpcHandlers,
+        installRemotePermissionHook,
+        startPtyClaudeSession,
+      }),
     );
 
     const handlers = capturedHandlers as unknown as SessionRpcHandlers;
     await expect(handlers.takeControl()).resolves.toEqual({ ok: true });
-    await expect(handlers.interrupt()).resolves.toEqual({ ok: false });
+    await expect(handlers.interrupt()).resolves.toEqual({ ok: true });
+    expect(sendInterrupt).toHaveBeenCalledOnce();
     await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({ ok: false });
 
     // perm.answer routes to the PreToolUse bridge (first-wins), not {ok:false}.

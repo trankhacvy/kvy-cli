@@ -225,6 +225,18 @@ export interface PreToolPermissionBridgeDeps {
    * transport-neutral and simply allows the pending call under the new mode.
    */
   onModeChange?: (mode: PermissionMode) => void;
+  /**
+   * Fires on the local-turn path of either hook — `handlePreToolUse` always
+   * defers to `ask`, and on a local turn that genuinely means "Claude Code's
+   * own TUI dialog may render next"; `handlePermissionRequest`'s local-
+   * `undefined` return means the same thing, more precisely (only calls that
+   * survive Claude Code's own auto-allow evaluation reach it). The caller
+   * wires this to the injection gate's `setPromptOpen(true)` (plan-v2.md
+   * W1.3) so a queued web message is never typed into an open dialog. Never
+   * fires on a web turn — those prompts resolve remotely with no local
+   * dialog rendered.
+   */
+  onPromptLikely?: () => void;
   /** Max wait for a web answer before falling back to a deny. Default {@link DEFAULT_ANSWER_TIMEOUT_MS}. */
   answerTimeoutMs?: number;
   /** Injectable timer (default `setTimeout`) so tests can trigger the timeout on demand. */
@@ -320,6 +332,11 @@ export class PreToolPermissionBridge {
    * case is Wave 2.1, not built here.
    */
   handlePreToolUse(_input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+    // A web turn's `ask` here doesn't mean a local dialog is coming — the
+    // `PermissionRequest` hook that follows resolves it remotely with no
+    // TUI dialog ever rendered. Only signal "a dialog may be about to show"
+    // on the local-turn path.
+    if (!this.deps.isWebTurnActive()) this.deps.onPromptLikely?.();
     return Promise.resolve(output("ask", "Deferred to Claude Code's own permission engine."));
   }
 
@@ -341,6 +358,7 @@ export class PreToolPermissionBridge {
       // Locally-typed turn: never intercept — the terminal user is already
       // looking at the TUI dialog Claude Code is about to show.
       this.deps.logger?.debug("[pretool-bridge] local turn — TUI dialog owns it", { toolName });
+      this.deps.onPromptLikely?.();
       return Promise.resolve(undefined);
     }
 

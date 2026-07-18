@@ -7,7 +7,11 @@ import type {
   PreToolUseHookInput,
   PreToolUseHookOutput,
 } from "./pretoolPermissionBridge.js";
-import { HOOK_SETTINGS_ENV_VAR, installRemotePermissionHook } from "./remotePermissionHook.js";
+import {
+  HOOK_SETTINGS_ENV_VAR,
+  installRemotePermissionHook,
+  WEB_TURN_MAX_MS,
+} from "./remotePermissionHook.js";
 
 /**
  * Fakes for the two injected seams — no real Fastify server / temp files. The
@@ -42,10 +46,17 @@ function makeHarness() {
       if (!captured) throw new Error("hook server not started");
       return captured;
     },
-    install: () =>
+    install: (
+      optsOverrides: Partial<Parameters<typeof installRemotePermissionHook>[0]> = {},
+      depsOverrides: Partial<Parameters<typeof installRemotePermissionHook>[1]> = {},
+    ) =>
       installRemotePermissionHook(
-        { hooksDir: "/tmp/hooks", emitEnvelope: (e) => emitted.push(e) },
-        { startHookServer, writeHookSettingsFile },
+        {
+          hooksDir: "/tmp/hooks",
+          emitEnvelope: (e) => emitted.push(e),
+          ...optsOverrides,
+        },
+        { startHookServer, writeHookSettingsFile, ...depsOverrides },
       ),
   };
 }
@@ -178,5 +189,97 @@ describe("installRemotePermissionHook", () => {
     expect(output.hookSpecificOutput.decision?.behavior).toBe("deny");
     expect(h.cleanup).toHaveBeenCalledOnce();
     expect(h.serverStop).toHaveBeenCalledOnce();
+  });
+
+  describe("web-turn watchdog + local-activity override (W1.2)", () => {
+    it("auto-clears a web turn quiet past webTurnMaxMs", async () => {
+      let clock = 0;
+      const h = makeHarness();
+      const handle = await h.install({ webTurnMaxMs: 1000 }, { now: () => clock });
+
+      handle.markWebTurnStart();
+      expect(handle.isWebTurnActive()).toBe(true);
+
+      clock += 1001;
+      expect(handle.isWebTurnActive()).toBe(false);
+
+      await handle.stop();
+    });
+
+    it("defaults to WEB_TURN_MAX_MS (30 minutes) when webTurnMaxMs is not overridden", async () => {
+      let clock = 0;
+      const h = makeHarness();
+      const handle = await h.install({}, { now: () => clock });
+
+      handle.markWebTurnStart();
+      // Note: `isWebTurnActive()` itself refreshes the last-activity clock
+      // while still active (that's the point — hook traffic counts as
+      // activity), so this test checks expiry from a single jump past the
+      // default max rather than an incremental countdown that would keep
+      // refreshing itself.
+      clock += WEB_TURN_MAX_MS + 1;
+      expect(handle.isWebTurnActive()).toBe(false);
+
+      await handle.stop();
+    });
+
+    it("hook traffic while active refreshes the watchdog's last-activity clock", async () => {
+      let clock = 0;
+      const h = makeHarness();
+      const handle = await h.install({ webTurnMaxMs: 1000 }, { now: () => clock });
+      handle.markWebTurnStart();
+
+      // A PermissionRequest firing partway through calls isWebTurnActive(),
+      // which refreshes the clock — so the flag survives past the ORIGINAL
+      // deadline as long as it keeps seeing activity.
+      clock += 600;
+      void h.captured.onPermissionRequest?.(permReq("Bash"));
+      clock += 600; // would have expired from turn-start, but not from the refresh
+      expect(handle.isWebTurnActive()).toBe(true);
+
+      await handle.stop();
+    });
+
+    it("markLocalActivity clears an active web turn immediately, regardless of the watchdog", async () => {
+      const h = makeHarness();
+      const handle = await h.install();
+      handle.markWebTurnStart();
+      expect(handle.isWebTurnActive()).toBe(true);
+
+      handle.markLocalActivity();
+      expect(handle.isWebTurnActive()).toBe(false);
+
+      await handle.stop();
+    });
+  });
+
+  describe("onPromptLikely forwarding (W1.3)", () => {
+    it("forwards the bridge's local-turn onPromptLikely signal to the caller", async () => {
+      const onPromptLikely = vi.fn();
+      const h = makeHarness();
+      const handle = await h.install({ onPromptLikely });
+
+      // Local turn (never marked as web) — both hooks' local paths fire it.
+      await h.captured.onPreToolUse?.(preTool("Bash"));
+      expect(onPromptLikely).toHaveBeenCalledOnce();
+
+      await h.captured.onPermissionRequest?.(permReq("Bash"));
+      expect(onPromptLikely).toHaveBeenCalledTimes(2);
+
+      await handle.stop();
+    });
+
+    it("never fires onPromptLikely on the web-turn path", async () => {
+      const onPromptLikely = vi.fn();
+      const h = makeHarness();
+      const handle = await h.install({ onPromptLikely });
+      handle.markWebTurnStart();
+
+      await h.captured.onPreToolUse?.(preTool("Bash"));
+      void h.captured.onPermissionRequest?.(permReq("Bash"));
+      expect(onPromptLikely).not.toHaveBeenCalled();
+
+      await handle.stop();
+    });
   });
 });

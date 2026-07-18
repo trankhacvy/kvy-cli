@@ -134,4 +134,95 @@ describe("InjectionController", () => {
     controller.enqueue({ id: "b", text: "second" });
     expect(controller.queueDepth).toBe(0);
   });
+
+  it("isInjecting reflects the write-to-submit window only", () => {
+    const { controller, timers } = setup();
+    controller.markReady();
+    expect(controller.isInjecting).toBe(false);
+
+    controller.enqueue({ id: "a", text: "hi" });
+    expect(controller.isInjecting).toBe(true);
+
+    timers.runAll();
+    expect(controller.isInjecting).toBe(false);
+  });
+
+  describe("promptOpen gate (W1.3)", () => {
+    it("blocks injection while a TUI dialog is open, and flushes once it clears", () => {
+      const { controller, writeText } = setup();
+      controller.markReady();
+      controller.setPromptOpen(true);
+
+      controller.enqueue({ id: "a", text: "queued behind a dialog" });
+      expect(writeText).not.toHaveBeenCalled();
+
+      controller.setPromptOpen(false);
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("queued behind a dialog");
+    });
+
+    it("is idempotent — redundant setPromptOpen calls don't re-arm the failsafe or re-flush", () => {
+      const { controller, writeText } = setup();
+      controller.markReady();
+      controller.setPromptOpen(true);
+      controller.setPromptOpen(true); // no-op, same value
+
+      controller.enqueue({ id: "a", text: "still queued" });
+      expect(writeText).not.toHaveBeenCalled();
+
+      controller.setPromptOpen(false);
+      controller.setPromptOpen(false); // no-op, doesn't double-flush
+      expect(writeText).toHaveBeenCalledOnce();
+    });
+
+    it("self-clears via the 120s failsafe if nothing ever calls setPromptOpen(false)", () => {
+      const { controller, writeText, timers } = setup();
+      controller.markReady();
+      controller.setPromptOpen(true);
+      controller.enqueue({ id: "a", text: "abandoned dialog" });
+      expect(writeText).not.toHaveBeenCalled();
+
+      // The failsafe is the only pending timer at this point (submit/cooldown
+      // timers haven't started — nothing has flushed yet).
+      timers.runAll();
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("abandoned dialog");
+    });
+  });
+
+  describe("localDraft gate (W1.3)", () => {
+    it("blocks injection while the human is mid-draft, and flushes once they stop", () => {
+      const { controller, writeText } = setup();
+      controller.markReady();
+      controller.setLocalDraft(true);
+
+      controller.enqueue({ id: "a", text: "queued behind a draft" });
+      expect(writeText).not.toHaveBeenCalled();
+
+      controller.setLocalDraft(false);
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("queued behind a draft");
+    });
+  });
+
+  it("promptOpen and localDraft gates are independent — both must clear before injection resumes", () => {
+    const { controller, writeText } = setup();
+    controller.markReady();
+    controller.setPromptOpen(true);
+    controller.setLocalDraft(true);
+    controller.enqueue({ id: "a", text: "double-gated" });
+    expect(writeText).not.toHaveBeenCalled();
+
+    controller.setLocalDraft(false);
+    expect(writeText).not.toHaveBeenCalled();
+
+    controller.setPromptOpen(false);
+    expect(writeText).toHaveBeenCalledExactlyOnceWith("double-gated");
+  });
+
+  it("setPromptOpen/setLocalDraft are no-ops after dispose", () => {
+    const { controller, writeText } = setup();
+    controller.dispose();
+    controller.setPromptOpen(false);
+    controller.setLocalDraft(false);
+    controller.enqueue({ id: "a", text: "never" });
+    expect(writeText).not.toHaveBeenCalled();
+  });
 });
