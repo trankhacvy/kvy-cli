@@ -56,7 +56,13 @@
  * every tool call closes that gap at negligible cost — see maybeEmitSubagentStart.
  */
 
-import { createEnvelope, type SessionEnvelope, type SessionEvent } from "@falcon/wire";
+import {
+  type CreateEnvelopeOptions,
+  createEnvelope,
+  type SessionEnvelope,
+  type SessionEvent,
+  type SessionRole,
+} from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import type { RawJSONLines } from "./types.js";
 
@@ -173,11 +179,17 @@ interface RawToolResultBlock {
   content?: unknown;
   is_error?: unknown;
 }
+/** An image content block — user-pasted images and tool results (e.g. `Read` on an image file) both use this shape. */
+interface RawImageBlock {
+  type: "image";
+  source?: unknown;
+}
 type RawContentBlock =
   | RawTextBlock
   | RawThinkingBlock
   | RawToolUseBlock
   | RawToolResultBlock
+  | RawImageBlock
   | { type: unknown };
 
 function pickUuid(message: RawJSONLines): string | undefined {
@@ -260,6 +272,90 @@ function toolTitle(name: string, input: unknown): string {
     }
   }
   return `${name} call`;
+}
+
+// --- static tool -> risk map (plan-v2.md W3.3, PTY-path parity with
+// `acp/acpToEnvelope.ts`'s own `RISK_BY_KIND`, keyed by ACP `kind` there —
+// Claude Code's raw transcript instead names the tool directly, so this is
+// keyed by tool name). ---
+
+const RISK_BY_TOOL_NAME: Record<string, "read" | "write" | "exec" | "network"> = {
+  Bash: "exec",
+  Edit: "write",
+  Write: "write",
+  MultiEdit: "write",
+  NotebookEdit: "write",
+  Read: "read",
+  Grep: "read",
+  Glob: "read",
+  LS: "read",
+  WebFetch: "network",
+  WebSearch: "network",
+};
+
+function pickRisk(name: string): "read" | "write" | "exec" | "network" | undefined {
+  return RISK_BY_TOOL_NAME[name];
+}
+
+// --- image blocks -> `file` envelopes (plan-v2.md W3.2) ---
+// No blob-storage subsystem exists on the CLI yet (design §4.3's blob path is
+// server/web-side only, driven by the web composer's upload button — see
+// `optimistic-composer.ts:63`), so a transcript image is inlined directly
+// into the wire `file` event's `ref` as `inline:<base64>` when it's small
+// enough (≤256KB) to be a reasonable envelope payload; a larger image is
+// dropped in favor of an honest `service` note rather than silently
+// truncating or blowing up an outbox batch.
+
+const MAX_INLINE_IMAGE_BYTES = 256 * 1024;
+
+const IMAGE_EXTENSION_BY_MEDIA_TYPE: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/gif": "gif",
+  "image/webp": "webp",
+};
+
+function imageFileName(mediaType: string): string {
+  return `image.${IMAGE_EXTENSION_BY_MEDIA_TYPE[mediaType] ?? "png"}`;
+}
+
+/** Conservative byte-size estimate from a base64 string's length (padding ignored — fine for a size hint, not a checksum). */
+function approxBase64Bytes(base64: string): number {
+  return Math.floor((base64.length * 3) / 4);
+}
+
+interface RawImageSource {
+  mediaType: string;
+  data: string;
+}
+
+function pickImageSource(block: RawImageBlock): RawImageSource | undefined {
+  const source = block.source;
+  if (!source || typeof source !== "object" || Array.isArray(source)) return undefined;
+  const raw = source as { type?: unknown; media_type?: unknown; data?: unknown };
+  if (raw.type !== "base64") return undefined;
+  if (typeof raw.media_type !== "string" || typeof raw.data !== "string") return undefined;
+  if (raw.data.length === 0) return undefined;
+  return { mediaType: raw.media_type, data: raw.data };
+}
+
+/** Maps one image content block to a `file` (inlined, ≤256KB) or `service` (too large) envelope; `undefined` when the block isn't a recognizable image. */
+function imageBlockToEnvelope(
+  block: RawImageBlock,
+  role: SessionRole,
+  opts: CreateEnvelopeOptions,
+): SessionEnvelope | undefined {
+  const source = pickImageSource(block);
+  if (!source) return undefined;
+  const size = approxBase64Bytes(source.data);
+  if (size > MAX_INLINE_IMAGE_BYTES) {
+    return createEnvelope(role, { t: "service", text: "image omitted (too large)" }, opts);
+  }
+  return createEnvelope(
+    role,
+    { t: "file", ref: `inline:${source.data}`, name: imageFileName(source.mediaType), size },
+    opts,
+  );
 }
 
 // --- Task-prompt -> subagent fallback matching ---
@@ -536,10 +632,18 @@ export function mapClaudeToEnvelopes(
 
         const call = mintedId(providerCallIds(state), providerCallId);
         const title = toolTitle(name, toolUseBlock.input);
+        const risk = pickRisk(name);
         envelopes.push(
           createEnvelope(
             "agent",
-            { t: "tool-start", call, name, title, args: toToolArgs(toolUseBlock.input) },
+            {
+              t: "tool-start",
+              call,
+              name,
+              title,
+              args: toToolArgs(toolUseBlock.input),
+              ...(risk !== undefined ? { risk } : {}),
+            },
             { turn: turnId, subagent },
           ),
         );
@@ -590,6 +694,11 @@ export function mapClaudeToEnvelopes(
           const text = (block as RawTextBlock).text as string;
           if (text.trim().length > 0)
             envelopes.push(createEnvelope("user", { t: "text", md: text }));
+          continue;
+        }
+        if (block.type === "image") {
+          const imageEnvelope = imageBlockToEnvelope(block as RawImageBlock, "user", {});
+          if (imageEnvelope) envelopes.push(imageEnvelope);
         }
       }
       return envelopes;
@@ -636,6 +745,23 @@ export function mapClaudeToEnvelopes(
             { turn: turnId, subagent },
           ),
         );
+
+        // A tool result's own `content` can itself be a block array (e.g.
+        // `Read` on an image file) — surface any image blocks nested in it
+        // as their own `file`/`service` envelopes, right after the tool-end
+        // they belong to (plan-v2.md W3.2). `output` above keeps the raw
+        // content untouched either way — this only adds envelopes, it
+        // doesn't rewrite tool-end's payload.
+        if (Array.isArray(resultBlock.content)) {
+          for (const nested of resultBlock.content as RawContentBlock[]) {
+            if (nested.type !== "image") continue;
+            const imageEnvelope = imageBlockToEnvelope(nested as RawImageBlock, "agent", {
+              turn: turnId,
+              subagent,
+            });
+            if (imageEnvelope) envelopes.push(imageEnvelope);
+          }
+        }
         continue;
       }
 
@@ -646,6 +772,15 @@ export function mapClaudeToEnvelopes(
             createEnvelope("agent", { t: "text", md: text }, { turn: turnId, subagent }),
           );
         }
+        continue;
+      }
+
+      if (block.type === "image") {
+        const imageEnvelope = imageBlockToEnvelope(block as RawImageBlock, "agent", {
+          turn: turnId,
+          subagent,
+        });
+        if (imageEnvelope) envelopes.push(imageEnvelope);
       }
     }
 

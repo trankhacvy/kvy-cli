@@ -19,7 +19,23 @@ import type { ClaudeCliLocation } from "../provider/claudeCliLocator.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
 import type { SessionClientHandle } from "../session/sessionClient.js";
-import { runStartClaudeCommand, type StartClaudeCommandDeps } from "./start.js";
+import { type OutboxLike, runStartClaudeCommand, type StartClaudeCommandDeps } from "./start.js";
+
+/** Captures every envelope batch handed to `outbox.enqueue()` — stands in for
+ * the real `Outbox` (which seals/persists/POSTs, all things a unit test must
+ * never do) so W3.3's lifecycle `service` envelopes are directly observable. */
+function fakeOutbox(): { outbox: OutboxLike; enqueued: SessionEnvelope[][] } {
+  const enqueued: SessionEnvelope[][] = [];
+  return {
+    outbox: {
+      enqueue: (events) => {
+        enqueued.push([...events]);
+      },
+      dispose: () => {},
+    },
+    enqueued,
+  };
+}
 
 function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
@@ -115,6 +131,11 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     loop: vi.fn(async () => 0),
     startSessionClient: vi.fn(() => fakeSessionClientHandle()),
     registerSessionRpcHandlers: vi.fn(() => ({ stop: vi.fn() })),
+    // Never touch a real disk queue under the fake homeDir — W3.3's lifecycle
+    // `service` envelopes now enqueue unconditionally, so every test needs a
+    // safe default outbox even when it isn't asserting on the enqueued
+    // content itself (see the `fakeOutbox()` helper above).
+    createOutbox: () => fakeOutbox().outbox,
     sleep: async () => {},
     now: () => 0,
     write: (text: string) => {
@@ -585,6 +606,43 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const handlers = capturedHandlers as unknown as SessionRpcHandlers;
     await expect(handlers.permAnswer({ reqId: "x", decision: { kind: "deny" } })).resolves.toEqual({
       ok: false,
+    });
+  });
+
+  // plan-v2.md W3.3 — lifecycle `service` envelopes the web timeline should
+  // see even though nothing in the Claude Code transcript says them.
+  describe("lifecycle service envelopes", () => {
+    it("enqueues a 'session started' service envelope once the PTY session is spawned, then 'session ended' on a clean exit", async () => {
+      const { outbox, enqueued } = fakeOutbox();
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(0) }));
+
+      const code = await runStartClaudeCommand(
+        baseDeps({ startPtyClaudeSession, createOutbox: () => outbox }),
+      );
+
+      expect(code).toBe(0);
+      const serviceEnvelopes = enqueued.flat().filter((e) => e.ev.t === "service");
+      const serviceTexts = serviceEnvelopes.map((e) =>
+        e.ev.t === "service" ? e.ev.text : undefined,
+      );
+      expect(serviceTexts).toEqual(["session started", "session ended"]);
+      expect(serviceEnvelopes.every((e) => e.role === "agent")).toBe(true);
+    });
+
+    it("enqueues a distinguishing 'session ended unexpectedly' note for a non-zero exit (covers spawn failures too — ptyClaudeSession.ts's own setup-failure path resolves `done` the same way)", async () => {
+      const { outbox, enqueued } = fakeOutbox();
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(1) }));
+
+      const code = await runStartClaudeCommand(
+        baseDeps({ startPtyClaudeSession, createOutbox: () => outbox }),
+      );
+
+      expect(code).toBe(1);
+      const serviceTexts = enqueued
+        .flat()
+        .filter((e) => e.ev.t === "service")
+        .map((e) => (e.ev.t === "service" ? e.ev.text : undefined));
+      expect(serviceTexts).toEqual(["session started", "session ended unexpectedly (exit code 1)"]);
     });
   });
 });
