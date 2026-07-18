@@ -175,6 +175,14 @@ export class FakeSessionProcess {
           return { ok: true };
         },
         permAnswer: (params) => this.permissionHandler.resolve(params),
+        // `stop` (plan-v2.md W2.3 "Stop session from the web") has no
+        // scripted scenario in this harness yet — an honest `{ok:true}`
+        // ack, matching `handleInterrupt`/`handleTakeControl`'s shape, keeps
+        // this fake conformant with the real `SessionRpcHandlers` contract
+        // without inventing process-teardown behavior no e2e scenario
+        // exercises. Real teardown on stop is `dispose()`, called by the
+        // caller once it's done with this fake, same as today.
+        stop: () => ({ ok: true }),
       },
     });
   }

@@ -555,6 +555,23 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         logger.debug("[start-claude] perm.answer RPC — no live permission hook to route to");
         return { ok: false };
       },
+      // "End session" from the web (plan-v2.md W2.3): SIGTERM the PTY child.
+      // Status reporting ("ended", landing BEFORE the WS drops so a stop that
+      // races the disconnect still surfaces) is deliberately not wired here —
+      // the server's `POST /v1/sessions/:id/status` route only accepts
+      // `status: "failed"` today (plan-v2.md U1.4 "lifecycle-status", not yet
+      // landed on this branch, adds the additive `"ended"` transition); firing
+      // it now would either be rejected or mislabel a clean stop as a crash.
+      // `force` doesn't SIGKILL the child directly — `ptyProcess.kill()` has
+      // no signal override yet — it instead exits this whole CLI process
+      // after a short grace period so a hung child can't block the "web says
+      // stopped" outcome the user asked for.
+      stop: async ({ force }) => {
+        logger.info("[start-claude] stop requested from web", { force: force ?? false });
+        ptySession.stop();
+        if (force) setTimeout(() => process.exit(0), 3000).unref();
+        return { ok: true };
+      },
     };
     const rpcHandle = registerRpc({
       sessionId: bootstrap.sessionId,
@@ -601,10 +618,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     // `startClaudeRemoteLauncher(..., deps.remote)`.
     const remoteLauncherDeps: ClaudeRemoteLauncherDeps = {};
     const permissionMode: PermissionMode = "default";
-    const noUnsubscribe = () => () => {};
 
     const messageSignal = createSignal<QueuedMessage>();
     const takeControlSignal = createSignal<void>();
+    const exitSignal = createSignal<void>();
     let currentMode: ClaudeMode = "remote";
     let activeRemote: RemoteControls | null = null;
 
@@ -633,6 +650,17 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       permAnswer: async ({ reqId, decision }) => {
         if (!activeRemote) return { ok: false };
         return activeRemote.resolvePermission({ reqId, decision });
+      },
+      // "End session" from the web (plan-v2.md W2.3): routes through
+      // `loop()`'s own double-Ctrl-C "exit the whole client" trigger
+      // (`onExitRequested` below), which asks the live remote launcher to
+      // exit. Same not-yet-landed status-reporting caveat as `runLocalPty`'s
+      // `stop` handler — see its comment.
+      stop: async ({ force }) => {
+        logger.info("[start-claude] stop requested from web", { force: force ?? false });
+        exitSignal.emit();
+        if (force) setTimeout(() => process.exit(0), 3000).unref();
+        return { ok: true };
       },
     };
     const rpcHandle = registerRpc({
@@ -664,7 +692,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           },
           onMessage: (handler) => messageSignal.subscribe(handler),
           onTakeControl: (handler) => takeControlSignal.subscribe(handler),
-          onExitRequested: noUnsubscribe,
+          onExitRequested: (handler) => exitSignal.subscribe(handler),
           logger,
         },
         { local: localLauncherDeps, remote: remoteLauncherDeps },

@@ -17,5 +17,6 @@ export function sessionRpcToActions(rpc: SessionRpcClient): SessionControlAction
     interrupt: () => rpc.call("interrupt", {}),
     takeControl: () => rpc.call("takeControl", {}),
     setMode: (mode) => rpc.call("setMode", { mode }),
+    stopSession: (force) => rpc.call("stop", { force }),
   };
 }

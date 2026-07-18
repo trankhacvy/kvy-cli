@@ -72,6 +72,8 @@ export type {
   SessionRpcResults,
   SetModeParams,
   SetModeResult,
+  StopRpcParams,
+  StopRpcResult,
   TakeControlResult,
 } from "./sessionRpc.js";
 export { createSessionRpcClient, SessionRpcError } from "./sessionRpc.js";

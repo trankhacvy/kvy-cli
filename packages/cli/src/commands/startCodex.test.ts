@@ -196,6 +196,78 @@ describe("runStartCodexCommand", () => {
     }
   });
 
+  it("stop RPC requests exit (ending the run without waitForExit ever resolving) and stops the remote", async () => {
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-test-"));
+    try {
+      let handlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
+        handlers = d.handlers;
+        return { stop: vi.fn() };
+      });
+      // A `waitForExit` that never resolves on its own — only the `stop` RPC's
+      // exit request should end the run.
+      const { deps, fakeRemote } = baseDeps({
+        homeDir,
+        registerSessionRpcHandlers,
+        waitForExit: () => new Promise<void>(() => {}),
+      });
+
+      const run = runStartCodexCommand(deps);
+      await new Promise((r) => setTimeout(r, 0));
+      const h = handlers as unknown as SessionRpcHandlers;
+
+      const result = await h.stop({});
+      expect(result).toEqual({ ok: true });
+
+      const code = await run;
+      expect(code).toBe(0);
+      expect(fakeRemote.stop).toHaveBeenCalledOnce();
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
+  it("stop RPC with force schedules a process exit after the grace period", async () => {
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-force-test-"));
+    vi.useFakeTimers();
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    try {
+      let handlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
+        handlers = d.handlers;
+        return { stop: vi.fn() };
+      });
+      // Same never-resolving waitForExit as the no-force test above — only
+      // the `stop` RPC's exit request (or, here, the scheduled process.exit)
+      // ends things.
+      const { deps } = baseDeps({
+        homeDir,
+        registerSessionRpcHandlers,
+        waitForExit: () => new Promise<void>(() => {}),
+      });
+
+      const run = runStartCodexCommand(deps);
+      await vi.advanceTimersByTimeAsync(0);
+      const h = handlers as unknown as SessionRpcHandlers;
+
+      const result = await h.stop({ force: true });
+      expect(result).toEqual({ ok: true });
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      // `requestExit()` still ends the run itself (the grace-period exit is
+      // a backstop, not the only way out).
+      const code = await run;
+      expect(code).toBe(0);
+
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      exitSpy.mockRestore();
+      vi.useRealTimers();
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
+
   it("completes the send claim once the turn settles (a later duplicate then reports 'duplicate')", async () => {
     const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
     try {

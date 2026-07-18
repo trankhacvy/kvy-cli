@@ -41,6 +41,7 @@ function noopHandlers(overrides: Partial<SessionRpcHandlers> = {}): SessionRpcHa
     takeControl: vi.fn(async () => ({ ok: true })),
     setMode: vi.fn(async () => ({ ok: true })),
     permAnswer: vi.fn(async () => ({ ok: true })),
+    stop: vi.fn(async () => ({ ok: true })),
     ...overrides,
   };
 }
@@ -58,7 +59,7 @@ async function callAndAwaitAck(
 }
 
 describe("registerSessionRpcHandlers", () => {
-  it("registers all five session RPC targets on connect", () => {
+  it("registers all six session RPC targets on connect", () => {
     const socket = new FakeSocket();
     registerSessionRpcHandlers({
       sessionId: "sess_1",
@@ -77,6 +78,7 @@ describe("registerSessionRpcHandlers", () => {
         { target: "s:sess_1:takeControl" },
         { target: "s:sess_1:setMode" },
         { target: "s:sess_1:perm.answer" },
+        { target: "s:sess_1:stop" },
       ]),
     );
   });
@@ -91,7 +93,7 @@ describe("registerSessionRpcHandlers", () => {
       handlers: noopHandlers(),
     });
 
-    expect(socket.emitted.filter((e) => e.event === "rpc-register")).toHaveLength(5);
+    expect(socket.emitted.filter((e) => e.event === "rpc-register")).toHaveLength(6);
   });
 
   it("decrypts params, runs the matching handler, and seals a valid result", async () => {
@@ -151,6 +153,22 @@ describe("registerSessionRpcHandlers", () => {
     const modeResponse = await callAndAwaitAck(socket, "setMode", seal({ mode: "plan" }, DEK));
     expect(handlers.setMode).toHaveBeenCalledExactlyOnceWith({ mode: "plan" });
     expect(open(modeResponse, DEK)).toEqual({ ok: true });
+  });
+
+  it("routes 'stop' to handlers.stop with its force param", async () => {
+    const socket = new FakeSocket();
+    const handlers = noopHandlers();
+    registerSessionRpcHandlers({
+      sessionId: "sess_1",
+      dek: DEK,
+      socket: socket as unknown as import("socket.io-client").Socket,
+      handlers,
+    });
+
+    const response = await callAndAwaitAck(socket, "stop", seal({ force: true }, DEK));
+
+    expect(handlers.stop).toHaveBeenCalledExactlyOnceWith({ force: true });
+    expect(open(response, DEK)).toEqual({ ok: true });
   });
 
   it("replies with a sealed error for an unknown method", async () => {

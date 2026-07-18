@@ -1,7 +1,8 @@
 /**
- * Typed caller-side client for the five session RPC methods
+ * Typed caller-side client for the session RPC methods
  * (falcon-system-design.md §4.4 "Session RPCs — registered by the session
- * process"; plan.md §16 "2.4 Web control surface"). This is the web's
+ * process"; plan.md §16 "2.4 Web control surface"; `stop` added by
+ * plan-v2.md W2.3 "Stop session from the web"). This is the web's
  * counterpart to `packages/cli/src/rpc/sessionRpc.ts` (the session-process
  * registration side): seal the params under the session's crypto-bridge
  * key, `apiSocket.rpcCall` to `s:<sessionId>:<method>`, open + validate the
@@ -22,6 +23,8 @@ import {
   PermAnswerResultSchema,
   type SetModeParamsSchema,
   SetModeResultSchema,
+  type StopRpcParamsSchema,
+  StopRpcResultSchema,
   TakeControlResultSchema,
 } from "@falcon/wire";
 import type { ZodType, z } from "zod";
@@ -39,6 +42,8 @@ export type SetModeParams = z.infer<typeof SetModeParamsSchema>;
 export type SetModeResult = z.infer<typeof SetModeResultSchema>;
 export type InterruptResult = z.infer<typeof InterruptResultSchema>;
 export type TakeControlResult = z.infer<typeof TakeControlResultSchema>;
+export type StopRpcParams = z.infer<typeof StopRpcParamsSchema>;
+export type StopRpcResult = z.infer<typeof StopRpcResultSchema>;
 
 /** Params shape per method — `interrupt`/`takeControl` take none. */
 export interface SessionRpcParams {
@@ -47,6 +52,7 @@ export interface SessionRpcParams {
   takeControl: Record<string, never>;
   setMode: SetModeParams;
   "perm.answer": PermAnswerParams;
+  stop: StopRpcParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/rpc/sessionRpc.ts`'s
@@ -62,6 +68,7 @@ export interface SessionRpcResults {
   takeControl: TakeControlResult;
   setMode: SetModeResult;
   "perm.answer": PermAnswerResult;
+  stop: StopRpcResult;
 }
 
 export type SessionRpcMethod = keyof SessionRpcParams;
@@ -72,6 +79,7 @@ const RESULT_SCHEMAS: { [M in SessionRpcMethod]: ZodType<SessionRpcResults[M]> }
   takeControl: TakeControlResultSchema,
   setMode: SetModeResultSchema,
   "perm.answer": PermAnswerResultSchema,
+  stop: StopRpcResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack

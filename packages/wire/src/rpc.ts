@@ -307,6 +307,21 @@ export const PermAnswerResultSchema = z.object({
 export const InterruptParamsSchema = z.object({});
 export const InterruptResultSchema = z.object({ ok: z.boolean() });
 
+// `stop` (plan.md §16 "2.3 Stop session", plan-v2.md W2.3 "Stop session from
+// the web"): a session RPC, not the machine RPC `StopSessionParams/
+// ResultSchema` above — the session process is alive, connected, and owns
+// its own child, so no daemon round-trip is needed (the daemon doesn't even
+// track terminal sessions, design §A9). The machine-RPC `stopSession` stays
+// reserved for a dead/daemon-spawned session with no live session-RPC
+// target to call directly (plan-v2.md Wave 4 note).
+export const StopRpcParamsSchema = z.object({
+  /** Graceful by default (SIGTERM to the child, or the remote loop's own
+   * exit request); `force: true` additionally exits the whole CLI process
+   * after a short grace period even if the child hasn't exited yet. */
+  force: z.boolean().optional(),
+});
+export const StopRpcResultSchema = z.object({ ok: z.boolean() });
+
 export const TakeControlParamsSchema = z.object({});
 export const TakeControlResultSchema = z.object({ ok: z.boolean() });
 

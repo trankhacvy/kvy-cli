@@ -4,7 +4,23 @@ import type { PermissionMode } from "@falcon/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useSessionControl } from "@/features/session-control";
+import {
+  initialStopSessionDialogState,
+  resetStopSessionDialogState,
+  type StopSessionDialogState,
+  toStopError,
+  toStopping,
+} from "./stop-session-state";
 
 const MODES: PermissionMode[] = ["default", "acceptEdits", "plan", "bypassPermissions"];
 const MODE_LABEL: Record<PermissionMode, string> = {
@@ -57,6 +73,17 @@ export function canMutateMode(controlMode: "local" | "remote"): boolean {
  *    `setMode`, the selector drops its mutating affordance for
  *    `controlMode === "local"` and becomes a plain read-only display of the
  *    derived mode, rather than surfacing an error after every attempt.
+ *
+ * **"End session"** (plan-v2.md W2.3 "Stop session from the web") calls the
+ * `stop` session RPC behind a shadcn `Dialog` confirm — unlike the other
+ * three actions here, ending the session is destructive and irreversible
+ * from the web's point of view (the CLI process exits), so it always asks
+ * first. Available in both `controlMode`s: on the PTY flow it SIGTERMs the
+ * terminal-attached `claude` child; on the remote-loop flow it requests the
+ * loop's own exit. Not yet gated on the session's own `active`/`ended`/
+ * `failed` status (plan-v2.md U1.4 "lifecycle-status" hasn't landed on this
+ * branch, so no such status reaches this screen at all yet) — every other
+ * button here has the same gap today.
  */
 export function ControlBar({
   mode,
@@ -70,6 +97,10 @@ export function ControlBar({
   const { actions } = useSessionControl();
   const [selectedMode, setSelectedMode] = useState(mode);
   const [modeError, setModeError] = useState<string | null>(null);
+  const [stopDialogOpen, setStopDialogOpen] = useState(false);
+  const [stopDialogState, setStopDialogState] = useState<StopSessionDialogState>(
+    initialStopSessionDialogState,
+  );
 
   // The canonical mode can change underneath this component (another device
   // switched it, or a permission answer resolved by mode-switch) — stay in
@@ -83,6 +114,7 @@ export function ControlBar({
   const setModeMutation = useMutation({
     mutationFn: (next: PermissionMode) => actions.setMode(next),
   });
+  const stopMutation = useMutation({ mutationFn: () => actions.stopSession() });
 
   function handleModeChange(next: PermissionMode) {
     const previous = selectedMode;
@@ -93,6 +125,21 @@ export function ControlBar({
         setSelectedMode(previous);
         setModeError(error instanceof Error ? error.message : "Could not change the mode.");
       },
+    });
+  }
+
+  // Reset to a fresh confirm step on every open (after a prior cancel or
+  // error) — `Dialog`'s own `onOpenChange` fires for both directions.
+  function handleStopDialogOpenChange(open: boolean) {
+    if (!open) setStopDialogState(resetStopSessionDialogState());
+    setStopDialogOpen(open);
+  }
+
+  function handleConfirmStop() {
+    setStopDialogState(toStopping());
+    stopMutation.mutate(undefined, {
+      onSuccess: () => setStopDialogOpen(false),
+      onError: (error) => setStopDialogState(toStopError(error)),
     });
   }
 
@@ -139,6 +186,41 @@ export function ControlBar({
           Take control
         </Button>
       )}
+
+      <Dialog open={stopDialogOpen} onOpenChange={handleStopDialogOpenChange}>
+        <DialogTrigger asChild>
+          <Button size="sm" variant="outline" className="ml-auto">
+            End session
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>End this session?</DialogTitle>
+            <DialogDescription>
+              Ends the CLI process on the machine — the terminal user will see Claude exit.
+            </DialogDescription>
+          </DialogHeader>
+          {stopDialogState.phase === "error" && (
+            <p className="text-sm text-destructive">{stopDialogState.message}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={stopDialogState.phase === "stopping"}
+              onClick={() => handleStopDialogOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={stopDialogState.phase === "stopping"}
+              onClick={handleConfirmStop}
+            >
+              {stopDialogState.phase === "stopping" ? "Ending…" : "End session"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {modeError && <span className="text-xs text-destructive">{modeError}</span>}
       {interruptMutation.isError && (

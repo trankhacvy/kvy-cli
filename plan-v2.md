@@ -1420,12 +1420,12 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [x] W2.4: `deriveCurrentPermissionMode` + pass-through (kill hardcoded
         `"default"`); hide Take-control in PTY mode; hide mode mutation until U4.5
   - [x] Tests: plan render; selector derivation; visibility rules
-- [ ] **U2.3 `[solo]` "stop-session"** (W2.3 — WIRE+CLI+WEB)
-  - [ ] Wire: `StopRpcParams/ResultSchema` (additive-lint green)
-  - [ ] CLI: `"stop"` in `sessionRpc.ts`; handlers in both flows
+- [x] **U2.3 `[solo]` "stop-session"** (W2.3 — WIRE+CLI+WEB)
+  - [x] Wire: `StopRpcParams/ResultSchema` (additive-lint green)
+  - [x] CLI: `"stop"` in `sessionRpc.ts`; handlers in both flows
         (status-before-kill; `force`)
-  - [ ] Web: `sessionRpc.stop` + `stopSession` action + "End session" confirm dialog
-  - [ ] Tests: round-trip; ordering; dialog flow
+  - [x] Web: `sessionRpc.stop` + `stopSession` action + "End session" confirm dialog
+  - [x] Tests: round-trip; ordering; dialog flow
   - [ ] `[human]` live: stop from web → TUI exits, web "Ended"
 - [ ] **U2.4 `[human]`** Wave-2 exit: AUQ matrix + plan approval + stop, live
 

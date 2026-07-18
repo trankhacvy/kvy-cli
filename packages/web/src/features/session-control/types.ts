@@ -4,6 +4,7 @@ import type {
   MessageRpcResult,
   PermAnswerResult,
   SetModeResult,
+  StopRpcResult,
   TakeControlResult,
 } from "@/sync/sessionRpc";
 
@@ -14,7 +15,8 @@ import type {
  * `UseSessionListSnapshot` (mock by default, swapped for the real
  * `SessionRpcClient`-backed implementation once this screen's data layer —
  * the sync engine + a session-scoped crypto client — lands, a separate
- * task). Every method maps 1:1 onto one of design §4.4's five session RPCs.
+ * task). Every method maps 1:1 onto one of design §4.4's session RPCs
+ * (`stopSession` added by plan-v2.md W2.3 "Stop session from the web").
  */
 export interface SessionControlActions {
   sendMessage(envelope: SessionEnvelope): Promise<MessageRpcResult>;
@@ -22,6 +24,7 @@ export interface SessionControlActions {
   interrupt(): Promise<InterruptResult>;
   takeControl(): Promise<TakeControlResult>;
   setMode(mode: PermissionMode): Promise<SetModeResult>;
+  stopSession(force?: boolean): Promise<StopRpcResult>;
 }
 
 export type UseSessionControl = (sessionId: string) => SessionControlActions;

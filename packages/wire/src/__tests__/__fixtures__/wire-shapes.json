@@ -2669,6 +2669,27 @@
       }
     }
   },
+  "StopRpcParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "force": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "StopRpcResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
   "TakeControlResultSchema": {
     "kind": "object",
     "fields": {

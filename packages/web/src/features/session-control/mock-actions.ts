@@ -45,6 +45,10 @@ export function createMockSessionControl(_sessionId: string): SessionControlActi
       await delay(LATENCY_MS);
       return { ok: true };
     },
+    async stopSession() {
+      await delay(LATENCY_MS);
+      return { ok: true };
+    },
   };
 }
 

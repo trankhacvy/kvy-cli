@@ -90,6 +90,31 @@ describe("createSessionRpcClient", () => {
     expect(result).toEqual({ ok: false, reason: "already-answered", decision: winningDecision });
   });
 
+  it("targets 's:<sessionId>:stop' and returns the decrypted { ok } result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ ok: true }),
+      }),
+    );
+    const client = createSessionRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      sessionId: "sess-42",
+    });
+
+    const result = await client.call("stop", { force: true });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "s:sess-42:stop",
+      "stop",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    const [, , params] = rpcCall.mock.calls[0] ?? [];
+    expect(JSON.parse(params?.c ?? "null")).toEqual({ force: true });
+    expect(result).toEqual({ ok: true });
+  });
+
   it("throws SessionRpcError when the transport reports failure", async () => {
     const client = createSessionRpcClient({
       socket: fakeSocket(async () => ({ ok: false, error: "target-offline" })),
