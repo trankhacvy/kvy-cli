@@ -729,4 +729,42 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
       await rm(homeDir, { recursive: true, force: true });
     }
   });
+
+  it("stop RPC with force schedules a process exit after the grace period on the remote flow", async () => {
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-stop-force-test-"));
+    vi.useFakeTimers();
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    try {
+      const loop = vi.fn(async (options: LoopOptions) => {
+        options.onExitRequested(() => {});
+        return 0;
+      });
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
+
+      await runStartClaudeCommand(
+        baseDeps({
+          homeDir,
+          claudeArgs: ["--starting-mode", "remote"],
+          loop,
+          registerSessionRpcHandlers,
+        }),
+      );
+
+      const handlers = capturedHandlers as unknown as SessionRpcHandlers;
+      const result = await handlers.stop({ force: true });
+      expect(result).toEqual({ ok: true });
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(3000);
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      exitSpy.mockRestore();
+      vi.useRealTimers();
+      await rm(homeDir, { recursive: true, force: true });
+    }
+  });
 });
