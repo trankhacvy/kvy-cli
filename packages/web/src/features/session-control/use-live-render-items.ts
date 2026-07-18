@@ -37,12 +37,20 @@ import { useSessionCrypto } from "./use-session-crypto";
  * to trigger it yet. `decryptMessageBatches`/`reduceEnvelopes` don't care
  * about page order (see `messages.ts`'s own doc comment), so a newly-fetched
  * older page decrypts and merges in with no special-casing here.
+ *
+ * `isInitialLoading` (plan-v2.md W4.2 "skeletons for … timeline initial
+ * loads") is `messagesQuery.isLoading` — TanStack's own "no data cached yet
+ * and a fetch is in flight" signal — straight through, so
+ * `SessionTimelineScreen` can show a transcript skeleton instead of a bare
+ * empty list for the one render or two before the first page (and this
+ * session's DEK) resolve.
  */
 export function useLiveRenderItems(sessionId: string): {
   items: RenderItem[];
   error: string | null;
   hasMore: boolean;
   isLoadingMore: boolean;
+  isInitialLoading: boolean;
   loadEarlier: () => void;
 } {
   const crypto = useSessionCrypto(sessionId);
@@ -105,6 +113,7 @@ export function useLiveRenderItems(sessionId: string): {
     error,
     hasMore: messagesQuery.hasNextPage,
     isLoadingMore: messagesQuery.isFetchingNextPage,
+    isInitialLoading: messagesQuery.isLoading,
     loadEarlier: () => {
       void messagesQuery.fetchNextPage();
     },

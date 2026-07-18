@@ -36,6 +36,7 @@ import { metricsRoutes, recordHttpRequest } from "./routes/metrics.js";
 import { buildNotificationSettingsRoutes } from "./routes/notificationSettings.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
 import { buildPushRoutes } from "./routes/push.js";
+import { buildSessionArchiveRoutes } from "./routes/sessionArchive.js";
 import { buildSessionCasRoutes } from "./routes/sessionCas.js";
 import { buildSessionNotifyRoutes } from "./routes/sessionNotify.js";
 import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
@@ -187,6 +188,7 @@ export async function buildServer(
   await app.register(buildMessagesRoutes(db, eventRouter));
   await app.register(buildSessionCasRoutes(db, eventRouter));
   await app.register(buildSessionStatusRoutes(db, eventRouter, pushDispatcher));
+  await app.register(buildSessionArchiveRoutes(db, eventRouter));
   await app.register(buildSessionNotifyRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildSyncRoutes(db));
   await app.register(buildMachinesRoutes(db, eventRouter));

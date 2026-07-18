@@ -10,6 +10,7 @@ import {
   useLiveUnmanagedSessions,
   useMockUnmanagedActions,
 } from "@/features/unmanaged-sessions";
+import { SessionListSkeleton } from "./components/session-list-skeleton";
 import { WorkspaceSection } from "./components/workspace-section";
 import { groupSessionsByWorkspace } from "./group";
 import { useLiveSessionListSnapshot } from "./live-source";
@@ -53,6 +54,22 @@ export function SessionListScreen({
   const groups = useMemo(() => groupSessionsByWorkspace(snapshot), [snapshot]);
   const machinesById = useMemo(() => new Map(snapshot.machines.map((m) => [m.id, m])), [snapshot]);
   const unmanagedSnapshot = useUnmanagedSnapshot();
+
+  // Skeleton only for the true first-load window: the initial account fetch
+  // is in flight and nothing — session or unmanaged — has rendered yet. A
+  // later refetch (gap-invalidation, reconnect) never re-shows this; it just
+  // keeps whatever was already on screen (plan-v2.md W4.2 "skeletons for
+  // Home … initial loads").
+  if (snapshot.isLoading && groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
+    return (
+      <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-semibold tracking-tight">Sessions</h1>
+        </div>
+        <SessionListSkeleton />
+      </main>
+    );
+  }
 
   if (groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
     return (

@@ -409,7 +409,10 @@ export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
   const items = useDecryptedItems(sessionRows, pageResults, itemsBridge);
 
   return useMemo(
-    () => buildSnapshot(sessionRows, machineRows, titles, presence, items, attention),
-    [sessionRows, machineRows, titles, presence, items, attention],
+    () => ({
+      ...buildSnapshot(sessionRows, machineRows, titles, presence, items, attention),
+      isLoading: query.isLoading,
+    }),
+    [sessionRows, machineRows, titles, presence, items, attention, query.isLoading],
   );
 };

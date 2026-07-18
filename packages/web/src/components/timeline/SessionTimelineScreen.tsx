@@ -20,6 +20,7 @@ import {
   useLiveSessionControl,
   useSessionEphemerals,
   useSessionModelChip,
+  useSessionTitle,
   useTabAttention,
 } from "@/features/session-control";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
@@ -28,7 +29,9 @@ import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ControlBar } from "./ControlBar";
+import { SessionHeaderActions } from "./SessionHeaderActions";
 import { Timeline } from "./Timeline";
+import { TimelineSkeleton } from "./TimelineSkeleton";
 
 /**
  * Session timeline screen (falcon-system-design.md §9.2 "Session" row,
@@ -62,9 +65,11 @@ export function SessionTimelineScreen({
     error: decryptError,
     hasMore,
     isLoadingMore,
+    isInitialLoading,
     loadEarlier,
   } = useLiveRenderItems(sessionId);
   const modelChip = useSessionModelChip(sessionId);
+  const title = useSessionTitle(sessionId);
   const queryClient = useQueryClient();
   const retryDecrypt = () =>
     queryClient.invalidateQueries({ queryKey: messagesQueryKey(sessionId) });
@@ -103,12 +108,13 @@ export function SessionTimelineScreen({
     lastSeenAt: getLastSeenAt(sessionId),
   });
 
-  useTabAttention(`Session ${sessionId}`, attention, working);
+  useTabAttention(title ?? `Session ${sessionId}`, attention, working);
 
   return (
     <SessionControlProvider sessionId={sessionId} useControl={useControl}>
       <SessionTimelineBody
         sessionId={sessionId}
+        title={title}
         items={items}
         controlMode={controlMode}
         permissionMode={permissionMode}
@@ -117,6 +123,7 @@ export function SessionTimelineScreen({
         onRetryDecrypt={retryDecrypt}
         hasMore={hasMore}
         isLoadingMore={isLoadingMore}
+        isInitialLoading={isInitialLoading}
         onLoadEarlier={loadEarlier}
         modelChip={modelChip}
         sessionStatus={sessionStatus}
@@ -130,6 +137,7 @@ export function SessionTimelineScreen({
  * provider mounts. */
 function SessionTimelineBody({
   sessionId,
+  title,
   items,
   controlMode,
   permissionMode,
@@ -138,11 +146,16 @@ function SessionTimelineBody({
   onRetryDecrypt,
   hasMore,
   isLoadingMore,
+  isInitialLoading,
   onLoadEarlier,
   modelChip,
   sessionStatus,
 }: {
   sessionId: string;
+  /** Decrypted session title (`useSessionTitle`), or `null` until it's
+   * resolved — falls back to the raw `sessionId`, same as the tab-title
+   * override above. */
+  title: string | null;
   items: RenderItem[];
   controlMode: "local" | "remote";
   permissionMode: PermissionMode;
@@ -151,6 +164,9 @@ function SessionTimelineBody({
   onRetryDecrypt: () => void;
   hasMore: boolean;
   isLoadingMore: boolean;
+  /** `true` while this session's first message page + DEK unwrap are still
+   * in flight (plan-v2.md W4.2 "skeletons for … timeline initial loads"). */
+  isInitialLoading: boolean;
   onLoadEarlier: () => void;
   /** Decrypted `model` from this session's own metadata, or `null` until the
    * CLI records one there (plan-v2.md W4.2 "header model chip"). */
@@ -164,10 +180,10 @@ function SessionTimelineBody({
 
   return (
     <div className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-medium">
-            Session {sessionId}
+      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 truncate text-sm font-medium">
+            {title ?? sessionId}
             {modelChip && (
               <Badge variant="secondary" className="font-normal">
                 {modelChip}
@@ -179,9 +195,12 @@ function SessionTimelineBody({
             {controlMode === "local" ? "Local control" : "Remote control"}
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
-        </Button>
+        <div className="flex shrink-0 items-center gap-2">
+          <SessionHeaderActions sessionId={sessionId} />
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
+          </Button>
+        </div>
       </header>
       {decryptError && (
         <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
@@ -198,13 +217,17 @@ function SessionTimelineBody({
         working={working}
         disabled={isDisabled}
       />
-      <Timeline
-        items={mergedItems}
-        working={working}
-        hasMore={hasMore}
-        isLoadingMore={isLoadingMore}
-        onLoadEarlier={onLoadEarlier}
-      />
+      {isInitialLoading && items.length === 0 ? (
+        <TimelineSkeleton />
+      ) : (
+        <Timeline
+          items={mergedItems}
+          working={working}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onLoadEarlier={onLoadEarlier}
+        />
+      )}
       <Composer
         sessionId={sessionId}
         onSend={send}
