@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision, PermissionMode } from "@falcon/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +15,39 @@ import { parseEditArgs } from "@/lib/tool-args";
 import type { PermissionInfo } from "@/sync/reducer";
 import { DiffView } from "./DiffView";
 import { JsonBlock } from "./JsonBlock";
+import { Markdown } from "./Markdown";
 import { PermissionBadge } from "./PermissionBadge";
 
 const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write"]);
+
+/** Claude Code's `ExitPlanMode` tool name, either casing an adapter might
+ * use (the ACP `codex-acp`/`claude-agent-acp` adapters normalize tool names
+ * differently — plan-v2.md W2.2). */
+const EXIT_PLAN_TOOL_NAMES = new Set(["ExitPlanMode", "exit_plan_mode"]);
+
+/** Whether `name` is the plan-approval tool — drives both the markdown plan
+ * preview and the approve/keep-planning button relabeling below. */
+export function isExitPlanTool(name: string): boolean {
+  return EXIT_PLAN_TOOL_NAMES.has(name);
+}
+
+/** The plan's markdown body (`perm-request.args.plan`, falcon-prd.md
+ * FR-7.4), or `null` if `name` isn't the plan-approval tool or `args` didn't
+ * carry a string `plan` field (an adapter contract violation — falls back
+ * to the plain `JsonBlock` dump rather than a blank preview). Exported for
+ * testing without needing to render the full card (plan-v2.md W2.2). */
+export function extractPlanMarkdown(name: string, args: unknown): string | null {
+  if (!isExitPlanTool(name)) return null;
+  const plan = (args as { plan?: unknown } | undefined)?.plan;
+  return typeof plan === "string" ? plan : null;
+}
+
+const MODE_LABEL: Record<PermissionMode, string> = {
+  default: "Default",
+  acceptEdits: "Accept edits",
+  plan: "Plan",
+  bypassPermissions: "Bypass permissions",
+};
 
 /**
  * Interactive permission card (falcon-system-design.md §9.2 "Session" row:
@@ -96,6 +126,8 @@ export function PermCard({
 
   const isEdit = EDIT_TOOLS.has(name);
   const editArgs = isEdit ? parseEditArgs(args) : null;
+  const isExitPlan = isExitPlanTool(name);
+  const planMd = extractPlanMarkdown(name, args);
 
   return (
     <div
@@ -136,6 +168,10 @@ export function PermCard({
               />
             ))}
           </div>
+        ) : planMd ? (
+          <div className="max-h-96 overflow-y-auto rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+            <Markdown md={planMd} />
+          </div>
         ) : (
           args !== undefined && <JsonBlock value={args} />
         ))}
@@ -148,7 +184,7 @@ export function PermCard({
           disabled={submitting}
           onClick={() => submit({ kind: "allow", scope: "once" })}
         >
-          Allow
+          {isExitPlan ? "Approve plan" : "Allow"}
         </Button>
         <Button
           size="sm"
@@ -166,7 +202,7 @@ export function PermCard({
             disabled={submitting}
             onClick={() => submit({ kind: "mode", mode })}
           >
-            Switch to {mode}
+            {isExitPlan ? `Approve & ${MODE_LABEL[mode]}` : `Switch to ${mode}`}
           </Button>
         ))}
         <Button
@@ -175,7 +211,7 @@ export function PermCard({
           disabled={submitting}
           onClick={() => submit({ kind: "deny" })}
         >
-          Deny
+          {isExitPlan ? "Keep planning" : "Deny"}
         </Button>
       </div>
     </div>

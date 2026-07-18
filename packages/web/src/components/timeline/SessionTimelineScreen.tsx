@@ -1,5 +1,6 @@
 "use client";
 
+import type { PermissionMode } from "@falcon/wire";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   deriveAttention,
   deriveControlMode,
+  deriveCurrentPermissionMode,
   getLastSeenAt,
   isTurnOpen,
   markSeenNow,
@@ -73,6 +75,7 @@ export function SessionTimelineScreen({
   // each update (which `useLiveRenderItems` produces on every decrypt+reduce
   // pass, live-updated by the sync engine).
   const controlMode = deriveControlMode(items);
+  const permissionMode = deriveCurrentPermissionMode(items);
   const attention = deriveAttention({
     items,
     ephemeralAttentionKind: attentionKind,
@@ -87,6 +90,7 @@ export function SessionTimelineScreen({
         sessionId={sessionId}
         items={items}
         controlMode={controlMode}
+        permissionMode={permissionMode}
         working={working}
         decryptError={decryptError}
         onRetryDecrypt={retryDecrypt}
@@ -102,6 +106,7 @@ function SessionTimelineBody({
   sessionId,
   items,
   controlMode,
+  permissionMode,
   working,
   decryptError,
   onRetryDecrypt,
@@ -109,6 +114,7 @@ function SessionTimelineBody({
   sessionId: string;
   items: RenderItem[];
   controlMode: "local" | "remote";
+  permissionMode: PermissionMode;
   working: boolean;
   decryptError: string | null;
   onRetryDecrypt: () => void;
@@ -138,7 +144,7 @@ function SessionTimelineBody({
           </Button>
         </div>
       )}
-      <ControlBar mode="default" controlMode={controlMode} working={working} />
+      <ControlBar mode={permissionMode} controlMode={controlMode} working={working} />
       <Timeline items={mergedItems} working={working} />
       <Composer
         onSend={send}

@@ -21,7 +21,7 @@ export {
   SessionControlProvider,
   useSessionControl,
 } from "./session-control-context";
-export { deriveControlMode, isTurnOpen } from "./session-state";
+export { deriveControlMode, deriveCurrentPermissionMode, isTurnOpen } from "./session-state";
 export { computeTabTitle, faviconColor, faviconDataUri } from "./tab-attention";
 export type { SessionControlActions, UseSessionControl } from "./types";
 export type { ComposerState } from "./use-composer-state";
