@@ -1,4 +1,5 @@
 import { SessionTimelineScreen } from "@/components/timeline/SessionTimelineScreen";
+import { RequireAuth } from "@/features/auth";
 
 // Static export (next.config.ts) prerenders every route at build time — no
 // server ever renders user content (design §5.3), and real session ids are
@@ -15,5 +16,9 @@ export function generateStaticParams() {
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <SessionTimelineScreen sessionId={id} />;
+  return (
+    <RequireAuth>
+      <SessionTimelineScreen sessionId={id} />
+    </RequireAuth>
+  );
 }

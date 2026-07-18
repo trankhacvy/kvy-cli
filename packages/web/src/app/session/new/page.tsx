@@ -1,3 +1,4 @@
+import { RequireAuth } from "@/features/auth";
 import { NewSessionScreen } from "@/features/new-session";
 
 // The New Session flow (design §9.2 "New session" row, falcon-prd.md
@@ -8,5 +9,9 @@ import { NewSessionScreen } from "@/features/new-session";
 // injectable seams that swap in the real machine list + machine RPC client
 // later.
 export default function NewSessionPage() {
-  return <NewSessionScreen />;
+  return (
+    <RequireAuth>
+      <NewSessionScreen />
+    </RequireAuth>
+  );
 }

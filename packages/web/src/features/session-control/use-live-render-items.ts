@@ -6,6 +6,7 @@ import { getSessionMessages } from "@/lib/api";
 import { getToken } from "@/lib/session";
 import { decryptMessageBatches, messagesQueryKey } from "@/sync";
 import { type RenderItem, reduceEnvelopes } from "@/sync/reducer";
+import { formatDecryptError } from "./decrypt-error";
 import { useSessionCrypto } from "./use-session-crypto";
 
 /**
@@ -26,8 +27,16 @@ import { useSessionCrypto } from "./use-session-crypto";
  * Only the most recent page is fetched — older history ("load more") isn't
  * wired into `Timeline` yet, matching its current read-only, non-paginated
  * scroll container.
+ *
+ * `error` (W1.10, plan.md §16 wave 1) surfaces a page-level decrypt failure
+ * — previously only `console.error`'d — so `SessionTimelineScreen` can show
+ * an inline destructive banner with a "Retry" instead of silently rendering
+ * an empty/stale transcript.
  */
-export function useLiveRenderItems(sessionId: string): RenderItem[] {
+export function useLiveRenderItems(sessionId: string): {
+  items: RenderItem[];
+  error: string | null;
+} {
   const crypto = useSessionCrypto(sessionId);
   const messagesQuery = useInfiniteQuery({
     queryKey: messagesQueryKey(sessionId),
@@ -42,12 +51,15 @@ export function useLiveRenderItems(sessionId: string): RenderItem[] {
   });
 
   const [items, setItems] = useState<RenderItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   // Clears immediately on a session switch so the previous session's items
-  // never flash while the new session's first page is still in flight.
+  // (and any stale error banner) never flash while the new session's first
+  // page is still in flight.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `sessionId` isn't read inside the effect body — it's the reset trigger itself (re-run, not re-derive, on session switch).
   useEffect(() => {
     setItems([]);
+    setError(null);
   }, [sessionId]);
 
   useEffect(() => {
@@ -55,19 +67,24 @@ export function useLiveRenderItems(sessionId: string): RenderItem[] {
     let cancelled = false;
     decryptMessageBatches(messagesQuery.data.pages, crypto)
       .then((envelopes) => {
-        if (!cancelled) setItems(reduceEnvelopes(envelopes));
+        if (!cancelled) {
+          setItems(reduceEnvelopes(envelopes));
+          setError(null);
+        }
       })
       .catch((err) => {
         // `decryptMessageBatches` itself already logs + drops any individual
         // bad row (design principle: no silent failures) — this only fires
         // for a total failure (e.g. the crypto worker crashing mid-batch,
         // `client.ts`'s `rejectAllPending`), which must stay visible too
-        // rather than becoming an unhandled rejection under this effect.
+        // rather than becoming an unhandled rejection under this effect —
+        // and, per W1.10, in the UI itself rather than only the console.
         if (!cancelled) {
           console.error(
             `useLiveRenderItems: failed to decrypt session ${sessionId}'s messages`,
             err,
           );
+          setError(formatDecryptError(err));
         }
       });
     return () => {
@@ -75,5 +92,5 @@ export function useLiveRenderItems(sessionId: string): RenderItem[] {
     };
   }, [crypto, messagesQuery.data, sessionId]);
 
-  return items;
+  return { items, error };
 }

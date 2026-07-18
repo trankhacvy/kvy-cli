@@ -10,6 +10,19 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
+  // tsconfig.json sets `"jsx": "preserve"` (Next's own SWC compiler does the
+  // real transform at build time — tsc never touches it). Vite's esbuild
+  // pretransform has no bundler-level JSX plugin registered here to fall
+  // back to, so without an explicit mode it leaves `.tsx` JSX untransformed
+  // as classic `React.createElement` calls with no matching `React` import
+  // (this app uses the automatic runtime everywhere, same as Next). W1.10's
+  // `app/error.tsx`/`app/not-found.tsx` tests are this file's first ones to
+  // actually render a project `.tsx` component's JSX (via
+  // `react-dom/server`'s `renderToStaticMarkup`) rather than only import
+  // plain functions from one, so this wasn't needed before.
+  esbuild: {
+    jsx: "automatic",
+  },
   test: {
     globals: false,
     environment: "node",

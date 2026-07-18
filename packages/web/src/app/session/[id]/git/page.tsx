@@ -1,3 +1,4 @@
+import { RequireAuth } from "@/features/auth";
 import { GitDiffPanel } from "@/features/git-diff";
 
 // Static export (next.config.ts) prerenders every route at build time (same
@@ -13,13 +14,15 @@ export function generateStaticParams() {
 export default async function SessionGitPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="border-b border-border px-4 py-3">
-        <p className="text-sm font-medium">Session {id} — Changed files</p>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <GitDiffPanel machineId={`mach-${id}`} worktree={`/workspace/${id}`} />
+    <RequireAuth>
+      <div className="flex h-dvh flex-col">
+        <header className="border-b border-border px-4 py-3">
+          <p className="text-sm font-medium">Session {id} — Changed files</p>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <GitDiffPanel machineId={`mach-${id}`} worktree={`/workspace/${id}`} />
+        </div>
       </div>
-    </div>
+    </RequireAuth>
   );
 }

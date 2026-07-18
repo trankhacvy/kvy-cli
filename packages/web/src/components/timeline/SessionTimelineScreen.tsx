@@ -1,5 +1,6 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
   useSessionEphemerals,
   useTabAttention,
 } from "@/features/session-control";
+import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ControlBar } from "./ControlBar";
@@ -49,7 +51,10 @@ export function SessionTimelineScreen({
   sessionId: string;
   useControl?: UseSessionControl;
 }) {
-  const items = useLiveRenderItems(sessionId);
+  const { items, error: decryptError } = useLiveRenderItems(sessionId);
+  const queryClient = useQueryClient();
+  const retryDecrypt = () =>
+    queryClient.invalidateQueries({ queryKey: messagesQueryKey(sessionId) });
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -83,6 +88,8 @@ export function SessionTimelineScreen({
         items={items}
         controlMode={controlMode}
         working={working}
+        decryptError={decryptError}
+        onRetryDecrypt={retryDecrypt}
       />
     </SessionControlProvider>
   );
@@ -96,11 +103,15 @@ function SessionTimelineBody({
   items,
   controlMode,
   working,
+  decryptError,
+  onRetryDecrypt,
 }: {
   sessionId: string;
   items: RenderItem[];
   controlMode: "local" | "remote";
   working: boolean;
+  decryptError: string | null;
+  onRetryDecrypt: () => void;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, error, notice } =
     useComposerState(items);
@@ -119,6 +130,14 @@ function SessionTimelineBody({
           <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
         </Button>
       </header>
+      {decryptError && (
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
+          <p className="text-sm text-destructive">{decryptError}</p>
+          <Button type="button" variant="outline" size="sm" onClick={onRetryDecrypt}>
+            Retry
+          </Button>
+        </div>
+      )}
       <ControlBar mode="default" controlMode={controlMode} working={working} />
       <Timeline items={mergedItems} />
       <Composer
