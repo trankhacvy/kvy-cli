@@ -1438,11 +1438,11 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
         web `<img>` render for `inline:`
   - [ ] W3.3: static `risk` map on tool-start; `service` envelopes from start.ts
   - [ ] Tests: mapper fixtures (images, risk); web render
-- [ ] **U3.3 `[bundle]` "machine-rpc-web"** (W3.4+W3.5 — shared
+- [x] **U3.3 `[bundle]` "machine-rpc-web"** (W3.4+W3.5 — shared
       `use-machine-crypto.ts`)
-  - [ ] `use-machine-crypto.ts` (per-machine DEK unwrap)
-  - [ ] W3.4: live machines list + live spawn; swap `new-session-screen` defaults
-  - [ ] W3.5: real machineId/worktree into git route; default
+  - [x] `use-machine-crypto.ts` (per-machine DEK unwrap)
+  - [x] W3.4: live machines list + live spawn; swap `new-session-screen` defaults
+  - [x] W3.5: real machineId/worktree into git route; default
         `machineRpcToGitDiffActions`
   - [ ] `[human]` live: spawn from web; git status/diff on a dirty worktree
 - [ ] **U3.4 `[bundle]` "home-live"** (W3.6+W3.10 — `features/session-list/`)

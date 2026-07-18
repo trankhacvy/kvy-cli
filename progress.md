@@ -54,6 +54,39 @@ its state before the next cycle picks a unit.
   `pretoolPermissionBridge.ts`/`remotePermissionHook.ts`, same files U1.2 just landed
   in; good next pick while that context is warm.
 
+## v2-pty-injection Cycle 3 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U3.3 `[bundle]` "machine-rpc-web" — `53f5350021f5e5a4ae0ebbbf43224dd1a1e55790`
+  (W3.4+W3.5 — shared `use-machine-crypto.ts`)
+  - `use-machine-crypto.ts` (per-machine DEK unwrap)
+  - W3.4: live machines list + live spawn; swap `new-session-screen` defaults
+  - W3.5: real machineId/worktree into git route; default `machineRpcToGitDiffActions`
+
+**Parked units:**
+- U1.4 — parked this cycle, worktree/branch left in place at `.worktrees/U1.4` /
+  `wf/U1.4` (tip `d4cb7ec`) for human inspection; not touched.
+
+**Verification:** `git merge-base --is-ancestor 53f5350021f5e5a4ae0ebbbf43224dd1a1e55790
+v2-pty-injection` confirmed ancestry. `pnpm typecheck` — all 11 turbo tasks successful
+(cache-hit, `>>> FULL TURBO`), including a fresh static export/typecheck of `@falcon/web`.
+Worktree `.worktrees/U3.3` and branch `wf/U3.3` removed. plan-v2.md's U3.3 non-`[human]`
+sub-boxes + unit box flipped to `[x]`; the `[human]` live-check sub-box left unchecked
+pending manual verification.
+
+**Note:** `.worktrees/U2.3` (`wf/U2.3`, tip `cb3f127`) and `.worktrees/U3.2`
+(`wf/U3.2`, tip `a65e039`) also exist on disk but were not part of this cycle's
+merged/failed lists — left untouched; worth checking their state before the next
+cycle picks a unit.
+
+**Next recommended units:**
+- U1.4 `[solo]` "lifecycle-status" — investigate parked worktree state before
+  restarting or re-parking.
+- U3.4 `[bundle]` "home-live" (W3.6+W3.10 — `features/session-list/`) — next
+  unstarted unit in Master TODO order after U3.3.
+
 ## Cycle 76 — 2026-07-18
 
 **Branch checked:** `main` (HEAD `cc3e9ae` — "chore: cycle 75 — completed 0 tasks (2
