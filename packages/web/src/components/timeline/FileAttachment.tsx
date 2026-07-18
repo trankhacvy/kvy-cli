@@ -10,6 +10,55 @@ import type { FileItem } from "@/sync/reducer";
 
 type DownloadState = "idle" | "downloading" | "error";
 
+/** `envelopeMapper.ts`'s inline-image ref prefix (plan-v2.md W3.2) — a
+ * transcript image small enough (≤256KB) to inline directly into the wire
+ * `file` event rather than go through the (not-yet-built-on-the-CLI) blob
+ * upload path `item.ref`'s other case (a real `blobId`) uses. */
+const INLINE_REF_PREFIX = "inline:";
+
+export function isInlineFileRef(ref: string): boolean {
+  return ref.startsWith(INLINE_REF_PREFIX);
+}
+
+/** `inline:` refs carry only base64 bytes, no media type (plan-v2.md W3.2's
+ * wire shape) — the CLI names the file `image.<ext>` from the source media
+ * type when it mints the envelope (`envelopeMapper.ts`'s `imageFileName()`),
+ * so this is that mapping's inverse. Defaults to PNG for an unrecognized/
+ * missing extension — always a plausible guess since this path only ever
+ * renders images. */
+const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+};
+
+function inferImageMimeType(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  return MIME_TYPE_BY_EXTENSION[ext] ?? "image/png";
+}
+
+/**
+ * Renders an inline (`ref: "inline:<base64>"`) image directly as an `<img>`
+ * — no download/decrypt round trip, the bytes are already sitting plaintext
+ * in the envelope. Deliberately hook-free (unlike `FileAttachment` below) so
+ * it's unit-testable the same way `tool-cards/registry.test.ts` tests its
+ * dispatch: call it directly and inspect the returned element, no DOM/render
+ * environment needed.
+ */
+export function InlineImageAttachment({ item }: { item: FileItem }) {
+  const base64 = item.ref.slice(INLINE_REF_PREFIX.length);
+  const mimeType = inferImageMimeType(item.name);
+  return (
+    <img
+      src={`data:${mimeType};base64,${base64}`}
+      alt={item.name}
+      className="max-h-80 max-w-[85%] rounded-md border border-border object-contain"
+    />
+  );
+}
+
 /**
  * Renders a `file` transcript entry and, on click, downloads + decrypts the
  * attachment (the read half of the encrypted attachment path, plan.md §16
@@ -17,12 +66,18 @@ type DownloadState = "idle" | "downloading" | "error";
  * half). `item.ref` is the blob-storage `blobId`; decryption reuses the
  * same session blob key `Composer`'s upload path encrypted under
  * (`useSessionCrypto`, one instance per session shared with the rest of
- * this screen).
+ * this screen). An `inline:` ref (plan-v2.md W3.2 — a small transcript
+ * image with no blob to download) short-circuits straight to
+ * `InlineImageAttachment` instead.
  */
 export function FileAttachment({ item }: { item: FileItem }) {
   const { sessionId } = useSessionControl();
   const cryptoBridge = useSessionCrypto(sessionId);
   const [state, setState] = useState<DownloadState>("idle");
+
+  if (isInlineFileRef(item.ref)) {
+    return <InlineImageAttachment item={item} />;
+  }
 
   async function handleDownload() {
     const token = getToken();

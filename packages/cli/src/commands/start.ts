@@ -68,10 +68,10 @@
  */
 import path from "node:path";
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
-import type { PermissionMode } from "@falcon/wire";
+import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
-import { Outbox } from "../api/outbox.js";
+import { Outbox, type OutboxOptions } from "../api/outbox.js";
 import { resolveBackendUrl } from "../auth/config.js";
 import {
   type FalconCredentials,
@@ -117,6 +117,12 @@ import {
 const MASTER_SECRET_LENGTH_BYTES = 32;
 const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
 
+/** The minimal `Outbox` surface this module depends on — the real `Outbox` satisfies it structurally; a test fake can capture `enqueue` calls without a disk queue/HTTP client. */
+export interface OutboxLike {
+  enqueue(events: readonly SessionEnvelope[]): void;
+  dispose(): void;
+}
+
 // The daemon persists `machineId` to `daemon.state.json` only once its own
 // (async, network-bound) machine registration completes — see
 // `machineIntegration.ts` — which can land a beat after `ensureDaemon()`
@@ -161,6 +167,8 @@ export interface StartClaudeCommandDeps {
   startSessionClient?: typeof startSessionClientDefault;
   /** Injectable for tests; defaults to the real `registerSessionRpcHandlers()`. */
   registerSessionRpcHandlers?: typeof registerSessionRpcHandlers;
+  /** Injectable for tests; defaults to the real `Outbox`. */
+  createOutbox?: (options: OutboxOptions) => OutboxLike;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   write?: (text: string) => void;
@@ -239,6 +247,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
   const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
+  const createOutbox = deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
 
   // 1. Never touch the network without credentials (no silent failures).
   const credentials = readCreds(deps.homeDir);
@@ -320,7 +329,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // 5. Outbox mirrors every transcript envelope to the server; disposed
   // (buffered-but-unsealed envelopes flushed to the on-disk queue, not
   // necessarily sent) once the local session ends.
-  const outbox = new Outbox({
+  const outbox = createOutbox({
     sessionId: bootstrap.sessionId,
     dek: bootstrap.dek,
     http: createHttpClient({
@@ -497,6 +506,13 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     );
     ptyHandle = ptySession;
 
+    // A lifecycle moment the web timeline should see even though nothing in
+    // the Claude Code transcript itself says it (plan-v2.md W3.3) — the PTY
+    // is spawned (or, if `runPtySession`'s own setup failed, about to report
+    // that below via a non-zero `done` exit code; `ptyClaudeSession.ts`'s
+    // `done` never rejects, so a spawn failure is only observable that way).
+    outbox.enqueue([createEnvelope("agent", { t: "service", text: "session started" })]);
+
     const rpcHandlers: SessionRpcHandlers = {
       message: async ({ envelope }) => {
         const begin = await beginSend(envelope);
@@ -531,13 +547,26 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       logger,
     });
 
+    let exitCode: number;
     try {
-      return await ptySession.done;
+      exitCode = await ptySession.done;
     } finally {
       ptySession.stop();
       rpcHandle.stop();
       if (permHook) await permHook.stop();
     }
+    // A non-zero code covers both a normal non-zero `claude` exit AND
+    // `ptyClaudeSession.ts`'s own internal setup/spawn-failure path (its
+    // `run()` catch resolves `done(1)` — there is no separate signal for
+    // "spawn failed" vs "the child genuinely exited 1").
+    outbox.enqueue([
+      createEnvelope("agent", {
+        t: "service",
+        text:
+          exitCode === 0 ? "session ended" : `session ended unexpectedly (exit code ${exitCode})`,
+      }),
+    ]);
+    return exitCode;
   }
 
   /**

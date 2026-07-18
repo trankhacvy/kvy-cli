@@ -45,7 +45,7 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
     expect(envelopes[0]?.turn).toBeUndefined();
   });
 
-  it("maps non-tool user array content to user text without opening a turn", () => {
+  it("maps non-tool user array content to user text + an inline file envelope for the image, without opening a turn", () => {
     const state = createClaudeEnvelopeMapperState();
     const envelopes = mapClaudeToEnvelopes(
       {
@@ -64,10 +64,14 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
     );
 
     expect(state.currentTurnId).toBeNull();
-    expect(envelopes).toHaveLength(1);
+    expect(envelopes).toHaveLength(2);
     expect(envelopes[0]).toMatchObject({
       role: "user",
       ev: { t: "text", md: "look at this image" },
+    });
+    expect(envelopes[1]).toMatchObject({
+      role: "user",
+      ev: { t: "file", ref: "inline:abc", name: "image.png", size: 2 },
     });
   });
 
@@ -250,6 +254,150 @@ describe("mapClaudeToEnvelopes — tool call lifecycle", () => {
     if (c1?.ev.t === "tool-start" && c2?.ev.t === "tool-start") {
       expect(c1.ev.call).toBe(c2.ev.call);
     }
+  });
+});
+
+/** plan-v2.md W3.3 — PTY-path parity: the same static `RISK_BY_KIND`-style
+ * map ACP's `acpToEnvelope.ts` uses, ported to Claude Code's raw tool names. */
+describe("mapClaudeToEnvelopes — static tool risk map", () => {
+  function toolStart(name: string, callId: string): RawJSONLines {
+    return {
+      type: "assistant",
+      uuid: `a-risk-${callId}`,
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: callId, name, input: {} }],
+      },
+    } as unknown as RawJSONLines;
+  }
+
+  it.each([
+    ["Bash", "exec"],
+    ["Edit", "write"],
+    ["Write", "write"],
+    ["MultiEdit", "write"],
+    ["NotebookEdit", "write"],
+    ["Read", "read"],
+    ["Grep", "read"],
+    ["Glob", "read"],
+    ["LS", "read"],
+    ["WebFetch", "network"],
+    ["WebSearch", "network"],
+  ] as const)("tags %s tool-start with risk %s", (name, risk) => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(toolStart(name, `toolu_${name}`), state);
+    const start = envelopes.find((e) => e.ev.t === "tool-start");
+    expect(start?.ev).toMatchObject({ name, risk });
+  });
+
+  it("leaves risk unset for a tool name outside the static map", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(toolStart("SomeMcpTool", "toolu_mcp"), state);
+    const start = envelopes.find((e) => e.ev.t === "tool-start");
+    expect(start?.ev.t === "tool-start" && "risk" in start.ev).toBe(false);
+  });
+});
+
+/** plan-v2.md W3.2 — image blocks -> wire `file` envelopes (inline, ≤256KB)
+ * or a `service` fallback note when the payload is too large. */
+describe("mapClaudeToEnvelopes — image blocks", () => {
+  it("maps a small image tool_result nested content block to an inline file envelope after its tool-end", () => {
+    const state = createClaudeEnvelopeMapperState();
+    mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "a-img-1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "toolu_read_img", name: "Read", input: { file_path: "x.png" } },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "u-img-1",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_read_img",
+              content: [
+                { type: "text", text: "here is the image" },
+                {
+                  type: "image",
+                  source: { type: "base64", media_type: "image/jpeg", data: "aGVsbG8=" },
+                },
+              ],
+            },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    const endIndex = envelopes.findIndex((e) => e.ev.t === "tool-end");
+    const fileEnvelope = envelopes.find((e) => e.ev.t === "file");
+    expect(endIndex).toBeGreaterThanOrEqual(0);
+    expect(fileEnvelope).toBeDefined();
+    expect(envelopes.indexOf(fileEnvelope!)).toBeGreaterThan(endIndex);
+    expect(fileEnvelope?.ev).toMatchObject({
+      t: "file",
+      ref: "inline:aGVsbG8=",
+      name: "image.jpg",
+    });
+    // tool-end's own `output` keeps the raw (untouched) content array too.
+    const endEnvelope = envelopes.find((e) => e.ev.t === "tool-end");
+    expect(endEnvelope?.ev).toMatchObject({ ok: true });
+  });
+
+  it("falls back to a service note when the inline image would exceed the 256KB cap", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const hugeBase64 = "A".repeat(400_000); // ~300KB decoded, over the cap
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "u-img-big",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "image",
+              source: { type: "base64", media_type: "image/png", data: hugeBase64 },
+            },
+          ],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]).toMatchObject({
+      role: "user",
+      ev: { t: "service", text: "image omitted (too large)" },
+    });
+  });
+
+  it("ignores an image block with an unrecognized source shape instead of crashing", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "u-img-bad",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: [{ type: "image", source: { type: "url", url: "https://example.com/x.png" } }],
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(0);
   });
 });
 
