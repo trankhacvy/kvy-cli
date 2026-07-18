@@ -7,8 +7,8 @@ import {
   UnmanagedSection,
   type UseUnmanagedActions,
   type UseUnmanagedSessionsSnapshot,
+  useLiveUnmanagedSessions,
   useMockUnmanagedActions,
-  useMockUnmanagedSessions,
 } from "@/features/unmanaged-sessions";
 import { WorkspaceSection } from "./components/workspace-section";
 import { groupSessionsByWorkspace } from "./group";
@@ -31,14 +31,18 @@ import type { UseSessionListSnapshot } from "./types";
  * an injectable prop so a test can still pass `useMockSessionListData`
  * without touching `WorkspaceSection`/`SessionCard`.
  *
- * `useUnmanagedSnapshot`/`useUnmanagedActions` are still mock-backed — wiring
- * the unmanaged-sessions section to live data is separate, not-yet-landed
- * follow-up work (out of scope here: this task only wires the managed
- * session list).
+ * `useUnmanagedSnapshot` defaults to the real `useLiveUnmanagedSessions`
+ * (`features/unmanaged-sessions/live-source.ts`) — same `['sync']` snapshot,
+ * live rows. `useUnmanagedActions` stays mock-backed: the `adopt.mirror`/
+ * `adopt.take` RPCs need a live per-machine crypto client this screen
+ * doesn't have yet (plan.md §16 W3.10's own scope note), so `actionsDisabled`
+ * is passed alongside it to grey out `UnmanagedSection`'s "View"/"Take over"
+ * entry points instead of letting them silently pretend to succeed against a
+ * real row.
  */
 export function SessionListScreen({
   useData = useLiveSessionListSnapshot,
-  useUnmanagedSnapshot = useMockUnmanagedSessions,
+  useUnmanagedSnapshot = useLiveUnmanagedSessions,
   useUnmanagedActions = useMockUnmanagedActions,
 }: {
   useData?: UseSessionListSnapshot;
@@ -76,7 +80,16 @@ export function SessionListScreen({
       {groups.map((group) => (
         <WorkspaceSection key={group.workspace.id} group={group} machinesById={machinesById} />
       ))}
-      <UnmanagedSection useSnapshot={useUnmanagedSnapshot} useActions={useUnmanagedActions} />
+      <UnmanagedSection
+        useSnapshot={useUnmanagedSnapshot}
+        useActions={useUnmanagedActions}
+        // `adopt.mirror`/`adopt.take` have no live per-machine crypto client
+        // wired into this screen yet (see this component's own doc comment)
+        // — hardcoded true, not a prop, since it tracks this call site's
+        // actual capability rather than being something a caller should
+        // toggle independently of which `useUnmanagedActions` is plugged in.
+        actionsDisabled
+      />
     </main>
   );
 }

@@ -26,10 +26,17 @@ export function UnmanagedSessionCard({
   session,
   machine,
   useActions,
+  actionsDisabled = false,
 }: {
   session: UnmanagedSessionItem;
   machine: SessionListMachine | null;
   useActions: UseUnmanagedActions;
+  /** True when `useActions` is still mock-backed against real (non-fixture)
+   * session data — mirror/take-over would silently pretend to succeed
+   * against a row the daemon actually owns, so the entry points are greyed
+   * out instead (plan.md §16 W3.10: "render read-only rows first"). Default
+   * `false` keeps existing mock-driven call sites fully interactive. */
+  actionsDisabled?: boolean;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const actions = useActions(session.machineId);
@@ -62,21 +69,34 @@ export function UnmanagedSessionCard({
         </Badge>
         {machine && <MachineBadge machine={machine} />}
         <div className="ml-auto flex gap-1.5">
-          <Button asChild size="sm" variant="outline">
-            <Link href={`/session/unmanaged/${session.id}/`}>View</Link>
-          </Button>
-          <Button size="sm" onClick={() => setDialogOpen(true)}>
+          {actionsDisabled ? (
+            <Button size="sm" variant="outline" disabled title="Live viewing isn't wired up yet">
+              View
+            </Button>
+          ) : (
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/session/unmanaged/${session.id}/`}>View</Link>
+            </Button>
+          )}
+          <Button
+            size="sm"
+            disabled={actionsDisabled}
+            title={actionsDisabled ? "Adoption isn't wired up yet" : undefined}
+            onClick={() => setDialogOpen(true)}
+          >
             Take over
           </Button>
         </div>
       </CardContent>
 
-      <TakeOverDialog
-        session={session}
-        actions={actions}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
+      {!actionsDisabled && (
+        <TakeOverDialog
+          session={session}
+          actions={actions}
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+        />
+      )}
     </Card>
   );
 }

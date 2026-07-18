@@ -1,18 +1,26 @@
 "use client";
 
 import { decodeBase64 } from "@falcon/crypto/web";
-import type { MachineRow, SessionRow } from "@falcon/wire";
+import type { Ephemeral, MachineRow, SessionRow } from "@falcon/wire";
+import { useQueries } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
+import type { EphemeralSource } from "@/features/session-control";
+import { getSessionMessages } from "@/lib/api";
+import { getToken } from "@/lib/session";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
+import { apiSocket, decryptMessageBatches, type MessagesQueryData, messagesQueryKey } from "@/sync";
+import { type RenderItem, reduceEnvelopes } from "@/sync/reducer";
 import type {
+  AttentionKind,
   SessionListMachine,
   SessionListSession,
   SessionListSnapshot,
   SessionListWorkspace,
   UseSessionListSnapshot,
 } from "./types";
+import { deriveMachineOnline, useMachinePresence } from "./use-machine-presence";
 
 /**
  * The Home screen's real `UseSessionListSnapshot` (falcon-system-design.md
@@ -41,24 +49,25 @@ import type {
  * codebase's "no silent failures, no silent data loss" design principle
  * (`@falcon/crypto`'s `open()` doc comment).
  *
- * Not yet wired (documented here as follow-ups, not blockers — see this
- * task's own scope note): per-session `items`/`attention` are always
- * `[]`/`null`, since deriving those needs each session's decrypted message
- * transcript (`features/session-control/use-live-render-items.ts`'s job,
- * out of scope for a session list of many sessions) or the live `ephemeral`
- * stream (`apiSocket.on('ephemeral', ...)`, `use-session-ephemerals.ts`'s
- * per-session pattern) fanned out across every visible session — a
- * reasonable next step, not required for a first real-data pass per this
- * task's brief. `machineOnline` is a `lastSeenAt`-recency heuristic, not the
- * live `machine-presence` ephemeral — same reasoning.
+ * Status inputs (plan.md §16 W3.6 "Home screen real status dots +
+ * presence"): `machineOnline` prefers the live `machine-presence` ephemeral
+ * (`use-machine-presence.ts`, shared with `features/unmanaged-sessions`),
+ * falling back to the `lastSeenAt` heuristic until this machine's first
+ * live event arrives. Per-session `items` come from that session's *most
+ * recent* page of `GET /v1/sessions/:id/messages` (`useSessionMessagePages`
+ * below, one `useQueries` entry per session — deliberately the real
+ * `messagesQueryKey` so `sync/engine.ts`'s per-session message fast-path
+ * keeps a rendered row's page current across `message-new` events, exactly
+ * like the Timeline's own `useLiveRenderItems`), decrypted sequentially
+ * against one shared bridge (`useDecryptedItems`, same one-active-key-at-once
+ * reasoning as `useDecryptedTitles` below) and reduced via the real
+ * `reduceEnvelopes`. `attention` comes from the live `attention` ephemeral
+ * (`useLiveAttention`) — the wire's `SessionEvent` union has no "agent asked
+ * a question" variant, so this is the only source for it, mirroring
+ * `features/session-control/use-session-ephemerals.ts`'s per-session
+ * pattern but fanned across every row this hook is given rather than one
+ * open session at a time.
  */
-
-/** A machine is considered online if its heartbeat (`machineClient.ts`'s
- * `heartbeatIntervalMs`, 60s by default) landed within this window — three
- * missed beats' worth of slack before flipping to "offline", rather than
- * subscribing to the live `machine-presence` ephemeral (a further follow-up,
- * see this module's doc comment). */
-const MACHINE_ONLINE_WINDOW_MS = 3 * 60_000;
 
 const UNTITLED_SESSION = "(untitled session)";
 const UNNAMED_MACHINE = "(unnamed machine)";
@@ -180,21 +189,158 @@ function useDecryptedTitles(
   return titles;
 }
 
-function isMachineOnline(machine: MachineRow, now: number): boolean {
-  return machine.lastSeenAt !== null && now - machine.lastSeenAt <= MACHINE_ONLINE_WINDOW_MS;
+/** The newest cached message's `seq` for a fetched page, or `0` for a
+ * genuinely empty (but fetched) page — mirrors `sync/engine.ts`'s own
+ * `msgSeqBaseline`, used here as the cheap "has this session's page actually
+ * changed" cache key so `useDecryptedItems` only re-decrypts sessions whose
+ * fetched data moved (a fresh `message-new` fast-patch, or the initial
+ * fetch), not every session on every render. */
+export function newestSeq(data: MessagesQueryData | undefined): number | undefined {
+  return data?.pages[0]?.messages[0]?.seq ?? (data ? 0 : undefined);
 }
 
-function buildSnapshot(
+/**
+ * One `useQueries` entry per session, each at the *real* `messagesQueryKey`
+ * (`@/sync`) fetching only the newest page (no `before` cursor) — the same
+ * cache key `features/session-control/use-live-render-items.ts`'s
+ * `useInfiniteQuery` reads/writes for the Timeline, and the one
+ * `sync/engine.ts`'s per-session message fast-path patches on every
+ * `message-new` WS event. Sharing the key (not just the shape) is what keeps
+ * a Home-screen row's status live without a second sync mechanism: opening
+ * that session's Timeline later reuses this exact cached page instead of
+ * re-fetching, and a `message-new` for a row currently rendered on Home
+ * keeps it patched even before the Timeline is ever opened.
+ *
+ * `useQueries` (rather than calling a hook once per session inside a
+ * `.map()`) is what makes this safe against a session list whose length
+ * changes across renders — TanStack Query's own array-of-queries hook is
+ * built for exactly that; a hand-rolled loop over `useQuery` calls would not
+ * satisfy the Rules of Hooks here.
+ */
+function useSessionMessagePages(sessionIds: string[]) {
+  const signedIn = getToken() !== null;
+  return useQueries({
+    queries: sessionIds.map((sessionId) => ({
+      queryKey: messagesQueryKey(sessionId),
+      queryFn: async (): Promise<MessagesQueryData> => {
+        const token = getToken();
+        if (!token) throw new Error("Not signed in");
+        const page = await getSessionMessages(token, sessionId);
+        return { pages: [page], pageParams: [undefined] };
+      },
+      enabled: signedIn,
+      // Kept current by the sync engine's per-session fast-path, not
+      // polling — same rationale as `useSyncSnapshotQuery`'s `staleTime`.
+      staleTime: Number.POSITIVE_INFINITY,
+    })),
+  });
+}
+
+/**
+ * Decrypts each session's fetched message page into `RenderItem[]`
+ * (`reduceEnvelopes`), one session at a time against the *same* shared
+ * `bridge` `useDecryptedTitles` above already unwraps sequentially — a
+ * crypto-bridge worker only ever holds one active session key at once, so
+ * this loop `await`s each session's `setSessionKey` + decrypt before moving
+ * to the next rather than firing them in parallel. Only re-decrypts a
+ * session whose fetched page's newest `seq` has actually changed since the
+ * last pass (`newestSeq`), so a sync-engine fast-patch to one session's
+ * cache doesn't re-run the crypto worker for every other row.
+ */
+function useDecryptedItems(
+  sessions: SessionRow[],
+  pageResults: Array<{ data: MessagesQueryData | undefined }>,
+  bridge: CryptoBridgeClient | null,
+): Map<string, RenderItem[]> {
+  const [items, setItems] = useState<Map<string, RenderItem[]>>(new Map());
+  const [seqCache] = useState(() => new Map<string, number>());
+
+  useEffect(() => {
+    if (!bridge) return;
+    const toDecrypt: Array<{ session: SessionRow; data: MessagesQueryData }> = [];
+    for (let i = 0; i < sessions.length; i++) {
+      const session = sessions[i];
+      const data = pageResults[i]?.data;
+      if (!session || !data) continue;
+      const seq = newestSeq(data);
+      if (seq === undefined || seqCache.get(session.id) === seq) continue;
+      toDecrypt.push({ session, data });
+    }
+    if (toDecrypt.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const next = new Map<string, RenderItem[]>();
+      for (const { session, data } of toDecrypt) {
+        if (cancelled) return;
+        try {
+          const ok = await bridge.setSessionKey(decodeBase64(session.dek));
+          const envelopes = ok ? await decryptMessageBatches(data.pages, bridge) : [];
+          next.set(session.id, reduceEnvelopes(envelopes));
+        } catch (err) {
+          console.error(`live-source: failed to decrypt session ${session.id}'s messages`, err);
+          next.set(session.id, []);
+        }
+        const seq = newestSeq(data);
+        if (seq !== undefined) seqCache.set(session.id, seq);
+      }
+      if (cancelled) return;
+      setItems((prev) => new Map([...prev, ...next]));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // `seqCache` is a stable Map ref (useState initializer) used as a
+    // mutable cache — listing it satisfies useExhaustiveDependencies and
+    // never triggers a re-run, since the reference itself never changes.
+  }, [bridge, sessions, pageResults, seqCache]);
+
+  return items;
+}
+
+/** Live `attention` ephemeral, fanned across every session this hook is
+ * given (falcon-system-design.md §4.3) — mirrors
+ * `features/session-control/use-session-ephemerals.ts`'s per-session
+ * pattern, but as one shared subscription for however many rows are
+ * currently rendered rather than one hook instance per open session. */
+function useLiveAttention(source: EphemeralSource = apiSocket): Map<string, AttentionKind> {
+  const [attention, setAttention] = useState<Map<string, AttentionKind>>(new Map());
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `source` is a stable singleton by default (apiSocket) or a test double the caller controls — subscribe once for the component's lifetime.
+  useEffect(() => {
+    return source.on("ephemeral", (event: Ephemeral) => {
+      if (event.t !== "attention") return;
+      setAttention((prev) => {
+        if (prev.get(event.sessionId) === event.kind) return prev;
+        const next = new Map(prev);
+        next.set(event.sessionId, event.kind);
+        return next;
+      });
+    });
+  }, []);
+
+  return attention;
+}
+
+/** Exported for `live-source.test.ts` — assembles the final `SessionListSnapshot`
+ * from already-resolved inputs (no async/effect involved), so status-derivation
+ * fixtures can exercise the real assembly logic deterministically instead of
+ * hand-building a `SessionListSnapshot` and skipping it entirely. */
+export function buildSnapshot(
   sessionRows: SessionRow[],
   machineRows: MachineRow[],
   titles: DecryptedTitles,
+  presence: Map<string, boolean>,
+  items: Map<string, RenderItem[]>,
+  attention: Map<string, AttentionKind>,
 ): SessionListSnapshot {
   const now = Date.now();
 
   const machines: SessionListMachine[] = machineRows.map((m) => ({
     id: m.id,
     name: titles.machines.get(m.id) ?? UNNAMED_MACHINE,
-    online: isMachineOnline(m, now),
+    online: deriveMachineOnline(m, presence, now),
   }));
 
   const workspaceIds = new Set<string>();
@@ -214,12 +360,12 @@ function buildSnapshot(
     provider: s.provider,
     status: s.status,
     updatedAt: s.updatedAt,
-    // Not derived from a decrypted transcript / live ephemeral stream yet —
-    // see this module's doc comment. `deriveSessionStatus` still degrades
-    // honestly with these: `active` + no items reads as "idle", never a
+    // Empty/`null` until this session's own message page has decrypted /
+    // an ephemeral has arrived — `deriveSessionStatus` still degrades
+    // honestly with these: `active` + no items yet reads as "idle", never a
     // fabricated "working".
-    items: [],
-    attention: null,
+    items: items.get(s.id) ?? [],
+    attention: attention.get(s.id) ?? null,
   }));
 
   return { workspaces, machines, sessions };
@@ -237,9 +383,15 @@ export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
   const sessionRows = query.data?.sessions ?? EMPTY_SESSIONS;
   const machineRows = query.data?.machines ?? EMPTY_MACHINES;
   const titles = useDecryptedTitles(sessionRows, machineRows, bridge);
+  const presence = useMachinePresence();
+  const attention = useLiveAttention();
+
+  const sessionIds = useMemo(() => sessionRows.map((s) => s.id), [sessionRows]);
+  const pageResults = useSessionMessagePages(sessionIds);
+  const items = useDecryptedItems(sessionRows, pageResults, bridge);
 
   return useMemo(
-    () => buildSnapshot(sessionRows, machineRows, titles),
-    [sessionRows, machineRows, titles],
+    () => buildSnapshot(sessionRows, machineRows, titles, presence, items, attention),
+    [sessionRows, machineRows, titles, presence, items, attention],
   );
 };

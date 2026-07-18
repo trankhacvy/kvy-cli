@@ -24,9 +24,13 @@ import { UnmanagedSessionCard } from "./unmanaged-session-card";
 export function UnmanagedSection({
   useSnapshot = useMockUnmanagedSessions,
   useActions = useMockUnmanagedActions,
+  actionsDisabled = false,
 }: {
   useSnapshot?: UseUnmanagedSessionsSnapshot;
   useActions?: UseUnmanagedActions;
+  /** See `UnmanagedSessionCard`'s own doc comment — threaded straight
+   * through to every rendered card. */
+  actionsDisabled?: boolean;
 }) {
   const snapshot = useSnapshot();
   const machinesById = useMemo(
@@ -48,6 +52,7 @@ export function UnmanagedSection({
             session={session}
             machine={machinesById.get(session.machineId) ?? null}
             useActions={useActions}
+            actionsDisabled={actionsDisabled}
           />
         ))}
       </div>
