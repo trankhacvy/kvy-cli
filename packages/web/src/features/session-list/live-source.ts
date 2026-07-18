@@ -59,9 +59,19 @@ import { deriveMachineOnline, useMachinePresence } from "./use-machine-presence"
  * `messagesQueryKey` so `sync/engine.ts`'s per-session message fast-path
  * keeps a rendered row's page current across `message-new` events, exactly
  * like the Timeline's own `useLiveRenderItems`), decrypted sequentially
- * against one shared bridge (`useDecryptedItems`, same one-active-key-at-once
- * reasoning as `useDecryptedTitles` below) and reduced via the real
- * `reduceEnvelopes`. `attention` comes from the live `attention` ephemeral
+ * against `useDecryptedItems`'s *own* `useCryptoBridge()` instance — a
+ * separate worker from `useDecryptedTitles`'s, not shared with it. A
+ * crypto-bridge worker only ever holds one active session key at once
+ * (`setSessionKey` doc comment), but that constraint is *within* a single
+ * worker; `useDecryptedTitles` and `useDecryptedItems` are two independent
+ * React effects with no mutual exclusion between them, so a single shared
+ * bridge could have one effect's `setSessionKey` land between the other's
+ * `setSessionKey`+`open`, decrypting under the wrong key. Giving each hook
+ * its own worker (same "each owns its own worker" precedent
+ * `use-crypto-bridge.ts` documents, and the same shape
+ * `session-list-screen.tsx` already has for `useLiveSessionListSnapshot`
+ * vs. `useLiveUnmanagedSessions`) sidesteps the race entirely instead of
+ * building a cross-hook decrypt queue. `attention` comes from the live `attention` ephemeral
  * (`useLiveAttention`) — the wire's `SessionEvent` union has no "agent asked
  * a question" variant, so this is the only source for it, mirroring
  * `features/session-control/use-session-ephemerals.ts`'s per-session
@@ -238,14 +248,18 @@ function useSessionMessagePages(sessionIds: string[]) {
 
 /**
  * Decrypts each session's fetched message page into `RenderItem[]`
- * (`reduceEnvelopes`), one session at a time against the *same* shared
- * `bridge` `useDecryptedTitles` above already unwraps sequentially — a
- * crypto-bridge worker only ever holds one active session key at once, so
- * this loop `await`s each session's `setSessionKey` + decrypt before moving
- * to the next rather than firing them in parallel. Only re-decrypts a
- * session whose fetched page's newest `seq` has actually changed since the
- * last pass (`newestSeq`), so a sync-engine fast-patch to one session's
- * cache doesn't re-run the crypto worker for every other row.
+ * (`reduceEnvelopes`), one session at a time against `bridge` — this hook's
+ * *own* `useCryptoBridge()` instance, deliberately not shared with
+ * `useDecryptedTitles`'s bridge (see the module doc comment above: a
+ * crypto-bridge worker only ever holds one active session key at once, and
+ * two independent effects racing `setSessionKey` calls against the same
+ * worker can decrypt under the wrong key). Within this hook, the loop still
+ * `await`s each session's `setSessionKey` + decrypt before moving to the
+ * next rather than firing them in parallel, since *this* loop's own calls
+ * do share one worker. Only re-decrypts a session whose fetched page's
+ * newest `seq` has actually changed since the last pass (`newestSeq`), so a
+ * sync-engine fast-patch to one session's cache doesn't re-run the crypto
+ * worker for every other row.
  */
 function useDecryptedItems(
   sessions: SessionRow[],
@@ -377,18 +391,22 @@ export function buildSnapshot(
  * the crypto bridge is ready, same "never crash on absent data" shape the
  * mock's static fixture doesn't need to worry about but a live source does. */
 export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
-  const bridge = useCryptoBridge();
+  const titlesBridge = useCryptoBridge();
+  // Its own worker, deliberately not shared with `titlesBridge` — see the
+  // module doc comment: two independent effects racing `setSessionKey`
+  // calls against one shared worker can decrypt under the wrong key.
+  const itemsBridge = useCryptoBridge();
   const query = useSyncSnapshotQuery();
 
   const sessionRows = query.data?.sessions ?? EMPTY_SESSIONS;
   const machineRows = query.data?.machines ?? EMPTY_MACHINES;
-  const titles = useDecryptedTitles(sessionRows, machineRows, bridge);
+  const titles = useDecryptedTitles(sessionRows, machineRows, titlesBridge);
   const presence = useMachinePresence();
   const attention = useLiveAttention();
 
   const sessionIds = useMemo(() => sessionRows.map((s) => s.id), [sessionRows]);
   const pageResults = useSessionMessagePages(sessionIds);
-  const items = useDecryptedItems(sessionRows, pageResults, bridge);
+  const items = useDecryptedItems(sessionRows, pageResults, itemsBridge);
 
   return useMemo(
     () => buildSnapshot(sessionRows, machineRows, titles, presence, items, attention),
