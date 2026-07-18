@@ -1,5 +1,6 @@
 export type { AttentionMeta, AttentionState, DeriveAttentionInput } from "./attention";
 export { ATTENTION_META, deriveAttention } from "./attention";
+export { formatDecryptError } from "./decrypt-error";
 export { getLastSeenAt, markSeenNow } from "./last-seen";
 export { sessionRpcToActions } from "./live-actions";
 export { createMockSessionControl, useMockSessionControl } from "./mock-actions";
