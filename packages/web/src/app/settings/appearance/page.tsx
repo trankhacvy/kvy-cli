@@ -37,7 +37,7 @@ export default function AppearanceSettingsPage() {
         </p>
       </div>
 
-      <div className="flex gap-2" role="radiogroup" aria-label="Theme">
+      <div className="flex gap-2">
         <Button
           type="button"
           variant={theme === "dark" ? "default" : "outline"}

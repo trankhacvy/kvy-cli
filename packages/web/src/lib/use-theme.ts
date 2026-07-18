@@ -16,9 +16,35 @@ import { DEFAULT_THEME, parseTheme, THEME_STORAGE_KEY, type Theme } from "./them
 const listeners = new Set<() => void>();
 let current: Theme = DEFAULT_THEME;
 let initialized = false;
+let storageListenerAttached = false;
 
 function notify(): void {
   for (const listener of listeners) listener();
+}
+
+/** Cross-tab sync (next-themes' own pattern, referenced in this file's
+ * docstring): another same-origin tab writing `THEME_STORAGE_KEY` fires a
+ * `storage` event on every *other* open tab (never the tab that wrote it),
+ * so this only needs to adopt the new value and notify — no origin/write
+ * loop risk. Attached lazily, once, from the first `subscribe()` call
+ * rather than at module-eval time, since this module can be imported where
+ * `window` doesn't exist (see the module docstring). */
+function handleStorageEvent(event: StorageEvent): void {
+  if (event.key !== THEME_STORAGE_KEY) return;
+  const next = parseTheme(event.newValue);
+  if (next === current) return;
+  current = next;
+  initialized = true;
+  if (typeof document !== "undefined") {
+    document.documentElement.classList.toggle("dark", next === "dark");
+  }
+  notify();
+}
+
+function ensureStorageListenerAttached(): void {
+  if (storageListenerAttached || typeof window === "undefined") return;
+  storageListenerAttached = true;
+  window.addEventListener("storage", handleStorageEvent);
 }
 
 /** Applies `theme` to the live DOM (`<html>` class — `globals.css`'s `.dark`
@@ -51,6 +77,7 @@ function ensureInitialized(): void {
 }
 
 function subscribe(listener: () => void): () => void {
+  ensureStorageListenerAttached();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
