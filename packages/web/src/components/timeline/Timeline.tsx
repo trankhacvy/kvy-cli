@@ -2,7 +2,9 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useRef, useState } from "react";
+import { formatFullTimestamp, formatHourDividerLabel, shouldShowHourDivider } from "@/lib/format";
 import type { RenderItem } from "@/sync/reducer";
+import { HourDivider } from "./HourDivider";
 import { TimelineRow } from "./TimelineRow";
 
 /** Stick-to-bottom threshold (the AI Elements `Conversation` pattern):
@@ -94,6 +96,7 @@ export function Timeline({ items, working = false }: { items: RenderItem[]; work
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const item = items[virtualRow.index];
             if (!item) return null;
+            const previous = items[virtualRow.index - 1];
 
             return (
               <div
@@ -108,7 +111,11 @@ export function Timeline({ items, working = false }: { items: RenderItem[]; work
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
                 className="pb-3"
+                title={formatFullTimestamp(item.time)}
               >
+                {shouldShowHourDivider(previous?.time, item.time) && (
+                  <HourDivider label={formatHourDividerLabel(item.time)} />
+                )}
                 <TimelineRow item={item} />
               </div>
             );

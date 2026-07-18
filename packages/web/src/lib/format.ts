@@ -52,3 +52,44 @@ export function formatTokenCount(count: number): string {
 
   return `${rounded.toFixed(digits)}${units[unitIndex]}`;
 }
+
+/** Local wall-clock hour bucket start (epoch ms) for `shouldShowHourDivider`
+ * below — two envelope times are "the same hour" iff they share one of
+ * these, so hour boundaries follow the *viewer's* clock (not a fixed UTC
+ * grid): a run spanning 2:58-3:02 still gets a divider right at 3:00. */
+function hourBucketStart(ms: number): number {
+  const date = new Date(ms);
+  date.setMinutes(0, 0, 0);
+  return date.getTime();
+}
+
+/** Whether an hourly divider (`TimelineRow`, plan-v2.md W4.2) should render
+ * immediately before an item at `time`, given the previous rendered item's
+ * `time` (`undefined` for the very first item in the list — always shown,
+ * so the timeline opens with an explicit time anchor rather than none). */
+export function shouldShowHourDivider(previousTime: number | undefined, time: number): boolean {
+  if (previousTime === undefined) return true;
+  return hourBucketStart(previousTime) !== hourBucketStart(time);
+}
+
+/** Hourly-divider label, e.g. "Jul 18, 3:00 PM". Locale pinned to `en-US`
+ * (like every other formatter in this file) so rendering is deterministic
+ * regardless of the host machine's locale, not because Falcon only
+ * supports English. */
+export function formatHourDividerLabel(ms: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(hourBucketStart(ms)));
+}
+
+/** Full-precision timestamp for a timeline row's hover tooltip (plan-v2.md
+ * W4.2 "Timestamps"), e.g. "Jul 18, 2026, 3:45:12 PM". */
+export function formatFullTimestamp(ms: number): string {
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "medium",
+  }).format(new Date(ms));
+}

@@ -48,4 +48,22 @@ describe("renderMarkdown", () => {
     const html = await renderToHtml("just a plain sentence");
     expect(html).toContain("just a plain sentence");
   });
+
+  it("emits dual --shiki-light/--shiki-dark CSS vars per token, never a hardcoded single-theme color (plan-v2.md W4.2 'dual shiki theme')", async () => {
+    const html = await renderToHtml("```ts\nconst x = 1;\n```");
+    expect(html).toContain("--shiki-light:");
+    expect(html).toContain("--shiki-dark:");
+    // rehype-pretty-code's dual-theme mode forces `defaultColor: false` — a
+    // literal `color:` property on a token would mean the light/dark switch
+    // in globals.css (`.markdown-body [data-rehype-pretty-code-figure]
+    // span`) has nothing to override.
+    expect(html).not.toContain("color:#");
+  });
+
+  it("wires the fenced-code `pre` through CodeBlock (plan-v2.md W4.2 'Copy buttons'), not a bare `pre`", async () => {
+    const html = await renderToHtml("```ts\nconst x = 1;\n```");
+    // CodeBlock wraps `pre` in a `group/code` div alongside a CopyButton.
+    expect(html).toContain('class="group/code relative"');
+    expect(html).toContain('aria-label="Copy"');
+  });
 });

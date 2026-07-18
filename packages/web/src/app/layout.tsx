@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { DocumentTitle } from "@/components/DocumentTitle";
+import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -23,11 +24,33 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Dark is Falcon's default theme (design §9 stack table). The `.dark` class
-  // is a static default here — an appearance toggle (design §9.2 Settings
-  // screen) can flip it later without any other change to this file.
+  // Dark is Falcon's default theme (design §9 stack table), so the static
+  // export always prerenders `.dark` on `<html>` — there's no per-visitor
+  // personalization at build time anyway. The inline script below is the
+  // pre-hydration anti-flash step (next-themes' own pattern): it runs
+  // synchronously, before first paint, and removes `.dark` if this browser
+  // previously chose light (`src/app/settings/appearance`, backed by
+  // `use-theme.ts`'s store — plan-v2.md W4.2). `suppressHydrationWarning`
+  // covers the resulting server/client class mismatch on `<html>` itself.
+  //
+  // Plain string children (not `dangerouslySetInnerHTML`) — this app's one
+  // firm rule (see `lib/markdown.ts`/`lib/unifiedDiff.ts`) is that untrusted
+  // content never reaches innerHTML; a `<script>` tag's string children
+  // become its literal text content instead, which is all a `<script>`
+  // needs, so that rule never has to bend for this either.
+  const themeInitScript = `(function(){try{var v=localStorage.getItem(${JSON.stringify(
+    THEME_STORAGE_KEY,
+  )});if(v==="light"){document.documentElement.classList.remove("dark")}}catch(e){}})();`;
+
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={DEFAULT_THEME === "dark" ? "dark" : undefined}
+      suppressHydrationWarning
+    >
+      <head>
+        <script suppressHydrationWarning>{themeInitScript}</script>
+      </head>
       <body className="antialiased">
         <DocumentTitle />
         <Providers>{children}</Providers>
