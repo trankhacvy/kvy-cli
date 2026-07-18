@@ -21,6 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSessionControl } from "@/features/session-control";
+import { PTY_SET_MODE_ENABLED } from "@/lib/config";
+import { nextModeAfterSetMode } from "./mode-switch-state";
 import {
   initialStopSessionDialogState,
   resetStopSessionDialogState,
@@ -44,11 +46,18 @@ export function shouldShowTakeControl(controlMode: "local" | "remote"): boolean 
   return controlMode === "remote";
 }
 
-/** Whether the mode selector's `setMode` mutation is real (`true`) or should
+/**
+ * Whether the mode selector's `setMode` mutation is real (`true`) or should
  * degrade to a read-only display (`false`) — see the component doc comment.
- * Exported for testing, same reasoning as `shouldShowTakeControl`. */
-export function canMutateMode(controlMode: "local" | "remote"): boolean {
-  return controlMode === "remote";
+ * A remote-loop session's `setMode` is unconditionally real; a PTY/local
+ * session's is real only once the flag-gated Shift+Tab cycle (plan-v2.md
+ * W4.3) has been enabled on this build (`ptySetModeEnabled`, defaulted to
+ * `false` so every pre-U4.5 caller — including this file's own existing
+ * tests — keeps its prior behavior unless it opts in). Exported for
+ * testing, same reasoning as `shouldShowTakeControl`.
+ */
+export function canMutateMode(controlMode: "local" | "remote", ptySetModeEnabled = false): boolean {
+  return controlMode === "remote" || (controlMode === "local" && ptySetModeEnabled);
 }
 
 /**
@@ -74,12 +83,21 @@ export function canMutateMode(controlMode: "local" | "remote"): boolean {
  *    entirely for `controlMode === "local"` rather than offering an action
  *    that can never do anything.
  *  - **setMode** genuinely works for a remote-loop session
- *    (`runRemoteLoop`'s handler calls the live ACP session's `setMode`), but
- *    a PTY session's handler honestly returns `{ok:false}` always ("the
- *    live TUI owns its own permission mode") — until U4.5 wires a real PTY
- *    `setMode`, the selector drops its mutating affordance for
- *    `controlMode === "local"` and becomes a plain read-only display of the
- *    derived mode, rather than surfacing an error after every attempt.
+ *    (`runRemoteLoop`'s handler calls the live ACP session's `setMode`). A
+ *    PTY session's handler is real too, as of plan-v2.md W4.3 (a Shift+Tab
+ *    keystroke cycle verified via the bridge's own hook echo) — but it's
+ *    version-coupled, flag-gated TUI behavior, so the selector's mutating
+ *    affordance only un-hides for `controlMode === "local"` once
+ *    `PTY_SET_MODE_ENABLED` (`@/lib/config`, mirroring the CLI's own
+ *    `FALCON_PTY_SETMODE` flag) is on; otherwise it stays the plain
+ *    read-only display it's always been. A mutation that resolves
+ *    `{ok:false}` (verification failed, or the injection gate was closed)
+ *    reverts the selector to `observedMode` when the RPC reported one, or
+ *    the prior selection otherwise — never silently keeps showing the
+ *    unconfirmed target. That revert logic is the pure, exported
+ *    `nextModeAfterSetMode` (`mode-switch-state.ts`), same extraction
+ *    pattern as the "end session" dialog's `stop-session-state.ts`, so it's
+ *    unit-tested (`ControlBar.test.ts`) without mounting the component.
  *
  * **"End session"** (plan-v2.md W2.3 "Stop session from the web") calls the
  * `stop` session RPC behind a shadcn `Dialog` confirm — unlike the other
@@ -131,6 +149,16 @@ export function ControlBar({
     setSelectedMode(next);
     setModeError(null);
     setModeMutation.mutate(next, {
+      // A resolved `{ok:false}` (verification failed, or the PTY path's
+      // injection gate was closed — plan-v2.md W4.3) is not an exception:
+      // it's an honest "didn't happen", and the selector must revert to
+      // whatever mode the RPC actually observed rather than keep showing
+      // the unconfirmed target.
+      onSuccess: (result) => {
+        const outcome = nextModeAfterSetMode(next, previous, result);
+        setSelectedMode(outcome.mode);
+        setModeError(outcome.error);
+      },
       onError: (error) => {
         setSelectedMode(previous);
         setModeError(error instanceof Error ? error.message : "Could not change the mode.");
@@ -164,7 +192,7 @@ export function ControlBar({
         Interrupt
       </Button>
 
-      {canMutateMode(controlMode) ? (
+      {canMutateMode(controlMode, PTY_SET_MODE_ENABLED) ? (
         <label
           className="flex items-center gap-1.5 text-xs text-muted-foreground"
           htmlFor="control-bar-mode"

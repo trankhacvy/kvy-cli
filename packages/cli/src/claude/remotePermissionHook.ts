@@ -116,6 +116,20 @@ export interface RemotePermissionHookHandle {
   /** Wire into the `perm.answer` session RPC (first-wins resolution). */
   resolvePermission: (params: { reqId: string; decision: PermDecision }) => PermAnswerResult;
   /**
+   * The last `permission_mode` seen on any hook input, or `null` before the
+   * first one fires. The PTY `setMode` RPC's only source of truth for the
+   * live TUI's actual mode (plan-v2.md W4.3) — forwards {@link
+   * PreToolPermissionBridge.currentPermissionMode}.
+   */
+  getCurrentPermissionMode: () => PermissionMode | null;
+  /**
+   * Resolves with the `permission_mode` observed on the NEXT hook input, or
+   * `null` on `timeoutMs` with none seen — the "verify via hook echo" half
+   * of the real PTY `setMode` (plan-v2.md W4.3). Forwards {@link
+   * PreToolPermissionBridge.waitForModeEcho}.
+   */
+  waitForModeEcho: (timeoutMs: number) => Promise<PermissionMode | null>;
+  /**
    * True once `markWebTurnStart()` has fired and `markTurnEnd()`/
    * `markLocalActivity()` has not, AND the turn hasn't gone quiet past
    * `webTurnMaxMs` (the watchdog — plan-v2.md W1.2). Calling this refreshes
@@ -222,6 +236,8 @@ export async function installRemotePermissionHook(
     settingsEnv: { [HOOK_SETTINGS_ENV_VAR]: settings.path },
     port: server.port,
     resolvePermission: (params) => bridge.resolve(params),
+    getCurrentPermissionMode: () => bridge.currentPermissionMode,
+    waitForModeEcho: (timeoutMs) => bridge.waitForModeEcho(timeoutMs),
     isWebTurnActive,
     markWebTurnStart,
     markTurnEnd,

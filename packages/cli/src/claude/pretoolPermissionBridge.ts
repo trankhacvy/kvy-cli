@@ -118,6 +118,20 @@
  * `perm-request`/`perm-resolve` envelope emission. The mapping target
  * differs (a `PreToolUse` `permissionDecision` string vs. ACP's option-id
  * response), so the two handlers are parallel rather than one reused class.
+ *
+ * ## `permission_mode` cache + real PTY `setMode` (plan-v2.md W4.3, flag-gated)
+ * Both hooks' input carries `permission_mode` — the live TUI's own,
+ * authoritative idea of its current mode — on every call. {@link
+ * cachePermissionMode} records the latest value ({@link
+ * currentPermissionMode}) so `start.ts`'s PTY `setMode` RPC handler can
+ * compute a Shift+Tab press count via {@link permissionModeCyclePresses}
+ * around the fixed {@link PERMISSION_MODE_CYCLE} instead of guessing at the
+ * live TUI's state blind. After sending that keystroke cycle (gated
+ * idle+no-prompt, same rule as message injection — `ptyClaudeSession.ts`'s
+ * `sendModeCycle`), the RPC handler awaits {@link waitForModeEcho} to
+ * confirm the switch actually landed before reporting success back to the
+ * web — this bridge has no other channel to ask the live TUI "did that
+ * work", so the next hook input's own `permission_mode` IS the verification.
  */
 
 import {
@@ -227,6 +241,11 @@ export interface PermissionRequestHookInput {
   session_id?: string;
   tool_name: string;
   tool_input?: Record<string, unknown>;
+  /** Present per the header doc's verified `PermissionRequest` contract;
+   * cached the same way `PreToolUse`'s own `permission_mode` is (plan-v2.md
+   * W4.3) — a `PermissionRequest` fires strictly more often than a mode
+   * switch, so it's as good an echo source as `PreToolUse`. */
+  permission_mode?: string;
   [key: string]: unknown;
 }
 
@@ -271,6 +290,29 @@ function availableModes(toolName: string): PermissionMode[] {
   return [
     ...(toolName === "ExitPlanMode" || toolName === "exit_plan_mode" ? EXIT_PLAN_MODES : ALL_MODES),
   ];
+}
+
+/**
+ * The fixed order Claude Code's own Shift+Tab keystroke cycles permission
+ * modes through (plan-v2.md W4.3 "Real setMode for the PTY path") — the same
+ * four states {@link ALL_MODES} already enumerates, exported under its own
+ * name here because the PTY keystroke feature's identity as "a fixed 4-state
+ * cycle, not a freeform widget" (plan-v2.md W4.3) is the point, not an
+ * implementation detail of the permission pipeline.
+ */
+export const PERMISSION_MODE_CYCLE: readonly PermissionMode[] = ALL_MODES;
+
+/**
+ * Number of forward Shift+Tab presses to get from `from` to `to` around
+ * {@link PERMISSION_MODE_CYCLE} (there is no reverse keystroke). `0` when
+ * already there. Exported so the PTY session/`start.ts` can compute the
+ * keystroke count without duplicating the cycle order.
+ */
+export function permissionModeCyclePresses(from: PermissionMode, to: PermissionMode): number {
+  const fromIndex = PERMISSION_MODE_CYCLE.indexOf(from);
+  const toIndex = PERMISSION_MODE_CYCLE.indexOf(to);
+  if (fromIndex === -1 || toIndex === -1) return 0;
+  return (toIndex - fromIndex + PERMISSION_MODE_CYCLE.length) % PERMISSION_MODE_CYCLE.length;
 }
 
 /** Minimal timer seam so tests can drive the timeout deterministically. */
@@ -388,10 +430,66 @@ export class PreToolPermissionBridge {
   private completedRequests: Record<string, AgentStateCompletedRequest> = {};
   private readonly answerTimeoutMs: number;
   private readonly setTimer: (callback: () => void, ms: number) => CancelableTimer;
+  // The last `permission_mode` seen on ANY hook input — `PreToolUse` and
+  // `PermissionRequest` both carry it on every call (plan-v2.md W4.3). This
+  // is the PTY `setMode` RPC's only source of truth for "what mode is the
+  // live TUI actually in right now" (there is no other channel to ask it),
+  // and the verification target for {@link waitForModeEcho} after sending a
+  // Shift+Tab cycle.
+  private lastPermissionMode: PermissionMode | null = null;
+  private readonly modeWatchers = new Set<(mode: PermissionMode) => void>();
 
   constructor(private readonly deps: PreToolPermissionBridgeDeps) {
     this.answerTimeoutMs = deps.answerTimeoutMs ?? DEFAULT_ANSWER_TIMEOUT_MS;
     this.setTimer = deps.setTimer ?? defaultSetTimer;
+  }
+
+  /** The last observed `permission_mode`, or `null` before any hook has fired. */
+  get currentPermissionMode(): PermissionMode | null {
+    return this.lastPermissionMode;
+  }
+
+  /**
+   * Caches `permission_mode` off any hook input and notifies pending
+   * {@link waitForModeEcho} callers. An unrecognized value (a future Claude
+   * Code build renaming/adding modes) is ignored rather than corrupting the
+   * cache with something {@link permissionModeCyclePresses} can't index.
+   */
+  private cachePermissionMode(raw: string | undefined): void {
+    if (raw === undefined) return;
+    const mode = PERMISSION_MODE_CYCLE.find((m) => m === raw);
+    if (!mode) return;
+    this.lastPermissionMode = mode;
+    for (const watcher of [...this.modeWatchers]) watcher(mode);
+  }
+
+  /**
+   * Resolves with the `permission_mode` observed on the NEXT hook input
+   * (whichever mode that turns out to be — the caller compares it to what it
+   * expected), or `null` if none arrives within `timeoutMs`. This is the
+   * "verify via hook echo" half of plan-v2.md W4.3's real PTY `setMode`: the
+   * bridge can't reach into the live TUI to ask its mode directly, so
+   * confirmation is "did the next thing Claude Code told us agree with what
+   * we expect".
+   */
+  waitForModeEcho(timeoutMs: number): Promise<PermissionMode | null> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const watcher = (mode: PermissionMode): void => {
+        if (settled) return;
+        settled = true;
+        this.modeWatchers.delete(watcher);
+        timer.clear();
+        resolve(mode);
+      };
+      const timer = this.setTimer(() => {
+        if (settled) return;
+        settled = true;
+        this.modeWatchers.delete(watcher);
+        resolve(null);
+      }, timeoutMs);
+      this.modeWatchers.add(watcher);
+    });
   }
 
   /** Number of unanswered requests across both hook types — introspection/tests. */
@@ -409,6 +507,7 @@ export class PreToolPermissionBridge {
    * deny-with-answer" doc for why this can't wait for `PermissionRequest`).
    */
   handlePreToolUse(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+    this.cachePermissionMode(input.permission_mode);
     if (isAskUserQuestion(input.tool_name)) return this.handleAskUserQuestion(input);
 
     // A web turn's `ask` here doesn't mean a local dialog is coming — the
@@ -493,6 +592,7 @@ export class PreToolPermissionBridge {
   handlePermissionRequest(
     input: PermissionRequestHookInput,
   ): Promise<PermissionRequestHookOutput | undefined> {
+    this.cachePermissionMode(input.permission_mode);
     const toolName = input.tool_name;
     const toolInput = input.tool_input ?? {};
 

@@ -234,6 +234,46 @@ describe("startHookServer", () => {
     }
   });
 
+  it("POST /hook/pre-tool-use forwards `permission_mode` to onPreToolUse's input intact (W4.3 mode cache)", async () => {
+    const onPreToolUse = vi.fn(async () => ({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse" as const,
+        permissionDecision: "allow" as const,
+      },
+      suppressOutput: true as const,
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPreToolUse });
+    try {
+      await post(server.port, "/hook/pre-tool-use", {
+        tool_name: "Bash",
+        tool_input: {},
+        permission_mode: "acceptEdits",
+      });
+      const [input] = onPreToolUse.mock.calls[0] as unknown as [{ permission_mode?: string }];
+      expect(input.permission_mode).toBe("acceptEdits");
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/pre-tool-use omits `permission_mode` from the input when the body doesn't carry one", async () => {
+    const onPreToolUse = vi.fn(async () => ({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse" as const,
+        permissionDecision: "allow" as const,
+      },
+      suppressOutput: true as const,
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPreToolUse });
+    try {
+      await post(server.port, "/hook/pre-tool-use", { tool_name: "Bash", tool_input: {} });
+      const [input] = onPreToolUse.mock.calls[0] as unknown as [{ permission_mode?: string }];
+      expect(input.permission_mode).toBeUndefined();
+    } finally {
+      await server.stop();
+    }
+  });
+
   it("POST /hook/pre-tool-use defers to `ask` when no onPreToolUse is wired", async () => {
     const server = await startHookServer({ onSessionId: () => {} });
     try {
@@ -291,6 +331,29 @@ describe("startHookServer", () => {
       expect(onPermissionRequest).toHaveBeenCalledOnce();
       const [input] = onPermissionRequest.mock.calls[0] as unknown as [{ tool_input: unknown }];
       expect(input.tool_input).toEqual({ command: "rm -rf /" });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("POST /hook/permission-request forwards `permission_mode` to onPermissionRequest's input intact (W4.3 mode cache)", async () => {
+    const onPermissionRequest = vi.fn(async () => ({
+      hookSpecificOutput: {
+        hookEventName: "PermissionRequest" as const,
+        decision: { behavior: "allow" as const },
+      },
+    }));
+    const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
+    try {
+      await post(server.port, "/hook/permission-request", {
+        tool_name: "Bash",
+        tool_input: {},
+        permission_mode: "bypassPermissions",
+      });
+      const [input] = onPermissionRequest.mock.calls[0] as unknown as [
+        { permission_mode?: string },
+      ];
+      expect(input.permission_mode).toBe("bypassPermissions");
     } finally {
       await server.stop();
     }

@@ -182,6 +182,11 @@ const PermissionRequestHookBodySchema = z
   .object({
     tool_name: z.string().min(1),
     tool_input: z.record(z.string(), z.unknown()).optional(),
+    // Present per the verified contract (plan-v2.md W0.3); typed explicitly
+    // (rather than left to `.passthrough()`'s catchall) so the PTY
+    // `setMode` mode-cache (plan-v2.md W4.3, `pretoolPermissionBridge.ts`'s
+    // `cachePermissionMode`) reads it type-safely off `request.body`.
+    permission_mode: z.string().optional(),
   })
   .passthrough();
 
