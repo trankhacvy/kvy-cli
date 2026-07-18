@@ -1469,7 +1469,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
       note on the no-streaming decision
 - [x] **U4.2 `[bundle]` "render-polish"** (W4.2a): timestamps + `CopyButton`
       (messages/code/bash) + theme toggle + dual shiki theme (un-hardcode `dark`)
-- [ ] **U4.3 `[bundle]` "composer-polish"** (W4.2b): auto-grow + sessionStorage
+- [x] **U4.3 `[bundle]` "composer-polish"** (W4.2b): auto-grow + sessionStorage
       drafts + multi-file/image previews + crypto-ready gating + shadcn `Select`
       replacements + "Load earlier" pagination + model selector (spawn) + header
       model chip

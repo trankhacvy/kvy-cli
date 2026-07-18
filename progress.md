@@ -8810,3 +8810,35 @@ all 11 turbo tasks successful (cache-hit, `>>> FULL TURBO`).
   fix forward or restart the unit.
 - U4.3 `[bundle]` "composer-polish" (W4.2b) or U4.4 `[bundle]` "shell-polish"
   (W4.2c) — next unstarted Phase 4 units after U4.2's render-polish landed.
+
+## v2-pty-injection Cycle 7 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U4.3 `[bundle]` "composer-polish" — `2aa60a7968fe515d0ae09e344609c311eb15429a`
+  (W4.2b): auto-grow + sessionStorage drafts + multi-file/image previews +
+  crypto-ready gating + shadcn `Select` replacements + "Load earlier"
+  pagination + model selector (spawn) + header model chip
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) —
+  still failed/parked from prior cycles. Worktree `.worktrees/U1.4`
+  (`wf/U1.4`, tip `d4cb7ec`) left in place for human inspection per the
+  false-landing rule.
+- U4.6 `[bundle]` "session-registration" (W4.4+W4.5 — bootstrap/start) —
+  failed this cycle. Worktree `.worktrees/U4.6` (`wf/U4.6`, tip `0524ebe`)
+  left in place for human inspection per the false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor 2aa60a7968fe515d0ae09e344609c311eb15429a v2-pty-injection`
+held — confirmed real ancestry. `.worktrees/U4.3` and branch `wf/U4.3` were
+removed post-verification. plan-v2.md's Master TODO: U4.3's unit box flipped
+to `[x]` (no sub-boxes on this unit). `pnpm typecheck` on `v2-pty-injection`
+— all 11 turbo tasks successful (cache-hit, `>>> FULL TURBO`).
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `d4cb7ec`) and
+  `.worktrees/U4.6` (`wf/U4.6`, tip `0524ebe`) — both parked/failed; figure
+  out why they keep failing and either fix forward or restart the units.
+- U4.4 `[bundle]` "shell-polish" (W4.2c) — next unstarted Phase 4 unit after
+  U4.3's composer-polish landed.
