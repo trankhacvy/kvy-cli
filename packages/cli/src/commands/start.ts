@@ -28,8 +28,11 @@
  * the session is idle — no mode switch, no process kill, no Ink takeover.
  * Remote answering of the live TUI's tool-permission prompts (design §7.4/
  * §7.6) rides on a SINGLE hook server installed here via
- * `installRemotePermissionHook()`, which owns all four Claude Code hooks
- * (`SessionStart`/`Notification`/`Stop`/`PreToolUse`). Its `settingsEnv`/
+ * `installRemotePermissionHook()`, which owns all five Claude Code hooks
+ * (`SessionStart`/`Notification`/`Stop`/`PreToolUse`/`PermissionRequest` —
+ * `PreToolUse` always defers to Claude Code's own permission engine;
+ * `PermissionRequest` is where the web-vs-terminal fork actually lives,
+ * plan-v2.md Wave 1.1). Its `settingsEnv`/
  * `settingsPath` are handed to the PTY session (so the spawned `claude` gets
  * `--settings`), its `onSessionId` is routed to the PTY tailer, its
  * `resolvePermission` backs the `perm.answer` RPC, and `markWebTurnStart()`

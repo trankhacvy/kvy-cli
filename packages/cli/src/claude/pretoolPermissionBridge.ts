@@ -1,6 +1,7 @@
 /**
- * Remote permission answering for the LIVE Claude Code TUI, via a
- * `PreToolUse` hook (design §7.4/§7.6, plan.md §17).
+ * Remote permission answering for the LIVE Claude Code TUI, via the
+ * `PreToolUse` + `PermissionRequest` hooks (design §7.4/§7.6, plan.md §17,
+ * plan-v2.md Wave 1.1).
  *
  * ## The problem this solves
  * In the new `falcon claude` model the real `claude` TUI stays live at the
@@ -9,13 +10,13 @@
  * makes Claude want to run a tool that needs approval, the permission prompt
  * appears in the *terminal* TUI — which a remote web user can't answer.
  *
- * Claude Code's `PreToolUse` hook runs a command before every tool executes
- * and its stdout JSON can approve/deny/defer the call. This bridge is the
- * decision-routing core behind that hook: it takes the hook's tool payload,
- * runs it through Falcon's EXISTING permission pipeline (a `perm-request`
- * envelope for the web PermCard, the first-wins `perm.answer` RPC, a
- * `perm-resolve` envelope), and translates the answer back into the
- * `PreToolUse` output contract — all while the TUI stays live and normal.
+ * Claude Code's hooks run a command around tool execution and their stdout
+ * JSON can approve/deny/defer the call. This bridge is the decision-routing
+ * core behind both hooks: it takes the hook's tool payload, runs it through
+ * Falcon's EXISTING permission pipeline (a `perm-request` envelope for the
+ * web PermCard, the first-wins `perm.answer` RPC, a `perm-resolve`
+ * envelope), and translates the answer back into each hook's own output
+ * contract — all while the TUI stays live and normal.
  *
  * ## The `PreToolUse` contract (verified against Claude Code 2.1.212)
  * Input (stdin JSON): `{ session_id, tool_name, tool_input, permission_mode,
@@ -35,20 +36,50 @@
  * PreToolUse — Claude's own docs say "use hookSpecificOutput.permissionDecision
  * instead", so this bridge only emits the new form.)
  *
- * ## Local-vs-web policy (the load-bearing UX decision)
- * A `PreToolUse` hook fires for EVERY tool call — including ones a human
- * typed at the terminal, where they can just answer the TUI prompt
- * themselves. Intercepting those would make the local flow slower and
- * weirder (a round-trip to the web for a prompt the terminal user is already
- * looking at). So the policy is: **only route to the web when the current
- * turn was initiated by a web-injected message.** That signal is the
- * injected `isWebTurnActive()` predicate (the caller flips it true when the
- * `message` RPC delivers web input, false when the turn ends). When it's
- * false, the bridge returns `ask` IMMEDIATELY (zero added latency, zero
- * behavior change) so the terminal TUI prompt shows exactly as it always
- * does. The default is fail-safe: if the caller can't tell, treat it as a
- * local turn and defer to the terminal — a remote-answer path is never
- * forced onto a human sitting at the keyboard.
+ * ## The `PermissionRequest` contract (verified against Claude Code 2.1.214,
+ * plan-v2.md W0.3)
+ * Fires only when a permission dialog would actually be shown — auto-allowed
+ * tools (settings/allowlist/mode) never reach it. Input (stdin JSON):
+ * `{ session_id, tool_name, tool_input, permission_mode, hook_event_name:
+ * "PermissionRequest", cwd, transcript_path, prompt_id,
+ * permission_suggestions }`. Output (stdout JSON):
+ * ```json
+ * { "hookSpecificOutput": {
+ *     "hookEventName": "PermissionRequest",
+ *     "decision": { "behavior": "allow" | "deny", "message": "..." } } }
+ * ```
+ * Returning `undefined` (→ the hook server's 204) means "no decision" — the
+ * forwarder writes nothing and Claude Code's normal TUI dialog renders.
+ *
+ * ## Two hooks, one responsibility split (design §7.6, plan-v2.md Wave 1.1 —
+ * "kill the web-turn permission flood")
+ * An earlier version of this bridge routed EVERY `PreToolUse` call of a
+ * web-initiated turn to the web — Read/Grep/Glob included, one web message
+ * → a wall of PermCards. `PermissionRequest` (verified against our installed
+ * Claude Code build, plan-v2.md W0.3) fires only for calls that survive
+ * Claude Code's own settings/allowlist/mode evaluation and would genuinely
+ * show a dialog — auto-allowed tools never reach it. So responsibilities
+ * split across the two hooks:
+ *  - `PreToolUse` ({@link handlePreToolUse}) always defers with `ask` —
+ *    Claude Code's own permission engine decides from there, exactly like a
+ *    local turn. (The `AskUserQuestion` special case is Wave 2.1, not built
+ *    here.)
+ *  - `PermissionRequest` ({@link handlePermissionRequest}) is where the
+ *    web-vs-terminal fork now lives: a local turn gets `undefined` (no
+ *    decision → Claude Code's normal TUI dialog renders untouched); a web
+ *    turn runs through the same perm-request/perm-resolve pipeline as
+ *    before.
+ * This makes the web see *exactly* the prompts a terminal user would see —
+ * no more, no less.
+ *
+ * ## Deny copy (probe finding, plan-v2.md W0.3)
+ * A live probe showed the model working around a `PreToolUse`/
+ * `PermissionRequest` deny by retrying the same effect through an
+ * allowlisted tool (e.g. an allowlisted `Bash` to create a file after a
+ * denied `Write`). Every deny message this bridge produces — default or
+ * web-supplied — is therefore run through {@link appendDenyGuard}, which
+ * appends "Do not attempt this action another way." so the model reads it
+ * as a hard stop rather than a suggestion to route around.
  *
  * ## Timeout / fallback
  * A blocked `PreToolUse` hook holds up the tool, and Claude Code enforces its
@@ -115,6 +146,31 @@ export interface PreToolUseHookOutput {
 }
 
 /**
+ * Claude Code's `PermissionRequest` hook stdin payload (verified against
+ * 2.1.214, plan-v2.md W0.3). Only `tool_name`/`tool_input` are load-bearing
+ * here; everything else (`permission_suggestions` included) is accepted and
+ * ignored so a Claude Code version that adds fields never breaks this.
+ */
+export interface PermissionRequestHookInput {
+  session_id?: string;
+  tool_name: string;
+  tool_input?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+/**
+ * The `PermissionRequest` hook stdout JSON this bridge emits for a web turn.
+ * `undefined` (handled by the hook server as a 204) is the local-turn escape
+ * hatch — "no decision, let the TUI dialog render."
+ */
+export interface PermissionRequestHookOutput {
+  hookSpecificOutput: {
+    hookEventName: "PermissionRequest";
+    decision?: { behavior: "allow" | "deny"; message?: string };
+  };
+}
+
+/**
  * Default max wait for a web answer. Kept below the hook command's own
  * timeout ({@link HOOK_COMMAND_TIMEOUT_SECONDS}) so the bridge resolves the
  * request itself (as a clean deny) before Claude Code fires its "hook did not
@@ -156,7 +212,8 @@ export interface PreToolPermissionBridgeDeps {
   /**
    * True when the currently-running Claude turn was initiated by a
    * web-injected message (so the human is remote and needs the PermCard).
-   * False for a locally-typed turn — see the "Local-vs-web policy" section.
+   * False for a locally-typed turn — see the "Two hooks, one responsibility
+   * split" section above.
    */
   isWebTurnActive: () => boolean;
   /** Fires with the full requests/completedRequests snapshot on every change. */
@@ -175,8 +232,25 @@ export interface PreToolPermissionBridgeDeps {
   logger?: Logger;
 }
 
+/**
+ * A `PreToolUse`-style pending entry — kept for {@link resolve}/{@link reset}
+ * to share with {@link PendingPermissionRequest} even though nothing
+ * currently populates {@link PreToolPermissionBridge.pending} (`handlePreToolUse`
+ * always resolves immediately with `ask`). Wave 2.1's `AskUserQuestion`
+ * special case is the intended future occupant of this map — see
+ * plan-v2.md's W2.1 section, which reuses this exact pipeline.
+ */
 interface PendingPreToolRequest {
   settle: (output: PreToolUseHookOutput) => void;
+  toolName: string;
+  input: Record<string, unknown>;
+  timer: CancelableTimer;
+}
+
+/** A pending `PermissionRequest` — settled with a `PermDecision` that {@link
+ * handlePermissionRequest}'s own closure translates into the hook's output shape. */
+interface PendingPermissionRequest {
+  settle: (decision: PermDecision) => void;
   toolName: string;
   input: Record<string, unknown>;
   timer: CancelableTimer;
@@ -201,12 +275,28 @@ function output(decision: PreToolPermissionDecision, reason: string): PreToolUse
 }
 
 /**
- * Decision-routing core for the `PreToolUse` remote-permission hook. Wire
- * {@link handlePreToolUse} into the loopback hook server's `onPreToolUse`
- * callback, and {@link resolve} into the `perm.answer` session RPC.
+ * Appends the anti-workaround instruction every deny message must carry
+ * (plan-v2.md W0.3 probe finding: without it, the model routed around a
+ * denied `Write` via an allowlisted `Bash` instead of treating the deny as
+ * final). Applied exactly once, at the point each deny message is authored.
+ */
+function appendDenyGuard(message: string): string {
+  return `${message} Do not attempt this action another way.`;
+}
+
+/**
+ * Decision-routing core for the `PreToolUse`/`PermissionRequest`
+ * remote-permission hooks. Wire {@link handlePreToolUse} into the loopback
+ * hook server's `onPreToolUse` callback, {@link handlePermissionRequest} into
+ * `onPermissionRequest`, and {@link resolve} into the `perm.answer` session RPC.
  */
 export class PreToolPermissionBridge {
+  // See {@link PendingPreToolRequest}'s own doc: unpopulated today, reserved
+  // for Wave 2.1's `AskUserQuestion` special case, which reuses this exact
+  // pipeline. `resolve()`/`reset()` already look here so that wiring is a
+  // pure addition later.
   private readonly pending = new Map<string, PendingPreToolRequest>();
+  private readonly permRequestPending = new Map<string, PendingPermissionRequest>();
   private requests: Record<string, AgentStateRequest> = {};
   private completedRequests: Record<string, AgentStateCompletedRequest> = {};
   private readonly answerTimeoutMs: number;
@@ -217,55 +307,88 @@ export class PreToolPermissionBridge {
     this.setTimer = deps.setTimer ?? defaultSetTimer;
   }
 
-  /** Number of unanswered requests — introspection/tests. */
+  /** Number of unanswered requests across both hook types — introspection/tests. */
   get pendingCount(): number {
-    return this.pending.size;
+    return this.pending.size + this.permRequestPending.size;
   }
 
   /**
-   * The `PreToolUse` hook handler. Returns immediately with `ask` for a
-   * locally-initiated turn (the terminal TUI owns the prompt); otherwise
-   * emits a `perm-request` and blocks until a `perm.answer` decision arrives
-   * ({@link resolve}), the answer times out (→ deny), or {@link reset}.
+   * The `PreToolUse` hook handler. Always defers with `ask` — Claude Code's
+   * own permission engine decides from there (auto-allow, or a genuine
+   * prompt that fires `PermissionRequest`, where the web-vs-terminal fork now
+   * lives; see {@link handlePermissionRequest}). The `AskUserQuestion` special
+   * case is Wave 2.1, not built here.
    */
-  handlePreToolUse(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+  handlePreToolUse(_input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+    return Promise.resolve(output("ask", "Deferred to Claude Code's own permission engine."));
+  }
+
+  /**
+   * The `PermissionRequest` hook handler — fires only for calls Claude Code
+   * itself decided need a genuine prompt (design §7.6, plan-v2.md Wave 1.1).
+   * A local turn returns `undefined` (no decision → the terminal TUI dialog
+   * renders untouched); a web turn emits a `perm-request` and blocks until a
+   * `perm.answer` decision arrives ({@link resolve}), the answer times out
+   * (→ deny), or {@link reset}.
+   */
+  handlePermissionRequest(
+    input: PermissionRequestHookInput,
+  ): Promise<PermissionRequestHookOutput | undefined> {
     const toolName = input.tool_name;
     const toolInput = input.tool_input ?? {};
 
     if (!this.deps.isWebTurnActive()) {
-      // Locally-typed turn: never intercept — let Claude Code show its own
-      // TUI permission prompt, exactly as if no hook existed.
-      this.deps.logger?.debug("[pretool-bridge] local turn — deferring to terminal", { toolName });
-      return Promise.resolve(
-        output(
-          "ask",
-          "Locally-initiated turn — answer the prompt at the terminal (Falcon only routes web-initiated turns to the web UI).",
-        ),
-      );
+      // Locally-typed turn: never intercept — the terminal user is already
+      // looking at the TUI dialog Claude Code is about to show.
+      this.deps.logger?.debug("[pretool-bridge] local turn — TUI dialog owns it", { toolName });
+      return Promise.resolve(undefined);
     }
 
     const reqId = createId();
 
-    return new Promise<PreToolUseHookOutput>((resolvePromise) => {
+    return new Promise<PermissionRequestHookOutput>((resolvePromise) => {
+      const settle = (decision: PermDecision): void => {
+        if (decision.kind === "allow" && decision.updatedInput !== undefined) {
+          // The `PermissionRequest` output contract has no `updatedInput`
+          // channel (unlike `PreToolUse`'s), so an edited input can't be
+          // plumbed back through the live TUI here either — same limitation
+          // `mapDecision` documents for its own (currently dead) path. Warn
+          // rather than silently discarding the edit, so an "Allow" on an
+          // edited-input PermCard is never silently a no-op.
+          this.deps.logger?.warn(
+            "[pretool-bridge] updatedInput is not applied — allowing with original input",
+            { toolName },
+          );
+        }
+        const behavior = decision.kind === "deny" ? "deny" : "allow";
+        const message =
+          decision.kind === "deny"
+            ? appendDenyGuard(decision.message ?? "Denied from the Falcon web UI.")
+            : decision.kind === "mode"
+              ? `Switched permission mode to "${decision.mode}" and allowed from the Falcon web UI.`
+              : "Allowed from the Falcon web UI.";
+        resolvePromise({
+          hookSpecificOutput: {
+            hookEventName: "PermissionRequest",
+            decision: { behavior, message },
+          },
+        });
+      };
+
       const timer = this.setTimer(() => {
-        const pending = this.pending.get(reqId);
+        const pending = this.permRequestPending.get(reqId);
         if (!pending) return;
-        this.pending.delete(reqId);
+        this.permRequestPending.delete(reqId);
         const decision: PermDecision = {
           kind: "deny",
           message: `No response from the web within ${Math.round(this.answerTimeoutMs / 1000)}s — denied.`,
         };
         this.finishRequest(reqId, decision, "denied");
         this.deps.logger?.warn("[pretool-bridge] request timed out — denying", { reqId, toolName });
-        pending.settle(output("deny", decision.message ?? "Timed out."));
+        pending.settle(decision);
       }, this.answerTimeoutMs);
 
-      this.pending.set(reqId, {
-        settle: resolvePromise,
-        toolName,
-        input: toolInput,
-        timer,
-      });
+      this.permRequestPending.set(reqId, { settle, toolName, input: toolInput, timer });
 
       this.requests[reqId] = { tool: toolName, arguments: toolInput, createdAt: Date.now() };
       this.publishAgentState();
@@ -285,47 +408,81 @@ export class PreToolPermissionBridge {
   }
 
   /**
-   * First-wins resolution for a `perm.answer` RPC call (design §7.6). The
-   * first caller to resolve a given `reqId` gets `{ok:true}` and settles the
-   * blocked hook; every later caller gets `{ok:false, reason:
-   * 'already-answered', decision}` carrying the decision that actually won.
+   * First-wins resolution for a `perm.answer` RPC call (design §7.6). Looks
+   * up both the `PreToolUse`-style {@link pending} map and the
+   * `PermissionRequest`-style {@link permRequestPending} map — one RPC
+   * method serves both hook types. The first caller to resolve a given
+   * `reqId` gets `{ok:true}` and settles the blocked hook; every later caller
+   * gets `{ok:false, reason: 'already-answered', decision}` carrying the
+   * decision that actually won.
    */
   resolve(params: { reqId: string; decision: PermDecision }): PermAnswerResult {
-    const pending = this.pending.get(params.reqId);
-    if (!pending) {
-      const completed = this.completedRequests[params.reqId];
-      this.deps.logger?.debug("[pretool-bridge] resolve: already answered", {
-        reqId: params.reqId,
-      });
-      return completed
-        ? { ok: false, reason: "already-answered", decision: completed.decision }
-        : { ok: false, reason: "already-answered" };
-    }
-    this.pending.delete(params.reqId);
-    pending.timer.clear();
+    const preToolPending = this.pending.get(params.reqId);
+    if (preToolPending) {
+      this.pending.delete(params.reqId);
+      preToolPending.timer.clear();
 
-    const result = this.mapDecision(pending, params.decision);
-    this.finishRequest(
-      params.reqId,
-      params.decision,
-      result.hookSpecificOutput.permissionDecision === "deny" ? "denied" : "approved",
-    );
-    pending.settle(result);
-    return { ok: true };
+      const result = this.mapDecision(preToolPending, params.decision);
+      this.finishRequest(
+        params.reqId,
+        params.decision,
+        result.hookSpecificOutput.permissionDecision === "deny" ? "denied" : "approved",
+      );
+      preToolPending.settle(result);
+      return { ok: true };
+    }
+
+    const permRequestPending = this.permRequestPending.get(params.reqId);
+    if (permRequestPending) {
+      this.permRequestPending.delete(params.reqId);
+      permRequestPending.timer.clear();
+
+      // Choosing a mode is itself the resolving action (mirrors the ACP
+      // handler's rule and `mapDecision`'s `case "mode"` below). The live
+      // TUI's mode isn't changed by this hook; the caller owns any
+      // best-effort sync via `onModeChange`.
+      if (params.decision.kind === "mode") this.deps.onModeChange?.(params.decision.mode);
+
+      this.finishRequest(
+        params.reqId,
+        params.decision,
+        params.decision.kind === "deny" ? "denied" : "approved",
+      );
+      permRequestPending.settle(params.decision);
+      return { ok: true };
+    }
+
+    const completed = this.completedRequests[params.reqId];
+    this.deps.logger?.debug("[pretool-bridge] resolve: already answered", {
+      reqId: params.reqId,
+    });
+    return completed
+      ? { ok: false, reason: "already-answered", decision: completed.decision }
+      : { ok: false, reason: "already-answered" };
   }
 
   /**
-   * Settles every in-flight request as a deny (`ask` would re-surface the
-   * prompt at a terminal nobody is guaranteed to be watching; a clean deny is
-   * the safe terminal state). Call on session shutdown.
+   * Settles every in-flight request (across both maps) as a deny (`ask`
+   * would re-surface the prompt at a terminal nobody is guaranteed to be
+   * watching; a clean deny is the safe terminal state). Call on session
+   * shutdown.
    */
   reset(reason = "Session ended before the permission request was answered."): void {
+    const finalReason = appendDenyGuard(reason);
     for (const [reqId, pending] of this.pending.entries()) {
       pending.timer.clear();
-      this.finishRequest(reqId, { kind: "deny", message: reason }, "canceled");
-      pending.settle(output("deny", reason));
+      this.finishRequest(reqId, { kind: "deny", message: finalReason }, "canceled");
+      pending.settle(output("deny", finalReason));
     }
     this.pending.clear();
+
+    for (const [reqId, pending] of this.permRequestPending.entries()) {
+      pending.timer.clear();
+      const decision: PermDecision = { kind: "deny", message: reason };
+      this.finishRequest(reqId, decision, "canceled");
+      pending.settle(decision);
+    }
+    this.permRequestPending.clear();
   }
 
   private mapDecision(
@@ -347,7 +504,10 @@ export class PreToolPermissionBridge {
         return output("allow", `Allowed from the Falcon web UI (${decision.scope}).`);
       }
       case "deny":
-        return output("deny", decision.message ?? "Denied from the Falcon web UI.");
+        return output(
+          "deny",
+          appendDenyGuard(decision.message ?? "Denied from the Falcon web UI."),
+        );
       case "mode": {
         // Choosing a mode is itself the resolving action (mirrors the ACP
         // handler's rule). The live TUI's mode isn't changed by this hook;

@@ -3,15 +3,17 @@
  * TUI session (design §7.4/§7.6, plan.md §17). It ties together the three
  * pieces that already exist in isolation:
  *
- *  - {@link PreToolPermissionBridge} — the decision-routing core (local-vs-web
- *    policy, perm-request/perm-resolve emission, first-wins `perm.answer`,
- *    timeout→deny fallback).
- *  - {@link startHookServer} — the loopback server, now with an
- *    `onPreToolUse` endpoint the generated hook forwarder POSTs to and blocks
- *    on for the decision.
- *  - {@link writeHookSettingsFile} — the temp `--settings` file, now carrying
- *    a `PreToolUse` hook alongside the existing `SessionStart`/`Notification`/
- *    `Stop` ones.
+ *  - {@link PreToolPermissionBridge} — the decision-routing core. `PreToolUse`
+ *    always defers (`ask`); `PermissionRequest` is where the web-vs-terminal
+ *    fork actually lives (local-vs-web policy, perm-request/perm-resolve
+ *    emission, first-wins `perm.answer`, timeout→deny fallback) — design
+ *    §7.6, plan-v2.md Wave 1.1.
+ *  - {@link startHookServer} — the loopback server, with `onPreToolUse` and
+ *    `onPermissionRequest` endpoints the generated hook forwarder POSTs to
+ *    and blocks on for the decision.
+ *  - {@link writeHookSettingsFile} — the temp `--settings` file, carrying
+ *    `PreToolUse` and `PermissionRequest` hooks alongside the existing
+ *    `SessionStart`/`Notification`/`Stop` ones.
  *
  * ## What the caller (`commands/start.ts`) wires from the returned handle
  *  - `settingsEnv` — merge into the spawned `claude`'s `claudeEnvVars` so
@@ -132,6 +134,7 @@ export async function installRemotePermissionHook(
         opts.onAttention?.(kind);
       },
       onPreToolUse: (input) => bridge.handlePreToolUse(input),
+      onPermissionRequest: (input) => bridge.handlePermissionRequest(input),
       logger: opts.logger,
     });
   } catch (error) {

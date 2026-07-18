@@ -98,6 +98,8 @@ import { z } from "zod";
 import type { Logger } from "../logger.js";
 import {
   HOOK_COMMAND_TIMEOUT_SECONDS,
+  type PermissionRequestHookInput,
+  type PermissionRequestHookOutput,
   type PreToolUseHookInput,
   type PreToolUseHookOutput,
 } from "./pretoolPermissionBridge.js";
@@ -169,6 +171,20 @@ const PRE_TOOL_USE_ASK: PreToolUseHookOutput = {
   suppressOutput: true,
 };
 
+// Claude Code's `PermissionRequest` hook payload (verified against 2.1.214,
+// plan-v2.md W0.3) — fires only for calls that survive Claude Code's own
+// settings/allowlist/mode evaluation and would genuinely show a dialog.
+// `tool_name` is the only strictly-required field; `tool_input` and
+// Claude Code's own `permission_suggestions` (e.g. "allow this command
+// always") pass through unvalidated — surfaced later (Wave 4), never
+// required here.
+const PermissionRequestHookBodySchema = z
+  .object({
+    tool_name: z.string().min(1),
+    tool_input: z.record(z.string(), z.unknown()).optional(),
+  })
+  .passthrough();
+
 const HookOkResponseSchema = z.object({ status: z.literal("ok") });
 
 /**
@@ -204,6 +220,17 @@ export interface HookServerDeps {
    * (awaiting a web answer) up to the bridge's own timeout.
    */
   onPreToolUse?: (input: PreToolUseHookInput) => Promise<PreToolUseHookOutput>;
+  /**
+   * Invoked when Claude Code's `PermissionRequest` hook fires — a permission
+   * dialog is genuinely about to be shown (design §7.6, plan-v2.md Wave 1.1).
+   * Resolve with a decision to answer it remotely, or with `undefined` to let
+   * the TUI dialog render normally (the local-turn escape hatch). Optional:
+   * when omitted, every call gets a 204 (no decision), so a caller that only
+   * wants the lifecycle/`PreToolUse` hooks stays unaffected.
+   */
+  onPermissionRequest?: (
+    input: PermissionRequestHookInput,
+  ) => Promise<PermissionRequestHookOutput | undefined>;
   logger?: Logger;
 }
 
@@ -218,7 +245,7 @@ export interface HookServerHandle {
  * shape exactly.
  */
 export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle> {
-  const { onSessionId, onAttention, onPreToolUse, logger } = deps;
+  const { onSessionId, onAttention, onPreToolUse, onPermissionRequest, logger } = deps;
 
   return new Promise((resolve, reject) => {
     const app = fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -296,6 +323,26 @@ export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle>
       },
     );
 
+    // A permission dialog is genuinely about to be shown — Claude Code's own
+    // settings/allowlist/mode evaluation already ran (design §7.6, plan-v2.md
+    // Wave 1.1). A 204 (no `onPermissionRequest`, or it resolves with
+    // `undefined`) means "no decision" — the forwarder writes nothing and
+    // Claude Code's normal TUI dialog renders.
+    app.post(
+      "/hook/permission-request",
+      { schema: { body: PermissionRequestHookBodySchema } },
+      async (request, reply) => {
+        logger?.debug("[hook-server] permission-request", { toolName: request.body.tool_name });
+        const out = onPermissionRequest
+          ? await onPermissionRequest(request.body as PermissionRequestHookInput)
+          : undefined;
+        if (!out) {
+          return reply.code(204).send();
+        }
+        return out;
+      },
+    );
+
     app.listen({ port: 0, host: "127.0.0.1" }, (err, address) => {
       if (err) {
         logger?.debug("[hook-server] failed to start", {
@@ -325,21 +372,23 @@ export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle>
 // anywhere itself. This script (written alongside the settings file so no
 // repo-checked-in script is required) reads stdin and forwards it verbatim
 // to this process's own hook server, mirroring happy-cli's
-// `session_hook_forwarder.cjs` forwarder. It's shared by all four hooks
-// (`SessionStart`/`Notification`/`Stop`/`PreToolUse`) — the settings file
-// passes each hook's own endpoint path as the second argv so one script
-// covers all of them.
+// `session_hook_forwarder.cjs` forwarder. It's shared by all five hooks
+// (`SessionStart`/`Notification`/`Stop`/`PreToolUse`/`PermissionRequest`) —
+// the settings file passes each hook's own endpoint path as the second argv
+// so one script covers all of them.
 //
 // The `SessionStart`/`Notification`/`Stop` hooks are fire-and-forget: the
 // response is drained and ignored, and any error is swallowed so a forwarder
 // failure never surfaces as a Claude Code error to the user.
 //
-// The `PreToolUse` hook is DIFFERENT: it is a blocking, request/response
-// decision hook. The forwarder must (1) keep the request open until the
-// server responds (the server holds it until the web answers or its own
-// timeout), and (2) write the server's 200 response body verbatim to its OWN
-// stdout — that JSON IS the hook's decision (`permissionDecision`
-// allow/deny/ask). On any error or non-200, it writes nothing and exits 0,
+// The `PreToolUse` and `PermissionRequest` hooks are DIFFERENT: they are
+// blocking, request/response decision hooks. The forwarder must (1) keep the
+// request open until the server responds (the server holds it until the web
+// answers or its own timeout), and (2) write the server's 200 response body
+// verbatim to its OWN stdout — that JSON IS the hook's decision
+// (`PreToolUse`'s `permissionDecision` allow/deny/ask, or `PermissionRequest`'s
+// `decision.behavior` allow/deny). On any non-200 (including
+// `PermissionRequest`'s 204 "no decision"), it writes nothing and exits 0,
 // which Claude Code treats as "no decision" → its normal TUI permission
 // prompt (a safe fallback that never wedges the tool).
 const FORWARDER_SCRIPT = `#!/usr/bin/env node
@@ -348,7 +397,7 @@ const http = require('node:http');
 const port = Number(process.argv[2]);
 const hookPath = process.argv[3];
 if (!port || Number.isNaN(port) || !hookPath) process.exit(0);
-const blocking = hookPath === '/hook/pre-tool-use';
+const blocking = hookPath === '/hook/pre-tool-use' || hookPath === '/hook/permission-request';
 const chunks = [];
 process.stdin.on('data', (chunk) => chunks.push(chunk));
 process.stdin.on('end', () => {
@@ -392,12 +441,15 @@ export interface HookSettingsFile {
 
 /**
  * Write a temp `--settings` file (design §7.4) configuring `SessionStart`,
- * `Notification`, `Stop`, and `PreToolUse` hooks that all report to the hook
- * server listening on `port`, each hitting its own endpoint via one shared
- * forwarder script written into the same directory (the hook mechanism only
- * supports shell "command" hooks, not a direct HTTP call). The first three
- * are fire-and-forget lifecycle signals; `PreToolUse` is the blocking
- * remote-permission-answering hook (design §7.6).
+ * `Notification`, `Stop`, `PreToolUse`, and `PermissionRequest` hooks that all
+ * report to the hook server listening on `port`, each hitting its own
+ * endpoint via one shared forwarder script written into the same directory
+ * (the hook mechanism only supports shell "command" hooks, not a direct HTTP
+ * call). The first three are fire-and-forget lifecycle signals;
+ * `PreToolUse`/`PermissionRequest` are the blocking remote-permission-
+ * answering hooks (design §7.6, plan-v2.md Wave 1.1) — `PreToolUse` always
+ * defers (`ask`), and `PermissionRequest` is where the web-vs-terminal fork
+ * actually lives (fires only for calls that would genuinely show a dialog).
  *
  * `dir` is caller-supplied (e.g. a `~/.falcon/tmp/hooks`-style directory)
  * rather than resolved here, keeping this module decoupled from
@@ -435,6 +487,22 @@ export function writeHookSettingsFile(dir: string, port: number): HookSettingsFi
             {
               type: "command",
               command: command("/hook/pre-tool-use"),
+              timeout: HOOK_COMMAND_TIMEOUT_SECONDS,
+            },
+          ],
+        },
+      ],
+      // The PermissionRequest hook is where the web-vs-terminal fork actually
+      // lives (design §7.6, plan-v2.md Wave 1.1): it fires only for calls
+      // Claude Code's own settings/allowlist/mode evaluation decided
+      // genuinely need a human. Same blocking/timeout shape as PreToolUse.
+      PermissionRequest: [
+        {
+          matcher: "*",
+          hooks: [
+            {
+              type: "command",
+              command: command("/hook/permission-request"),
               timeout: HOOK_COMMAND_TIMEOUT_SECONDS,
             },
           ],
