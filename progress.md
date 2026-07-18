@@ -8492,3 +8492,35 @@ cycle picks a unit.
 - U1.5 `[bundle]` "timeline-fixes" (W1.6+W1.8) — a worktree already exists at
   `.worktrees/U1.5` (`wf/U1.5`, tip `c4bdfdc`); inspect before deciding whether to
   resume or restart it.
+
+## v2-pty-injection Cycle 4 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:** none
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) — failed
+  this cycle. Worktree `.worktrees/U1.4` (`wf/U1.4`, tip `0754076` "fix: U1.4 —
+  resolve test issues") left in place for human inspection per the false-landing
+  rule; not merged onto `v2-pty-injection`.
+
+**Verification:** No units were merged this cycle, so no ancestry checks or
+plan-v2.md checkbox flips apply — nothing was ticked. `.worktrees/U1.4`'s branch
+`wf/U1.4` was left untouched (parked, not merged). `pnpm typecheck` on
+`v2-pty-injection` — all 11 turbo tasks successful (cache-hit, `>>> FULL TURBO`).
+
+**Note:** `.worktrees/U1.5` (`wf/U1.5`, tip `c4bdfdc`) and `.worktrees/U1.6`
+(`wf/U1.6`, tip `ecb1f32` "test: U1.6") also exist on disk but were not part of
+this cycle's merged/failed lists — left untouched; worth checking their state
+before the next cycle picks a unit.
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`) — figure out why it failed
+  and either fix forward or restart the unit.
+- U1.5 `[bundle]` "timeline-fixes" (W1.6+W1.8) — worktree already exists at
+  `.worktrees/U1.5` (`wf/U1.5`, tip `c4bdfdc`); inspect before deciding whether
+  to resume or restart it.
+- U1.6 `[bundle]` "web-safety" (W1.9+W1.10) — worktree already exists at
+  `.worktrees/U1.6` (`wf/U1.6`, tip `ecb1f32`); inspect before deciding whether
+  to resume or restart it.
