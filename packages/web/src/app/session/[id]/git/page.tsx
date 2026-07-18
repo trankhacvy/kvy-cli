@@ -1,12 +1,17 @@
 import { RequireAuth } from "@/features/auth";
-import { GitDiffPanel } from "@/features/git-diff";
+import { SessionGitScreen } from "@/features/git-diff";
 
 // Static export (next.config.ts) prerenders every route at build time (same
 // constraint as `/session/[id]/page.tsx`) — no server ever renders user
-// content (design §5.3). Real session→worktree/machine resolution comes
-// from the sync engine (a separate, in-flight task); until that lands
-// there's exactly one prerenderable id, `demo`, which serves
-// `GitDiffPanel`'s mock data source.
+// content (design §5.3), and real session ids are only known at runtime
+// (minted by `POST /v1/sessions`, not this build). `generateStaticParams`
+// still needs at least one concrete id to emit this route's HTML/JS shell
+// at all; `demo` is an arbitrary placeholder — `SessionGitScreen` now always
+// resolves the session's real `machineId`/`workspaceId` off the live
+// `['sync']` snapshot (`use-sync-snapshot.ts`) rather than the
+// `mach-${id}`/`/workspace/${id}` placeholders this route used to fabricate,
+// so navigating here (via the timeline header's "Files changed" link) with
+// any real id works the same way, reading `id` from the URL at runtime.
 export function generateStaticParams() {
   return [{ id: "demo" }];
 }
@@ -15,14 +20,7 @@ export default async function SessionGitPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   return (
     <RequireAuth>
-      <div className="flex h-dvh flex-col">
-        <header className="border-b border-border px-4 py-3">
-          <p className="text-sm font-medium">Session {id} — Changed files</p>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <GitDiffPanel machineId={`mach-${id}`} worktree={`/workspace/${id}`} />
-        </div>
-      </div>
+      <SessionGitScreen sessionId={id} />
     </RequireAuth>
   );
 }

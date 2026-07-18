@@ -10,7 +10,7 @@ import { DirectoryStep } from "./components/directory-step";
 import { ImportStep } from "./components/import-step";
 import { MachineStep } from "./components/machine-step";
 import { OptionsStep } from "./components/options-step";
-import { useMockNewSessionActions, useMockNewSessionMachines } from "./mock-source";
+import { useLiveNewSessionActions, useLiveNewSessionMachines } from "./live-source";
 import { PROVIDER_META } from "./provider-meta";
 import { runSpawnFlow } from "./spawn-flow";
 import type { UseNewSessionActions, UseNewSessionMachines } from "./types";
@@ -47,14 +47,16 @@ type SpawnState =
  *
  * `useMachines`/`useActions` are the injectable seams (mirrors
  * `features/session-list`'s `UseSessionListSnapshot` /
- * `features/session-control`'s `UseSessionControl`) — mock by default, a
- * real machine-list snapshot + `machineRpcToActions(createMachineRpcClient(
- * {...}))` (`live-actions.ts`) once a screen has a live `apiSocket` + a
- * crypto client holding the chosen machine's unwrapped DEK.
+ * `features/session-control`'s `UseSessionControl`) — default to the real
+ * live machine-list snapshot + `machineRpcToActions(createMachineRpcClient(
+ * {...}))` (`live-source.ts`), gated on the chosen machine's unwrapped DEK
+ * (`@/lib/use-machine-crypto.ts`); `mock-source.ts`'s fakes stay exported
+ * for tests/standalone review, same precedent as `SessionTimelineScreen`'s
+ * `useMockSessionControl`.
  */
 export function NewSessionScreen({
-  useMachines = useMockNewSessionMachines,
-  useActions = useMockNewSessionActions,
+  useMachines = useLiveNewSessionMachines,
+  useActions = useLiveNewSessionActions,
 }: {
   useMachines?: UseNewSessionMachines;
   useActions?: UseNewSessionActions;
