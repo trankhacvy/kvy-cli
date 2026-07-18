@@ -76,7 +76,11 @@ describe("shouldShowActivityRow (W1.8 pulse row)", () => {
 
   it("is suppressed by a running tool even with other items before it", () => {
     expect(
-      shouldShowActivityRow(true, [textItem("1"), toolItem("t1", "done"), toolItem("t2", "running")]),
+      shouldShowActivityRow(true, [
+        textItem("1"),
+        toolItem("t1", "done"),
+        toolItem("t2", "running"),
+      ]),
     ).toBe(false);
   });
 });
