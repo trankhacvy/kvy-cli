@@ -62,15 +62,33 @@
  * split across the two hooks:
  *  - `PreToolUse` ({@link handlePreToolUse}) always defers with `ask` —
  *    Claude Code's own permission engine decides from there, exactly like a
- *    local turn. (The `AskUserQuestion` special case is Wave 2.1, not built
- *    here.)
+ *    local turn — EXCEPT for `AskUserQuestion` ({@link handleAskUserQuestion},
+ *    plan-v2.md Wave 2.1), which this hook intercepts directly. Denying at
+ *    `PreToolUse` happens *before* Claude Code ever runs the tool, so a web
+ *    answer never renders the question widget at all — see "AskUserQuestion
+ *    deny-with-answer" below.
  *  - `PermissionRequest` ({@link handlePermissionRequest}) is where the
- *    web-vs-terminal fork now lives: a local turn gets `undefined` (no
- *    decision → Claude Code's normal TUI dialog renders untouched); a web
- *    turn runs through the same perm-request/perm-resolve pipeline as
- *    before.
+ *    web-vs-terminal fork now lives for every OTHER tool: a local turn gets
+ *    `undefined` (no decision → Claude Code's normal TUI dialog renders
+ *    untouched); a web turn runs through the same perm-request/perm-resolve
+ *    pipeline as before.
  * This makes the web see *exactly* the prompts a terminal user would see —
  * no more, no less.
+ *
+ * ## AskUserQuestion deny-with-answer (plan-v2.md Wave 2.1, gated on the W0.2
+ * probe — **PASS**, 2026-07-18, claude 2.1.214)
+ * `AskUserQuestion` can't go through `PermissionRequest` like a normal
+ * prompt: there is no output channel there for the actual answer text, only
+ * allow/deny. Instead, {@link handleAskUserQuestion} intercepts it at
+ * `PreToolUse` (before Claude Code decides whether to show its own dialog)
+ * and, on a web turn, denies the call with a reason string formatted exactly
+ * like Claude Code's own native multiple-choice answer output
+ * ({@link composeAskAnswerReason}). The probe confirmed the model reads that
+ * denial as "the user already answered" and proceeds with the same turn —
+ * the question widget never renders, and no re-ask happens. A local turn
+ * (or a web turn that times out) instead gets `ask`/a plain-text fallback
+ * reason ({@link ASK_FALLBACK_REASON}) instructing the model to ask again as
+ * ordinary chat text, which the composer can answer like any other message.
  *
  * ## Deny copy (probe finding, plan-v2.md W0.3)
  * A live probe showed the model working around a `PreToolUse`/
@@ -119,6 +137,60 @@ import type { Logger } from "../logger.js";
 
 /** The three `permissionDecision` values Claude Code's `PreToolUse` hook accepts. */
 export type PreToolPermissionDecision = "allow" | "deny" | "ask";
+
+/** True for either of Claude Code's two `AskUserQuestion` tool-name spellings
+ * (the SDK/hook payload has used both across versions). */
+export const isAskUserQuestion = (name: string): boolean =>
+  name === "AskUserQuestion" || name === "ask_user_question";
+
+/** One option Claude Code's `AskUserQuestion` tool offers — either a bare
+ * string or `{label, description?}`, per the tool's own input schema. */
+export type AskQuestionOption = { label: string; description?: string } | string;
+
+/** One entry of the `AskUserQuestion` tool's `questions` array. */
+export interface AskQuestion {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: AskQuestionOption[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Composes the `PreToolUse` deny reason in Claude Code's own native answer
+ * format (`- {question}\n  → {labels}`) so the model reads it exactly like a
+ * real `AskUserQuestion` result (format verified by the W0.2 live probe,
+ * plan-v2.md; mirrors the format claude-code-anywhere's intercept.cjs uses,
+ * which itself mimics Claude Code's own).
+ */
+export function composeAskAnswerReason(
+  questions: AskQuestion[],
+  answers: Record<string, string>,
+): string {
+  const lines = questions.map(
+    (q) => `- ${q.question}\n  → ${answers[q.question] ?? "(no answer)"}`,
+  );
+  return [
+    "The user answered via the Falcon web UI:",
+    ...lines,
+    "Proceed using these answers. Do not call AskUserQuestion again for these questions.",
+  ].join("\n");
+}
+
+/**
+ * The `PreToolUse` deny reason used both when a web turn's answer times out
+ * and when a web-supplied decision doesn't carry a usable answer shape
+ * (degraded mode — also the primary path if the W0.2 probe had failed).
+ * Deliberately NOT run through {@link appendDenyGuard}: this message already
+ * tells the model exactly what to do next (ask again in plain text, then
+ * stop and wait), so appending the generic anti-workaround sentence would
+ * only muddy that instruction.
+ */
+export const ASK_FALLBACK_REASON =
+  "The remote user did not answer the structured question form. Ask the same question(s) again in PLAIN TEXT in your reply (no AskUserQuestion tool), then end your turn and wait for the user's typed answer.";
 
 /**
  * Claude Code's `PreToolUse` hook stdin payload (verified against 2.1.212).
@@ -245,18 +317,23 @@ export interface PreToolPermissionBridgeDeps {
 }
 
 /**
- * A `PreToolUse`-style pending entry — kept for {@link resolve}/{@link reset}
- * to share with {@link PendingPermissionRequest} even though nothing
- * currently populates {@link PreToolPermissionBridge.pending} (`handlePreToolUse`
- * always resolves immediately with `ask`). Wave 2.1's `AskUserQuestion`
- * special case is the intended future occupant of this map — see
- * plan-v2.md's W2.1 section, which reuses this exact pipeline.
+ * A `PreToolUse`-style pending entry. Its only occupant is
+ * {@link PreToolPermissionBridge.handleAskUserQuestion}'s web-turn path
+ * (`handlePreToolUse` itself always resolves every other tool immediately
+ * with `ask` — see that method's doc). `isQuestion`/`questions` carry enough
+ * of the original `AskUserQuestion` call for {@link
+ * PreToolPermissionBridge.mapDecision} to compose the deny-with-answer
+ * reason once a web decision arrives.
  */
 interface PendingPreToolRequest {
   settle: (output: PreToolUseHookOutput) => void;
   toolName: string;
   input: Record<string, unknown>;
   timer: CancelableTimer;
+  /** True only for the `AskUserQuestion` pending path (plan-v2.md W2.1). */
+  isQuestion?: boolean;
+  /** The original `questions` array — kept for {@link composeAskAnswerReason}. */
+  questions?: AskQuestion[];
 }
 
 /** A pending `PermissionRequest` — settled with a `PermDecision` that {@link
@@ -303,10 +380,8 @@ function appendDenyGuard(message: string): string {
  * `onPermissionRequest`, and {@link resolve} into the `perm.answer` session RPC.
  */
 export class PreToolPermissionBridge {
-  // See {@link PendingPreToolRequest}'s own doc: unpopulated today, reserved
-  // for Wave 2.1's `AskUserQuestion` special case, which reuses this exact
-  // pipeline. `resolve()`/`reset()` already look here so that wiring is a
-  // pure addition later.
+  // Populated only by {@link handleAskUserQuestion}'s web-turn path — see
+  // {@link PendingPreToolRequest}'s own doc (plan-v2.md Wave 2.1).
   private readonly pending = new Map<string, PendingPreToolRequest>();
   private readonly permRequestPending = new Map<string, PendingPermissionRequest>();
   private requests: Record<string, AgentStateRequest> = {};
@@ -325,19 +400,86 @@ export class PreToolPermissionBridge {
   }
 
   /**
-   * The `PreToolUse` hook handler. Always defers with `ask` — Claude Code's
-   * own permission engine decides from there (auto-allow, or a genuine
-   * prompt that fires `PermissionRequest`, where the web-vs-terminal fork now
-   * lives; see {@link handlePermissionRequest}). The `AskUserQuestion` special
-   * case is Wave 2.1, not built here.
+   * The `PreToolUse` hook handler. Defers with `ask` for every tool — Claude
+   * Code's own permission engine decides from there (auto-allow, or a
+   * genuine prompt that fires `PermissionRequest`, where the web-vs-terminal
+   * fork now lives; see {@link handlePermissionRequest}) — EXCEPT
+   * `AskUserQuestion`, which {@link handleAskUserQuestion} intercepts here
+   * directly (plan-v2.md Wave 2.1; see the class-level "AskUserQuestion
+   * deny-with-answer" doc for why this can't wait for `PermissionRequest`).
    */
-  handlePreToolUse(_input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+  handlePreToolUse(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+    if (isAskUserQuestion(input.tool_name)) return this.handleAskUserQuestion(input);
+
     // A web turn's `ask` here doesn't mean a local dialog is coming — the
     // `PermissionRequest` hook that follows resolves it remotely with no
     // TUI dialog ever rendered. Only signal "a dialog may be about to show"
     // on the local-turn path.
     if (!this.deps.isWebTurnActive()) this.deps.onPromptLikely?.();
     return Promise.resolve(output("ask", "Deferred to Claude Code's own permission engine."));
+  }
+
+  /**
+   * `AskUserQuestion`'s `PreToolUse` special case (plan-v2.md Wave 2.1). A
+   * local turn defers to `ask` — the terminal TUI's own question widget
+   * renders there, answered by the human at the keyboard, and the tailer
+   * mirrors question+answer as an ordinary tool-start/tool-end pair (a
+   * read-only card — no interception needed, so unlike
+   * {@link handlePermissionRequest}'s local path this doesn't even need
+   * `undefined`; `ask` is Claude Code's own "run the tool" signal). A web
+   * turn emits a `perm-request` (with `modes: []` — a question offers no
+   * mode switches) and blocks for an answer, exactly like {@link
+   * handlePermissionRequest}, but settles through {@link mapDecision}'s
+   * question branch instead of the generic allow/deny/mode mapping.
+   */
+  private handleAskUserQuestion(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+    if (!this.deps.isWebTurnActive()) {
+      this.deps.onPromptLikely?.();
+      return Promise.resolve(
+        output("ask", "Locally-initiated turn — answer the widget at the terminal."),
+      );
+    }
+
+    const toolInput = input.tool_input ?? {};
+    const questions = (toolInput.questions ?? []) as AskQuestion[];
+    const reqId = createId();
+
+    return new Promise<PreToolUseHookOutput>((resolvePromise) => {
+      const timer = this.setTimer(() => {
+        const pending = this.pending.get(reqId);
+        if (!pending) return;
+        this.pending.delete(reqId);
+        // Degraded mode (also the W0.2-fail primary): turn the widget into a
+        // plain conversational question — the composer handles the reply.
+        const decision: PermDecision = { kind: "deny", message: ASK_FALLBACK_REASON };
+        this.finishRequest(reqId, decision, "denied");
+        pending.settle(output("deny", ASK_FALLBACK_REASON));
+      }, this.answerTimeoutMs);
+
+      this.pending.set(reqId, {
+        settle: (out) => resolvePromise(out),
+        toolName: input.tool_name,
+        input: toolInput,
+        timer,
+        isQuestion: true,
+        questions,
+      });
+
+      this.requests[reqId] = { tool: input.tool_name, arguments: toolInput, createdAt: Date.now() };
+      this.publishAgentState();
+
+      this.deps.emitEnvelope(
+        createEnvelope("agent", {
+          t: "perm-request",
+          reqId,
+          name: input.tool_name,
+          args: toolInput,
+          modes: [], // a question offers no mode switches
+        }),
+      );
+
+      this.deps.logger?.debug("[pretool-bridge] question sent", { reqId });
+    });
   }
 
   /**
@@ -507,6 +649,27 @@ export class PreToolPermissionBridge {
     pending: PendingPreToolRequest,
     decision: PermDecision,
   ): PreToolUseHookOutput {
+    if (pending.isQuestion) {
+      // deny-with-answer (plan-v2.md Wave 2.1, W0.2-probe-verified): the
+      // question widget never renders — Claude reads the deny reason as the
+      // user's answer and continues the same turn.
+      if (
+        decision.kind === "allow" &&
+        isRecord(decision.updatedInput) &&
+        isRecord((decision.updatedInput as Record<string, unknown>).answers)
+      ) {
+        const answers = (decision.updatedInput as { answers: Record<string, string> }).answers;
+        return output("deny", composeAskAnswerReason(pending.questions ?? [], answers));
+      }
+      if (decision.kind === "deny") {
+        return output("deny", decision.message ?? ASK_FALLBACK_REASON);
+      }
+      // Any other decision shape for a question (e.g. a bare allow with no
+      // answers, or a mode switch — neither makes sense for a question)
+      // degrades to the plain-text fallback.
+      return output("deny", ASK_FALLBACK_REASON);
+    }
+
     switch (decision.kind) {
       case "allow": {
         if (decision.updatedInput !== undefined) {

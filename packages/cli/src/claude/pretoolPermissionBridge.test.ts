@@ -1,10 +1,15 @@
 import type { SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import {
+  ASK_FALLBACK_REASON,
+  type AskQuestion,
   type CancelableTimer,
+  composeAskAnswerReason,
+  isAskUserQuestion,
   type PermissionRequestHookOutput,
   PreToolPermissionBridge,
   type PreToolPermissionBridgeDeps,
+  type PreToolUseHookOutput,
 } from "./pretoolPermissionBridge.js";
 
 /** Collects emitted envelopes + gives a manual timer trigger for the timeout path. */
@@ -367,5 +372,179 @@ describe("PreToolPermissionBridge — handlePermissionRequest — missing tool_i
       { t: "perm-request" }
     >;
     expect(ev.args).toEqual({});
+  });
+});
+
+describe("isAskUserQuestion", () => {
+  it("matches both tool-name spellings and nothing else", () => {
+    expect(isAskUserQuestion("AskUserQuestion")).toBe(true);
+    expect(isAskUserQuestion("ask_user_question")).toBe(true);
+    expect(isAskUserQuestion("Bash")).toBe(false);
+  });
+});
+
+describe("composeAskAnswerReason", () => {
+  it("formats a single question in Claude Code's own native answer shape (snapshot)", () => {
+    const questions: AskQuestion[] = [
+      { question: "Which color?", options: ["Red", "Blue", "Green"] },
+    ];
+    expect(composeAskAnswerReason(questions, { "Which color?": "Blue" })).toBe(
+      [
+        "The user answered via the Falcon web UI:",
+        "- Which color?\n  → Blue",
+        "Proceed using these answers. Do not call AskUserQuestion again for these questions.",
+      ].join("\n"),
+    );
+  });
+
+  it("formats multiple questions, each on its own bullet (snapshot)", () => {
+    const questions: AskQuestion[] = [
+      { question: "Which color?", options: ["Red", "Blue"] },
+      { question: "Which size?", options: ["Small", "Large"] },
+    ];
+    expect(
+      composeAskAnswerReason(questions, { "Which color?": "Blue", "Which size?": "Large" }),
+    ).toBe(
+      [
+        "The user answered via the Falcon web UI:",
+        "- Which color?\n  → Blue",
+        "- Which size?\n  → Large",
+        "Proceed using these answers. Do not call AskUserQuestion again for these questions.",
+      ].join("\n"),
+    );
+  });
+
+  it("falls back to `(no answer)` for a question missing from the answers map", () => {
+    const questions: AskQuestion[] = [{ question: "Which color?", options: ["Red"] }];
+    expect(composeAskAnswerReason(questions, {})).toContain("→ (no answer)");
+  });
+});
+
+describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion special case (W2.1)", () => {
+  it("local turn: defers with `ask` pointing at the terminal widget, emits nothing", async () => {
+    const onPromptLikely = vi.fn();
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, onPromptLikely });
+
+    const out = await bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions: [{ question: "Which color?", options: ["Red", "Blue"] }] },
+    });
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("ask");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toContain("terminal");
+    expect(onPromptLikely).toHaveBeenCalledOnce();
+    expect(emitted).toHaveLength(0);
+    expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("web turn: emits a perm-request with no mode options and blocks for an answer", async () => {
+    const { bridge, emitted } = makeBridge();
+    const questions = [{ question: "Which color?", options: ["Red", "Blue", "Green"] }];
+    const pending = bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions },
+    });
+
+    const reqEv = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
+    expect(reqEv.name).toBe("AskUserQuestion");
+    expect(reqEv.args).toEqual({ questions });
+    expect(reqEv.modes).toEqual([]);
+    expect(bridge.pendingCount).toBe(1);
+
+    bridge.resolve({
+      reqId: reqEv.reqId,
+      decision: {
+        kind: "allow",
+        scope: "once",
+        updatedInput: { answers: { "Which color?": "Blue" } },
+      },
+    });
+    const out = (await pending) as PreToolUseHookOutput;
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toBe(
+      composeAskAnswerReason(questions, { "Which color?": "Blue" }),
+    );
+    expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("web turn, answer decision missing the answers shape: degrades to the plain-text fallback", async () => {
+    const { bridge, emitted } = makeBridge();
+    const pending = bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions: [{ question: "Which color?", options: ["Red"] }] },
+    });
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+
+    bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "allow", scope: "once" } });
+    const out = (await pending) as PreToolUseHookOutput;
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toBe(ASK_FALLBACK_REASON);
+  });
+
+  it("web turn, a deny decision: denies with the decision's own message, or the fallback reason", async () => {
+    const { bridge, emitted } = makeBridge();
+    const pending = bridge.handlePreToolUse({ tool_name: "ask_user_question" });
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+
+    bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "deny", message: "not now" } });
+    const out = (await pending) as PreToolUseHookOutput;
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toBe("not now");
+  });
+
+  it("web turn, a mode-switch decision (nonsensical for a question): degrades to the plain-text fallback", async () => {
+    const { bridge, emitted } = makeBridge();
+    const pending = bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+
+    bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "mode", mode: "acceptEdits" } });
+    const out = (await pending) as PreToolUseHookOutput;
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toBe(ASK_FALLBACK_REASON);
+  });
+
+  it("times out to the plain-text fallback reason exactly (no anti-workaround guard appended)", async () => {
+    const { bridge, triggerTimeout } = makeBridge({ answerTimeoutMs: 1000 });
+    const pending = bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+
+    triggerTimeout();
+    const out = (await pending) as PreToolUseHookOutput;
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toBe(ASK_FALLBACK_REASON);
+    expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("is first-wins, sharing the resolve()/reset() plumbing with the `pending` map", async () => {
+    const { bridge, emitted } = makeBridge();
+    const pending = bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+
+    const first = bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "deny", message: "a" } });
+    const second = bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "deny", message: "b" } });
+
+    expect(first).toEqual({ ok: true });
+    expect(second.ok).toBe(false);
+    await pending;
+  });
+
+  it("reset() settles a pending question as a guarded deny", async () => {
+    const { bridge } = makeBridge();
+    const pending = bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+
+    bridge.reset("session ended");
+    const out = (await pending) as PreToolUseHookOutput;
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toContain(
+      "Do not attempt this action another way.",
+    );
+    expect(bridge.pendingCount).toBe(0);
   });
 });

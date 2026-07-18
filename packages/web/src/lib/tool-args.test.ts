@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   asRecord,
+  isAskUserQuestion,
+  parseAskAnswers,
+  parseAskQuestions,
   parseBashArgs,
   parseBashOutput,
   parseEditArgs,
@@ -133,5 +136,99 @@ describe("parseTodoItems", () => {
   it("returns an empty array rather than throwing when todos is missing", () => {
     expect(parseTodoItems({})).toEqual([]);
     expect(parseTodoItems(undefined)).toEqual([]);
+  });
+});
+
+describe("isAskUserQuestion", () => {
+  it("matches both tool-name spellings and nothing else", () => {
+    expect(isAskUserQuestion("AskUserQuestion")).toBe(true);
+    expect(isAskUserQuestion("ask_user_question")).toBe(true);
+    expect(isAskUserQuestion("Bash")).toBe(false);
+  });
+});
+
+describe("parseAskQuestions", () => {
+  it("reads a single-select question with string options", () => {
+    const questions = parseAskQuestions({
+      questions: [{ question: "Which color?", header: "Color", options: ["Red", "Blue"] }],
+    });
+    expect(questions).toEqual([
+      {
+        question: "Which color?",
+        header: "Color",
+        multiSelect: undefined,
+        options: [
+          { label: "Red", description: undefined },
+          { label: "Blue", description: undefined },
+        ],
+      },
+    ]);
+  });
+
+  it("reads a multiSelect question with object options + descriptions", () => {
+    const questions = parseAskQuestions({
+      questions: [
+        {
+          question: "Which frameworks?",
+          multiSelect: true,
+          options: [{ label: "React", description: "UI library" }, { label: "Vue" }],
+        },
+      ],
+    });
+    expect(questions[0]?.multiSelect).toBe(true);
+    expect(questions[0]?.options).toEqual([
+      { label: "React", description: "UI library" },
+      { label: "Vue", description: undefined },
+    ]);
+  });
+
+  it("reads a multi-question form, preserving order", () => {
+    const questions = parseAskQuestions({
+      questions: [
+        { question: "Q1", options: ["A"] },
+        { question: "Q2", options: ["B"] },
+      ],
+    });
+    expect(questions.map((q) => q.question)).toEqual(["Q1", "Q2"]);
+  });
+
+  it("drops malformed questions/options rather than throwing", () => {
+    expect(
+      parseAskQuestions({
+        questions: [{ question: "Q1", options: ["A", 42, { noLabel: true }] }, "not-an-object", {}],
+      }),
+    ).toEqual([
+      {
+        question: "Q1",
+        header: undefined,
+        multiSelect: undefined,
+        options: [{ label: "A", description: undefined }],
+      },
+    ]);
+  });
+
+  it("returns an empty array rather than throwing when questions is missing", () => {
+    expect(parseAskQuestions({})).toEqual([]);
+    expect(parseAskQuestions(undefined)).toEqual([]);
+  });
+});
+
+describe("parseAskAnswers", () => {
+  it("reads an {answers: {question: answer}} map", () => {
+    expect(parseAskAnswers({ answers: { "Which color?": "Blue" } })).toEqual([
+      { question: "Which color?", answer: "Blue" },
+    ]);
+  });
+
+  it("reads an array of {question, answer} entries", () => {
+    expect(parseAskAnswers([{ question: "Q1", answer: "A1" }])).toEqual([
+      { question: "Q1", answer: "A1" },
+    ]);
+  });
+
+  it("returns undefined on an unrecognized shape rather than throwing", () => {
+    expect(parseAskAnswers({ nothingUseful: true })).toBeUndefined();
+    expect(parseAskAnswers("raw string")).toBeUndefined();
+    expect(parseAskAnswers(undefined)).toBeUndefined();
   });
 });

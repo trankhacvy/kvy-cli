@@ -1,3 +1,11 @@
+export {
+  type AskSelections,
+  allAskQuestionsAnswered,
+  buildAskAnswerDecision,
+  buildAskAnswers,
+  extractAskAnswers,
+  toggleAskSelection,
+} from "./ask-question-state";
 export type { AttentionMeta, AttentionState, DeriveAttentionInput } from "./attention";
 export { ATTENTION_META, deriveAttention } from "./attention";
 export { formatDecryptError } from "./decrypt-error";

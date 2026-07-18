@@ -152,3 +152,98 @@ export function parseTodoItems(args: unknown): TodoEntry[] {
     activeForm: readString(todo, "activeForm"),
   }));
 }
+
+/** True for either of Claude Code's two `AskUserQuestion` tool-name spellings
+ * (mirrors `packages/cli/src/claude/pretoolPermissionBridge.ts`'s own
+ * `isAskUserQuestion` — no shared runtime module between the two packages
+ * for a predicate this small, plan-v2.md W2.1). */
+export function isAskUserQuestion(name: string): boolean {
+  return name === "AskUserQuestion" || name === "ask_user_question";
+}
+
+export interface AskQuestionOption {
+  label: string;
+  description?: string;
+}
+
+export interface AskQuestionParsed {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: AskQuestionOption[];
+}
+
+function parseAskOption(raw: unknown): AskQuestionOption | undefined {
+  if (typeof raw === "string") return { label: raw };
+  const r = asRecord(raw);
+  const label = readString(r, "label");
+  return label ? { label, description: readString(r, "description") } : undefined;
+}
+
+/** Reads the `AskUserQuestion` tool's `{questions: [...]}` input shape
+ * (plan-v2.md W2.1) — each question's `options` may be bare strings or
+ * `{label, description?}` objects; both normalize to `AskQuestionOption`.
+ * Malformed questions/options are dropped rather than thrown on. */
+export function parseAskQuestions(args: unknown): AskQuestionParsed[] {
+  const r = asRecord(args);
+  const rawQuestions = r?.questions;
+  if (!Array.isArray(rawQuestions)) return [];
+
+  return rawQuestions
+    .map((raw): AskQuestionParsed | undefined => {
+      const qr = asRecord(raw);
+      const question = readString(qr, "question");
+      if (!question) return undefined;
+      const rawOptions = qr?.options;
+      const options = Array.isArray(rawOptions)
+        ? rawOptions.map(parseAskOption).filter((o): o is AskQuestionOption => o !== undefined)
+        : [];
+      return {
+        question,
+        header: readString(qr, "header"),
+        multiSelect: readBoolean(qr, "multiSelect"),
+        options,
+      };
+    })
+    .filter((q): q is AskQuestionParsed => q !== undefined);
+}
+
+export interface AskAnswerEntry {
+  question: string;
+  answer: string;
+}
+
+/** Reads a completed `AskUserQuestion` tool-end's answer, for the read-only
+ * (locally-answered) ToolCard. Two tolerated shapes: `{answers: {question:
+ * answer}}` (Falcon's own deny-with-answer convention, in case a future
+ * transport ever mirrors it back as a real tool-end) or an array of
+ * `{question, answer}` entries. Neither is a verified Claude Code tool-result
+ * shape (plan-v2.md W2.1's `[human]` sub-task covers that live check) —
+ * degrades to `undefined` on any other shape so the card falls back to a raw
+ * dump instead of hiding data. */
+export function parseAskAnswers(output: unknown): AskAnswerEntry[] | undefined {
+  const r = asRecord(output);
+  const answersRecord = asRecord(r?.answers);
+  if (answersRecord) {
+    const entries = Object.entries(answersRecord).filter(
+      (entry): entry is [string, string] => typeof entry[1] === "string",
+    );
+    return entries.length > 0
+      ? entries.map(([question, answer]) => ({ question, answer }))
+      : undefined;
+  }
+
+  if (Array.isArray(output)) {
+    const entries = output
+      .map((entry) => {
+        const er = asRecord(entry);
+        const question = readString(er, "question");
+        const answer = readString(er, "answer");
+        return question && answer ? { question, answer } : undefined;
+      })
+      .filter((e): e is AskAnswerEntry => e !== undefined);
+    return entries.length > 0 ? entries : undefined;
+  }
+
+  return undefined;
+}
