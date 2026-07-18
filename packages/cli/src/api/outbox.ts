@@ -7,7 +7,9 @@
  * Two thresholds decide when a buffered batch of envelopes gets sealed and
  * queued, whichever comes first:
  *   - `maxBatchSize` envelopes have accumulated (default 20), or
- *   - `flushMs` have elapsed since the first envelope in the batch (default 300ms).
+ *   - `flushMs` have elapsed since the first envelope in the batch (default 150ms —
+ *     plan.md W4.1: lowered from 300ms for perceived-latency polish, since real
+ *     token streaming is CLI-shaped-out; see docs/protocol.md §2).
  *
  * Once sealed, a batch is appended to a disk-backed queue (10MB cap, oldest
  * evicted first — see `queue.ts`) *before* the network call is attempted, so
@@ -38,8 +40,8 @@ import {
   type QueuedBatch,
 } from "./queue.js";
 
-/** plan.md §6.5: "flush ≤300ms/≤20 into one outbox entry". */
-export const DEFAULT_FLUSH_MS = 300;
+/** plan.md §6.5/W4.1: "flush ≤150ms/≤20 into one outbox entry" (lowered from 300ms). */
+export const DEFAULT_FLUSH_MS = 150;
 export const DEFAULT_MAX_BATCH_SIZE = 20;
 
 export interface OutboxOptions {
@@ -50,7 +52,7 @@ export interface OutboxOptions {
   /** `~/.falcon` (or `FALCON_HOME_DIR`) — the disk queue lives under `<homeDir>/outbox/`. */
   homeDir: string;
   logger: Logger;
-  /** Coalescing time threshold in ms. Default 300 (plan.md §6.5). */
+  /** Coalescing time threshold in ms. Default 150 (plan.md §6.5/W4.1). */
   flushMs?: number;
   /** Coalescing count threshold. Default 20 (plan.md §6.5). */
   maxBatchSize?: number;

@@ -127,8 +127,8 @@ describe("Outbox", () => {
       expect(calls.length).toBe(1);
     });
 
-    it("uses the documented defaults (300ms / 20 events) when not overridden", () => {
-      expect(DEFAULT_FLUSH_MS).toBe(300);
+    it("uses the documented defaults (150ms / 20 events) when not overridden", () => {
+      expect(DEFAULT_FLUSH_MS).toBe(150);
       expect(DEFAULT_MAX_BATCH_SIZE).toBe(20);
     });
 
