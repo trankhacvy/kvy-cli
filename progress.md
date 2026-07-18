@@ -8580,3 +8580,33 @@ TURBO`).
   why it failed and either fix forward or restart the unit.
 - U2.3 `[solo]` "stop-session" (W2.3 — WIRE+CLI+WEB) — next Phase-2 unit per
   plan-v2.md Master TODO ordering.
+
+## v2-pty-injection Cycle 7 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U3.1 `[bundle]` "tool-cards" (W3.1 — `tool-cards/` dir: WebFetch, WebSearch,
+  NotebookEdit, LS cards + registry + fixture tests) — sha
+  `6fccc23a5141ba6cce1685a0687eba1d48769fed`
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) —
+  still failed/parked from prior cycles. Worktree `.worktrees/U1.4`
+  (`wf/U1.4`, tip `0754076`) left in place for human inspection per the
+  false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor
+6fccc23a5141ba6cce1685a0687eba1d48769fed v2-pty-injection` held — confirmed
+real ancestry, not just branch presence. `.worktrees/U3.1` and branch
+`wf/U3.1` were removed post-verification. plan-v2.md's Master TODO had U3.1's
+unit box flipped to `[x]` (single-line entry, no sub-boxes and no `[human]`
+sub-box). `pnpm typecheck` on `v2-pty-injection` — all 11 turbo tasks
+successful (cache-hit, `>>> FULL TURBO`).
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `0754076`) — figure out
+  why it failed and either fix forward or restart the unit.
+- U2.3 `[solo]` "stop-session" (W2.3 — WIRE+CLI+WEB) — next Phase-2 unit per
+  plan-v2.md Master TODO ordering (still unlanded); U3.2 "mapper-parity"
+  (W3.2+W3.3) is the next Phase-3 unit if Phase-2 is intentionally deferred.

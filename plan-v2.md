@@ -1431,7 +1431,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 
 ### Phase 3 — coverage & live wiring
 
-- [ ] **U3.1 `[bundle]` "tool-cards"** (W3.1 — `tool-cards/` dir): WebFetch,
+- [x] **U3.1 `[bundle]` "tool-cards"** (W3.1 — `tool-cards/` dir): WebFetch,
       WebSearch, NotebookEdit, LS cards + registry + fixture tests
 - [ ] **U3.2 `[bundle]` "mapper-parity"** (W3.2+W3.3 — `envelopeMapper.ts` both)
   - [ ] W3.2: image blocks → `t:"file"` `inline:` refs (≤256KB) else `service` note;
