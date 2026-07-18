@@ -36,4 +36,15 @@ describe("formatTokenCount (UsageChip, W4.6)", () => {
     expect(formatTokenCount(-5)).toBe("0");
     expect(formatTokenCount(Number.NaN)).toBe("0");
   });
+
+  it("rolls over to the next unit instead of displaying a stale unit at 4 digits (rounding boundary)", () => {
+    // toFixed(1) rounds 999.95 up to "1000.0" before the unit is chosen —
+    // without a re-check after rounding this renders "1000.0k" instead of
+    // rolling over to "1.0M". Mirrors the equivalent boundary in
+    // `formatBytes` (same base-swap algorithm, see file header).
+    expect(formatTokenCount(999_950)).toBe("1.0M");
+    // Same class of bug one unit down: 9999 rounds to "10.0k" (1 decimal,
+    // chosen while value was still <10) instead of "10k".
+    expect(formatTokenCount(9999)).toBe("10k");
+  });
 });
