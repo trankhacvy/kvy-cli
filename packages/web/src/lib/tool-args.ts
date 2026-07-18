@@ -48,6 +48,16 @@ export function readRecordArray(
     .filter((entry): entry is Record<string, unknown> => entry !== undefined);
 }
 
+export function readStringArray(
+  record: Record<string, unknown> | undefined,
+  key: string,
+): string[] | undefined {
+  const v = record?.[key];
+  if (!Array.isArray(v)) return undefined;
+  const items = v.filter((entry): entry is string => typeof entry === "string");
+  return items.length > 0 ? items : undefined;
+}
+
 export interface BashArgs {
   command?: string;
   description?: string;
@@ -151,6 +161,96 @@ export function parseTodoItems(args: unknown): TodoEntry[] {
     status: readString(todo, "status"),
     activeForm: readString(todo, "activeForm"),
   }));
+}
+
+export interface WebFetchArgs {
+  url?: string;
+  prompt?: string;
+}
+
+export function parseWebFetchArgs(args: unknown): WebFetchArgs {
+  const r = asRecord(args);
+  return {
+    url: readString(r, "url"),
+    prompt: readString(r, "prompt"),
+  };
+}
+
+export interface WebSearchArgs {
+  query?: string;
+  allowedDomains?: string[];
+  blockedDomains?: string[];
+}
+
+export function parseWebSearchArgs(args: unknown): WebSearchArgs {
+  const r = asRecord(args);
+  return {
+    query: readString(r, "query"),
+    allowedDomains: readStringArray(r, "allowed_domains"),
+    blockedDomains: readStringArray(r, "blocked_domains"),
+  };
+}
+
+export interface WebSearchResultItem {
+  title?: string;
+  url?: string;
+}
+
+/** Claude Code's `WebSearch` tool-result is a plain text blob ("Web search
+ * results for query: ... \n\n ... \n\nLinks: [{"title":...,"url":...}, ...]"),
+ * not structured JSON at the top level (verified against a real transcript,
+ * `__fixtures__/task_non_sdk.jsonl`) — this pulls the embedded `Links: [...]`
+ * array back out. Degrades to `undefined` (raw text fallback) for any other
+ * shape, including a future structured-output revision. */
+export function parseWebSearchResults(output: unknown): WebSearchResultItem[] | undefined {
+  if (typeof output !== "string") return undefined;
+  const match = output.match(/Links:\s*(\[.*?\])/s);
+  if (!match?.[1]) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(match[1]);
+    if (!Array.isArray(parsed)) return undefined;
+    const items = parsed
+      .map((entry) => asRecord(entry))
+      .filter((entry): entry is Record<string, unknown> => entry !== undefined)
+      .map((entry) => ({ title: readString(entry, "title"), url: readString(entry, "url") }))
+      .filter((entry) => entry.title !== undefined || entry.url !== undefined);
+    return items.length > 0 ? items : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export interface NotebookEditArgs {
+  notebookPath?: string;
+  cellId?: string;
+  newSource?: string;
+  cellType?: string;
+  editMode?: string;
+}
+
+export function parseNotebookEditArgs(args: unknown): NotebookEditArgs {
+  const r = asRecord(args);
+  return {
+    notebookPath: readString(r, "notebook_path"),
+    cellId: readString(r, "cell_id"),
+    newSource: readString(r, "new_source"),
+    cellType: readString(r, "cell_type"),
+    editMode: readString(r, "edit_mode"),
+  };
+}
+
+export interface LsArgs {
+  path?: string;
+  ignore?: string[];
+}
+
+export function parseLsArgs(args: unknown): LsArgs {
+  const r = asRecord(args);
+  return {
+    path: readString(r, "path"),
+    ignore: readStringArray(r, "ignore"),
+  };
 }
 
 /** True for either of Claude Code's two `AskUserQuestion` tool-name spellings
