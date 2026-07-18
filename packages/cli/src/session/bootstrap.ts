@@ -25,6 +25,19 @@
  * `fetchImpl`) so this module has no hard dependency on the not-yet-merged
  * `falcon auth login` CLI work — callers pass a `getAuthToken` function
  * (sync or async) that returns a bearer token.
+ *
+ * **Resume (plan-v2.md W3.7, design v0.3 §7.4):** a re-spawned session
+ * process (`daemon/resumeSession.ts`'s `FALCON_RECONNECT_*` env contract —
+ * currently only set by the daemon's own headless resume path) must keep
+ * writing into its *existing* server-side session row, never mint a fresh
+ * one under a brand-new nonce — a second row for the same logical session
+ * would silently fork the transcript the web UI already has cached. When
+ * `FALCON_RECONNECT_SESSION_ID` is present this call skips `POST
+ * /v1/sessions` entirely and re-attaches locally: the wrapped DEK already
+ * travelled via `FALCON_RECONNECT_ENCRYPTION_KEY` (the same wrapped-DEK
+ * shape `/session-started` reports and `sessions.json` persists), so
+ * unwrapping it with the caller's content secret key is enough — no network
+ * round trip needed, and no new tag is minted (there's nothing to create).
  */
 import { createHash } from "node:crypto";
 import type { BoxKeyPair } from "@falcon/crypto";
@@ -70,6 +83,13 @@ export interface BootstrapSessionParams {
   metadata: SessionMetadataInput;
   workspaceId?: string | null;
   executionTarget?: string;
+  /**
+   * Injectable for tests; defaults to `process.env`. When
+   * `FALCON_RECONNECT_SESSION_ID` is set, this call re-attaches to that
+   * existing session instead of create-or-getting a fresh one — see the
+   * module doc comment above.
+   */
+  env?: NodeJS.ProcessEnv;
 }
 
 export interface BootstrapSessionDeps {
@@ -132,15 +152,72 @@ export function buildSessionTag(params: {
 }
 
 /**
+ * Re-attaches to an already-existing session (`FALCON_RECONNECT_SESSION_ID`)
+ * by unwrapping the wrapped DEK the reconnect env already carries
+ * (`FALCON_RECONNECT_ENCRYPTION_KEY`) — no `POST /v1/sessions` call, no fresh
+ * tag (there's nothing being created). `tag` on the returned result is `""`:
+ * meaningless here since no create-or-get call was made, and unused by every
+ * caller (checked: only `bootstrap.test.ts` asserts on `tag`, and only on the
+ * create/replay paths).
+ */
+function reattachSession(
+  deps: Pick<BootstrapSessionDeps, "logger">,
+  params: { sessionId: string; env: NodeJS.ProcessEnv; contentKeyPair: BoxKeyPair },
+): BootstrapSessionResult {
+  const { logger } = deps;
+  const wrappedDekB64 = params.env.FALCON_RECONNECT_ENCRYPTION_KEY?.trim();
+  if (!wrappedDekB64) {
+    logger?.error(
+      "[session/bootstrap] FALCON_RECONNECT_SESSION_ID set without FALCON_RECONNECT_ENCRYPTION_KEY",
+      { sessionId: params.sessionId },
+    );
+    throw new Error(
+      `bootstrapSession: FALCON_RECONNECT_SESSION_ID=${params.sessionId} set without ` +
+        "FALCON_RECONNECT_ENCRYPTION_KEY — cannot re-attach without the wrapped DEK",
+    );
+  }
+
+  const dek = unwrapDek(decodeBase64(wrappedDekB64), params.contentKeyPair.secretKey);
+  if (!dek) {
+    logger?.error("[session/bootstrap] failed to unwrap reconnect DEK", {
+      sessionId: params.sessionId,
+    });
+    throw new Error(
+      `bootstrapSession: could not unwrap the reconnect DEK for session ${params.sessionId} — ` +
+        "wrong key, or corrupted/foreign wrap",
+    );
+  }
+
+  logger?.debug("[session/bootstrap] re-attached via FALCON_RECONNECT_SESSION_ID", {
+    sessionId: params.sessionId,
+  });
+  return { sessionId: params.sessionId, dek, tag: "", created: false };
+}
+
+/**
  * Mint a fresh session DEK, wrap it to `contentKeyPair.publicKey`, and
  * create-or-get the session row via `POST /v1/sessions`. Throws on any
  * non-2xx response, network failure, or unwrap failure on the replay path —
  * this is a required startup step, not a best-effort side channel.
+ *
+ * Short-circuits to `reattachSession()` (no network call at all) when
+ * `FALCON_RECONNECT_SESSION_ID` is present in `params.env` — see the module
+ * doc comment.
  */
 export async function bootstrapSession(
   deps: BootstrapSessionDeps,
   params: BootstrapSessionParams,
 ): Promise<BootstrapSessionResult> {
+  const env = params.env ?? process.env;
+  const reconnectSessionId = env.FALCON_RECONNECT_SESSION_ID?.trim();
+  if (reconnectSessionId) {
+    return reattachSession(deps, {
+      sessionId: reconnectSessionId,
+      env,
+      contentKeyPair: params.contentKeyPair,
+    });
+  }
+
   const { serverUrl, fetchImpl, getAuthToken, logger } = deps;
   const tag = buildSessionTag(params);
   const dek = getRandomBytes(DEK_LENGTH_BYTES);

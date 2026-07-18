@@ -258,6 +258,103 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBeNull();
   });
 
+  it("resumes the provider transcript from FALCON_RECONNECT_PROVIDER_SESSION_ID when set (plan-v2.md W3.7)", async () => {
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+
+    await runStartClaudeCommand(
+      baseDeps({
+        env: { FALCON_RECONNECT_PROVIDER_SESSION_ID: "provider-sess-abc" },
+        startPtyClaudeSession,
+      }),
+    );
+
+    const [ptyOptions] = startPtyClaudeSession.mock.calls[0] as unknown as [
+      PtyClaudeSessionOptions,
+    ];
+    expect(ptyOptions.providerSessionId).toBe("provider-sess-abc");
+  });
+
+  it("treats a whitespace-only FALCON_RECONNECT_PROVIDER_SESSION_ID as absent, not a truthy sessionId", async () => {
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+
+    await runStartClaudeCommand(
+      baseDeps({
+        env: { FALCON_RECONNECT_PROVIDER_SESSION_ID: "   " },
+        startPtyClaudeSession,
+      }),
+    );
+
+    const [ptyOptions] = startPtyClaudeSession.mock.calls[0] as unknown as [
+      PtyClaudeSessionOptions,
+    ];
+    expect(ptyOptions.providerSessionId).toBeNull();
+  });
+
+  it("passes env through to bootstrapSession so it can honor FALCON_RECONNECT_SESSION_ID", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_1",
+      dek: getRandomBytes(32),
+      tag: "",
+      created: false,
+    }));
+    const reconnectEnv = {
+      FALCON_RECONNECT_SESSION_ID: "sess_existing",
+      FALCON_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
+    };
+
+    await runStartClaudeCommand(
+      baseDeps({
+        env: reconnectEnv,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+      }),
+    );
+
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { env?: NodeJS.ProcessEnv },
+    ];
+    expect(bootstrapParams.env).toMatchObject(reconnectEnv);
+  });
+
+  it("wires the full daemon-resume env contract end-to-end: bootstrapSession re-attaches AND the PTY resumes the provider transcript from the same call", async () => {
+    // The combination `daemon/resumeSession.ts`'s `buildReconnectEnv()` actually
+    // produces (session re-attach) plus a provider session id a caller layered
+    // on top for the terminal case — both must flow through this single
+    // `runStartClaudeCommand` call without one clobbering the other.
+    const fullReconnectEnv = {
+      FALCON_RECONNECT_SESSION_ID: "sess_existing",
+      FALCON_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
+      FALCON_RECONNECT_PROVIDER_SESSION_ID: "provider-sess-xyz",
+    };
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_existing",
+      dek: getRandomBytes(32),
+      tag: "",
+      created: false,
+    }));
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
+
+    await runStartClaudeCommand(
+      baseDeps({
+        env: fullReconnectEnv,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+        startPtyClaudeSession,
+      }),
+    );
+
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { env?: NodeJS.ProcessEnv },
+    ];
+    expect(bootstrapParams.env).toMatchObject(fullReconnectEnv);
+
+    const [ptyOptions] = startPtyClaudeSession.mock.calls[0] as unknown as [
+      PtyClaudeSessionOptions,
+    ];
+    expect(ptyOptions.providerSessionId).toBe("provider-sess-xyz");
+  });
+
   it("installs exactly one hook server and hands its settings path/env to the PTY session", async () => {
     const installRemotePermissionHook = vi.fn(async () =>
       fakeRemotePermissionHook({
