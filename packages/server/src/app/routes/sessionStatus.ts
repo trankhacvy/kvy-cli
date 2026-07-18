@@ -18,28 +18,39 @@ import { NotFoundSchema, SessionIdParamsSchema } from "./shared.js";
 // `attention{kind:'failed'}` ephemeral (design §6.4's existing "session
 // failed" push trigger) — clients already show a generic, session-scoped
 // signal for that, same as every other attention kind.
+//
+// `"ended"` (plan-v2.md W1.4+B15) is additive: the PTY-injection path
+// (`start.ts`) reports it on a normal exit or SIGTERM/SIGHUP, so the web can
+// show the session as over instead of inferring nothing. It only fans out
+// `session-update` — unlike `failed`, ending a session isn't itself an
+// attention-worthy event (no push, no `attention` ephemeral); a resumable
+// exit isn't the kind of thing FR-8.2's "no per-message notifications, ever"
+// lifecycle-push list (`LifecycleKindSchema`) covers.
 const SessionStatusBodySchema = z.object({
-  status: z.literal("failed"),
+  status: z.enum(["failed", "ended"]),
   error: z.string().max(2000).optional(),
 });
-const SessionStatusResponseSchema = z.object({ status: z.literal("failed") });
+const SessionStatusResponseSchema = z.object({ status: z.enum(["failed", "ended"]) });
 
 /**
  * `POST /v1/sessions/:id/status` (PRD FR-3.7; design §7.5's mode state
- * machine — "Crash ⇒ status `failed` + error surfaced"). Deliberately
- * narrow: unlike `sessionCas.ts`'s CAS routes (`PUT .../metadata|state`),
- * this is not a generic, optimistically-concurrent status setter — it only
- * ever transitions a session to `failed`, and takes no `expectedVersion`.
+ * machine — "Crash ⇒ status `failed` + error surfaced"; plan-v2.md W1.4+B15
+ * adds the `ended` normal/signal-exit report). Deliberately narrow: unlike
+ * `sessionCas.ts`'s CAS routes (`PUT .../metadata|state`), this is not a
+ * generic, optimistically-concurrent status setter — it only ever
+ * transitions a session to one of these two terminal statuses, and takes no
+ * `expectedVersion`.
  *
  * Rationale for skipping CAS here: this route exists for exactly one
- * caller shape — a CLI session process's best-effort crash report, fired
- * from a signal/uncaught-exception handler that may itself be racing the
- * process's own shutdown. A dropped/duplicate retry of that POST must
- * still succeed the same way (idempotent), and there is no legitimate
- * concurrent writer to lose a race against: nothing else on `main` today
- * transitions `sessions.status` at all. Explicit archive (`POST
- * .../archive`, design §6.2) and any richer status lifecycle are separate,
- * out-of-scope future work (plan.md §16 "1.4 Transcript pipeline").
+ * caller shape — a CLI session process's best-effort exit/crash report,
+ * fired from `start.ts`'s normal-exit path or a signal/uncaught-exception
+ * handler that may itself be racing the process's own shutdown. A dropped/
+ * duplicate retry of that POST must still succeed the same way (idempotent),
+ * and there is no legitimate concurrent writer to lose a race against:
+ * nothing else on `main` today transitions `sessions.status` at all.
+ * Explicit archive (`POST .../archive`, design §6.2) and any richer status
+ * lifecycle are separate, out-of-scope future work (plan.md §16 "1.4
+ * Transcript pipeline").
  */
 export function buildSessionStatusRoutes(
   db: Database,
@@ -61,10 +72,10 @@ export function buildSessionStatusRoutes(
       async (req, reply) => {
         const accountId = req.accountId;
         const { id } = req.params;
-        const { error } = req.body;
+        const { status, error } = req.body;
 
         if (error) {
-          app.log.warn({ sessionId: id, accountId, error }, "session reported failed");
+          app.log.warn({ sessionId: id, accountId, status, error }, `session reported ${status}`);
         }
 
         const outcome = await db.transaction(async (tx) => {
@@ -73,14 +84,15 @@ export function buildSessionStatusRoutes(
           });
           if (!session) return { outcome: "not-found" as const };
 
-          // Idempotent no-op: a retried best-effort POST (or a second crash
-          // signal firing during the same shutdown) must not bump headerSeq
-          // or fan out a second time for a session already marked failed.
-          if (session.status === "failed") return { outcome: "already-failed" as const };
+          // Idempotent no-op: a retried best-effort POST (or a second
+          // crash/exit signal firing during the same shutdown) must not bump
+          // headerSeq or fan out a second time for a session already in this
+          // exact status.
+          if (session.status === status) return { outcome: "already-set" as const };
 
           await tx
             .update(sessions)
-            .set({ status: "failed", updatedAt: new Date() })
+            .set({ status, updatedAt: new Date() })
             .where(and(eq(sessions.id, id), eq(sessions.accountId, accountId)));
 
           const headerSeq = await allocHeaderSeq(tx, accountId);
@@ -97,21 +109,26 @@ export function buildSessionStatusRoutes(
               payload: {
                 seq: outcome.headerSeq,
                 ts: Date.now(),
-                body: { t: "session-update", id, status: "failed" },
+                body: { t: "session-update", id, status },
               },
             });
-            eventRouter.emitEphemeral({
-              accountId,
-              recipientFilter: { type: "all-interested-in-session", sessionId: id },
-              payload: { t: "attention", sessionId: id, kind: "failed" },
-            });
-            // Lifecycle push dispatch (plan.md §10) — fire-and-forget, never
-            // blocks the response; presence-suppressed inside the dispatcher.
-            void pushDispatcher.dispatch({ accountId, sessionId: id, kind: "failed" });
+            // `failed` alone is attention-worthy (design §6.4's existing
+            // push trigger + in-tab attention dot) — `ended` is a normal/
+            // resumable exit, not something to notify or badge on.
+            if (status === "failed") {
+              eventRouter.emitEphemeral({
+                accountId,
+                recipientFilter: { type: "all-interested-in-session", sessionId: id },
+                payload: { t: "attention", sessionId: id, kind: "failed" },
+              });
+              // Lifecycle push dispatch (plan.md §10) — fire-and-forget, never
+              // blocks the response; presence-suppressed inside the dispatcher.
+              void pushDispatcher.dispatch({ accountId, sessionId: id, kind: "failed" });
+            }
           });
         }
 
-        return { status: "failed" as const };
+        return { status };
       },
     );
   };

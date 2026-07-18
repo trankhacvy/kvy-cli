@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode, SessionRow } from "@falcon/wire";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect } from "react";
@@ -22,6 +22,8 @@ import {
   useSessionModelChip,
   useTabAttention,
 } from "@/features/session-control";
+import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
+import { cn } from "@/lib/utils";
 import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
@@ -67,6 +69,16 @@ export function SessionTimelineScreen({
   const retryDecrypt = () =>
     queryClient.invalidateQueries({ queryKey: messagesQueryKey(sessionId) });
 
+  // The session row's own lifecycle `status` (plan-v2.md W1.4+B15, design
+  // §7.5's mode state machine) — read straight off the same `['sync']`
+  // account snapshot `features/session-list/live-source.ts` already reads,
+  // rather than threading a second fetch through this screen. `undefined`
+  // until the snapshot has loaded or this session id isn't (yet) present in
+  // it; treated the same as `"active"` below (the default a fresh session
+  // row is created with) — never as "ended"/"failed" by absence alone.
+  const sessionStatus: SessionRow["status"] =
+    useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId)?.status ?? "active";
+
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
   // not on every render, so a completed-turn-while-open doesn't immediately
@@ -107,6 +119,7 @@ export function SessionTimelineScreen({
         isLoadingMore={isLoadingMore}
         onLoadEarlier={loadEarlier}
         modelChip={modelChip}
+        sessionStatus={sessionStatus}
       />
     </SessionControlProvider>
   );
@@ -127,6 +140,7 @@ function SessionTimelineBody({
   isLoadingMore,
   onLoadEarlier,
   modelChip,
+  sessionStatus,
 }: {
   sessionId: string;
   items: RenderItem[];
@@ -141,9 +155,12 @@ function SessionTimelineBody({
   /** Decrypted `model` from this session's own metadata, or `null` until the
    * CLI records one there (plan-v2.md W4.2 "header model chip"). */
   modelChip: string | null;
+  sessionStatus: SessionRow["status"];
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
+
+  const isDisabled = isSessionControlDisabled(sessionStatus);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -174,7 +191,13 @@ function SessionTimelineBody({
           </Button>
         </div>
       )}
-      <ControlBar mode={permissionMode} controlMode={controlMode} working={working} />
+      <LifecycleBanner sessionStatus={sessionStatus} />
+      <ControlBar
+        mode={permissionMode}
+        controlMode={controlMode}
+        working={working}
+        disabled={isDisabled}
+      />
       <Timeline
         items={mergedItems}
         working={working}
@@ -189,9 +212,48 @@ function SessionTimelineBody({
         isSending={isSending}
         isQueued={isQueued}
         cryptoReady={cryptoReady}
+        disabled={isDisabled}
         error={error}
         notice={notice}
       />
+    </div>
+  );
+}
+
+/** Once the CLI process itself is gone (W1.4's `ended`/`failed` — as
+ * opposed to `completed`/`archived`/`compacted`, which describe a turn or
+ * an explicit archive on a session that's still otherwise controllable),
+ * nothing sent from this screen can reach a live process anymore — disable
+ * the controls rather than let a request silently go nowhere. Only these
+ * two terminal states disable controls; `archived`/`compacted` (like
+ * `active`) leave a still-controllable session's controls enabled.
+ *
+ * Exported (alongside `LifecycleBanner` below) as a plain, hook-free
+ * function/component so the actual disabled-wiring rule and banner copy
+ * have a direct render test (`SessionTimelineScreen.test.tsx`, via
+ * `react-dom/server`'s `renderToStaticMarkup` — same no-jsdom style as
+ * `lib/markdown.test.ts`) without needing to stand up this screen's full
+ * live sync/crypto hook graph. */
+export function isSessionControlDisabled(status: SessionRow["status"]): boolean {
+  return status === "ended" || status === "failed";
+}
+
+/** The ended/failed banner shown above the control bar (plan-v2.md
+ * W1.4+B15). Renders nothing for every other status. */
+export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["status"] }) {
+  if (!isSessionControlDisabled(sessionStatus)) return null;
+  return (
+    <div
+      className={cn(
+        "border-b border-border px-4 py-2 text-sm",
+        sessionStatus === "failed"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-muted/40 text-muted-foreground",
+      )}
+    >
+      {sessionStatus === "failed"
+        ? "Session failed — this session can no longer be controlled from the web."
+        : "Session ended — this session can no longer be controlled from the web."}
     </div>
   );
 }

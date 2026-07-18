@@ -8,7 +8,7 @@ import { EncryptedBoxSchema, VersionedSchema } from "./box";
  * an opaque `EncryptedBox`, the server never sends plaintext.
  */
 
-export const SessionStatusSchema = z.enum(["active", "archived", "failed", "compacted"]);
+export const SessionStatusSchema = z.enum(["active", "archived", "failed", "compacted", "ended"]);
 export type SessionStatus = z.infer<typeof SessionStatusSchema>;
 
 export const SessionRowSchema = z.object({

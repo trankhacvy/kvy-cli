@@ -87,19 +87,22 @@ export function canMutateMode(controlMode: "local" | "remote"): boolean {
  * from the web's point of view (the CLI process exits), so it always asks
  * first. Available in both `controlMode`s: on the PTY flow it SIGTERMs the
  * terminal-attached `claude` child; on the remote-loop flow it requests the
- * loop's own exit. Not yet gated on the session's own `active`/`ended`/
- * `failed` status (plan-v2.md U1.4 "lifecycle-status" hasn't landed on this
- * branch, so no such status reaches this screen at all yet) — every other
- * button here has the same gap today.
+ * loop's own exit.
+ *
+ * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
+ * says the underlying CLI process is gone (`ended`/`failed`) — every
+ * action here targets a session RPC that has nothing live to reach anymore.
  */
 export function ControlBar({
   mode,
   controlMode,
   working,
+  disabled = false,
 }: {
   mode: PermissionMode;
   controlMode: "local" | "remote";
   working: boolean;
+  disabled?: boolean;
 }) {
   const { actions } = useSessionControl();
   const [selectedMode, setSelectedMode] = useState(mode);
@@ -155,7 +158,7 @@ export function ControlBar({
       <Button
         size="sm"
         variant="destructive"
-        disabled={!working || interruptMutation.isPending}
+        disabled={disabled || !working || interruptMutation.isPending}
         onClick={() => interruptMutation.mutate()}
       >
         Interrupt
@@ -169,7 +172,7 @@ export function ControlBar({
           Mode
           <Select
             value={selectedMode}
-            disabled={setModeMutation.isPending}
+            disabled={disabled || setModeMutation.isPending}
             onValueChange={(value) => handleModeChange(value as PermissionMode)}
           >
             <SelectTrigger id="control-bar-mode" size="sm" className="text-xs">
@@ -194,7 +197,7 @@ export function ControlBar({
         <Button
           size="sm"
           variant="secondary"
-          disabled={takeControlMutation.isPending}
+          disabled={disabled || takeControlMutation.isPending}
           onClick={() => takeControlMutation.mutate()}
         >
           Take control
@@ -203,7 +206,7 @@ export function ControlBar({
 
       <Dialog open={stopDialogOpen} onOpenChange={handleStopDialogOpenChange}>
         <DialogTrigger asChild>
-          <Button size="sm" variant="outline" className="ml-auto">
+          <Button size="sm" variant="outline" className="ml-auto" disabled={disabled}>
             End session
           </Button>
         </DialogTrigger>

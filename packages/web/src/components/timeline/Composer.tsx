@@ -53,6 +53,10 @@ interface AttachmentPreview {
  * unwrapped its DEK yet, so an attachment can't be encrypted (plan-v2.md
  * W4.2 "disabled-until-crypto-ready attach button"); a text-only send never
  * needs that bridge, so the Send button itself is never gated on it.
+ *
+ * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
+ * says the underlying CLI process is gone (`ended`/`failed`) — sending a
+ * follow-up would just queue against a session nothing is listening to.
  */
 export function Composer({
   sessionId,
@@ -61,6 +65,7 @@ export function Composer({
   isSending,
   isQueued,
   cryptoReady,
+  disabled = false,
   error,
   notice,
 }: {
@@ -70,6 +75,7 @@ export function Composer({
   isSending: boolean;
   isQueued: boolean;
   cryptoReady: boolean;
+  disabled?: boolean;
   error: string | null;
   /** Non-blocking `outcome-unknown` delivery notice (design §7.10) — shown
    * alongside, never instead of, the composer's normal controls. */
@@ -108,7 +114,7 @@ export function Composer({
   }
 
   function submit() {
-    if (text.trim().length === 0) return;
+    if (disabled || text.trim().length === 0) return;
     onSend(text);
     setText("");
     saveDraft(sessionId, "");
@@ -117,7 +123,7 @@ export function Composer({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = ""; // allow re-selecting the same file(s) consecutively
-    if (files.length === 0) return;
+    if (files.length === 0 || disabled) return;
 
     const nextPreviews: AttachmentPreview[] = files.map((file, i) => ({
       key: `${Date.now()}-${i}-${file.name}`,
@@ -171,7 +177,7 @@ export function Composer({
           type="button"
           variant="outline"
           size="icon"
-          disabled={isSending || !cryptoReady}
+          disabled={disabled || isSending || !cryptoReady}
           title={cryptoReady ? undefined : "Session key isn't ready yet — try again in a moment."}
           onClick={() => fileInputRef.current?.click()}
           aria-label="Attach a file"
@@ -180,6 +186,7 @@ export function Composer({
         </Button>
         <textarea
           value={text}
+          disabled={disabled}
           onChange={(e) => handleTextChange(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -187,11 +194,11 @@ export function Composer({
               submit();
             }
           }}
-          placeholder="Send a follow-up…"
+          placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
           rows={1}
-          className="min-h-9 max-h-64 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm outline-none [field-sizing:content] focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-9 max-h-64 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm outline-none [field-sizing:content] focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
-        <Button onClick={submit} disabled={isSending || text.trim().length === 0}>
+        <Button onClick={submit} disabled={disabled || isSending || text.trim().length === 0}>
           Send
         </Button>
       </div>

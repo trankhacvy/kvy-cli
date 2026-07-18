@@ -13,6 +13,7 @@ export type SessionListStatus =
   | "waiting-for-input"
   | "idle"
   | "completed"
+  | "ended"
   | "failed"
   | "offline";
 
@@ -74,6 +75,15 @@ function lastClosedTurnStatus(items: RenderItem[]): "completed" | "failed" | "ca
  * terminal session row state → offline → pending permission → pending
  * question → actively working → last-turn outcome → idle.
  *
+ * `"ended"` (plan-v2.md W1.4+B15) is its own terminal row state, distinct
+ * from `"completed"`: `completed` describes a *turn* outcome (or an
+ * archived/compacted row) on a session that's still otherwise controllable,
+ * while `ended` means the underlying CLI process itself is gone — the PTY
+ * path's normal/signal exit (`start.ts`'s `reportStatusOnce`). Checked
+ * before `archived`/`compacted` since those two never apply to a live PTY
+ * session in the first place, but ordering doesn't actually matter given
+ * they're mutually exclusive DB values.
+ *
  * Turn state (open/closed, closed-turn outcome, pending permission) is
  * replayed straight from `items` — the reduced event stream, design
  * principle #3. `attention` fills the one gap `items` can't: "question" (the
@@ -88,6 +98,7 @@ export function deriveSessionStatus(input: DeriveSessionStatusInput): SessionLis
   const { status, machineOnline, items, attention } = input;
 
   if (status === "failed") return "failed";
+  if (status === "ended") return "ended";
   if (status === "archived" || status === "compacted") return "completed";
   if (machineOnline === false) return "offline";
 
@@ -119,6 +130,7 @@ export const SESSION_STATUS_META: Record<SessionListStatus, SessionStatusMeta> =
   "waiting-for-input": { label: "Needs input", dotClassName: "bg-amber-500", pulse: true },
   idle: { label: "Idle", dotClassName: "bg-muted-foreground/50", pulse: false },
   completed: { label: "Completed", dotClassName: "bg-emerald-500", pulse: false },
+  ended: { label: "Ended", dotClassName: "bg-slate-500", pulse: false },
   failed: { label: "Failed", dotClassName: "bg-destructive", pulse: false },
   offline: { label: "Offline", dotClassName: "bg-muted-foreground/30", pulse: false },
 };

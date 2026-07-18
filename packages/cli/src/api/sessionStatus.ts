@@ -13,6 +13,14 @@
  * exists on `main` yet — `falcon auth login` is still a stub), matching the
  * "treated as a given" pattern `claudeLocal.ts`/`hookServer.ts` already use
  * for their own not-yet-landed dependencies.
+ *
+ * `reportSessionStatus` (plan.md §16 "1. lifecycle-status" / plan-v2.md
+ * W1.4+B15) generalizes this beyond the crash-only `failed` status: the
+ * PTY-injection path (`commands/start.ts`) also reports `ended` at its
+ * normal-exit and signal-handler exits, so the web can show a session as
+ * over instead of inferring nothing (design §7.5's mode state machine).
+ * `reportSessionFailed` stays as a thin `failed`-only wrapper so its
+ * existing callers/tests are untouched.
  */
 
 import type { Logger } from "../logger.js";
@@ -32,6 +40,10 @@ export type ReportSessionFailedResult =
   | { type: "http-error"; status: number }
   | { type: "network-error"; error: string };
 
+/** Every status this route can ever report — additive (design §5.3: the
+ * wire's `SessionStatusSchema` gained `"ended"` alongside this). */
+export type ReportableSessionStatus = "failed" | "ended";
+
 const DEFAULT_TIMEOUT_MS = 3000;
 // The server never persists this text (see sessionStatus.ts's comment) —
 // still cap it defensively so a runaway stack trace can't blow past the
@@ -39,14 +51,15 @@ const DEFAULT_TIMEOUT_MS = 3000;
 const MAX_ERROR_LENGTH = 2000;
 
 /**
- * Best-effort report that a session's local process crashed. Swallows every
- * failure mode into a typed result instead of throwing — callers (a
- * signal/uncaught-exception handler racing process shutdown) must be able
- * to fire this and move on unconditionally.
+ * Best-effort report of a session's terminal status (`failed` — a crash —
+ * or `ended` — a normal/signal exit, W1.4). Swallows every failure mode
+ * into a typed result instead of throwing — callers (a signal/uncaught-
+ * exception handler, or `start.ts`'s own exit path, racing process
+ * shutdown) must be able to fire this and move on unconditionally.
  */
-export async function reportSessionFailed(
+export async function reportSessionStatus(
   deps: ReportSessionFailedDeps,
-  params: { sessionId: string; error: Error },
+  params: { sessionId: string; status: ReportableSessionStatus; error?: Error },
 ): Promise<ReportSessionFailedResult> {
   const {
     backendUrl,
@@ -55,8 +68,8 @@ export async function reportSessionFailed(
     logger,
     timeoutMs = DEFAULT_TIMEOUT_MS,
   } = deps;
-  const { sessionId } = params;
-  const errorMessage = params.error.message.slice(0, MAX_ERROR_LENGTH);
+  const { sessionId, status } = params;
+  const errorMessage = params.error?.message.slice(0, MAX_ERROR_LENGTH);
 
   try {
     const res = await fetchImpl(`${backendUrl}/v1/sessions/${sessionId}/status`, {
@@ -65,26 +78,44 @@ export async function reportSessionFailed(
         "content-type": "application/json",
         authorization: `Bearer ${accessToken}`,
       },
-      body: JSON.stringify({ status: "failed", error: errorMessage }),
+      body: JSON.stringify({ status, ...(errorMessage ? { error: errorMessage } : {}) }),
       signal: AbortSignal.timeout(timeoutMs),
     });
 
     if (!res.ok) {
-      logger?.warn("[session-status] server rejected crash report", {
+      logger?.warn("[session-status] server rejected status report", {
         sessionId,
-        status: res.status,
+        status,
+        httpStatus: res.status,
       });
       return { type: "http-error", status: res.status };
     }
 
-    logger?.debug("[session-status] reported session failed", { sessionId });
+    logger?.debug("[session-status] reported session status", { sessionId, status });
     return { type: "ok" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger?.warn("[session-status] failed to reach backend for crash report", {
+    logger?.warn("[session-status] failed to reach backend for status report", {
       sessionId,
+      status,
       error: message,
     });
     return { type: "network-error", error: message };
   }
+}
+
+/**
+ * Thin `failed`-only wrapper kept for `sessionExit.ts`'s (and its own
+ * tests') existing call shape — a crash report never carries any other
+ * status.
+ */
+export async function reportSessionFailed(
+  deps: ReportSessionFailedDeps,
+  params: { sessionId: string; error: Error },
+): Promise<ReportSessionFailedResult> {
+  return reportSessionStatus(deps, {
+    sessionId: params.sessionId,
+    status: "failed",
+    error: params.error,
+  });
 }
