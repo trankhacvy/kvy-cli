@@ -8741,3 +8741,36 @@ not reported merged or failed this cycle — left untouched.
   exists (`.worktrees/U2.3`, `wf/U2.3`); pick up and finish.
 - Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `d4cb7ec`) — figure
   out why it keeps failing and either fix forward or restart the unit.
+
+## v2-pty-injection Cycle 5 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U2.3 `[solo]` "stop-session" (W2.3 — WIRE+CLI+WEB) —
+  sha `c1f35a377b73d9e7523cd60061f772856f636673`
+- U4.7 `[bundle]` "usage-and-compact" (W4.6 — WIRE+CLI+WEB) —
+  sha `2fe5ebc81e0c9bd3ee26d07f63af7074e1c24f30`
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) —
+  still failed/parked from prior cycles. Worktree `.worktrees/U1.4`
+  (`wf/U1.4`, tip `d4cb7ec`) left in place for human inspection per the
+  false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor <sha> v2-pty-injection` held
+for both U2.3 (`c1f35a3`) and U4.7 (`2fe5ebc`) — confirmed real ancestry, not
+just branch presence. `.worktrees/U2.3`/`.worktrees/U4.7` and branches
+`wf/U2.3`/`wf/U4.7` were removed post-verification. plan-v2.md's Master TODO
+had U4.7's unit box flipped to `[x]` (no sub-boxes to flip); U2.3 was already
+fully flipped (`[x]` unit box + all non-`[human]` sub-boxes) from a prior
+cycle, with only its `[human]` live-check sub-box left unchecked, as
+expected. `pnpm typecheck` on `v2-pty-injection` — all 11 turbo tasks
+successful (cache-hit, `>>> FULL TURBO`).
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `d4cb7ec`) — figure
+  out why it keeps failing and either fix forward or restart the unit.
+- U4.5 `[solo]` "pty-setmode" (W4.3 — flag-gated, version-coupled) or U4.6
+  `[bundle]` "session-registration" (W4.4+W4.5 — bootstrap/start) — next
+  unstarted Phase 4 units.

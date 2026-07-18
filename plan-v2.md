@@ -1484,7 +1484,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [ ] W4.4: same-dir duplicate lock + live-pid detection + `--force-new-session`
   - [ ] W4.5: `notifyDaemonSessionStarted` from start.ts (best-effort)
   - [ ] Tests: lock; registration integration
-- [ ] **U4.7 `[bundle]` "usage-and-compact"** (W4.6 — WIRE+CLI+WEB): additive
+- [x] **U4.7 `[bundle]` "usage-and-compact"** (W4.6 — WIRE+CLI+WEB): additive
       `t:"usage"` event + mapper emission + compact `service` marker + web token
       chip/divider
 - [ ] **U4.8 `[parked]`** Deferred-but-tracked: machine-RPC `stopSession` for
