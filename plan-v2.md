@@ -1355,17 +1355,17 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [x] W1.7a: `ThinkingBlock.tsx` collapsed label → "Thought process"
   - [x] W1.7b: `use-session-ephemerals.ts` 60s staleness cap on `working:true`
   - [x] Combined: scoped tests + `pnpm typecheck` + commit
-- [ ] **U1.2 `[solo]` "perm-routing"** (W1.1) — the permission-flood rework
-  - [ ] `hookServer.ts`: forwarder blocking-path widening; PermissionRequest
+- [x] **U1.2 `[solo]` "perm-routing"** (W1.1) — the permission-flood rework
+  - [x] `hookServer.ts`: forwarder blocking-path widening; PermissionRequest
         schemas/route (204 = no decision); 5th settings entry
-  - [ ] `pretoolPermissionBridge.ts`: `handlePermissionRequest()` + shared
+  - [x] `pretoolPermissionBridge.ts`: `handlePermissionRequest()` + shared
         `resolve()`/`reset()` across both pending maps; `handlePreToolUse` collapses
         to AskUserQuestion-else-`ask`
-  - [ ] `remotePermissionHook.ts`: wire `onPermissionRequest`
+  - [x] `remotePermissionHook.ts`: wire `onPermissionRequest`
   - [x] ~~(only if U0.4 failed) plan B~~ — not needed, U0.4 passed; plan A it is.
         Deny copy everywhere must end with "Do not attempt this action another
         way." (probe showed the model working around a deny via allowlisted Bash)
-  - [ ] Tests: bridge branches ×2 maps, hookServer 204/settings/forwarder
+  - [x] Tests: bridge branches ×2 maps, hookServer 204/settings/forwarder
   - [ ] `[human]` live: ≥5-read-only-tool web turn → zero PermCards; genuine prompt →
         one PermCard
 - [ ] **U1.3 `[bundle]` "injection-gates"** (W1.2+W1.3+W1.5 — same files:

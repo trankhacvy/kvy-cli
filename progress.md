@@ -21,6 +21,39 @@ v2-pty-injection` confirmed ancestry. `pnpm typecheck` — all 11 turbo tasks su
   `pretoolPermissionBridge.ts`, `remotePermissionHook.ts`)
 - Next inline/bundle-sized unit after U1.2 per plan-v2.md Master TODO ordering
 
+## v2-pty-injection Cycle 2 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U1.2 `[solo]` "perm-routing" — `668fe39ae2ee841647709d38173d4288dc3b7fc3`
+  - `hookServer.ts` forwarder blocking-path widening, PermissionRequest schema/route
+    (204 = no decision), 5th settings entry
+  - `pretoolPermissionBridge.ts`: `handlePermissionRequest()` + shared `resolve()`/
+    `reset()` across both pending maps; `handlePreToolUse` collapses to
+    AskUserQuestion-else-`ask`
+  - `remotePermissionHook.ts`: wired `onPermissionRequest`
+  - Tests: bridge branches ×2 maps, hookServer 204/settings/forwarder
+
+**Parked units:** none
+
+**Verification:** `git merge-base --is-ancestor 668fe39ae2ee841647709d38173d4288dc3b7fc3
+v2-pty-injection` confirmed ancestry. `pnpm typecheck` — all 11 turbo tasks successful
+(cache-hit, `>>> FULL TURBO`). Worktree `.worktrees/U1.2` and branch `wf/U1.2` removed.
+plan-v2.md's U1.2 non-`[human]` sub-boxes + unit box flipped to `[x]`; the `[human]`
+live-check sub-box left unchecked pending manual verification.
+
+**Note:** `.worktrees/U1.4` / `wf/U1.4` exist on disk (branch `wf/U1.4`, tip `045fd56`)
+but U1.4 was not in this cycle's merged/failed lists — left untouched; worth checking
+its state before the next cycle picks a unit.
+
+**Next recommended units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15) — worktree/branch already present,
+  check whether it's finished work awaiting merge before starting fresh.
+- U1.3 `[bundle]` "injection-gates" (W1.2+W1.3+W1.5) — touches
+  `pretoolPermissionBridge.ts`/`remotePermissionHook.ts`, same files U1.2 just landed
+  in; good next pick while that context is warm.
+
 ## Cycle 76 — 2026-07-18
 
 **Branch checked:** `main` (HEAD `cc3e9ae` — "chore: cycle 75 — completed 0 tasks (2
