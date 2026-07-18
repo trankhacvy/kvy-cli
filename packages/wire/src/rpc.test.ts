@@ -19,6 +19,7 @@ import {
   PermAnswerParamsSchema,
   PermAnswerResultSchema,
   RpcCallSchema,
+  SetModeResultSchema,
   SpawnParamsSchema,
   SpawnResultSchema,
 } from "./rpc";
@@ -215,5 +216,29 @@ describe("session RPC schemas", () => {
 
   it("message RPC result still requires `queued` (unchanged, additive-only)", () => {
     expect(MessageRpcResultSchema.safeParse({ status: "queued" }).success).toBe(false);
+  });
+});
+
+describe("SetModeResultSchema (W4.3 — additive `observedMode` for the PTY verify-via-hook-echo path)", () => {
+  it("accepts the pre-W4.3 shape with `ok` alone (unchanged, additive-only)", () => {
+    expect(SetModeResultSchema.safeParse({ ok: false }).success).toBe(true);
+    expect(SetModeResultSchema.safeParse({ ok: true }).success).toBe(true);
+  });
+
+  it("accepts an `observedMode` for any valid permission mode", () => {
+    for (const observedMode of ["default", "acceptEdits", "plan", "bypassPermissions"] as const) {
+      expect(SetModeResultSchema.safeParse({ ok: true, observedMode }).success).toBe(true);
+      expect(SetModeResultSchema.safeParse({ ok: false, observedMode }).success).toBe(true);
+    }
+  });
+
+  it("rejects an unrecognized `observedMode` value", () => {
+    expect(
+      SetModeResultSchema.safeParse({ ok: false, observedMode: "some-future-mode" }).success,
+    ).toBe(false);
+  });
+
+  it("still requires `ok` (unchanged, additive-only)", () => {
+    expect(SetModeResultSchema.safeParse({ observedMode: "plan" }).success).toBe(false);
   });
 });
