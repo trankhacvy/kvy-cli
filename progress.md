@@ -8674,3 +8674,36 @@ merged and ancestry-verified). `pnpm typecheck` on `v2-pty-injection` — all
 - Inspect `.worktrees/U2.3` (`wf/U2.3`) and `.worktrees/U3.3` (`wf/U3.3`) —
   determine whether to resume, restart, or discard before the next cycle
   picks a unit.
+
+## v2-pty-injection Cycle 9 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U3.2 `[bundle]` "mapper-parity" (W3.2+W3.3 — `envelopeMapper.ts` both) —
+  sha `059e555036011e496375140b31dd5bb084e22795`
+- U3.4 `[bundle]` "home-live" (W3.6+W3.10 — `features/session-list/`) —
+  sha `ff7b31f315c2cd60eee298b1225ad859dbc6b401`
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) —
+  still failed/parked from prior cycles. Worktree `.worktrees/U1.4`
+  (`wf/U1.4`, tip `d4cb7ec`) left in place for human inspection per the
+  false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor <sha> v2-pty-injection` held
+for both U3.2 (`059e555`) and U3.4 (`ff7b31f`) — confirmed real ancestry, not
+just branch presence. `.worktrees/U3.2`/`.worktrees/U3.4` and branches
+`wf/U3.2`/`wf/U3.4` were removed post-verification. plan-v2.md's Master TODO
+had both units' unit boxes and all sub-boxes flipped to `[x]` (neither unit
+has a `[human]` sub-box). `pnpm typecheck` on `v2-pty-injection` — all 11
+turbo tasks successful (cache-hit, `>>> FULL TURBO`).
+
+**Note:** `.worktrees/U2.3` (`wf/U2.3`, tip `cb3f127`) still exists on disk,
+not reported merged or failed this cycle — left untouched.
+
+**Next recommended units:**
+- U2.3 `[solo]` "stop-session" (W2.3 — WIRE+CLI+WEB) — worktree already
+  exists (`.worktrees/U2.3`, `wf/U2.3`); pick up and finish.
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `d4cb7ec`) — figure
+  out why it keeps failing and either fix forward or restart the unit.

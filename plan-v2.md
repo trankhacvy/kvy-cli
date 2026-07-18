@@ -1433,11 +1433,11 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 
 - [x] **U3.1 `[bundle]` "tool-cards"** (W3.1 — `tool-cards/` dir): WebFetch,
       WebSearch, NotebookEdit, LS cards + registry + fixture tests
-- [ ] **U3.2 `[bundle]` "mapper-parity"** (W3.2+W3.3 — `envelopeMapper.ts` both)
-  - [ ] W3.2: image blocks → `t:"file"` `inline:` refs (≤256KB) else `service` note;
+- [x] **U3.2 `[bundle]` "mapper-parity"** (W3.2+W3.3 — `envelopeMapper.ts` both)
+  - [x] W3.2: image blocks → `t:"file"` `inline:` refs (≤256KB) else `service` note;
         web `<img>` render for `inline:`
-  - [ ] W3.3: static `risk` map on tool-start; `service` envelopes from start.ts
-  - [ ] Tests: mapper fixtures (images, risk); web render
+  - [x] W3.3: static `risk` map on tool-start; `service` envelopes from start.ts
+  - [x] Tests: mapper fixtures (images, risk); web render
 - [x] **U3.3 `[bundle]` "machine-rpc-web"** (W3.4+W3.5 — shared
       `use-machine-crypto.ts`)
   - [x] `use-machine-crypto.ts` (per-machine DEK unwrap)
@@ -1445,11 +1445,11 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [x] W3.5: real machineId/worktree into git route; default
         `machineRpcToGitDiffActions`
   - [ ] `[human]` live: spawn from web; git status/diff on a dirty worktree
-- [ ] **U3.4 `[bundle]` "home-live"** (W3.6+W3.10 — `features/session-list/`)
-  - [ ] W3.6: lazy recent-page decrypt → real status dots; `machine-presence`
+- [x] **U3.4 `[bundle]` "home-live"** (W3.6+W3.10 — `features/session-list/`)
+  - [x] W3.6: lazy recent-page decrypt → real status dots; `machine-presence`
         ephemeral replaces 3-min heuristic
-  - [ ] W3.10: unmanaged rows live (read-only, actions disabled)
-  - [ ] Tests: status derivation fixtures
+  - [x] W3.10: unmanaged rows live (read-only, actions disabled)
+  - [x] Tests: status derivation fixtures
 - [ ] **U3.5 `[solo]` "pty-resume"** (W3.7 — bootstrap/resume, risky)
   - [ ] `bootstrap.ts` `FALCON_RECONNECT_SESSION_ID` re-attach; `start.ts` provider
         id from env; `resumeSession.ts` headless-vs-terminal decision
