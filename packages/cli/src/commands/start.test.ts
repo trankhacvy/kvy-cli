@@ -829,6 +829,66 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
   });
 
+  it("awaits the SIGTERM-triggered status report before resolving, even when it settles after the PTY child has already stopped", async () => {
+    // Regression test for a race: the signal handler fires `reportStatusOnce`
+    // without awaiting it (it's a plain sync callback), and its first-wins
+    // `statusReported` guard turns `runLocalPty`'s own *awaited*
+    // `reportStatusOnce(...)` call on its normal-exit path into a
+    // synchronous no-op once the signal has already tripped it — so nothing
+    // in the awaited chain used to actually wait on the network call this
+    // handler kicked off. Since `index.ts` calls `process.exit()` the
+    // instant this function's returned promise resolves, a status report
+    // slower than the PTY child's own shutdown could be silently dropped.
+    // Here the child stops (resolves `done`) synchronously inside `stop()`,
+    // well before the report settles, to prove the wrapper's own promise
+    // still doesn't resolve until the report does too.
+    let resolveReport: (value: { type: "ok" }) => void = () => {};
+    const reportSessionStatus = vi.fn(
+      () =>
+        new Promise<{ type: "ok" }>((resolve) => {
+          resolveReport = resolve;
+        }),
+    );
+    const { handle } = fakeStoppablePtyHandle();
+    const startPtyClaudeSession = vi.fn(() => handle);
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, reportSessionStatus }),
+    );
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
+    });
+    const handler = onSpy.mock.calls.find(([event]) => event === "SIGTERM")?.[1] as
+      | ((signal: NodeJS.Signals) => void)
+      | undefined;
+    expect(handler).toBeDefined();
+
+    // Fires the (still-pending) report AND synchronously resolves the PTY
+    // child's `done` via `stop()` — the child "wins" the race against the
+    // report on purpose.
+    handler?.("SIGTERM");
+
+    let settled = false;
+    void resultPromise.then(() => {
+      settled = true;
+    });
+    // Flush every microtask that doesn't depend on the still-pending report
+    // promise (the PTY child's own exit-path teardown, both flows' cleanup).
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(settled).toBe(false);
+    expect(exitSpy).not.toHaveBeenCalled();
+
+    resolveReport({ type: "ok" });
+    const code = await resultPromise;
+
+    expect(settled).toBe(true);
+    expect(code).toBe(0);
+    expect(exitSpy).not.toHaveBeenCalled();
+  });
+
   it("removes the SIGTERM/SIGHUP listeners once the session ends normally, so they never leak across runs", async () => {
     const beforeTerm = process.listenerCount("SIGTERM");
     const beforeHup = process.listenerCount("SIGHUP");

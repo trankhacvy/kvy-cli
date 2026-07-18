@@ -379,10 +379,21 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // (never "failed").
   let signalExitCode: number | null = null;
   let requestGracefulStop: (() => void) | null = null;
+  // Captures the signal-triggered `reportStatusOnce()` call so the wrapper's
+  // final return (below) can await it before resolving. Without this, the
+  // report races the flow's own graceful stop: `reportStatusOnce`'s
+  // first-wins guard (`statusReported`) makes the *later*, normally-awaited
+  // call in `runLocalPty`/`runRemoteLoop`'s own exit path collapse into a
+  // synchronous no-op once this handler has already flipped it, so nothing
+  // in the awaited chain actually waits for this network call to land — and
+  // `index.ts` calls `process.exit()` the instant this function resolves,
+  // which can cut the request off mid-flight (silently dropping the very
+  // "ended" report SIGTERM/SIGHUP handling exists to guarantee).
+  let pendingStatusReport: Promise<void> | null = null;
   const onSignal = (signal: NodeJS.Signals) => {
     logger.info("[start-claude] signal — ending session", { signal });
     signalExitCode = signal === "SIGTERM" ? 0 : 1;
-    void reportStatusOnce("ended");
+    pendingStatusReport = reportStatusOnce("ended");
     requestGracefulStop?.();
   };
   process.on("SIGTERM", onSignal);
@@ -699,6 +710,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   } finally {
     process.off("SIGTERM", onSignal);
     process.off("SIGHUP", onSignal);
+    // Let a still-in-flight signal-triggered status report actually land
+    // (or hit its own timeout) before this function resolves — see
+    // `pendingStatusReport`'s doc comment above for why this can't just
+    // rely on the normal-exit path's own `await reportStatusOnce(...)`.
+    if (pendingStatusReport) await pendingStatusReport;
     sessionClient.stop();
     outbox.dispose();
   }
