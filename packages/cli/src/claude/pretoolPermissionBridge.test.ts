@@ -485,6 +485,24 @@ describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion speci
     expect(out.hookSpecificOutput.permissionDecisionReason).toBe(ASK_FALLBACK_REASON);
   });
 
+  it("web turn, an allow decision whose updatedInput.answers is not a record: degrades to the plain-text fallback", async () => {
+    const { bridge, emitted } = makeBridge();
+    const pending = bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions: [{ question: "Which color?", options: ["Red"] }] },
+    });
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+
+    bridge.resolve({
+      reqId: reqEv.reqId,
+      decision: { kind: "allow", scope: "once", updatedInput: { answers: "not-a-record" } },
+    });
+    const out = (await pending) as PreToolUseHookOutput;
+
+    expect(out.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(out.hookSpecificOutput.permissionDecisionReason).toBe(ASK_FALLBACK_REASON);
+  });
+
   it("web turn, a deny decision: denies with the decision's own message, or the fallback reason", async () => {
     const { bridge, emitted } = makeBridge();
     const pending = bridge.handlePreToolUse({ tool_name: "ask_user_question" });
