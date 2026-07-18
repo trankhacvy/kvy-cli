@@ -1455,19 +1455,19 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
         id from env; `resumeSession.ts` headless-vs-terminal decision
   - [x] Tests: re-attach; env consumption
   - [ ] `[human]` live: `falcon resume` continues session + transcript
-- [ ] **U3.6 `[bundle]` "tailer-and-loss"** (W3.8+W3.9 — scanner +
+- [x] **U3.6 `[bundle]` "tailer-and-loss"** (W3.8+W3.9 — scanner +
       injectionController + start.ts)
-  - [ ] W3.8: final `syncNow()` in cleanup; new-file rotation fallback →
+  - [x] W3.8: final `syncNow()` in cleanup; new-file rotation fallback →
         `onNewSession` (debounced, logged)
-  - [ ] W3.9: `dispose()` returns dropped queue; submit-skip path too;
+  - [x] W3.9: `dispose()` returns dropped queue; submit-skip path too;
         `onDroppedInjections` → claims completed as `dropped-session-ended`
-  - [ ] Tests: shutdown tail; rotation; dropped→`duplicate` on retry
+  - [x] Tests: shutdown tail; rotation; dropped→`duplicate` on retry
 
 ### Phase 4 — polish & platform
 
 - [x] **U4.1 `[inline]` "wave4-trivia"** (W4.1): outbox flush 300→150ms + protocol-doc
       note on the no-streaming decision
-- [ ] **U4.2 `[bundle]` "render-polish"** (W4.2a): timestamps + `CopyButton`
+- [x] **U4.2 `[bundle]` "render-polish"** (W4.2a): timestamps + `CopyButton`
       (messages/code/bash) + theme toggle + dual shiki theme (un-hardcode `dark`)
 - [ ] **U4.3 `[bundle]` "composer-polish"** (W4.2b): auto-grow + sessionStorage
       drafts + multi-file/image previews + crypto-ready gating + shadcn `Select`

@@ -8774,3 +8774,39 @@ successful (cache-hit, `>>> FULL TURBO`).
 - U4.5 `[solo]` "pty-setmode" (W4.3 — flag-gated, version-coupled) or U4.6
   `[bundle]` "session-registration" (W4.4+W4.5 — bootstrap/start) — next
   unstarted Phase 4 units.
+
+## v2-pty-injection Cycle 6 — 2026-07-18
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U3.6 `[bundle]` "tailer-and-loss" — `6120d46d2d9ede4b8a6b4c0607dea1bdce885a42`
+  (W3.8+W3.9 — scanner + injectionController + start.ts): final `syncNow()` in
+  cleanup + new-file rotation fallback → `onNewSession` (debounced, logged);
+  `dispose()` returns dropped queue (submit-skip path too); `onDroppedInjections`
+  → claims completed as `dropped-session-ended`; tests for shutdown tail,
+  rotation, dropped→`duplicate` on retry
+- U4.2 `[bundle]` "render-polish" — `3db5c348c2208125cc97ba42d92c9fc5deb58cc9`
+  (W4.2a): timestamps + `CopyButton` (messages/code/bash) + theme toggle + dual
+  shiki theme (un-hardcode `dark`)
+
+**Parked units:**
+- U1.4 `[solo]` "lifecycle-status" (W1.4+B15 — cross-package CLI/SRV/WEB) —
+  still failed/parked from prior cycles. Worktree `.worktrees/U1.4`
+  (`wf/U1.4`, tip `d4cb7ec`) left in place for human inspection per the
+  false-landing rule.
+
+**Verification:** `git merge-base --is-ancestor <sha> v2-pty-injection` held
+for both U3.6 (`6120d46d`) and U4.2 (`3db5c348`) — confirmed real ancestry.
+`.worktrees/U3.6`/`.worktrees/U4.2` and branches `wf/U3.6`/`wf/U4.2` were
+removed post-verification. plan-v2.md's Master TODO: U3.6's unit box + all
+sub-boxes flipped to `[x]` (no `[human]` sub-boxes on this unit); U4.2's unit
+box flipped to `[x]` (no sub-boxes). `pnpm typecheck` on `v2-pty-injection` —
+all 11 turbo tasks successful (cache-hit, `>>> FULL TURBO`).
+
+**Next recommended units:**
+- Inspect and resolve `.worktrees/U1.4` (`wf/U1.4`, tip `d4cb7ec`) — still
+  parked across multiple cycles; figure out why it keeps failing and either
+  fix forward or restart the unit.
+- U4.3 `[bundle]` "composer-polish" (W4.2b) or U4.4 `[bundle]` "shell-polish"
+  (W4.2c) — next unstarted Phase 4 units after U4.2's render-polish landed.
