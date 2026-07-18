@@ -156,6 +156,15 @@ export interface PtyClaudeSessionOptions {
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
   /** Fires once a web-injected message has actually been submitted — the §7.10 send-claim completion hook. */
   onInjected?: (id: string) => void;
+  /**
+   * Fires with messages that will never be injected — session ending with
+   * some still queued, or one whose text was typed but whose submit was
+   * skipped because the child exited mid-injection (design/plan-v2.md W3.9).
+   * The caller must fail those messages' send-claims (`start.ts` completes
+   * them as `dropped-session-ended`) so a web retry sees an honest
+   * `duplicate` instead of hanging as `outcome-unknown` forever.
+   */
+  onDroppedInjections?: (messages: PendingInjection[]) => void;
   /** Fires when the human at the real terminal submits input (Enter outside injection) — plan-v2.md W1.2. */
   onLocalSubmit?: () => void;
   logger?: Logger;
@@ -254,13 +263,18 @@ export function startPtyClaudeSession(
     writeText: (text) => ptyProcess?.write(text),
     submit: () => ptyProcess?.write(SUBMIT_KEY),
     onInjected: (id) => opts.onInjected?.(id),
+    onDropped: (messages) => opts.onDroppedInjections?.(messages),
     submitDelayMs: deps.submitDelayMs,
     postSubmitCooldownMs: deps.postSubmitCooldownMs,
     setTimeoutImpl,
     clearTimeoutImpl,
     logger,
   });
-  cleanups.push(() => controller.dispose());
+  cleanups.push(() => {
+    // Dropped (never-injected) messages are reported via the `onDropped`
+    // callback wired above — the return value isn't needed here.
+    controller.dispose();
+  });
 
   // Debounced busy edge from the launcher's fetch-start/fetch-end signal —
   // structurally identical to `claudeLocal.ts`'s "thinking" tracking.

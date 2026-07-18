@@ -55,6 +55,16 @@ export interface InjectionControllerDeps {
   submit: () => void;
   /** Fired once a queued message has actually been submitted — the send-claim completion hook (design §7.10). */
   onInjected?: (id: string) => void;
+  /**
+   * Fired with messages that will now NEVER be injected — either still-queued
+   * entries dropped by {@link InjectionController.dispose} (session ending
+   * with messages waiting), or a message whose text was already typed into
+   * the PTY but whose submit keystroke was skipped because `dispose()` ran
+   * mid-injection (the child exited between write and submit). Either way the
+   * caller must fail the corresponding send-claim rather than leave it
+   * indeterminate (plan-v2.md W3.9) — see `start.ts`'s `onDroppedInjections`.
+   */
+  onDropped?: (messages: PendingInjection[]) => void;
   /** Delay between writing the text and sending the submit key. Default 250ms (omnara's value). */
   submitDelayMs?: number;
   /** Quiet window after a submit before the next message may be injected. Default 1200ms. */
@@ -96,7 +106,6 @@ export class InjectionController {
   private promptOpen = false;
   private localDraft = false;
   private disposed = false;
-  private submitTimer: ReturnType<typeof setTimeout> | null = null;
   private cooldownTimer: ReturnType<typeof setTimeout> | null = null;
   private promptOpenFailsafeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -177,17 +186,31 @@ export class InjectionController {
     if (!active) this.tryFlush();
   }
 
-  /** Cancels any pending timers and drops the queue. Safe to call once. */
-  dispose(): void {
-    if (this.disposed) return;
+  /**
+   * Cancels pending timers and drops the queue. Safe to call once. Returns
+   * whatever was still queued (never injected) so the caller can fail those
+   * messages' send-claims instead of leaving them indeterminate (plan-v2.md
+   * W3.9) — also reported via {@link InjectionControllerDeps.onDropped}.
+   *
+   * The submit timer is deliberately NOT cleared here: if a message is
+   * mid-injection (its text already written, waiting on the submit
+   * keystroke — `this.injecting`), that message was already shifted off
+   * `this.queue` and so can't appear in this method's own splice. Leaving
+   * its timer running lets `tryFlush`'s own submit callback observe
+   * `this.disposed` when it fires and report THAT message as dropped too —
+   * one code path owns "a message that will now never be submitted"
+   * instead of duplicating the check here.
+   */
+  dispose(): PendingInjection[] {
+    if (this.disposed) return [];
     this.disposed = true;
-    if (this.submitTimer) this.clearTimeoutImpl(this.submitTimer);
     if (this.cooldownTimer) this.clearTimeoutImpl(this.cooldownTimer);
     if (this.promptOpenFailsafeTimer) this.clearTimeoutImpl(this.promptOpenFailsafeTimer);
-    this.submitTimer = null;
     this.cooldownTimer = null;
     this.promptOpenFailsafeTimer = null;
-    this.queue.length = 0;
+    const dropped = this.queue.splice(0);
+    if (dropped.length > 0) this.deps.onDropped?.(dropped);
+    return dropped;
   }
 
   private canInject(): boolean {
@@ -212,9 +235,22 @@ export class InjectionController {
     this.logger.debug("[injection] typing web message into PTY", { id: message.id });
     this.deps.writeText(message.text);
 
-    this.submitTimer = this.setTimeoutImpl(() => {
-      this.submitTimer = null;
-      if (this.disposed) return;
+    // Deliberately not tracked/cancelable via a stored timer handle (unlike
+    // `cooldownTimer`/`promptOpenFailsafeTimer`): `dispose()` intentionally
+    // leaves this timer running so its own `this.disposed` check below still
+    // fires and reports a mid-injection message as dropped (see `dispose`'s
+    // doc comment).
+    this.setTimeoutImpl(() => {
+      if (this.disposed) {
+        // The text was already typed (writeText ran above before this timer
+        // was scheduled), but the child exited before the submit keystroke
+        // could be sent — dispose()'s own queue splice never saw this
+        // message (it was shifted off the queue before this callback was
+        // scheduled), so it must be reported here or its send-claim would
+        // hang open forever (plan-v2.md W3.9).
+        this.deps.onDropped?.([message]);
+        return;
+      }
       this.deps.submit();
       this.injecting = false;
       this.logger.debug("[injection] submitted web message", { id: message.id });

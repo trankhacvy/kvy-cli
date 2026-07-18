@@ -30,15 +30,23 @@ interface DebugRecord {
   meta?: Record<string, unknown>;
 }
 
-function collectingLogger(): { logger: Logger; debugRecords: DebugRecord[] } {
+function collectingLogger(): {
+  logger: Logger;
+  debugRecords: DebugRecord[];
+  infoRecords: DebugRecord[];
+} {
   const debugRecords: DebugRecord[] = [];
+  const infoRecords: DebugRecord[] = [];
   return {
     debugRecords,
+    infoRecords,
     logger: {
       debug: (message, meta) => {
         debugRecords.push({ message, meta });
       },
-      info: () => {},
+      info: (message, meta) => {
+        infoRecords.push({ message, meta });
+      },
       warn: () => {},
       error: () => {},
     },
@@ -324,4 +332,69 @@ describe("createSessionScanner", () => {
 
     expect(uuids(seen).sort()).toEqual(["new-1", "old-2"]);
   });
+
+  it("maps shutdown-tail entries appended right before cleanup() (W3.8 final sync pass)", async () => {
+    const seen: RawJSONLines[] = [];
+    const file = join(projectDir, "sess-shutdown.jsonl");
+    await writeFile(file, userLine("u1"));
+
+    scanner = await createSessionScanner({
+      sessionId: "sess-shutdown",
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      // A long poll interval so the periodic tick can't be the one that
+      // happens to pick this up — only the final pass inside cleanup() can.
+      pollIntervalMs: 60_000,
+      env,
+    });
+
+    // Appended after the scanner started but before any poll tick or
+    // fs-watcher callback has had a chance to run.
+    await appendFile(file, userLine("u2"));
+    const scannerToCleanup = scanner;
+    scanner = null;
+    await scannerToCleanup.cleanup();
+
+    expect(uuids(seen)).toEqual(["u2"]);
+  });
+
+  it("rotates to a new session automatically when its transcript file appears without a SessionStart hook (W3.8 rotation fallback)", async () => {
+    const { logger, infoRecords } = collectingLogger();
+    const seen: RawJSONLines[] = [];
+    const oldFile = join(projectDir, "sess-rotate-old.jsonl");
+    await writeFile(oldFile, userLine("old-1"));
+
+    scanner = await createSessionScanner({
+      sessionId: "sess-rotate-old",
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60_000,
+      logger,
+      env,
+    });
+    await sleep(100);
+
+    // No `onNewSession` call — simulate `/clear` (or a Claude-minted id) that
+    // wrote a brand-new transcript file with no SessionStart hook firing.
+    const newFile = join(projectDir, "sess-rotate-new.jsonl");
+    await writeFile(newFile, userLine("new-1"));
+
+    // The rotation fallback debounces 2s before acting; give it enough room.
+    await sleep(3000);
+
+    expect(uuids(seen)).toContain("new-1");
+    const rotationLogs = infoRecords.filter((r) =>
+      r.message.includes("new transcript file detected"),
+    );
+    expect(rotationLogs.length).toBe(1);
+    expect(rotationLogs[0]?.meta?.newSessionId).toBe("sess-rotate-new");
+
+    // The old session must still be scanned (agent tasks can still append to
+    // it), exactly like an explicit `onNewSession` call would preserve.
+    await appendFile(oldFile, userLine("old-2"));
+    await sleep(200);
+    expect(uuids(seen)).toContain("old-2");
+  }, 10_000);
 });
