@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RenderItem } from "@/sync/reducer";
-import { deriveControlMode, isTurnOpen } from "../session-state.js";
+import { deriveControlMode, deriveCurrentPermissionMode, isTurnOpen } from "../session-state.js";
 
 describe("deriveControlMode", () => {
   it("defaults to 'local' when there's no mode-switch item", () => {
@@ -13,6 +13,131 @@ describe("deriveControlMode", () => {
       { id: "m2", time: 2, role: "agent", kind: "mode-switch", control: "local", by: "terminal" },
     ];
     expect(deriveControlMode(items)).toBe("local");
+  });
+});
+
+describe("deriveCurrentPermissionMode", () => {
+  it("defaults to 'default' when there's no mode decision yet", () => {
+    expect(deriveCurrentPermissionMode([])).toBe("default");
+  });
+
+  it("reflects a 'mode' perm-resolve decision applied onto a tool item", () => {
+    const items: RenderItem[] = [
+      {
+        id: "t1",
+        time: 1,
+        role: "agent",
+        kind: "tool",
+        call: "c1",
+        name: "ExitPlanMode",
+        args: { plan: "do the thing" },
+        status: "done",
+        permission: {
+          reqId: "r1",
+          modes: ["default", "acceptEdits", "bypassPermissions"],
+          decision: { kind: "mode", mode: "acceptEdits" },
+        },
+      },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("acceptEdits");
+  });
+
+  it("reflects a 'mode' decision applied onto a still-unmatched perm-placeholder", () => {
+    const items: RenderItem[] = [
+      {
+        id: "p1",
+        time: 1,
+        role: "agent",
+        kind: "perm-placeholder",
+        name: "ExitPlanMode",
+        args: { plan: "do the thing" },
+        permission: {
+          reqId: "r1",
+          modes: ["default", "acceptEdits", "bypassPermissions"],
+          decision: { kind: "mode", mode: "bypassPermissions" },
+        },
+      },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("bypassPermissions");
+  });
+
+  it("takes the most recent 'mode' decision when more than one has landed", () => {
+    const items: RenderItem[] = [
+      {
+        id: "t1",
+        time: 1,
+        role: "agent",
+        kind: "tool",
+        call: "c1",
+        name: "ExitPlanMode",
+        args: {},
+        status: "done",
+        permission: {
+          reqId: "r1",
+          modes: ["default", "acceptEdits", "bypassPermissions"],
+          decision: { kind: "mode", mode: "acceptEdits" },
+        },
+      },
+      {
+        id: "t2",
+        time: 2,
+        role: "agent",
+        kind: "tool",
+        call: "c2",
+        name: "ExitPlanMode",
+        args: {},
+        status: "done",
+        permission: {
+          reqId: "r2",
+          modes: ["default", "acceptEdits", "bypassPermissions"],
+          decision: { kind: "mode", mode: "bypassPermissions" },
+        },
+      },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("bypassPermissions");
+  });
+
+  it("ignores non-'mode' decisions (allow/deny don't carry a mode)", () => {
+    const items: RenderItem[] = [
+      {
+        id: "t1",
+        time: 1,
+        role: "agent",
+        kind: "tool",
+        call: "c1",
+        name: "Bash",
+        args: {},
+        status: "done",
+        permission: {
+          reqId: "r1",
+          modes: ["default", "acceptEdits", "plan", "bypassPermissions"],
+          decision: { kind: "allow", scope: "once" },
+        },
+      },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("default");
+  });
+
+  it("resets to 'default' on a mode-switch, even after a known mode decision", () => {
+    const items: RenderItem[] = [
+      {
+        id: "t1",
+        time: 1,
+        role: "agent",
+        kind: "tool",
+        call: "c1",
+        name: "ExitPlanMode",
+        args: {},
+        status: "done",
+        permission: {
+          reqId: "r1",
+          modes: ["default", "acceptEdits", "bypassPermissions"],
+          decision: { kind: "mode", mode: "bypassPermissions" },
+        },
+      },
+      { id: "m1", time: 2, role: "agent", kind: "mode-switch", control: "remote", by: "client" },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("default");
   });
 });
 

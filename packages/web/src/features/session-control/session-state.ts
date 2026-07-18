@@ -1,3 +1,4 @@
+import type { PermissionMode } from "@falcon/wire";
 import type { RenderItem } from "@/sync/reducer";
 
 /**
@@ -31,4 +32,36 @@ export function isTurnOpen(items: RenderItem[]): boolean {
     else if (item.kind === "turn-end") open = false;
   }
   return open;
+}
+
+/**
+ * The session's current permission mode (falcon-system-design.md §7.5,
+ * plan-v2.md W2.4), replacing `SessionTimelineScreen`'s previously-hardcoded
+ * `"default"` passed to `ControlBar`. There is no wire event carrying a bare
+ * "the mode is now X" fact — `mode-switch` items only carry *control*
+ * (`"local"` | `"remote"`, see `deriveControlMode` above), never a
+ * `PermissionMode` value. The one place a `PermissionMode` value actually
+ * appears is a `perm-resolve` decision of kind `"mode"` (a `PermCard`
+ * "Approve & <mode>" / "Switch to <mode>" answer, W2.2/W2.4), which the
+ * reducer applies onto whichever item's `PermissionInfo` it belongs to
+ * (`perm-placeholder` or `tool`) — so this walks the same two item kinds
+ * `hasPendingPermission` (`attention.ts`) does, last-one-wins in item order.
+ * A `mode-switch` item resets the running value back to `"default"`:
+ * crossing a local/remote control boundary makes the previously-known mode
+ * stale — the newly-controlling side's actual mode is unknown until its own
+ * decision lands. Defaults to `"default"` (Claude Code's own starting mode)
+ * when nothing has happened yet.
+ */
+export function deriveCurrentPermissionMode(items: RenderItem[]): PermissionMode {
+  let mode: PermissionMode = "default";
+  for (const item of items) {
+    if (item.kind === "mode-switch") {
+      mode = "default";
+    } else if (item.kind === "perm-placeholder" && item.permission.decision?.kind === "mode") {
+      mode = item.permission.decision.mode;
+    } else if (item.kind === "tool" && item.permission?.decision?.kind === "mode") {
+      mode = item.permission.decision.mode;
+    }
+  }
+  return mode;
 }
