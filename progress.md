@@ -8897,3 +8897,34 @@ session limit. Worktrees left in place for the resumed run.
   (W4.3) — both have impl-complete worktrees (`.worktrees/U4.4` branch
   `wf/U4.4` tip `72bc0a1`; `.worktrees/U4.5` branch `wf/U4.5` tip `788fb7d`)
   per the prior hand-merge session's note; still workflow-eligible.
+
+## v2-pty-injection Cycle 2 — 2026-07-19
+
+**Branch:** `v2-pty-injection`
+
+**Merged units:**
+- U4.5 `[solo]` "pty-setmode" — `878c57e` (worktree tip `30cb409`, branch
+  `wf/U4.5`)
+  - W4.3: `permission_mode` cache bridge; `sendModeCycle(n)` gated
+    idle+no-prompt; `setMode` RPC verified via hook-echo; web mode-switch UI
+    re-enabled behind flag
+
+**Parked units (unchanged from Cycle 1, left in place for human inspection):**
+- U1.6 `[bundle]` "web-safety" (W1.9+W1.10) — worktree `.worktrees/U1.6`
+  (branch `review/U1.6-recreated`, tip `3466855`).
+- U4.4 `[bundle]` "shell-polish" (W4.2c) — worktree `.worktrees/U4.4` (branch
+  `wf/U4.4`, tip `ae11a2c`).
+
+**Verification:** `git merge-base --is-ancestor 878c57e v2-pty-injection`
+confirmed ancestry. Worktree `.worktrees/U4.5` and branch `wf/U4.5` removed.
+plan-v2.md's U4.5 non-`[human]` sub-box + unit box flipped to `[x]`; the
+`[human]` live-soak sub-box (20 switches, no TUI corruption) left unchecked
+per the false-landing rule. `pnpm typecheck` on `v2-pty-injection` — all 11
+turbo tasks successful (cache-hit, `>>> FULL TURBO`).
+
+**Next recommended units:**
+- Resolve `.worktrees/U1.6` (`review/U1.6-recreated`, tip `3466855`) — figure
+  out why the recreated attempt failed and either fix forward or restart the
+  unit.
+- U4.4 `[bundle]` "shell-polish" (W4.2c) — worktree `.worktrees/U4.4` (branch
+  `wf/U4.4`, tip `ae11a2c`) is impl-complete and still workflow-eligible.

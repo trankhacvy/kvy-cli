@@ -1476,8 +1476,8 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 - [ ] **U4.4 `[bundle]` "shell-polish"** (W4.2c): toasts + skeletons + offline/WS
       banner + PWA icons/manifest + decrypted title in header + archive/delete
       wiring
-- [ ] **U4.5 `[solo]` "pty-setmode"** (W4.3 — flag-gated, version-coupled)
-  - [ ] Bridge `permission_mode` cache; `sendModeCycle(n)` gated idle+no-prompt;
+- [x] **U4.5 `[solo]` "pty-setmode"** (W4.3 — flag-gated, version-coupled)
+  - [x] Bridge `permission_mode` cache; `sendModeCycle(n)` gated idle+no-prompt;
         `setMode` RPC verify-via-hook-echo; web re-enable behind flag
   - [ ] `[human]` live soak: 20 switches, no TUI corruption
 - [x] **U4.6 `[bundle]` "session-registration"** (W4.4+W4.5 — bootstrap/start)
