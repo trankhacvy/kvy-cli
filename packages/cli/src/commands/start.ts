@@ -353,7 +353,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     const lockResult = await doAcquireSessionLock(
       deps.homeDir,
       { machineId, workspacePath: deps.workingDirectory },
-      { pid: process.pid, sessionId: null, startedAt: Date.now() },
+      { pid: process.pid, sessionId: null, startedAt: (deps.now ?? Date.now)() },
     );
     if (!lockResult.ok) {
       if (lockResult.reason === "held-by-running-process") {

@@ -118,43 +118,23 @@ describe("acquireSessionLock", () => {
 
   it("release() is a no-op if the lock was already reclaimed by a new owner", async () => {
     const deadPid = await spawnAndReapDeadPid();
-    const stalePayload = payload({ pid: deadPid, sessionId: "sess_stale" });
-    await writeFile(sessionLockPath(homeDir, KEY), JSON.stringify(stalePayload));
-
-    const reclaimer = await acquireSessionLock(
+    const stale = await acquireSessionLock(
       homeDir,
       KEY,
-      payload({ sessionId: "sess_new", startedAt: 999 }),
+      payload({ pid: deadPid, sessionId: "sess_stale", startedAt: 999 }),
     );
-    expect(reclaimer.ok).toBe(true);
-
-    // The original (now-stale) "owner" calling release() must not delete the
-    // reclaimer's lock out from under it.
-    const staleHandleRelease = async (): Promise<void> => {
-      const current = await readFile(sessionLockPath(homeDir, KEY), "utf8");
-      expect(JSON.parse(current).sessionId).toBe("sess_new");
-    };
-    await staleHandleRelease();
-  });
-
-  it("a real stale handle's own release() does not delete a subsequent reclaimer's lock", async () => {
-    // Unlike the previous test (which seeds the stale payload directly on
-    // disk and so never actually exercises a handle's `release()` at all),
-    // this one acquires through the real `acquireSessionLock()` path first,
-    // so `stale.handle.release()` below is the actual guarded call.
-    const deadPid = await spawnAndReapDeadPid();
-    const stale = await acquireSessionLock(homeDir, KEY, payload({ pid: deadPid }));
     expect(stale.ok).toBe(true);
     if (!stale.ok) return;
 
     const reclaimer = await acquireSessionLock(homeDir, KEY, payload({ sessionId: "sess_new" }));
     expect(reclaimer.ok).toBe(true);
-    if (!reclaimer.ok) return;
 
+    // The original (now-stale) "owner"'s handle.release() must not delete the
+    // reclaimer's lock out from under it — this actually calls release() on
+    // the stale handle, rather than merely re-reading the lock file.
     await stale.handle.release();
-    await expect(readFile(sessionLockPath(homeDir, KEY), "utf8")).resolves.toContain("sess_new");
-
-    await reclaimer.handle.release();
+    const current = await readFile(sessionLockPath(homeDir, KEY), "utf8");
+    expect(JSON.parse(current).sessionId).toBe("sess_new");
   });
 
   it("updateSessionId() rewrites the payload so a later contender sees the real session id", async () => {
