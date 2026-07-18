@@ -16,12 +16,17 @@ import { Button } from "@/components/ui/button";
  * attachment path in the web composer") is a plain hidden `<input
  * type="file">` triggered by the paperclip button — `onAttach` does the
  * actual encrypt+upload+send, this component just hands it the raw `File`.
+ *
+ * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
+ * says the underlying CLI process is gone (`ended`/`failed`) — sending a
+ * follow-up would just queue against a session nothing is listening to.
  */
 export function Composer({
   onSend,
   onAttach,
   isSending,
   isQueued,
+  disabled = false,
   error,
   notice,
 }: {
@@ -29,6 +34,7 @@ export function Composer({
   onAttach: (file: File) => void;
   isSending: boolean;
   isQueued: boolean;
+  disabled?: boolean;
   error: string | null;
   /** Non-blocking `outcome-unknown` delivery notice (design §7.10) — shown
    * alongside, never instead of, the composer's normal controls. */
@@ -38,7 +44,7 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function submit() {
-    if (text.trim().length === 0) return;
+    if (disabled || text.trim().length === 0) return;
     onSend(text);
     setText("");
   }
@@ -46,7 +52,7 @@ export function Composer({
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file consecutively
-    if (file) onAttach(file);
+    if (file && !disabled) onAttach(file);
   }
 
   return (
@@ -70,7 +76,7 @@ export function Composer({
           type="button"
           variant="outline"
           size="icon"
-          disabled={isSending}
+          disabled={disabled || isSending}
           onClick={() => fileInputRef.current?.click()}
           aria-label="Attach a file"
         >
@@ -78,6 +84,7 @@ export function Composer({
         </Button>
         <textarea
           value={text}
+          disabled={disabled}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
@@ -85,11 +92,11 @@ export function Composer({
               submit();
             }
           }}
-          placeholder="Send a follow-up…"
+          placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
           rows={1}
-          className="min-h-9 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-h-9 flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
         />
-        <Button onClick={submit} disabled={isSending || text.trim().length === 0}>
+        <Button onClick={submit} disabled={disabled || isSending || text.trim().length === 0}>
           Send
         </Button>
       </div>

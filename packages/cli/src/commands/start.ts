@@ -55,6 +55,17 @@
  * `onInjected` — the moment the message is typed + submitted; the remote path
  * on `onTurnSettled`). A retried RPC can never run the agent twice for one
  * logical send.
+ *
+ * Session lifecycle status (plan-v2.md W1.4+B15; PRD FR-3.7): `reportStatusOnce`
+ * best-effort reports the session's terminal status to the server exactly
+ * once, whichever exit path reaches it first — a clean process exit (either
+ * flow's own exit code, mapped 0 ⇒ `ended` / non-zero ⇒ `failed`), or a
+ * `SIGTERM`/`SIGHUP` on this wrapper process (always `ended` — a signal is a
+ * normal, resumable way for a terminal session to stop). `SIGINT`
+ * (Ctrl-C) isn't handled here: it reaches the PTY child directly (raw mode
+ * forwards the byte to the foreground process group) and that child's own
+ * exit is what settles `ptySession.done`, so it still flows through the
+ * same normal-exit mapping above.
  */
 import path from "node:path";
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
@@ -62,6 +73,10 @@ import type { PermissionMode } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox } from "../api/outbox.js";
+import {
+  type ReportableSessionStatus,
+  reportSessionStatus as reportSessionStatusDefault,
+} from "../api/sessionStatus.js";
 import { resolveBackendUrl } from "../auth/config.js";
 import {
   type FalconCredentials,
@@ -151,6 +166,12 @@ export interface StartClaudeCommandDeps {
   startSessionClient?: typeof startSessionClientDefault;
   /** Injectable for tests; defaults to the real `registerSessionRpcHandlers()`. */
   registerSessionRpcHandlers?: typeof registerSessionRpcHandlers;
+  /**
+   * Injectable for tests; defaults to the real `reportSessionStatus()`
+   * (`api/sessionStatus.ts`). Backs `reportStatusOnce` — the session's
+   * best-effort `ended`/`failed` lifecycle report at every exit path (W1.4).
+   */
+  reportSessionStatus?: typeof reportSessionStatusDefault;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   write?: (text: string) => void;
@@ -229,6 +250,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
   const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
+  const doReportSessionStatus = deps.reportSessionStatus ?? reportSessionStatusDefault;
 
   // 1. Never touch the network without credentials (no silent failures).
   const credentials = readCreds(deps.homeDir);
@@ -306,6 +328,42 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   write(`falcon claude: starting session ${bootstrap.sessionId}\n`);
+
+  // Session lifecycle status (plan-v2.md W1.4+B15; PRD FR-3.7, design §7.5):
+  // best-effort report the session's terminal status to the server exactly
+  // once, from whichever exit path reaches it first (normal child exit,
+  // SIGTERM/SIGHUP, or — in `runRemoteLoop` — the mode loop's own exit code)
+  // so the web can show "Ended"/"Failed" instead of inferring nothing.
+  const statusDeps = {
+    backendUrl,
+    accessToken: credentials.token,
+    fetchImpl,
+    logger,
+  };
+  let statusReported = false;
+  const reportStatusOnce = async (
+    status: ReportableSessionStatus,
+    error?: Error,
+  ): Promise<void> => {
+    if (statusReported) return;
+    statusReported = true;
+    await doReportSessionStatus(statusDeps, { sessionId: bootstrap.sessionId, status, error });
+  };
+
+  // SIGINT reaches the child via the PTY (raw mode forwards Ctrl-C bytes to
+  // the foreground process group, same reasoning as `sessionExit.ts`'s own
+  // doc comment on why local mode doesn't fight the child's native
+  // Ctrl-C handling) — but SIGTERM/SIGHUP land on this wrapper process
+  // itself (a terminal closing, `kill -TERM`) and must still end the
+  // session honestly rather than leaving it looking perpetually active.
+  const onSignal = (signal: NodeJS.Signals) => {
+    logger.info("[start-claude] signal — ending session", { signal });
+    void reportStatusOnce("ended").finally(() => {
+      process.exit(signal === "SIGTERM" ? 0 : 1);
+    });
+  };
+  process.on("SIGTERM", onSignal);
+  process.on("SIGHUP", onSignal);
 
   // 5. Outbox mirrors every transcript envelope to the server; disposed
   // (buffered-but-unsealed envelopes flushed to the on-disk queue, not
@@ -487,7 +545,14 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
 
     try {
-      return await ptySession.done;
+      const code = await ptySession.done;
+      // A clean exit (0) is a normal/resumable end; anything else is the PTY
+      // child crashing or exiting abnormally — report accordingly (W1.4).
+      await reportStatusOnce(
+        code === 0 ? "ended" : "failed",
+        code === 0 ? undefined : new Error(`claude exited with code ${code}`),
+      );
+      return code;
     } finally {
       ptySession.stop();
       rpcHandle.stop();
@@ -553,7 +618,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
 
     try {
-      return await runLoop(
+      const code = await runLoop(
         {
           workingDirectory: deps.workingDirectory,
           startingMode: "remote",
@@ -578,6 +643,13 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         },
         { local: localLauncherDeps, remote: remoteLauncherDeps },
       );
+      // Same exit-code -> status mapping as the PTY flow's `runLocalPty`
+      // (W1.4): a clean loop exit is a normal/resumable end.
+      await reportStatusOnce(
+        code === 0 ? "ended" : "failed",
+        code === 0 ? undefined : new Error(`claude exited with code ${code}`),
+      );
+      return code;
     } finally {
       rpcHandle.stop();
     }
@@ -588,6 +660,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       ? runRemoteLoop()
       : runLocalPty());
   } finally {
+    process.off("SIGTERM", onSignal);
+    process.off("SIGHUP", onSignal);
     sessionClient.stop();
     outbox.dispose();
   }

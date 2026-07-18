@@ -112,6 +112,10 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     loop: vi.fn(async () => 0),
     startSessionClient: vi.fn(() => fakeSessionClientHandle()),
     registerSessionRpcHandlers: vi.fn(() => ({ stop: vi.fn() })),
+    // Never let a unit test hit the real backend for a lifecycle-status
+    // report (W1.4) — same "no real network from a unit test" rule every
+    // other injected dep here already follows.
+    reportSessionStatus: vi.fn(async () => ({ type: "ok" }) as const),
     sleep: async () => {},
     now: () => 0,
     write: (text: string) => {
@@ -426,6 +430,43 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
+  it("reports the session 'ended' with no error on a clean (code 0) exit", async () => {
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(0) }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, reportSessionStatus }),
+    );
+
+    expect(code).toBe(0);
+    expect(reportSessionStatus).toHaveBeenCalledOnce();
+    const [reportDeps, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      { accessToken: string },
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportDeps.accessToken).toBe("test-token");
+    expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
+  });
+
+  it("reports the session 'failed' with the exit code in the error on a non-zero exit", async () => {
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(7) }));
+
+    const code = await runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, reportSessionStatus }),
+    );
+
+    expect(code).toBe(7);
+    expect(reportSessionStatus).toHaveBeenCalledOnce();
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams.sessionId).toBe("sess_1");
+    expect(reportParams.status).toBe("failed");
+    expect(reportParams.error?.message).toBe("claude exited with code 7");
+  });
+
   it("still starts (non-fatally) with no --settings and not-supported perm.answer when the hook fails to install", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
     let capturedHandlers: SessionRpcHandlers | null = null;
@@ -466,6 +507,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     });
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
     const installRemotePermissionHook = vi.fn(async () => fakeRemotePermissionHook());
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
 
     const code = await runStartClaudeCommand(
       baseDeps({
@@ -474,6 +516,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
         startPtyClaudeSession,
         installRemotePermissionHook:
           installRemotePermissionHook as unknown as typeof installRemotePermissionHookType,
+        reportSessionStatus,
       }),
     );
 
@@ -482,6 +525,36 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     expect(startPtyClaudeSession).not.toHaveBeenCalled();
     // The remote/ACP flow owns permissions agent-side — no hook server here.
     expect(installRemotePermissionHook).not.toHaveBeenCalled();
+    // Same exit-code -> status mapping as the PTY flow (W1.4): a non-zero
+    // loop exit reports 'failed', with the code in the error message.
+    expect(reportSessionStatus).toHaveBeenCalledOnce();
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams.status).toBe("failed");
+    expect(reportParams.error?.message).toBe("claude exited with code 5");
+  });
+
+  it("reports the session 'ended' on a clean (code 0) loop exit", async () => {
+    const loop = vi.fn(async () => 0);
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--starting-mode", "remote"],
+        loop,
+        reportSessionStatus,
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(reportSessionStatus).toHaveBeenCalledOnce();
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({ sessionId: "sess_1", status: "ended", error: undefined });
   });
 
   it("routes a message RPC into loop()'s onMessage subscribers on the remote flow", async () => {

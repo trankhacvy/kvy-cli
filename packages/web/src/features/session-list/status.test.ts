@@ -132,6 +132,12 @@ describe("deriveSessionStatus", () => {
     expect(deriveSessionStatus({ ...base, status: "compacted", items: [] })).toBe("completed");
   });
 
+  it("is ended for a session row the CLI reported as ended, regardless of live signals", () => {
+    expect(
+      deriveSessionStatus({ ...base, status: "ended", attention: "question", items: [] }),
+    ).toBe("ended");
+  });
+
   it("prioritizes offline over a pending permission (nothing can act on the answer while the machine is down)", () => {
     const items = reduceEnvelopes([
       createEnvelope(

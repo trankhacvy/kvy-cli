@@ -116,6 +116,95 @@ describe("POST /v1/sessions/:id/status", () => {
     expect(pushDispatcher.calls).toHaveLength(0);
   });
 
+  it("marks a fresh session ended and fans out session-update only (no attention, no push)", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        tag: "status-session-ended",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    const endedSessionId = createResponse.json().id;
+
+    const updates: EmitUpdateParams[] = [];
+    const ephemerals: EmitEphemeralParams[] = [];
+    const unsubUpdate = eventRouter.onUpdate((e) => updates.push(e));
+    const unsubEphemeral = eventRouter.onEphemeral((e) => ephemerals.push(e));
+    pushDispatcher.calls.length = 0;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${endedSessionId}/status`,
+      headers: { authorization: authHeader },
+      payload: { status: "ended" },
+    });
+    unsubUpdate();
+    unsubEphemeral();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ended" });
+
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.payload.body).toEqual({
+      t: "session-update",
+      id: endedSessionId,
+      status: "ended",
+    });
+
+    // Unlike `failed`, `ended` is not attention-worthy — no ephemeral, no push.
+    expect(ephemerals).toHaveLength(0);
+    expect(pushDispatcher.calls).toHaveLength(0);
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+    });
+    const row = getResponse.json().sessions.find((s: { id: string }) => s.id === endedSessionId);
+    expect(row.status).toBe("ended");
+  });
+
+  it("is idempotent: a second POST for an already-ended session doesn't fan out again", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        tag: "status-session-ended-2",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    const endedSessionId = createResponse.json().id;
+
+    await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${endedSessionId}/status`,
+      headers: { authorization: authHeader },
+      payload: { status: "ended" },
+    });
+
+    const updates: EmitUpdateParams[] = [];
+    const unsubscribe = eventRouter.onUpdate((e) => updates.push(e));
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${endedSessionId}/status`,
+      headers: { authorization: authHeader },
+      payload: { status: "ended" },
+    });
+    unsubscribe();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ status: "ended" });
+    expect(updates).toHaveLength(0);
+  });
+
   it("404s for a session that doesn't belong to the caller", async () => {
     const { authHeader: otherHeader } = await createTestAccount(db);
     const response = await app.inject({

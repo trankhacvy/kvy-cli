@@ -25,15 +25,21 @@ const MODE_LABEL: Record<PermissionMode, string> = {
  * session state (derived from the reduced transcript + live ephemerals,
  * design principle #3) — this component only owns the *optimistic* mode
  * selection while a `setMode` call is in flight, rolling back on failure.
+ *
+ * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
+ * says the underlying CLI process is gone (`ended`/`failed`) — every
+ * action here targets a session RPC that has nothing live to reach anymore.
  */
 export function ControlBar({
   mode,
   controlMode,
   working,
+  disabled = false,
 }: {
   mode: PermissionMode;
   controlMode: "local" | "remote";
   working: boolean;
+  disabled?: boolean;
 }) {
   const { actions } = useSessionControl();
   const [selectedMode, setSelectedMode] = useState(mode);
@@ -69,7 +75,7 @@ export function ControlBar({
       <Button
         size="sm"
         variant="destructive"
-        disabled={!working || interruptMutation.isPending}
+        disabled={disabled || !working || interruptMutation.isPending}
         onClick={() => interruptMutation.mutate()}
       >
         Interrupt
@@ -79,7 +85,7 @@ export function ControlBar({
         Mode
         <select
           value={selectedMode}
-          disabled={setModeMutation.isPending}
+          disabled={disabled || setModeMutation.isPending}
           onChange={(e) => handleModeChange(e.target.value as PermissionMode)}
           className="rounded-md border border-input bg-background px-2 py-1 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -95,7 +101,7 @@ export function ControlBar({
         <Button
           size="sm"
           variant="secondary"
-          disabled={takeControlMutation.isPending}
+          disabled={disabled || takeControlMutation.isPending}
           onClick={() => takeControlMutation.mutate()}
         >
           Take control

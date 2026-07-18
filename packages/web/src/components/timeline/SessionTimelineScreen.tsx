@@ -1,5 +1,6 @@
 "use client";
 
+import type { SessionRow } from "@falcon/wire";
 import Link from "next/link";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,8 @@ import {
   useSessionEphemerals,
   useTabAttention,
 } from "@/features/session-control";
+import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
+import { cn } from "@/lib/utils";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ControlBar } from "./ControlBar";
@@ -51,6 +54,16 @@ export function SessionTimelineScreen({
 }) {
   const items = useLiveRenderItems(sessionId);
 
+  // The session row's own lifecycle `status` (plan-v2.md W1.4+B15, design
+  // §7.5's mode state machine) — read straight off the same `['sync']`
+  // account snapshot `features/session-list/live-source.ts` already reads,
+  // rather than threading a second fetch through this screen. `undefined`
+  // until the snapshot has loaded or this session id isn't (yet) present in
+  // it; treated the same as `"active"` below (the default a fresh session
+  // row is created with) — never as "ended"/"failed" by absence alone.
+  const sessionStatus: SessionRow["status"] =
+    useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId)?.status ?? "active";
+
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
   // not on every render, so a completed-turn-while-open doesn't immediately
@@ -83,6 +96,7 @@ export function SessionTimelineScreen({
         items={items}
         controlMode={controlMode}
         working={working}
+        sessionStatus={sessionStatus}
       />
     </SessionControlProvider>
   );
@@ -96,14 +110,23 @@ function SessionTimelineBody({
   items,
   controlMode,
   working,
+  sessionStatus,
 }: {
   sessionId: string;
   items: RenderItem[];
   controlMode: "local" | "remote";
   working: boolean;
+  sessionStatus: SessionRow["status"];
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, error, notice } =
     useComposerState(items);
+
+  // Once the CLI process itself is gone (W1.4's `ended`/`failed` — as
+  // opposed to `completed`/`archived`/`compacted`, which describe a turn or
+  // an explicit archive on a session that's still otherwise controllable),
+  // nothing sent from here can reach a live process anymore — disable the
+  // controls rather than let a request silently go nowhere.
+  const isActive = sessionStatus === "active";
 
   return (
     <div className="flex h-dvh flex-col">
@@ -119,13 +142,28 @@ function SessionTimelineBody({
           <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
         </Button>
       </header>
-      <ControlBar mode="default" controlMode={controlMode} working={working} />
+      {(sessionStatus === "ended" || sessionStatus === "failed") && (
+        <div
+          className={cn(
+            "border-b border-border px-4 py-2 text-sm",
+            sessionStatus === "failed"
+              ? "bg-destructive/10 text-destructive"
+              : "bg-muted/40 text-muted-foreground",
+          )}
+        >
+          {sessionStatus === "failed"
+            ? "Session failed — this session can no longer be controlled from the web."
+            : "Session ended — this session can no longer be controlled from the web."}
+        </div>
+      )}
+      <ControlBar mode="default" controlMode={controlMode} working={working} disabled={!isActive} />
       <Timeline items={mergedItems} />
       <Composer
         onSend={send}
         onAttach={sendAttachment}
         isSending={isSending}
         isQueued={isQueued}
+        disabled={!isActive}
         error={error}
         notice={notice}
       />
