@@ -170,4 +170,46 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     expect(snapshot.sessions[0]?.title).toBe("(untitled session)");
     expect(snapshot.machines[0]?.name).toBe("(unnamed machine)");
   });
+
+  it("derives a workspace's display name from the basename of its id/path", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/falcon" });
+
+    const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/falcon", name: "falcon" }]);
+  });
+
+  it("dedupes multiple sessions sharing the same workspaceId into one workspace entry", () => {
+    const a = makeSession({ id: "sess-1", workspaceId: "/ws/one" });
+    const b = makeSession({ id: "sess-2", workspaceId: "/ws/one" });
+
+    const snapshot = buildSnapshot([a, b], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([{ id: "/ws/one", name: "one" }]);
+  });
+
+  it("excludes sessions with no workspaceId from the workspaces list", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: null });
+
+    const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([]);
+    expect(snapshot.sessions[0]?.workspaceId).toBeNull();
+  });
+
+  it("falls back to the full id for a workspace path with no usable basename", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: "/" });
+
+    const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([{ id: "/", name: "/" }]);
+  });
+
+  it("strips a trailing slash before deriving the basename", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/falcon/" });
+
+    const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/falcon/", name: "falcon" }]);
+  });
 });
