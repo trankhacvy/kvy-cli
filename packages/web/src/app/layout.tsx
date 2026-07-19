@@ -3,7 +3,11 @@ import type { Metadata, Viewport } from "next";
 import { DocumentTitle } from "@/components/DocumentTitle";
 import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
 import "./globals.css";
+import { Inter } from "next/font/google";
+import { cn } from "@/lib/utils";
 import { Providers } from "./providers";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 // `title` is deliberately *not* set here — `<DocumentTitle />` below is the
 // app's one and only `<title>` element (see its own docstring for why: a
@@ -54,7 +58,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={DEFAULT_THEME === "dark" ? "dark" : undefined}
+      className={cn(DEFAULT_THEME === "dark" ? "dark" : undefined, "font-sans", inter.variable)}
       suppressHydrationWarning
     >
       <head>

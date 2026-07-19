@@ -24,21 +24,15 @@ export function TimelineRow({ item }: { item: RenderItem }) {
       return <FileAttachment item={item} />;
 
     case "turn-start":
-      return <ServiceLine label="Turn started" tone="hairline" />;
+      return <ServiceLine label={null} />;
 
     case "turn-end":
-      return (
+      return item.status === "completed" ? (
+        <ServiceLine label={null} />
+      ) : (
         <ServiceLine
-          label={
-            item.status === "completed"
-              ? "Turn completed"
-              : item.status === "failed"
-                ? "Turn failed"
-                : "Turn cancelled"
-          }
-          tone={
-            item.status === "completed" ? "muted" : item.status === "failed" ? "error" : "warning"
-          }
+          label={item.status === "failed" ? "Turn failed" : "Turn cancelled"}
+          tone={item.status === "failed" ? "error" : "warning"}
         />
       );
 
@@ -48,10 +42,10 @@ export function TimelineRow({ item }: { item: RenderItem }) {
       );
 
     case "sub-start":
-      return <ServiceLine label="Subagent started" tone="hairline" />;
+      return <ServiceLine label={null} />;
 
     case "sub-stop":
-      return <ServiceLine label="Subagent finished" tone="hairline" />;
+      return <ServiceLine label={null} />;
 
     case "usage":
       return <UsageChip item={item} />;

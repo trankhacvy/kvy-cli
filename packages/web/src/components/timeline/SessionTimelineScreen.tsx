@@ -2,9 +2,9 @@
 
 import type { PermissionMode, SessionRow } from "@falcon/wire";
 import { useQueryClient } from "@tanstack/react-query";
+import { FolderGit2, Globe } from "lucide-react";
 import Link from "next/link";
-import { useEffect } from "react";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   deriveAttention,
@@ -18,6 +18,7 @@ import {
   useComposerState,
   useLiveRenderItems,
   useLiveSessionControl,
+  useSessionControl,
   useSessionEphemerals,
   useSessionModelChip,
   useSessionTitle,
@@ -28,8 +29,9 @@ import { cn } from "@/lib/utils";
 import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
-import { ControlBar } from "./ControlBar";
-import { SessionHeaderActions } from "./SessionHeaderActions";
+import { ComposerControls } from "./ComposerControls";
+import { SessionActionsMenu } from "./SessionActionsMenu";
+import { SessionSidePanel } from "./SessionSidePanel";
 import { Timeline } from "./Timeline";
 import { TimelineSkeleton } from "./TimelineSkeleton";
 
@@ -38,20 +40,16 @@ import { TimelineSkeleton } from "./TimelineSkeleton";
  * falcon-prd.md FR-7.2/FR-7.3/FR-7.4). Renders the reducer's `RenderItem[]`
  * output as a structured chat transcript plus the full control surface
  * (plan.md §16 "2.4 Web control surface"): `Composer` (queue-aware follow-up
- * input), `ControlBar` (interrupt/mode-selector/take-control), interactive
- * `PermCard`s inline in the transcript, live working/attention indicators,
- * and a tab title + favicon reflecting the max attention state.
+ * input + footer session chips), interactive `PermCard`s inline in the
+ * transcript, live working/attention indicators, and a tab title + favicon
+ * reflecting the max attention state.
  *
  * `items`/`useControl` both come from the real sync engine + session-scoped
  * crypto worker by default (`useLiveRenderItems`/`useLiveSessionControl`,
- * `features/session-control/use-session-crypto.ts`) — the hand-built
- * `demo-items.ts` fixture and `useMockSessionControl` this screen used to
- * default to are retired from this call site (still exported, for tests/
- * standalone review, from `features/session-control`). `useControl` stays
- * an injectable prop, mirroring `features/session-list`'s
+ * `features/session-control/use-session-crypto.ts`). `useControl` stays an
+ * injectable prop, mirroring `features/session-list`'s
  * `UseSessionListSnapshot` seam, so a test can still swap in
- * `useMockSessionControl` without touching `Composer`/`PermCard`/
- * `ControlBar`.
+ * `useMockSessionControl` without touching `Composer`/`PermCard`.
  */
 export function SessionTimelineScreen({
   sessionId,
@@ -175,70 +173,86 @@ function SessionTimelineBody({
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
+  const { actions } = useSessionControl();
+  const [panelOpen, setPanelOpen] = useState(true);
 
   const isDisabled = isSessionControlDisabled(sessionStatus);
 
   return (
-    <div className="flex h-dvh flex-col">
-      <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <p className="flex items-center gap-2 truncate text-sm font-medium">
-            {title ?? sessionId}
-            {modelChip && (
-              <Badge variant="secondary" className="font-normal">
-                {modelChip}
-              </Badge>
-            )}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {working ? "Working…" : "Idle"} ·{" "}
-            {controlMode === "local" ? "Local control" : "Remote control"}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <SessionHeaderActions sessionId={sessionId} />
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
-          </Button>
-        </div>
-      </header>
-      {decryptError && (
-        <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
-          <p className="text-sm text-destructive">{decryptError}</p>
-          <Button type="button" variant="outline" size="sm" onClick={onRetryDecrypt}>
-            Retry
-          </Button>
-        </div>
-      )}
-      <LifecycleBanner sessionStatus={sessionStatus} />
-      <ControlBar
-        mode={permissionMode}
-        controlMode={controlMode}
-        working={working}
-        disabled={isDisabled}
-      />
-      {isInitialLoading && items.length === 0 ? (
-        <TimelineSkeleton />
-      ) : (
-        <Timeline
-          items={mergedItems}
+    <div className="flex h-full min-h-0">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl min-w-0 flex-col">
+        <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <p className="min-w-0 truncate text-base font-semibold">{title ?? sessionId}</p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
+            </Button>
+            <Button
+              type="button"
+              variant={panelOpen ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setPanelOpen((open) => !open)}
+              aria-pressed={panelOpen}
+            >
+              <FolderGit2 className="size-3.5" />
+              Repo root
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled
+              title="Preview isn't available yet"
+            >
+              <Globe className="size-3.5" />
+              Preview
+            </Button>
+            <SessionActionsMenu sessionId={sessionId} disabled={isDisabled} />
+          </div>
+        </header>
+        {decryptError && (
+          <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
+            <p className="text-sm text-destructive">{decryptError}</p>
+            <Button type="button" variant="outline" size="sm" onClick={onRetryDecrypt}>
+              Retry
+            </Button>
+          </div>
+        )}
+        <LifecycleBanner sessionStatus={sessionStatus} />
+        {isInitialLoading && items.length === 0 ? (
+          <TimelineSkeleton />
+        ) : (
+          <Timeline
+            items={mergedItems}
+            working={working}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            onLoadEarlier={onLoadEarlier}
+          />
+        )}
+        <Composer
+          sessionId={sessionId}
+          onSend={send}
+          onAttach={sendAttachment}
+          isSending={isSending}
+          isQueued={isQueued}
+          cryptoReady={cryptoReady}
+          disabled={isDisabled}
+          error={error}
+          notice={notice}
           working={working}
-          hasMore={hasMore}
-          isLoadingMore={isLoadingMore}
-          onLoadEarlier={onLoadEarlier}
+          onStop={() => actions.interrupt()}
+          footerControls={
+            <ComposerControls
+              mode={permissionMode}
+              controlMode={controlMode}
+              disabled={isDisabled}
+              modelChip={modelChip}
+            />
+          }
         />
-      )}
-      <Composer
-        sessionId={sessionId}
-        onSend={send}
-        onAttach={sendAttachment}
-        isSending={isSending}
-        isQueued={isQueued}
-        cryptoReady={cryptoReady}
-        disabled={isDisabled}
-        error={error}
-        notice={notice}
-      />
+      </div>
+      {panelOpen && <SessionSidePanel />}
     </div>
   );
 }

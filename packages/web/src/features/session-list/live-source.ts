@@ -385,11 +385,10 @@ export function buildSnapshot(
   return { workspaces, machines, sessions };
 }
 
-/** Real `UseSessionListSnapshot` — swap-in replacement for
- * `useMockSessionListData` (`mock-source.ts`) at the Home screen's call
- * site. Returns an empty snapshot until the account snapshot has loaded and
- * the crypto bridge is ready, same "never crash on absent data" shape the
- * mock's static fixture doesn't need to worry about but a live source does. */
+/** Real `UseSessionListSnapshot` — the Home screen's default data source.
+ * Returns an empty snapshot until the account snapshot has loaded and the
+ * crypto bridge is ready: a live source has to tolerate "no data yet" at
+ * every layer rather than assume a fixture's always-present rows. */
 export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
   const titlesBridge = useCryptoBridge();
   // Its own worker, deliberately not shared with `titlesBridge` — see the

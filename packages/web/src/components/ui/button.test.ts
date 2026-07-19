@@ -7,7 +7,7 @@ describe("buttonVariants", () => {
     expect(classes).toContain("bg-primary");
     expect(classes).toContain("text-primary-foreground");
     expect(classes).toContain("h-9");
-    expect(classes).toContain("px-4");
+    expect(classes).toContain("px-2.5");
   });
 
   it("produces distinct classes per variant", () => {
@@ -28,8 +28,8 @@ describe("buttonVariants", () => {
 
   it("the 'destructive' variant carries destructive background/foreground tokens", () => {
     const classes = buttonVariants({ variant: "destructive" });
-    expect(classes).toContain("bg-destructive");
-    expect(classes).toContain("text-destructive-foreground");
+    expect(classes).toContain("bg-destructive/10");
+    expect(classes).toContain("text-destructive");
   });
 
   it("the 'outline' variant is bordered and transparent-background by default", () => {

@@ -1,6 +1,25 @@
 import type { PermissionMode } from "@falcon/wire";
 import type { SetModeResult } from "@/sync/sessionRpc";
 
+/** "Take control" is only meaningful for a genuine remote-loop session — a
+ * PTY/terminal session's `takeControl` RPC handler is a permanent,
+ * always-`{ok:true}` no-op ("the human is already at this terminal"), so
+ * callers hide the action entirely for `controlMode === "local"`. */
+export function shouldShowTakeControl(controlMode: "local" | "remote"): boolean {
+  return controlMode === "remote";
+}
+
+/**
+ * Whether the mode selector's `setMode` mutation is real (`true`) or should
+ * degrade to a read-only display (`false`). A remote-loop session's
+ * `setMode` is unconditionally real; a PTY/local session's is real only once
+ * the flag-gated Shift+Tab cycle (plan-v2.md W4.3) has been enabled on this
+ * build (`ptySetModeEnabled`, defaulted to `false`).
+ */
+export function canMutateMode(controlMode: "local" | "remote", ptySetModeEnabled = false): boolean {
+  return controlMode === "remote" || (controlMode === "local" && ptySetModeEnabled);
+}
+
 /**
  * `ControlBar`'s reaction to a settled `setMode` mutation (plan-v2.md W4.3
  * "Real setMode for the PTY path"). Kept as a pure module — same precedent

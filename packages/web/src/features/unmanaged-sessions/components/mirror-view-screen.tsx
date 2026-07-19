@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useMockUnmanagedActions, useMockUnmanagedSessions } from "../mock-source";
+import { useLiveUnmanagedSessions } from "../live-source";
+import { useMockUnmanagedActions } from "../mock-source";
 import type { UseUnmanagedActions, UseUnmanagedSessionsSnapshot } from "../types";
 import { useMirrorTranscript } from "../use-mirror-transcript";
 import { TakeOverDialog } from "./take-over-dialog";
@@ -13,15 +14,16 @@ import { TakeOverDialog } from "./take-over-dialog";
  * "unmanaged row visible on phone (live read-only mirror via chunked RPC)";
  * plan.md §16 "3.3 Session adoption (UC9)"). Read-only by design — this is
  * a mirror of someone else's terminal session, not a control surface, so it
- * carries no `Composer`/`ControlBar`, only a `TakeOverDialog` entry point.
+ * carries no `Composer`/mode controls, only a `TakeOverDialog` entry point.
  *
- * `useSnapshot`/`useActions` are the same injectable seams as
- * `UnmanagedSection` (mock by default, live once the sync engine + a
- * per-machine crypto client are wired in).
+ * `useSnapshot` defaults to the real `useLiveUnmanagedSessions` (the sync
+ * engine's unmanaged-sessions snapshot). `useActions` still defaults to the
+ * mock — a live per-machine RPC/crypto client for take-over/mirroring isn't
+ * wired in yet (same not-yet-wired caveat as `UnmanagedSection`).
  */
 export function MirrorViewScreen({
   id,
-  useSnapshot = useMockUnmanagedSessions,
+  useSnapshot = useLiveUnmanagedSessions,
   useActions = useMockUnmanagedActions,
 }: {
   id: string;

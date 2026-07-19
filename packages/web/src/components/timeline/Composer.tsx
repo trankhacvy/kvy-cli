@@ -1,9 +1,17 @@
 "use client";
 
-import { Paperclip } from "lucide-react";
+import { Mic, Paperclip, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputButton,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from "@/components/ai-elements/prompt-input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { loadDraft, saveDraft } from "@/features/session-control";
 import { formatBytes } from "@/lib/format";
 
@@ -31,32 +39,28 @@ interface AttachmentPreview {
  * (`@/features/session-control`) so `Timeline` and this component can share
  * the same merged item list without threading it through props twice.
  *
- * Three plan-v2.md W4.2 "Composer" polish items live here:
- *  - **Auto-grow**: the textarea uses CSS `field-sizing: content` (+ a
- *    `max-h`, past which it scrolls) instead of a manual `scrollHeight`
- *    effect — no JS needed for a textarea that grows with its content.
+ * The shell is AI Elements' `PromptInput` (two-row chat composer: input row
+ * + footer row of chips/buttons, à la the Cursor/ChatGPT layout). Our
+ * behaviors stay ours:
  *  - **Draft persistence**: `sessionStorage`-backed per-`sessionId` draft
  *    (`composer-draft.ts`) — loaded once on mount/session-switch, saved on
  *    every keystroke, cleared right after a successful send.
- *  - **Multi-file attach + image thumbnail previews**: the file input takes
- *    `multiple`; each selected file gets an `onAttach` call (one upload per
- *    file — `useComposerState`'s attach mutation already handles one file at
- *    a time) plus a transient preview chip (an `<img>` thumbnail for images,
- *    a name/size chip otherwise) shown until every in-flight attachment call
- *    has settled (`isSending` flips back to `false`).
+ *  - **Direct-attach flow**: selecting a file immediately encrypts+uploads
+ *    +sends it (one `onAttach` call per file), tracked by the transient
+ *    preview strip below — NOT PromptInput's own accumulate-then-send
+ *    attachment model, which would change semantics.
+ *  - **Queue-aware send**: sending while the agent is working queues the
+ *    follow-up rather than blocking, so the submit button never morphs into
+ *    a stop button. Interrupt is a separate stop button shown only while
+ *    `working` (it would otherwise steal the queue path).
  *
- * The attach button (plan.md §16 "4.3 Distribution & self-host": "encrypted
- * attachment path in the web composer") is a plain hidden `<input
- * type="file">` triggered by the paperclip button — `onAttach` does the
- * actual encrypt+upload+send, this component just hands it the raw `File`s.
- * It's disabled until `cryptoReady` — this session's crypto bridge hasn't
- * unwrapped its DEK yet, so an attachment can't be encrypted (plan-v2.md
- * W4.2 "disabled-until-crypto-ready attach button"); a text-only send never
- * needs that bridge, so the Send button itself is never gated on it.
+ * `footerControls` is a render slot for session-scoped chips (model, mode
+ * selector, take-control) that need `SessionControlProvider` context — this
+ * component intentionally stays provider-free so it can render standalone
+ * in tests (`Composer.test.tsx`) and in the demo fixture.
  *
  * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
- * says the underlying CLI process is gone (`ended`/`failed`) — sending a
- * follow-up would just queue against a session nothing is listening to.
+ * says the underlying CLI process is gone (`ended`/`failed`).
  */
 export function Composer({
   sessionId,
@@ -68,6 +72,9 @@ export function Composer({
   disabled = false,
   error,
   notice,
+  working = false,
+  onStop,
+  footerControls,
 }: {
   sessionId: string;
   onSend: (text: string) => void;
@@ -80,6 +87,13 @@ export function Composer({
   /** Non-blocking `outcome-unknown` delivery notice (design §7.10) — shown
    * alongside, never instead of, the composer's normal controls. */
   notice: string | null;
+  /** True while a turn is in flight — shows the interrupt (stop) button. */
+  working?: boolean;
+  /** Interrupt the current turn (session RPC `interrupt`). */
+  onStop?: () => void;
+  /** Left-side footer chips (model / mode / take-control), rendered by the
+   * caller inside its session-control context. */
+  footerControls?: React.ReactNode;
 }) {
   const [text, setText] = useState(() => loadDraft(sessionId));
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
@@ -113,7 +127,7 @@ export function Composer({
     saveDraft(sessionId, next);
   }
 
-  function submit() {
+  function handleSubmit() {
     if (disabled || text.trim().length === 0) return;
     onSend(text);
     setText("");
@@ -136,7 +150,7 @@ export function Composer({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 border-t border-border px-4 py-3">
+    <div className="flex flex-col gap-1.5 px-4 py-3">
       {isQueued && (
         <Badge variant="warning" className="w-fit">
           Queued — the agent is finishing its current turn
@@ -164,44 +178,62 @@ export function Composer({
       )}
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex items-end gap-2">
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={handleFileChange}
-          aria-hidden
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          disabled={disabled || isSending || !cryptoReady}
-          title={cryptoReady ? undefined : "Session key isn't ready yet — try again in a moment."}
-          onClick={() => fileInputRef.current?.click()}
-          aria-label="Attach a file"
-        >
-          <Paperclip className="size-4" />
-        </Button>
-        <textarea
-          value={text}
-          disabled={disabled}
-          onChange={(e) => handleTextChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              submit();
-            }
-          }}
-          placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
-          rows={1}
-          className="min-h-9 max-h-64 flex-1 resize-none overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm outline-none [field-sizing:content] focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-        />
-        <Button onClick={submit} disabled={disabled || isSending || text.trim().length === 0}>
-          Send
-        </Button>
-      </div>
+      <PromptInput onSubmit={handleSubmit}>
+        <PromptInputBody>
+          <PromptInputTextarea
+            value={text}
+            disabled={disabled}
+            onChange={(e) => handleTextChange(e.currentTarget.value)}
+            placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
+          />
+        </PromptInputBody>
+        <PromptInputFooter>
+          <PromptInputTools>{footerControls}</PromptInputTools>
+          <PromptInputTools>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+              aria-hidden
+            />
+            <PromptInputButton
+              disabled={disabled || isSending || !cryptoReady}
+              tooltip={
+                cryptoReady
+                  ? "Attach a file"
+                  : "Session key isn't ready yet — try again in a moment."
+              }
+              onClick={() => fileInputRef.current?.click()}
+              aria-label="Attach a file"
+            >
+              <Paperclip className="size-4" />
+            </PromptInputButton>
+            <PromptInputButton
+              disabled
+              tooltip="Voice input isn't available yet"
+              aria-label="Voice input"
+            >
+              <Mic className="size-4" />
+            </PromptInputButton>
+            {working && (
+              <PromptInputButton
+                variant="destructive"
+                tooltip="Interrupt the current turn"
+                onClick={onStop}
+                aria-label="Interrupt"
+              >
+                <Square className="size-3.5" />
+              </PromptInputButton>
+            )}
+            <PromptInputSubmit
+              className="rounded-full"
+              disabled={disabled || isSending || text.trim().length === 0}
+            />
+          </PromptInputTools>
+        </PromptInputFooter>
+      </PromptInput>
     </div>
   );
 }

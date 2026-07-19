@@ -6,7 +6,6 @@ export { WorkspaceSection } from "./components/workspace-section";
 export { formatRelativeTime } from "./format-relative-time";
 export { groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID, type WorkspaceGroup } from "./group";
 export { useLiveSessionListSnapshot } from "./live-source";
-export { useMockSessionListData } from "./mock-source";
 export { SessionListScreen } from "./session-list-screen";
 export {
   type DeriveSessionStatusInput,

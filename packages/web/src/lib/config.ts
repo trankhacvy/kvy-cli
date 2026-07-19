@@ -48,8 +48,8 @@ export const VAPID_PUBLIC_KEY: string | undefined =
  * `PTY_SET_MODE_ENV_VAR`) — the PTY path's real `setMode` (a version-coupled
  * Shift+Tab keystroke cycle, plan-v2.md W4.3) stays behind a flag on both
  * sides until it's been live-soaked. This is purely cosmetic here (it only
- * un-hides `ControlBar`'s mode-selector mutating affordance for a
- * `controlMode === "local"` session — `ControlBar.canMutateMode`); the CLI
+ * un-hides the composer footer's mode-selector mutating affordance for a
+ * `controlMode === "local"` session — `ComposerControls`' `canMutateMode`); the CLI
  * independently fails safe (`{ok: false}`) if this is on but the session's
  * own process doesn't also have `FALCON_PTY_SETMODE=1` set. Set
  * `NEXT_PUBLIC_FALCON_PTY_SETMODE=1` only against a stack you know has the

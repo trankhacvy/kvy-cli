@@ -25,12 +25,9 @@ import type { UseSessionListSnapshot } from "./types";
  * found but Falcon never spawned.
  *
  * `useData` defaults to the real sync-engine-backed `useLiveSessionListSnapshot`
- * (`live-source.ts`) — the hand-built `mock-source.ts` fixture this screen
- * used to default to is retired from this call site (still exported, for
- * tests/Storybook-less component review, from `features/session-list`),
- * mirroring `SessionTimelineScreen`'s own `useControl` swap. `useData` stays
- * an injectable prop so a test can still pass `useMockSessionListData`
- * without touching `WorkspaceSection`/`SessionCard`.
+ * (`live-source.ts`), mirroring `SessionTimelineScreen`'s own `useControl`
+ * default. `useData` stays an injectable prop so a test can still pass a
+ * fixture snapshot without touching `WorkspaceSection`/`SessionCard`.
  *
  * `useUnmanagedSnapshot` defaults to the real `useLiveUnmanagedSessions`
  * (`features/unmanaged-sessions/live-source.ts`) — same `['sync']` snapshot,

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
-import { useMockUnmanagedActions, useMockUnmanagedSessions } from "../mock-source";
+import { useLiveUnmanagedSessions } from "../live-source";
+import { useMockUnmanagedActions } from "../mock-source";
 import type { UseUnmanagedActions, UseUnmanagedSessionsSnapshot } from "../types";
 import { UnmanagedSessionCard } from "./unmanaged-session-card";
 
@@ -14,15 +15,15 @@ import { UnmanagedSessionCard } from "./unmanaged-session-card";
  * `sessions` rows, so it stays its own section rather than folding into a
  * workspace group.
  *
- * `useSnapshot`/`useActions` are the injectable seams — same pattern as
- * `features/session-list`'s `UseSessionListSnapshot` /
- * `features/new-session`'s `UseNewSessionActions`: mock by default, swapped
- * for the real sync-engine-backed snapshot +
+ * `useSnapshot` defaults to the real sync-engine-backed
+ * `useLiveUnmanagedSessions`. `useActions` stays mock-backed by default: the
+ * `adopt.mirror`/`adopt.take` RPCs need a live per-machine RPC/crypto client
+ * no screen has yet — swap it for
  * `(machineId) => machineRpcToUnmanagedActions(createMachineRpcClient({...}))`
- * once a screen has a live `apiSocket` + crypto client.
+ * once that lands. Both remain injectable seams for tests.
  */
 export function UnmanagedSection({
-  useSnapshot = useMockUnmanagedSessions,
+  useSnapshot = useLiveUnmanagedSessions,
   useActions = useMockUnmanagedActions,
   actionsDisabled = false,
 }: {

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { Toaster } from "sonner";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useTheme } from "@/lib/use-theme";
 
 /**
@@ -24,9 +25,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
   const [theme] = useTheme();
   return (
     <QueryClientProvider client={queryClient}>
-      <OfflineBanner />
-      {children}
-      <Toaster theme={theme} richColors closeButton position="bottom-right" />
+      <TooltipProvider>
+        <OfflineBanner />
+        {children}
+        <Toaster theme={theme} richColors closeButton position="bottom-right" />
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

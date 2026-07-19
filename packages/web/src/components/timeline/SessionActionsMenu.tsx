@@ -1,0 +1,168 @@
+"use client";
+
+import { Archive, CircleStop, MoreHorizontal, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useSessionControl } from "@/features/session-control";
+import { useArchiveSessionMutation, useDeleteSessionMutation } from "@/lib/use-session-lifecycle";
+import {
+  initialStopSessionDialogState,
+  resetStopSessionDialogState,
+  type StopSessionDialogState,
+  toStopError,
+  toStopping,
+} from "./stop-session-state";
+
+/**
+ * The session header's single actions menu (⋯) — archive, delete, and
+ * end-session consolidated into one dropdown, replacing the old always-
+ * visible button row (`SessionHeaderActions`) plus ControlBar's separate
+ * "End session" dialog. Both mutations navigate back to Home on success,
+ * same as before: delete makes staying impossible, archive leaves no reason
+ * to stay. End-session keeps its confirm dialog + `stop-session-state.ts`
+ * state machine (it's destructive and irreversible from the web — the CLI
+ * process exits), and is unavailable once the session row says the process
+ * is already gone (`disabled`).
+ */
+export function SessionActionsMenu({
+  sessionId,
+  disabled = false,
+}: {
+  sessionId: string;
+  disabled?: boolean;
+}) {
+  const router = useRouter();
+  const { actions } = useSessionControl();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
+  const archiveMutation = useArchiveSessionMutation();
+  const deleteMutation = useDeleteSessionMutation();
+
+  function handleStopOpenChange(open: boolean) {
+    if (!open) setStopState(resetStopSessionDialogState());
+    setStopOpen(open);
+  }
+
+  function handleConfirmStop() {
+    setStopState(toStopping());
+    actions.stopSession().then(
+      () => setStopOpen(false),
+      (error) => setStopState(toStopError(error)),
+    );
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" size="icon-sm" variant="outline" aria-label="Session actions">
+            <MoreHorizontal className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            disabled={archiveMutation.isPending}
+            onSelect={() =>
+              archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+            }
+          >
+            <Archive className="size-4" />
+            Archive
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={disabled} onSelect={() => setStopOpen(true)}>
+            <CircleStop className="size-4" />
+            End session
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+            <Trash2 className="size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete this session?</DialogTitle>
+            <DialogDescription>
+              Permanently deletes this session and its transcript. This can't be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteMutation.isError && (
+            <p className="text-sm text-destructive">
+              {deleteMutation.error instanceof Error
+                ? deleteMutation.error.message
+                : "Could not delete the session."}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={deleteMutation.isPending}
+              onClick={() => setDeleteOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() =>
+                deleteMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+              }
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={stopOpen} onOpenChange={handleStopOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>End this session?</DialogTitle>
+            <DialogDescription>
+              Ends the CLI process on the machine — the terminal user will see Claude exit.
+            </DialogDescription>
+          </DialogHeader>
+          {stopState.phase === "error" && (
+            <p className="text-sm text-destructive">{stopState.message}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={stopState.phase === "stopping"}
+              onClick={() => handleStopOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={stopState.phase === "stopping"}
+              onClick={handleConfirmStop}
+            >
+              {stopState.phase === "stopping" ? "Ending…" : "End session"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Composer } from "./Composer";
 
 /**
@@ -9,37 +10,44 @@ import { Composer } from "./Composer";
  * `SessionControlProvider`/query client needed), so a plain
  * `renderToStaticMarkup` render (no jsdom/@testing-library, same style as
  * `lib/markdown.test.ts`) is enough to inspect the real serialized markup.
+ * `TooltipProvider` is required because the AI Elements `PromptInputButton`
+ * tooltips are Radix `Tooltip`s (the app supplies the provider in
+ * `app/providers.tsx`).
  */
 function renderComposer(disabled?: boolean) {
   return renderToStaticMarkup(
-    <Composer
-      sessionId="sess_1"
-      onSend={() => {}}
-      onAttach={() => {}}
-      isSending={false}
-      isQueued={false}
-      cryptoReady={true}
-      disabled={disabled}
-      error={null}
-      notice={null}
-    />,
+    <TooltipProvider>
+      <Composer
+        sessionId="sess_1"
+        onSend={() => {}}
+        onAttach={() => {}}
+        isSending={false}
+        isQueued={false}
+        cryptoReady={true}
+        disabled={disabled}
+        error={null}
+        notice={null}
+      />
+    </TooltipProvider>,
   );
 }
 
 describe("Composer disabled wiring", () => {
   it("leaves the textarea and attach button enabled by default (the send button is still its own separate empty-text disable)", () => {
     const html = renderComposer(false);
-    // Only the send button is disabled here — by `text.trim().length === 0`,
-    // not by `disabled`, since there's no text yet on a fresh render.
-    expect(html.match(/disabled=""/g)).toHaveLength(1);
+    // Two disabled controls here: the send button (by `text.trim().length === 0`,
+    // not by `disabled`, since there's no text yet on a fresh render) and the
+    // always-disabled dummy voice-input button (not a real feature yet).
+    expect(html.match(/disabled=""/g)).toHaveLength(2);
     expect(html).toContain("Send a follow-up…");
     expect(html).not.toContain("This session has ended.");
   });
 
   it("disables the textarea, attach button, and send button when disabled", () => {
     const html = renderComposer(true);
-    // One disabled attribute for each of: attach button, textarea, send button.
-    expect(html.match(/disabled=""/g)).toHaveLength(3);
+    // One disabled attribute for each of: attach button, textarea, send button —
+    // plus the always-disabled dummy voice-input button.
+    expect(html.match(/disabled=""/g)).toHaveLength(4);
     expect(html).toContain("This session has ended.");
   });
 });
