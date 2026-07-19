@@ -32,5 +32,11 @@ out/
 # Worktrees used by falcon-dev-loop
 .worktrees/
 
+# Agent tooling (skills, reports) — local environment artifacts, not project source
+.agents/
+.claude/
+skills-lock.json
+live-test-report.md
+
 # Throwaway extraction dir used by packages/wire/scripts/check-additive-vs-base.ts
 packages/wire/.wire-lint-*/
