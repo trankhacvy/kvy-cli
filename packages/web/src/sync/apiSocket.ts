@@ -79,6 +79,11 @@ type ApiSocketEventMap = {
   reconnect: undefined;
   connect: undefined;
   disconnect: undefined;
+  /** Fires when a (re)connection attempt is rejected by the server (e.g. an
+   * expired/invalid token) — distinct from a transport-level disconnect,
+   * which infinite-retry can genuinely recover from on its own
+   * (bug-fix-plan.md #10). */
+  authError: { message: string };
 };
 
 type Listener<T> = (payload: T) => void;
@@ -116,6 +121,12 @@ export interface ApiSocket {
    * call when already disconnected. */
   disconnect(): void;
   isConnected(): boolean;
+  /** True once the server has rejected a (re)connection attempt as an
+   * auth failure (`authError`) and stays true until the next successful
+   * `connect(token)` call with a fresh token — a synchronous query
+   * mirroring `isConnected()`, so callers (e.g. `useConnectivity`) can read
+   * the current state at mount, not just react to the event going forward. */
+  isAuthExpired(): boolean;
   /** Current reported app-state ("active" unless the tab is hidden). */
   appState(): AppState;
   on<K extends keyof ApiSocketEventMap>(
@@ -168,6 +179,7 @@ export function createApiSocket(
   let appState: AppState = visibility.currentState();
   let hasConnectedBefore = false;
   let unsubscribeVisibility: (() => void) | null = null;
+  let authExpired = false;
 
   function handleConnect(): void {
     if (hasConnectedBefore) {
@@ -179,6 +191,23 @@ export function createApiSocket(
 
   function handleDisconnect(): void {
     emit("disconnect", undefined);
+  }
+
+  function handleConnectError(err: Error): void {
+    // Socket.IO delivers the server's `io.use()` middleware `next(new
+    // Error(...))` message verbatim (server's socket.ts: "Missing
+    // authentication token" / "Invalid authentication token") — anything
+    // else (e.g. a transport-level failure to even reach the server) is left
+    // for the infinite-retry engine to keep handling on its own.
+    if (!/authentication token/i.test(err.message)) return;
+    authExpired = true;
+    emit("authError", { message: err.message });
+    // The retry loop cannot succeed without a fresh token —
+    // `reconnectionAttempts: Infinity` (socket-factory.ts) has no way to know
+    // the failure is permanent on its own, so stop it here rather than let it
+    // keep retrying a handshake that's doomed to be rejected the same way
+    // every time.
+    teardown();
   }
 
   function handleUpdate(raw: unknown): void {
@@ -201,11 +230,21 @@ export function createApiSocket(
 
   function teardown(): void {
     if (socket) {
+      // `disconnect()` must run *before* `handleDisconnect` is unsubscribed:
+      // a real socket.io-client socket (and the fake test double) fires its
+      // 'disconnect' event synchronously from this call, and apiSocket's own
+      // 'disconnect' event (consumed by e.g. `useConnectivity`'s
+      // `wsConnected`) is only ever re-emitted from that handler. Tearing
+      // down listeners first — the previous order — silently swallowed
+      // 'disconnect' for every path that routes through `teardown()`
+      // (`disconnect()` itself and `handleConnectError`'s auth-rejection
+      // path alike), leaving `wsConnected` stuck at its last value.
+      socket.disconnect();
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
       socket.off("update", handleUpdate);
       socket.off("ephemeral", handleEphemeral);
-      socket.disconnect();
       socket = null;
     }
     unsubscribeVisibility?.();
@@ -217,6 +256,7 @@ export function createApiSocket(
   return {
     connect(nextToken: string): void {
       if (socket && token === nextToken) return; // already connecting/connected with this token
+      authExpired = false; // a fresh connect() attempt starts optimistic; handleConnectError flips this if rejected again
       teardown();
       token = nextToken;
       appState = visibility.currentState(); // pick up any change while disconnected
@@ -233,6 +273,7 @@ export function createApiSocket(
       }));
       nextSocket.on("connect", handleConnect);
       nextSocket.on("disconnect", handleDisconnect);
+      nextSocket.on("connect_error", handleConnectError);
       nextSocket.on("update", handleUpdate);
       nextSocket.on("ephemeral", handleEphemeral);
       socket = nextSocket;
@@ -243,6 +284,9 @@ export function createApiSocket(
     },
     isConnected(): boolean {
       return socket?.connected ?? false;
+    },
+    isAuthExpired(): boolean {
+      return authExpired;
     },
     appState(): AppState {
       return appState;

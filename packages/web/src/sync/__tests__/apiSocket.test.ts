@@ -181,6 +181,95 @@ describe("apiSocket", () => {
     expect(sockets[0]?.emitted.some((e) => e.event === "app-state")).toBe(false);
   });
 
+  it("translates a connect_error auth-rejection message into 'authError' and stops retrying", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    expect(client.isAuthExpired()).toBe(false);
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+
+    expect(authErrorHandler).toHaveBeenCalledExactlyOnceWith({
+      message: "Invalid authentication token",
+    });
+    expect(client.isAuthExpired()).toBe(true);
+    // The doomed retry loop is torn down rather than left to keep retrying.
+    expect(client.isConnected()).toBe(false);
+    expect(sockets[0]?.connected).toBe(false);
+  });
+
+  it("fires its own 'disconnect' listeners for the teardown a connect_error triggers", () => {
+    // `teardown()` calls `socket.disconnect()` *before* unsubscribing
+    // `handleDisconnect` (see apiSocket.ts), so the internal handler that
+    // re-emits apiSocket's own 'disconnect' event still runs for this path,
+    // alongside `authError`. This matters because `useConnectivity`'s
+    // `wsConnected` state is driven solely by that 'disconnect' event (not a
+    // poll of `isConnected()`): an auth-rejection must flip `wsConnected` to
+    // `false` in step with `isConnected()`, or it would stay stuck at
+    // whatever it was before (typically `true`) purely because of listener
+    // teardown ordering, independent of the real connection state.
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const disconnectHandler = vi.fn();
+    client.on("disconnect", disconnectHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+
+    expect(client.isConnected()).toBe(false); // the synchronous query is accurate
+    expect(disconnectHandler).toHaveBeenCalledTimes(1); // ...and the event told listeners so too
+  });
+
+  it("ignores a connect_error that isn't an auth rejection (transport-level failure)", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("xhr poll error"));
+
+    expect(authErrorHandler).not.toHaveBeenCalled();
+    expect(client.isAuthExpired()).toBe(false);
+  });
+
+  it("isAuthExpired() resets to false on the next connect() (fresh token)", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+    expect(client.isAuthExpired()).toBe(true);
+
+    client.connect("tok-2");
+    expect(client.isAuthExpired()).toBe(false);
+  });
+
+  it("unsubscribes connect_error in teardown() — no authError after disconnect()", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    const socket = sockets[0];
+    client.disconnect();
+    socket?.serverEmit("connect_error", new Error("Invalid authentication token"));
+
+    expect(authErrorHandler).not.toHaveBeenCalled();
+  });
+
   it("fires 'disconnect' listeners when the socket disconnects", () => {
     const { factory, sockets } = createFakeSocketFactory();
     const { source } = createFakeVisibilitySource("active");
