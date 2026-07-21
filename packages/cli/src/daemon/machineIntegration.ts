@@ -331,6 +331,31 @@ export async function startMachineIntegration(
     });
   }
 
+  // `adopt.take`'s continuation spawn deliberately re-launches into a
+  // directory that a tracked session ALREADY occupies — by definition, an
+  // adopted provider session's directory is one Claude Code was already
+  // running in (`adoptTake.ts`'s own doc comment), and a `mode: 'takeover'`
+  // kill doesn't remove the old pid from the registry's live map until the
+  // next `pruneDeadSessions` sweep (`sessionRegistry.ts`'s documented
+  // `stopSession` behavior). Reusing `spawnSessionHandler`'s directory-dedup
+  // guard here would therefore short-circuit the continuation spawn and
+  // hand back the very session `adopt.take` is meant to replace, instead of
+  // minting a distinct one — the guard exists for the New Session
+  // wizard/duplicate-RPC-retry case (plan.md §16 "Flow 3 —
+  // spawn-directory-dedup"), not for this intentional continuation, so this
+  // variant omits `findLiveSessionInDirectory` entirely. It still calls
+  // `trackSpawned` so a LATER, genuinely-new spawn's dedup scan can find
+  // this continuation session.
+  async function spawnSessionForAdoptTake(params: SpawnParams): Promise<SpawnResult> {
+    return spawnSessionCore(params, {
+      resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
+      awaiter: deps.awaiter,
+      logger: deps.logger,
+      trackSpawned: deps.registry.trackSpawned,
+      ...deps.spawnEngineOverrides,
+    });
+  }
+
   async function resumeSessionHandler(sessionId: string): Promise<unknown> {
     return resumeSessionCore(sessionId, {
       registry: deps.registry,
@@ -342,7 +367,7 @@ export async function startMachineIntegration(
   }
 
   const adoptTakeDeps = createAdoptTakeDeps(
-    { resolveProviderSession: deps.resolveProviderSession, spawnSession: spawnSessionHandler },
+    { resolveProviderSession: deps.resolveProviderSession, spawnSession: spawnSessionForAdoptTake },
     { logger: deps.logger },
   );
 
