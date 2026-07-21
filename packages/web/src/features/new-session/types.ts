@@ -69,10 +69,24 @@ export interface ImportCandidate {
   running?: boolean;
 }
 
-/** Mirrors `@falcon/wire`'s `SpawnResult`, flattened into a discriminated union — easier for the screen to branch on than the wire's "exactly one of two optional fields" shape. */
+/**
+ * Mirrors `@falcon/wire`'s `SpawnResult`, flattened into a discriminated
+ * union — easier for the screen to branch on than the wire's "exactly one
+ * of two optional fields" shape. `action` carries `SpawnResult.
+ * requiresApproval.action` through untouched (plan.md §16 "Flow 3 —
+ * spawn-fresh-folder-register (Piece A)"): `"create-directory"` (the
+ * existing loop — the target directory doesn't exist yet) or
+ * `"register-workspace"` (a genuinely fresh, never-registered folder —
+ * `spawn-flow.ts`'s `runSpawnFlow` branches on this to call
+ * `createDirectory`/`registerWorkspace` respectively before retrying).
+ */
 export type SpawnOutcome =
   | { type: "success"; sessionId: string }
-  | { type: "requiresApproval"; directory: string };
+  | {
+      type: "requiresApproval";
+      action: "create-directory" | "register-workspace";
+      directory: string;
+    };
 
 /**
  * The RPC surface this flow needs, seamed off from *how* those calls reach
@@ -87,6 +101,8 @@ export interface NewSessionActions {
   browseDirectory(path?: string): Promise<DirectoryListing>;
   /** Creates `path` (and any missing parents) on the machine. Throws on failure. */
   createDirectory(path: string): Promise<void>;
+  /** Registers `directory` as a genuine Falcon workspace (the daemon's `workspace.register` RPC, plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)") — backs the `register-workspace` approval branch of `spawn`, the same way `createDirectory` backs `create-directory`. Idempotent; throws only on a real failure. */
+  registerWorkspace(directory: string): Promise<void>;
   spawn(request: SpawnRequest): Promise<SpawnOutcome>;
   /** Lists recent plain `claude`/`codex` sessions for `directory` (the daemon's `adopt.list` RPC, keyed by workspace — `directory` doubles as the workspace id, same convention `spawn`'s `workspaceId` already uses in `live-actions.ts`) — the session-import step's data source (falcon-prd.md FR-7.8 UC7). Throws on failure (unreachable machine, ...); an empty array means "none found", not an error. */
   listImportCandidates(directory: string): Promise<ImportCandidate[]>;

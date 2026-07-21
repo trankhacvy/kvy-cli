@@ -21,9 +21,21 @@
  * `requiresApproval` result (`@falcon/wire`'s `SpawnResult`, plan.md §16
  * "3.1 Remote spawn" — "409 directory-creation approval loop") instead of
  * throwing — the web New Session flow offers to create it (`fs.mkdir`) and
- * retries `spawn` with the same `idempotencyKey`. Every other validation
- * failure (unregistered workspace, outside-root escape, ...) still throws
- * `SpawnError`: those are real rejections, not "please create this for me".
+ * retries `spawn` with the same `idempotencyKey`. The same now applies when
+ * `workspaceId` itself is simply unregistered (plan.md §16 "Flow 3 —
+ * spawn-fresh-folder-register (Piece A)": a genuinely fresh folder picked
+ * cold in the web UI, never `falcon workspace register`'d from a
+ * terminal) — that resolves to a `register-workspace` approval instead of a
+ * dead-end error, mirroring the create-directory loop exactly (the web
+ * confirms, calls the new `workspace.register` RPC, and retries `spawn`).
+ * Every OTHER validation failure (outside-workspace-root escape,
+ * not-absolute, not-a-directory) still throws `SpawnError`: those are real
+ * rejections, not "please add this for me" — see `workspacePath.ts`'s own
+ * doc comment on why `unknown-workspace` alone gets this graceful
+ * treatment (design §12's "no arbitrary-directory execution from remote"
+ * boundary stays intact — registration only ever happens via this explicit,
+ * user-confirmed approval step, never as a silent side effect of `spawn`
+ * itself).
  *
  * `params.branch` (P1, falcon-prd.md FR-1.2 "`falcon -b <branch>`") is
  * resolved via `gitWorktree.ts` after workspace validation succeeds: the
@@ -110,6 +122,20 @@ export async function spawnSession(
       });
       return {
         requiresApproval: { action: "create-directory", directory: params.directory },
+      };
+    }
+    if (validation.reason === "unknown-workspace") {
+      // The user picked a folder never registered from a terminal. Rather
+      // than a dead-end error, surface the same approval loop the missing-
+      // directory case uses — the web confirms "register this folder as a
+      // workspace?", registers it (a deliberate designation act, preserving
+      // design §12's consent boundary), and retries spawn with the same key.
+      logger.info(
+        "[spawn-engine] workspaceId is not a registered workspace, requesting registration approval",
+        { workspaceId: params.workspaceId, directory: params.directory },
+      );
+      return {
+        requiresApproval: { action: "register-workspace", directory: params.directory },
       };
     }
     throw new SpawnError(`workspace path rejected (${validation.reason}): ${params.directory}`);

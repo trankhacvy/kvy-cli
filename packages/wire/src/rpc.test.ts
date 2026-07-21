@@ -22,6 +22,8 @@ import {
   SetModeResultSchema,
   SpawnParamsSchema,
   SpawnResultSchema,
+  WorkspaceRegisterParamsSchema,
+  WorkspaceRegisterResultSchema,
 } from "./rpc";
 
 const box = { t: "enc" as const, v: 1 as const, c: "x" };
@@ -150,6 +152,42 @@ describe("SpawnResultSchema", () => {
         requiresApproval: { action: "create-directory", directory: "/tmp/new-project" },
       }).success,
     ).toBe(true);
+  });
+
+  it("accepts a register-workspace-approval result (Flow 3 Piece A — a fresh, unregistered folder)", () => {
+    expect(
+      SpawnResultSchema.safeParse({
+        requiresApproval: { action: "register-workspace", directory: "/tmp/fresh-folder" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("rejects a requiresApproval action outside the two known variants", () => {
+    expect(
+      SpawnResultSchema.safeParse({
+        requiresApproval: { action: "delete-everything", directory: "/tmp/x" },
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("workspace.register schemas (Flow 3 — spawn-fresh-folder-register, Piece A)", () => {
+  it("requires idempotencyKey and directory", () => {
+    expect(WorkspaceRegisterParamsSchema.safeParse({}).success).toBe(false);
+    expect(
+      WorkspaceRegisterParamsSchema.safeParse({ directory: "/tmp/fresh-folder" }).success,
+    ).toBe(false);
+    expect(
+      WorkspaceRegisterParamsSchema.safeParse({
+        idempotencyKey: "idem-ws-1",
+        directory: "/tmp/fresh-folder",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("result is a bare {ok}", () => {
+    expect(WorkspaceRegisterResultSchema.safeParse({ ok: true }).success).toBe(true);
+    expect(WorkspaceRegisterResultSchema.safeParse({}).success).toBe(false);
   });
 });
 

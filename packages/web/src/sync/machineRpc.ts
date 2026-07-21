@@ -2,7 +2,9 @@
  * Typed caller-side client for the daemon's machine-scoped RPCs (design
  * §4.4 "Machine RPCs — registered by the daemon"; plan.md §16 "3.1 Remote
  * spawn" / "4.1 Git panel"): `spawn`, the New Session directory picker's
- * `fs.list`/`fs.mkdir`, and the Git panel's `git.status`/`git.diff`. This is
+ * `fs.list`/`fs.mkdir`/`workspace.register` (plan.md §16 "Flow 3 —
+ * spawn-fresh-folder-register (Piece A)"), and the Git panel's
+ * `git.status`/`git.diff`. This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
  * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
@@ -43,6 +45,8 @@ import {
   GitStatusResultSchema,
   type SpawnParams,
   SpawnResultSchema,
+  type WorkspaceRegisterParams,
+  WorkspaceRegisterResultSchema,
 } from "@falcon/wire";
 import type { ZodType, z } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
@@ -55,6 +59,7 @@ export type {
   GitDiffParams,
   GitStatusParams,
   SpawnParams,
+  WorkspaceRegisterParams,
 };
 
 export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
@@ -65,6 +70,7 @@ export interface MachineRpcParams {
   spawn: SpawnParams;
   "fs.list": FsListParams;
   "fs.mkdir": FsMkdirParams;
+  "workspace.register": WorkspaceRegisterParams;
   "adopt.list": AdoptListParams;
   "adopt.take": AdoptTakeParams;
   "adopt.mirror": AdoptMirrorParams;
@@ -77,6 +83,7 @@ export interface MachineRpcResults {
   spawn: import("@falcon/wire").SpawnResult;
   "fs.list": import("@falcon/wire").FsListResult;
   "fs.mkdir": import("@falcon/wire").FsMkdirResult;
+  "workspace.register": import("@falcon/wire").WorkspaceRegisterResult;
   "adopt.list": AdoptListResult;
   "adopt.take": import("@falcon/wire").AdoptTakeResult;
   "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
@@ -90,6 +97,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   spawn: SpawnResultSchema,
   "fs.list": FsListResultSchema,
   "fs.mkdir": FsMkdirResultSchema,
+  "workspace.register": WorkspaceRegisterResultSchema,
   "adopt.list": AdoptListResultSchema,
   "adopt.take": AdoptTakeResultSchema,
   "adopt.mirror": AdoptMirrorResultSchema,

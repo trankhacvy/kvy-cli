@@ -167,6 +167,37 @@ describe("spawnSession", () => {
     expect(deps.launchProcess).not.toHaveBeenCalled();
   });
 
+  it("returns a register-workspace requiresApproval result (not a throw) when workspaceId is unregistered", async () => {
+    const deps = baseDeps({ resolveWorkspaceRoot: () => null });
+
+    const result = await spawnSession(baseParams({ directory: root }), deps);
+
+    expect(result).toEqual({
+      requiresApproval: { action: "register-workspace", directory: root },
+    });
+    expect(deps.launchProcess).not.toHaveBeenCalled();
+  });
+
+  it("launches on retry after the workspace is registered (simulated register-then-retry, same idempotencyKey)", async () => {
+    let registered = false;
+    const deps = baseDeps({ resolveWorkspaceRoot: () => (registered ? root : null) });
+    const params = baseParams({ directory: root });
+
+    const first = await spawnSession(params, deps);
+    expect(first).toEqual({
+      requiresApproval: { action: "register-workspace", directory: root },
+    });
+    expect(deps.launchProcess).not.toHaveBeenCalled();
+
+    // Simulates the web flow calling the new `workspace.register` RPC
+    // between the two `spawn` attempts, then retrying with the same
+    // `idempotencyKey` (`spawn-flow.ts`'s register-workspace branch).
+    registered = true;
+    const second = await spawnSession(params, deps);
+    expect(second).toEqual({ sessionId: "sess_new" });
+    expect(deps.launchProcess).toHaveBeenCalledOnce();
+  });
+
   it("still throws for a directory that exists but is outside the workspace root (not a requiresApproval case)", async () => {
     const outside = await mkdtemp(path.join(tmpdir(), "falcon-outside-2-"));
     try {

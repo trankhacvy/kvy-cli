@@ -109,10 +109,23 @@ export function createMockNewSessionActions(_machineId: string): NewSessionActio
       }
     },
 
+    async registerWorkspace(directory) {
+      // The mock fake-fs has no separate "registered workspaces" concept —
+      // every seeded/created directory is already spawn-able (see `spawn`
+      // below), so there's nothing for this mock to actually do; it exists
+      // purely to satisfy `NewSessionActions`' shape for the mock source.
+      await delay(LATENCY_MS);
+      void directory;
+    },
+
     async spawn(request) {
       await delay(LATENCY_MS);
       if (!fakeFs.has(request.directory)) {
-        const outcome: SpawnOutcome = { type: "requiresApproval", directory: request.directory };
+        const outcome: SpawnOutcome = {
+          type: "requiresApproval",
+          action: "create-directory",
+          directory: request.directory,
+        };
         return outcome;
       }
       const outcome: SpawnOutcome = { type: "success", sessionId: `sess-${Date.now()}` };

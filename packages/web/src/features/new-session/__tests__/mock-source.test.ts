@@ -42,7 +42,11 @@ describe("createMockNewSessionActions", () => {
     };
 
     const first = await actions.spawn(request);
-    expect(first).toEqual({ type: "requiresApproval", directory: "/Users/vy/projects/brand-new" });
+    expect(first).toEqual({
+      type: "requiresApproval",
+      action: "create-directory",
+      directory: "/Users/vy/projects/brand-new",
+    });
 
     await actions.createDirectory("/Users/vy/projects/brand-new");
     const second = await actions.spawn(request);

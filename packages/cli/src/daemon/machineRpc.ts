@@ -8,8 +8,10 @@
  * params/results sealed under the owning DEK), adapted to the
  * machine-scoped `m:<machineId>:<method>` target namespace. `spawn`,
  * `resumeSession`, the New Session directory picker's `fs.list`/`fs.mkdir`,
- * session adoption's `adopt.take`/`adopt.mirror`, and the Git panel's
- * `git.status`/`git.diff` (plan.md §16 "4.1 Git panel") are in scope here —
+ * that same flow's `workspace.register` (plan.md §16 "Flow 3 —
+ * spawn-fresh-folder-register (Piece A)"), session adoption's
+ * `adopt.take`/`adopt.mirror`, and the Git panel's `git.status`/`git.diff`
+ * (plan.md §16 "4.1 Git panel") are in scope here —
  * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
  * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
  * the same way without touching this module's dispatch shape.
@@ -28,7 +30,10 @@
  * pattern via `withIdempotencyCache` (keyed on `idempotencyKey` + a JSON
  * snapshot of `params` — see that helper's own doc comment for why).
  * `fs.list`/`fs.mkdir` need no such cache — listing is naturally
- * idempotent, and `mkdir -p` succeeds identically on retry. `git.status`/
+ * idempotent, and `mkdir -p` succeeds identically on retry.
+ * `workspace.register` needs none either, for the same reason as
+ * `fs.mkdir`: registering an already-registered directory is a no-op
+ * (`workspace/registry.ts`'s own idempotent contract). `git.status`/
  * `git.diff` need none either, for the same reason as `fs.list`: they only
  * read current repository state, so a retry just re-reads it — unlike
  * `adopt.mirror`'s "re-reading a file mid-write twice" hazard, there's no
@@ -101,6 +106,10 @@ import {
   SpawnParamsSchema,
   type SpawnResult,
   SpawnResultSchema,
+  type WorkspaceRegisterParams,
+  WorkspaceRegisterParamsSchema,
+  type WorkspaceRegisterResult,
+  WorkspaceRegisterResultSchema,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import type { ZodType } from "zod";
@@ -111,12 +120,14 @@ import {
 } from "./fsBrowse.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
+import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
 export const MACHINE_RPC_METHODS = [
   "spawn",
   "resumeSession",
   "fs.list",
   "fs.mkdir",
+  "workspace.register",
   "git.status",
   "git.diff",
   "adopt.take",
@@ -137,6 +148,8 @@ export interface MachineRpcDeps {
   listDirectory?: (params: FsListParams) => Promise<FsListResult>;
   /** Backs the `fs.mkdir` create-directory-approval RPC. Injectable for tests; defaults to `fsBrowse.ts`'s real `mkdir -p`. Throws on failure. */
   createDirectory?: (params: FsMkdirParams) => Promise<FsMkdirResult>;
+  /** Backs the `workspace.register` register-workspace-approval RPC (plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)"). Injectable for tests; defaults to `workspaceRegisterRpc.ts`'s real, already-idempotent `registerWorkspace`. Throws on failure. */
+  registerWorkspace?: (params: WorkspaceRegisterParams) => Promise<WorkspaceRegisterResult>;
   /** Backs the `git.status` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitStatus.ts`'s real `git status --porcelain=v2` parse. Throws on failure (e.g. `worktree` isn't a git repo). */
   getGitStatus?: (params: GitStatusParams) => Promise<GitStatusResult>;
   /** Backs the `git.diff` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitDiff.ts`'s real `git diff` against the resolved base ref. Throws on failure. */
@@ -251,7 +264,8 @@ function withProviderSessionGuard(
 
 /**
  * Registers the daemon's machine-scoped `spawn`/`resumeSession`/`fs.list`/
- * `fs.mkdir`/`adopt.take`/`adopt.mirror` RPCs: joins `m:<machineId>:<method>`
+ * `fs.mkdir`/`workspace.register`/`adopt.take`/`adopt.mirror` RPCs: joins
+ * `m:<machineId>:<method>`
  * for each on every (re)connect, and answers `rpc-request` by decrypting
  * params, validating against the method's `@falcon/wire` schema, running
  * (or, where applicable, replaying) the handler, and sealing the result
@@ -262,6 +276,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const spawnResults = new Map<string, Promise<SpawnResult>>();
   const listDirectory = deps.listDirectory ?? listDirectoryDefault;
   const createDirectory = deps.createDirectory ?? createDirectoryDefault;
+  const registerWorkspace = deps.registerWorkspace ?? registerWorkspaceDefault;
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
@@ -323,6 +338,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: FsMkdirParamsSchema,
       resultSchema: FsMkdirResultSchema,
       handle: createDirectory as (params: unknown) => Promise<unknown>,
+    },
+    "workspace.register": {
+      paramsSchema: WorkspaceRegisterParamsSchema,
+      resultSchema: WorkspaceRegisterResultSchema,
+      handle: registerWorkspace as (params: unknown) => Promise<unknown>,
     },
     "git.status": {
       paramsSchema: GitStatusParamsSchema,

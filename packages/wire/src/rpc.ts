@@ -59,11 +59,24 @@ export type SpawnParams = z.infer<typeof SpawnParamsSchema>;
 // exist yet, so the caller offers to create it (`fs.mkdir`) and retries
 // `spawn` with the same `idempotencyKey`. Exactly one of `sessionId` /
 // `requiresApproval` is set on any successful (non-throwing) response.
+//
+// `action` is a multi-value literal, not a `z.enum` (plan.md §16 "Flow 3 —
+// spawn-fresh-folder-register (Piece A)"): the additive-only compat check
+// (`__tests__/schemaShape.ts`'s `isCompatible`) treats a schema's `kind` as
+// part of its frozen shape, and `describeShape` reports `z.literal(...)` and
+// `z.enum([...])` as two *different* kinds — so swapping to `z.enum` here
+// would be a breaking kind change under the frozen fixture even though the
+// value set only grew. `"register-workspace"` is the second action: a
+// `spawn` whose `workspaceId` was never registered (a genuinely fresh
+// folder picked cold in the web UI — falcon-prd.md FR-7.5, plan.md §16
+// "3.1 Remote spawn") resolves to this instead of throwing, mirroring the
+// `"create-directory"` loop — the caller confirms, registers it (the new
+// `workspace.register` RPC below), and retries `spawn`.
 export const SpawnResultSchema = z.object({
   sessionId: z.string().optional(),
   requiresApproval: z
     .object({
-      action: z.literal("create-directory"),
+      action: z.literal(["create-directory", "register-workspace"]),
       directory: z.string(),
     })
     .optional(),
@@ -197,6 +210,30 @@ export type FsMkdirParams = z.infer<typeof FsMkdirParamsSchema>;
 
 export const FsMkdirResultSchema = z.object({ ok: z.boolean() });
 export type FsMkdirResult = z.infer<typeof FsMkdirResultSchema>;
+
+// `workspace.register` (plan.md §16 "Flow 3 — spawn-fresh-folder-register
+// (Piece A)"): backs `SpawnResult`'s `register-workspace` approval branch
+// above — registers `directory` as a genuine, deliberately-designated
+// workspace (`workspace/registry.ts`'s already-idempotent
+// `registerWorkspace`), so a `spawn` retried with the same `directory`
+// afterward resolves instead of repeating `unknown-workspace`. Deliberately
+// NOT folded into `fs.mkdir` — that RPC only ever touches the filesystem
+// (design §12's directory-picker carve-out); this one is the actual
+// workspace-registry write, kept as its own explicit, user-confirmed act
+// per that same design note ("no arbitrary-directory execution from
+// remote" must stay an opt-in designation, never an implicit side effect
+// of any inbound `spawn`). Idempotent like `fs.mkdir` — registering an
+// already-registered directory is a no-op — so, like `fs.list`/`fs.mkdir`,
+// it needs no `idempotencyKey` replay cache in `machineRpc.ts` even though
+// the field is still carried on the wire for uniformity.
+export const WorkspaceRegisterParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  directory: z.string(),
+});
+export type WorkspaceRegisterParams = z.infer<typeof WorkspaceRegisterParamsSchema>;
+
+export const WorkspaceRegisterResultSchema = z.object({ ok: z.boolean() });
+export type WorkspaceRegisterResult = z.infer<typeof WorkspaceRegisterResultSchema>;
 
 export const AdoptListParamsSchema = z.object({
   idempotencyKey: z.string(),
