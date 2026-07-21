@@ -115,6 +115,52 @@ describe("PreToolPermissionBridge — onPendingAttention (docs/user-flows.md fix
     await bridge.handlePreToolUse({ tool_name: "Bash" });
     expect(onPendingAttention).not.toHaveBeenCalled();
   });
+
+  // docs/plan-flows-3-4-5.md FL5.1 "notify-callsite-guard": the assertions
+  // above only prove `onPendingAttention` is called *eventually* — they
+  // `await` the handler's returned promise first, so they'd pass just as
+  // well if the call site were moved to fire only once the decision
+  // resolves. These two tests instead assert the call already happened
+  // BEFORE the decision is ever made — i.e. before `bridge.resolve()` is
+  // called at all — which is the actual property `bridge:651-652`/`:588-589`
+  // exist for (push arrives before the tool runs, not merely "at some
+  // point"). Deleting or commenting out either call site fails the first
+  // expectation in its test (zero calls where one is expected); moving the
+  // call into `settle`/after the decision resolves also fails it, since at
+  // that point in the test no decision has been supplied yet.
+  it("invokes onPendingAttention('perm') from handlePermissionRequest before the decision resolves (guards bridge.ts:651-652)", async () => {
+    const onPendingAttention = vi.fn();
+    const { bridge, emitted } = makeBridge({ onPendingAttention });
+    const pending = bridge.handlePermissionRequest({ tool_name: "Bash" });
+
+    // No decision has been supplied yet — if this passes, the call fired
+    // strictly before resolution.
+    expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("perm");
+
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+    bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "allow", scope: "once" } });
+    await pending;
+
+    // Still exactly one call after resolving — the resolve path itself
+    // doesn't (and shouldn't) fire it again.
+    expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("perm");
+  });
+
+  it("invokes onPendingAttention('question') from the AskUserQuestion path before the decision resolves (guards bridge.ts:588-589)", async () => {
+    const onPendingAttention = vi.fn();
+    const { bridge, emitted } = makeBridge({ onPendingAttention });
+    const pending = bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+
+    // No decision has been supplied yet — if this passes, the call fired
+    // strictly before resolution.
+    expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("question");
+
+    const reqEv = permRequests(emitted)[0]?.ev as { reqId: string };
+    bridge.resolve({ reqId: reqEv.reqId, decision: { kind: "deny", message: "no" } });
+    await pending;
+
+    expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("question");
+  });
 });
 
 describe("PreToolPermissionBridge — handlePermissionRequest — local vs web policy", () => {
