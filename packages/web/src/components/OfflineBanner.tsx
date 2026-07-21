@@ -7,8 +7,14 @@ import { useConnectivity } from "@/lib/use-connectivity";
 /**
  * A thin, dismiss-free banner reflecting connectivity (plan-v2.md W4.2
  * "offline banner (`navigator.onLine` + WS state from `apiSocket`)").
- * Mounted once, near the app root (`app/providers.tsx`), so it's visible
- * from every screen without each one wiring it up separately.
+ * Mounted once, in `app/(protected)/layout.tsx` — not globally in
+ * `app/providers.tsx`, where it used to live — so it's visible from every
+ * authenticated screen without each one wiring it up separately, and never
+ * renders on a public route (`/signin/`, `/pair/`, `/auth/callback/*`),
+ * where `apiSocket.connect()` is never called and `wsConnected`/
+ * `authExpired` would never reflect anything real (known-issues.md
+ * "OfflineBanner shows a misleading 'Reconnecting…' on pages with no
+ * connection to reconnect").
  *
  * Three distinct messages, in priority order:
  *  - The server has rejected the current token (`authExpired: true`,
