@@ -13,6 +13,18 @@ import { isSignedIn } from "@/lib/session";
  */
 export const SIGNIN_PATH = "/signin/";
 
+/** How often `RequireAuth` re-checks `isSignedIn()` (which now also folds in
+ * `isTokenExpired()`, see `lib/session.ts`) while a protected route stays
+ * mounted — the proactive half of bug-fix-plan.md issue #9: a token that
+ * expires *while the user is already on the page* should redirect them
+ * within one tick of this interval, rather than only being caught the next
+ * time the layout happens to remount (or, worse, only surfacing once the
+ * socket's next reconnect attempt gets rejected — issue #10). One minute
+ * comfortably beats the design's stated "1h, auto-refresh" JWT lifetime by a
+ * wide margin without polling `localStorage`/decoding the token needlessly
+ * often. */
+const EXPIRY_CHECK_INTERVAL_MS = 60_000;
+
 /** The gate's actual decision, pulled out of the component so it's testable
  * without mounting React (this package has no DOM test environment — see
  * `__tests__/require-auth.test.ts`). */
@@ -36,6 +48,13 @@ export function shouldRedirectToSignin(signedIn: boolean): boolean {
  * a bare render-time check would flash `children` on a client-side
  * navigation into the route, where there's no server-rendered HTML for this
  * check to run against before paint.
+ *
+ * Also re-checks `isSignedIn()` on a `EXPIRY_CHECK_INTERVAL_MS` timer for as
+ * long as the gate stays mounted (bug-fix-plan.md issue #9) — Next's App
+ * Router keeps a shared layout like this one mounted across navigations
+ * within the same route group, so this interval keeps running for the whole
+ * time a visitor stays inside the protected area, catching a token that
+ * expires mid-session instead of only ever checking once at mount.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -47,6 +66,13 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       return;
     }
     setChecked(true);
+
+    const interval = setInterval(() => {
+      if (shouldRedirectToSignin(isSignedIn())) {
+        router.replace(SIGNIN_PATH);
+      }
+    }, EXPIRY_CHECK_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, [router]);
 
   if (!checked) return null;

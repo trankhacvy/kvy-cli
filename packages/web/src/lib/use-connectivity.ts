@@ -9,7 +9,11 @@ import { apiSocket } from "@/sync";
  * seam. */
 export interface ConnectivitySource {
   isConnected(): boolean;
-  on(event: "connect" | "disconnect", handler: () => void): () => void;
+  /** Synchronous query mirroring `isConnected()` — see `apiSocket.ts`'s
+   * `isAuthExpired()` doc comment for why this needs to be queryable at
+   * mount, not just reactive via the `authError` event below. */
+  isAuthExpired(): boolean;
+  on(event: "connect" | "disconnect" | "authError", handler: () => void): () => void;
 }
 
 export interface ConnectivityState {
@@ -23,6 +27,13 @@ export interface ConnectivityState {
    * *reachable* network with the Falcon server unreachable (server down,
    * blocked, auth failure) only ever shows up here. */
   wsConnected: boolean;
+  /** True once the server has rejected a (re)connection attempt as an auth
+   * failure (bug-fix-plan.md issue #10 — `apiSocket`'s `authError` event).
+   * Distinct from a plain `!wsConnected`: this is a permanent condition the
+   * infinite-retry engine cannot resolve on its own by waiting — the banner
+   * should stop reading "Reconnecting…" and tell the user to sign in again
+   * instead (see `OfflineBanner`). */
+  authExpired: boolean;
 }
 
 function readBrowserOnline(): boolean {
@@ -40,6 +51,7 @@ function readBrowserOnline(): boolean {
 export function useConnectivity(source: ConnectivitySource = apiSocket): ConnectivityState {
   const [online, setOnline] = useState(readBrowserOnline);
   const [wsConnected, setWsConnected] = useState(() => source.isConnected());
+  const [authExpired, setAuthExpired] = useState(() => source.isAuthExpired());
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -55,13 +67,21 @@ export function useConnectivity(source: ConnectivitySource = apiSocket): Connect
 
   useEffect(() => {
     setWsConnected(source.isConnected());
-    const offConnect = source.on("connect", () => setWsConnected(true));
+    setAuthExpired(source.isAuthExpired());
+    const offConnect = source.on("connect", () => {
+      setWsConnected(true);
+      // A successful (re)connect only happens with a token the server just
+      // accepted — clears a previous authError's lingering state.
+      setAuthExpired(false);
+    });
     const offDisconnect = source.on("disconnect", () => setWsConnected(false));
+    const offAuthError = source.on("authError", () => setAuthExpired(true));
     return () => {
       offConnect();
       offDisconnect();
+      offAuthError();
     };
   }, [source]);
 
-  return { online, wsConnected };
+  return { online, wsConnected, authExpired };
 }

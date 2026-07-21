@@ -181,6 +181,71 @@ describe("apiSocket", () => {
     expect(sockets[0]?.emitted.some((e) => e.event === "app-state")).toBe(false);
   });
 
+  it("translates a connect_error auth-rejection message into 'authError' and stops retrying", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    expect(client.isAuthExpired()).toBe(false);
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+
+    expect(authErrorHandler).toHaveBeenCalledExactlyOnceWith({
+      message: "Invalid authentication token",
+    });
+    expect(client.isAuthExpired()).toBe(true);
+    // The doomed retry loop is torn down rather than left to keep retrying.
+    expect(client.isConnected()).toBe(false);
+    expect(sockets[0]?.connected).toBe(false);
+  });
+
+  it("ignores a connect_error that isn't an auth rejection (transport-level failure)", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("xhr poll error"));
+
+    expect(authErrorHandler).not.toHaveBeenCalled();
+    expect(client.isAuthExpired()).toBe(false);
+  });
+
+  it("isAuthExpired() resets to false on the next connect() (fresh token)", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+    expect(client.isAuthExpired()).toBe(true);
+
+    client.connect("tok-2");
+    expect(client.isAuthExpired()).toBe(false);
+  });
+
+  it("unsubscribes connect_error in teardown() — no authError after disconnect()", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    const socket = sockets[0];
+    client.disconnect();
+    socket?.serverEmit("connect_error", new Error("Invalid authentication token"));
+
+    expect(authErrorHandler).not.toHaveBeenCalled();
+  });
+
   it("fires 'disconnect' listeners when the socket disconnects", () => {
     const { factory, sockets } = createFakeSocketFactory();
     const { source } = createFakeVisibilitySource("active");

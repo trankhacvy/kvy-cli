@@ -11,9 +11,10 @@ import { useConnectivity } from "./use-connectivity";
 // `useState` values, which is also the only frame reachable in this
 // package's `environment: "node"` vitest config (no `window`/`navigator` to
 // begin with, matching the hook's own "no DOM" fallback).
-function fakeSource(isConnected: boolean): ConnectivitySource {
+function fakeSource(isConnected: boolean, isAuthExpired = false): ConnectivitySource {
   return {
     isConnected: () => isConnected,
+    isAuthExpired: () => isAuthExpired,
     on: () => () => {},
   };
 }
@@ -46,5 +47,13 @@ describe("useConnectivity", () => {
     const state = renderConnectivity(fakeSource(false));
     expect(state.online).toBe(true);
     expect(state.wsConnected).toBe(false);
+  });
+
+  it("reflects the source's isAuthExpired() at mount as authExpired", () => {
+    expect(renderConnectivity(fakeSource(true, true)).authExpired).toBe(true);
+  });
+
+  it("defaults authExpired to false when the source reports no auth failure", () => {
+    expect(renderConnectivity(fakeSource(true, false)).authExpired).toBe(false);
   });
 });
