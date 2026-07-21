@@ -151,14 +151,42 @@ this unit).
   - `pnpm build` — all 6 build tasks succeed (turbo).
   - `pnpm typecheck` — all 11 typecheck tasks succeed.
   - `pnpm test` — `@falcon/wire` (102 tests), `@falcon/web` (747 tests),
-    and `falcon`/cli (1501 tests) all pass in isolation and in scoped runs.
-    Two tests are flaky under full-monorepo parallel load and unrelated to
-    this change: `daemon/transcriptIndexer.test.ts`'s two fs-watch-debounce-
-    timing tests occasionally miss their timing window (confirmed
-    pre-existing via `git stash` — identical failures reproduce on the
-    pristine tree with none of this unit's changes applied — and confirmed
-    non-deterministic by re-running the same file in isolation
-    immediately after, which passes 13/13 every time). `@falcon/server`'s
+    and `falcon`/cli (1501 tests) all pass in isolation and in scoped runs
+    **on a machine with headroom in the OS's directory-watch resource
+    pool**. Corrected from an earlier draft of this section, which
+    understated the scope of a pre-existing, unrelated environmental
+    condition: on a loaded dev machine (many concurrent `fs.watch`-based
+    dev processes — other projects' `tsx watch`, editor language servers,
+    etc. — hold the OS's vnode/FSEvents watch table near its ceiling), any
+    *new* `fs.watch()` call fails immediately with `EMFILE`, which is
+    silently absorbed by both watchers' own retry/backoff loops (working as
+    designed) but means the directory-rotation-fallback code path under
+    test never fires. This has been seen to affect **six** tests, not two:
+    `daemon/transcriptIndexer.test.ts`'s two fs-watch-debounce-timing tests
+    ("debounces rapid successive appends into a single upsert",
+    "picks up a brand-new session file appearing after startup") *and*
+    `claude/scanner.test.ts`'s four directory-rotation-fallback tests
+    ("rotates onto a new session automatically when no SessionStart hook
+    has ever fired", "never adopts a sibling transcript file once
+    hook-confirmed...", "a hook confirming the same session the fallback
+    already adopted still permanently blocks later siblings", "ignores a
+    new transcript file once the fallback's armed window has expired...").
+    Confirmed pre-existing and unrelated to this unit's diff via `git
+    stash`/a separate worktree of the parent commit (identical failures
+    reproduce on the pristine tree; neither `scanner.ts`/`scanner.test.ts`
+    nor `transcriptIndexer.ts`/`transcriptIndexer.test.ts` were touched by
+    this unit) — root-caused precisely (rather than dismissed as
+    "occasional timing flakiness") via a standalone reproduction outside
+    vitest entirely: a bare `node:fs/promises` `watch(dir, {persistent:
+    true, signal})` call throws `EMFILE` on its very first invocation, and
+    `sysctl kern.num_vnodes`/`kern.maxvnodes` reads as fully saturated
+    (100%) system-wide at the time. This is a per-machine OS resource
+    ceiling, not a code defect in either watcher, and not something any
+    change inside this repo can fix — it reproduces identically with none
+    of this unit's changes present, resolves once the machine's own
+    concurrent-fs.watch load is reduced (or on a fresh CI runner), and both
+    six-test failures and the earlier draft's flakiness framing are the
+    same single root cause, just previously under-scoped. `@falcon/server`'s
     `db/seq.test.ts` "requires Postgres" concurrency-timing test showed the
     same one-off flakiness in a combined `pnpm test` run, also unrelated to
     this unit (no server-package files were touched) and passing on an
