@@ -514,6 +514,39 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
+  it("seeds the hook server's initialPermissionMode from a --permission-mode claudeArgs override (docs/bug-fix-plan.md #5)", async () => {
+    const installRemotePermissionHook = vi.fn(async () => fakeRemotePermissionHook());
+
+    await runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--permission-mode", "plan"],
+        installRemotePermissionHook:
+          installRemotePermissionHook as unknown as typeof installRemotePermissionHookType,
+      }),
+    );
+
+    const [hookOptions] = installRemotePermissionHook.mock.calls[0] as unknown as [
+      { initialPermissionMode?: string },
+    ];
+    expect(hookOptions.initialPermissionMode).toBe("plan");
+  });
+
+  it('falls back to Claude Code\'s own "default" mode when claudeArgs carries no --permission-mode flag', async () => {
+    const installRemotePermissionHook = vi.fn(async () => fakeRemotePermissionHook());
+
+    await runStartClaudeCommand(
+      baseDeps({
+        installRemotePermissionHook:
+          installRemotePermissionHook as unknown as typeof installRemotePermissionHookType,
+      }),
+    );
+
+    const [hookOptions] = installRemotePermissionHook.mock.calls[0] as unknown as [
+      { initialPermissionMode?: string },
+    ];
+    expect(hookOptions.initialPermissionMode).toBe("default");
+  });
+
   it("never touches the mode loop for a terminal session", async () => {
     const loop = vi.fn(async () => 0);
     await runStartClaudeCommand(baseDeps({ loop }));

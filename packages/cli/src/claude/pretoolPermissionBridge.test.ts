@@ -670,6 +670,33 @@ describe("PreToolPermissionBridge — permission_mode cache (W4.3)", () => {
   });
 });
 
+describe("PreToolPermissionBridge — initialPermissionMode seed (docs/bug-fix-plan.md #5 fix)", () => {
+  it("reports the seeded mode via currentPermissionMode before any hook has fired", () => {
+    const { bridge } = makeBridge({ initialPermissionMode: "default" });
+    expect(bridge.currentPermissionMode).toBe("default");
+  });
+
+  it("emits on the very first hook call when it's a genuine transition from the seeded baseline — the exact gap this fix closes: a Shift+Tab before ever using a tool", async () => {
+    const { bridge, emitted } = makeBridge({ initialPermissionMode: "default" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "plan" });
+    const events = permissionModeEvents(emitted);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.ev).toEqual({ t: "permission-mode", mode: "plan", source: "terminal" });
+  });
+
+  it("does not emit on the first hook call when it merely echoes the seeded baseline unchanged", async () => {
+    const { bridge, emitted } = makeBridge({ initialPermissionMode: "default" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "default" });
+    expect(permissionModeEvents(emitted)).toHaveLength(0);
+  });
+
+  it("without a seed (the pre-fix default), the first observed mode still stays silent", async () => {
+    const { bridge, emitted } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "plan" });
+    expect(permissionModeEvents(emitted)).toHaveLength(0);
+  });
+});
+
 describe("PreToolPermissionBridge — emits permission-mode on a genuine transition (docs/bug-fix-plan.md §5)", () => {
   it("does not emit on the very first observed mode (announcing a baseline, not a change)", async () => {
     const { bridge, emitted } = makeBridge();

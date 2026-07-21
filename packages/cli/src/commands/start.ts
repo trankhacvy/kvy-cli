@@ -160,6 +160,7 @@ import {
   createBootstrapSessionDeps,
 } from "../session/bootstrap.js";
 import { extractModelFlag } from "../session/modelFlag.js";
+import { extractPermissionModeFlag } from "../session/permissionModeFlag.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
@@ -766,6 +767,13 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // is a harmless side-signal, and the server's own presence
         // suppression already avoids over-notifying an actively-watching tab.
         onPendingAttention: (kind) => reportAttention(kind),
+        // The mode this local PTY session actually launched in
+        // (docs/bug-fix-plan.md issue #5) — a `--permission-mode` passthrough
+        // flag if the user gave one, else Claude Code's own "default". Seeds
+        // the bridge's mode cache so a Shift+Tab before the first tool call
+        // is a real, emittable transition instead of an unfalsifiable "first
+        // observation".
+        initialPermissionMode: extractPermissionModeFlag(claudeArgs) ?? "default",
         logger,
       });
     } catch (error) {

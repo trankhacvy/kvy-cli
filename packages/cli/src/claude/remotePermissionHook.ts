@@ -74,6 +74,11 @@ export interface RemotePermissionHookOptions {
   emitEnvelope: (envelope: SessionEnvelope) => void;
   /** Best-effort live-TUI mode sync for a `{kind:'mode'}` decision (default no-op). */
   onModeChange?: (mode: PermissionMode) => void;
+  /** Forwarded straight to {@link PreToolPermissionBridge}'s own
+   * `initialPermissionMode` — the mode the caller knows the session actually
+   * launched in (docs/bug-fix-plan.md issue #5), e.g. `start.ts`'s
+   * `extractPermissionModeFlag(claudeArgs) ?? "default"`. */
+  initialPermissionMode?: PermissionMode;
   /** Forwarded from Claude Code's `SessionStart` hook (the real provider session UUID). */
   onSessionId?: (sessionId: string) => void;
   /** Forwarded from Claude Code's `Notification`/`Stop` attention hooks. */
@@ -212,6 +217,7 @@ export async function installRemotePermissionHook(
     onPromptLikely: opts.onPromptLikely,
     onPendingAttention: opts.onPendingAttention,
     answerTimeoutMs: opts.answerTimeoutMs,
+    initialPermissionMode: opts.initialPermissionMode,
     logger: opts.logger,
   });
 

@@ -367,6 +367,20 @@ export interface PreToolPermissionBridgeDeps {
   answerTimeoutMs?: number;
   /** Injectable timer (default `setTimeout`) so tests can trigger the timeout on demand. */
   setTimer?: (callback: () => void, ms: number) => CancelableTimer;
+  /**
+   * The mode the session actually launched in (docs/bug-fix-plan.md issue #5's
+   * known gap) — the caller's best knowledge of "what mode is this *before*
+   * any hook has ever fired", e.g. `extractPermissionModeFlag`'s read of a
+   * `--permission-mode` passthrough flag, falling back to `"default"`.
+   * Seeds {@link currentPermissionMode} so the very first hook echo has a
+   * real baseline to compare against — without this, a mode switched via
+   * Shift+Tab *before* the first tool call looks identical to "no transition
+   * happened" (the bridge only sees the already-switched mode, with nothing
+   * to diff it against), and the web mode chip silently never catches up
+   * until an unrelated second switch. Defaults to `"default"`, matching
+   * Claude Code's own default when the caller has no better information.
+   */
+  initialPermissionMode?: PermissionMode;
   logger?: Logger;
 }
 
@@ -448,15 +462,21 @@ export class PreToolPermissionBridge {
   // live TUI actually in right now" (there is no other channel to ask it),
   // and the verification target for {@link waitForModeEcho} after sending a
   // Shift+Tab cycle.
-  private lastPermissionMode: PermissionMode | null = null;
+  private lastPermissionMode: PermissionMode | null;
   private readonly modeWatchers = new Set<(mode: PermissionMode) => void>();
 
   constructor(private readonly deps: PreToolPermissionBridgeDeps) {
     this.answerTimeoutMs = deps.answerTimeoutMs ?? DEFAULT_ANSWER_TIMEOUT_MS;
     this.setTimer = deps.setTimer ?? defaultSetTimer;
+    // `null` (not seeded) preserves the pre-existing behavior for any caller
+    // that doesn't pass this — the first hook echo is treated as "no prior
+    // state", same as before docs/bug-fix-plan.md issue #5's fix.
+    this.lastPermissionMode = deps.initialPermissionMode ?? null;
   }
 
-  /** The last observed `permission_mode`, or `null` before any hook has fired. */
+  /** The last observed `permission_mode`, the seeded
+   * {@link PreToolPermissionBridgeDeps.initialPermissionMode} before any hook
+   * has fired, or `null` if neither is available. */
   get currentPermissionMode(): PermissionMode | null {
     return this.lastPermissionMode;
   }
@@ -471,13 +491,17 @@ export class PreToolPermissionBridge {
    * genuine transition from the previously-cached one (docs/bug-fix-plan.md
    * §5) — so a Shift+Tab press at the live TUI, which every hook call reports
    * but nothing previously surfaced, reaches the web mode chip without a
-   * round-trip through a permission decision. The very first observed mode is
-   * NOT emitted: `lastPermissionMode` starts `null`, and every hook call
-   * (including ones with no permission decision at all) would otherwise emit
-   * once as soon as the first `PreToolUse` fires, which is an
-   * echo-of-current-state rather than a *change* — the web already has no
-   * opinion before its first event, so `deriveCurrentPermissionMode`'s
-   * `"default"` fallback is exactly right until a real transition happens.
+   * round-trip through a permission decision. With `lastPermissionMode`
+   * seeded from {@link PreToolPermissionBridgeDeps.initialPermissionMode}
+   * (falling back to `null` when the caller doesn't provide one), the very
+   * first hook call *can* now emit — if the caller told us the session
+   * launched in `"default"` and the first hook echoes `"plan"` (a Shift+Tab
+   * before ever using a tool), that's a real transition worth surfacing, not
+   * an echo of current state. Only when `lastPermissionMode` is still `null`
+   * (no seed given) does the first observed mode stay silent — there's
+   * nothing to diff it against, and the web's `"default"` fallback
+   * (`deriveCurrentPermissionMode`) is exactly right until a real transition
+   * happens.
    */
   private cachePermissionMode(raw: string | undefined): void {
     if (raw === undefined) return;
