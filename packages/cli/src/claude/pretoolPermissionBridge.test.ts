@@ -81,6 +81,39 @@ describe("PreToolPermissionBridge — onPromptLikely (W1.3)", () => {
   });
 });
 
+describe("PreToolPermissionBridge — onPendingAttention (docs/user-flows.md fix-plan task 4)", () => {
+  it("fires 'perm' from handlePermissionRequest on both a local AND a web turn", async () => {
+    const onPendingAttention = vi.fn();
+    const local = makeBridge({ isWebTurnActive: () => false, onPendingAttention });
+    await local.bridge.handlePermissionRequest({ tool_name: "Bash" });
+    expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("perm");
+
+    const web = makeBridge({ isWebTurnActive: () => true, onPendingAttention });
+    void web.bridge.handlePermissionRequest({ tool_name: "Bash" });
+    expect(onPendingAttention).toHaveBeenCalledTimes(2);
+    expect(onPendingAttention).toHaveBeenNthCalledWith(2, "perm");
+  });
+
+  it("fires 'question' from the AskUserQuestion PreToolUse path on both a local AND a web turn", async () => {
+    const onPendingAttention = vi.fn();
+    const local = makeBridge({ isWebTurnActive: () => false, onPendingAttention });
+    await local.bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+    expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("question");
+
+    const web = makeBridge({ isWebTurnActive: () => true, onPendingAttention });
+    void web.bridge.handlePreToolUse({ tool_name: "AskUserQuestion" });
+    expect(onPendingAttention).toHaveBeenCalledTimes(2);
+    expect(onPendingAttention).toHaveBeenNthCalledWith(2, "question");
+  });
+
+  it("never fires from an ordinary handlePreToolUse call (only PermissionRequest/AskUserQuestion count as 'pending')", async () => {
+    const onPendingAttention = vi.fn();
+    const { bridge } = makeBridge({ onPendingAttention });
+    await bridge.handlePreToolUse({ tool_name: "Bash" });
+    expect(onPendingAttention).not.toHaveBeenCalled();
+  });
+});
+
 describe("PreToolPermissionBridge — handlePermissionRequest — local vs web policy", () => {
   it("returns undefined immediately for a local turn and emits nothing", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });

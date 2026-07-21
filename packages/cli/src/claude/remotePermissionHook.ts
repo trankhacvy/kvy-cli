@@ -86,6 +86,15 @@ export interface RemotePermissionHookOptions {
    * web message never gets typed into an open dialog.
    */
   onPromptLikely?: () => void;
+  /**
+   * Fires the instant a permission request or `AskUserQuestion` becomes
+   * pending, regardless of local vs. web (docs/user-flows.md fix-plan task
+   * 4) — forwarded straight from {@link PreToolPermissionBridge}'s own
+   * `onPendingAttention` dep. The caller (`start.ts`) wires this to a
+   * `POST /v1/sessions/:id/notify` call so a push notification fires for a
+   * pending permission/question even when the turn originated locally.
+   */
+  onPendingAttention?: (kind: "perm" | "question") => void;
   /** Max wait for a web answer before the bridge falls back to a deny. */
   answerTimeoutMs?: number;
   /**
@@ -201,6 +210,7 @@ export async function installRemotePermissionHook(
     isWebTurnActive,
     onModeChange: opts.onModeChange,
     onPromptLikely: opts.onPromptLikely,
+    onPendingAttention: opts.onPendingAttention,
     answerTimeoutMs: opts.answerTimeoutMs,
     logger: opts.logger,
   });
