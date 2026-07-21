@@ -40,3 +40,37 @@ Once `FL3.1`, `FL3.2`, and `FL4.2` are landed, the only remaining unchecked,
 non-`[human]` units left in this track will be `FL4.3`/`FL4.4` — and both are
 gated on `FL4.1`'s human design review, not on any further automatable work. At
 that point this track is effectively blocked on a human step, not on the executor.
+
+## Cycle 2 — 2026-07-21/22
+
+**Merged (ancestry-proven onto `v2-pty-injection`):**
+
+- `FL3.1 [bundle]` "spawn-fresh-folder-register" — `4487e1f`
+- `FL4.2 [inline]` "sharing-crypto-roundtrip-test" — `6426d70cdfd83c74fa5d7cd7ffd7c1a09e5c98d4`
+
+Both verified via `git merge-base --is-ancestor <sha> v2-pty-injection`. Worktrees
+`.worktrees/FL3.1` / `.worktrees/FL4.2` and branches `wf/FL3.1` / `wf/FL4.2` removed
+after verification.
+
+**Parked this cycle:** none.
+
+**Plan checkboxes flipped in `docs/plan-flows-3-4-5.md`:** `FL3.1`'s unit box and
+all non-`[human]` sub-boxes, and `FL4.2`'s unit box and all sub-boxes. `FL3.3
+[human]` left unchecked.
+
+**Post-cycle checks on `v2-pty-injection`:** see typecheck result recorded by the
+workflow at commit time.
+
+**Next recommended units:**
+
+1. `FL3.2 [bundle] "spawn-directory-dedup"` (Piece B — now unblocked, FL3.1 is in).
+2. `FL3.3 [human] "flow-3-live-verify"` — flag to a human once FL3.2 lands too.
+
+**Blocked track note — Flow 4:** `FL4.2` (the only automatable Flow 4 unit) is now
+done. Every remaining unchecked, non-`[human]` unit in Phase 2 (`FL4.3`, `FL4.4`)
+is gated on `FL4.1 [human] "session-sharing-design-review"`, which requires a
+human-authored, human-approved design doc this workflow cannot produce. `FL4.1`,
+`FL4.3`, and `FL4.4` remain unchecked and must stay that way until a human
+completes and approves that review. **Flow 4 beyond FL4.2 is now blocked purely
+on FL4.1's human design review — there is no further automatable work available
+on this track.** Continue with Flow 3 (`FL3.2`) or Flow 5 in the meantime.

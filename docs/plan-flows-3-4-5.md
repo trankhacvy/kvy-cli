@@ -793,31 +793,31 @@ work), Flow 4 last (needs a design review before any implementation).
 
 ### Phase 1 — Flow 3 spawn: fresh-folder registration + dedup
 
-- [ ] **FL3.1 `[bundle]` "spawn-fresh-folder-register"** (Piece A — spans
+- [x] **FL3.1 `[bundle]` "spawn-fresh-folder-register"** (Piece A — spans
       `packages/wire/src/rpc.ts`, `packages/cli/src/daemon/spawnEngine.ts`, a new
       `workspace.register` machine RPC in `packages/cli/src/daemon/machineRpc.ts` +
       `packages/cli/src/workspace/registry.ts` reuse, and
       `packages/web/src/features/new-session/{spawn-flow,live-actions,types}.ts`; bundled
       because the wire change and both consumers must land together)
-  - [ ] Widen `SpawnResultSchema.requiresApproval.action` to the **multi-value literal**
+  - [x] Widen `SpawnResultSchema.requiresApproval.action` to the **multi-value literal**
         `z.literal(["create-directory", "register-workspace"])` (`rpc.ts:62-71`) — **not**
         `z.enum(...)`, which fails `additiveOnly.test.ts` (`schemaShape.ts`'s `isCompatible`
         treats literal→enum as a breaking kind change). Confirm `additiveOnly.test.ts` still
         passes with the multi-value literal.
-  - [ ] In `spawnEngine.ts:106-116`, map `unknown-workspace` to
+  - [x] In `spawnEngine.ts:106-116`, map `unknown-workspace` to
         `requiresApproval: { action: "register-workspace", directory }` instead of throwing;
         leave `outside-workspace-root`/`not-absolute`/`not-directory` throwing.
-  - [ ] Add a `workspace.register` machine RPC (or a `registerWorkspace` action) backed by the
+  - [x] Add a `workspace.register` machine RPC (or a `registerWorkspace` action) backed by the
         already-idempotent `registerWorkspace(directory)` (`registry.ts:211-239`); register it
         in `machineRpc.ts` alongside the existing handlers.
-  - [ ] Extend `NewSessionActions` + `machineRpcToActions` (`live-actions.ts`) with
+  - [x] Extend `NewSessionActions` + `machineRpcToActions` (`live-actions.ts`) with
         `registerWorkspace`, and `runSpawnFlow` (`spawn-flow.ts`) with a `register-workspace`
         branch mirroring the existing create-directory approval loop (prompt → register →
         retry same request/`idempotencyKey`).
-  - [ ] Tests: `spawnEngine` (unregistered → `register-workspace`, not throw; register+retry →
+  - [x] Tests: `spawnEngine` (unregistered → `register-workspace`, not throw; register+retry →
         launch); `rpc.test.ts` (new action variant + compat lint); `spawn-flow.test.ts`
         (approve → register → retry → success; decline → `declined`).
-  - [ ] Combined: scoped tests + `pnpm typecheck` + commit.
+  - [x] Combined: scoped tests + `pnpm typecheck` + commit.
   - **Definition of Done:** `additiveOnly.test.ts` passes with `action` as the multi-value
     literal (proving the wire change is genuinely backward-compatible, not just asserted so);
     a `spawnEngine` test proves an unregistered `workspaceId` now returns
@@ -891,12 +891,12 @@ work), Flow 4 last (needs a design review before any implementation).
     by the user — a doc merely drafted is not sufficient, since FL4.3/FL4.4 are blocked on
     *approved* scope, not draft scope. Do not check this box as part of an automated pipeline;
     it requires an explicit human sign-off.
-- [ ] **FL4.2 `[inline]` "sharing-crypto-roundtrip-test"** — the one code-grounded unit that
+- [x] **FL4.2 `[inline]` "sharing-crypto-roundtrip-test"** — the one code-grounded unit that
       can proceed today (independent of the design review; validates the reused primitive).
-  - [ ] In `packages/crypto/src/__tests__/`, prove `wrapDek(sessionDek, teammate.content.publicKey)`
+  - [x] In `packages/crypto/src/__tests__/`, prove `wrapDek(sessionDek, teammate.content.publicKey)`
         → `unwrapDek(…, teammate.content.secretKey)` recovers the DEK while unwrap with the
         owner's content secret key returns `null` (two independent `deriveKeyTree`s).
-  - [ ] Scoped tests + `pnpm typecheck` + commit.
+  - [x] Scoped tests + `pnpm typecheck` + commit.
   - **Definition of Done:** the round-trip test proves BOTH directions in one test file —
     `unwrapDek(wrapDek(dek, teammate.content.publicKey), teammate.content.secretKey)` recovers
     the original `dek`, AND the same wrapped value fails (`unwrapDek` returns `null`) when
