@@ -1,8 +1,13 @@
 import type { PermissionOption, RequestPermissionRequest } from "@agentclientprotocol/sdk";
 import type { SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
+import type { ReportSessionAttentionDeps } from "../api/sessionNotify.js";
 import type { Logger } from "../logger.js";
-import { AcpPermissionHandler, type AgentStateSnapshot } from "./acpPermissionHandler.js";
+import {
+  AcpPermissionHandler,
+  type AcpPermissionHandlerDeps,
+  type AgentStateSnapshot,
+} from "./acpPermissionHandler.js";
 
 function fakeLogger(): Logger {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -39,7 +44,7 @@ interface Harness {
   logger: Logger;
 }
 
-function harness(): Harness {
+function harness(overrides: Partial<AcpPermissionHandlerDeps> = {}): Harness {
   const envelopes: SessionEnvelope[] = [];
   const snapshots: AgentStateSnapshot[] = [];
   const modeChanges: string[] = [];
@@ -49,6 +54,7 @@ function harness(): Harness {
     onAgentStateChange: (snapshot) => snapshots.push(snapshot),
     onModeChange: (mode) => modeChanges.push(mode),
     logger,
+    ...overrides,
   });
   return { handler, envelopes, snapshots, modeChanges, logger };
 }
@@ -303,5 +309,118 @@ describe("cancellation", () => {
       reason: "already-answered",
       decision: { kind: "deny", message: "Permission request cancelled" },
     });
+  });
+});
+
+// docs/plan-flows-3-4-5.md Flow 5's ACP correction (FL5.2): `reportSessionAttention`
+// call sites, mirroring pretoolPermissionBridge.test.ts's own
+// "onPendingAttention" assertions for the terminal path.
+describe("session attention (docs/plan-flows-3-4-5.md Flow 5 — ACP wiring)", () => {
+  const attention: ReportSessionAttentionDeps = {
+    backendUrl: "https://api.example",
+    accessToken: "tok-1",
+  };
+
+  it("reports 'perm' from handleRequest for an ordinary tool call", () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-1", attention, reportSessionAttention });
+    void h.handler.handleRequest(permissionRequest(), new AbortController().signal);
+
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(attention, {
+      sessionId: "sess-1",
+      kind: "perm",
+    });
+  });
+
+  it("reports 'question' from handleRequest when the tool call is AskUserQuestion", () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-1", attention, reportSessionAttention });
+    void h.handler.handleRequest(
+      permissionRequest({
+        toolCall: {
+          toolCallId: "call-q",
+          _meta: { claudeCode: { toolName: "AskUserQuestion" } },
+        } as RequestPermissionRequest["toolCall"],
+      }),
+      new AbortController().signal,
+    );
+
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(attention, {
+      sessionId: "sess-1",
+      kind: "question",
+    });
+  });
+
+  it("reports 'question' for the ask_user_question tool-name spelling too", () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-1", attention, reportSessionAttention });
+    void h.handler.handleRequest(
+      permissionRequest({
+        toolCall: {
+          toolCallId: "call-q2",
+          _meta: { claudeCode: { toolName: "ask_user_question" } },
+        } as RequestPermissionRequest["toolCall"],
+      }),
+      new AbortController().signal,
+    );
+
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(attention, {
+      sessionId: "sess-1",
+      kind: "question",
+    });
+  });
+
+  it("reports attention BEFORE handleRequest's blocking promise settles — parity with the terminal path's call-site timing", () => {
+    const order: string[] = [];
+    const reportSessionAttention = vi.fn(async () => {
+      order.push("attention-reported");
+      return { type: "ok" } as const;
+    });
+    const h = harness({ sessionId: "sess-1", attention, reportSessionAttention });
+
+    const promise = h.handler.handleRequest(permissionRequest(), new AbortController().signal);
+    order.push("handleRequest-returned");
+
+    // The attention report already happened by the time handleRequest hands
+    // back its (still-pending) promise — i.e. before the block, not after.
+    expect(order).toEqual(["attention-reported", "handleRequest-returned"]);
+    expect(h.handler.pendingCount).toBe(1); // still blocking — proves this isn't a post-resolution report
+    void promise;
+  });
+
+  it("reportTurnEnd() reports 'done' — the turn-completion call site (acpRemote.ts's drain())", () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-1", attention, reportSessionAttention });
+
+    h.handler.reportTurnEnd();
+
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(attention, {
+      sessionId: "sess-1",
+      kind: "done",
+    });
+  });
+
+  it("is a silent no-op for every kind when sessionId/attention aren't wired (no live caller yet)", () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ reportSessionAttention });
+
+    void h.handler.handleRequest(permissionRequest(), new AbortController().signal);
+    h.handler.reportTurnEnd();
+
+    expect(reportSessionAttention).not.toHaveBeenCalled();
+  });
+
+  it("never fires attention reporting from resolve()/reset() (only handleRequest/reportTurnEnd are call sites)", () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-1", attention, reportSessionAttention });
+    const promise = h.handler.handleRequest(permissionRequest(), new AbortController().signal);
+    reportSessionAttention.mockClear();
+
+    h.handler.resolve({
+      reqId: reqIdFrom(h.envelopes),
+      decision: { kind: "allow", scope: "once" },
+    });
+    expect(reportSessionAttention).not.toHaveBeenCalled();
+    void promise;
   });
 });

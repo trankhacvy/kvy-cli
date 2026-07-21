@@ -59,6 +59,10 @@
 import type { PermissionMode, SessionEnvelope } from "@falcon/wire";
 import { createEnvelope } from "@falcon/wire";
 import type { AdapterId } from "../adapters/index.js";
+import type {
+  ReportSessionAttentionDeps,
+  reportSessionAttention as reportSessionAttentionDefault,
+} from "../api/sessionNotify.js";
 import { FALCON_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
 import type { Logger } from "../logger.js";
 import { OrderedEnvelopeQueue } from "../remote/outgoingQueue.js";
@@ -100,6 +104,19 @@ export interface AcpRemoteOptions {
   onProviderSessionId?: (providerSessionId: string) => void;
   /** Fires when a turn's `session/prompt` RESOLVED — the claim-completion hook (file header). */
   onTurnSettled?: (info: { messageId?: string; status: SessionTurnEndStatus }) => void;
+  /**
+   * Falcon session id + backend/auth config for the session-attention
+   * notify POST (docs/plan-flows-3-4-5.md Flow 5's ACP wiring,
+   * `api/sessionNotify.ts`), threaded straight into the `AcpPermissionHandler`
+   * this module owns (`perm`/`question` kinds) and consulted again at this
+   * module's own turn-end path (`done` kind, see `drain()`). Optional: no
+   * live caller wires these yet (same not-yet-connected-seam precedent as
+   * this package's other injectable deps) — when absent, attention
+   * reporting is a silent no-op and every other ACP behavior (permission
+   * decisions, turn flow) is unchanged.
+   */
+  sessionId?: string;
+  attention?: ReportSessionAttentionDeps;
   logger?: Logger;
 }
 
@@ -126,6 +143,8 @@ export interface AcpRemoteDeps {
   /** Injectable for tests; defaults to a real `AcpConnection` on the `claude-code` adapter. */
   createConnection?: (opts: { homeDir: string; logger?: Logger }) => AcpRemoteConnection;
   clientInfo?: { name: string; version: string };
+  /** Injectable for tests; defaults to the real `reportSessionAttention()` (`api/sessionNotify.ts`). */
+  reportSessionAttention?: typeof reportSessionAttentionDefault;
 }
 
 export interface AcpRemoteHandle {
@@ -196,6 +215,9 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
         });
       });
     },
+    sessionId: opts.sessionId,
+    attention: opts.attention,
+    reportSessionAttention: deps.reportSessionAttention,
     logger,
   });
   connection.setPermissionHandler((params, _requestId, signal) =>
@@ -296,6 +318,10 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
       try {
         const result = await connection.prompt(sessionId, [{ type: "text", text: turn.text }]);
         outgoing.pushAll(endAcpTurn(mapperState, result.stopReason));
+        // Turn genuinely completed (this prompt call RESOLVED) — the "done"
+        // attention kind, parity with the terminal path's Stop-hook
+        // `reportAttention("done")` (docs/plan-flows-3-4-5.md Flow 5).
+        permissionHandler.reportTurnEnd();
         opts.onTurnSettled?.({
           messageId: turn.id,
           status: mapAcpStopReasonToTurnStatus(result.stopReason),
