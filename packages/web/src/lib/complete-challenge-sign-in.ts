@@ -12,9 +12,9 @@ import { setToken } from "./session.js";
 
 export async function completeChallengeSignIn(
   bridge: CryptoBridgeClient,
-): Promise<{ nextUrl: string }> {
+): Promise<{ nextUrl: string; accountStatus: "found" | "created" }> {
   const challenge = await bridge.signInChallenge();
-  const { token } = await signIn({
+  const { token, accountStatus } = await signIn({
     publicKey: challenge.signPubKey,
     contentPublicKey: challenge.contentPubKey,
     challenge: challenge.challenge,
@@ -23,5 +23,8 @@ export async function completeChallengeSignIn(
   setToken(token);
 
   const pendingEphPub = consumePendingPair();
-  return { nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
+  return {
+    nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/",
+    accountStatus,
+  };
 }

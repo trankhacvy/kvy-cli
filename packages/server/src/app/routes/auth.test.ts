@@ -116,4 +116,53 @@ describe("POST /v1/auth", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe(firstVerified?.accountId);
   });
+
+  // accountStatus ("found" vs "created") — docs/bug-fix-plan.md issue #12 /
+  // known-issues.md "Recovery code can silently create a disconnected account
+  // instead of failing": the recovery-restore flow on the client needs to be able
+  // to tell these two cases apart, even though both are still a 200 with a valid
+  // token (normal sign-in behavior is unchanged either way).
+  it('reports accountStatus: "created" for a brand-new signPublicKey', async () => {
+    const { body } = signedChallenge();
+    const response = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
+
+    expect(response.statusCode).toBe(200);
+    const responseBody = response.json();
+    expect(responseBody.success).toBe(true);
+    expect(responseBody.accountStatus).toBe("created");
+  });
+
+  it('reports accountStatus: "found" the second time the same signPublicKey signs in', async () => {
+    const { body } = signedChallenge();
+
+    const first = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
+    expect(first.json().accountStatus).toBe("created");
+
+    const second = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
+    expect(second.statusCode).toBe(200);
+    const secondBody = second.json();
+    expect(secondBody.success).toBe(true);
+    expect(secondBody.accountStatus).toBe("found");
+
+    // Still the exact same account row both times (this field is additive
+    // information, not a new account-identity mechanism).
+    const firstVerified = await verifyToken(first.json().token);
+    const secondVerified = await verifyToken(secondBody.token);
+    expect(firstVerified?.accountId).toBe(secondVerified?.accountId);
+  });
+
+  it('reports accountStatus: "found" for a distinct signPublicKey that signs in after another account already exists', async () => {
+    // Guards against a naive "is this the only row in the table" implementation —
+    // accountStatus must reflect *this* upsert's own insert-vs-update outcome, not
+    // some global table state.
+    const other = signedChallenge();
+    await app.inject({ method: "POST", url: "/v1/auth", payload: other.body });
+
+    const { body } = signedChallenge();
+    const created = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
+    expect(created.json().accountStatus).toBe("created");
+
+    const found = await app.inject({ method: "POST", url: "/v1/auth", payload: body });
+    expect(found.json().accountStatus).toBe("found");
+  });
 });

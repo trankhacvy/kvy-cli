@@ -5,6 +5,7 @@
  * changed and why.
  */
 import { decodeBase64 } from "@falcon/crypto";
+import { sql } from "drizzle-orm";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import tweetnacl from "tweetnacl";
@@ -40,6 +41,12 @@ const AuthRequestSchema = z.object({
 const AuthResponseSchema = z.object({
   success: z.literal(true),
   token: z.string(),
+  // Whether this signature upserted a brand-new `accounts` row ("created") or
+  // found an already-existing one ("found") — see the module docblock's
+  // ACCOUNT STATUS note. Additive-only: every existing caller that only reads
+  // `success`/`token` (the normal sign-in path) is unaffected by this field's
+  // presence; it does not change the 200 status or any other response shape.
+  accountStatus: z.enum(["found", "created"]),
 });
 
 const AuthErrorSchema = z.object({
@@ -57,6 +64,23 @@ const AuthErrorSchema = z.object({
  * (design §5.2 "Sign-in"). A valid signature upserts the `accounts` row keyed by the
  * hex-encoded sign public key (idempotent: the same key always maps to the same
  * account row) and returns a fresh JWT (`mintToken`, `@falcon/server`'s auth module).
+ *
+ * ACCOUNT STATUS (docs/bug-fix-plan.md issue #12, known-issues.md "Recovery code can
+ * silently create a disconnected account instead of failing"): this upsert used to
+ * report the same `{ success: true, token }` shape whether it found an existing
+ * `accounts` row or just created a brand-new one — which meant a client attempting to
+ * *restore* an identity from a recovery code (rather than sign in normally) had no way
+ * to tell "your code matched a real account" apart from "your code didn't match
+ * anything, so here's a fresh, empty, disconnected one." The response now also
+ * reports `accountStatus: "found" | "created"`, derived from Postgres's `xmax` system
+ * column on the `RETURNING` row: `xmax = 0` iff the row now visible was inserted by
+ * *this* command rather than updated (an `ON CONFLICT DO UPDATE` sets `xmax` to the
+ * current transaction's id) — the standard "was this an insert or an update" check for
+ * a single upsert statement, no separate pre-check `SELECT` needed. This is purely
+ * additive: the normal returning-device sign-in path still gets `success: true` and a
+ * valid token regardless of `accountStatus`, unchanged from before — only the
+ * recovery-restore flow (packages/web) inspects this field to decide whether to roll
+ * back and show a "no account found for that recovery code" error.
  *
  * `db` is injected (rather than importing the module singleton) so tests can bind an
  * in-memory Postgres (see auth.test.ts) without touching `DATABASE_URL`.
@@ -107,7 +131,12 @@ export function buildAuthRoutes(db: Database): FastifyPluginAsyncZod {
             target: accounts.signPublicKey,
             set: { contentPubKey },
           })
-          .returning();
+          .returning({
+            id: accounts.id,
+            // See the module docblock's ACCOUNT STATUS note: `xmax = 0` iff this
+            // command inserted the row rather than updating an existing one.
+            created: sql<boolean>`(xmax = 0)`,
+          });
 
         if (!account) {
           // Unreachable in practice — an upsert's `.returning()` always yields the
@@ -116,7 +145,11 @@ export function buildAuthRoutes(db: Database): FastifyPluginAsyncZod {
         }
 
         const token = await mintToken(account.id);
-        return reply.send({ success: true, token });
+        return reply.send({
+          success: true,
+          token,
+          accountStatus: account.created ? "created" : "found",
+        });
       },
     );
   };

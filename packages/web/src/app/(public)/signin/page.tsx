@@ -3,6 +3,7 @@
 import { Fingerprint, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { RecoveryCodeInput } from "@/components/auth/recovery-code-input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -12,6 +13,7 @@ import { completeChallengeSignIn } from "@/lib/complete-challenge-sign-in";
 import { DEV_AUTH_ENABLED, GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
 import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { handleRestoreFromRecoveryCode, type RestoreStatus } from "./restore-handler";
 
 type Status =
   | { kind: "checking" }
@@ -32,6 +34,18 @@ export default function SignInPage() {
   // Bumped by the error state's "Try again" button to re-run the identity
   // check / challenge sign-in below without a full page reload.
   const [attempt, setAttempt] = useState(0);
+  // Independent of `status` on purpose (see restore-handler.ts's docblock):
+  // a restore attempt must not unmount needs-signup's OAuth buttons or the
+  // recovery-code input while it's in flight or if it fails.
+  const [restoreStatus, setRestoreStatus] = useState<RestoreStatus>({ kind: "idle" });
+
+  function handleRestoreSubmit(code: string) {
+    if (!bridge) return;
+    handleRestoreFromRecoveryCode(bridge, code, {
+      setRestoreStatus,
+      onSuccess: (nextUrl) => router.replace(nextUrl),
+    });
+  }
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: attempt is intentionally over-specified to re-trigger this effect from the "Try again" button
   useEffect(() => {
@@ -182,6 +196,36 @@ export default function SignInPage() {
 
                 {status.kind === "needs-signup" && (
                   <>
+                    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Already have a Falcon account?</p>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          Restore your original identity on this browser using a recovery code you
+                          exported earlier.
+                        </p>
+                      </div>
+                      <RecoveryCodeInput
+                        onSubmit={handleRestoreSubmit}
+                        pending={restoreStatus.kind === "restoring"}
+                      />
+                      {restoreStatus.kind === "error" && (
+                        <p
+                          className="text-sm leading-6 text-destructive"
+                          aria-live="polite"
+                          data-testid="restore-error"
+                        >
+                          {restoreStatus.message}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="relative">
+                      <Separator />
+                      <span className="absolute inset-x-0 -top-2 mx-auto w-fit bg-card px-3 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+                        Or provision this browser
+                      </span>
+                    </div>
+
                     <div className="space-y-3">
                       <Button
                         type="button"

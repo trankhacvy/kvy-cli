@@ -93,13 +93,19 @@ export function register(body: {
   return postJson("/v1/auth/register", body);
 }
 
-/** `POST /v1/auth` — sign-in: proves possession of an already-provisioned identity. */
+/** `POST /v1/auth` — sign-in: proves possession of an already-provisioned identity.
+ * `accountStatus` ("found" vs "created") lets the recovery-restore flow
+ * (`lib/restore-recovery-code.ts`) tell a genuine match apart from an
+ * upsert that silently minted a brand-new, disconnected account — see
+ * `packages/server/src/app/routes/auth.ts`'s module docblock ACCOUNT STATUS
+ * note. The normal returning-device sign-in path (`complete-challenge-sign-in.ts`)
+ * ignores this field; nothing about its behavior changes. */
 export function signIn(body: {
   publicKey: string;
   contentPublicKey: string;
   challenge: string;
   signature: string;
-}): Promise<{ success: true; token: string }> {
+}): Promise<{ success: true; token: string; accountStatus: "found" | "created" }> {
   return postJson("/v1/auth", body);
 }
 
