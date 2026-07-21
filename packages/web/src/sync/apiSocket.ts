@@ -230,12 +230,21 @@ export function createApiSocket(
 
   function teardown(): void {
     if (socket) {
+      // `disconnect()` must run *before* `handleDisconnect` is unsubscribed:
+      // a real socket.io-client socket (and the fake test double) fires its
+      // 'disconnect' event synchronously from this call, and apiSocket's own
+      // 'disconnect' event (consumed by e.g. `useConnectivity`'s
+      // `wsConnected`) is only ever re-emitted from that handler. Tearing
+      // down listeners first — the previous order — silently swallowed
+      // 'disconnect' for every path that routes through `teardown()`
+      // (`disconnect()` itself and `handleConnectError`'s auth-rejection
+      // path alike), leaving `wsConnected` stuck at its last value.
+      socket.disconnect();
       socket.off("connect", handleConnect);
       socket.off("disconnect", handleDisconnect);
       socket.off("connect_error", handleConnectError);
       socket.off("update", handleUpdate);
       socket.off("ephemeral", handleEphemeral);
-      socket.disconnect();
       socket = null;
     }
     unsubscribeVisibility?.();
