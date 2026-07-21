@@ -241,6 +241,62 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
     expect(state.currentTurnId).toBe(openTurnId);
   });
 
+  it("still emits a (empty) service marker for a local-command-stdout tag pair with no inner content (BF1.2 edge case)", () => {
+    // extractLocalCommandStdout's `match?.[1]?.trim() ?? null` only falls
+    // back to null when the tag pair itself is absent — an empty capture
+    // group trims to "", which is not null, so this path is NOT dropped
+    // the way a bare invocation is. Documenting the current behavior rather
+    // than asserting it's desirable: an empty-text `service` envelope is
+    // still minted.
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "local-cmd-stdout-empty-1",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content: "<local-command-stdout></local-command-stdout>",
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]).toMatchObject({ role: "agent", ev: { t: "service", text: "" } });
+  });
+
+  it("routes a local-command-stdout result through the quiet service path even inside a sidechain, instead of the subagent text branch (BF1.2)", () => {
+    // The stdout/invocation checks run before `isSidechainMessage`, so a
+    // /model result recorded mid-subagent-conversation still becomes a
+    // top-level service marker (no turn/subagent scoping) rather than
+    // subagent chat text — documenting the current precedence, not a
+    // claimed requirement.
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "local-cmd-stdout-sidechain-1",
+        isSidechain: true,
+        message: {
+          role: "user",
+          content:
+            "<local-command-stdout>Set model to Haiku 4.5 and saved as your default for new sessions.</local-command-stdout>",
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]).toMatchObject({
+      role: "agent",
+      ev: {
+        t: "service",
+        text: "Set model to Haiku 4.5 and saved as your default for new sessions.",
+      },
+    });
+    expect(envelopes[0]?.subagent).toBeUndefined();
+    expect(envelopes[0]?.turn).toBeUndefined();
+  });
+
   it("maps a compact-summary assistant line to a quiet service marker, not the summary text, no turn opened (W4.6)", () => {
     const state = createClaudeEnvelopeMapperState();
     state.currentTurnId = "turn-1";

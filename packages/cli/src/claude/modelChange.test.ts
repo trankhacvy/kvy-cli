@@ -68,6 +68,21 @@ describe("findClaudeModelChangeInEnvelopes", () => {
 
     expect(findClaudeModelChangeInEnvelopes(envelopes)).toBe("Opus");
   });
+
+  it("finds a blocked model change (with stray ANSI) in a `service` envelope (BF1.2)", () => {
+    // Combines the two variations the plain-text branch already covered
+    // separately (ANSI stripping, `[blocked]` suffix) against the new
+    // `service` branch, so the blocked-model-switch case is exercised
+    // through the exact envelope shape envelopeMapper.ts now emits.
+    const envelopes: SessionEnvelope[] = [
+      createEnvelope("agent", {
+        t: "service",
+        text: "Set model to [1mOpus 4.1[22m and saved as your default for new sessions [blocked].",
+      }),
+    ];
+
+    expect(findClaudeModelChangeInEnvelopes(envelopes)).toBe("Opus 4.1");
+  });
 });
 
 describe("normalizeTranscriptText (exported for envelopeMapper.ts reuse — BF1.2)", () => {
