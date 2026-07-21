@@ -74,6 +74,11 @@ export const SessionEventSchema = z.discriminatedUnion("t", [
     by: z.enum(["terminal", "client"]),
   }),
   z.object({
+    t: z.literal("permission-mode"),
+    mode: PermissionModeSchema,
+    source: z.enum(["terminal", "client"]),
+  }),
+  z.object({
     t: z.literal("sub-start"),
   }),
   z.object({

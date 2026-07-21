@@ -56,6 +56,17 @@ export interface ModeSwitchItem extends RenderItemBase {
   by: "terminal" | "client";
 }
 
+/** The live permission mode is now `mode` (docs/bug-fix-plan.md §5) — a
+ * standalone fact distinct from `mode-switch`'s local↔remote control handoff.
+ * `source: "terminal"` is the live TUI's Shift+Tab cycling reported via the
+ * CLI's hook bridge; `source: "client"` is reserved for a future web-initiated
+ * `setMode` RPC announcing its own change the same way. */
+export interface PermissionModeItem extends RenderItemBase {
+  kind: "permission-mode";
+  mode: PermissionMode;
+  source: "terminal" | "client";
+}
+
 export interface SubStartItem extends RenderItemBase {
   kind: "sub-start";
 }
@@ -142,6 +153,7 @@ export type RenderItem =
   | TurnStartItem
   | TurnEndItem
   | ModeSwitchItem
+  | PermissionModeItem
   | SubStartItem
   | SubStopItem
   | UsageItem

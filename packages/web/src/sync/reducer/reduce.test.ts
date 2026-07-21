@@ -295,8 +295,13 @@ describe("reduceEnvelopes — misc event pass-through", () => {
       ),
       createEnvelope(
         "agent",
+        { t: "permission-mode", mode: "acceptEdits", source: "terminal" },
+        { id: "5", time: 5 },
+      ),
+      createEnvelope(
+        "agent",
         { t: "turn-end", status: "completed" },
-        { id: "5", time: 5, turn: "t1" },
+        { id: "6", time: 6, turn: "t1" },
       ),
     ];
     const items: RenderItem[] = reduceEnvelopes(envs);
@@ -305,8 +310,11 @@ describe("reduceEnvelopes — misc event pass-through", () => {
       "service",
       "file",
       "mode-switch",
+      "permission-mode",
       "turn-end",
     ]);
+    const permissionModeItem = items.find((i) => i.kind === "permission-mode");
+    expect(permissionModeItem).toMatchObject({ mode: "acceptEdits", source: "terminal" });
   });
 });
 

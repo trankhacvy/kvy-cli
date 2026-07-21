@@ -466,11 +466,28 @@ export class PreToolPermissionBridge {
    * {@link waitForModeEcho} callers. An unrecognized value (a future Claude
    * Code build renaming/adding modes) is ignored rather than corrupting the
    * cache with something {@link permissionModeCyclePresses} can't index.
+   *
+   * Also emits a `permission-mode` wire event whenever the observed mode is a
+   * genuine transition from the previously-cached one (docs/bug-fix-plan.md
+   * §5) — so a Shift+Tab press at the live TUI, which every hook call reports
+   * but nothing previously surfaced, reaches the web mode chip without a
+   * round-trip through a permission decision. The very first observed mode is
+   * NOT emitted: `lastPermissionMode` starts `null`, and every hook call
+   * (including ones with no permission decision at all) would otherwise emit
+   * once as soon as the first `PreToolUse` fires, which is an
+   * echo-of-current-state rather than a *change* — the web already has no
+   * opinion before its first event, so `deriveCurrentPermissionMode`'s
+   * `"default"` fallback is exactly right until a real transition happens.
    */
   private cachePermissionMode(raw: string | undefined): void {
     if (raw === undefined) return;
     const mode = PERMISSION_MODE_CYCLE.find((m) => m === raw);
     if (!mode) return;
+    if (this.lastPermissionMode !== null && mode !== this.lastPermissionMode) {
+      this.deps.emitEnvelope(
+        createEnvelope("agent", { t: "permission-mode", mode, source: "terminal" }),
+      );
+    }
     this.lastPermissionMode = mode;
     for (const watcher of [...this.modeWatchers]) watcher(mode);
   }

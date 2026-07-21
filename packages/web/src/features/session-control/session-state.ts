@@ -93,6 +93,8 @@ export function deriveCurrentPermissionMode(items: RenderItem[]): PermissionMode
   for (const item of items) {
     if (item.kind === "mode-switch") {
       mode = "default";
+    } else if (item.kind === "permission-mode") {
+      mode = item.mode;
     } else if (item.kind === "perm-placeholder" && item.permission.decision?.kind === "mode") {
       mode = item.permission.decision.mode;
     } else if (item.kind === "tool" && item.permission?.decision?.kind === "mode") {

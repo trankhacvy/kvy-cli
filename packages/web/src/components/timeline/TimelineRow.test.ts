@@ -32,3 +32,19 @@ describe("TimelineRow — usage dispatch (W4.6)", () => {
     expect(TimelineRow({ item }).type).toBe(ServiceLine);
   });
 });
+
+describe("TimelineRow — permission-mode dispatch (docs/bug-fix-plan.md #5)", () => {
+  it("routes a permission-mode item to ServiceLine with a mode+source label", () => {
+    const item: RenderItem = {
+      id: "pm1",
+      time: 0,
+      role: "agent",
+      kind: "permission-mode",
+      mode: "acceptEdits",
+      source: "terminal",
+    };
+    const row = TimelineRow({ item });
+    expect(row.type).toBe(ServiceLine);
+    expect(row.props).toMatchObject({ label: "Permission mode: acceptEdits (terminal)" });
+  });
+});
