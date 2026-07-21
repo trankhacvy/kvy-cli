@@ -1899,13 +1899,13 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
 
 ### Phase 2 — Web tool-cards & UI polish
 
-- [ ] **BF2.1 `[bundle]` "plan-and-task-cards"** (Issues #6+#7 — both land in
+- [x] **BF2.1 `[bundle]` "plan-and-task-cards"** (Issues #6+#7 — both land in
       `packages/web/src/components/timeline/tool-cards/`'s registry + new card files)
-  - [ ] Issue #6: add `parseExitPlanModeArgs` to `lib/tool-args.ts`; add
+  - [x] Issue #6: add `parseExitPlanModeArgs` to `lib/tool-args.ts`; add
         `ExitPlanModeToolCard.tsx` (rendering the `plan` field's markdown via the existing
         `Markdown` component inside `ToolCardShell`, falling back to a "No plan text recorded"
         message); register both `ExitPlanMode`/`exit_plan_mode` in `registry.tsx`
-  - [ ] Issue #6 tests: `ExitPlanModeToolCard.test.ts` (plan renders; malformed/missing plan
+  - [x] Issue #6 tests: `ExitPlanModeToolCard.test.ts` (plan renders; malformed/missing plan
         falls back safely) and a `registry.test.ts` case asserting both spellings resolve to the
         new card, not `McpGenericCard`
   - [ ] Issue #7 — precondition, `[human]`: capture a real `TaskCreate`/`TaskUpdate` transcript
@@ -1913,7 +1913,7 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
         `packages/cli/src/claude/__fixtures__/task-create-update-session.jsonl` (following the
         `task_sdk.jsonl`/`task_non_sdk.jsonl` convention) — the real args/output shape is
         currently unverified anywhere in this codebase and must not be guessed
-  - [ ] Issue #7 — only once that fixture exists: add a defensive parser to `tool-args.ts`
+  - [x] Issue #7 — only once that fixture exists: add a defensive parser to `tool-args.ts`
         matching the fixture's real field names, a `TaskEntryCard` (sibling of `TodoCard`), and
         register `TaskCreate`/`TaskUpdate` in `registry.tsx`; if the fixture isn't available
         yet, skip this sub-task rather than shipping a guessed schema — the current raw-JSON
@@ -1922,30 +1922,30 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
         with a working Allow/Deny row; if the Issue #7 fixture was captured, also trigger a real
         `TaskCreate`/`TaskUpdate` call and confirm a readable checklist view
 
-- [ ] **BF2.2 `[inline]` "web-polish-batch"** — three small, disjoint-file web fixes batched
+- [x] **BF2.2 `[inline]` "web-polish-batch"** — three small, disjoint-file web fixes batched
       into one pass (verified: `SessionTimelineScreen.tsx` vs `SubagentGroup.tsx`+
       `RenderItemGroups.tsx` vs `live-source.ts`+`types.ts`+`session-card.tsx` share no files)
-  - [ ] Issue #3: change `SessionTimelineScreen.tsx`'s message-list wrapper from
+  - [x] Issue #3: change `SessionTimelineScreen.tsx`'s message-list wrapper from
         `<div className="min-h-0 flex-1 overflow-hidden">` to
         `<div className="flex min-h-0 flex-1 flex-col overflow-hidden">` so `Conversation`'s
         `flex-1 min-h-0` classes actually constrain its height (matching the other flex-col
         wrappers already in this file)
-  - [ ] Issue #8: change `SubagentGroup`'s prop from a raw `id` to a computed display `label`;
+  - [x] Issue #8: change `SubagentGroup`'s prop from a raw `id` to a computed display `label`;
         in `RenderItemGroups.tsx`, compute an ordinal ("Subagent 1", "Subagent 2", ...) per
         standalone group instead of forwarding the internal `subagentId` cuid2 into visible
         text (the id stays only in the React `key`)
-  - [ ] Issue #13: change `SessionListSession.title`/`SessionListMachine.name` to
+  - [x] Issue #13: change `SessionListSession.title`/`SessionListMachine.name` to
         `string | null` in `types.ts`; in `live-source.ts`'s `buildSnapshot`, stop defaulting
         through `?? UNTITLED_SESSION`/`?? UNNAMED_MACHINE` at read time — carry `null` when the
         titles map has no entry yet; in `session-card.tsx` (and the equivalent machine-badge
         render), show the existing `Skeleton` component when the title is `null`, only falling
         back to the literal placeholder text once decryption has genuinely completed with no
         usable title
-  - [ ] Tests: `RenderItemGroups.test.ts` (two standalone subagent groups render "Subagent 1"/
+  - [x] Tests: `RenderItemGroups.test.ts` (two standalone subagent groups render "Subagent 1"/
         "Subagent 2", no cuid-shaped substring); `live-source.test.ts` (empty titles maps →
         `null`, not placeholder strings) and a `session-card` render-test case (`null` title →
         `Skeleton`, string title → text)
-  - [ ] Combined: scoped tests + `pnpm typecheck` + commit; Issue #3 has no automated test
+  - [x] Combined: scoped tests + `pnpm typecheck` + commit; Issue #3 has no automated test
         (jsdom doesn't compute real layout) — note this honestly rather than fabricating a
         layout assertion
 

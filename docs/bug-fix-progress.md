@@ -54,3 +54,24 @@ false-landing rule.
 **Next recommended units:**
 - `BF2.1 [bundle] "plan-and-task-cards"` (Issues #6+#7, Phase 2 — web tool-cards & UI polish)
 - `BF2.2 [inline] "web-polish-batch"` (three small, disjoint-file web fixes)
+
+## Cycle 4 — 2026-07-21
+
+**Merged units:**
+- `BF2.1` "plan-and-task-cards" — `6cdcf69f7aac87b849c60137ce293bcfafe58133`
+  (verified via `git merge-base --is-ancestor` against `v2-pty-injection`)
+- `BF2.2` "web-polish-batch" — `4c932e66103ca30112284dbabc3771dcdbc547c4`
+  (verified via `git merge-base --is-ancestor` against `v2-pty-injection`)
+
+**Parked/failed units:** none this cycle.
+
+**Worktree/branch cleanup:** `.worktrees/BF2.1` and `.worktrees/BF2.2` removed, `wf/BF2.1` and
+`wf/BF2.2` branches deleted.
+
+**Note:** all non-`[human]` sub-boxes for BF2.1 and BF2.2 flipped to `[x]` in
+`docs/bug-fix-plan.md`; the `[human]` live-check sub-boxes (including BF2.1's Issue #7
+fixture-capture precondition) remain unchecked per the false-landing rule.
+
+**Next recommended units:**
+- `BF3.1 [bundle] "jwt-expiry-and-reconnect"` (Issues #9+#10, Phase 3 — auth & session robustness)
+- `BF3.2 [solo] "recovery-code-restore"` (Issue #12)
