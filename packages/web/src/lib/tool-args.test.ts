@@ -281,6 +281,8 @@ describe("parseExitPlanModeArgs", () => {
   it("degrades gracefully on a non-object args value", () => {
     expect(parseExitPlanModeArgs(undefined)).toEqual({ plan: undefined });
     expect(parseExitPlanModeArgs("not an object")).toEqual({ plan: undefined });
+    expect(parseExitPlanModeArgs(null)).toEqual({ plan: undefined });
+    expect(parseExitPlanModeArgs(["not", "an", "object"])).toEqual({ plan: undefined });
   });
 });
 

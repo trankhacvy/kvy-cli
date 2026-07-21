@@ -59,4 +59,14 @@ describe("ExitPlanModeToolCard", () => {
     expect(body.type).toBe("p");
     expect((body.props as { children: string }).children).toBe("No plan text recorded.");
   });
+
+  it("falls back to a safe message when args is null or an array", () => {
+    const nullBody = cardBody(toolItem(null)) as ReactElement;
+    expect(nullBody.type).toBe("p");
+    expect((nullBody.props as { children: string }).children).toBe("No plan text recorded.");
+
+    const arrayBody = cardBody(toolItem(["not", "an", "object"])) as ReactElement;
+    expect(arrayBody.type).toBe("p");
+    expect((arrayBody.props as { children: string }).children).toBe("No plan text recorded.");
+  });
 });
