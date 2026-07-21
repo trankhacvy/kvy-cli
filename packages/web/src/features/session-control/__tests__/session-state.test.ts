@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { RenderItem } from "@/sync/reducer";
-import { deriveControlMode, deriveCurrentPermissionMode, isTurnOpen } from "../session-state.js";
+import {
+  deriveControlMode,
+  deriveCurrentPermissionMode,
+  deriveWorking,
+  isTurnOpen,
+} from "../session-state.js";
 
 describe("deriveControlMode", () => {
   it("defaults to 'local' when there's no mode-switch item", () => {
@@ -166,5 +171,49 @@ describe("isTurnOpen", () => {
       { id: "t3", time: 3, role: "user", kind: "turn-start" },
     ];
     expect(isTurnOpen(items)).toBe(true);
+  });
+});
+
+describe("deriveWorking (docs/user-flows.md fix-plan item 2: the stuck 'Working…' header)", () => {
+  it("is true while the turn is open, regardless of the ephemeral hint", () => {
+    const items: RenderItem[] = [{ id: "t1", time: 1, role: "agent", kind: "turn-start" }];
+    expect(deriveWorking(items, false)).toBe(true);
+    expect(deriveWorking(items, true)).toBe(true);
+  });
+
+  it("trusts a `true` ephemeral hint before any turn history has landed yet", () => {
+    expect(deriveWorking([], true)).toBe(true);
+  });
+
+  it("is false with no turn history and no ephemeral hint", () => {
+    expect(deriveWorking([], false)).toBe(false);
+  });
+
+  it("never lets a stuck-true ephemeral override a turn that has already closed (the reported bug)", () => {
+    const items: RenderItem[] = [
+      { id: "t1", time: 1, role: "agent", kind: "turn-start" },
+      { id: "t2", time: 2, role: "agent", kind: "turn-end", status: "completed" },
+    ];
+    // Simulates the ephemeral's `working:false` companion having been
+    // dropped (or a stray `working:true` re-arriving) — `isTurnOpen(items)`
+    // already correctly says the turn is closed, and that must win.
+    expect(deriveWorking(items, true)).toBe(false);
+  });
+
+  it("stays false for a stuck-true ephemeral even after a failed/cancelled turn-end", () => {
+    const items: RenderItem[] = [
+      { id: "t1", time: 1, role: "agent", kind: "turn-start" },
+      { id: "t2", time: 2, role: "agent", kind: "turn-end", status: "failed" },
+    ];
+    expect(deriveWorking(items, true)).toBe(false);
+  });
+
+  it("re-opens correctly on a genuine second turn, independent of the ephemeral hint", () => {
+    const items: RenderItem[] = [
+      { id: "t1", time: 1, role: "agent", kind: "turn-start" },
+      { id: "t2", time: 2, role: "agent", kind: "turn-end", status: "completed" },
+      { id: "t3", time: 3, role: "user", kind: "turn-start" },
+    ];
+    expect(deriveWorking(items, false)).toBe(true);
   });
 });

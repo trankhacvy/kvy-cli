@@ -136,6 +136,71 @@ describe("reconcilePending", () => {
     ];
     expect(reconcilePending(filePending, items)).toEqual([]);
   });
+
+  describe("self-healing fallback for a stuck `queued` entry (docs/user-flows.md fix-plan item 3: stale 'Queued' banner + duplicate bubble)", () => {
+    it("drops a still-`queued` entry once a turn closes at/after it was sent, even if neither id nor text ever matches", () => {
+      // Reproduces the reported live bug: a message queued behind a running
+      // turn gets answered (visible elsewhere in the transcript as a
+      // `turn-end` after `sentAt`), but for whatever reason (CLI-side
+      // reformatting, a dropped id) neither the id nor exact-text
+      // reconciliation above ever confirms it — it must not stay stuck.
+      const queuedPending: PendingMessage[] = [
+        { kind: "text", localId: "q1", text: "please continue", sentAt: 10, queued: true },
+      ];
+      const items: RenderItem[] = [
+        { id: "t1", time: 5, role: "agent", kind: "turn-start" },
+        // Some reformatted/garbled echo that will never content-match "please continue".
+        {
+          id: "echo-1",
+          time: 12,
+          role: "user",
+          kind: "text",
+          md: "please continue.",
+          thinking: false,
+        },
+        { id: "t2", time: 15, role: "agent", kind: "turn-end", status: "completed" },
+      ];
+      expect(reconcilePending(queuedPending, items)).toEqual([]);
+    });
+
+    it("does not force-drop a `queued` entry while only an older turn (closed before it was sent) exists", () => {
+      const queuedPending: PendingMessage[] = [
+        { kind: "text", localId: "q1", text: "please continue", sentAt: 10, queued: true },
+      ];
+      const items: RenderItem[] = [
+        { id: "t1", time: 1, role: "agent", kind: "turn-start" },
+        { id: "t2", time: 2, role: "agent", kind: "turn-end", status: "completed" }, // closed well before sentAt
+      ];
+      expect(reconcilePending(queuedPending, items)).toBe(queuedPending);
+    });
+
+    it("does not force-drop a never-queued (queued: false) entry just because a later turn closes", () => {
+      const notQueuedPending: PendingMessage[] = [
+        { kind: "text", localId: "q1", text: "please continue", sentAt: 10, queued: false },
+      ];
+      const items: RenderItem[] = [
+        { id: "t2", time: 15, role: "agent", kind: "turn-end", status: "completed" },
+      ];
+      expect(reconcilePending(notQueuedPending, items)).toBe(notQueuedPending);
+    });
+
+    it("still prefers exact text/id matches over the fallback when both are available", () => {
+      const queuedPending: PendingMessage[] = [
+        { kind: "text", localId: "q1", text: "please continue", sentAt: 10, queued: true },
+      ];
+      const items: RenderItem[] = [
+        {
+          id: "echo-1",
+          time: 12,
+          role: "user",
+          kind: "text",
+          md: "please continue",
+          thinking: false,
+        },
+      ];
+      expect(reconcilePending(queuedPending, items)).toEqual([]);
+    });
+  });
 });
 
 describe("pendingToRenderItem", () => {
