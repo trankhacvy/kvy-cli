@@ -4,7 +4,13 @@ import path from "node:path";
 import type { SpawnParams } from "@falcon/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LaunchedProcess } from "./processLauncher.js";
-import { type SpawnEngineDeps, SpawnError, spawnSession } from "./spawnEngine.js";
+import {
+  type SpawnEngineDeps,
+  SpawnError,
+  scanForLiveSessionInDirectory,
+  spawnSession,
+} from "./spawnEngine.js";
+import type { TrackedSession } from "./types.js";
 
 function baseParams(overrides: Partial<SpawnParams> = {}): SpawnParams {
   return {
@@ -245,5 +251,97 @@ describe("spawnSession", () => {
       ),
     ).rejects.toThrow(/branch\/worktree setup failed/);
     expect(deps.launchProcess).not.toHaveBeenCalled();
+  });
+
+  describe("directory dedup (plan.md §16 'Flow 3 — spawn-directory-dedup')", () => {
+    it("returns the already-live session's id and never invokes the process launcher when one is already tracked in this exact directory", async () => {
+      const realRoot = await realpath(root);
+      const deps = baseDeps({
+        findLiveSessionInDirectory: (realDirectory) =>
+          realDirectory === realRoot ? "sess_already_live" : null,
+      });
+
+      const result = await spawnSession(baseParams({ directory: root }), deps);
+
+      expect(result).toEqual({ sessionId: "sess_already_live" });
+      // The load-bearing assertion: a false pass here (e.g. asserting only
+      // that *a* sessionId came back) would hide a real double spawn — the
+      // launcher must never even be called.
+      expect(deps.launchProcess).not.toHaveBeenCalled();
+      expect(deps.awaiter.waitFor).not.toHaveBeenCalled();
+    });
+
+    it("proceeds with a normal spawn when findLiveSessionInDirectory reports nothing live there", async () => {
+      const deps = baseDeps({ findLiveSessionInDirectory: () => null });
+
+      const result = await spawnSession(baseParams({ directory: root }), deps);
+
+      expect(result).toEqual({ sessionId: "sess_new" });
+      expect(deps.launchProcess).toHaveBeenCalledOnce();
+    });
+
+    it("spawns normally when no findLiveSessionInDirectory dep is configured at all", async () => {
+      const deps = baseDeps();
+      expect(deps.findLiveSessionInDirectory).toBeUndefined();
+
+      const result = await spawnSession(baseParams({ directory: root }), deps);
+
+      expect(result).toEqual({ sessionId: "sess_new" });
+      expect(deps.launchProcess).toHaveBeenCalledOnce();
+    });
+
+    it("records the launched pid's directory via trackSpawned right after a successful launch", async () => {
+      const trackSpawned = vi.fn();
+      const deps = baseDeps({ trackSpawned });
+
+      await spawnSession(baseParams({ directory: root }), deps);
+
+      const realRoot = await realpath(root);
+      expect(trackSpawned).toHaveBeenCalledExactlyOnceWith(4242, realRoot);
+    });
+
+    it("does not regress FL3.1: a fresh, never-registered workspaceId still resolves to the register-workspace approval, not the dedup path", async () => {
+      // `findLiveSessionInDirectory` is wired (as the real daemon composition
+      // always wires it) and would (wrongly, if ever reached) claim a live
+      // session exists here — but workspace validation fails FIRST for an
+      // unregistered workspaceId, so the dedup scan must never even run.
+      const findLiveSessionInDirectory = vi.fn(() => "sess_should_never_be_returned");
+      const deps = baseDeps({
+        resolveWorkspaceRoot: () => null,
+        findLiveSessionInDirectory,
+      });
+
+      const result = await spawnSession(baseParams({ directory: root }), deps);
+
+      expect(result).toEqual({
+        requiresApproval: { action: "register-workspace", directory: root },
+      });
+      expect(findLiveSessionInDirectory).not.toHaveBeenCalled();
+      expect(deps.launchProcess).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe("scanForLiveSessionInDirectory", () => {
+  function session(overrides: Partial<TrackedSession> = {}): TrackedSession {
+    return { startedBy: "daemon", pid: 1, ...overrides };
+  }
+
+  it("returns the sessionId of a live tracked session whose directory matches", () => {
+    const sessions = [
+      session({ pid: 1, sessionId: "sess_a", directory: "/repos/a" }),
+      session({ pid: 2, sessionId: "sess_b", directory: "/repos/b" }),
+    ];
+    expect(scanForLiveSessionInDirectory(sessions, "/repos/b")).toBe("sess_b");
+  });
+
+  it("returns null when no tracked session matches the directory", () => {
+    const sessions = [session({ pid: 1, sessionId: "sess_a", directory: "/repos/a" })];
+    expect(scanForLiveSessionInDirectory(sessions, "/repos/never-seen")).toBeNull();
+  });
+
+  it("ignores a pid tracked pre-webhook (no sessionId yet) even if its directory matches", () => {
+    const sessions = [session({ pid: 1, directory: "/repos/a" })];
+    expect(scanForLiveSessionInDirectory(sessions, "/repos/a")).toBeNull();
   });
 });

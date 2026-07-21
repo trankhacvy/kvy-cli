@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { isDirectoryNotFoundError } from "../components/directory-step-logic";
+import {
+  isDirectoryAlreadyLive,
+  isDirectoryNotFoundError,
+} from "../components/directory-step-logic";
 import { createMockNewSessionActions } from "../mock-source";
 import { runSpawnFlow } from "../spawn-flow";
 import type { SpawnRequest } from "../types";
@@ -12,6 +15,20 @@ describe("isDirectoryNotFoundError", () => {
   it("does not match other browse failures", () => {
     expect(isDirectoryNotFoundError("path must be absolute: relative/path")).toBe(false);
     expect(isDirectoryNotFoundError("could not list /root: EACCES")).toBe(false);
+  });
+});
+
+describe("isDirectoryAlreadyLive (Flow 3 — spawn-directory-dedup item 4, client-side pre-check)", () => {
+  it("is true when the directory matches one already carrying a live session", () => {
+    expect(isDirectoryAlreadyLive("/repos/falcon", ["/repos/falcon", "/repos/other"])).toBe(true);
+  });
+
+  it("is false for a directory not in the live set", () => {
+    expect(isDirectoryAlreadyLive("/repos/fresh", ["/repos/other"])).toBe(false);
+  });
+
+  it("is false when the live set is empty (no live-session data wired up)", () => {
+    expect(isDirectoryAlreadyLive("/repos/falcon", [])).toBe(false);
   });
 });
 

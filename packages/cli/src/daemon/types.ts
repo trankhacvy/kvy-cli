@@ -35,6 +35,19 @@ export interface TrackedSession {
   encryption?: SessionEncryptionData;
   pid: number;
   error?: string;
+  /**
+   * The resolved real (symlink-followed) directory this pid was spawned
+   * into (plan.md §16 "Flow 3 — spawn-directory-dedup"). Populated by
+   * `sessionRegistry.ts`'s `trackSpawned` for a daemon-spawned session — fed
+   * from `spawnEngine.ts`'s own `spawnDirectory` right after launch — and
+   * carried through by `onSessionStarted`'s merge for that same pid. Absent
+   * for a terminal-started session the daemon only learned about via its
+   * `/session-started` self-report (no `trackSpawned` call preceded it, so
+   * there was nothing to record a directory against). This is exactly what
+   * lets `spawnSession` answer "is a session already live in this
+   * directory?" without a new registry lookup shape.
+   */
+  directory?: string;
 }
 
 /**

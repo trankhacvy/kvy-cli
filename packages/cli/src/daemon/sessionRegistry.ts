@@ -40,8 +40,17 @@ export interface SessionRegistryDeps {
 export interface SessionRegistry {
   /** Loads not-yet-expired `sessions.json` entries into the resumable set. Call once at daemon boot, before serving any RPC. Returns how many were restored. */
   restore(): Promise<number>;
-  /** Registers a pid this daemon just spawned, ahead of its `/session-started` webhook arriving — lets `onSessionStarted` recognize it as the same session rather than a fresh terminal-started one. */
-  trackSpawned(pid: number): void;
+  /**
+   * Registers a pid this daemon just spawned, ahead of its
+   * `/session-started` webhook arriving — lets `onSessionStarted` recognize
+   * it as the same session rather than a fresh terminal-started one.
+   * `directory` (the resolved real path a `spawn`-launched pid was started
+   * in, plan.md §16 "Flow 3 — spawn-directory-dedup") is optional — a
+   * `resumeSession` relaunch calls this with no directory, since it isn't
+   * establishing a *new* live-directory fact, just re-tracking an existing
+   * session's pid.
+   */
+  trackSpawned(pid: number, directory?: string): void;
   /** The `/session-started` webhook handler (`ControlServerDeps.onSessionStarted`'s exact shape). */
   onSessionStarted(
     sessionId: string,
@@ -120,8 +129,8 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
       return resumable.size;
     },
 
-    trackSpawned(pid) {
-      pidToSession.set(pid, { startedBy: "daemon", pid });
+    trackSpawned(pid, directory) {
+      pidToSession.set(pid, { startedBy: "daemon", pid, directory });
     },
 
     onSessionStarted(sessionId, metadata, encryption, pid) {

@@ -75,6 +75,36 @@ describe("sessionRegistry", () => {
     expect(tracked?.sessionId).toBe("sess_1");
   });
 
+  it("trackSpawned records a spawned pid's directory, queryable via getSessions before any webhook arrives (plan.md §16 'Flow 3 — spawn-directory-dedup')", () => {
+    const registry = createSessionRegistry({ homeDir });
+    registry.trackSpawned(4242, "/Users/vy/projects/falcon");
+
+    const [tracked] = registry.getSessions();
+    expect(tracked).toMatchObject({
+      startedBy: "daemon",
+      pid: 4242,
+      directory: "/Users/vy/projects/falcon",
+    });
+    // No sessionId yet — the webhook hasn't landed — matching
+    // `spawnEngine.ts`'s dedup scan intentionally not matching a
+    // pre-webhook entry.
+    expect(tracked?.sessionId).toBeUndefined();
+  });
+
+  it("a spawned pid's directory survives onSessionStarted's merge once the webhook lands", () => {
+    const registry = createSessionRegistry({ homeDir });
+    registry.trackSpawned(4242, "/Users/vy/projects/falcon");
+
+    registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
+
+    const [tracked] = registry.getSessions();
+    expect(tracked).toMatchObject({
+      startedBy: "daemon",
+      sessionId: "sess_1",
+      directory: "/Users/vy/projects/falcon",
+    });
+  });
+
   it("persists to sessions.json whenever the webhook carries encryption material", async () => {
     const registry = createSessionRegistry({ homeDir });
     registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);

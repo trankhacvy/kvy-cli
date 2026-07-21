@@ -24,7 +24,12 @@
  * both, so a diff/transcript too large for the 64KB RPC control-plane
  * budget gets a real `blobRef` instead of just a truncated inline preview
  * (plan.md §16 "4.3 Distribution & self-host" — the blob-storage subsystem
- * both handlers' own doc comments reserved this field for).
+ * both handlers' own doc comments reserved this field for). `spawnSession`'s
+ * directory-dedup guard (plan.md §16 "Flow 3 — spawn-directory-dedup") ALSO
+ * gets extra wiring, for the same reason `git.diff`/`adopt.mirror` do: the
+ * dependency (a live scan of `registry.getSessions()`) only exists here at
+ * the composition root, not inside `spawnEngine.ts` itself — see
+ * `spawnSessionHandler` below.
  *
  * **No stored credentials ⇒ no machine client.** A daemon with nobody
  * logged in yet (`falcon auth login` never run) has no token/masterSecret
@@ -114,7 +119,11 @@ import {
 } from "./resumeSession.js";
 import type { PersistedSession } from "./sessionsStore.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
-import { type SpawnEngineDeps, spawnSession as spawnSessionCore } from "./spawnEngine.js";
+import {
+  type SpawnEngineDeps,
+  scanForLiveSessionInDirectory,
+  spawnSession as spawnSessionCore,
+} from "./spawnEngine.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 import {
   createTranscriptIndexerDeps,
@@ -123,6 +132,7 @@ import {
   type TranscriptIndexerHandle,
 } from "./transcriptIndexer.js";
 import { handleAdoptMirror } from "./transcriptMirror.js";
+import type { TrackedSession } from "./types.js";
 import {
   createUnmanagedSessionClientDeps,
   upsertUnmanagedSession,
@@ -154,7 +164,15 @@ export interface MachineIntegrationDeps {
     session: PersistedSession,
   ) => string | null | undefined | Promise<string | null | undefined>;
   heartbeatIntervalMs: number;
-  registry: ResumeSessionRegistry;
+  /**
+   * `ResumeSessionRegistry`'s narrower surface, widened with `getSessions()`
+   * (`sessionRegistry.ts`'s full `SessionRegistry` shape already has both) —
+   * `spawnSessionHandler` below scans it via `scanForLiveSessionInDirectory`
+   * for the directory-dedup guard (plan.md §16 "Flow 3 —
+   * spawn-directory-dedup"), the same registry handle `resumeSessionHandler`
+   * already used `findResumable`/`stopSession`/`trackSpawned` from.
+   */
+  registry: ResumeSessionRegistry & { getSessions(): TrackedSession[] };
   awaiter: SpawnAwaiter;
   /** Test-only escape hatch: extra overrides merged into `spawnEngine.ts`'s deps (e.g. a fake process launcher). Production leaves this unset — `spawnEngine.ts`'s own real defaults (tmux/detached launch) apply. */
   spawnEngineOverrides?: Partial<SpawnEngineDeps>;
@@ -301,6 +319,14 @@ export async function startMachineIntegration(
       resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
       awaiter: deps.awaiter,
       logger: deps.logger,
+      // Directory-dedup guard (plan.md §16 "Flow 3 — spawn-directory-dedup"):
+      // the registry handle is already in scope here (same one
+      // `resumeSessionHandler` below uses) — scan its live sessions for a
+      // directory match before spawning, and record this spawn's own
+      // directory once launched so a LATER spawn's scan can find it.
+      findLiveSessionInDirectory: (realDirectory) =>
+        scanForLiveSessionInDirectory(deps.registry.getSessions(), realDirectory),
+      trackSpawned: deps.registry.trackSpawned,
       ...deps.spawnEngineOverrides,
     });
   }
