@@ -69,13 +69,15 @@ describe("shouldShowActivityRow (W1.8 pulse row)", () => {
   });
 
   it("is hidden once a running tool card has landed after the latest user message", () => {
-    expect(shouldShowActivityRow(true, [userTextItem("u1"), toolItem("t1", "running")])).toBe(false);
+    expect(shouldShowActivityRow(true, [userTextItem("u1"), toolItem("t1", "running")])).toBe(
+      false,
+    );
   });
 
   it("is hidden when only hidden metadata rows remain", () => {
     expect(
       shouldShowActivityRow(true, [
-        { id: "s1", time: 0, role: "agent", kind: "service", text: "Session started" },
+        { id: "s1", time: 0, role: "agent", kind: "service", text: "Session started", quiet: true },
       ]),
     ).toBe(false);
   });

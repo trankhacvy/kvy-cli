@@ -64,6 +64,19 @@ function dedupeById(envelopes: SessionEnvelope[]): SessionEnvelope[] {
   return out;
 }
 
+/** Pure boundary chatter with no information value beyond "a session
+ * exists" — the only `service` text currently emitted that should stay
+ * hidden from the transcript (docs/bug-fix-plan.md issue #4). Everything
+ * else — model-switch confirmations, compaction notices, omitted-attachment
+ * notes, remote-session errors — is a real event a user would want to see,
+ * and was only ever hidden as a side effect of `service` being treated as
+ * one undifferentiated kind. */
+const ROUTINE_SERVICE_TEXTS = new Set(["session started"]);
+
+function isRoutineServiceText(text: string): boolean {
+  return ROUTINE_SERVICE_TEXTS.has(text);
+}
+
 function stableSortByTime<T extends { time: number }>(items: T[]): T[] {
   return items
     .map((item, index) => ({ item, index }))
@@ -99,7 +112,12 @@ function reduceScope(envs: SessionEnvelope[]): RenderItem[] {
         break;
 
       case "service":
-        items.push({ ...base, kind: "service", text: ev.text });
+        items.push({
+          ...base,
+          kind: "service",
+          text: ev.text,
+          quiet: isRoutineServiceText(ev.text),
+        });
         break;
 
       case "file":

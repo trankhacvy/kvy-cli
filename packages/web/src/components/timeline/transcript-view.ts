@@ -6,7 +6,7 @@ function hasVisibleTextContent(item: TextItem): boolean {
 
 function isHiddenTimelineItem(item: RenderItem): boolean {
   return (
-    item.kind === "service" ||
+    (item.kind === "service" && item.quiet) ||
     item.kind === "turn-start" ||
     item.kind === "turn-end" ||
     item.kind === "mode-switch" ||

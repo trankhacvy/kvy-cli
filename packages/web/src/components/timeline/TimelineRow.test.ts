@@ -28,6 +28,7 @@ describe("TimelineRow — usage dispatch (W4.6)", () => {
       role: "agent",
       kind: "service",
       text: "History compacted (/clear)",
+      quiet: false,
     };
     expect(TimelineRow({ item }).type).toBe(ServiceLine);
   });

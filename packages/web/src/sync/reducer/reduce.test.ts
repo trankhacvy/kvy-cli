@@ -318,6 +318,28 @@ describe("reduceEnvelopes — misc event pass-through", () => {
   });
 });
 
+describe("reduceEnvelopes — service item `quiet` classification (docs/bug-fix-plan.md #4)", () => {
+  it("marks the routine 'session started' boundary text as quiet", () => {
+    const envs: SessionEnvelope[] = [
+      createEnvelope("agent", { t: "service", text: "session started" }, { id: "1", time: 1 }),
+    ];
+    const [item] = reduceEnvelopes(envs);
+    expect(item).toMatchObject({ kind: "service", quiet: true });
+  });
+
+  it("marks a real, informative service text (e.g. a model-switch confirmation) as not quiet", () => {
+    const envs: SessionEnvelope[] = [
+      createEnvelope(
+        "agent",
+        { t: "service", text: "Set model to Haiku 4.5 and saved as your default for new sessions" },
+        { id: "1", time: 1 },
+      ),
+    ];
+    const [item] = reduceEnvelopes(envs);
+    expect(item).toMatchObject({ kind: "service", quiet: false });
+  });
+});
+
 describe("reduceEnvelopes — usage (W4.6)", () => {
   it("maps a usage envelope straight through, costUsd omitted when absent", () => {
     const env = createEnvelope(

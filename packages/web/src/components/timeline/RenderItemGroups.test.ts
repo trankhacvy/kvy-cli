@@ -6,11 +6,27 @@ import { groupRenderItems, RenderItemGroups } from "./RenderItemGroups";
 import { getVisibleTranscriptItems } from "./transcript-view";
 
 function agentText(id: string, md: string, turn?: string, thinking = false): RenderItem {
-  return { id, time: Number(id.replace(/\D/g, "")) || 0, role: "agent", kind: "text", md, turn, thinking };
+  return {
+    id,
+    time: Number(id.replace(/\D/g, "")) || 0,
+    role: "agent",
+    kind: "text",
+    md,
+    turn,
+    thinking,
+  };
 }
 
 function userText(id: string, md: string, turn?: string): RenderItem {
-  return { id, time: Number(id.replace(/\D/g, "")) || 0, role: "user", kind: "text", md, turn, thinking: false };
+  return {
+    id,
+    time: Number(id.replace(/\D/g, "")) || 0,
+    role: "user",
+    kind: "text",
+    md,
+    turn,
+    thinking: false,
+  };
 }
 
 describe("groupRenderItems", () => {
@@ -43,10 +59,10 @@ describe("groupRenderItems", () => {
     expect(groups[0].items.map((item) => item.kind)).toEqual(["text", "tool", "text"]);
   });
 
-  it("drops service rows from the visible transcript", () => {
+  it("drops quiet (routine boundary) service rows from the visible transcript", () => {
     const items: RenderItem[] = [
       agentText("a1", "hello", "t1"),
-      { id: "s1", time: 2, role: "agent", kind: "service", text: "Compacted history" },
+      { id: "s1", time: 2, role: "agent", kind: "service", text: "session started", quiet: true },
       agentText("a2", "after service", "t1"),
     ];
 
@@ -57,8 +73,26 @@ describe("groupRenderItems", () => {
     expect(groups[0].items).toHaveLength(2);
   });
 
+  it("keeps a non-quiet service row visible, as its own standalone group between messages (docs/bug-fix-plan.md #4)", () => {
+    const serviceText = "Set model to Haiku 4.5 and saved as your default for new sessions";
+    const items: RenderItem[] = [
+      agentText("a1", "hello", "t1"),
+      { id: "s1", time: 2, role: "agent", kind: "service", text: serviceText, quiet: false },
+      agentText("a2", "after service", "t1"),
+    ];
+
+    const groups = groupRenderItems(items);
+
+    expect(groups.map((g) => g.kind)).toEqual(["message", "standalone", "message"]);
+    if (groups[1]?.kind !== "standalone") throw new Error("expected standalone group");
+    expect(groups[1].item).toMatchObject({ kind: "service", text: serviceText });
+  });
+
   it("keeps user turns separate", () => {
-    const items: RenderItem[] = [userText("u1", "first", "u-turn-1"), userText("u2", "second", "u-turn-2")];
+    const items: RenderItem[] = [
+      userText("u1", "first", "u-turn-1"),
+      userText("u2", "second", "u-turn-2"),
+    ];
     const groups = groupRenderItems(items);
 
     expect(groups).toHaveLength(2);

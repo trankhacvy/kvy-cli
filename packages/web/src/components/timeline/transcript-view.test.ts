@@ -21,6 +21,29 @@ function permissionMode(id: string, time: number): RenderItem {
   };
 }
 
+function service(id: string, time: number, text: string, quiet: boolean): RenderItem {
+  return { id, time, role: "agent", kind: "service", text, quiet };
+}
+
+describe("getVisibleTranscriptItems — service `quiet` (docs/bug-fix-plan.md #4)", () => {
+  it("hides a quiet (routine boundary) service item", () => {
+    const items: RenderItem[] = [userText("u1", 1), service("s1", 2, "session started", true)];
+    const visible = getVisibleTranscriptItems(items);
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.kind).toBe("text");
+  });
+
+  it("keeps a non-quiet service item visible, e.g. a model-switch confirmation", () => {
+    const items: RenderItem[] = [
+      userText("u1", 1),
+      service("s1", 2, "Set model to Haiku 4.5 and saved as your default for new sessions", false),
+    ];
+    const visible = getVisibleTranscriptItems(items);
+    expect(visible).toHaveLength(2);
+    expect(visible.map((item) => item.kind)).toEqual(["text", "service"]);
+  });
+});
+
 describe("getVisibleTranscriptItems — permission-mode (docs/bug-fix-plan.md #5)", () => {
   it("hides a permission-mode item, same as mode-switch, while keeping a sibling visible item", () => {
     const items: RenderItem[] = [userText("u1", 1), permissionMode("pm1", 2)];

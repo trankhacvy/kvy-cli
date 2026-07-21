@@ -31,6 +31,14 @@ export interface TextItem extends RenderItemBase {
 export interface ServiceItem extends RenderItemBase {
   kind: "service";
   text: string;
+  /** True for routine boundary chatter ("session started" and the like) that
+   * carries no information a user needs to see — these stay hidden from the
+   * main transcript (`transcript-view.ts`'s `isHiddenTimelineItem`). False
+   * for everything else (model-switch confirmations, compaction notices,
+   * omitted-attachment notes, remote-session errors, ...), which previously
+   * were *all* unconditionally hidden alongside the routine ones —
+   * docs/bug-fix-plan.md issue #4's web-side gap. */
+  quiet: boolean;
 }
 
 export interface FileItem extends RenderItemBase {

@@ -19,18 +19,18 @@ import { CopyButton } from "./CopyButton";
 import { FileAttachment } from "./FileAttachment";
 import { OrphanToolEnd } from "./OrphanToolEnd";
 import { PermPlaceholder } from "./PermPlaceholder";
+import { ServiceLine } from "./ServiceLine";
 import { SubagentGroup } from "./SubagentGroup";
 import { ThinkingBlock } from "./ThinkingBlock";
 import { ToolCard } from "./tool-cards/registry";
 import { getVisibleTranscriptItems } from "./transcript-view";
 
-type MessageGroupItem =
-  | TextItem
-  | FileItem
-  | PermPlaceholderItem
-  | ToolItem
-  | OrphanToolEndItem;
-type StandaloneGroupItem = Extract<RenderItem, { kind: "subagent-group" }>;
+type MessageGroupItem = TextItem | FileItem | PermPlaceholderItem | ToolItem | OrphanToolEndItem;
+/** A non-quiet `service` item (docs/bug-fix-plan.md #4) renders as its own
+ * standalone row, same as a subagent group — it's a boundary marker between
+ * messages (often carrying no `turn`, e.g. a model-switch confirmation),
+ * not content that belongs inside an adjacent message bubble. */
+type StandaloneGroupItem = Extract<RenderItem, { kind: "subagent-group" | "service" }>;
 
 export interface MessageRenderGroup {
   kind: "message";
@@ -61,17 +61,13 @@ function isMessageGroupItem(item: RenderItem): item is MessageGroupItem {
 }
 
 function isStandaloneGroupItem(item: RenderItem): item is StandaloneGroupItem {
-  return item.kind === "subagent-group";
+  return item.kind === "subagent-group" || item.kind === "service";
 }
 
-function canAppendToMessageGroup(
-  group: MessageRenderGroup,
-  item: MessageGroupItem,
-): boolean {
+function canAppendToMessageGroup(group: MessageRenderGroup, item: MessageGroupItem): boolean {
   if (group.role !== item.role) return false;
   if (group.role === "user") return group.turn === item.turn;
-  if (group.turn !== undefined || item.turn !== undefined)
-    return group.turn === item.turn;
+  if (group.turn !== undefined || item.turn !== undefined) return group.turn === item.turn;
   return true;
 }
 
@@ -92,10 +88,7 @@ export function groupRenderItems(items: RenderItem[]): RenderGroup[] {
     }
 
     const previous = groups[groups.length - 1];
-    if (
-      previous?.kind === "message" &&
-      canAppendToMessageGroup(previous, item)
-    ) {
+    if (previous?.kind === "message" && canAppendToMessageGroup(previous, item)) {
       previous.items.push(item);
       continue;
     }
@@ -129,8 +122,7 @@ function MessageGroupView({
   compact?: boolean;
 }) {
   const from = group.role === "user" ? "user" : "assistant";
-  const copyText =
-    group.role === "agent" ? getMessageCopyText(group.items) : "";
+  const copyText = group.role === "agent" ? getMessageCopyText(group.items) : "";
 
   return (
     <Message from={from} className={cn("max-w-full gap-3", compact && "gap-2")}>
@@ -142,17 +134,11 @@ function MessageGroupView({
         )}
       >
         {group.items.map((item) => (
-          <MessageGroupPart
-            key={`${item.id}:${item.kind}`}
-            item={item}
-            compact={compact}
-          />
+          <MessageGroupPart key={`${item.id}:${item.kind}`} item={item} compact={compact} />
         ))}
       </MessageContent>
       {copyText.length > 0 && (
-        <MessageToolbar
-          className={cn("mt-0 w-fit justify-start", compact && "text-xs")}
-        >
+        <MessageToolbar className={cn("mt-0 w-fit justify-start", compact && "text-xs")}>
           <CopyButton getText={() => copyText} />
         </MessageToolbar>
       )}
@@ -172,9 +158,7 @@ function MessageGroupPart({
       return item.thinking ? (
         <ThinkingBlock md={item.md} compact={compact} />
       ) : (
-        <MessageResponse
-          className={cn("wrap-break-word", compact && "text-[13px]")}
-        >
+        <MessageResponse className={cn("wrap-break-word", compact && "text-[13px]")}>
           {item.md}
         </MessageResponse>
       );
@@ -214,6 +198,9 @@ export function RenderItemGroups({
       {groups.map((group) => {
         if (group.kind === "message") {
           return <MessageGroupView key={group.id} group={group} compact={compact} />;
+        }
+        if (group.item.kind === "service") {
+          return <ServiceLine key={group.id} label={group.item.text} tone="muted" />;
         }
         subagentOrdinal += 1;
         return (

@@ -12,7 +12,14 @@
     }
   ],
   "expected": [
-    { "id": "e3", "time": 4999, "role": "agent", "kind": "service", "text": "session resumed" },
+    {
+      "id": "e3",
+      "time": 4999,
+      "role": "agent",
+      "kind": "service",
+      "text": "session resumed",
+      "quiet": false
+    },
     { "id": "e1", "time": 5000, "role": "user", "kind": "text", "md": "ping", "thinking": false },
     { "id": "e2", "time": 5001, "role": "agent", "kind": "text", "md": "pong", "thinking": false }
   ]
