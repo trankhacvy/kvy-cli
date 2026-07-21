@@ -174,6 +174,73 @@ describe("mapClaudeToEnvelopes — basic message shapes", () => {
     expect(envelopes).toHaveLength(0);
   });
 
+  it("extracts local-command-stdout even when surrounded by stray ANSI noise outside the tags (BF1.2)", () => {
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "local-cmd-stdout-noisy-1",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content:
+            "[2m<local-command-stdout>Set model to Haiku 4.5 and saved as your default for new sessions.</local-command-stdout>[0m",
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]).toMatchObject({
+      role: "agent",
+      ev: {
+        t: "service",
+        text: "Set model to Haiku 4.5 and saved as your default for new sessions.",
+      },
+    });
+  });
+
+  it("does not close an already-open turn when a local-command-stdout result arrives mid-turn (BF1.2)", () => {
+    // Regression probe: ordinary user chat text closes the current turn
+    // (`closeTurn(state, "completed", envelopes)`) before pushing its own
+    // envelope. The local-command-stdout branch returns early without ever
+    // calling closeTurn/ensureTurn, so a turn left open by an in-flight
+    // assistant response is NOT closed by an interleaved local command —
+    // documenting the current (asymmetric) behavior rather than asserting
+    // it's correct.
+    const state = createClaudeEnvelopeMapperState();
+    mapClaudeToEnvelopes(
+      {
+        type: "assistant",
+        uuid: "a-open-turn",
+        message: { role: "assistant", content: [{ type: "text", text: "working..." }] },
+      } as unknown as RawJSONLines,
+      state,
+    );
+    expect(state.currentTurnId).not.toBeNull();
+    const openTurnId = state.currentTurnId;
+
+    const envelopes = mapClaudeToEnvelopes(
+      {
+        type: "user",
+        uuid: "local-cmd-stdout-mid-turn",
+        isSidechain: false,
+        message: {
+          role: "user",
+          content:
+            "<local-command-stdout>Set model to Haiku 4.5 and saved as your default for new sessions.</local-command-stdout>",
+        },
+      } as unknown as RawJSONLines,
+      state,
+    );
+
+    expect(envelopes).toHaveLength(1);
+    expect(envelopes[0]?.ev.t).toBe("service");
+    // The turn opened by the preceding assistant text is still open —
+    // no turn-end envelope was emitted, and state.currentTurnId is unchanged.
+    expect(envelopes.some((e) => e.ev.t === "turn-end")).toBe(false);
+    expect(state.currentTurnId).toBe(openTurnId);
+  });
+
   it("maps a compact-summary assistant line to a quiet service marker, not the summary text, no turn opened (W4.6)", () => {
     const state = createClaudeEnvelopeMapperState();
     state.currentTurnId = "turn-1";
