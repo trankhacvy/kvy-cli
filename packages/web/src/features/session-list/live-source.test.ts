@@ -154,7 +154,7 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     expect(status).toBe("waiting-for-input");
   });
 
-  it("falls back to an honest placeholder title/name for rows that haven't decrypted yet", () => {
+  it("carries null (not a placeholder string) for rows that haven't decrypted yet (Issue #13)", () => {
     const session = makeSession({ id: "sess-1" });
     const machine = makeMachine({ id: "mach-1" });
 
@@ -166,6 +166,20 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
       new Map(),
       new Map(),
     );
+
+    expect(snapshot.sessions[0]?.title).toBeNull();
+    expect(snapshot.machines[0]?.name).toBeNull();
+  });
+
+  it("surfaces the honest placeholder title/name once decryption has genuinely resolved to none", () => {
+    const session = makeSession({ id: "sess-1" });
+    const machine = makeMachine({ id: "mach-1" });
+    const titles = {
+      sessions: new Map([["sess-1", "(untitled session)"]]),
+      machines: new Map([["mach-1", "(unnamed machine)"]]),
+    };
+
+    const snapshot = buildSnapshot([session], [machine], titles, new Map(), new Map(), new Map());
 
     expect(snapshot.sessions[0]?.title).toBe("(untitled session)");
     expect(snapshot.machines[0]?.name).toBe("(unnamed machine)");

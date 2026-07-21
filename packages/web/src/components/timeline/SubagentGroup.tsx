@@ -6,11 +6,11 @@ import { NestedItems } from "./NestedItems";
  * (design principle: no silent data loss — the reducer still surfaces its
  * content, as its own group, at the time of its first envelope). */
 export function SubagentGroup({
-  id,
+  label,
   items,
   compact = false,
 }: {
-  id: string;
+  label: string;
   items: RenderItem[];
   compact?: boolean;
 }) {
@@ -24,7 +24,7 @@ export function SubagentGroup({
     >
       <p className="mb-3 flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         <Users className="size-3.5" />
-        Subagent {id}
+        {label}
       </p>
       <NestedItems items={items} />
     </div>

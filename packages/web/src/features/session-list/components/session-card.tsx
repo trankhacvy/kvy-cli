@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatRelativeTime } from "../format-relative-time";
 import { deriveSessionStatus, SESSION_STATUS_META } from "../status";
 import type { SessionListMachine, SessionListSession } from "../types";
@@ -33,7 +34,9 @@ export function SessionCard({
         <Card className="gap-2 py-3 pr-20 transition-colors hover:bg-accent/50">
           <CardHeader className="flex-row items-center gap-2 px-3">
             <SessionStatusDot status={status} />
-            <CardTitle className="min-w-0 flex-1 truncate">{session.title}</CardTitle>
+            <CardTitle className="min-w-0 flex-1 truncate">
+              {session.title === null ? <Skeleton className="h-4 w-32" /> : session.title}
+            </CardTitle>
             <span className="shrink-0 text-xs text-muted-foreground">
               {formatRelativeTime(session.updatedAt)}
             </span>
@@ -48,7 +51,7 @@ export function SessionCard({
         </Card>
       </Link>
       <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <SessionCardActions sessionId={session.id} title={session.title} />
+        <SessionCardActions sessionId={session.id} title={session.title ?? "this session"} />
       </div>
     </div>
   );

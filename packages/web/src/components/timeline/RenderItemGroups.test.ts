@@ -1,6 +1,8 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { RenderItem } from "@/sync/reducer";
-import { groupRenderItems } from "./RenderItemGroups";
+import { groupRenderItems, RenderItemGroups } from "./RenderItemGroups";
 import { getVisibleTranscriptItems } from "./transcript-view";
 
 function agentText(id: string, md: string, turn?: string, thinking = false): RenderItem {
@@ -98,5 +100,35 @@ describe("groupRenderItems", () => {
 
     expect(visibleItems).toHaveLength(1);
     expect(visibleItems[0]).toMatchObject({ kind: "text", md: "hello" });
+  });
+});
+
+describe("RenderItemGroups (Issue #8 — no internal subagentId leaks into visible text)", () => {
+  it("labels standalone subagent groups with a per-render ordinal, not the raw cuid2", () => {
+    const items: RenderItem[] = [
+      {
+        id: "sub1",
+        time: 1,
+        role: "agent",
+        kind: "subagent-group",
+        subagentId: "tz4a98xxat96iws9zmbrgioa",
+        items: [agentText("a1", "first subagent's work")],
+      },
+      {
+        id: "sub2",
+        time: 2,
+        role: "agent",
+        kind: "subagent-group",
+        subagentId: "k3f8p2q9wjr1n6yz0lce4dgs",
+        items: [agentText("a2", "second subagent's work")],
+      },
+    ];
+
+    const html = renderToStaticMarkup(createElement(RenderItemGroups, { items }));
+
+    expect(html).toContain("Subagent 1");
+    expect(html).toContain("Subagent 2");
+    expect(html).not.toContain("tz4a98xxat96iws9zmbrgioa");
+    expect(html).not.toContain("k3f8p2q9wjr1n6yz0lce4dgs");
   });
 });

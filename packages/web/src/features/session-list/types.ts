@@ -28,8 +28,11 @@ export interface SessionListWorkspace {
 
 export interface SessionListMachine {
   id: string;
-  /** Decrypted machine name (e.g. hostname). */
-  name: string;
+  /** Decrypted machine name (e.g. hostname). `null` means "not decrypted
+   * yet" — distinct from a genuinely empty/unnamed machine, which is a
+   * resolved placeholder string (Issue #13: don't flash a placeholder while
+   * decryption is still in flight). */
+  name: string | null;
   /** Live presence (design §4.3 `machine-presence` ephemeral / `lastSeenAt`
    * heartbeat) — never persisted as a flag, always a snapshot of "right now". */
   online: boolean;
@@ -39,10 +42,11 @@ export interface SessionListSession {
   id: string;
   workspaceId: string | null;
   machineId: string | null;
-  /** Decrypted session title (falls back to the session `tag` upstream if
-   * metadata hasn't decrypted yet — that fallback is the mock/source's job,
-   * not this screen's). */
-  title: string;
+  /** Decrypted session title. `null` means "not decrypted yet" — distinct
+   * from a genuinely untitled session, which is a resolved placeholder
+   * string (Issue #13: don't flash a placeholder while decryption is still
+   * in flight). */
+  title: string | null;
   provider: string;
   status: SessionRow["status"];
   updatedAt: number;
