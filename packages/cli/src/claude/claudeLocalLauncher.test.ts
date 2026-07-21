@@ -36,6 +36,7 @@ function fakeClaudeLocal(
 function fakeScanner(onMessage?: (raw: unknown) => void): SessionScanner {
   return {
     cleanup: async () => {},
+    flush: async () => {},
     onNewSession: async (id) => {
       onMessage?.(id);
     },

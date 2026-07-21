@@ -86,7 +86,7 @@ function makeFakeLocalDeps(counter: { n: number }): {
     },
     createSessionScanner: async (options) => {
       scanners.push({ onMessage: options.onMessage as unknown as (raw: unknown) => void });
-      return { cleanup: async () => {}, onNewSession: async () => {} };
+      return { cleanup: async () => {}, flush: async () => {}, onNewSession: async () => {} };
     },
   };
   return { deps, scanners };
@@ -146,6 +146,7 @@ describe("loop", () => {
         claudeLocal: async () => "s1",
         createSessionScanner: async () => ({
           cleanup: async () => {},
+          flush: async () => {},
           onNewSession: async () => {},
         }),
       },

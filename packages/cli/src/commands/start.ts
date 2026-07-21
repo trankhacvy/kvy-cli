@@ -753,7 +753,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
             // instead of waiting for the transcript scanner to retroactively
             // close it on the NEXT prompt (`envelopeMapper.ts`'s `closeTurn`,
             // only ever called from the `type:"user"` branch).
-            ptyHandle?.closeTurn("completed");
+            void ptyHandle?.closeTurn("completed");
             reportAttention("done");
           }
         },

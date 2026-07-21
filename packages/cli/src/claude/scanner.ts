@@ -77,6 +77,18 @@ export interface SessionScanner {
   /** Stops all watchers and the periodic poll. Safe to call once. */
   cleanup: () => Promise<void>;
   /**
+   * Forces one guaranteed-fresh read of every watched session's transcript
+   * file, resolving only once it (and anything already in flight) has fully
+   * completed — unlike the periodic poll, which fires on its own schedule
+   * and returns nothing the caller can wait on. Needed by callers that must
+   * know the transcript is fully ingested at a specific moment (e.g.
+   * `ptyClaudeSession.ts`'s `closeTurn`, called from Claude Code's `Stop`
+   * hook: the hook can fire before the periodic poll has ever read the
+   * assistant's just-written message, so checking turn state without
+   * flushing first races the poll and silently no-ops).
+   */
+  flush: () => Promise<void>;
+  /**
    * Announce that Claude Code started (or resumed into) a new session id.
    * The previously-current session, if any, moves to `pendingSessions` so
    * it keeps being scanned (agent tasks can still append to it after a
@@ -383,6 +395,29 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   }
 
   /**
+   * `flush`'s implementation: always routes through the same
+   * `running`/`currentSyncPromise` guard `invalidate()` uses — `runSync`'s
+   * mutable state (`processedEntryKeys`, `watchers`, etc.) isn't safe to
+   * re-enter concurrently, so this never calls `runSync()` directly while a
+   * periodic-poll-triggered pass could still be in flight.
+   */
+  async function flush(): Promise<void> {
+    if (stopped) return;
+    // Wait out whatever's currently running, re-requesting a rerun each time
+    // in case our request loses the race with an in-flight pass's own
+    // rerunRequested check — once the loop exits, nothing is running.
+    while (running) {
+      rerunRequested = true;
+      await currentSyncPromise?.catch(() => {});
+    }
+    // Run one guaranteed-fresh pass ourselves so the transcript is fully
+    // ingested by the time this resolves, regardless of the poll interval.
+    running = true;
+    currentSyncPromise = runSyncCoalesced();
+    await currentSyncPromise.catch(() => {});
+  }
+
+  /**
    * The shared body of `onNewSession` — also called by the directory-rotation
    * fallback below, so both the caller-driven path (a `SessionStart` hook)
    * and the fallback path (no hook fired) go through identical dedup/pending
@@ -465,6 +500,7 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
       for (const stop of watchers.values()) stop();
       watchers.clear();
     },
+    flush,
     onNewSession: announceNewSession,
   };
 }

@@ -127,6 +127,32 @@ describe("createSessionScanner", () => {
     expect(uuids(seen)).toEqual(["u2", "u3", "u4"]);
   });
 
+  it("flush() ingests a just-appended entry synchronously, without waiting for the periodic poll (docs/user-flows.md fix-plan task 1)", async () => {
+    // Reproduces the live-confirmed race: a caller (Claude Code's `Stop`
+    // hook, via `ptyClaudeSession.ts`'s `closeTurn`) can need to know the
+    // transcript is fully ingested at an arbitrary moment, not on the poll's
+    // own schedule. A long poll interval stands in for "the poll hasn't run
+    // yet" — if flush() only waited for the periodic timer, this entry
+    // would still be unseen when we check.
+    const seen: RawJSONLines[] = [];
+    const file = join(projectDir, "sess-flush.jsonl");
+    await writeFile(file, userLine("u1"));
+
+    scanner = await createSessionScanner({
+      sessionId: "sess-flush",
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60_000, // long enough that it will not fire during this test
+      env,
+    });
+
+    await appendFile(file, userLine("u2"));
+    // No sleep for the poll interval — flush() must ingest it immediately.
+    await scanner.flush();
+    expect(uuids(seen)).toEqual(["u2"]);
+  });
+
   it("dedupes across a simulated restart (fresh process, same transcript file)", async () => {
     const file = join(projectDir, "sess-restart.jsonl");
     await writeFile(file, userLine("u1") + userLine("u2"));

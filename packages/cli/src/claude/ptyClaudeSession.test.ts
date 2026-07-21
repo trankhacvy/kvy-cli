@@ -142,6 +142,7 @@ interface Harness {
   stdout: ReturnType<typeof makeFakeStdout>;
   scannerCleanup: ReturnType<typeof vi.fn>;
   scannerOnNewSession: ReturnType<typeof vi.fn>;
+  scannerFlush: ReturnType<typeof vi.fn>;
   getScannerOnMessage: () => ((raw: RawJSONLines) => void) | null;
   fetchClose: ReturnType<typeof vi.fn>;
   emitFetch: (event: { type: "fetch-start" | "fetch-end"; id: number }) => void;
@@ -156,10 +157,11 @@ function makeHarness(): Harness {
 
   const scannerCleanup = vi.fn(async () => {});
   const scannerOnNewSession = vi.fn(async () => {});
+  const scannerFlush = vi.fn(async () => {});
   let scannerOnMessage: ((raw: RawJSONLines) => void) | null = null;
   const createSessionScanner = vi.fn(async (opts: { onMessage: (raw: RawJSONLines) => void }) => {
     scannerOnMessage = opts.onMessage;
-    return { cleanup: scannerCleanup, onNewSession: scannerOnNewSession };
+    return { cleanup: scannerCleanup, onNewSession: scannerOnNewSession, flush: scannerFlush };
   }) as unknown as NonNullable<PtyClaudeSessionDeps["createSessionScanner"]>;
 
   const fetchClose = vi.fn(async () => {});
@@ -200,6 +202,7 @@ function makeHarness(): Harness {
     stdout,
     scannerCleanup,
     scannerOnNewSession,
+    scannerFlush,
     getScannerOnMessage: () => scannerOnMessage,
     fetchClose,
     emitFetch: (event) => fetchOnEvent?.(event),
@@ -728,12 +731,50 @@ describe("startPtyClaudeSession", () => {
       } as unknown as RawJSONLines);
       onEnvelopes.mockClear();
 
-      handle.closeTurn("completed");
+      await handle.closeTurn("completed");
 
       expect(onEnvelopes).toHaveBeenCalledOnce();
       const [envelopes] = onEnvelopes.mock.calls[0] as [SessionEnvelope[]];
       expect(envelopes).toHaveLength(1);
       expect(envelopes[0]).toMatchObject({ ev: { t: "turn-end", status: "completed" } });
+
+      handle.stop();
+    });
+
+    it("flushes the scanner before checking turn state, so a Stop hook that fires before the periodic poll has read the assistant's message still closes the turn", async () => {
+      // Reproduces the live-confirmed race (docs/user-flows.md): the `Stop`
+      // hook can fire before the transcript poll has ever ingested the
+      // assistant's just-written message, so `mapperState` doesn't consider
+      // any turn open yet at the instant `closeTurn` is called. `flush()`
+      // must run first and its result must be awaited before the mapper
+      // state is checked, or this silently no-ops exactly like it did live.
+      const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
+      await tick();
+
+      // The scanner hasn't "seen" the assistant message yet (no onMessage
+      // call) — flush() is what's responsible for making that happen before
+      // closeTurn checks state.
+      h.scannerFlush.mockImplementationOnce(async () => {
+        const onMessage = h.getScannerOnMessage();
+        onMessage?.({
+          type: "assistant",
+          uuid: "a-1",
+          message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+        } as unknown as RawJSONLines);
+      });
+
+      await handle.closeTurn("completed");
+
+      expect(h.scannerFlush).toHaveBeenCalledOnce();
+      // Two calls: the assistant message's own turn-start+text (emitted by
+      // flush's simulated onMessage above), then closeTurn's turn-end.
+      expect(onEnvelopes).toHaveBeenCalledTimes(2);
+      const allEnvelopes = onEnvelopes.mock.calls.flatMap(
+        ([envelopes]) => envelopes as SessionEnvelope[],
+      );
+      expect(allEnvelopes.some((e) => e.ev.t === "turn-end")).toBe(true);
 
       handle.stop();
     });
@@ -744,7 +785,7 @@ describe("startPtyClaudeSession", () => {
       const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
       await tick();
 
-      handle.closeTurn("completed");
+      await handle.closeTurn("completed");
       expect(onEnvelopes).not.toHaveBeenCalled();
 
       handle.stop();
@@ -755,7 +796,7 @@ describe("startPtyClaudeSession", () => {
       const h = makeHarness();
       const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
       // Called synchronously, before run()'s async scanner setup resolves.
-      handle.closeTurn("completed");
+      await handle.closeTurn("completed");
       expect(onEnvelopes).not.toHaveBeenCalled();
 
       await tick();
@@ -776,11 +817,11 @@ describe("startPtyClaudeSession", () => {
       } as unknown as RawJSONLines);
       onEnvelopes.mockClear();
 
-      handle.closeTurn("completed");
+      await handle.closeTurn("completed");
       expect(onEnvelopes).toHaveBeenCalledOnce();
       onEnvelopes.mockClear();
 
-      handle.closeTurn("completed");
+      await handle.closeTurn("completed");
       expect(onEnvelopes).not.toHaveBeenCalled();
 
       handle.stop();

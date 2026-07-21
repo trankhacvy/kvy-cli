@@ -91,6 +91,19 @@ const DRAFT_IDLE_MS = 15_000;
 const DEFAULT_PTY_NAME = "xterm-256color";
 const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
+
+/**
+ * `closeTurn`'s retry budget (docs/user-flows.md fix-plan task 1). Confirmed
+ * live: Claude Code's `Stop` hook can fire ~50ms before its own transcript
+ * write for the final assistant message has landed on disk — `flush()`
+ * alone can't help if the entry genuinely isn't there yet, no matter how
+ * fresh the read is. A few short retries gives the write time to land
+ * without noticeably delaying the (already async, fire-and-forget) turn
+ * close from the user's perspective.
+ */
+const CLOSE_TURN_MAX_ATTEMPTS = 5;
+const CLOSE_TURN_RETRY_DELAY_MS = 100;
+
 /** The submit keystroke — a carriage return, the same byte a real Enter sends on a TTY. */
 const SUBMIT_KEY = "\r";
 /** Shift+Tab — Claude Code's own permission-mode cycle keystroke (plan-v2.md W4.3). */
@@ -245,8 +258,18 @@ export interface PtyClaudeSessionHandle {
    * already closed it first) — `closeClaudeTurnWithStatus` itself is
    * idempotent. Any resulting `turn-end` (and `sub-stop`) envelopes are
    * forwarded through `onEnvelopes`, exactly like a tailer-driven turn close.
+   *
+   * Awaits the scanner's `flush()` first — but a single flush isn't always
+   * enough: confirmed live, Claude Code's `Stop` hook can fire ~50ms
+   * *before* its own transcript write for the final assistant message has
+   * landed on disk, so the entry genuinely isn't there yet for even a
+   * freshly-forced read to find. Retries `flush()` up to
+   * {@link CLOSE_TURN_MAX_ATTEMPTS} times, {@link CLOSE_TURN_RETRY_DELAY_MS}
+   * apart, breaking out as soon as a turn is found open — so the common
+   * case (the write already landed) costs one flush, and the race case
+   * costs a couple hundred ms, not an indefinitely-stuck turn.
    */
-  closeTurn(status: SessionTurnEndStatus): void;
+  closeTurn(status: SessionTurnEndStatus): Promise<void>;
   /** Terminates the session (SIGTERM to the pty child). Safe to call once. */
   stop(): void;
 }
@@ -559,7 +582,14 @@ export function startPtyClaudeSession(
       for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
       return true;
     },
-    closeTurn: (status) => {
+    closeTurn: async (status) => {
+      for (let attempt = 0; attempt < CLOSE_TURN_MAX_ATTEMPTS; attempt++) {
+        await scanner?.flush();
+        if (mapperState?.currentTurnId) break;
+        if (attempt < CLOSE_TURN_MAX_ATTEMPTS - 1) {
+          await new Promise<void>((resolve) => setTimeoutImpl(resolve, CLOSE_TURN_RETRY_DELAY_MS));
+        }
+      }
       if (!mapperState) return;
       const envelopes = closeClaudeTurnWithStatus(mapperState, status);
       if (envelopes.length > 0) opts.onEnvelopes(envelopes);
