@@ -94,15 +94,29 @@ const DEFAULT_ROWS = 24;
 
 /**
  * `closeTurn`'s retry budget (docs/user-flows.md fix-plan task 1). Confirmed
- * live: Claude Code's `Stop` hook can fire ~50ms before its own transcript
- * write for the final assistant message has landed on disk — `flush()`
- * alone can't help if the entry genuinely isn't there yet, no matter how
- * fresh the read is. A few short retries gives the write time to land
- * without noticeably delaying the (already async, fire-and-forget) turn
- * close from the user's perspective.
+ * live: Claude Code's `Stop` hook can fire before its own transcript write
+ * for the final assistant message has landed on disk — `flush()` alone
+ * can't help if the entry genuinely isn't there yet, no matter how fresh
+ * the read is. A few short retries gives the write time to land without
+ * noticeably delaying the (already async, fire-and-forget) turn close from
+ * the user's perspective.
+ *
+ * A single "this flush found nothing new" reading is NOT enough to declare
+ * the transcript settled: for a tool-using turn, `currentTurnId` becomes
+ * non-null at the FIRST assistant entry (the tool call) and stays open
+ * across several more disk writes (tool result, final text) — so a flush
+ * landing between two of those writes finds nothing new for reasons
+ * indistinguishable from "genuinely done." Confirmed live: trusting one
+ * quiet flush closed the turn right after the tool call, before the
+ * model's actual final reply had been written — silently orphaning that
+ * reply in a turn that never got its own `turn-end`. Requiring
+ * {@link CLOSE_TURN_QUIET_FLUSHES_REQUIRED} *consecutive* quiet flushes
+ * before closing gives a still-in-progress write another full retry
+ * interval to show up before we trust the quiet reading.
  */
 const CLOSE_TURN_MAX_ATTEMPTS = 5;
 const CLOSE_TURN_RETRY_DELAY_MS = 100;
+const CLOSE_TURN_QUIET_FLUSHES_REQUIRED = 2;
 
 /** The submit keystroke — a carriage return, the same byte a real Enter sends on a TTY. */
 const SUBMIT_KEY = "\r";
@@ -260,14 +274,20 @@ export interface PtyClaudeSessionHandle {
    * forwarded through `onEnvelopes`, exactly like a tailer-driven turn close.
    *
    * Awaits the scanner's `flush()` first — but a single flush isn't always
-   * enough: confirmed live, Claude Code's `Stop` hook can fire ~50ms
-   * *before* its own transcript write for the final assistant message has
-   * landed on disk, so the entry genuinely isn't there yet for even a
-   * freshly-forced read to find. Retries `flush()` up to
-   * {@link CLOSE_TURN_MAX_ATTEMPTS} times, {@link CLOSE_TURN_RETRY_DELAY_MS}
-   * apart, breaking out as soon as a turn is found open — so the common
-   * case (the write already landed) costs one flush, and the race case
-   * costs a couple hundred ms, not an indefinitely-stuck turn.
+   * enough, and "a turn is open" isn't the right thing to wait for either:
+   * confirmed live, Claude Code's `Stop` hook can fire before its own
+   * transcript write for the final assistant message has landed on disk,
+   * AND (for a tool-using turn) `currentTurnId` becomes non-null at the
+   * FIRST assistant entry and stays open across several more writes (tool
+   * result, final text) — so "a turn is open" is true almost immediately
+   * and proves nothing about whether the turn has actually finished.
+   * Instead, retries `flush()` up to {@link CLOSE_TURN_MAX_ATTEMPTS} times,
+   * {@link CLOSE_TURN_RETRY_DELAY_MS} apart, requiring
+   * {@link CLOSE_TURN_QUIET_FLUSHES_REQUIRED} *consecutive* passes that find
+   * nothing new before trusting that the transcript has actually settled —
+   * so the common case (everything already landed) costs two quick
+   * flushes, and the race case costs a few hundred ms, not an
+   * indefinitely-stuck turn or a prematurely-closed one.
    */
   closeTurn(status: SessionTurnEndStatus): Promise<void>;
   /** Terminates the session (SIGTERM to the pty child). Safe to call once. */
@@ -319,6 +339,16 @@ export function startPtyClaudeSession(
   // reuse the SAME state `onMessage`'s `mapClaudeToEnvelopes` call mutates,
   // rather than tracking a second, parallel notion of "is a turn open".
   let mapperState: ClaudeEnvelopeMapperState | null = null;
+  // Incremented by `onMessage` (in `run()` below) once per newly-processed
+  // transcript entry — `closeTurn()`'s retry loop uses this, not
+  // `currentTurnId`'s truthiness, to know when it's actually safe to close.
+  // A tool-use turn opens (currentTurnId becomes non-null) at the FIRST
+  // assistant entry, then stays open across several more disk writes (tool
+  // result, final text) — "a turn is open" is true almost immediately and
+  // says nothing about whether the turn has actually finished. "Flushing
+  // found nothing new this pass" is the real signal that the transcript has
+  // caught up with whatever prompted the `Stop` hook to fire.
+  let entriesProcessedCount = 0;
 
   const controller = new InjectionController({
     writeText: (text) => ptyProcess?.write(text),
@@ -405,6 +435,7 @@ export function startPtyClaudeSession(
         sessionId: opts.providerSessionId,
         workingDirectory: opts.workingDirectory,
         onMessage: (raw) => {
+          entriesProcessedCount++;
           const envelopes = mapClaudeToEnvelopes(raw, state);
           if (envelopes.length > 0) opts.onEnvelopes(envelopes);
         },
@@ -583,9 +614,16 @@ export function startPtyClaudeSession(
       return true;
     },
     closeTurn: async (status) => {
+      let consecutiveQuietFlushes = 0;
       for (let attempt = 0; attempt < CLOSE_TURN_MAX_ATTEMPTS; attempt++) {
+        const before = entriesProcessedCount;
         await scanner?.flush();
-        if (mapperState?.currentTurnId) break;
+        if (entriesProcessedCount === before) {
+          consecutiveQuietFlushes++;
+          if (consecutiveQuietFlushes >= CLOSE_TURN_QUIET_FLUSHES_REQUIRED) break;
+        } else {
+          consecutiveQuietFlushes = 0;
+        }
         if (attempt < CLOSE_TURN_MAX_ATTEMPTS - 1) {
           await new Promise<void>((resolve) => setTimeoutImpl(resolve, CLOSE_TURN_RETRY_DELAY_MS));
         }

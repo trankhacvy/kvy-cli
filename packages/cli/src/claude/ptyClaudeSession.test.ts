@@ -755,7 +755,9 @@ describe("startPtyClaudeSession", () => {
 
       // The scanner hasn't "seen" the assistant message yet (no onMessage
       // call) — flush() is what's responsible for making that happen before
-      // closeTurn checks state.
+      // closeTurn checks state. Only the FIRST flush finds anything; the
+      // two quiet flushes closeTurn requires after that use the default
+      // (no-op) mock implementation.
       h.scannerFlush.mockImplementationOnce(async () => {
         const onMessage = h.getScannerOnMessage();
         onMessage?.({
@@ -767,13 +769,75 @@ describe("startPtyClaudeSession", () => {
 
       await handle.closeTurn("completed");
 
-      expect(h.scannerFlush).toHaveBeenCalledOnce();
+      // 1 flush that finds the message + 2 consecutive quiet flushes
+      // (CLOSE_TURN_QUIET_FLUSHES_REQUIRED) before closeTurn trusts it.
+      expect(h.scannerFlush).toHaveBeenCalledTimes(3);
       // Two calls: the assistant message's own turn-start+text (emitted by
       // flush's simulated onMessage above), then closeTurn's turn-end.
       expect(onEnvelopes).toHaveBeenCalledTimes(2);
       const allEnvelopes = onEnvelopes.mock.calls.flatMap(
         ([envelopes]) => envelopes as SessionEnvelope[],
       );
+      expect(allEnvelopes.some((e) => e.ev.t === "turn-end")).toBe(true);
+
+      handle.stop();
+    });
+
+    it("does not close after a single quiet flush while a tool-use turn's final reply is still being written (docs/user-flows.md live-confirmed regression)", async () => {
+      // A tool-using turn opens (currentTurnId becomes non-null) at the
+      // FIRST assistant entry — long before the model's final text reply is
+      // written. Confirmed live: trusting a single quiet flush closed the
+      // turn right after the tool call, silently orphaning the reply that
+      // landed moments later in a turn that never got its own turn-end.
+      // Simulates exactly that: flush #1 is quiet (tool-use entries were
+      // already ingested earlier, nothing NEW this pass) even though the
+      // turn is still genuinely in progress; flush #2 is where the final
+      // reply actually shows up.
+      const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
+      await tick();
+
+      // Turn already open from an earlier tool-use message the regular
+      // tailer (not flush) already ingested.
+      const onMessage = h.getScannerOnMessage();
+      onMessage?.({
+        type: "assistant",
+        uuid: "a-1",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", id: "call-1", name: "Bash", input: { command: "sleep 1" } },
+          ],
+        },
+      } as unknown as RawJSONLines);
+      onEnvelopes.mockClear();
+
+      let flushCall = 0;
+      h.scannerFlush.mockImplementation(async () => {
+        flushCall++;
+        if (flushCall === 2) {
+          // The final reply lands on the SECOND flush, not the first.
+          h.getScannerOnMessage()?.({
+            type: "assistant",
+            uuid: "a-2",
+            message: { role: "assistant", content: [{ type: "text", text: "done" }] },
+          } as unknown as RawJSONLines);
+        }
+      });
+
+      await handle.closeTurn("completed");
+
+      // Must have kept flushing past the first quiet reading to catch the
+      // reply that arrived on flush #2, then required two MORE consecutive
+      // quiet flushes (#3, #4) before finally closing.
+      expect(h.scannerFlush).toHaveBeenCalledTimes(4);
+      const allEnvelopes = onEnvelopes.mock.calls.flatMap(
+        ([envelopes]) => envelopes as SessionEnvelope[],
+      );
+      // The reply text must be in the SAME turn as the turn-end — not
+      // orphaned in a turn that got closed before the text ever arrived.
+      expect(allEnvelopes.some((e) => e.ev.t === "text" && e.ev.md === "done")).toBe(true);
       expect(allEnvelopes.some((e) => e.ev.t === "turn-end")).toBe(true);
 
       handle.stop();
