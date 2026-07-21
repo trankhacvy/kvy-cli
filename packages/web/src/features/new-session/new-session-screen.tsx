@@ -36,7 +36,11 @@ const STEP_LABEL: Record<WizardStep, string> = {
 type SpawnState =
   | { phase: "idle" }
   | { phase: "spawning" }
-  | { phase: "pending-approval"; directory: string }
+  | {
+      phase: "pending-approval";
+      directory: string;
+      action: "create-directory" | "register-workspace";
+    }
   | { phase: "success"; sessionId: string }
   | { phase: "error"; message: string };
 
@@ -82,8 +86,8 @@ export function NewSessionScreen({
     setSpawnState({ phase: "spawning" });
     try {
       const request = buildSpawnRequest(form);
-      const result = await runSpawnFlow(actions, request, (directory) => {
-        setSpawnState({ phase: "pending-approval", directory });
+      const result = await runSpawnFlow(actions, request, (directory, action) => {
+        setSpawnState({ phase: "pending-approval", directory, action });
         return new Promise<boolean>((resolve) => {
           approvalDecision.current = resolve;
         });
@@ -191,11 +195,15 @@ export function NewSessionScreen({
                 <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
                   <p>
                     <code className="rounded bg-muted px-1 py-0.5">{spawnState.directory}</code>{" "}
-                    doesn&apos;t exist yet. Create it?
+                    {spawnState.action === "register-workspace"
+                      ? "isn't a Falcon workspace yet. Add it as one?"
+                      : "doesn't exist yet. Create it?"}
                   </p>
                   <div className="flex gap-2">
                     <Button size="sm" onClick={() => resolveApproval(true)}>
-                      Create directory
+                      {spawnState.action === "register-workspace"
+                        ? "Add workspace"
+                        : "Create directory"}
                     </Button>
                     <Button size="sm" variant="outline" onClick={() => resolveApproval(false)}>
                       Cancel

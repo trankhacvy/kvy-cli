@@ -11,9 +11,13 @@
  * `spawnSession`/`resumeSession`/`adoptTake`/`adoptMirror` callbacks to the
  * real `spawnEngine.ts`/`resumeSession.ts`/`adoptTake.ts`/
  * `transcriptMirror.ts` implementations — replacing `commands.ts`'s old
- * literal "not implemented yet" stub. `git.status`/`fs.list`/`fs.mkdir` need
- * no extra wiring here: `registerMachineRpcHandlers` already has real,
- * dependency-free defaults for all three. `git.diff`/`adopt.mirror` DO get
+ * literal "not implemented yet" stub. `git.status`/`fs.list`/`fs.mkdir`/
+ * `workspace.register` (plan.md §16 "Flow 3 — spawn-fresh-folder-register
+ * (Piece A)") need no extra wiring here: `registerMachineRpcHandlers`
+ * already has real, dependency-free defaults for all four —
+ * `workspace.register`'s default (`workspaceRegisterRpc.ts`) wraps the same
+ * `workspace/registry.ts` store `resolveWorkspaceRoot` below is backed by.
+ * `git.diff`/`adopt.mirror` DO get
  * extra wiring — a `deps.uploadBlob` closure (`blobClient.ts`'s
  * `uploadBlob`, bound to this machine's server credentials and a
  * `deriveBlobKey(dek)`-derived blob key, design §5.1) is threaded into

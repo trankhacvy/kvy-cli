@@ -119,6 +119,20 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it("round-trips a workspace.register call and result (Flow 3 Piece A)", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({ ok: true, result: box({ ok: true }) })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("workspace.register", {
+      idempotencyKey: "idem-ws-1",
+      directory: "/fresh/repo",
+    });
+    expect(result).toEqual({ ok: true });
+  });
+
   it("round-trips an adopt.list call and result", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({

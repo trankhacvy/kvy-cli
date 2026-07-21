@@ -125,6 +125,7 @@ function pendingNewSessionActions(): NewSessionActions {
   return {
     browseDirectory: notReady,
     createDirectory: notReady,
+    registerWorkspace: notReady,
     spawn: notReady,
     listImportCandidates: notReady,
   };

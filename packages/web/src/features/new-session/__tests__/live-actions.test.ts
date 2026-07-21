@@ -40,7 +40,7 @@ describe("machineRpcToActions", () => {
     );
   });
 
-  it("spawn maps a requiresApproval result to a requiresApproval outcome", async () => {
+  it("spawn maps a create-directory requiresApproval result to a requiresApproval outcome", async () => {
     const call = vi.fn(async () => ({
       requiresApproval: { action: "create-directory", directory: "/repo" },
     }));
@@ -51,7 +51,41 @@ describe("machineRpcToActions", () => {
       provider: "claude-code",
       permissionMode: "default",
     });
-    expect(outcome).toEqual({ type: "requiresApproval", directory: "/repo" });
+    expect(outcome).toEqual({
+      type: "requiresApproval",
+      action: "create-directory",
+      directory: "/repo",
+    });
+  });
+
+  it("spawn maps a register-workspace requiresApproval result to a requiresApproval outcome (Flow 3 Piece A)", async () => {
+    const call = vi.fn(async () => ({
+      requiresApproval: { action: "register-workspace", directory: "/fresh/repo" },
+    }));
+    const actions = machineRpcToActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+
+    const outcome = await actions.spawn({
+      directory: "/fresh/repo",
+      provider: "claude-code",
+      permissionMode: "default",
+    });
+    expect(outcome).toEqual({
+      type: "requiresApproval",
+      action: "register-workspace",
+      directory: "/fresh/repo",
+    });
+  });
+
+  it("registerWorkspace calls workspace.register", async () => {
+    const call = vi.fn(async () => ({ ok: true }));
+    const actions = machineRpcToActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+
+    await actions.registerWorkspace("/fresh/repo");
+
+    expect(call).toHaveBeenCalledExactlyOnceWith(
+      "workspace.register",
+      expect.objectContaining({ directory: "/fresh/repo" }),
+    );
   });
 
   it("spawn throws when the result carries neither field", async () => {

@@ -10,14 +10,20 @@ import type { NewSessionActions, SpawnOutcome } from "./types";
  * machineRpcToActions(createMachineRpcClient({...}))`. Mirrors
  * `features/session-control`'s `sessionRpcToActions`.
  *
- * `workspaceId` is set to `directory` itself: there's no workspace
- * registry yet (`packages/cli/src/daemon/workspacePath.ts`'s
- * `resolveWorkspaceRoot` is an injectable seam with no real default —
- * that's separate, later work), so the directory a user picks here stands
- * in as its own stable workspace identity, matching `mock-source.ts`'s
- * arbitrary workspace-id strings elsewhere in this codebase
- * (`features/session-list/mock-source.ts`). `listImportCandidates` reuses
- * the same convention for `adopt.list`'s own `workspaceId` param.
+ * `workspaceId` is set to `directory` itself: a workspace's `workspaceId`
+ * *is* its registered (real, symlink-resolved) directory path
+ * (`packages/cli/src/workspace/registry.ts`'s own module doc), matching
+ * `mock-source.ts`'s arbitrary workspace-id strings elsewhere in this
+ * codebase (`features/session-list/mock-source.ts`). `listImportCandidates`
+ * reuses the same convention for `adopt.list`'s own `workspaceId` param.
+ *
+ * A genuinely fresh directory — picked cold in the wizard, never
+ * `falcon workspace register`'d from a terminal — is not yet in that
+ * registry, so `spawn` resolves with a `register-workspace` approval
+ * (plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)") instead of
+ * throwing `unknown-workspace`; `registerWorkspace` below (the new
+ * `workspace.register` RPC) is what `spawn-flow.ts`'s `runSpawnFlow` calls
+ * to resolve that, mirroring `createDirectory`/`create-directory` exactly.
  */
 export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
   return {
@@ -27,6 +33,10 @@ export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
 
     async createDirectory(path) {
       await rpc.call("fs.mkdir", { idempotencyKey: crypto.randomUUID(), path });
+    },
+
+    async registerWorkspace(directory) {
+      await rpc.call("workspace.register", { idempotencyKey: crypto.randomUUID(), directory });
     },
 
     async spawn(request) {
@@ -48,6 +58,7 @@ export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
       if (result.requiresApproval) {
         const outcome: SpawnOutcome = {
           type: "requiresApproval",
+          action: result.requiresApproval.action,
           directory: result.requiresApproval.directory,
         };
         return outcome;

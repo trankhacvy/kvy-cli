@@ -36,6 +36,8 @@ export const schemaRegistry: Record<string, z.ZodTypeAny> = {
   FsListResultSchema: wire.FsListResultSchema,
   FsMkdirParamsSchema: wire.FsMkdirParamsSchema,
   FsMkdirResultSchema: wire.FsMkdirResultSchema,
+  WorkspaceRegisterParamsSchema: wire.WorkspaceRegisterParamsSchema,
+  WorkspaceRegisterResultSchema: wire.WorkspaceRegisterResultSchema,
   AdoptListParamsSchema: wire.AdoptListParamsSchema,
   AdoptListResultSchema: wire.AdoptListResultSchema,
   AdoptTakeParamsSchema: wire.AdoptTakeParamsSchema,

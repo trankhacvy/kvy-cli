@@ -1,3 +1,6 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { open, seal } from "@falcon/crypto";
 import type {
   AdoptMirrorResult,
@@ -7,8 +10,9 @@ import type {
   FsMkdirResult,
   SpawnParams,
   SpawnResult,
+  WorkspaceRegisterResult,
 } from "@falcon/wire";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MACHINE_RPC_METHODS,
   type MachineRpcDeps,
@@ -117,6 +121,10 @@ describe("registerMachineRpcHandlers", () => {
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
       payload: { target: "m:mach_1:fs.mkdir" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:workspace.register" },
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
@@ -418,6 +426,93 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_mk_2" }, DEK),
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+  });
+
+  describe("workspace.register", () => {
+    it("decrypts params, calls registerWorkspace, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const registerWorkspace = vi.fn(async (): Promise<WorkspaceRegisterResult> => ({ ok: true }));
+      register(socket, { registerWorkspace });
+
+      const params = { idempotencyKey: "idem_ws_1", directory: "/tmp/fresh-project" };
+      const response = await callAndAwaitAck(socket, "workspace.register", seal(params, DEK));
+
+      expect(registerWorkspace).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ ok: true });
+    });
+
+    it("replies with a sealed error when params fail schema validation (missing directory)", async () => {
+      const socket = new FakeSocket();
+      register(socket, { registerWorkspace: vi.fn() });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "workspace.register",
+        seal({ idempotencyKey: "idem_ws_2" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("replies with a sealed error when registerWorkspace throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        registerWorkspace: vi.fn(async () => {
+          throw new Error("failed to acquire workspace registry lock");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "workspace.register",
+        seal({ idempotencyKey: "idem_ws_3", directory: "/tmp/fresh-project" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+    });
+
+    describe("with the real default (no mocked-away side effect)", () => {
+      // Live-equivalent coverage (plan.md §16 "Flow 3 —
+      // spawn-fresh-folder-register (Piece A)" Definition of Done): unlike
+      // every other `describe` block above, this one does NOT override
+      // `registerWorkspace` in `register(...)` — it exercises
+      // `machineRpc.ts`'s real, dependency-free default
+      // (`workspaceRegisterRpc.ts`, wrapping `workspace/registry.ts`'s real
+      // `registerWorkspace`), pointed at a temp `~/.falcon`-equivalent via
+      // `FALCON_HOME_DIR`, and asserts the actual `workspaces.json` file the
+      // real registry writes — proving the RPC really performs the durable
+      // side effect, not just that some function got called.
+      let homeDir: string;
+      let previousFalconHomeDir: string | undefined;
+
+      beforeEach(async () => {
+        homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-register-rpc-"));
+        previousFalconHomeDir = process.env.FALCON_HOME_DIR;
+        process.env.FALCON_HOME_DIR = homeDir;
+      });
+
+      afterEach(async () => {
+        if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
+        else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+        await rm(homeDir, { recursive: true, force: true });
+      });
+
+      it("actually writes a real workspaces.json entry via the real registerWorkspace", async () => {
+        const socket = new FakeSocket();
+        register(socket); // no registerWorkspace override — exercises the real default
+
+        const target = path.join(homeDir, "project");
+        const response = await callAndAwaitAck(
+          socket,
+          "workspace.register",
+          seal({ idempotencyKey: "idem_ws_live_1", directory: target }, DEK),
+        );
+        expect(open(response, DEK)).toEqual({ ok: true });
+
+        const written = JSON.parse(await readFile(path.join(homeDir, "workspaces.json"), "utf8"));
+        expect(written.workspaces).toContainEqual(
+          expect.objectContaining({ path: target }),
+        );
+      });
     });
   });
 
