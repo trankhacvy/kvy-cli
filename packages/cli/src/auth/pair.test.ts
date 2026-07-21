@@ -5,7 +5,7 @@ import {
   libsodiumEncryptForPublicKey,
 } from "@falcon/crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { pairDevice } from "./pair.js";
+import { delay, pairDevice } from "./pair.js";
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -247,5 +247,25 @@ describe("pairDevice", () => {
     });
 
     expect(outcome).toEqual({ ok: false, reason: "cancelled" });
+  });
+});
+
+describe("delay (Issue #11: leaked abort listeners on the never-aborted path)", () => {
+  it("removes its abort listener on the normal timer-resolves path too, not just on abort", async () => {
+    const controller = new AbortController();
+    const addSpy = vi.spyOn(controller.signal, "addEventListener");
+    const removeSpy = vi.spyOn(controller.signal, "removeEventListener");
+
+    // Mirrors `pairDevice`'s poll loop: the same long-lived signal reused
+    // across many ticks, none of which ever abort — the exact shape that
+    // used to accumulate a dangling listener per tick until Node's default
+    // max-listener threshold tripped a `MaxListenersExceededWarning`.
+    for (let i = 0; i < 20; i++) {
+      await delay(0, controller.signal);
+    }
+
+    expect(addSpy).toHaveBeenCalledTimes(20);
+    expect(removeSpy).toHaveBeenCalledTimes(20);
+    expect(controller.signal.aborted).toBe(false);
   });
 });
