@@ -33,3 +33,24 @@ do not merge the two.
   (`.worktrees/BF1.2`) and branch (`wf/BF1.2`) already exist in-tree but are not yet merged; pick
   up and finish this next.
 - Continue Phase 1 sequentially per `docs/bug-fix-plan.md`'s ordering thereafter.
+
+## Cycle 3 — 2026-07-21
+
+**Merged units:**
+- `BF1.2` "model-switch-render-fix" — `de676c53ae8613f243cff8b7c7982b720b487252`
+  (verified via `git merge-base --is-ancestor` against `v2-pty-injection`)
+- `BF1.3` "permission-mode-sync" — `a107aeb5ea3ab3bbfe89843daddaadc8c2f35bc6`
+  (verified via `git merge-base --is-ancestor` against `v2-pty-injection`)
+
+**Parked/failed units:** none this cycle.
+
+**Worktree/branch cleanup:** `.worktrees/BF1.2` and `.worktrees/BF1.3` removed, `wf/BF1.2` and
+`wf/BF1.3` branches deleted.
+
+**Note:** all non-`[human]` sub-boxes for BF1.2 and BF1.3 flipped to `[x]` in
+`docs/bug-fix-plan.md`; the `[human]` live-check sub-boxes remain unchecked per the
+false-landing rule.
+
+**Next recommended units:**
+- `BF2.1 [bundle] "plan-and-task-cards"` (Issues #6+#7, Phase 2 — web tool-cards & UI polish)
+- `BF2.2 [inline] "web-polish-batch"` (three small, disjoint-file web fixes)

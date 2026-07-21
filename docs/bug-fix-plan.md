@@ -1850,22 +1850,22 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
         `addEventListener`/`removeEventListener` call counts match (no leaked listeners)
   - [x] Combined: scoped tests + `pnpm typecheck` + commit
 
-- [ ] **BF1.2 `[bundle]` "model-switch-render-fix"** (Issue #4 —
+- [x] **BF1.2 `[bundle]` "model-switch-render-fix"** (Issue #4 —
       `packages/cli/src/claude/envelopeMapper.ts` + `packages/cli/src/claude/modelChange.ts`)
-  - [ ] Export `normalizeTranscriptText` from `modelChange.ts` (currently private) so
+  - [x] Export `normalizeTranscriptText` from `modelChange.ts` (currently private) so
         `envelopeMapper.ts` can reuse its ANSI-stripping instead of duplicating it
-  - [ ] Add `extractLocalCommandStdout`/`isLocalCommandInvocation` helpers to
+  - [x] Add `extractLocalCommandStdout`/`isLocalCommandInvocation` helpers to
         `envelopeMapper.ts` (regex-matching `<local-command-stdout>...</local-command-stdout>`
         / `<command-name>...</command-name>`), alongside the existing `isCompactSummaryMessage`
         helper
-  - [ ] In the `message.type === "user"`, string-content branch (before the existing
+  - [x] In the `message.type === "user"`, string-content branch (before the existing
         `isSidechainMessage` check): a matched `local-command-stdout` becomes a quiet
         `agent`/`service` envelope with `normalizeTranscriptText`-cleaned text; a bare
         invocation record (`<command-name>` with no stdout yet) is dropped rather than shown as
         a raw chat bubble
-  - [ ] Confirm `findClaudeModelChangeInEnvelopes`'s model-chip side channel still works
+  - [x] Confirm `findClaudeModelChangeInEnvelopes`'s model-chip side channel still works
         unchanged against the now-cleaned `service` text
-  - [ ] Tests: capture a real `/model haiku` transcript (invocation + `<local-command-stdout>`
+  - [x] Tests: capture a real `/model haiku` transcript (invocation + `<local-command-stdout>`
         result) into a new CLI fixture and assert `mapClaudeToEnvelopes` produces one clean
         `service` envelope with no XML tags/ANSI codes; extend `modelChange.test.ts` with the
         same strings
@@ -1873,23 +1873,23 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
         a clean "Set model to Haiku 4.5..." service line (no visible tags/escape codes) and the
         model chip still updates
 
-- [ ] **BF1.3 `[bundle]` "permission-mode-sync"** (Issue #5 — `packages/wire/src/session.ts`,
+- [x] **BF1.3 `[bundle]` "permission-mode-sync"** (Issue #5 — `packages/wire/src/session.ts`,
       `packages/cli/src/claude/pretoolPermissionBridge.ts`,
       `packages/web/src/sync/reducer/{types,reduce}.ts`,
       `packages/web/src/features/session-control/session-state.ts`)
-  - [ ] Add an additive `permission-mode` wire event variant
+  - [x] Add an additive `permission-mode` wire event variant
         (`{t:"permission-mode", mode: PermissionModeSchema, source: "terminal"|"client"}`)
         alongside `mode-switch` in `session.ts`'s `SessionEventSchema`
-  - [ ] In `pretoolPermissionBridge.ts`'s `cachePermissionMode`, emit the new event via the
+  - [x] In `pretoolPermissionBridge.ts`'s `cachePermissionMode`, emit the new event via the
         already-wired `emitEnvelope` dep whenever the observed mode genuinely changes (not on
         every hook echo) — decide and document whether the very first observed mode should also
         emit
-  - [ ] Add a matching `PermissionModeItem` `RenderItem` kind and reducer case (`reduce.ts`)
+  - [x] Add a matching `PermissionModeItem` `RenderItem` kind and reducer case (`reduce.ts`)
         mirroring `mode-switch`'s existing handling
-  - [ ] Extend `deriveCurrentPermissionMode` (`session-state.ts`) with a new case for
+  - [x] Extend `deriveCurrentPermissionMode` (`session-state.ts`) with a new case for
         `kind === "permission-mode"`, keeping the existing `perm-placeholder`/`tool`-decision
         cases so a web-initiated switch still reflects immediately pending the hook echo
-  - [ ] Tests: `pretoolPermissionBridge.test.ts` — two hook calls with different
+  - [x] Tests: `pretoolPermissionBridge.test.ts` — two hook calls with different
         `permission_mode` values emit exactly one `permission-mode` event on the real
         transition; `session-state.test.ts` — a `permission-mode` item with `source:"terminal"`
         updates `deriveCurrentPermissionMode` independent of any pending decision
