@@ -108,17 +108,26 @@ async function getPairStatus(
   }
 }
 
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
+// Exported only so `pair.test.ts` can call it directly to assert the
+// add/remove abort-listener counts stay balanced (Issue #11) — every other
+// caller still reaches it through `pairDevice`'s poll loop.
+export function delay(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        resolve();
-      },
-      { once: true },
-    );
+    // Declared before `timer` (matching scanner.ts's own already-correct
+    // `wait()` pattern) so the timer callback below can remove this same
+    // listener on the normal, non-aborted path too — `{ once: true }` alone
+    // only unregisters it when `abort` actually fires, which leaves a
+    // dangling listener on the long-lived, shared signal `pairDevice` reuses
+    // across every ~2s poll tick for as long as ~450 ticks (Issue #11).
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 

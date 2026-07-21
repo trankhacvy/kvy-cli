@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { SessionRow } from "@falcon/wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -45,5 +48,32 @@ describe("LifecycleBanner", () => {
     expect(html).toContain("Session failed");
     expect(html).toContain("can no longer be controlled from the web");
     expect(html).toContain("bg-destructive");
+  });
+});
+
+describe("deriveWorking wiring (docs/bug-fix-plan.md #2: the stuck 'Working…' header)", () => {
+  // `SessionTimelineScreen` itself can't be rendered here — it pulls in the
+  // live sync engine, TanStack Query, and the session-scoped crypto worker
+  // via non-hook-free hooks (`useLiveRenderItems`/`useSessionEphemerals`/
+  // etc.), none of which are wired up in this vitest `environment: "node"`
+  // setup (see the file header above and `vitest.config.ts`). So this
+  // asserts against the component's own shipped source text instead — the
+  // same "exercise what's actually in the file" spirit as
+  // `push/__tests__/sw.test.ts` — rather than skipping the guard entirely.
+  // This is the regression the fix-plan calls out by name: a stuck-`true`
+  // `ephemeralWorking` must never be able to override an already-closed
+  // turn again by `working` going back to the old
+  // `ephemeralWorking || isTurnOpen(items)` inline form.
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./SessionTimelineScreen.tsx"),
+    "utf8",
+  );
+
+  it("computes `working` by calling deriveWorking(items, ephemeralWorking) directly", () => {
+    expect(source).toMatch(/\bconst working = deriveWorking\(items, ephemeralWorking\);/);
+  });
+
+  it("never reintroduces the old ephemeralWorking-OR-isTurnOpen inline form", () => {
+    expect(source).not.toMatch(/ephemeralWorking\s*\|\|\s*isTurnOpen\(/);
   });
 });
