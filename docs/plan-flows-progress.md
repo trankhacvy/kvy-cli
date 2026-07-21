@@ -74,3 +74,49 @@ human-authored, human-approved design doc this workflow cannot produce. `FL4.1`,
 completes and approves that review. **Flow 4 beyond FL4.2 is now blocked purely
 on FL4.1's human design review — there is no further automatable work available
 on this track.** Continue with Flow 3 (`FL3.2`) or Flow 5 in the meantime.
+
+## Cycle 3 — 2026-07-22
+
+**Merged (ancestry-proven onto `v2-pty-injection`):**
+
+- `FL3.2 [bundle]` "spawn-directory-dedup" — `cfb654119ce8678cc8b7197810f3e42d90f56761`
+
+Verified via `git merge-base --is-ancestor cfb654119ce8678cc8b7197810f3e42d90f56761
+v2-pty-injection`. Worktree `.worktrees/FL3.2` and branch `wf/FL3.2` removed after
+verification.
+
+**Parked this cycle:** none.
+
+**Plan checkboxes flipped in `docs/plan-flows-3-4-5.md`:** `FL3.2`'s unit box and
+all non-`[human]` sub-boxes. `FL3.3 [human]` left unchecked, as required.
+
+**Post-cycle checks on `v2-pty-injection`:** `pnpm typecheck` — see result recorded
+at commit time below.
+
+**Status:** every non-`[human]` unit in `docs/plan-flows-3-4-5.md` is now checked
+(FL5.1, FL5.2, FL3.1, FL3.2, FL4.2 all `[x]`). The only unchecked boxes remaining
+in the whole document are:
+
+- `FL5.3 [human]` "flow-5-live-verify + boundary decision"
+- `FL3.3 [human]` "flow-3-live-verify"
+- `FL4.1 [human]` "session-sharing-design-review"
+- `FL4.3 [solo]` "session-shares-schema-and-authz" — **BLOCKED on FL4.1**
+- `FL4.4 [solo]` "session-shares-socket-and-web" — **BLOCKED on FL4.3**
+
+**This entire track is now blocked on human input, not on further automatable
+work.** `FL5.3` and `FL3.3` each need a human to live-verify against a real
+second machine and a real daemon; `FL4.1` needs a human to author and approve
+`docs/design-session-sharing.md` (threat/trust model, `session_shares` schema,
+authorization mechanism, and the `rpcHandler.ts` account-keyed-room routing
+fix) before `FL4.3`/`FL4.4` can even be attempted. Per standing instructions,
+this workflow must never check `FL4.1`, `FL4.3`, or `FL4.4`.
+
+**Next recommended steps (both require a human, not this workflow):**
+
+1. A human live-verifies `FL3.3` and `FL5.3` against a real daemon/second
+   machine.
+2. A human authors and approves the `FL4.1` design doc, which unblocks
+   `FL4.3` for a future automated cycle.
+
+No further automatable units exist in this track until one of the above
+human steps lands.

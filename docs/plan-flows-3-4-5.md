@@ -827,24 +827,24 @@ work), Flow 4 last (needs a design review before any implementation).
     live-equivalent daemon test (not just unit-level) confirms `workspace.register` actually
     calls the real idempotent `registerWorkspace` (no mocked-away side effect); `pnpm build &&
     pnpm typecheck && pnpm test && pnpm lint` all clean in the worktree; commit lands.
-- [ ] **FL3.2 `[bundle]` "spawn-directory-dedup"** (Piece B —
+- [x] **FL3.2 `[bundle]` "spawn-directory-dedup"** (Piece B —
       `packages/cli/src/daemon/{types.ts,sessionRegistry.ts,spawnEngine.ts}` +
       `machineIntegration.ts` wiring)
-  - [ ] Add `directory?: string` to `TrackedSession` (`types.ts:28-38`); populate it (resolved
+  - [x] Add `directory?: string` to `TrackedSession` (`types.ts:28-38`); populate it (resolved
         real path) where the daemon records a spawned pid (`sessionRegistry.ts`
         `trackSpawned`/`onSessionStarted`, fed from `spawnEngine.ts`'s `spawnDirectory`).
-  - [ ] Add a `findLiveSessionInDirectory(realDirectory)` seam to `SpawnEngineDeps`
+  - [x] Add a `findLiveSessionInDirectory(realDirectory)` seam to `SpawnEngineDeps`
         (default: scan `registry.getSessions()` for a live `sessionId` with matching
         `directory`); consult it in `spawnSession` after validation and return the existing
         `sessionId` instead of double-spawning.
-  - [ ] Wire the seam through `machineIntegration.ts:295-302`'s `spawnSessionHandler` (the
+  - [x] Wire the seam through `machineIntegration.ts:295-302`'s `spawnSessionHandler` (the
         `registry` handle is already in scope).
-  - [ ] Optional client-side pre-check: warn/grey a directory with an existing live session in
+  - [x] Optional client-side pre-check: warn/grey a directory with an existing live session in
         the wizard, using the session list's `workspaceId` (racy — daemon guard is
         authoritative).
-  - [ ] Tests: `spawnEngine` (a live session in the same resolved directory → returns its
+  - [x] Tests: `spawnEngine` (a live session in the same resolved directory → returns its
         id, never launches); `sessionRegistry` (spawned pid records its directory).
-  - [ ] Combined: scoped tests + `pnpm typecheck` + commit.
+  - [x] Combined: scoped tests + `pnpm typecheck` + commit.
   - **Definition of Done:** a `spawnEngine` test proves that spawning into a directory with an
     already-live tracked session returns that session's existing `sessionId` and never invokes
     the process launcher (assert the launcher mock's call count is 0, not just that a
