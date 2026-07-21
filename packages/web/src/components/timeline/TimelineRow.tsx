@@ -63,7 +63,12 @@ export function TimelineRow({ item }: { item: RenderItem }) {
       return <OrphanToolEnd item={item} />;
 
     case "subagent-group":
-      return <SubagentGroup id={item.subagentId} items={item.items} />;
+      // Dispatched one `RenderItem` at a time with no sibling context, so
+      // (unlike `RenderItemGroups`, the actual caller for this kind — see
+      // `Timeline.tsx`) there's no ordinal to compute here. Falls back to a
+      // generic label rather than fabricating a number or leaking the
+      // internal `subagentId` (Issue #8 — docs/bug-fix-plan.md #8).
+      return <SubagentGroup label="Subagent" items={item.items} />;
 
     default: {
       const exhaustive: never = item;

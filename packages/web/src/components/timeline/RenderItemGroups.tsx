@@ -207,21 +207,24 @@ export function RenderItemGroups({
   }
 
   const groups = groupRenderItems(items);
+  let subagentOrdinal = 0;
 
   return (
     <div className={cn("flex flex-col gap-5", compact && "gap-3")}>
-      {groups.map((group) =>
-        group.kind === "message" ? (
-          <MessageGroupView key={group.id} group={group} compact={compact} />
-        ) : (
+      {groups.map((group) => {
+        if (group.kind === "message") {
+          return <MessageGroupView key={group.id} group={group} compact={compact} />;
+        }
+        subagentOrdinal += 1;
+        return (
           <SubagentGroup
             key={group.id}
-            id={group.item.subagentId}
+            label={`Subagent ${subagentOrdinal}`}
             items={group.item.items}
             compact={compact}
           />
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }

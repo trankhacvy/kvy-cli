@@ -353,7 +353,11 @@ export function buildSnapshot(
 
   const machines: SessionListMachine[] = machineRows.map((m) => ({
     id: m.id,
-    name: titles.machines.get(m.id) ?? UNNAMED_MACHINE,
+    // `null` = not decrypted yet (see `SessionListMachine.name`'s doc
+    // comment) — the map only ever has an entry once `decryptMachineName`
+    // has genuinely resolved (success or the honest `UNNAMED_MACHINE`
+    // fallback), never as a stand-in for "haven't gotten to it yet".
+    name: titles.machines.get(m.id) ?? null,
     online: deriveMachineOnline(m, presence, now),
   }));
 
@@ -370,7 +374,11 @@ export function buildSnapshot(
     id: s.id,
     workspaceId: s.workspaceId,
     machineId: s.machineId,
-    title: titles.sessions.get(s.id) ?? UNTITLED_SESSION,
+    // `null` = not decrypted yet (see `SessionListSession.title`'s doc
+    // comment) — the map only ever has an entry once `decryptSessionTitle`
+    // has genuinely resolved (success or the honest `UNTITLED_SESSION`
+    // fallback), never as a stand-in for "haven't gotten to it yet".
+    title: titles.sessions.get(s.id) ?? null,
     provider: s.provider,
     status: s.status,
     updatedAt: s.updatedAt,
