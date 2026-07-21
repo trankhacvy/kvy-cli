@@ -68,6 +68,7 @@ import {
   type SessionRole,
 } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
+import { normalizeTranscriptText } from "./modelChange.js";
 import type { RawJSONLines } from "./types.js";
 
 /** `@falcon/wire` doesn't export this narrowed type on its own — derive it. */
@@ -218,6 +219,25 @@ function isMetaMessage(message: RawJSONLines): boolean {
 
 function isCompactSummaryMessage(message: RawJSONLines): boolean {
   return (message as unknown as { isCompactSummary?: unknown }).isCompactSummary === true;
+}
+
+// BF1.2 (bug-fix-plan.md #4): Claude Code records a local slash command
+// (e.g. `/model haiku`) as a synthetic `user`-type record wrapped in its own
+// XML-ish tags — the invocation as `<command-name>...</command-name>` (plus
+// a sibling `<command-message>`), and the result as a later `user` record
+// wrapped in `<local-command-stdout>...</local-command-stdout>`. Neither
+// wrapper is a real chat turn, so both get quiet handling below instead of
+// flowing through as a raw-tagged chat bubble.
+const LOCAL_COMMAND_STDOUT_PATTERN = /<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/;
+const LOCAL_COMMAND_INVOCATION_PATTERN = /<command-name>([\s\S]*?)<\/command-name>/;
+
+function extractLocalCommandStdout(content: string): string | null {
+  const match = content.match(LOCAL_COMMAND_STDOUT_PATTERN);
+  return match?.[1]?.trim() ?? null;
+}
+
+function isLocalCommandInvocation(content: string): boolean {
+  return LOCAL_COMMAND_INVOCATION_PATTERN.test(content);
 }
 
 /**
@@ -721,6 +741,25 @@ export function mapClaudeToEnvelopes(
     const content = pickMessageContent(message);
 
     if (typeof content === "string") {
+      const stdout = extractLocalCommandStdout(content);
+      if (stdout !== null) {
+        // A local slash command's result (e.g. /model) — never a real chat
+        // turn; surface it as a quiet service marker with ANSI/wrapping
+        // stripped, reusing modelChange.ts's own cleaner (bug-fix-plan.md
+        // #4). No turn is opened/closed for it, matching the compact-summary
+        // marker's precedent above.
+        envelopes.push(
+          createEnvelope("agent", { t: "service", text: normalizeTranscriptText(stdout) }),
+        );
+        return envelopes;
+      }
+      if (isLocalCommandInvocation(content)) {
+        // The invocation record itself (e.g. "/model haiku") carries no
+        // useful information beyond what its stdout result already reports —
+        // drop it rather than showing the raw XML wrapper as a user chat
+        // bubble.
+        return envelopes;
+      }
       if (isSidechainMessage(message)) {
         const turnId = ensureTurn(state, envelopes);
         maybeEmitSubagentStart(state, turnId, subagent, envelopes);

@@ -5,7 +5,13 @@ const ORPHANED_ANSI_MARKER = /\[(?:\d+;)*\d+m/g;
 const MODEL_CHANGE_PATTERN =
   /^Set model to\s+(.+?)(?:\s+and saved as your default for new sessions)?(?:\s+\[blocked\])?\.?$/i;
 
-function normalizeTranscriptText(text: string): string {
+/**
+ * Strips ANSI escape sequences/orphaned markers and collapses whitespace.
+ * Exported (bug-fix-plan.md #4 / BF1.2) so `envelopeMapper.ts` can reuse this
+ * exact cleaner for local-command-stdout service text instead of
+ * duplicating ANSI-stripping logic.
+ */
+export function normalizeTranscriptText(text: string): string {
   return text
     .replace(ANSI_ESCAPE_SEQUENCE, "")
     .replace(ORPHANED_ANSI_MARKER, "")
@@ -42,11 +48,27 @@ export function findClaudeModelChangeInEnvelopes(
 ): string | null {
   for (let index = envelopes.length - 1; index >= 0; index -= 1) {
     const envelope = envelopes[index];
-    if (!envelope || envelope.role !== "agent" || envelope.ev.t !== "text" || envelope.ev.thinking) {
+    if (envelope?.role !== "agent") continue;
+
+    // Real assistant text (unchanged pre-existing case — a model-change
+    // message that, for whatever reason, arrives as plain agent text rather
+    // than the local-command-stdout wrapper).
+    if (envelope.ev.t === "text" && !envelope.ev.thinking) {
+      const model = extractClaudeModelChangeFromText(envelope.ev.md);
+      if (model) return model;
       continue;
     }
-    const model = extractClaudeModelChangeFromText(envelope.ev.md);
-    if (model) return model;
+
+    // BF1.2 (bug-fix-plan.md #4): `/model`'s real transcript shape is a
+    // `<local-command-stdout>` block, which `envelopeMapper.ts` now maps to a
+    // quiet `service` envelope (not `text`) instead of a raw chat bubble —
+    // this side channel has to look at the cleaned `service` text too, or a
+    // model switch would stop updating the chip the moment the chat-render
+    // fix landed.
+    if (envelope.ev.t === "service") {
+      const model = extractClaudeModelChangeFromText(envelope.ev.text);
+      if (model) return model;
+    }
   }
   return null;
 }
