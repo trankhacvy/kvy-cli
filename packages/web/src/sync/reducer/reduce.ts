@@ -125,6 +125,10 @@ function reduceScope(envs: SessionEnvelope[]): RenderItem[] {
         items.push({ ...base, kind: "mode-switch", control: ev.control, by: ev.by });
         break;
 
+      case "permission-mode":
+        items.push({ ...base, kind: "permission-mode", mode: ev.mode, source: ev.source });
+        break;
+
       case "sub-start":
         items.push({ ...base, kind: "sub-start" });
         break;

@@ -97,6 +97,8 @@ export function summarizeEnvelope(
       return { content: `🔓 Permission ${ev.decision.kind}`, kind: "system" };
     case "mode-switch":
       return { content: `↔ Switched to ${ev.control} control (${ev.by})`, kind: "status" };
+    case "permission-mode":
+      return { content: `🔀 Permission mode: ${ev.mode}`, kind: "status" };
     case "sub-start":
       return { content: "▶ Subagent started", kind: "status" };
     case "sub-stop":

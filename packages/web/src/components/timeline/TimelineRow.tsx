@@ -41,6 +41,11 @@ export function TimelineRow({ item }: { item: RenderItem }) {
         <ServiceLine label={`Switched to ${item.control} mode (by ${item.by})`} tone="muted" />
       );
 
+    case "permission-mode":
+      return (
+        <ServiceLine label={`Permission mode: ${item.mode} (${item.source})`} tone="muted" />
+      );
+
     case "sub-start":
       return <ServiceLine label={null} />;
 

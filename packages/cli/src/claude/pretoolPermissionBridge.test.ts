@@ -39,6 +39,9 @@ function permRequests(emitted: SessionEnvelope[]) {
 function permResolves(emitted: SessionEnvelope[]) {
   return emitted.filter((e) => e.ev.t === "perm-resolve");
 }
+function permissionModeEvents(emitted: SessionEnvelope[]) {
+  return emitted.filter((e) => e.ev.t === "permission-mode");
+}
 
 describe("PreToolPermissionBridge — handlePreToolUse (W1.1: always defers)", () => {
   it("always returns `ask` and emits nothing, regardless of web-turn state", async () => {
@@ -664,6 +667,52 @@ describe("PreToolPermissionBridge — permission_mode cache (W4.3)", () => {
     await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "plan" });
     await bridge.handlePreToolUse({ tool_name: "Bash" });
     expect(bridge.currentPermissionMode).toBe("plan");
+  });
+});
+
+describe("PreToolPermissionBridge — emits permission-mode on a genuine transition (docs/bug-fix-plan.md §5)", () => {
+  it("does not emit on the very first observed mode (announcing a baseline, not a change)", async () => {
+    const { bridge, emitted } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    expect(permissionModeEvents(emitted)).toHaveLength(0);
+  });
+
+  it("emits exactly one permission-mode event on the second call, when the mode actually changed", async () => {
+    const { bridge, emitted } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "default" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    const events = permissionModeEvents(emitted);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.ev).toEqual({
+      t: "permission-mode",
+      mode: "acceptEdits",
+      source: "terminal",
+    });
+  });
+
+  it("does not emit again on a repeated echo of the same mode", async () => {
+    const { bridge, emitted } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "default" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });
+    expect(permissionModeEvents(emitted)).toHaveLength(1);
+  });
+
+  it("ignores an unrecognized permission_mode value — no emit, no cache corruption", async () => {
+    const { bridge, emitted } = makeBridge();
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "default" });
+    await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "some-future-mode" });
+    expect(permissionModeEvents(emitted)).toHaveLength(0);
+    expect(bridge.currentPermissionMode).toBe("default");
+  });
+
+  it("emits from handlePermissionRequest too, on a genuine transition", async () => {
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
+    await bridge.handlePermissionRequest({ tool_name: "Bash", permission_mode: "default" });
+    await bridge.handlePermissionRequest({ tool_name: "Bash", permission_mode: "plan" });
+    const events = permissionModeEvents(emitted);
+    expect(events).toHaveLength(1);
+    expect(events[0]?.ev).toEqual({ t: "permission-mode", mode: "plan", source: "terminal" });
   });
 });
 

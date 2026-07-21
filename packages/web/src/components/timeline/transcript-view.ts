@@ -10,6 +10,7 @@ function isHiddenTimelineItem(item: RenderItem): boolean {
     item.kind === "turn-start" ||
     item.kind === "turn-end" ||
     item.kind === "mode-switch" ||
+    item.kind === "permission-mode" ||
     item.kind === "sub-start" ||
     item.kind === "sub-stop" ||
     item.kind === "usage"

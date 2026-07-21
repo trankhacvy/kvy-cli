@@ -123,6 +123,35 @@ describe("deriveCurrentPermissionMode", () => {
     expect(deriveCurrentPermissionMode(items)).toBe("default");
   });
 
+  it("reflects a 'permission-mode' item with source:'terminal', independent of any pending decision", () => {
+    const items: RenderItem[] = [
+      { id: "pm1", time: 1, role: "agent", kind: "permission-mode", mode: "acceptEdits", source: "terminal" },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("acceptEdits");
+  });
+
+  it("takes the most recent of a 'permission-mode' item and a later mode decision, in stream order", () => {
+    const items: RenderItem[] = [
+      { id: "pm1", time: 1, role: "agent", kind: "permission-mode", mode: "acceptEdits", source: "terminal" },
+      {
+        id: "t1",
+        time: 2,
+        role: "agent",
+        kind: "tool",
+        call: "c1",
+        name: "ExitPlanMode",
+        args: {},
+        status: "done",
+        permission: {
+          reqId: "r1",
+          modes: ["default", "acceptEdits", "bypassPermissions"],
+          decision: { kind: "mode", mode: "bypassPermissions" },
+        },
+      },
+    ];
+    expect(deriveCurrentPermissionMode(items)).toBe("bypassPermissions");
+  });
+
   it("resets to 'default' on a mode-switch, even after a known mode decision", () => {
     const items: RenderItem[] = [
       {
