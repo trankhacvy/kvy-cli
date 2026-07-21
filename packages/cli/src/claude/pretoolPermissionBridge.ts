@@ -351,6 +351,18 @@ export interface PreToolPermissionBridgeDeps {
    * dialog rendered.
    */
   onPromptLikely?: () => void;
+  /**
+   * Fires the instant a permission request or `AskUserQuestion` becomes
+   * pending — at the TOP of {@link handlePermissionRequest} /
+   * {@link handleAskUserQuestion}, before either branch decides local vs.
+   * web (docs/user-flows.md fix-plan task 4). Unlike {@link emitEnvelope}'s
+   * `perm-request` (which stays local-turn-honest — a locally-typed
+   * permission request must never show a PermCard on web), this fires on
+   * BOTH local and web turns: it's an additive push-notification side
+   * signal, not a routing decision, and the server's own presence
+   * suppression already avoids over-notifying an actively-watching tab.
+   */
+  onPendingAttention?: (kind: "perm" | "question") => void;
   /** Max wait for a web answer before falling back to a deny. Default {@link DEFAULT_ANSWER_TIMEOUT_MS}. */
   answerTimeoutMs?: number;
   /** Injectable timer (default `setTimeout`) so tests can trigger the timeout on demand. */
@@ -532,6 +544,8 @@ export class PreToolPermissionBridge {
    * question branch instead of the generic allow/deny/mode mapping.
    */
   private handleAskUserQuestion(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
+    // Fires regardless of local vs. web — see `onPendingAttention`'s own doc.
+    this.deps.onPendingAttention?.("question");
     if (!this.deps.isWebTurnActive()) {
       this.deps.onPromptLikely?.();
       return Promise.resolve(
@@ -593,6 +607,8 @@ export class PreToolPermissionBridge {
     input: PermissionRequestHookInput,
   ): Promise<PermissionRequestHookOutput | undefined> {
     this.cachePermissionMode(input.permission_mode);
+    // Fires regardless of local vs. web — see `onPendingAttention`'s own doc.
+    this.deps.onPendingAttention?.("perm");
     const toolName = input.tool_name;
     const toolInput = input.tool_input ?? {};
 

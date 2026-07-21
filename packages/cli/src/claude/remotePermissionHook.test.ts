@@ -283,6 +283,28 @@ describe("installRemotePermissionHook", () => {
     });
   });
 
+  describe("onPendingAttention forwarding (docs/user-flows.md fix-plan task 4)", () => {
+    it("forwards 'perm'/'question' regardless of local vs. web turn state", async () => {
+      const onPendingAttention = vi.fn();
+      const h = makeHarness();
+      const handle = await h.install({ onPendingAttention });
+
+      void h.captured.onPermissionRequest?.(permReq("Bash"));
+      expect(onPendingAttention).toHaveBeenCalledExactlyOnceWith("perm");
+
+      await h.captured.onPreToolUse?.(preTool("AskUserQuestion"));
+      expect(onPendingAttention).toHaveBeenCalledTimes(2);
+      expect(onPendingAttention).toHaveBeenNthCalledWith(2, "question");
+
+      handle.markWebTurnStart();
+      void h.captured.onPermissionRequest?.(permReq("Bash"));
+      expect(onPendingAttention).toHaveBeenCalledTimes(3);
+      expect(onPendingAttention).toHaveBeenNthCalledWith(3, "perm");
+
+      await handle.stop();
+    });
+  });
+
   describe("permission_mode cache forwarding (W4.3 — real PTY setMode)", () => {
     it("getCurrentPermissionMode is null before any hook fires, then reflects the latest permission_mode", async () => {
       const h = makeHarness();

@@ -102,21 +102,16 @@
  * child's own exit code.
  */
 import path from "node:path";
-import {
-  decodeBase64,
-  deriveKeyTree,
-  encodeBase64,
-  wrapDek,
-} from "@falcon/crypto";
-import {
-  createEnvelope,
-  type PermissionMode,
-  type SessionEnvelope,
-} from "@falcon/wire";
+import { decodeBase64, deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
+import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox, type OutboxOptions } from "../api/outbox.js";
 import { createSessionMetadataUpdater } from "../api/sessionMetadata.js";
+import {
+  reportSessionAttention as reportSessionAttentionDefault,
+  type SessionAttentionKind,
+} from "../api/sessionNotify.js";
 import {
   type ReportableSessionStatus,
   reportSessionStatus as reportSessionStatusDefault,
@@ -129,7 +124,6 @@ import {
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
-import { findClaudeModelChangeInEnvelopes } from "../claude/modelChange.js";
 import {
   type ClaudeMode,
   type LoopDeps,
@@ -138,6 +132,7 @@ import {
   type QueuedMessage,
   type RemoteControls,
 } from "../claude/loop.js";
+import { findClaudeModelChangeInEnvelopes } from "../claude/modelChange.js";
 import { permissionModeCyclePresses } from "../claude/pretoolPermissionBridge.js";
 import {
   type PtyClaudeSessionHandle,
@@ -152,20 +147,14 @@ import {
   createNotifyDaemonSessionStartedDeps,
   notifyDaemonSessionStarted as notifyDaemonSessionStartedDefault,
 } from "../daemon/notify.js";
-import {
-  type DaemonState,
-  readDaemonState as readDaemonStateDefault,
-} from "../daemon/state.js";
+import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import {
   type ClaudeCliLocation,
   findGlobalClaudeCliPath as findGlobalClaudeCliPathDefault,
 } from "../provider/claudeCliLocator.js";
 import { CLAUDE_NOT_INSTALLED_MESSAGE } from "../provider/claudeProviderAdapter.js";
-import {
-  registerSessionRpcHandlers,
-  type SessionRpcHandlers,
-} from "../rpc/sessionRpc.js";
+import { registerSessionRpcHandlers, type SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import {
   bootstrapSession as bootstrapSessionDefault,
   createBootstrapSessionDeps,
@@ -181,8 +170,7 @@ import {
 } from "../session/sessionLock.js";
 
 const MASTER_SECRET_LENGTH_BYTES = 32;
-const NOT_LOGGED_IN_MESSAGE =
-  'falcon: not logged in — run "falcon auth login" first\n';
+const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
 
 /**
  * `setMode` on the PTY path (plan-v2.md W4.3 "Real setMode for the PTY
@@ -254,6 +242,13 @@ export interface StartClaudeCommandDeps {
    * best-effort `ended`/`failed` lifecycle report at every exit path (W1.4).
    */
   reportSessionStatus?: typeof reportSessionStatusDefault;
+  /**
+   * Injectable for tests; defaults to the real `reportSessionAttention()`
+   * (`api/sessionNotify.ts`). Backs the best-effort `POST /v1/sessions/:id/
+   * notify` fired for a pending permission/question and a completed turn
+   * (docs/user-flows.md fix-plan task 4).
+   */
+  reportSessionAttention?: typeof reportSessionAttentionDefault;
   /**
    * Injectable for tests; defaults to the real `acquireSessionLock()`
    * (plan-v2.md W4.4 — same-directory duplicate session lock).
@@ -330,12 +325,9 @@ async function waitForMachineId(
 }
 
 /** Runs `falcon claude [args...]`. Returns the process exit code. */
-export async function runStartClaudeCommand(
-  deps: StartClaudeCommandDeps,
-): Promise<number> {
+export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
-  const writeError =
-    deps.writeError ?? ((text: string) => process.stderr.write(text));
+  const writeError = deps.writeError ?? ((text: string) => process.stderr.write(text));
   const logger = deps.logger ?? noopLogger;
   const env = deps.env ?? process.env;
   const readCreds = deps.readCredentials ?? readCredentialsDefault;
@@ -343,16 +335,12 @@ export async function runStartClaudeCommand(
   const fetchImpl = deps.fetchImpl ?? fetch;
   const locate = deps.locateClaudeCli ?? findGlobalClaudeCliPathDefault;
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
-  const startSessionClient =
-    deps.startSessionClient ?? startSessionClientDefault;
-  const registerRpc =
-    deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
-  const createOutbox =
-    deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
-  const doReportSessionStatus =
-    deps.reportSessionStatus ?? reportSessionStatusDefault;
-  const doAcquireSessionLock =
-    deps.acquireSessionLock ?? acquireSessionLockDefault;
+  const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
+  const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
+  const createOutbox = deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
+  const doReportSessionStatus = deps.reportSessionStatus ?? reportSessionStatusDefault;
+  const doReportSessionAttention = deps.reportSessionAttention ?? reportSessionAttentionDefault;
+  const doAcquireSessionLock = deps.acquireSessionLock ?? acquireSessionLockDefault;
   const doNotifyDaemonSessionStarted =
     deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
 
@@ -362,9 +350,7 @@ export async function runStartClaudeCommand(
   // `claudeLocal.ts`'s `resolveSessionFlags`, just for a flag that isn't
   // Claude Code's to interpret at all).
   const forceNewSession = deps.claudeArgs.includes("--force-new-session");
-  const claudeArgs = deps.claudeArgs.filter(
-    (arg) => arg !== "--force-new-session",
-  );
+  const claudeArgs = deps.claudeArgs.filter((arg) => arg !== "--force-new-session");
 
   // 1. Never touch the network without credentials (no silent failures).
   const credentials = readCreds(deps.homeDir);
@@ -506,9 +492,7 @@ export async function runStartClaudeCommand(
       sessionId: bootstrap.sessionId,
       metadata: sessionMetadata,
       encryption: {
-        encryptionKey: encodeBase64(
-          wrapDek(bootstrap.dek, contentKeyPair.publicKey),
-        ),
+        encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
         seq: 0,
         metadataVersion: 0,
         agentStateVersion: 0,
@@ -544,6 +528,20 @@ export async function runStartClaudeCommand(
       sessionId: bootstrap.sessionId,
       status,
       error,
+    });
+  };
+
+  // Fix-plan task 4 (docs/user-flows.md): fire-and-forget `POST /v1/sessions/
+  // :id/notify` for a pending permission/question or a completed turn, so a
+  // push notification actually reaches a user who's walked away — nobody
+  // calls this route today. `reportSessionAttention` itself never throws
+  // (typed result), so this is a plain fire-and-forget, unlike
+  // `reportStatusOnce`'s once-only guard: attention fires many times over a
+  // session's life, not once at exit.
+  const reportAttention = (kind: SessionAttentionKind): void => {
+    void doReportSessionAttention(statusDeps, {
+      sessionId: bootstrap.sessionId,
+      kind,
     });
   };
 
@@ -611,9 +609,7 @@ export async function runStartClaudeCommand(
     metadataVersion: 0,
     fetchImpl,
   });
-  const handlePossibleModelChange = (
-    envelopes: readonly SessionEnvelope[],
-  ): void => {
+  const handlePossibleModelChange = (envelopes: readonly SessionEnvelope[]): void => {
     const nextModel = findClaudeModelChangeInEnvelopes(envelopes);
     if (!nextModel) return;
     void sessionMetadataUpdater.updateModel(nextModel).catch((error) => {
@@ -660,23 +656,15 @@ export async function runStartClaudeCommand(
   // Claim a send BEFORE it reaches the agent — a retried/duplicated RPC must
   // never run the agent twice (design §7.10). Returns either the text to
   // deliver (fresh claim) or the honest tri-state RPC response to send back.
-  type MessageEnvelope = Parameters<
-    SessionRpcHandlers["message"]
-  >[0]["envelope"];
+  type MessageEnvelope = Parameters<SessionRpcHandlers["message"]>[0]["envelope"];
   type MessageResult = Awaited<ReturnType<SessionRpcHandlers["message"]>>;
   const beginSend = async (
     envelope: MessageEnvelope,
-  ): Promise<
-    | { proceed: true; text: string }
-    | { proceed: false; response: MessageResult }
-  > => {
+  ): Promise<{ proceed: true; text: string } | { proceed: false; response: MessageResult }> => {
     if (envelope.ev.t !== "text") {
-      logger.warn(
-        "[start-claude] message RPC delivered a non-text envelope; dropping",
-        {
-          type: envelope.ev.t,
-        },
-      );
+      logger.warn("[start-claude] message RPC delivered a non-text envelope; dropping", {
+        type: envelope.ev.t,
+      });
       return { proceed: false, response: { queued: false } };
     }
     const text = envelope.ev.md;
@@ -684,24 +672,18 @@ export async function runStartClaudeCommand(
       homeDir: deps.homeDir,
     });
     if (claim.status === "completed") {
-      logger.debug(
-        "[start-claude] message RPC replay — claim already completed",
-        {
-          id: envelope.id,
-        },
-      );
+      logger.debug("[start-claude] message RPC replay — claim already completed", {
+        id: envelope.id,
+      });
       return {
         proceed: false,
         response: { queued: false, status: "duplicate" },
       };
     }
     if (claim.status === "in-progress") {
-      logger.warn(
-        "[start-claude] message RPC outcome indeterminate — open claim, not re-running",
-        {
-          id: envelope.id,
-        },
-      );
+      logger.warn("[start-claude] message RPC outcome indeterminate — open claim, not re-running", {
+        id: envelope.id,
+      });
       return {
         proceed: false,
         response: { queued: false, status: "outcome-unknown" },
@@ -724,8 +706,7 @@ export async function runStartClaudeCommand(
    * prompts route to the web PermCard.
    */
   async function runLocalPty(): Promise<number> {
-    const runPtySession =
-      deps.startPtyClaudeSession ?? startPtyClaudeSessionDefault;
+    const runPtySession = deps.startPtyClaudeSession ?? startPtyClaudeSessionDefault;
     const installRemotePermHook =
       deps.installRemotePermissionHook ?? installRemotePermissionHookDefault;
 
@@ -742,10 +723,7 @@ export async function runStartClaudeCommand(
         hooksDir: defaultHooksDir(deps.homeDir),
         emitEnvelope: (envelope) => outbox.enqueue([envelope]),
         onSessionId: (id) => {
-          logger.debug(
-            "[start-claude] provider session id from SessionStart hook",
-            { id },
-          );
+          logger.debug("[start-claude] provider session id from SessionStart hook", { id });
           ptyHandle?.notifyProviderSessionId(id);
         },
         // "perm"/"question" mean Claude Code is showing (or about to show) a
@@ -764,17 +742,30 @@ export async function runStartClaudeCommand(
         // ending is safe to reflect regardless of who started it.
         onAttention: (kind) => {
           logger.debug("[start-claude] attention from hook", { kind });
-          if (
-            (kind === "perm" || kind === "question") &&
-            !permHook?.isWebTurnActive()
-          ) {
+          if ((kind === "perm" || kind === "question") && !permHook?.isWebTurnActive()) {
             ptyHandle?.setPromptOpen(true);
           }
-          if (kind === "done") ptyHandle?.setPromptOpen(false);
+          if (kind === "done") {
+            ptyHandle?.setPromptOpen(false);
+            // Fix-plan task 1 (docs/user-flows.md): the `Stop` hook is
+            // Claude Code's own authoritative "the turn just finished"
+            // signal — close the turn on the wire the instant it fires
+            // instead of waiting for the transcript scanner to retroactively
+            // close it on the NEXT prompt (`envelopeMapper.ts`'s `closeTurn`,
+            // only ever called from the `type:"user"` branch).
+            ptyHandle?.closeTurn("completed");
+            reportAttention("done");
+          }
         },
         // The bridge's local-turn path (a dialog may be about to render at
         // the terminal) — the earlier, less certain half of the same gate.
         onPromptLikely: () => ptyHandle?.setPromptOpen(true),
+        // Fix-plan task 4 (docs/user-flows.md): fires for BOTH web- and
+        // locally-initiated turns (unlike the `perm-request` envelope this
+        // bridge emits, which stays local-turn-honest) — a push notification
+        // is a harmless side-signal, and the server's own presence
+        // suppression already avoids over-notifying an actively-watching tab.
+        onPendingAttention: (kind) => reportAttention(kind),
         logger,
       });
     } catch (error) {
@@ -794,8 +785,7 @@ export async function runStartClaudeCommand(
         // `--resume` composition from this) — set only when a caller
         // arranged the reconnect env ahead of this spawn (plan-v2.md W3.7);
         // ordinarily absent, i.e. a fresh provider session.
-        providerSessionId:
-          env.FALCON_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
+        providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
         homeDir: deps.homeDir,
         env,
         // The single shared hook server's `--settings` file + env — so the
@@ -806,8 +796,7 @@ export async function runStartClaudeCommand(
           // The tailer's next tool-result is the precise "the dialog that was
           // open is gone" signal — clears the gate the attention/onPromptLikely
           // wiring above set (plan-v2.md W1.3).
-          if (envelopes.some((e) => e.ev.t === "tool-end"))
-            ptyHandle?.setPromptOpen(false);
+          if (envelopes.some((e) => e.ev.t === "tool-end")) ptyHandle?.setPromptOpen(false);
           handlePossibleModelChange(envelopes);
           outbox.enqueue(envelopes);
         },
@@ -827,8 +816,7 @@ export async function runStartClaudeCommand(
         // envelope id then sees `duplicate` (claim already completed) rather
         // than `outcome-unknown` for a message that never actually ran.
         onDroppedInjections: (messages) => {
-          for (const m of messages)
-            completeClaim(m.id, { status: "dropped-session-ended" });
+          for (const m of messages) completeClaim(m.id, { status: "dropped-session-ended" });
         },
         // A locally-typed Enter at the real keyboard is the human reclaiming
         // the turn — clear the web-turn flag immediately (plan-v2.md W1.2).
@@ -849,9 +837,7 @@ export async function runStartClaudeCommand(
     // is spawned (or, if `runPtySession`'s own setup failed, about to report
     // that below via a non-zero `done` exit code; `ptyClaudeSession.ts`'s
     // `done` never rejects, so a spawn failure is only observable that way).
-    outbox.enqueue([
-      createEnvelope("agent", { t: "service", text: "session started" }),
-    ]);
+    outbox.enqueue([createEnvelope("agent", { t: "service", text: "session started" })]);
 
     const rpcHandlers: SessionRpcHandlers = {
       message: async ({ envelope }) => {
@@ -893,29 +879,21 @@ export async function runStartClaudeCommand(
 
         const presses = permissionModeCyclePresses(current, mode);
         if (!ptySession.sendModeCycle(presses)) {
-          logger.debug(
-            "[start-claude] setMode: injection gate closed — not sending keystrokes",
-            {
-              current,
-              requested: mode,
-              presses,
-            },
-          );
+          logger.debug("[start-claude] setMode: injection gate closed — not sending keystrokes", {
+            current,
+            requested: mode,
+            presses,
+          });
           return { ok: false, observedMode: current };
         }
 
-        const observed =
-          (await permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS)) ??
-          null;
+        const observed = (await permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS)) ?? null;
         if (observed === mode) return { ok: true, observedMode: observed };
 
-        logger.warn(
-          "[start-claude] setMode: hook echo did not confirm the switch",
-          {
-            requested: mode,
-            observed,
-          },
-        );
+        logger.warn("[start-claude] setMode: hook echo did not confirm the switch", {
+          requested: mode,
+          observed,
+        });
         return { ok: false, observedMode: observed ?? current };
       },
       // Remote answering of the live TUI's tool-permission prompt (design
@@ -923,9 +901,7 @@ export async function runStartClaudeCommand(
       // the hook server failed to install is this honestly not-supported.
       permAnswer: async ({ reqId, decision }) => {
         if (permHook) return permHook.resolvePermission({ reqId, decision });
-        logger.debug(
-          "[start-claude] perm.answer RPC — no live permission hook to route to",
-        );
+        logger.debug("[start-claude] perm.answer RPC — no live permission hook to route to");
         return { ok: false };
       },
       // "End session" from the web (plan-v2.md W2.3): report "ended" FIRST
@@ -970,17 +946,13 @@ export async function runStartClaudeCommand(
     // "spawn failed" vs "the child genuinely exited 1").
     await reportStatusOnce(
       exitCode === 0 ? "ended" : "failed",
-      exitCode === 0
-        ? undefined
-        : new Error(`claude exited with code ${exitCode}`),
+      exitCode === 0 ? undefined : new Error(`claude exited with code ${exitCode}`),
     );
     outbox.enqueue([
       createEnvelope("agent", {
         t: "service",
         text:
-          exitCode === 0
-            ? "session ended"
-            : `session ended unexpectedly (exit code ${exitCode})`,
+          exitCode === 0 ? "session ended" : `session ended unexpectedly (exit code ${exitCode})`,
       }),
     ]);
     return exitCode;

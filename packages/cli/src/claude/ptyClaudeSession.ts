@@ -57,7 +57,13 @@ import type { SessionEnvelope } from "@falcon/wire";
 import { spawn as spawnPtyDefault } from "node-pty";
 import type { Logger } from "../logger.js";
 import { FALCON_SYSTEM_PROMPT, findLastLocalSession, resolveSessionFlags } from "./claudeLocal.js";
-import { createClaudeEnvelopeMapperState, mapClaudeToEnvelopes } from "./envelopeMapper.js";
+import {
+  type ClaudeEnvelopeMapperState,
+  closeClaudeTurnWithStatus,
+  createClaudeEnvelopeMapperState,
+  mapClaudeToEnvelopes,
+  type SessionTurnEndStatus,
+} from "./envelopeMapper.js";
 import { InjectionController, type PendingInjection } from "./injectionController.js";
 import {
   createFetchSignalServer as createFetchSignalServerDefault,
@@ -229,6 +235,18 @@ export interface PtyClaudeSessionHandle {
    * than pretending the switch happened.
    */
   sendModeCycle(presses: number): boolean;
+  /**
+   * Force-closes the currently open turn on the wire, the instant Claude
+   * Code's own `Stop` hook fires (docs/user-flows.md fix-plan task 1) —
+   * reuses the SAME tailer mapper state `onEnvelopes` is driven from
+   * (`envelopeMapper.ts`'s `closeClaudeTurnWithStatus`), rather than
+   * inventing a parallel turn-tracking mechanism. A no-op when no turn is
+   * currently open (e.g. the transcript scanner's own `type:"user"` branch
+   * already closed it first) — `closeClaudeTurnWithStatus` itself is
+   * idempotent. Any resulting `turn-end` (and `sub-stop`) envelopes are
+   * forwarded through `onEnvelopes`, exactly like a tailer-driven turn close.
+   */
+  closeTurn(status: SessionTurnEndStatus): void;
   /** Terminates the session (SIGTERM to the pty child). Safe to call once. */
   stop(): void;
 }
@@ -272,6 +290,12 @@ export function startPtyClaudeSession(
     if (scanner) void scanner.onNewSession(id);
     else bufferedSessionId = id;
   };
+
+  // The tailer's turn-tracking state (created once the scanner is up, in
+  // `run()` below) — hoisted here so `closeTurn()` on the returned handle can
+  // reuse the SAME state `onMessage`'s `mapClaudeToEnvelopes` call mutates,
+  // rather than tracking a second, parallel notion of "is a turn open".
+  let mapperState: ClaudeEnvelopeMapperState | null = null;
 
   const controller = new InjectionController({
     writeText: (text) => ptyProcess?.write(text),
@@ -348,12 +372,17 @@ export function startPtyClaudeSession(
       // provider session id that drives `onNewSession` comes from the caller's
       // single shared hook server via `notifyProviderSessionId()`, not a
       // hook server owned here.
-      const mapperState = createClaudeEnvelopeMapperState();
+      // Captured in a non-null local for the `onMessage` closure below —
+      // `mapperState` itself stays a mutable outer `let` (nullable until
+      // `run()` reaches here) so `closeTurn()` on the returned handle can
+      // reuse it too (see that field's own doc comment).
+      const state = createClaudeEnvelopeMapperState();
+      mapperState = state;
       const sessionScanner: SessionScanner = await createSessionScanner({
         sessionId: opts.providerSessionId,
         workingDirectory: opts.workingDirectory,
         onMessage: (raw) => {
-          const envelopes = mapClaudeToEnvelopes(raw, mapperState);
+          const envelopes = mapClaudeToEnvelopes(raw, state);
           if (envelopes.length > 0) opts.onEnvelopes(envelopes);
         },
         logger,
@@ -529,6 +558,11 @@ export function startPtyClaudeSession(
       if (!controller.canInjectNow) return false;
       for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
       return true;
+    },
+    closeTurn: (status) => {
+      if (!mapperState) return;
+      const envelopes = closeClaudeTurnWithStatus(mapperState, status);
+      if (envelopes.length > 0) opts.onEnvelopes(envelopes);
     },
     stop: () => {
       if (stopped) return;

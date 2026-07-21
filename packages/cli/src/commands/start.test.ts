@@ -2,11 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { encodeBase64, getRandomBytes, open } from "@falcon/crypto";
-import {
-  createEnvelope,
-  type EncryptedBox,
-  type SessionEnvelope,
-} from "@falcon/wire";
+import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon/wire";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
 import type { LoopOptions } from "../claude/loop.js";
@@ -28,11 +24,7 @@ import type {
   acquireSessionLock as acquireSessionLockType,
   SessionLockHandle,
 } from "../session/sessionLock.js";
-import {
-  type OutboxLike,
-  runStartClaudeCommand,
-  type StartClaudeCommandDeps,
-} from "./start.js";
+import { type OutboxLike, runStartClaudeCommand, type StartClaudeCommandDeps } from "./start.js";
 
 /** Captures every envelope batch handed to `outbox.enqueue()` — stands in for
  * the real `Outbox` (which seals/persists/POSTs, all things a unit test must
@@ -50,9 +42,7 @@ function fakeOutbox(): { outbox: OutboxLike; enqueued: SessionEnvelope[][] } {
   };
 }
 
-function fakeCredentials(
-  overrides: Partial<FalconCredentials> = {},
-): FalconCredentials {
+function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
     token: "test-token",
     masterSecretOrContentBundle: encodeBase64(getRandomBytes(32)),
@@ -71,9 +61,7 @@ function fakeDaemonState(overrides: Partial<DaemonState> = {}): DaemonState {
   };
 }
 
-function fakeClaudeLocation(
-  overrides: Partial<ClaudeCliLocation> = {},
-): ClaudeCliLocation {
+function fakeClaudeLocation(overrides: Partial<ClaudeCliLocation> = {}): ClaudeCliLocation {
   return { path: "/usr/local/bin/claude", source: "PATH", ...overrides };
 }
 
@@ -89,9 +77,7 @@ function fakeSessionClientHandle(
 }
 
 /** A fake PTY-injection session handle whose `done` resolves with an exit code. */
-function fakePtyHandle(
-  overrides: Partial<PtyClaudeSessionHandle> = {},
-): PtyClaudeSessionHandle {
+function fakePtyHandle(overrides: Partial<PtyClaudeSessionHandle> = {}): PtyClaudeSessionHandle {
   return {
     done: Promise.resolve(0),
     injectMessage: vi.fn(),
@@ -99,6 +85,7 @@ function fakePtyHandle(
     setPromptOpen: vi.fn(),
     sendInterrupt: vi.fn(() => true),
     sendModeCycle: vi.fn(() => true),
+    closeTurn: vi.fn(),
     stop: vi.fn(),
     ...overrides,
   };
@@ -140,9 +127,7 @@ function fakeRemotePermissionHook(
 }
 
 /** A fake, always-succeeding session-lock handle — never touches real disk. */
-function fakeSessionLockHandle(
-  overrides: Partial<SessionLockHandle> = {},
-): SessionLockHandle {
+function fakeSessionLockHandle(overrides: Partial<SessionLockHandle> = {}): SessionLockHandle {
   return {
     release: vi.fn(async () => {}),
     updateSessionId: vi.fn(async () => {}),
@@ -150,9 +135,7 @@ function fakeSessionLockHandle(
   };
 }
 
-function baseDeps(
-  overrides: Partial<StartClaudeCommandDeps> = {},
-): StartClaudeCommandDeps {
+function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeCommandDeps {
   const written: string[] = [];
   return {
     homeDir: "/fake/home",
@@ -185,6 +168,9 @@ function baseDeps(
     // report (W1.4) — same "no real network from a unit test" rule every
     // other injected dep here already follows.
     reportSessionStatus: vi.fn(async () => ({ type: "ok" }) as const),
+    // Never let a unit test hit the real backend for an attention-notify
+    // report (docs/user-flows.md fix-plan task 4) either.
+    reportSessionAttention: vi.fn(async () => ({ type: "ok" }) as const),
     // Never touch a real per-directory lock file or a real daemon control
     // server from a unit test — both default to safe, always-succeeding fakes.
     acquireSessionLock: vi.fn(async () => ({
@@ -215,8 +201,7 @@ describe("runStartClaudeCommand — preflight", () => {
       baseDeps({
         readCredentials: () => null,
         startPtyClaudeSession,
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
         writeError: (text) => stderr.push(text),
       }),
     );
@@ -292,9 +277,7 @@ describe("runStartClaudeCommand — preflight", () => {
 
 describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   it("wires the located claude path, launcher, workdir and args into the PTY session and returns its exit code", async () => {
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ done: Promise.resolve(42) }),
-    );
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(42) }));
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_42",
       dek: getRandomBytes(32),
@@ -305,10 +288,8 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const code = await runStartClaudeCommand(
       baseDeps({
         claudeArgs: ["--model", "opus"],
-        locateClaudeCli: () =>
-          fakeClaudeLocation({ path: "/opt/claude/cli.js" }),
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        locateClaudeCli: () => fakeClaudeLocation({ path: "/opt/claude/cli.js" }),
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
         startPtyClaudeSession,
         loop: vi.fn(async () => 0),
       }),
@@ -337,8 +318,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     await runStartClaudeCommand(
       baseDeps({
         claudeArgs: ["--model", "opus", "--verbose"],
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
       }),
     );
 
@@ -361,8 +341,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     await runStartClaudeCommand(
       baseDeps({
         claudeArgs: ["--verbose"],
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
       }),
     );
 
@@ -420,8 +399,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     await runStartClaudeCommand(
       baseDeps({
         env: reconnectEnv,
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
       }),
     );
 
@@ -491,8 +469,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     await runStartClaudeCommand(
       baseDeps({
         env: fullReconnectEnv,
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
         startPtyClaudeSession,
       }),
     );
@@ -583,19 +560,13 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   it("routes the hook server's SessionStart provider session id into the PTY tailer", async () => {
     const notifyProviderSessionId = vi.fn();
     let onSessionId: ((id: string) => void) | undefined;
-    const installRemotePermissionHook = (async (opts: {
-      onSessionId?: (id: string) => void;
-    }) => {
+    const installRemotePermissionHook = (async (opts: { onSessionId?: (id: string) => void }) => {
       onSessionId = opts.onSessionId;
       return fakeRemotePermissionHook();
     }) as unknown as typeof installRemotePermissionHookType;
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ notifyProviderSessionId }),
-    );
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ notifyProviderSessionId }));
 
-    await runStartClaudeCommand(
-      baseDeps({ installRemotePermissionHook, startPtyClaudeSession }),
-    );
+    await runStartClaudeCommand(baseDeps({ installRemotePermissionHook, startPtyClaudeSession }));
 
     onSessionId?.("11111111-2222-3333-4444-555555555555");
     expect(notifyProviderSessionId).toHaveBeenCalledExactlyOnceWith(
@@ -614,12 +585,10 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       });
 
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
       await runStartClaudeCommand(
         baseDeps({
@@ -664,21 +633,17 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   it("completes a dropped injection's claim as dropped-session-ended so a retry sees an honest duplicate (W3.9)", async () => {
     const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-test-"));
     try {
-      let onDroppedInjections:
-        | ((messages: { id: string; text: string }[]) => void)
-        | undefined;
+      let onDroppedInjections: ((messages: { id: string; text: string }[]) => void) | undefined;
       const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
         onDroppedInjections = opts.onDroppedInjections;
         return fakePtyHandle();
       });
 
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
       await runStartClaudeCommand(
         baseDeps({
@@ -730,9 +695,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         },
       })) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     // The web turn is marked the moment the PTY reports the message submitted —
     // so THIS turn's PreToolUse prompts route to the web PermCard.
@@ -753,9 +716,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         markLocalActivity,
       })) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     expect(markLocalActivity).not.toHaveBeenCalled();
     onLocalSubmit?.();
@@ -773,9 +734,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       return fakeRemotePermissionHook();
     }) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     onAttention?.("perm");
     expect(setPromptOpen).toHaveBeenLastCalledWith(true);
@@ -796,9 +755,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       return fakeRemotePermissionHook({ isWebTurnActive: () => true });
     }) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     onAttention?.("perm");
     onAttention?.("question");
@@ -807,20 +764,74 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(false);
   });
 
+  it("closes the turn on the wire and reports 'done' attention the instant the Stop hook fires (fix-plan task 1/4)", async () => {
+    const closeTurn = vi.fn();
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ closeTurn }));
+    let onAttention: ((kind: "perm" | "question" | "done") => void) | undefined;
+    const installRemotePermissionHook = (async (opts: {
+      onAttention?: (kind: "perm" | "question" | "done") => void;
+    }) => {
+      onAttention = opts.onAttention;
+      return fakeRemotePermissionHook();
+    }) as unknown as typeof installRemotePermissionHookType;
+    const reportSessionAttention = vi.fn(async () => ({ type: "ok" }) as const);
+
+    await runStartClaudeCommand(
+      baseDeps({
+        startPtyClaudeSession,
+        installRemotePermissionHook,
+        reportSessionAttention,
+      }),
+    );
+
+    expect(closeTurn).not.toHaveBeenCalled();
+    expect(reportSessionAttention).not.toHaveBeenCalled();
+
+    onAttention?.("done");
+
+    expect(closeTurn).toHaveBeenCalledExactlyOnceWith("completed");
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(expect.anything(), {
+      sessionId: "sess_1",
+      kind: "done",
+    });
+  });
+
+  it("reports 'perm'/'question' attention regardless of local vs. web turn, via the hook's onPendingAttention", async () => {
+    let onPendingAttention: ((kind: "perm" | "question") => void) | undefined;
+    const installRemotePermissionHook = (async (opts: {
+      onPendingAttention?: (kind: "perm" | "question") => void;
+    }) => {
+      onPendingAttention = opts.onPendingAttention;
+      return fakeRemotePermissionHook();
+    }) as unknown as typeof installRemotePermissionHookType;
+    const reportSessionAttention = vi.fn(async () => ({ type: "ok" }) as const);
+
+    await runStartClaudeCommand(baseDeps({ installRemotePermissionHook, reportSessionAttention }));
+
+    onPendingAttention?.("perm");
+    onPendingAttention?.("question");
+
+    expect(reportSessionAttention).toHaveBeenCalledTimes(2);
+    expect(reportSessionAttention).toHaveBeenNthCalledWith(1, expect.anything(), {
+      sessionId: "sess_1",
+      kind: "perm",
+    });
+    expect(reportSessionAttention).toHaveBeenNthCalledWith(2, expect.anything(), {
+      sessionId: "sess_1",
+      kind: "question",
+    });
+  });
+
   it("opens the prompt gate when the bridge signals a local-turn dialog is likely", async () => {
     const setPromptOpen = vi.fn();
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ setPromptOpen }));
     let onPromptLikely: (() => void) | undefined;
-    const installRemotePermissionHook = (async (opts: {
-      onPromptLikely?: () => void;
-    }) => {
+    const installRemotePermissionHook = (async (opts: { onPromptLikely?: () => void }) => {
       onPromptLikely = opts.onPromptLikely;
       return fakeRemotePermissionHook();
     }) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     expect(setPromptOpen).not.toHaveBeenCalled();
     onPromptLikely?.();
@@ -861,12 +872,10 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendInterrupt }));
 
     let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn(
-      (rpcDeps: { handlers: SessionRpcHandlers }) => {
-        capturedHandlers = rpcDeps.handlers;
-        return { stop: vi.fn() };
-      },
-    );
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
 
     await runStartClaudeCommand(
       baseDeps({
@@ -915,23 +924,18 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       env?: Record<string, string>;
     }) {
       const sendModeCycle = overrides.sendModeCycle ?? vi.fn(() => true);
-      const startPtyClaudeSession = vi.fn(() =>
-        fakePtyHandle({ sendModeCycle }),
-      );
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendModeCycle }));
       const installRemotePermissionHook = (async () =>
         fakeRemotePermissionHook({
-          getCurrentPermissionMode:
-            overrides.getCurrentPermissionMode ?? (() => null),
+          getCurrentPermissionMode: overrides.getCurrentPermissionMode ?? (() => null),
           waitForModeEcho: overrides.waitForModeEcho ?? (async () => null),
         })) as unknown as typeof installRemotePermissionHookType;
 
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
       await runStartClaudeCommand(
         baseDeps({
@@ -1030,12 +1034,10 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const sendInterrupt = vi.fn(() => false);
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendInterrupt }));
     let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn(
-      (rpcDeps: { handlers: SessionRpcHandlers }) => {
-        capturedHandlers = rpcDeps.handlers;
-        return { stop: vi.fn() };
-      },
-    );
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
 
     await runStartClaudeCommand(
       baseDeps({
@@ -1053,16 +1055,12 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const ptyStop = vi.fn();
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ stop: ptyStop }));
     let capturedHandlers: SessionRpcHandlers | null = null;
-    const registerSessionRpcHandlers = vi.fn(
-      (rpcDeps: { handlers: SessionRpcHandlers }) => {
-        capturedHandlers = rpcDeps.handlers;
-        return { stop: vi.fn() };
-      },
-    );
+    const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+      capturedHandlers = rpcDeps.handlers;
+      return { stop: vi.fn() };
+    });
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, registerSessionRpcHandlers }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, registerSessionRpcHandlers }));
 
     const handlers = capturedHandlers as unknown as SessionRpcHandlers;
     // The `finally` teardown already called ptySession.stop() once by the
@@ -1076,22 +1074,16 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
   it("stop RPC with force schedules a process exit after the grace period", async () => {
     vi.useFakeTimers();
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => undefined as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     try {
       const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
-      await runStartClaudeCommand(
-        baseDeps({ startPtyClaudeSession, registerSessionRpcHandlers }),
-      );
+      await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, registerSessionRpcHandlers }));
 
       const handlers = capturedHandlers as unknown as SessionRpcHandlers;
       const result = await handlers.stop({ force: true });
@@ -1108,9 +1100,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
   it("reports the session 'ended' with no error on a clean (code 0) exit", async () => {
     const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ done: Promise.resolve(0) }),
-    );
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(0) }));
 
     const code = await runStartClaudeCommand(
       baseDeps({ startPtyClaudeSession, reportSessionStatus }),
@@ -1118,8 +1108,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
     expect(code).toBe(0);
     expect(reportSessionStatus).toHaveBeenCalledOnce();
-    const [reportDeps, reportParams] = reportSessionStatus.mock
-      .calls[0] as unknown as [
+    const [reportDeps, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
       { accessToken: string },
       { sessionId: string; status: string; error?: Error },
     ];
@@ -1133,9 +1122,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
   it("reports the session 'failed' with the exit code in the error on a non-zero exit", async () => {
     const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ done: Promise.resolve(7) }),
-    );
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(7) }));
 
     const code = await runStartClaudeCommand(
       baseDeps({ startPtyClaudeSession, reportSessionStatus }),
@@ -1161,12 +1148,10 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
           throw new Error("port in use");
         }) as unknown as typeof installRemotePermissionHookType,
         startPtyClaudeSession,
-        registerSessionRpcHandlers: vi.fn(
-          (rpcDeps: { handlers: SessionRpcHandlers }) => {
-            capturedHandlers = rpcDeps.handlers;
-            return { stop: vi.fn() };
-          },
-        ),
+        registerSessionRpcHandlers: vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+          capturedHandlers = rpcDeps.handlers;
+          return { stop: vi.fn() };
+        }),
       }),
     );
 
@@ -1180,9 +1165,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
     // With no hook installed, perm.answer is honestly not-supported again.
     const handlers = capturedHandlers as unknown as SessionRpcHandlers;
-    await expect(
-      handlers.permAnswer({ reqId: "x", decision: { kind: "deny" } }),
-    ).resolves.toEqual({
+    await expect(handlers.permAnswer({ reqId: "x", decision: { kind: "deny" } })).resolves.toEqual({
       ok: false,
     });
   });
@@ -1192,18 +1175,14 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   describe("lifecycle service envelopes", () => {
     it("enqueues a 'session started' service envelope once the PTY session is spawned, then 'session ended' on a clean exit", async () => {
       const { outbox, enqueued } = fakeOutbox();
-      const startPtyClaudeSession = vi.fn(() =>
-        fakePtyHandle({ done: Promise.resolve(0) }),
-      );
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(0) }));
 
       const code = await runStartClaudeCommand(
         baseDeps({ startPtyClaudeSession, createOutbox: () => outbox }),
       );
 
       expect(code).toBe(0);
-      const serviceEnvelopes = enqueued
-        .flat()
-        .filter((e) => e.ev.t === "service");
+      const serviceEnvelopes = enqueued.flat().filter((e) => e.ev.t === "service");
       const serviceTexts = serviceEnvelopes.map((e) =>
         e.ev.t === "service" ? e.ev.text : undefined,
       );
@@ -1213,9 +1192,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
     it("enqueues a distinguishing 'session ended unexpectedly' note for a non-zero exit (covers spawn failures too — ptyClaudeSession.ts's own setup-failure path resolves `done` the same way)", async () => {
       const { outbox, enqueued } = fakeOutbox();
-      const startPtyClaudeSession = vi.fn(() =>
-        fakePtyHandle({ done: Promise.resolve(1) }),
-      );
+      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(1) }));
 
       const code = await runStartClaudeCommand(
         baseDeps({ startPtyClaudeSession, createOutbox: () => outbox }),
@@ -1226,10 +1203,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         .flat()
         .filter((e) => e.ev.t === "service")
         .map((e) => (e.ev.t === "service" ? e.ev.text : undefined));
-      expect(serviceTexts).toEqual([
-        "session started",
-        "session ended unexpectedly (exit code 1)",
-      ]);
+      expect(serviceTexts).toEqual(["session started", "session ended unexpectedly (exit code 1)"]);
     });
   });
 });
@@ -1256,9 +1230,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
         }),
     );
     const onSpy = vi.spyOn(process, "on");
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     const resultPromise = runStartClaudeCommand(
       baseDeps({
@@ -1270,14 +1242,10 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     );
 
     await vi.waitFor(() => {
-      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(
-        true,
-      );
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
     });
     const sigtermCall = onSpy.mock.calls.find(([event]) => event === "SIGTERM");
-    const handler = sigtermCall?.[1] as
-      | ((signal: NodeJS.Signals) => void)
-      | undefined;
+    const handler = sigtermCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
     expect(handler).toBeDefined();
 
     handler?.("SIGTERM");
@@ -1313,9 +1281,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
         }),
     );
     const onSpy = vi.spyOn(process, "on");
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     const resultPromise = runStartClaudeCommand(
       baseDeps({
@@ -1330,9 +1296,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
       expect(onSpy.mock.calls.some(([event]) => event === "SIGHUP")).toBe(true);
     });
     const sighupCall = onSpy.mock.calls.find(([event]) => event === "SIGHUP");
-    const handler = sighupCall?.[1] as
-      | ((signal: NodeJS.Signals) => void)
-      | undefined;
+    const handler = sighupCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
     expect(handler).toBeDefined();
 
     handler?.("SIGHUP");
@@ -1363,9 +1327,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
       return 5;
     });
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
-    const installRemotePermissionHook = vi.fn(async () =>
-      fakeRemotePermissionHook(),
-    );
+    const installRemotePermissionHook = vi.fn(async () => fakeRemotePermissionHook());
     const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
 
     const code = await runStartClaudeCommand(
@@ -1421,9 +1383,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 
   it("routes a message RPC into loop()'s onMessage subscribers on the remote flow", async () => {
-    const homeDir = await mkdtemp(
-      path.join(tmpdir(), "falcon-start-remote-test-"),
-    );
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-test-"));
     try {
       const received: { id: string; text: string }[] = [];
       const loop = vi.fn(async (options: LoopOptions) => {
@@ -1431,12 +1391,10 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
         return 0;
       });
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
       await runStartClaudeCommand(
         baseDeps({
@@ -1499,9 +1457,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 
   it("routes a stop RPC into loop()'s onExitRequested subscribers on the remote flow", async () => {
-    const homeDir = await mkdtemp(
-      path.join(tmpdir(), "falcon-start-remote-stop-test-"),
-    );
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-stop-test-"));
     try {
       let exitRequests = 0;
       const loop = vi.fn(async (options: LoopOptions) => {
@@ -1511,12 +1467,10 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
         return 0;
       });
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
       await runStartClaudeCommand(
         baseDeps({
@@ -1537,25 +1491,19 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 
   it("stop RPC with force schedules a process exit after the grace period on the remote flow", async () => {
-    const homeDir = await mkdtemp(
-      path.join(tmpdir(), "falcon-start-remote-stop-force-test-"),
-    );
+    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-stop-force-test-"));
     vi.useFakeTimers();
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(() => undefined as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     try {
       const loop = vi.fn(async (options: LoopOptions) => {
         options.onExitRequested(() => {});
         return 0;
       });
       let capturedHandlers: SessionRpcHandlers | null = null;
-      const registerSessionRpcHandlers = vi.fn(
-        (rpcDeps: { handlers: SessionRpcHandlers }) => {
-          capturedHandlers = rpcDeps.handlers;
-          return { stop: vi.fn() };
-        },
-      );
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
 
       await runStartClaudeCommand(
         baseDeps({
@@ -1625,9 +1573,7 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     const permHookStop = vi.fn(async () => {});
     const sessionClientStop = vi.fn();
     const onSpy = vi.spyOn(process, "on");
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     const resultPromise = runStartClaudeCommand(
       baseDeps({
@@ -1638,21 +1584,15 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
           fakeRemotePermissionHook({
             stop: permHookStop,
           })) as unknown as typeof installRemotePermissionHookType,
-        startSessionClient: vi.fn(() =>
-          fakeSessionClientHandle({ stop: sessionClientStop }),
-        ),
+        startSessionClient: vi.fn(() => fakeSessionClientHandle({ stop: sessionClientStop })),
       }),
     );
 
     await vi.waitFor(() => {
-      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(
-        true,
-      );
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
     });
     const sigtermCall = onSpy.mock.calls.find(([event]) => event === "SIGTERM");
-    const handler = sigtermCall?.[1] as
-      | ((signal: NodeJS.Signals) => void)
-      | undefined;
+    const handler = sigtermCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
     expect(handler).toBeDefined();
 
     // Fire it twice — a signal racing itself (or a duplicate delivery) must
@@ -1694,9 +1634,7 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     const { handle, stop } = fakeStoppablePtyHandle();
     const startPtyClaudeSession = vi.fn(() => handle);
     const onSpy = vi.spyOn(process, "on");
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     const resultPromise = runStartClaudeCommand(
       baseDeps({ startPtyClaudeSession, reportSessionStatus }),
@@ -1706,9 +1644,7 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
       expect(onSpy.mock.calls.some(([event]) => event === "SIGHUP")).toBe(true);
     });
     const sighupCall = onSpy.mock.calls.find(([event]) => event === "SIGHUP");
-    const handler = sighupCall?.[1] as
-      | ((signal: NodeJS.Signals) => void)
-      | undefined;
+    const handler = sighupCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
     expect(handler).toBeDefined();
 
     handler?.("SIGHUP");
@@ -1757,22 +1693,18 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     const { handle } = fakeStoppablePtyHandle();
     const startPtyClaudeSession = vi.fn(() => handle);
     const onSpy = vi.spyOn(process, "on");
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     const resultPromise = runStartClaudeCommand(
       baseDeps({ startPtyClaudeSession, reportSessionStatus }),
     );
 
     await vi.waitFor(() => {
-      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(
-        true,
-      );
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGTERM")).toBe(true);
     });
-    const handler = onSpy.mock.calls.find(
-      ([event]) => event === "SIGTERM",
-    )?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    const handler = onSpy.mock.calls.find(([event]) => event === "SIGTERM")?.[1] as
+      | ((signal: NodeJS.Signals) => void)
+      | undefined;
     expect(handler).toBeDefined();
 
     // Fires the (still-pending) report AND synchronously resolves the PTY
@@ -1823,13 +1755,9 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     // A `done` that's already resolved by the time the signal fires — the
     // guard (`statusReported`) must hold regardless of which side "wins" the
     // race, not just the signal-first ordering the other tests exercise.
-    const startPtyClaudeSession = vi.fn(() =>
-      fakePtyHandle({ done: Promise.resolve(0) }),
-    );
+    const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ done: Promise.resolve(0) }));
     const onSpy = vi.spyOn(process, "on");
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
 
     const code = await runStartClaudeCommand(
       baseDeps({ startPtyClaudeSession, reportSessionStatus }),
@@ -1842,9 +1770,7 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     // directly simulates a signal landing just after normal completion —
     // it must be a harmless no-op, never a second report.
     const sigtermCall = onSpy.mock.calls.find(([event]) => event === "SIGTERM");
-    const handler = sigtermCall?.[1] as
-      | ((signal: NodeJS.Signals) => void)
-      | undefined;
+    const handler = sigtermCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
     expect(handler).toBeDefined();
     handler?.("SIGTERM");
 
@@ -1866,10 +1792,8 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
 
     const code = await runStartClaudeCommand(
       baseDeps({
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
         startPtyClaudeSession,
         writeError: (text) => stderr.push(text),
       }),
@@ -1893,8 +1817,7 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
 
     const code = await runStartClaudeCommand(
       baseDeps({
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
         writeError: (text) => stderr.push(text),
       }),
     );
@@ -1912,8 +1835,7 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
 
     const code = await runStartClaudeCommand(
       baseDeps({
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
         writeError: (text) => stderr.push(text),
       }),
     );
@@ -1929,8 +1851,7 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
     const code = await runStartClaudeCommand(
       baseDeps({
         claudeArgs: ["--force-new-session", "--some-claude-flag"],
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
         startPtyClaudeSession,
       }),
     );
@@ -1963,12 +1884,10 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
 
     const code = await runStartClaudeCommand(
       baseDeps({
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
         notifyDaemonSessionStarted:
           notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
-        bootstrapSession:
-          bootstrapSession as unknown as typeof bootstrapSessionType,
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
         startPtyClaudeSession: vi.fn(() => fakePtyHandle()),
       }),
     );
@@ -1998,8 +1917,7 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
 
     const code = await runStartClaudeCommand(
       baseDeps({
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
         bootstrapSession: vi.fn(async () => {
           throw new Error("boom");
         }) as unknown as typeof bootstrapSessionType,
@@ -2037,10 +1955,8 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
     const code = await runStartClaudeCommand(
       baseDeps({
         workingDirectory: "/fake/workdir",
-        readDaemonState: async () =>
-          fakeDaemonState({ machineId: "machine-xyz" }),
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        readDaemonState: async () => fakeDaemonState({ machineId: "machine-xyz" }),
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
       }),
     );
 
@@ -2064,8 +1980,7 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
     const code = await runStartClaudeCommand(
       baseDeps({
         claudeArgs: ["--starting-mode", "remote"],
-        acquireSessionLock:
-          acquireSessionLock as unknown as typeof acquireSessionLockType,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
         loop,
         writeError: (text) => stderr.push(text),
       }),

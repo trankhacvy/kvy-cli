@@ -712,4 +712,78 @@ describe("startPtyClaudeSession", () => {
       expect(handle.sendModeCycle(2)).toBe(false);
     });
   });
+
+  describe("closeTurn (docs/user-flows.md fix-plan task 1 — proactive turn-end)", () => {
+    it("force-closes the currently open turn, reusing the same tailer mapper state onEnvelopes is driven from", async () => {
+      const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
+      await tick();
+
+      const onMessage = h.getScannerOnMessage();
+      onMessage?.({
+        type: "assistant",
+        uuid: "a-1",
+        message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+      } as unknown as RawJSONLines);
+      onEnvelopes.mockClear();
+
+      handle.closeTurn("completed");
+
+      expect(onEnvelopes).toHaveBeenCalledOnce();
+      const [envelopes] = onEnvelopes.mock.calls[0] as [SessionEnvelope[]];
+      expect(envelopes).toHaveLength(1);
+      expect(envelopes[0]).toMatchObject({ ev: { t: "turn-end", status: "completed" } });
+
+      handle.stop();
+    });
+
+    it("is a no-op when no turn is currently open", async () => {
+      const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
+      await tick();
+
+      handle.closeTurn("completed");
+      expect(onEnvelopes).not.toHaveBeenCalled();
+
+      handle.stop();
+    });
+
+    it("is a no-op when called before the tailer's async setup has assigned its mapper state", async () => {
+      const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
+      // Called synchronously, before run()'s async scanner setup resolves.
+      handle.closeTurn("completed");
+      expect(onEnvelopes).not.toHaveBeenCalled();
+
+      await tick();
+      handle.stop();
+    });
+
+    it("does not re-close (and emits nothing) on a second call once already closed", async () => {
+      const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions({ onEnvelopes }), h.deps);
+      await tick();
+
+      const onMessage = h.getScannerOnMessage();
+      onMessage?.({
+        type: "assistant",
+        uuid: "a-1",
+        message: { role: "assistant", content: [{ type: "text", text: "hi" }] },
+      } as unknown as RawJSONLines);
+      onEnvelopes.mockClear();
+
+      handle.closeTurn("completed");
+      expect(onEnvelopes).toHaveBeenCalledOnce();
+      onEnvelopes.mockClear();
+
+      handle.closeTurn("completed");
+      expect(onEnvelopes).not.toHaveBeenCalled();
+
+      handle.stop();
+    });
+  });
 });
