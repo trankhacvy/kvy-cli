@@ -125,5 +125,17 @@ describe("session (window.localStorage present)", () => {
       setToken(fakeJwt({ exp: "not-a-number" }));
       expect(isTokenExpired()).toBe(true);
     });
+
+    it("a token with too many dot-separated segments -> treated as expired, not thrown", () => {
+      setToken("a.b.c.d");
+      expect(() => isTokenExpired()).not.toThrow();
+      expect(isTokenExpired()).toBe(true);
+    });
+
+    it("a token with an empty payload segment ('a..b') -> treated as expired, not thrown", () => {
+      setToken("a..b");
+      expect(() => isTokenExpired()).not.toThrow();
+      expect(isTokenExpired()).toBe(true);
+    });
   });
 });

@@ -202,6 +202,33 @@ describe("apiSocket", () => {
     expect(sockets[0]?.connected).toBe(false);
   });
 
+  it("does NOT fire its own 'disconnect' listeners for the teardown a connect_error triggers", () => {
+    // `teardown()` unsubscribes `handleDisconnect` from the underlying socket
+    // *before* calling `socket.disconnect()` (see apiSocket.ts), so the
+    // internal handler that re-emits apiSocket's own 'disconnect' event never
+    // runs for this path — only `authError` fires. This matters because
+    // `useConnectivity`'s `wsConnected` state is driven solely by that
+    // 'disconnect' event (not a poll of `isConnected()`): after an
+    // auth-rejection, `wsConnected` stays stuck at whatever it was before
+    // (typically `true`) even though `isConnected()` correctly reports
+    // `false`. Currently harmless because `OfflineBanner` checks
+    // `authExpired` before `wsConnected`, but that's an implicit coupling,
+    // not an enforced invariant — pinning down the actual event behavior
+    // here so a future change to either side doesn't silently regress it.
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const disconnectHandler = vi.fn();
+    client.on("disconnect", disconnectHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+
+    expect(client.isConnected()).toBe(false); // the synchronous query is accurate
+    expect(disconnectHandler).not.toHaveBeenCalled(); // but no event told a listener so
+  });
+
   it("ignores a connect_error that isn't an auth rejection (transport-level failure)", () => {
     const { factory, sockets } = createFakeSocketFactory();
     const { source } = createFakeVisibilitySource("active");
