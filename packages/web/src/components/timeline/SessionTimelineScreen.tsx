@@ -10,8 +10,8 @@ import {
   deriveAttention,
   deriveControlMode,
   deriveCurrentPermissionMode,
+  deriveWorking,
   getLastSeenAt,
-  isTurnOpen,
   markSeenNow,
   SessionControlProvider,
   type UseSessionControl,
@@ -90,8 +90,14 @@ export function SessionTimelineScreen({
     markSeenNow(sessionId);
   }, [sessionId]);
 
+  // `deriveWorking` (`session-state.ts`) is authoritative on `isTurnOpen(items)`
+  // — the always-fresh, persisted-envelope-derived signal — never masked by a
+  // stuck `ephemeralWorking` (docs/user-flows.md fix-plan item 2: the header
+  // must never show "Working…" once the transcript itself says the turn is
+  // closed). `ephemeralWorking` only ever contributes before this session has
+  // any turn history at all.
   const { working: ephemeralWorking, attentionKind } = useSessionEphemerals(sessionId);
-  const working = ephemeralWorking || isTurnOpen(items);
+  const working = deriveWorking(items, ephemeralWorking);
   // Recomputed every render rather than `useMemo`d: `items` is a small,
   // cheap-to-walk array (design principle #3: derived, never stored/cached
   // as a stale flag), and re-deriving on every render is correct regardless

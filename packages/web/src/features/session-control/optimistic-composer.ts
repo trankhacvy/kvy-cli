@@ -65,6 +65,23 @@ export function buildFileEnvelope(
   );
 }
 
+/**
+ * Whether some turn has closed at or after `sentAt` — the self-healing
+ * fallback `reconcilePending` uses for a still-`queued` entry that neither
+ * id nor text matching below has confirmed yet (docs/user-flows.md fix-plan
+ * item 3: the stale "Queued" banner + duplicate message bubble). Per the
+ * CLI's transcript mapper (`envelopeMapper.ts`'s `closeTurn`), a turn only
+ * ever closes when a *new* user message lands in the transcript — so a
+ * `turn-end` at/after the moment a message was queued is proof some user
+ * prompt has already been injected and the transcript has moved on past it.
+ * Given the injection controller flushes queued web messages strictly
+ * idle-gated and one at a time, that prompt is, in the ordinary single-actor
+ * case this indicator exists for, the queued message itself.
+ */
+function hasTurnClosedSince(items: RenderItem[], sentAt: number): boolean {
+  return items.some((item) => item.kind === "turn-end" && item.time >= sentAt);
+}
+
 /** Drops any pending message that has already landed in `items` (matched by
  * `RenderItem.id === localId`) — the reconciliation half of "optimistic
  * insert, reconciled by echo update". Falls back to matching by exact
@@ -78,6 +95,16 @@ export function buildFileEnvelope(
  * rather than a self-healing one). Each landed text item can satisfy at most
  * one pending entry, claimed in send order, so two genuinely distinct
  * pending sends with identical text don't both collapse onto one echo.
+ *
+ * A further, last-resort fallback (`hasTurnClosedSince` above) covers a
+ * still-`queued` entry that even the two matching passes above never
+ * confirm — e.g. an id AND content mismatch (a CLI-side reformat, a dropped
+ * id, or the entry simply being far enough behind other reconciled sends
+ * that its own echo is ambiguous). Restricted to `queued` entries only
+ * (never a send that was never queued in the first place, which has no
+ * "behind a turn" story to self-heal from) so it can't mask a genuinely
+ * still-in-flight, never-queued send.
+ *
  * Returns the same array reference when nothing changed, so callers can skip
  * a re-render via referential equality. */
 export function reconcilePending(pending: PendingMessage[], items: RenderItem[]): PendingMessage[] {
@@ -90,11 +117,15 @@ export function reconcilePending(pending: PendingMessage[], items: RenderItem[])
 
   const next = pending.filter((p) => {
     if (landedIds.has(p.localId)) return false;
-    if (p.kind !== "text") return true; // fallback only applies to text sends — attachments always carry a real blob ref
-    const match = landedUserTexts.find((item) => !claimed.has(item.id) && item.md === p.text);
-    if (!match) return true;
-    claimed.add(match.id);
-    return false;
+    if (p.kind === "text") {
+      const match = landedUserTexts.find((item) => !claimed.has(item.id) && item.md === p.text);
+      if (match) {
+        claimed.add(match.id);
+        return false;
+      }
+    }
+    if (p.queued && hasTurnClosedSince(items, p.sentAt)) return false;
+    return true;
   });
 
   return next.length === pending.length ? pending : next;
