@@ -143,6 +143,18 @@ tautologically-fails-if-removed property `pretoolPermissionBridge.test.ts`'s exi
     fs-watch/sandbox timing flakiness in this environment, untouched by FL5.2's diff (`git
     status` confirms `transcriptIndexer.ts`/`.test.ts` and `scanner.ts`/`.test.ts` are
     unmodified). Re-running the ACP-scoped suite alone is fully green.
+  - The full suite also intermittently surfaces additional flaky failures in
+    `src/claude/scanner.test.ts` (same root cause: fs-watch/debounce timing under resource
+    contention, not a fixed count — it's flaky, so how many of its 16 tests trip varies run to
+    run, up to 4 observed in one run in this environment). This is the same class of transient
+    flakiness CLAUDE.md already documents for the biome lint daemon ("Linter process terminated
+    abnormally (possibly out of memory)" from resource contention, not a config problem) — here
+    it's vitest's fs-watch/debounce timers racing real disk I/O under CPU/IO contention rather
+    than biome's daemon warm-up. Confirmed unrelated to this unit exactly as above:
+    `scanner.ts`/`scanner.test.ts` are untouched by FL5.2's diff (`git show 150ac90 --stat`), and
+    re-running the full suite immediately after passes 133/133 files, 1493/1493 tests clean —
+    the failures don't reproduce reliably, which is itself the signature of contention-driven
+    timing flakiness rather than a deterministic defect.
 - `pnpm lint` (biome) on the touched files (`packages/cli/src/acp/*`) — clean (0 errors; the one
   remaining `useOptionalChain` warning is pre-existing, in the untouched `reqIdFrom` test
   helper, not introduced by this change). Import-order was auto-fixed via `biome check --write`
@@ -165,10 +177,12 @@ tautologically-fails-if-removed property `pretoolPermissionBridge.test.ts`'s exi
 - **"new tests assert these call sites fire ... and would fail if removed"** — yes, both test
   files above; every assertion is a direct mock-call check against the production call site.
 - **"`pnpm build && pnpm typecheck && pnpm test` clean in the worktree"** — build and typecheck
-  are fully clean repo-wide. `pnpm test` has two pre-existing, unrelated failures (see
-  Verification above) reproduced identically on the pristine pre-change worktree via `git
-  stash` — not introduced by this unit. All ACP-scoped tests (the entire surface this unit
-  touches) are green.
+  are fully clean repo-wide. `pnpm test` has two pre-existing, unrelated, deterministic failures
+  (see Verification above) reproduced identically on the pristine pre-change worktree via `git
+  stash`, plus intermittent additional fs-watch/debounce-timing flakiness observed in
+  `src/claude/scanner.test.ts` under resource contention (same untouched-by-this-diff class of
+  flakiness, not deterministic — re-running passes 133/133 files clean) — none of it introduced
+  by this unit. All ACP-scoped tests (the entire surface this unit touches) are green.
 - **"no change to non-notify ACP behavior (permission decisions still resolve exactly as
   before)"** — yes: every new dep is optional and defaults to a no-op; the existing
   `acpPermissionHandler.test.ts`/`acpRemote.test.ts` suites (permission mapping, mode switches,
