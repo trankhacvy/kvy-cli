@@ -6,6 +6,7 @@ import { LsCard } from "./LsCard";
 import { McpGenericCard } from "./McpGenericCard";
 import { NotebookEditCard } from "./NotebookEditCard";
 import { ToolCard } from "./registry";
+import { TaskEntryCard } from "./TaskEntryCard";
 import { WebFetchCard } from "./WebFetchCard";
 import { WebSearchCard } from "./WebSearchCard";
 
@@ -68,5 +69,20 @@ describe("ToolCard registry — ExitPlanMode dispatch", () => {
   it("does not fall back to McpGenericCard for either spelling", () => {
     expect(ToolCard({ item: toolItem("ExitPlanMode") }).type).not.toBe(McpGenericCard);
     expect(ToolCard({ item: toolItem("exit_plan_mode") }).type).not.toBe(McpGenericCard);
+  });
+});
+
+/** bug-fix-plan.md #7: `TaskCreate`/`TaskUpdate` (Claude Code's current
+ * task/checklist tool pair, replacing `TodoWrite`) previously fell through
+ * to the raw-JSON `McpGenericCard` fallback like any unregistered tool. */
+describe("ToolCard registry — TaskCreate/TaskUpdate dispatch", () => {
+  it("routes both TaskCreate and TaskUpdate to TaskEntryCard", () => {
+    expect(ToolCard({ item: toolItem("TaskCreate") }).type).toBe(TaskEntryCard);
+    expect(ToolCard({ item: toolItem("TaskUpdate") }).type).toBe(TaskEntryCard);
+  });
+
+  it("does not fall back to McpGenericCard for either tool name", () => {
+    expect(ToolCard({ item: toolItem("TaskCreate") }).type).not.toBe(McpGenericCard);
+    expect(ToolCard({ item: toolItem("TaskUpdate") }).type).not.toBe(McpGenericCard);
   });
 });

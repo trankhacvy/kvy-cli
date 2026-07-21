@@ -10,6 +10,7 @@ import { McpGenericCard } from "./McpGenericCard";
 import { NotebookEditCard } from "./NotebookEditCard";
 import { ReadCard } from "./ReadCard";
 import { TaskCard } from "./TaskCard";
+import { TaskEntryCard } from "./TaskEntryCard";
 import { TodoCard } from "./TodoCard";
 import { WebFetchCard } from "./WebFetchCard";
 import { WebSearchCard } from "./WebSearchCard";
@@ -22,7 +23,10 @@ import { WebSearchCard } from "./WebSearchCard";
  * `WebFetch`/`WebSearch`/`NotebookEdit`/`LS` (plan-v2.md W3.1) round out
  * coverage against Happy's own `knownTools.tsx` (19 native tools).
  * `ExitPlanMode`/`exit_plan_mode` (bug-fix-plan.md #6) get a dedicated card
- * instead of falling to the raw-JSON `McpGenericCard` fallback. */
+ * instead of falling to the raw-JSON `McpGenericCard` fallback.
+ * `TaskCreate`/`TaskUpdate` (bug-fix-plan.md #7) are Claude Code's current
+ * task/checklist tool pair, replacing `TodoWrite` — they get their own
+ * `TaskEntryCard` instead of falling through to `McpGenericCard`. */
 const REGISTRY: Record<string, (item: ToolItem) => ReactElement> = {
   Bash: (item) => <BashCard item={item} />,
   Edit: (item) => <EditCard item={item} />,
@@ -34,6 +38,8 @@ const REGISTRY: Record<string, (item: ToolItem) => ReactElement> = {
   LS: (item) => <LsCard item={item} />,
   TodoWrite: (item) => <TodoCard item={item} />,
   Task: (item) => <TaskCard item={item} />,
+  TaskCreate: (item) => <TaskEntryCard item={item} />,
+  TaskUpdate: (item) => <TaskEntryCard item={item} />,
   AskUserQuestion: (item) => <AskUserQuestionToolCard item={item} />,
   ask_user_question: (item) => <AskUserQuestionToolCard item={item} />,
   WebFetch: (item) => <WebFetchCard item={item} />,

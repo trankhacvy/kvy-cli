@@ -1127,4 +1127,62 @@ describe("golden fixtures — real Claude Code transcripts", () => {
     const end = envelopes.find((e) => e.ev.t === "tool-end");
     expect(end?.ev).toMatchObject({ ok: false });
   });
+
+  it("task-create-update-session.jsonl: TaskCreate/TaskUpdate round-trip as plain tool-start/tool-end, args/output untransformed (bug-fix-plan.md #7)", () => {
+    // Real transcript slice (this repo's own Claude Code session) — neither
+    // tool has any special-cased mapping, so this pins down the generic
+    // passthrough for the web ToolCard registry to build on: `args` is
+    // exactly the tool_use `input` object, and tool-end `output` is the
+    // tool_result's plain confirmation *string* (never the richer
+    // `toolUseResult` object Claude Code also writes alongside it — that
+    // field is never read by this mapper at all).
+    const rows = loadFixtureLines("task-create-update-session.jsonl");
+    const state = createClaudeEnvelopeMapperState();
+    const envelopes = mapAll(rows, state);
+
+    const starts = envelopes.filter((e) => e.ev.t === "tool-start");
+    const ends = envelopes.filter((e) => e.ev.t === "tool-end");
+    expect(starts).toHaveLength(10); // 7 TaskCreate + 3 TaskUpdate
+    expect(ends).toHaveLength(10);
+    expect(starts.every((e) => (e.ev.t === "tool-start" ? e.ev.name !== "Task" : true))).toBe(true);
+
+    const firstCreate = starts.find((e) =>
+      e.ev.t === "tool-start" ? e.ev.name === "TaskCreate" : false,
+    );
+    expect(firstCreate?.ev).toMatchObject({
+      t: "tool-start",
+      name: "TaskCreate",
+      args: {
+        subject: "Prune merged workflow worktrees and branches",
+        activeForm: "Pruning merged worktrees",
+      },
+    });
+
+    const firstCreateCall = firstCreate?.ev.t === "tool-start" ? firstCreate.ev.call : undefined;
+    const firstCreateEnd = ends.find((e) => e.ev.t === "tool-end" && e.ev.call === firstCreateCall);
+    expect(firstCreateEnd?.ev).toMatchObject({
+      t: "tool-end",
+      ok: true,
+      output: "Task #1 created successfully: Prune merged workflow worktrees and branches",
+    });
+
+    const firstUpdate = starts.find((e) =>
+      e.ev.t === "tool-start" ? e.ev.name === "TaskUpdate" : false,
+    );
+    expect(firstUpdate?.ev).toMatchObject({
+      t: "tool-start",
+      name: "TaskUpdate",
+      args: { taskId: "1", status: "in_progress" },
+    });
+    const firstUpdateCall = firstUpdate?.ev.t === "tool-start" ? firstUpdate.ev.call : undefined;
+    const firstUpdateEnd = ends.find((e) => e.ev.t === "tool-end" && e.ev.call === firstUpdateCall);
+    // The structured `{success, taskId, updatedFields, statusChange}` shape
+    // Claude Code also records is NOT what lands in `output` — only the
+    // tool_result block's own plain-text `content` does.
+    expect(firstUpdateEnd?.ev).toMatchObject({
+      t: "tool-end",
+      ok: true,
+      output: "Updated task #1 status",
+    });
+  });
 });

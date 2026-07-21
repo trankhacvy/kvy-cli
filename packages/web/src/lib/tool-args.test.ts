@@ -12,6 +12,8 @@ import {
   parseLsArgs,
   parseNotebookEditArgs,
   parseReadArgs,
+  parseTaskCreateArgs,
+  parseTaskUpdateArgs,
   parseTodoItems,
   parseWebFetchArgs,
   parseWebSearchArgs,
@@ -408,5 +410,115 @@ describe("parseAskAnswers", () => {
     expect(parseAskAnswers({ nothingUseful: true })).toBeUndefined();
     expect(parseAskAnswers("raw string")).toBeUndefined();
     expect(parseAskAnswers(undefined)).toBeUndefined();
+  });
+});
+
+// Real shapes below are taken verbatim from a captured live transcript
+// (`packages/cli/src/claude/__fixtures__/task-create-update-session.jsonl`,
+// bug-fix-plan.md #7) — every `TaskCreate` call in that session creates
+// exactly one task with this args shape.
+describe("parseTaskCreateArgs", () => {
+  it("reads subject/description/activeForm from a real TaskCreate call", () => {
+    expect(
+      parseTaskCreateArgs({
+        subject: "Prune merged workflow worktrees and branches",
+        description:
+          "Remove .worktrees/* entries whose branches are fully merged into main (P0/P1/P17 land + task worktrees). Only delete worktrees with clean trees and merged branches.",
+        activeForm: "Pruning merged worktrees",
+      }),
+    ).toEqual({
+      subject: "Prune merged workflow worktrees and branches",
+      description:
+        "Remove .worktrees/* entries whose branches are fully merged into main (P0/P1/P17 land + task worktrees). Only delete worktrees with clean trees and merged branches.",
+      activeForm: "Pruning merged worktrees",
+    });
+  });
+
+  it("degrades to undefined fields when args has none of the expected keys", () => {
+    expect(parseTaskCreateArgs({})).toEqual({
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+  });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseTaskCreateArgs(undefined)).toEqual({
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+    expect(parseTaskCreateArgs("not an object")).toEqual({
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+    expect(parseTaskCreateArgs(null)).toEqual({
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+  });
+});
+
+// A real `TaskUpdate` call is a partial patch, not a full list — every call
+// in the captured fixture only ever carries `{taskId, status}`.
+describe("parseTaskUpdateArgs", () => {
+  it("reads taskId/status from a real TaskUpdate call", () => {
+    expect(parseTaskUpdateArgs({ taskId: "1", status: "in_progress" })).toEqual({
+      taskId: "1",
+      status: "in_progress",
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+  });
+
+  it("also reads the older task_id spelling", () => {
+    expect(parseTaskUpdateArgs({ task_id: "3", status: "completed" })).toEqual({
+      taskId: "3",
+      status: "completed",
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+  });
+
+  it("prefers taskId over task_id when both are present", () => {
+    expect(parseTaskUpdateArgs({ taskId: "1", task_id: "2", status: "completed" })).toMatchObject({
+      taskId: "1",
+    });
+  });
+
+  it("reads subject/description/activeForm updates alongside or instead of status", () => {
+    expect(
+      parseTaskUpdateArgs({
+        taskId: "4",
+        description: "Merged to main as f9c3ba9.",
+      }),
+    ).toEqual({
+      taskId: "4",
+      status: undefined,
+      subject: undefined,
+      description: "Merged to main as f9c3ba9.",
+      activeForm: undefined,
+    });
+  });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseTaskUpdateArgs(undefined)).toEqual({
+      taskId: undefined,
+      status: undefined,
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
+    expect(parseTaskUpdateArgs("not an object")).toEqual({
+      taskId: undefined,
+      status: undefined,
+      subject: undefined,
+      description: undefined,
+      activeForm: undefined,
+    });
   });
 });

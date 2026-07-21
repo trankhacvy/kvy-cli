@@ -260,6 +260,61 @@ export function parseExitPlanModeArgs(args: unknown): ExitPlanModeArgs {
   return { plan: readString(r, "plan") };
 }
 
+export interface TaskCreateArgs {
+  subject?: string;
+  description?: string;
+  activeForm?: string;
+}
+
+/** `TaskCreate` — Claude Code's current task/checklist-tracking tool (the
+ * successor to the older `TodoWrite`; bug-fix-plan.md #7). Verified against a
+ * real captured transcript (`packages/cli/src/claude/__fixtures__/
+ * task-create-update-session.jsonl`) rather than assumed: each `TaskCreate`
+ * call creates exactly *one* task, args shape `{subject, description,
+ * activeForm}` — nothing here resembles the old `TodoWrite` `{todos: [...]}`
+ * full-list shape. Degrades to `undefined` fields on any other shape, same
+ * as every other parser here. */
+export function parseTaskCreateArgs(args: unknown): TaskCreateArgs {
+  const r = asRecord(args);
+  return {
+    subject: readString(r, "subject"),
+    description: readString(r, "description"),
+    activeForm: readString(r, "activeForm"),
+  };
+}
+
+export interface TaskUpdateArgs {
+  taskId?: string;
+  status?: string;
+  subject?: string;
+  description?: string;
+  activeForm?: string;
+}
+
+/** `TaskUpdate` — a *partial patch* against one task by id, not a full
+ * checklist (verified against the same real transcript as
+ * `parseTaskCreateArgs`: every observed call only touched `status`, e.g.
+ * `{taskId: "1", status: "in_progress"}`; real transcripts from other
+ * sessions on this machine also show `subject`/`description`/`activeForm`
+ * updates via the same tool — none of them ever carry the other tasks in the
+ * list). `taskId` has been observed under both `taskId` (current) and
+ * `task_id` (older Claude Code versions) spellings, mirroring this file's
+ * existing `file_path`/`path`-style dual-spelling tolerance. Because a
+ * `TaskUpdate` call never carries the full list, this card renders each call
+ * as its own standalone status-change entry rather than trying to
+ * reconstruct cumulative list state — no sibling-item access exists at the
+ * `ToolItem` level to do that correctly (see `TaskEntryCard.tsx`). */
+export function parseTaskUpdateArgs(args: unknown): TaskUpdateArgs {
+  const r = asRecord(args);
+  return {
+    taskId: readString(r, "taskId") ?? readString(r, "task_id"),
+    status: readString(r, "status"),
+    subject: readString(r, "subject"),
+    description: readString(r, "description"),
+    activeForm: readString(r, "activeForm"),
+  };
+}
+
 export interface LsArgs {
   path?: string;
   ignore?: string[];
