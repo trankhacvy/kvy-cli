@@ -68,6 +68,15 @@ export interface SessionScannerOptions {
   missingFileTimeoutMs?: number;
   /** How often to re-scan watched sessions' files for new entries. Defaults to 3s. */
   pollIntervalMs?: number;
+  /**
+   * How long the directory-wide rotation fallback (see
+   * `watchProjectDirectoryForNewSessions`) stays armed after scanner start —
+   * and again briefly after a tracked session is dropped — before it stops
+   * trusting any new `*.jsonl` file it sees (bug-fix-plan.md #1). Defaults to
+   * `FALLBACK_ARMED_WINDOW_MS` (30s). Exposed mainly so tests can exercise the
+   * expiry path quickly.
+   */
+  fallbackArmedWindowMs?: number;
   logger?: Logger;
   /** Overrides `process.env` for resolving `CLAUDE_CONFIG_DIR` (mainly for tests). */
   env?: NodeJS.ProcessEnv;
@@ -187,6 +196,18 @@ async function readSessionEntries(
 const NEW_SESSION_ROTATION_DEBOUNCE_MS = 2000;
 
 /**
+ * How long the directory-wide rotation fallback trusts a newly-seen
+ * `*.jsonl` file, measured from scanner start (and re-armed briefly after a
+ * tracked session is dropped via `onGaveUp`). A bare `fs.watch` rename event
+ * can never prove a new file belongs to *this* scanner's own child process —
+ * it's only a reasonable signal right around when a rotation would actually
+ * be expected, not for the entire lifetime of a long-running session
+ * (bug-fix-plan.md #1, "Time-box the fallback's authority even in the
+ * no-hook case").
+ */
+const FALLBACK_ARMED_WINDOW_MS = 30_000;
+
+/**
  * Watches a Claude Code project transcript directory for newly-created
  * `*.jsonl` files, calling `onNewFile` with each one's session id (the
  * filename minus extension) — debounced per id so a burst of `rename`
@@ -196,7 +217,10 @@ const NEW_SESSION_ROTATION_DEBOUNCE_MS = 2000;
  * Claude Code hasn't created yet) — unlike `fileWatcher.ts`'s
  * `startFileWatcher`, there is no give-up: this watcher is meant to outlive
  * the whole session, and the directory will exist by the time any session
- * writes its first transcript entry.
+ * writes its first transcript entry. Its *authority* to adopt what it sees is
+ * bounded by the caller, though (see `hookConfirmed` / `fallbackArmedUntil` in
+ * `createSessionScanner`) — this function itself has no opinion on that, it
+ * only reports raw new-file sightings.
  */
 function watchProjectDirectoryForNewSessions(
   projectDir: string,
@@ -273,6 +297,7 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   const logger = opts.logger ?? noopLogger;
   const projectDir = getProjectPath(opts.workingDirectory, opts.env ?? process.env);
   const pollIntervalMs = opts.pollIntervalMs ?? 3000;
+  const fallbackArmedWindowMs = opts.fallbackArmedWindowMs ?? FALLBACK_ARMED_WINDOW_MS;
 
   const finishedSessions = new Set<string>();
   const pendingSessions = new Set<string>();
@@ -282,6 +307,18 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   // so they must never be re-collected or re-watched (see file header).
   const deadSessions = new Set<string>();
   let currentSessionId: string | null = null;
+  // Whether a `SessionStart` hook has ever confirmed this scanner's own
+  // session id via the public `onNewSession` entry point (seeded true when
+  // the caller already knows a real session id at construction — that also
+  // came from an authoritative source, not the directory-wide heuristic
+  // below). Once true, the directory-wide fallback below is never trusted
+  // again for a *different* file — see bug-fix-plan.md #1.
+  let hookConfirmed = opts.sessionId !== null;
+  // The directory-wide rotation fallback's authority is also time-boxed
+  // (bug-fix-plan.md #1 item 3): armed for `fallbackArmedWindowMs` from
+  // scanner start, and re-armed briefly whenever a tracked session is
+  // dropped (`onGaveUp`, below) — never for the scanner's entire lifetime.
+  let fallbackArmedUntil = Date.now() + fallbackArmedWindowMs;
 
   if (opts.sessionId) {
     const entries = await readSessionEntries(projectDir, opts.sessionId, logger);
@@ -361,6 +398,11 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
             watchers.delete(id);
             deadSessions.add(id);
             pendingSessions.delete(id);
+            // A rotation is plausible right after a drop (e.g. the dropped
+            // id's own process was slow, and a real replacement is about to
+            // show up) — briefly re-arm the fallback's authority rather than
+            // leaving it expired for the rest of the session.
+            fallbackArmedUntil = Date.now() + fallbackArmedWindowMs;
           },
         }),
       );
@@ -421,19 +463,27 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
    * The shared body of `onNewSession` — also called by the directory-rotation
    * fallback below, so both the caller-driven path (a `SessionStart` hook)
    * and the fallback path (no hook fired) go through identical dedup/pending
-   * bookkeeping.
+   * bookkeeping. `source` distinguishes the two: only `"hook"` (the
+   * caller-driven, authoritative path) may revive a previously-dropped
+   * (`deadSessions`) id — a `"fallback"`-sourced call has zero actual
+   * correlation to "this is my own process rotating," it's purely "a file
+   * with some other name appeared in a directory I'm also watching," so it
+   * must never resurrect a session it can't independently verify
+   * (bug-fix-plan.md #1 item 2).
    */
   async function announceNewSession(
     sessionId: string,
     options?: { treatExistingAsProcessed?: boolean },
+    source: "hook" | "fallback" = "hook",
   ): Promise<void> {
     if (currentSessionId === sessionId) {
       logger.debug("[SESSION_SCANNER] new session is already current, skipping", { sessionId });
       return;
     }
     // The caller explicitly re-announces this session, so give a
-    // previously-dropped id another chance (its file may exist now).
-    if (deadSessions.delete(sessionId)) {
+    // previously-dropped id another chance (its file may exist now). Only
+    // the hook path is trusted to do this — see the doc comment above.
+    if (source === "hook" && deadSessions.delete(sessionId)) {
       logger.debug("[SESSION_SCANNER] reviving previously-dropped session", { sessionId });
     }
     if (finishedSessions.has(sessionId)) {
@@ -465,17 +515,38 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   // `/clear` or a Claude-minted new id — is a strong signal the session
   // rotated even when no `SessionStart` hook fired to announce it via
   // `onNewSession` directly. Hook coverage is the primary path; this only
-  // fires when it didn't, hence the debounce + explicit log.
+  // fires when it didn't, hence the debounce + explicit log. Its authority
+  // is bounded two ways (bug-fix-plan.md #1): it stops being trusted at all
+  // once a hook has ever confirmed this scanner's own session id
+  // (`hookConfirmed`), and even before that it's only armed for a bounded
+  // window (`fallbackArmedUntil`), not the scanner's entire lifetime.
   const stopDirectoryWatcher = watchProjectDirectoryForNewSessions(
     projectDir,
     (newSessionId) => {
       if (stopped) return;
       if (newSessionId === currentSessionId) return;
-      logger.info("[SESSION_SCANNER] new transcript file detected — rotating session (fallback)", {
-        newSessionId,
-        previousSessionId: currentSessionId,
-      });
-      void announceNewSession(newSessionId);
+      if (Date.now() > fallbackArmedUntil) {
+        logger.debug("[SESSION_SCANNER] ignoring new transcript file — fallback window expired", {
+          newSessionId,
+        });
+        return;
+      }
+      if (hookConfirmed) {
+        // A hook has already proven this scanner has real SessionStart
+        // coverage — a *different* file appearing is almost certainly a
+        // sibling session sharing this directory, not our own rotation.
+        // Never adopt it (plan-v2.md / bug-fix-plan.md #1).
+        logger.debug(
+          "[SESSION_SCANNER] ignoring unrelated new transcript file (hook coverage active)",
+          { newSessionId, currentSessionId },
+        );
+        return;
+      }
+      logger.info(
+        "[SESSION_SCANNER] new transcript file detected — rotating session (fallback, no hook coverage)",
+        { newSessionId, previousSessionId: currentSessionId },
+      );
+      void announceNewSession(newSessionId, undefined, "fallback");
     },
     logger,
   );
@@ -501,6 +572,9 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
       watchers.clear();
     },
     flush,
-    onNewSession: announceNewSession,
+    onNewSession: async (sessionId, options) => {
+      hookConfirmed = true;
+      await announceNewSession(sessionId, options, "hook");
+    },
   };
 }
