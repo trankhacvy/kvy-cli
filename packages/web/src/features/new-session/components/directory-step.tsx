@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { DirectoryListing, NewSessionActions } from "../types";
-import { isDirectoryNotFoundError } from "./directory-step-logic";
+import { isDirectoryAlreadyLive, isDirectoryNotFoundError } from "./directory-step-logic";
 
 /**
  * Step 2: browse the chosen machine's filesystem via `actions.browseDirectory`
@@ -22,10 +22,20 @@ export function DirectoryStep({
   actions,
   directory,
   onSelect,
+  liveDirectories = [],
 }: {
   actions: NewSessionActions;
   directory: string | null;
   onSelect: (path: string) => void;
+  /**
+   * Best-effort set of directories that already have a live session
+   * somewhere (plan.md §16 "Flow 3 — spawn-directory-dedup" item 4) — backs
+   * a non-blocking warning only; this is racy across devices, so the
+   * directory stays fully selectable. The daemon's own `spawn`-time dedup
+   * guard is the authoritative check. Defaults to none (no warning) when
+   * the caller doesn't have this data wired up yet.
+   */
+  liveDirectories?: string[];
 }) {
   const [listing, setListing] = useState<DirectoryListing | null>(null);
   const [pathInput, setPathInput] = useState(directory ?? "");
@@ -114,6 +124,13 @@ export function DirectoryStep({
               {directory === listing.path ? "Selected" : "Use this directory"}
             </Button>
           </div>
+
+          {isDirectoryAlreadyLive(listing.path, liveDirectories) && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              A session may already be running in this directory — picking it will resume that
+              session rather than start a new one.
+            </p>
+          )}
 
           <div className="flex flex-col gap-1 rounded-md border border-border">
             {listing.parent && (

@@ -41,6 +41,25 @@
  * resolved via `gitWorktree.ts` after workspace validation succeeds: the
  * provider process launches in the branch's worktree directory instead of
  * the workspace root when `createWorktree` is set.
+ *
+ * **Directory dedup (plan.md §16 "Flow 3 — spawn-directory-dedup").** The
+ * daemon does not otherwise track which directory a live session runs in,
+ * so nothing stops two wizard submissions (or a retried RPC with a fresh
+ * `idempotencyKey`, since idempotency-key replay only dedups an *exact*
+ * retry) from launching two independent provider processes in the same
+ * directory. Right after workspace validation resolves `realDirectory` —
+ * before any branch/worktree resolution or launch — `deps.
+ * findLiveSessionInDirectory` (when supplied) is consulted; a match returns
+ * that session's existing `sessionId` instead of spawning a duplicate. The
+ * daemon composition (`machineIntegration.ts`) wires this to a scan of the
+ * session registry's `getSessions()` for a live `TrackedSession` whose
+ * `directory` matches (`scanForLiveSessionInDirectory` below) — this module
+ * stays registry-agnostic, same "injected seam" convention as
+ * `resolveWorkspaceRoot`. Symmetrically, `deps.trackSpawned` (when supplied)
+ * is called with the launched pid and `spawnDirectory` right after a
+ * successful launch, so a *later* spawn's dedup scan can find THIS session —
+ * mirrors `resumeSession.ts`'s own `registry.trackSpawned(launched.pid)`
+ * call after its relaunch.
  */
 import { fileURLToPath } from "node:url";
 import type { SpawnParams, SpawnResult } from "@falcon/wire";
@@ -52,6 +71,7 @@ import {
   launchProviderProcess as launchProviderProcessDefault,
 } from "./processLauncher.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
+import type { TrackedSession } from "./types.js";
 import { validateSpawnWorkspace, type WorkspaceRootLookup } from "./workspacePath.js";
 
 /** Thrown for any failure along the spawn path — validation, env expansion, launch, or the post-launch webhook wait. */
@@ -83,7 +103,52 @@ export interface SpawnEngineDeps {
   gitWorktreeDeps?: GitWorktreeDeps;
   /** Returns the argv that re-invokes this same falcon binary, e.g. `[process.execPath, ...process.execArgv, entry]`. Injectable for tests. */
   falconEntrypoint?: () => string[];
+  /**
+   * Looks up a live tracked session already running in `realDirectory`
+   * (the validated, resolved spawn target), if any — the directory-dedup
+   * guard (plan.md §16 "Flow 3 — spawn-directory-dedup"). Returns its
+   * `sessionId`, or `null`/`undefined` for "no live session there, proceed
+   * with a normal spawn." Undefined means "no dedup guard configured" —
+   * `spawnSession` always performs a real spawn attempt in that case,
+   * matching every other optional dep here. `machineIntegration.ts` wires
+   * the real default (a scan of the session registry's `getSessions()`,
+   * `scanForLiveSessionInDirectory` below).
+   */
+  findLiveSessionInDirectory?: (realDirectory: string) => string | null | undefined;
+  /**
+   * Records a newly-launched pid's directory right after a successful
+   * launch, so a LATER spawn's `findLiveSessionInDirectory` scan can find
+   * this one (plan.md §16 "Flow 3 — spawn-directory-dedup"). Mirrors
+   * `sessionRegistry.ts`'s `trackSpawned` exactly — `machineIntegration.ts`
+   * wires it straight to `registry.trackSpawned`. Optional: tests that don't
+   * care about dedup can simply omit it.
+   */
+  trackSpawned?: (pid: number, directory: string) => void;
   logger?: Logger;
+}
+
+/**
+ * The real default `findLiveSessionInDirectory` implementation: scans a
+ * session registry's already-live `TrackedSession[]` for one whose
+ * `directory` matches `realDirectory` and that still carries a `sessionId`
+ * (a session tracked pre-webhook, i.e. `trackSpawned` was called but
+ * `/session-started` hasn't landed yet, has no `sessionId` yet and can't be
+ * dedup'd against — the next spawn attempt would just race it, so this
+ * intentionally only matches sessions the daemon has actually heard back
+ * from). Exported standalone so it's unit-testable without standing up a
+ * real registry (plan.md §16 "Flow 3 — spawn-directory-dedup" testing
+ * notes).
+ */
+export function scanForLiveSessionInDirectory(
+  sessions: TrackedSession[],
+  realDirectory: string,
+): string | null {
+  for (const session of sessions) {
+    if (session.sessionId && session.directory === realDirectory) {
+      return session.sessionId;
+    }
+  }
+  return null;
 }
 
 const noopLogger: Logger = {
@@ -141,6 +206,20 @@ export async function spawnSession(
     throw new SpawnError(`workspace path rejected (${validation.reason}): ${params.directory}`);
   }
 
+  const existingSessionId = deps.findLiveSessionInDirectory?.(validation.realDirectory);
+  if (existingSessionId) {
+    // A live session is already tracked in this exact directory — return it
+    // instead of launching a second, competing process there (plan.md §16
+    // "Flow 3 — spawn-directory-dedup"). Checked before any branch/worktree
+    // resolution or launch attempt, so a duplicate submission never even
+    // reaches the process launcher.
+    logger.info(
+      "[spawn-engine] a live session already exists in this directory, returning it instead of spawning a duplicate",
+      { directory: validation.realDirectory, sessionId: existingSessionId },
+    );
+    return { sessionId: existingSessionId };
+  }
+
   let spawnDirectory = validation.realDirectory;
   if (params.branch) {
     try {
@@ -187,6 +266,8 @@ export async function spawnSession(
       `failed to launch provider process: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+
+  deps.trackSpawned?.(launched.pid, spawnDirectory);
 
   logger.info("[spawn-engine] launched provider process", {
     method: launched.method,

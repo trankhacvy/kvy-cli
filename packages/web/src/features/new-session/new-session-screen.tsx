@@ -61,9 +61,23 @@ type SpawnState =
 export function NewSessionScreen({
   useMachines = useLiveNewSessionMachines,
   useActions = useLiveNewSessionActions,
+  activeDirectories = [],
 }: {
   useMachines?: UseNewSessionMachines;
   useActions?: UseNewSessionActions;
+  /**
+   * Best-effort set of directories with an already-live session, across
+   * whichever machines the caller cares to check (plan.md §16 "Flow 3 —
+   * spawn-directory-dedup" item 4) — sourced from the synced session list's
+   * `workspaceId` field (`packages/wire/src/rows.ts`'s `SessionRow.
+   * workspaceId`, filtered to non-ended sessions), same "a workspaceId IS a
+   * directory path" convention `live-actions.ts` already documents. Purely
+   * a non-blocking UX hint in `DirectoryStep` — racy across devices, so the
+   * daemon's own `spawn`-time dedup guard remains the authoritative check.
+   * Defaults to none, matching this screen's other seams (`useMachines`/
+   * `useActions`) that aren't wired to a live data source yet either.
+   */
+  activeDirectories?: string[];
 }) {
   const machines = useMachines();
   const [step, setStep] = useState<WizardStep>("machine");
@@ -144,6 +158,7 @@ export function NewSessionScreen({
               actions={actions}
               directory={form.directory}
               onSelect={(directory) => patchForm({ directory, importCandidate: null })}
+              liveDirectories={activeDirectories}
             />
           )}
           {step === "import" && form.directory && (
