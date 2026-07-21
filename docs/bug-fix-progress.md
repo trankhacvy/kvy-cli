@@ -75,3 +75,20 @@ fixture-capture precondition) remain unchecked per the false-landing rule.
 **Next recommended units:**
 - `BF3.1 [bundle] "jwt-expiry-and-reconnect"` (Issues #9+#10, Phase 3 — auth & session robustness)
 - `BF3.2 [solo] "recovery-code-restore"` (Issue #12)
+
+## Cycle 5 — 2026-07-21
+
+**Merged units:**
+- `BF3.1` "jwt-expiry-and-reconnect" — `3d0d54a72c2464a670731401b2dbf255d2b8e71a`
+  (verified via `git merge-base --is-ancestor` against `v2-pty-injection`)
+
+**Parked/failed units:** none this cycle.
+
+**Worktree/branch cleanup:** `.worktrees/BF3.1` removed, `wf/BF3.1` branch deleted.
+
+**Note:** all non-`[human]` sub-boxes for BF3.1 flipped to `[x]` in `docs/bug-fix-plan.md`;
+the `[human]` live-check sub-box remains unchecked per the false-landing rule.
+
+**Next recommended units:**
+- `BF3.2 [solo] "recovery-code-restore"` (Issue #12)
+- Continue Phase 3 sequentially per `docs/bug-fix-plan.md`'s ordering thereafter.

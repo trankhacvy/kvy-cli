@@ -1951,26 +1951,26 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
 
 ### Phase 3 — Auth & session robustness
 
-- [ ] **BF3.1 `[bundle]` "jwt-expiry-and-reconnect"** (Issues #9+#10 —
+- [x] **BF3.1 `[bundle]` "jwt-expiry-and-reconnect"** (Issues #9+#10 —
       `packages/web/src/lib/session.ts`, `apiSocket.ts`, `use-connectivity.ts`,
       `OfflineBanner.tsx`; bundled for design coupling, not direct file overlap — #10's own
       proposed fix says it "should share this same signal" as #9's `isTokenExpired()`)
-  - [ ] Issue #9: add `isTokenExpired()`/`decodeJwtExp()` to `session.ts` (base64url-decode the
+  - [x] Issue #9: add `isTokenExpired()`/`decodeJwtExp()` to `session.ts` (base64url-decode the
         JWT payload, compare `exp` to now — no signature verification, a UX freshness check
         only) and make `isSignedIn()` require both a present token and `!isTokenExpired()`
-  - [ ] Issue #9: surface expiry proactively — a periodic check or dedicated hook that redirects
+  - [x] Issue #9: surface expiry proactively — a periodic check or dedicated hook that redirects
         to `/signin/` once `isTokenExpired()` flips true, rather than waiting for a socket
         reconnect to fail
-  - [ ] Issue #10: add a `connect_error` handler in `apiSocket.ts`, translating an
+  - [x] Issue #10: add a `connect_error` handler in `apiSocket.ts`, translating an
         auth-rejection message into a new `authError` event (and unsubscribing it in
         `teardown()`); stop the infinite retry loop (`apiSocket.disconnect()`) once it fires,
         since `reconnectionAttempts: Infinity` has no way to know the failure is permanent on
         its own
-  - [ ] Issue #10: extend `ConnectivitySource`/`useConnectivity` with an `authExpired` state
+  - [x] Issue #10: extend `ConnectivitySource`/`useConnectivity` with an `authExpired` state
         driven by `authError`; have `OfflineBanner` branch on it before the generic
         "Reconnecting…" copy, showing a "Your session expired — sign in again" message linking
         to `/signin/`
-  - [ ] Tests: `session.test.ts` (far-future/past/malformed `exp` cases); `apiSocket.test.ts`
+  - [x] Tests: `session.test.ts` (far-future/past/malformed `exp` cases); `apiSocket.test.ts`
         (a fake socket emitting `connect_error` with an auth-rejection message → `authError`
         emitted); `use-connectivity.test.ts` (`authExpired` state)
   - [ ] `[human]` live: manually set an expired JWT into `localStorage`, reload, confirm a
