@@ -385,14 +385,17 @@ describe("createSessionScanner", () => {
     expect(uuids(seen)).toEqual(["u2"]);
   });
 
-  it("rotates to a new session automatically when its transcript file appears without a SessionStart hook (W3.8 rotation fallback)", async () => {
+  it("rotates onto a new session automatically when no SessionStart hook has ever fired (W3.8 rotation fallback, no-hook coverage — bug-fix-plan.md #1 testing note (b))", async () => {
     const { logger, infoRecords } = collectingLogger();
     const seen: RawJSONLines[] = [];
-    const oldFile = join(projectDir, "sess-rotate-old.jsonl");
-    await writeFile(oldFile, userLine("old-1"));
 
+    // `sessionId: null` at construction and no `onNewSession` call for the
+    // life of this test — this is the genuine "no hook coverage at all"
+    // case (a native Claude Code install without the hook wired up). The
+    // fallback must be the only way this scanner ever discovers a session,
+    // and it must still work, just time-boxed (see the expiry test below).
     scanner = await createSessionScanner({
-      sessionId: "sess-rotate-old",
+      sessionId: null,
       workingDirectory,
       onMessage: (m) => seen.push(m),
       missingFileTimeoutMs: 100_000,
@@ -402,8 +405,6 @@ describe("createSessionScanner", () => {
     });
     await sleep(100);
 
-    // No `onNewSession` call — simulate `/clear` (or a Claude-minted id) that
-    // wrote a brand-new transcript file with no SessionStart hook firing.
     const newFile = join(projectDir, "sess-rotate-new.jsonl");
     await writeFile(newFile, userLine("new-1"));
 
@@ -416,12 +417,79 @@ describe("createSessionScanner", () => {
     );
     expect(rotationLogs.length).toBe(1);
     expect(rotationLogs[0]?.meta?.newSessionId).toBe("sess-rotate-new");
+  }, 10_000);
 
-    // The old session must still be scanned (agent tasks can still append to
-    // it), exactly like an explicit `onNewSession` call would preserve.
-    await appendFile(oldFile, userLine("old-2"));
-    await sleep(200);
-    expect(uuids(seen)).toContain("old-2");
+  it("never adopts a sibling transcript file once hook-confirmed, even after its own tracked session was dropped (bug-fix-plan.md #1 testing note (a))", async () => {
+    const { logger, debugRecords } = collectingLogger();
+    const seen: RawJSONLines[] = [];
+
+    scanner = await createSessionScanner({
+      sessionId: null,
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100,
+      pollIntervalMs: 50,
+      logger,
+      env,
+    });
+
+    // Simulate the hook firing once for session A — this is what flips
+    // `hookConfirmed` to true for the rest of this scanner's life.
+    await scanner.onNewSession("A");
+
+    // A's transcript file never appears, so its watcher gives up and A is
+    // blacklisted into `deadSessions` (~1s internal backoff for one retry).
+    await sleep(1500);
+    const gaveUp = debugRecords.filter((r) =>
+      r.message.includes("session transcript never appeared — dropping"),
+    );
+    expect(gaveUp.length).toBe(1);
+
+    // A sibling session's brand-new transcript file now appears in the same
+    // directory (e.g. an unrelated tmux pane running Claude Code against the
+    // same cwd). Even though A is dead, hook coverage was already proven, so
+    // this must never be adopted.
+    await writeFile(join(projectDir, "B.jsonl"), userLine("b-1"));
+    await sleep(3000);
+
+    expect(uuids(seen)).toEqual([]);
+    const ignored = debugRecords.filter((r) =>
+      r.message.includes("ignoring unrelated new transcript file (hook coverage active)"),
+    );
+    expect(ignored.length).toBeGreaterThan(0);
+    expect(ignored[0]?.meta?.newSessionId).toBe("B");
+  }, 10_000);
+
+  it("ignores a new transcript file once the fallback's armed window has expired, even with no hook coverage (bug-fix-plan.md #1 testing note (c))", async () => {
+    const { logger, debugRecords } = collectingLogger();
+    const seen: RawJSONLines[] = [];
+
+    scanner = await createSessionScanner({
+      sessionId: null,
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60_000,
+      // Short armed window so the test doesn't need to wait the real 30s
+      // default — see `SessionScannerOptions.fallbackArmedWindowMs`.
+      fallbackArmedWindowMs: 200,
+      logger,
+      env,
+    });
+
+    // Let the armed window lapse with no hook ever confirming anything.
+    await sleep(400);
+
+    const newFile = join(projectDir, "sess-rotate-late.jsonl");
+    await writeFile(newFile, userLine("late-1"));
+    await sleep(3000);
+
+    expect(uuids(seen)).toEqual([]);
+    const expired = debugRecords.filter((r) =>
+      r.message.includes("ignoring new transcript file — fallback window expired"),
+    );
+    expect(expired.length).toBeGreaterThan(0);
+    expect(expired[0]?.meta?.newSessionId).toBe("sess-rotate-late");
   }, 10_000);
 
   it("ignores non-.jsonl files created in the project directory (rotation fallback ignores unrelated renames)", async () => {
