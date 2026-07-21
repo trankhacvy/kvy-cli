@@ -92,3 +92,20 @@ the `[human]` live-check sub-box remains unchecked per the false-landing rule.
 **Next recommended units:**
 - `BF3.2 [solo] "recovery-code-restore"` (Issue #12)
 - Continue Phase 3 sequentially per `docs/bug-fix-plan.md`'s ordering thereafter.
+
+## Cycle 6 — 2026-07-21
+
+**Merged units:** none this cycle.
+
+**Parked/failed units:**
+- `BF3.2` "recovery-code-restore" (Issue #12) — failed/parked. Worktree `.worktrees/BF3.2`
+  (branch `wf/BF3.2`, tip `368f4a0` "fix: BF3.2 — resolve test issues") left in place for
+  human inspection per the false-landing rule; not merged into `v2-pty-injection`.
+
+**Worktree/branch cleanup:** none — no units merged this cycle, so nothing to remove.
+
+**Note:** no `docs/bug-fix-plan.md` checkboxes changed this cycle (no verified merges).
+
+**Next recommended units:**
+- Human inspection of `BF3.2` (`.worktrees/BF3.2`) to diagnose and re-attempt Issue #12.
+- Continue Phase 3 sequentially per `docs/bug-fix-plan.md`'s ordering thereafter.
