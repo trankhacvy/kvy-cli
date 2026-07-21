@@ -1833,22 +1833,22 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
 
 ### Phase 1 — CLI-side sync & render correctness
 
-- [ ] **BF1.1 `[inline]` "core-loop-trivia"** — two small, unrelated, disjoint-file fixes
+- [x] **BF1.1 `[inline]` "core-loop-trivia"** — two small, unrelated, disjoint-file fixes
       batched into one pass (mirrors plan-v2.md's U1.1 mixed-package precedent)
-  - [ ] Issue #2 (already fixed — verify only, do not re-implement): confirm
+  - [x] Issue #2 (already fixed — verify only, do not re-implement): confirm
         `session-state.test.ts`'s existing "never lets a stuck-true ephemeral override a turn
         that has already closed" case still passes; add one assertion to
         `SessionTimelineScreen`'s render test confirming it calls
         `deriveWorking(items, ephemeralWorking)` directly, so a future refactor can't silently
         reintroduce the old `ephemeralWorking || isTurnOpen(items)` inline form
-  - [ ] Issue #11: fix `packages/cli/src/auth/pair.ts`'s `delay()` helper to remove its `abort`
+  - [x] Issue #11: fix `packages/cli/src/auth/pair.ts`'s `delay()` helper to remove its `abort`
         listener on the timer-resolves path too (not only when the signal actually aborts),
         matching `scanner.ts`'s own already-correct `wait()` pattern — declare `onAbort` before
         the timer so the timer callback can call `signal?.removeEventListener("abort", onAbort)`
-  - [ ] Tests: new/extended `packages/cli/src/auth/pair.test.ts` — call
+  - [x] Tests: new/extended `packages/cli/src/auth/pair.test.ts` — call
         `delay(10, controller.signal)` in a loop ~20 times without ever aborting and assert
         `addEventListener`/`removeEventListener` call counts match (no leaked listeners)
-  - [ ] Combined: scoped tests + `pnpm typecheck` + commit
+  - [x] Combined: scoped tests + `pnpm typecheck` + commit
 
 - [ ] **BF1.2 `[bundle]` "model-switch-render-fix"** (Issue #4 —
       `packages/cli/src/claude/envelopeMapper.ts` + `packages/cli/src/claude/modelChange.ts`)
