@@ -3,6 +3,7 @@ import type { ToolItem } from "@/sync/reducer";
 import { AskUserQuestionToolCard } from "./AskUserQuestionToolCard";
 import { BashCard } from "./BashCard";
 import { EditCard } from "./EditCard";
+import { ExitPlanModeToolCard } from "./ExitPlanModeToolCard";
 import { GrepGlobCard } from "./GrepGlobCard";
 import { LsCard } from "./LsCard";
 import { McpGenericCard } from "./McpGenericCard";
@@ -19,7 +20,9 @@ import { WebSearchCard } from "./WebSearchCard";
  * `mcp__*` tool, falls back to `McpGenericCard`. `AskUserQuestion` (plan-v2.md
  * W2.1) gets its own read-only card instead of that raw-JSON fallback.
  * `WebFetch`/`WebSearch`/`NotebookEdit`/`LS` (plan-v2.md W3.1) round out
- * coverage against Happy's own `knownTools.tsx` (19 native tools). */
+ * coverage against Happy's own `knownTools.tsx` (19 native tools).
+ * `ExitPlanMode`/`exit_plan_mode` (bug-fix-plan.md #6) get a dedicated card
+ * instead of falling to the raw-JSON `McpGenericCard` fallback. */
 const REGISTRY: Record<string, (item: ToolItem) => ReactElement> = {
   Bash: (item) => <BashCard item={item} />,
   Edit: (item) => <EditCard item={item} />,
@@ -36,6 +39,8 @@ const REGISTRY: Record<string, (item: ToolItem) => ReactElement> = {
   WebFetch: (item) => <WebFetchCard item={item} />,
   WebSearch: (item) => <WebSearchCard item={item} />,
   NotebookEdit: (item) => <NotebookEditCard item={item} />,
+  ExitPlanMode: (item) => <ExitPlanModeToolCard item={item} />,
+  exit_plan_mode: (item) => <ExitPlanModeToolCard item={item} />,
 };
 
 export function ToolCard({ item }: { item: ToolItem }) {

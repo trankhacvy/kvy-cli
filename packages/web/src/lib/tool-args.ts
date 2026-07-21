@@ -246,6 +246,20 @@ export function parseNotebookEditArgs(args: unknown): NotebookEditArgs {
   };
 }
 
+export interface ExitPlanModeArgs {
+  plan?: string;
+}
+
+/** `ExitPlanMode` presents a plan for approval — args shape `{ plan: string }`
+ * (markdown plan text), already relied on elsewhere in this codebase's own
+ * tests (`session-state.test.ts:37-45`, `:57-65`; bug-fix-plan.md #6).
+ * Degrades to `undefined` on any other shape, same as every other parser
+ * here. */
+export function parseExitPlanModeArgs(args: unknown): ExitPlanModeArgs {
+  const r = asRecord(args);
+  return { plan: readString(r, "plan") };
+}
+
 export interface LsArgs {
   path?: string;
   ignore?: string[];

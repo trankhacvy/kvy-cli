@@ -7,6 +7,7 @@ import {
   parseBashArgs,
   parseBashOutput,
   parseEditArgs,
+  parseExitPlanModeArgs,
   parseGrepGlobArgs,
   parseLsArgs,
   parseNotebookEditArgs,
@@ -259,6 +260,27 @@ describe("parseNotebookEditArgs", () => {
       cellType: undefined,
       editMode: undefined,
     });
+  });
+});
+
+describe("parseExitPlanModeArgs", () => {
+  it("reads the plan string", () => {
+    expect(parseExitPlanModeArgs({ plan: "# Step 1\n\nDo the thing." })).toEqual({
+      plan: "# Step 1\n\nDo the thing.",
+    });
+  });
+
+  it("degrades to undefined when plan is missing", () => {
+    expect(parseExitPlanModeArgs({})).toEqual({ plan: undefined });
+  });
+
+  it("degrades to undefined when plan is not a string", () => {
+    expect(parseExitPlanModeArgs({ plan: 12345 })).toEqual({ plan: undefined });
+  });
+
+  it("degrades gracefully on a non-object args value", () => {
+    expect(parseExitPlanModeArgs(undefined)).toEqual({ plan: undefined });
+    expect(parseExitPlanModeArgs("not an object")).toEqual({ plan: undefined });
   });
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ToolItem } from "@/sync/reducer";
 import { AskUserQuestionToolCard } from "./AskUserQuestionToolCard";
+import { ExitPlanModeToolCard } from "./ExitPlanModeToolCard";
 import { LsCard } from "./LsCard";
 import { McpGenericCard } from "./McpGenericCard";
 import { NotebookEditCard } from "./NotebookEditCard";
@@ -53,5 +54,19 @@ describe("ToolCard registry — W3.1 coverage cards", () => {
 
   it("routes LS to LsCard", () => {
     expect(ToolCard({ item: toolItem("LS") }).type).toBe(LsCard);
+  });
+});
+
+/** bug-fix-plan.md #6: `ExitPlanMode` previously fell through to the raw-JSON
+ * `McpGenericCard` fallback like any unregistered tool. */
+describe("ToolCard registry — ExitPlanMode dispatch", () => {
+  it("routes both ExitPlanMode tool-name spellings to ExitPlanModeToolCard", () => {
+    expect(ToolCard({ item: toolItem("ExitPlanMode") }).type).toBe(ExitPlanModeToolCard);
+    expect(ToolCard({ item: toolItem("exit_plan_mode") }).type).toBe(ExitPlanModeToolCard);
+  });
+
+  it("does not fall back to McpGenericCard for either spelling", () => {
+    expect(ToolCard({ item: toolItem("ExitPlanMode") }).type).not.toBe(McpGenericCard);
+    expect(ToolCard({ item: toolItem("exit_plan_mode") }).type).not.toBe(McpGenericCard);
   });
 });
