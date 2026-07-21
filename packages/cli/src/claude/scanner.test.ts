@@ -460,6 +460,56 @@ describe("createSessionScanner", () => {
     expect(ignored[0]?.meta?.newSessionId).toBe("B");
   }, 10_000);
 
+  it("a hook confirming the same session the fallback already adopted still permanently blocks later siblings (bug-fix-plan.md #1)", async () => {
+    const { logger, debugRecords, infoRecords } = collectingLogger();
+    const seen: RawJSONLines[] = [];
+
+    // Starts with genuinely no hook coverage, so the fallback is free to
+    // adopt "A" on its own — this is the realistic sequence for a
+    // `SessionStart` hook that fires late (e.g. right as Claude Code
+    // finishes writing the first transcript line) rather than not at all:
+    // the fallback beats it to the adoption, and the hook call that follows
+    // is for the *same* session id, not a different one.
+    scanner = await createSessionScanner({
+      sessionId: null,
+      workingDirectory,
+      onMessage: (m) => seen.push(m),
+      missingFileTimeoutMs: 100_000,
+      pollIntervalMs: 60_000,
+      fallbackArmedWindowMs: 100_000,
+      logger,
+      env,
+    });
+
+    await writeFile(join(projectDir, "A.jsonl"), userLine("a-1"));
+    // The rotation fallback debounces 2s before acting; give it enough room.
+    await sleep(3000);
+
+    expect(uuids(seen)).toContain("a-1");
+    const rotationLogs = infoRecords.filter((r) =>
+      r.message.includes("new transcript file detected"),
+    );
+    expect(rotationLogs.length).toBe(1);
+    expect(rotationLogs[0]?.meta?.newSessionId).toBe("A");
+
+    // The hook now fires for the very same session id the fallback already
+    // adopted. `announceNewSession` no-ops on the "already current" check,
+    // but the wrapping `onNewSession` still flips `hookConfirmed` — this is
+    // the realistic "hook arrived, just later than the fallback" case, and
+    // it must lock out the fallback for good from this point on.
+    await scanner.onNewSession("A");
+
+    await writeFile(join(projectDir, "B.jsonl"), userLine("b-1"));
+    await sleep(3000);
+
+    expect(uuids(seen)).toEqual(["a-1"]);
+    const ignored = debugRecords.filter((r) =>
+      r.message.includes("ignoring unrelated new transcript file (hook coverage active)"),
+    );
+    expect(ignored.length).toBeGreaterThan(0);
+    expect(ignored[0]?.meta?.newSessionId).toBe("B");
+  }, 10_000);
+
   it("ignores a new transcript file once the fallback's armed window has expired, even with no hook coverage (bug-fix-plan.md #1 testing note (c))", async () => {
     const { logger, debugRecords } = collectingLogger();
     const seen: RawJSONLines[] = [];
