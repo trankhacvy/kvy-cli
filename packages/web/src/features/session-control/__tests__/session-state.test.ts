@@ -125,14 +125,28 @@ describe("deriveCurrentPermissionMode", () => {
 
   it("reflects a 'permission-mode' item with source:'terminal', independent of any pending decision", () => {
     const items: RenderItem[] = [
-      { id: "pm1", time: 1, role: "agent", kind: "permission-mode", mode: "acceptEdits", source: "terminal" },
+      {
+        id: "pm1",
+        time: 1,
+        role: "agent",
+        kind: "permission-mode",
+        mode: "acceptEdits",
+        source: "terminal",
+      },
     ];
     expect(deriveCurrentPermissionMode(items)).toBe("acceptEdits");
   });
 
   it("takes the most recent of a 'permission-mode' item and a later mode decision, in stream order", () => {
     const items: RenderItem[] = [
-      { id: "pm1", time: 1, role: "agent", kind: "permission-mode", mode: "acceptEdits", source: "terminal" },
+      {
+        id: "pm1",
+        time: 1,
+        role: "agent",
+        kind: "permission-mode",
+        mode: "acceptEdits",
+        source: "terminal",
+      },
       {
         id: "t1",
         time: 2,

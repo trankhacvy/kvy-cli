@@ -42,9 +42,7 @@ export function TimelineRow({ item }: { item: RenderItem }) {
       );
 
     case "permission-mode":
-      return (
-        <ServiceLine label={`Permission mode: ${item.mode} (${item.source})`} tone="muted" />
-      );
+      return <ServiceLine label={`Permission mode: ${item.mode} (${item.source})`} tone="muted" />;
 
     case "sub-start":
       return <ServiceLine label={null} />;
