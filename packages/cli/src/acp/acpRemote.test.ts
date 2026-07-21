@@ -1,5 +1,9 @@
 import type { SessionEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
+import type {
+  ReportSessionAttentionDeps,
+  reportSessionAttention as reportSessionAttentionDefault,
+} from "../api/sessionNotify.js";
 import { AcpConnectionError, type PermissionRequestHandler } from "./acpConnection.js";
 import type { AcpRemoteConnection, AcpRemoteHandle } from "./acpRemote.js";
 import { startAcpRemote } from "./acpRemote.js";
@@ -97,7 +101,16 @@ interface Harness {
   providerIds: string[];
 }
 
-function harness(opts: { resume?: string; model?: string; failConnect?: Error } = {}): Harness {
+function harness(
+  opts: {
+    resume?: string;
+    model?: string;
+    failConnect?: Error;
+    sessionId?: string;
+    attention?: ReportSessionAttentionDeps;
+    reportSessionAttention?: typeof reportSessionAttentionDefault;
+  } = {},
+): Harness {
   const connection = new FakeConnection();
   if (opts.failConnect) connection.failConnect = opts.failConnect;
   const envelopes: SessionEnvelope[] = [];
@@ -110,11 +123,13 @@ function harness(opts: { resume?: string; model?: string; failConnect?: Error } 
       model: opts.model,
       permissionMode: "default",
       homeDir: "/tmp/falcon-home",
+      sessionId: opts.sessionId,
+      attention: opts.attention,
       onEnvelopes: (batch) => envelopes.push(...batch),
       onProviderSessionId: (id) => providerIds.push(id),
       onTurnSettled: (info) => settled.push(info),
     },
-    { createConnection: () => connection },
+    { createConnection: () => connection, reportSessionAttention: opts.reportSessionAttention },
   );
   return { handle, connection, envelopes, settled, providerIds };
 }
@@ -323,5 +338,83 @@ describe("stop", () => {
     h.handle.send("late");
     await flushMicrotasks();
     expect(h.connection.prompts).toHaveLength(0);
+  });
+});
+
+// docs/plan-flows-3-4-5.md Flow 5's ACP correction (FL5.2): confirms the
+// composition root (`startAcpRemote`) actually threads `sessionId`/
+// `attention`/`reportSessionAttention` down into the `AcpPermissionHandler`
+// it constructs (perm/question) and calls its `reportTurnEnd()` at this
+// module's own turn-end path (done) — i.e. the wiring described in sub-task
+// 2, not just the handler's own unit behavior (covered by
+// acpPermissionHandler.test.ts).
+describe("session attention wiring (docs/plan-flows-3-4-5.md Flow 5 — ACP correction)", () => {
+  const attention: ReportSessionAttentionDeps = {
+    backendUrl: "https://api.example",
+    accessToken: "tok-1",
+  };
+
+  it("reports 'perm' for a session/request_permission call, threaded through from startAcpRemote's opts", async () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-9", attention, reportSessionAttention });
+    h.handle.send("edit stuff", "e1");
+    await flushMicrotasks();
+
+    void h.connection.permissionHandler?.(
+      {
+        sessionId: "uuid-session-1",
+        toolCall: {
+          toolCallId: "tc1",
+          rawInput: { file: "a.ts" },
+          _meta: { claudeCode: { toolName: "Write" } },
+        },
+        options: [{ optionId: "a", name: "Allow", kind: "allow_once" }],
+      } as Parameters<PermissionRequestHandler>[0],
+      1,
+      new AbortController().signal,
+    );
+
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(attention, {
+      sessionId: "sess-9",
+      kind: "perm",
+    });
+  });
+
+  it("reports 'done' when a turn completes (drain()'s turn-end path), not on cancel/reject", async () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-9", attention, reportSessionAttention });
+    h.handle.send("do something", "e1");
+    await flushMicrotasks();
+
+    h.connection.prompts[0]?.resolve({ stopReason: "end_turn" });
+    await vi.waitFor(() => expect(eventTypes(h.envelopes)).toContain("turn-end"));
+
+    expect(reportSessionAttention).toHaveBeenCalledExactlyOnceWith(attention, {
+      sessionId: "sess-9",
+      kind: "done",
+    });
+  });
+
+  it("does NOT report 'done' when the prompt is REJECTED (indeterminate outcome, same rule as onTurnSettled)", async () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ sessionId: "sess-9", attention, reportSessionAttention });
+    h.handle.send("doomed", "e1");
+    await flushMicrotasks();
+
+    h.connection.prompts[0]?.reject(new Error("adapter died"));
+    await vi.waitFor(() => expect(eventTypes(h.envelopes)).toContain("turn-end"));
+
+    expect(reportSessionAttention).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when sessionId/attention aren't passed (no live caller wired yet)", async () => {
+    const reportSessionAttention = vi.fn();
+    const h = harness({ reportSessionAttention }); // no sessionId/attention
+    h.handle.send("do something", "e1");
+    await flushMicrotasks();
+    h.connection.prompts[0]?.resolve({ stopReason: "end_turn" });
+    await vi.waitFor(() => expect(eventTypes(h.envelopes)).toContain("turn-end"));
+
+    expect(reportSessionAttention).not.toHaveBeenCalled();
   });
 });

@@ -69,6 +69,12 @@ import {
 } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import type { z } from "zod";
+import {
+  type ReportSessionAttentionDeps,
+  reportSessionAttention as reportSessionAttentionDefault,
+  type SessionAttentionKind,
+} from "../api/sessionNotify.js";
+import { isAskUserQuestion } from "../claude/pretoolPermissionBridge.js";
 import type { Logger } from "../logger.js";
 import { type AcpSessionUpdate, pickAcpToolArgs, pickAcpToolName } from "./acpToEnvelope.js";
 
@@ -113,6 +119,24 @@ export interface AcpPermissionHandlerDeps {
    */
   onModeChange?: (mode: PermissionMode) => void;
   logger?: Logger;
+  /**
+   * Session-attention wiring (docs/plan-flows-3-4-5.md Flow 5's ACP
+   * correction): best-effort `POST /v1/sessions/:id/notify`
+   * (`api/sessionNotify.ts`) so a push notification reaches a user who's
+   * walked away from a headless/ACP session — the ACP-path equivalent of
+   * the terminal path's `pretoolPermissionBridge.ts`'s `onPendingAttention`
+   * / `start.ts`'s `reportAttention`. `sessionId` is Falcon's own session
+   * id (NOT the ACP/provider session id). Both `sessionId` and `attention`
+   * must be supplied for reporting to fire; either missing is treated as
+   * "no live caller has wired this yet" (same not-yet-connected-seam
+   * precedent as this package's other injectable deps) and reporting is a
+   * silent no-op — every other permission-decision behavior is unchanged.
+   */
+  sessionId?: string;
+  /** `reportSessionAttention`'s backend/auth config. See `sessionId` above. */
+  attention?: ReportSessionAttentionDeps;
+  /** Injectable for tests; defaults to the real `reportSessionAttention()`. */
+  reportSessionAttention?: typeof reportSessionAttentionDefault;
 }
 
 const ALL_MODES: readonly PermissionMode[] = [
@@ -174,6 +198,13 @@ export class AcpPermissionHandler {
     const toolName = pickAcpToolName(toolCallShape);
     const input = pickAcpToolArgs(toolCallShape);
     const reqId = createId();
+
+    // Fires the instant a permission request becomes pending — BEFORE we
+    // block awaiting a `perm.answer`/agent-side resolution below. Parity
+    // with the terminal path's `onPendingAttention` timing
+    // (`pretoolPermissionBridge.ts`'s `handlePermissionRequest`/
+    // `handleAskUserQuestion`, both of which report before intercepting).
+    this.reportAttention(isAskUserQuestion(toolName) ? "question" : "perm");
 
     return new Promise<RequestPermissionResponse>((resolvePromise) => {
       if (signal.aborted) {
@@ -264,6 +295,26 @@ export class AcpPermissionHandler {
       pending.settle({ outcome: { outcome: "cancelled" } });
     }
     this.pending.clear();
+  }
+
+  /**
+   * Reports the `done` attention kind for a completed turn (Flow 5's ACP
+   * wiring) — call from the session's turn-end path once a `session/prompt`
+   * call resolves (`acpRemote.ts`'s `drain()`, mirroring the terminal path's
+   * `Stop`-hook `reportAttention("done")` call). Kept as a method on this
+   * class (rather than a free function in the caller) so every
+   * `reportSessionAttention` call site shares the same session-id/backend
+   * deps this handler already owns.
+   */
+  reportTurnEnd(): void {
+    this.reportAttention("done");
+  }
+
+  private reportAttention(kind: SessionAttentionKind): void {
+    const { sessionId, attention } = this.deps;
+    if (!sessionId || !attention) return; // no live caller has wired this yet — silent no-op
+    const report = this.deps.reportSessionAttention ?? reportSessionAttentionDefault;
+    void report(attention, { sessionId, kind });
   }
 
   private isRejectSelection(
