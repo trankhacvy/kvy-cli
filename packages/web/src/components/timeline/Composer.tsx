@@ -150,7 +150,7 @@ export function Composer({
   }
 
   return (
-    <div className="flex flex-col gap-1.5 px-4 py-3">
+    <div className="shrink-0 flex flex-col gap-1.5 px-4 py-3">
       {isQueued && (
         <Badge variant="warning" className="w-fit">
           Queued — the agent is finishing its current turn
@@ -181,6 +181,7 @@ export function Composer({
       <PromptInput onSubmit={handleSubmit}>
         <PromptInputBody>
           <PromptInputTextarea
+            className="max-h-[32vh] overflow-y-auto"
             value={text}
             disabled={disabled}
             onChange={(e) => handleTextChange(e.currentTarget.value)}

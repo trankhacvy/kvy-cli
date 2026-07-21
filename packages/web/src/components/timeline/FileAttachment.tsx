@@ -47,14 +47,24 @@ function inferImageMimeType(name: string): string {
  * dispatch: call it directly and inspect the returned element, no DOM/render
  * environment needed.
  */
-export function InlineImageAttachment({ item }: { item: FileItem }) {
+export function InlineImageAttachment({
+  item,
+  compact = false,
+}: {
+  item: FileItem;
+  compact?: boolean;
+}) {
   const base64 = item.ref.slice(INLINE_REF_PREFIX.length);
   const mimeType = inferImageMimeType(item.name);
   return (
     <img
       src={`data:${mimeType};base64,${base64}`}
       alt={item.name}
-      className="max-h-80 max-w-[85%] rounded-md border border-border object-contain"
+      className={
+        compact
+          ? "max-h-56 max-w-full rounded-md border border-border object-contain"
+          : "max-h-80 max-w-full rounded-xl border border-border object-contain"
+      }
     />
   );
 }
@@ -70,13 +80,13 @@ export function InlineImageAttachment({ item }: { item: FileItem }) {
  * image with no blob to download) short-circuits straight to
  * `InlineImageAttachment` instead.
  */
-export function FileAttachment({ item }: { item: FileItem }) {
+export function FileAttachment({ item, compact = false }: { item: FileItem; compact?: boolean }) {
   const { sessionId } = useSessionControl();
   const cryptoBridge = useSessionCrypto(sessionId);
   const [state, setState] = useState<DownloadState>("idle");
 
   if (isInlineFileRef(item.ref)) {
-    return <InlineImageAttachment item={item} />;
+    return <InlineImageAttachment item={item} compact={compact} />;
   }
 
   async function handleDownload() {
@@ -106,7 +116,11 @@ export function FileAttachment({ item }: { item: FileItem }) {
       type="button"
       onClick={handleDownload}
       disabled={state === "downloading"}
-      className="flex w-fit max-w-[85%] items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+      className={
+        compact
+          ? "flex w-full items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+          : "flex w-fit max-w-full items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-accent disabled:cursor-wait disabled:opacity-70"
+      }
     >
       <Paperclip className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0">

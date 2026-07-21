@@ -96,9 +96,13 @@ function NavigationGroup({
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const title = pageTitle(pathname);
+  const isSessionDetailRoute =
+    pathname.startsWith("/session/") &&
+    pathname !== "/session/new/" &&
+    !pathname.includes("/git/");
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className="h-svh overflow-hidden">
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>
@@ -132,7 +136,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </p>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="min-w-0">
+      <SidebarInset className="min-h-0 min-w-0">
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 sm:px-6">
           <SidebarTrigger />
           <p className="min-w-0 flex-1 truncate text-sm font-medium">{title}</p>
@@ -145,7 +149,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Button>
           )}
         </header>
-        <div className="min-h-0 flex-1 overflow-auto">{children}</div>
+        <div
+          className={isSessionDetailRoute ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto"}
+        >
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );

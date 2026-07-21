@@ -19,13 +19,13 @@ function toolItem(name: string, permission?: PermissionInfo): ToolItem {
   };
 }
 
-/** The permission-section child is the 3rd element in `ToolCardShell`'s own
- * `<div>` children (header, body, permission-section, subagent-section) —
- * see ToolCardShell.tsx. Reaching into the returned element tree is the same
- * "call the function directly, inspect the plain object" technique the
- * registry/PermPlaceholder dispatch tests use; no render environment. */
+/** The permission section now lives inside AI Elements `ToolContent` after the
+ * metadata row and the tool body slot. Reaching into the returned element tree
+ * is still enough here; no render environment needed. */
 function permissionSectionChildType(shell: ReactElement): unknown {
-  const section = (shell.props as { children: unknown[] }).children[2] as
+  const toolContent = (shell.props as { children: unknown[] }).children[1] as ReactElement | undefined;
+  if (!toolContent) return undefined;
+  const section = (toolContent.props as { children: unknown[] }).children[2] as
     | ReactElement
     | false
     | undefined;

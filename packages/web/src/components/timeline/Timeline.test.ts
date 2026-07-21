@@ -19,6 +19,10 @@ function toolItem(id: string, status: ToolItem["status"]): ToolItem {
   };
 }
 
+function userTextItem(id: string): RenderItem {
+  return { id, time: 0, role: "user", kind: "text", md: "yo", thinking: false };
+}
+
 describe("isNearBottom (W1.6 follow/pause threshold)", () => {
   it("stays following when scrolled all the way to the bottom", () => {
     expect(isNearBottom(0, 600)).toBe(true);
@@ -56,31 +60,32 @@ describe("shouldShowActivityRow (W1.8 pulse row)", () => {
     expect(shouldShowActivityRow(true, [])).toBe(false);
   });
 
-  it("shows while working and the last item is a finished message", () => {
-    expect(shouldShowActivityRow(true, [textItem("1")])).toBe(true);
+  it("shows while working after the latest user message and before any agent reply lands", () => {
+    expect(shouldShowActivityRow(true, [userTextItem("u1")])).toBe(true);
   });
 
-  it("shows while working and the last item is a completed tool", () => {
-    expect(shouldShowActivityRow(true, [toolItem("t1", "done")])).toBe(true);
+  it("is hidden once an agent reply has landed after the latest user message", () => {
+    expect(shouldShowActivityRow(true, [userTextItem("u1"), textItem("1")])).toBe(false);
   });
 
-  it("is suppressed when the last item is already a running tool card", () => {
-    expect(shouldShowActivityRow(true, [textItem("1"), toolItem("t1", "running")])).toBe(false);
+  it("is hidden once a running tool card has landed after the latest user message", () => {
+    expect(shouldShowActivityRow(true, [userTextItem("u1"), toolItem("t1", "running")])).toBe(false);
   });
 
-  it("shows when a running tool exists but is not the last item", () => {
-    // Only the last item gates suppression — an earlier running tool (e.g. a
-    // completed subagent step) shouldn't hide the row.
-    expect(shouldShowActivityRow(true, [toolItem("t1", "running"), textItem("1")])).toBe(true);
-  });
-
-  it("is suppressed by a running tool even with other items before it", () => {
+  it("is hidden when only hidden metadata rows remain", () => {
     expect(
       shouldShowActivityRow(true, [
-        textItem("1"),
-        toolItem("t1", "done"),
-        toolItem("t2", "running"),
+        { id: "s1", time: 0, role: "agent", kind: "service", text: "Session started" },
       ]),
     ).toBe(false);
+  });
+
+  it("is hidden when the only visible follow-up is empty reasoning", () => {
+    expect(
+      shouldShowActivityRow(true, [
+        userTextItem("u1"),
+        { id: "a1", time: 0, role: "agent", kind: "text", md: "   ", thinking: true },
+      ]),
+    ).toBe(true);
   });
 });

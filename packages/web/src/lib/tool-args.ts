@@ -9,7 +9,8 @@
  */
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value))
+    return undefined;
   return value as Record<string, unknown>;
 }
 
@@ -202,7 +203,9 @@ export interface WebSearchResultItem {
  * `__fixtures__/task_non_sdk.jsonl`) — this pulls the embedded `Links: [...]`
  * array back out. Degrades to `undefined` (raw text fallback) for any other
  * shape, including a future structured-output revision. */
-export function parseWebSearchResults(output: unknown): WebSearchResultItem[] | undefined {
+export function parseWebSearchResults(
+  output: unknown,
+): WebSearchResultItem[] | undefined {
   if (typeof output !== "string") return undefined;
   const match = output.match(/Links:\s*(\[.*?\])/s);
   if (!match?.[1]) return undefined;
@@ -213,7 +216,10 @@ export function parseWebSearchResults(output: unknown): WebSearchResultItem[] | 
     const items = parsed
       .map((entry) => asRecord(entry))
       .filter((entry): entry is Record<string, unknown> => entry !== undefined)
-      .map((entry) => ({ title: readString(entry, "title"), url: readString(entry, "url") }))
+      .map((entry) => ({
+        title: readString(entry, "title"),
+        url: readString(entry, "url"),
+      }))
       .filter((entry) => entry.title !== undefined || entry.url !== undefined);
     return items.length > 0 ? items : undefined;
   } catch {
@@ -273,11 +279,31 @@ export interface AskQuestionParsed {
   options: AskQuestionOption[];
 }
 
+function parseAskQuestion(raw: unknown): AskQuestionParsed | undefined {
+  const qr = asRecord(raw);
+  const question = readString(qr, "question");
+  if (!question) return undefined;
+  const rawOptions = qr?.options;
+  const options = Array.isArray(rawOptions)
+    ? rawOptions
+        .map(parseAskOption)
+        .filter((o): o is AskQuestionOption => o !== undefined)
+    : [];
+  return {
+    question,
+    header: readString(qr, "header"),
+    multiSelect: readBoolean(qr, "multiSelect"),
+    options,
+  };
+}
+
 function parseAskOption(raw: unknown): AskQuestionOption | undefined {
   if (typeof raw === "string") return { label: raw };
   const r = asRecord(raw);
   const label = readString(r, "label");
-  return label ? { label, description: readString(r, "description") } : undefined;
+  return label
+    ? { label, description: readString(r, "description") }
+    : undefined;
 }
 
 /** Reads the `AskUserQuestion` tool's `{questions: [...]}` input shape
@@ -287,25 +313,14 @@ function parseAskOption(raw: unknown): AskQuestionOption | undefined {
 export function parseAskQuestions(args: unknown): AskQuestionParsed[] {
   const r = asRecord(args);
   const rawQuestions = r?.questions;
-  if (!Array.isArray(rawQuestions)) return [];
+  if (Array.isArray(rawQuestions)) {
+    return rawQuestions
+      .map(parseAskQuestion)
+      .filter((q): q is AskQuestionParsed => q !== undefined);
+  }
 
-  return rawQuestions
-    .map((raw): AskQuestionParsed | undefined => {
-      const qr = asRecord(raw);
-      const question = readString(qr, "question");
-      if (!question) return undefined;
-      const rawOptions = qr?.options;
-      const options = Array.isArray(rawOptions)
-        ? rawOptions.map(parseAskOption).filter((o): o is AskQuestionOption => o !== undefined)
-        : [];
-      return {
-        question,
-        header: readString(qr, "header"),
-        multiSelect: readBoolean(qr, "multiSelect"),
-        options,
-      };
-    })
-    .filter((q): q is AskQuestionParsed => q !== undefined);
+  const singleQuestion = parseAskQuestion(args);
+  return singleQuestion ? [singleQuestion] : [];
 }
 
 export interface AskAnswerEntry {

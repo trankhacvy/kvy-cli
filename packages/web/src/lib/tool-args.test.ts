@@ -328,6 +328,24 @@ describe("parseAskQuestions", () => {
     expect(questions.map((q) => q.question)).toEqual(["Q1", "Q2"]);
   });
 
+  it("reads a top-level single-question shape used by some CLI/tool paths", () => {
+    const questions = parseAskQuestions({
+      question: "Which approach should I take?",
+      options: ["A", "B"],
+    });
+    expect(questions).toEqual([
+      {
+        question: "Which approach should I take?",
+        header: undefined,
+        multiSelect: undefined,
+        options: [
+          { label: "A", description: undefined },
+          { label: "B", description: undefined },
+        ],
+      },
+    ]);
+  });
+
   it("drops malformed questions/options rather than throwing", () => {
     expect(
       parseAskQuestions({

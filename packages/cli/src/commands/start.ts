@@ -102,11 +102,21 @@
  * child's own exit code.
  */
 import path from "node:path";
-import { decodeBase64, deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
-import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
+import {
+  decodeBase64,
+  deriveKeyTree,
+  encodeBase64,
+  wrapDek,
+} from "@falcon/crypto";
+import {
+  createEnvelope,
+  type PermissionMode,
+  type SessionEnvelope,
+} from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox, type OutboxOptions } from "../api/outbox.js";
+import { createSessionMetadataUpdater } from "../api/sessionMetadata.js";
 import {
   type ReportableSessionStatus,
   reportSessionStatus as reportSessionStatusDefault,
@@ -119,6 +129,7 @@ import {
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
+import { findClaudeModelChangeInEnvelopes } from "../claude/modelChange.js";
 import {
   type ClaudeMode,
   type LoopDeps,
@@ -141,14 +152,20 @@ import {
   createNotifyDaemonSessionStartedDeps,
   notifyDaemonSessionStarted as notifyDaemonSessionStartedDefault,
 } from "../daemon/notify.js";
-import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
+import {
+  type DaemonState,
+  readDaemonState as readDaemonStateDefault,
+} from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import {
   type ClaudeCliLocation,
   findGlobalClaudeCliPath as findGlobalClaudeCliPathDefault,
 } from "../provider/claudeCliLocator.js";
 import { CLAUDE_NOT_INSTALLED_MESSAGE } from "../provider/claudeProviderAdapter.js";
-import { registerSessionRpcHandlers, type SessionRpcHandlers } from "../rpc/sessionRpc.js";
+import {
+  registerSessionRpcHandlers,
+  type SessionRpcHandlers,
+} from "../rpc/sessionRpc.js";
 import {
   bootstrapSession as bootstrapSessionDefault,
   createBootstrapSessionDeps,
@@ -164,7 +181,8 @@ import {
 } from "../session/sessionLock.js";
 
 const MASTER_SECRET_LENGTH_BYTES = 32;
-const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
+const NOT_LOGGED_IN_MESSAGE =
+  'falcon: not logged in — run "falcon auth login" first\n';
 
 /**
  * `setMode` on the PTY path (plan-v2.md W4.3 "Real setMode for the PTY
@@ -312,9 +330,12 @@ async function waitForMachineId(
 }
 
 /** Runs `falcon claude [args...]`. Returns the process exit code. */
-export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promise<number> {
+export async function runStartClaudeCommand(
+  deps: StartClaudeCommandDeps,
+): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
-  const writeError = deps.writeError ?? ((text: string) => process.stderr.write(text));
+  const writeError =
+    deps.writeError ?? ((text: string) => process.stderr.write(text));
   const logger = deps.logger ?? noopLogger;
   const env = deps.env ?? process.env;
   const readCreds = deps.readCredentials ?? readCredentialsDefault;
@@ -322,11 +343,16 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const fetchImpl = deps.fetchImpl ?? fetch;
   const locate = deps.locateClaudeCli ?? findGlobalClaudeCliPathDefault;
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
-  const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
-  const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
-  const createOutbox = deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
-  const doReportSessionStatus = deps.reportSessionStatus ?? reportSessionStatusDefault;
-  const doAcquireSessionLock = deps.acquireSessionLock ?? acquireSessionLockDefault;
+  const startSessionClient =
+    deps.startSessionClient ?? startSessionClientDefault;
+  const registerRpc =
+    deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
+  const createOutbox =
+    deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
+  const doReportSessionStatus =
+    deps.reportSessionStatus ?? reportSessionStatusDefault;
+  const doAcquireSessionLock =
+    deps.acquireSessionLock ?? acquireSessionLockDefault;
   const doNotifyDaemonSessionStarted =
     deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
 
@@ -336,7 +362,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // `claudeLocal.ts`'s `resolveSessionFlags`, just for a flag that isn't
   // Claude Code's to interpret at all).
   const forceNewSession = deps.claudeArgs.includes("--force-new-session");
-  const claudeArgs = deps.claudeArgs.filter((arg) => arg !== "--force-new-session");
+  const claudeArgs = deps.claudeArgs.filter(
+    (arg) => arg !== "--force-new-session",
+  );
 
   // 1. Never touch the network without credentials (no silent failures).
   const credentials = readCreds(deps.homeDir);
@@ -403,7 +431,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     const lockResult = await doAcquireSessionLock(
       deps.homeDir,
       { machineId, workspacePath: deps.workingDirectory },
-      { pid: process.pid, sessionId: null, startedAt: (deps.now ?? Date.now)() },
+      {
+        pid: process.pid,
+        sessionId: null,
+        startedAt: (deps.now ?? Date.now)(),
+      },
     );
     if (!lockResult.ok) {
       if (lockResult.reason === "held-by-running-process") {
@@ -465,12 +497,18 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // updates to those counters are this session's own concern, not this
   // startup self-report's.
   const notifyResult = await doNotifyDaemonSessionStarted(
-    createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+    createNotifyDaemonSessionStartedDeps({
+      homeDir: deps.homeDir,
+      fetchImpl,
+      logger,
+    }),
     {
       sessionId: bootstrap.sessionId,
       metadata: sessionMetadata,
       encryption: {
-        encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
+        encryptionKey: encodeBase64(
+          wrapDek(bootstrap.dek, contentKeyPair.publicKey),
+        ),
         seq: 0,
         metadataVersion: 0,
         agentStateVersion: 0,
@@ -502,7 +540,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   ): Promise<void> => {
     if (statusReported) return;
     statusReported = true;
-    await doReportSessionStatus(statusDeps, { sessionId: bootstrap.sessionId, status, error });
+    await doReportSessionStatus(statusDeps, {
+      sessionId: bootstrap.sessionId,
+      status,
+      error,
+    });
   };
 
   // SIGINT reaches the child via the PTY (raw mode forwards Ctrl-C bytes to
@@ -560,6 +602,27 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     homeDir: deps.homeDir,
     logger,
   });
+  const sessionMetadataUpdater = createSessionMetadataUpdater({
+    sessionId: bootstrap.sessionId,
+    serverUrl: backendUrl,
+    token: credentials.token,
+    dek: bootstrap.dek,
+    metadata: sessionMetadata,
+    metadataVersion: 0,
+    fetchImpl,
+  });
+  const handlePossibleModelChange = (
+    envelopes: readonly SessionEnvelope[],
+  ): void => {
+    const nextModel = findClaudeModelChangeInEnvelopes(envelopes);
+    if (!nextModel) return;
+    void sessionMetadataUpdater.updateModel(nextModel).catch((error) => {
+      logger.warn("[start-claude] failed to persist live model change", {
+        model: nextModel,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
 
   // The session-scoped `/v1/stream` connection `message`/`interrupt`/
   // `takeControl`/`setMode`/`perm.answer` arrive over (design §4.4). Without
@@ -567,7 +630,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // room the server's RPC relay looks up.
   const sessionClient = startSessionClient(
     createSessionClientDeps(
-      { serverUrl: backendUrl, token: credentials.token, sessionId: bootstrap.sessionId },
+      {
+        serverUrl: backendUrl,
+        token: credentials.token,
+        sessionId: bootstrap.sessionId,
+      },
       { logger },
     ),
   );
@@ -593,15 +660,23 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // Claim a send BEFORE it reaches the agent — a retried/duplicated RPC must
   // never run the agent twice (design §7.10). Returns either the text to
   // deliver (fresh claim) or the honest tri-state RPC response to send back.
-  type MessageEnvelope = Parameters<SessionRpcHandlers["message"]>[0]["envelope"];
+  type MessageEnvelope = Parameters<
+    SessionRpcHandlers["message"]
+  >[0]["envelope"];
   type MessageResult = Awaited<ReturnType<SessionRpcHandlers["message"]>>;
   const beginSend = async (
     envelope: MessageEnvelope,
-  ): Promise<{ proceed: true; text: string } | { proceed: false; response: MessageResult }> => {
+  ): Promise<
+    | { proceed: true; text: string }
+    | { proceed: false; response: MessageResult }
+  > => {
     if (envelope.ev.t !== "text") {
-      logger.warn("[start-claude] message RPC delivered a non-text envelope; dropping", {
-        type: envelope.ev.t,
-      });
+      logger.warn(
+        "[start-claude] message RPC delivered a non-text envelope; dropping",
+        {
+          type: envelope.ev.t,
+        },
+      );
       return { proceed: false, response: { queued: false } };
     }
     const text = envelope.ev.md;
@@ -609,16 +684,28 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       homeDir: deps.homeDir,
     });
     if (claim.status === "completed") {
-      logger.debug("[start-claude] message RPC replay — claim already completed", {
-        id: envelope.id,
-      });
-      return { proceed: false, response: { queued: false, status: "duplicate" } };
+      logger.debug(
+        "[start-claude] message RPC replay — claim already completed",
+        {
+          id: envelope.id,
+        },
+      );
+      return {
+        proceed: false,
+        response: { queued: false, status: "duplicate" },
+      };
     }
     if (claim.status === "in-progress") {
-      logger.warn("[start-claude] message RPC outcome indeterminate — open claim, not re-running", {
-        id: envelope.id,
-      });
-      return { proceed: false, response: { queued: false, status: "outcome-unknown" } };
+      logger.warn(
+        "[start-claude] message RPC outcome indeterminate — open claim, not re-running",
+        {
+          id: envelope.id,
+        },
+      );
+      return {
+        proceed: false,
+        response: { queued: false, status: "outcome-unknown" },
+      };
     }
     openClaims.set(envelope.id, claim.claimId);
     return { proceed: true, text };
@@ -637,7 +724,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
    * prompts route to the web PermCard.
    */
   async function runLocalPty(): Promise<number> {
-    const runPtySession = deps.startPtyClaudeSession ?? startPtyClaudeSessionDefault;
+    const runPtySession =
+      deps.startPtyClaudeSession ?? startPtyClaudeSessionDefault;
     const installRemotePermHook =
       deps.installRemotePermissionHook ?? installRemotePermissionHookDefault;
 
@@ -654,7 +742,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         hooksDir: defaultHooksDir(deps.homeDir),
         emitEnvelope: (envelope) => outbox.enqueue([envelope]),
         onSessionId: (id) => {
-          logger.debug("[start-claude] provider session id from SessionStart hook", { id });
+          logger.debug(
+            "[start-claude] provider session id from SessionStart hook",
+            { id },
+          );
           ptyHandle?.notifyProviderSessionId(id);
         },
         // "perm"/"question" mean Claude Code is showing (or about to show) a
@@ -673,7 +764,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // ending is safe to reflect regardless of who started it.
         onAttention: (kind) => {
           logger.debug("[start-claude] attention from hook", { kind });
-          if ((kind === "perm" || kind === "question") && !permHook?.isWebTurnActive()) {
+          if (
+            (kind === "perm" || kind === "question") &&
+            !permHook?.isWebTurnActive()
+          ) {
             ptyHandle?.setPromptOpen(true);
           }
           if (kind === "done") ptyHandle?.setPromptOpen(false);
@@ -700,7 +794,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // `--resume` composition from this) — set only when a caller
         // arranged the reconnect env ahead of this spawn (plan-v2.md W3.7);
         // ordinarily absent, i.e. a fresh provider session.
-        providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
+        providerSessionId:
+          env.FALCON_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
         homeDir: deps.homeDir,
         env,
         // The single shared hook server's `--settings` file + env — so the
@@ -711,7 +806,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           // The tailer's next tool-result is the precise "the dialog that was
           // open is gone" signal — clears the gate the attention/onPromptLikely
           // wiring above set (plan-v2.md W1.3).
-          if (envelopes.some((e) => e.ev.t === "tool-end")) ptyHandle?.setPromptOpen(false);
+          if (envelopes.some((e) => e.ev.t === "tool-end"))
+            ptyHandle?.setPromptOpen(false);
+          handlePossibleModelChange(envelopes);
           outbox.enqueue(envelopes);
         },
         // The send-claim completes the moment the message is actually typed +
@@ -730,7 +827,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // envelope id then sees `duplicate` (claim already completed) rather
         // than `outcome-unknown` for a message that never actually ran.
         onDroppedInjections: (messages) => {
-          for (const m of messages) completeClaim(m.id, { status: "dropped-session-ended" });
+          for (const m of messages)
+            completeClaim(m.id, { status: "dropped-session-ended" });
         },
         // A locally-typed Enter at the real keyboard is the human reclaiming
         // the turn — clear the web-turn flag immediately (plan-v2.md W1.2).
@@ -751,7 +849,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     // is spawned (or, if `runPtySession`'s own setup failed, about to report
     // that below via a non-zero `done` exit code; `ptyClaudeSession.ts`'s
     // `done` never rejects, so a spawn failure is only observable that way).
-    outbox.enqueue([createEnvelope("agent", { t: "service", text: "session started" })]);
+    outbox.enqueue([
+      createEnvelope("agent", { t: "service", text: "session started" }),
+    ]);
 
     const rpcHandlers: SessionRpcHandlers = {
       message: async ({ envelope }) => {
@@ -793,21 +893,29 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
 
         const presses = permissionModeCyclePresses(current, mode);
         if (!ptySession.sendModeCycle(presses)) {
-          logger.debug("[start-claude] setMode: injection gate closed — not sending keystrokes", {
-            current,
-            requested: mode,
-            presses,
-          });
+          logger.debug(
+            "[start-claude] setMode: injection gate closed — not sending keystrokes",
+            {
+              current,
+              requested: mode,
+              presses,
+            },
+          );
           return { ok: false, observedMode: current };
         }
 
-        const observed = (await permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS)) ?? null;
+        const observed =
+          (await permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS)) ??
+          null;
         if (observed === mode) return { ok: true, observedMode: observed };
 
-        logger.warn("[start-claude] setMode: hook echo did not confirm the switch", {
-          requested: mode,
-          observed,
-        });
+        logger.warn(
+          "[start-claude] setMode: hook echo did not confirm the switch",
+          {
+            requested: mode,
+            observed,
+          },
+        );
         return { ok: false, observedMode: observed ?? current };
       },
       // Remote answering of the live TUI's tool-permission prompt (design
@@ -815,7 +923,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // the hook server failed to install is this honestly not-supported.
       permAnswer: async ({ reqId, decision }) => {
         if (permHook) return permHook.resolvePermission({ reqId, decision });
-        logger.debug("[start-claude] perm.answer RPC — no live permission hook to route to");
+        logger.debug(
+          "[start-claude] perm.answer RPC — no live permission hook to route to",
+        );
         return { ok: false };
       },
       // "End session" from the web (plan-v2.md W2.3): report "ended" FIRST
@@ -827,7 +937,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // hung child can't block the "web says stopped" outcome the user asked
       // for.
       stop: async ({ force }) => {
-        logger.info("[start-claude] stop requested from web", { force: force ?? false });
+        logger.info("[start-claude] stop requested from web", {
+          force: force ?? false,
+        });
         await reportStatusOnce("ended");
         ptySession.stop();
         if (force) setTimeout(() => process.exit(0), 3000).unref();
@@ -858,13 +970,17 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     // "spawn failed" vs "the child genuinely exited 1").
     await reportStatusOnce(
       exitCode === 0 ? "ended" : "failed",
-      exitCode === 0 ? undefined : new Error(`claude exited with code ${exitCode}`),
+      exitCode === 0
+        ? undefined
+        : new Error(`claude exited with code ${exitCode}`),
     );
     outbox.enqueue([
       createEnvelope("agent", {
         t: "service",
         text:
-          exitCode === 0 ? "session ended" : `session ended unexpectedly (exit code ${exitCode})`,
+          exitCode === 0
+            ? "session ended"
+            : `session ended unexpectedly (exit code ${exitCode})`,
       }),
     ]);
     return exitCode;
@@ -880,7 +996,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
    */
   async function runRemoteLoop(): Promise<number> {
     const runLoop = deps.loop ?? loopDefault;
-    const localLauncherDeps: ClaudeLocalLauncherDeps = { launcherPath: deps.launcherPath, logger };
+    const localLauncherDeps: ClaudeLocalLauncherDeps = {
+      launcherPath: deps.launcherPath,
+      logger,
+    };
     // Defaults-only, but a real object — a mid-run switch calls
     // `startClaudeRemoteLauncher(..., deps.remote)`.
     const remoteLauncherDeps: ClaudeRemoteLauncherDeps = {};
@@ -929,7 +1048,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // exit. Same not-yet-landed status-reporting caveat as `runLocalPty`'s
       // `stop` handler — see its comment.
       stop: async ({ force }) => {
-        logger.info("[start-claude] stop requested from web", { force: force ?? false });
+        logger.info("[start-claude] stop requested from web", {
+          force: force ?? false,
+        });
         exitSignal.emit();
         if (force) setTimeout(() => process.exit(0), 3000).unref();
         return { ok: true };
@@ -952,7 +1073,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           homeDir: deps.homeDir,
           claudeArgs,
           claudeEnvVars: { FALCON_CLAUDE_PATH: claudeCliPath },
-          onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
+          onEnvelopes: (envelopes) => {
+            handlePossibleModelChange(envelopes);
+            outbox.enqueue(envelopes);
+          },
           onModeChange: (mode) => {
             currentMode = mode;
           },

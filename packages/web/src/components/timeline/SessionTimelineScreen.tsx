@@ -180,7 +180,7 @@ function SessionTimelineBody({
 
   return (
     <div className="flex h-full min-h-0">
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl min-w-0 flex-col">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl min-w-0 flex-col overflow-hidden">
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <p className="min-w-0 truncate text-base font-semibold">{title ?? sessionId}</p>
           <div className="flex shrink-0 items-center gap-2">
@@ -219,38 +219,42 @@ function SessionTimelineBody({
           </div>
         )}
         <LifecycleBanner sessionStatus={sessionStatus} />
-        {isInitialLoading && items.length === 0 ? (
-          <TimelineSkeleton />
-        ) : (
-          <Timeline
-            items={mergedItems}
-            working={working}
-            hasMore={hasMore}
-            isLoadingMore={isLoadingMore}
-            onLoadEarlier={onLoadEarlier}
-          />
-        )}
-        <Composer
-          sessionId={sessionId}
-          onSend={send}
-          onAttach={sendAttachment}
-          isSending={isSending}
-          isQueued={isQueued}
-          cryptoReady={cryptoReady}
-          disabled={isDisabled}
-          error={error}
-          notice={notice}
-          working={working}
-          onStop={() => actions.interrupt()}
-          footerControls={
-            <ComposerControls
-              mode={permissionMode}
-              controlMode={controlMode}
-              disabled={isDisabled}
-              modelChip={modelChip}
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {isInitialLoading && items.length === 0 ? (
+            <TimelineSkeleton />
+          ) : (
+            <Timeline
+              items={mergedItems}
+              working={working}
+              hasMore={hasMore}
+              isLoadingMore={isLoadingMore}
+              onLoadEarlier={onLoadEarlier}
             />
-          }
-        />
+          )}
+        </div>
+        <div className="shrink-0 border-t border-border/70 bg-background">
+          <Composer
+            sessionId={sessionId}
+            onSend={send}
+            onAttach={sendAttachment}
+            isSending={isSending}
+            isQueued={isQueued}
+            cryptoReady={cryptoReady}
+            disabled={isDisabled}
+            error={error}
+            notice={notice}
+            working={working}
+            onStop={() => actions.interrupt()}
+            footerControls={
+              <ComposerControls
+                mode={permissionMode}
+                controlMode={controlMode}
+                disabled={isDisabled}
+                modelChip={modelChip}
+              />
+            }
+          />
+        </div>
       </div>
       {panelOpen && <SessionSidePanel />}
     </div>

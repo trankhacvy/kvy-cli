@@ -19,6 +19,7 @@ import {
 import { type AskQuestionParsed, parseAskQuestions } from "@/lib/tool-args";
 import { cn } from "@/lib/utils";
 import type { PermissionInfo } from "@/sync/reducer";
+import { AskQuestionOptions } from "./AskQuestionOptions";
 
 /**
  * Interactive `AskUserQuestion` card (plan-v2.md W2.1) — rendered instead of
@@ -142,6 +143,7 @@ function AskAnsweredSummary({
             {answers?.[q.question] ??
               (denied ? "Not answered" : decision ? "(no answer recorded)" : "Awaiting answer…")}
           </p>
+          <AskQuestionOptions question={q} answer={answers?.[q.question]} />
         </div>
       ))}
     </div>

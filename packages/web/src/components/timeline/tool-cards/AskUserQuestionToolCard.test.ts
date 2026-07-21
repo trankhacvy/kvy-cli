@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { describe, expect, it } from "vitest";
+import { AskQuestionOptions } from "../AskQuestionOptions";
 import type { PermissionInfo, ToolItem } from "@/sync/reducer";
 import { JsonBlock } from "../JsonBlock";
 import { AskUserQuestionToolCard } from "./AskUserQuestionToolCard";
@@ -13,7 +14,9 @@ function toolItem(overrides: Partial<ToolItem> = {}): ToolItem {
     kind: "tool",
     call: "c1",
     name: "AskUserQuestion",
-    args: { questions: [{ question: "Which color?", options: ["Red", "Blue"] }] },
+    args: {
+      questions: [{ question: "Which color?", options: ["Red", "Blue"] }],
+    },
     status: "done",
     ...overrides,
   };
@@ -42,7 +45,9 @@ describe("AskUserQuestionToolCard", () => {
     const body = bodyOf(toolItem({ permission: pendingPermission }));
 
     expect(body.type).toBe("p");
-    expect((body.props as { children: unknown }).children).toBe("Waiting for an answer…");
+    expect((body.props as { children: unknown }).children).toBe(
+      "Waiting for an answer…",
+    );
   });
 
   it("does not treat a decided permission as pending", () => {
@@ -51,7 +56,9 @@ describe("AskUserQuestionToolCard", () => {
       modes: [],
       decision: { kind: "deny" },
     };
-    const body = bodyOf(toolItem({ permission: decidedPermission, output: { answers: {} } }));
+    const body = bodyOf(
+      toolItem({ permission: decidedPermission, output: { answers: {} } }),
+    );
     expect(body.type).toBe("div");
   });
 
@@ -73,17 +80,60 @@ describe("AskUserQuestionToolCard", () => {
     expect(questionRows).toHaveLength(2);
 
     const firstRow = questionRows[0] as ReactElement;
-    const [firstQ, firstA] = (firstRow.props as { children: ReactElement[] }).children;
+    const [firstQ, firstA] = (firstRow.props as { children: ReactElement[] })
+      .children;
     expect(textOf(firstQ as ReactElement)).toBe("Which color?");
     expect(textOf(firstA as ReactElement)).toBe("Blue");
 
     const secondRow = questionRows[1] as ReactElement;
-    const [secondQ, secondA] = (secondRow.props as { children: ReactElement[] }).children;
+    const [secondQ, secondA] = (secondRow.props as { children: ReactElement[] })
+      .children;
     expect(textOf(secondQ as ReactElement)).toBe("Which size?");
     expect(textOf(secondA as ReactElement)).toBe("L");
 
     // No fallback JsonBlock once every answer was recognized.
     expect(children[1]).toBe(false);
+  });
+
+  it("renders options for a top-level single-question arg shape", () => {
+    const body = bodyOf(
+      toolItem({
+        args: {
+          question: "Which approach should I take?",
+          options: ["A", "B"],
+        },
+        output: { answers: { "Which approach should I take?": "A" } },
+      }),
+    );
+    const children = (body.props as { children: unknown[] }).children;
+    const questionRows = children[0] as ReactElement[];
+    const row = questionRows[0] as ReactElement;
+    const rowChildren = (row.props as { children: ReactElement[] }).children;
+    expect(textOf(rowChildren[0] as ReactElement)).toBe(
+      "Which approach should I take?",
+    );
+    expect((rowChildren[2] as ReactElement).type).toBe(AskQuestionOptions);
+  });
+
+  it("renders a declined question as a neutral outcome instead of a failure", () => {
+    const shell = AskUserQuestionToolCard({
+      item: toolItem({
+        ok: false,
+        output:
+          "The remote user did not answer the structured question form. Ask the same question(s) again in PLAIN TEXT in your reply (no AskUserQuestion tool), then end your turn and wait for the user's typed answer.",
+      }),
+    });
+
+    expect(shell.type).toBe(ToolCardShell);
+    expect((shell.props as { statusLabel?: string }).statusLabel).toBe(
+      "declined",
+    );
+    expect((shell.props as { statusVariant?: string }).statusVariant).toBe(
+      "secondary",
+    );
+
+    const body = (shell.props as { children: ReactElement }).children;
+    expect(body.type).toBe("div");
   });
 
   it("falls back to (no answer recorded) and a raw JsonBlock for an unrecognized output shape", () => {
