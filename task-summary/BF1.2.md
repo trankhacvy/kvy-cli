@@ -8,6 +8,19 @@ escape codes), instead of a clean "Set model to Haiku 4.5..." service line.
 No prior attempt existed in this worktree (`git log v2-pty-injection..HEAD`
 was empty) — built from scratch per the plan.
 
+**Review pass (this session):** `git log v2-pty-injection..HEAD` showed two
+existing commits (`feat: BF1.2 — model-switch-render-fix`, `test: BF1.2`).
+Verified every sub-task 1-5 against the real code line-by-line (exports,
+regex helpers, insertion point relative to `isSidechainMessage`, the
+`findClaudeModelChangeInEnvelopes` `service`-branch extension, the fixture's
+exact strings, and all test assertions) — everything matches the plan (with
+the one intentional, already-documented drift below) and nothing was
+missing or broken. The second commit only adds two extra regression tests
+on top of the first (an ANSI-noise-outside-the-tags extraction case, and a
+probe documenting that the local-command-stdout branch doesn't close an
+already-open turn); no code changes beyond tests. No gaps found — nothing
+to fill in.
+
 ## Changes
 
 **`packages/cli/src/claude/modelChange.ts`**
@@ -62,29 +75,45 @@ was empty) — built from scratch per the plan.
   `service`-envelope case for `findClaudeModelChangeInEnvelopes`, a
   mixed-envelope-list precedence case, and a direct test of the newly
   exported `normalizeTranscriptText`.
+- (second commit, additive) two more `envelopeMapper.test.ts` cases: ANSI
+  noise surrounding (not inside) the `<local-command-stdout>` tags still
+  extracts cleanly, and a probe documenting that the local-command-stdout
+  branch intentionally does not close an already-open turn (asymmetric vs.
+  ordinary user chat text, flagged as a documented behavior, not a bug to
+  fix in this unit).
 
 ## Verification
 
 - `pnpm build` — passes (includes `tsc --noEmit` per package).
 - `pnpm typecheck` — passes.
-- `pnpm --filter falcon test` / `pnpm test` — 132 files / 1456 tests pass.
-- `pnpm lint` (root `biome check .`) still reports pre-existing repo-wide
-  debt unrelated to this unit (96 errors / 132 warnings across the whole
-  repo, e.g. `packages/cli/src/api/sessionMetadata.ts`,
-  `e2e/src/fakeSessionProcess.ts`, `packages/cli/scripts/*` — none of it
-  touched by this diff). Scoped to only the 4 files this unit changed:
-  before hand-fixing, our new code/tests introduced 3 new format/lint
-  errors and 2 new warnings on top of that baseline; all were fixed
-  (`biome check --write` for formatting, manual optional-chaining rewrites
-  for the two `noNonNullAssertion`/`useOptionalChain` warnings, and a
-  manual rewrite of one test assertion whose regex had accidentally picked
-  up a literal ESC control byte, which is what `noControlCharactersInRegex`
-  was actually flagging). The one remaining error scoped to these 4 files
-  (`modelChange.ts:3`, `noControlCharactersInRegex` on the pre-existing
-  `ANSI_ESCAPE_SEQUENCE` regex) predates this change entirely (verified via
-  `git show v2-pty-injection:.../modelChange.ts`) and is out of this unit's
-  scope. Net effect: this unit introduces zero new lint errors or warnings
-  anywhere in the repo.
+- `pnpm --filter falcon test` / `pnpm test` — 132 files / 1458 tests pass
+  (re-run this session; 2 more than the first commit's 1456 thanks to the
+  second commit's two additional cases).
+- `pnpm lint` (root `biome check .`): at commit time, scoped to only the 4
+  files this unit changed, before hand-fixing our new code/tests introduced
+  3 new format/lint errors and 2 new warnings on top of the repo's
+  pre-existing debt; all were fixed (`biome check --write` for formatting,
+  manual optional-chaining rewrites for two `noNonNullAssertion`/
+  `useOptionalChain` warnings, and a manual rewrite of one test assertion
+  whose regex had accidentally picked up a literal ESC control byte, which
+  is what `noControlCharactersInRegex` was actually flagging). The one
+  remaining error scoped to these 4 files (`modelChange.ts:3`,
+  `noControlCharactersInRegex` on the pre-existing `ANSI_ESCAPE_SEQUENCE`
+  regex) predates this change (verified via
+  `git show v2-pty-injection:.../modelChange.ts`) and is out of scope.
+  **Re-verification this session:** `pnpm lint` (and even a bare
+  `npx biome check <single file>` / `npx biome --version`) failed with
+  `[warn] Linter process terminated abnormally (possibly out of memory)`
+  on every attempt, including after the documented one-shot retry — this
+  machine had ~148MB of free physical memory at the time (`top`/`vm_stat`),
+  i.e. real system-wide memory pressure from unrelated processes, not
+  something scoping the lint invocation to fewer files could route around
+  (even `--version` alone failed to spawn). This matches CLAUDE.md's
+  documented transient-OOM caveat for this exact command. Deferred to a
+  human re-run once memory pressure clears; not re-blocked on here since
+  `git status` is clean (the code is byte-identical to what was already
+  lint-verified clean at commit time) and `pnpm build`/`typecheck`/`test`
+  all pass on the current tree.
 
 ## Skipped (as instructed)
 
