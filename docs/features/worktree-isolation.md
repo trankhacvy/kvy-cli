@@ -129,6 +129,8 @@ Full-repo `pnpm build && pnpm typecheck && pnpm test` (via `node_modules/.bin/bi
 
 Two flaky, pre-existing (unrelated-to-this-task) test failures were observed under full-monorepo-test-suite resource contention — `src/index.test.ts`'s `--help` test and `src/daemon/sessionRegistry.test.ts`'s persistence-timing test — both pass reliably in isolation and on a repeated clean full-suite run; neither touches any file this task modified.
 
+Merged into v2-pty-injection at d1e2a18dd9fa471b8fbad6b5f20ce4199d82e1b9.
+
 ## Test & Review notes (independent verification pass)
 
 Re-ran everything from a clean worktree rather than trusting the checked boxes above.
