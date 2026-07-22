@@ -209,8 +209,8 @@ describe("adopt.take double-takeover race", () => {
 
     // Both concurrent callers see the same failure — neither silently hangs nor gets a
     // divergent answer.
-    expect(open(resultA, DEK)).toEqual({ ok: false, error: "handler-error" });
-    expect(open(resultB, DEK)).toEqual({ ok: false, error: "handler-error" });
+    expect(open(resultA, DEK)).toEqual({ ok: false, error: "no owning process found" });
+    expect(open(resultB, DEK)).toEqual({ ok: false, error: "no owning process found" });
 
     // The failed attempt must not wedge the providerSessionId forever: a genuinely new
     // takeover attempt afterwards (new idempotencyKey, arrives once the failure has

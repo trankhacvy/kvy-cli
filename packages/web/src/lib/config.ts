@@ -44,6 +44,23 @@ export const VAPID_PUBLIC_KEY: string | undefined =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || undefined;
 
 /**
+ * Settings → Support (docs/competitive-notes-omnara.md #23): an invite link to Falcon's
+ * Discord community. Not a secret — safe to ship in a public bundle like the OAuth client
+ * ids above. Self-hosters running their own community server override it via
+ * `NEXT_PUBLIC_DISCORD_INVITE_URL`; the default points at Falcon's own.
+ */
+export const DISCORD_INVITE_URL: string =
+  process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || "https://discord.gg/falcon";
+
+/**
+ * Settings → Support (docs/competitive-notes-omnara.md #23): the direct support email
+ * address, rendered as a `mailto:` link. Mirrors the server's own `VAPID_SUBJECT` default
+ * (`packages/server/src/config.ts`) so the two stay the same address unless a self-hoster
+ * overrides both.
+ */
+export const SUPPORT_EMAIL: string = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@falcon.dev";
+
+/**
  * Mirrors the CLI's own `FALCON_PTY_SETMODE` flag (`commands/start.ts`'s
  * `PTY_SET_MODE_ENV_VAR`) — the PTY path's real `setMode` (a version-coupled
  * Shift+Tab keystroke cycle, plan-v2.md W4.3) stays behind a flag on both

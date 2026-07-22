@@ -2393,6 +2393,407 @@
       }
     }
   },
+  "GitCommitParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "message": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "stageAll": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitCommitResultSchema": {
+    "kind": "object",
+    "fields": {
+      "commitSha": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "committed": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "nothingToCommit": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "GitPushParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "branch": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "force": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "remote": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "setUpstream": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitPushResultSchema": {
+    "kind": "object",
+    "fields": {
+      "branch": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "forced": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "ok": {
+        "kind": "literal",
+        "values": [
+          true
+        ]
+      },
+      "remote": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitRenameBranchParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "from": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "to": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitRenameBranchResultSchema": {
+    "kind": "object",
+    "fields": {
+      "branch": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "hadUpstream": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "ok": {
+        "kind": "literal",
+        "values": [
+          true
+        ]
+      }
+    }
+  },
+  "GithubChecksParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "CheckRunSchema": {
+    "kind": "object",
+    "fields": {
+      "completedAt": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "conclusion": {
+        "kind": "optional",
+        "inner": {
+          "kind": "enum",
+          "options": [
+            "action_required",
+            "cancelled",
+            "failure",
+            "neutral",
+            "skipped",
+            "stale",
+            "success",
+            "timed_out"
+          ]
+        }
+      },
+      "detailsUrl": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "name": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "startedAt": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "status": {
+        "kind": "enum",
+        "options": [
+          "completed",
+          "in_progress",
+          "queued"
+        ]
+      }
+    }
+  },
+  "PullRequestInfoSchema": {
+    "kind": "object",
+    "fields": {
+      "draft": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "headSha": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "number": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "state": {
+        "kind": "enum",
+        "options": [
+          "closed",
+          "merged",
+          "open"
+        ]
+      },
+      "title": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "url": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GithubChecksResultSchema": {
+    "kind": "object",
+    "fields": {
+      "branch": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "checks": {
+        "kind": "optional",
+        "inner": {
+          "kind": "array",
+          "element": {
+            "kind": "object",
+            "fields": {
+              "completedAt": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "number"
+                }
+              },
+              "conclusion": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "enum",
+                  "options": [
+                    "action_required",
+                    "cancelled",
+                    "failure",
+                    "neutral",
+                    "skipped",
+                    "stale",
+                    "success",
+                    "timed_out"
+                  ]
+                }
+              },
+              "detailsUrl": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
+              },
+              "name": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "startedAt": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "number"
+                }
+              },
+              "status": {
+                "kind": "enum",
+                "options": [
+                  "completed",
+                  "in_progress",
+                  "queued"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "message": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "pr": {
+        "kind": "optional",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "draft": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "boolean"
+              }
+            },
+            "headSha": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "number": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "state": {
+              "kind": "enum",
+              "options": [
+                "closed",
+                "merged",
+                "open"
+              ]
+            },
+            "title": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "url": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "repo": {
+        "kind": "optional",
+        "inner": {
+          "kind": "object",
+          "fields": {
+            "name": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "owner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "state": {
+        "kind": "enum",
+        "options": [
+          "no-pr",
+          "no-token",
+          "not-pushed",
+          "ok",
+          "unsupported-remote"
+        ]
+      }
+    }
+  },
   "FsReadParamsSchema": {
     "kind": "object",
     "fields": {

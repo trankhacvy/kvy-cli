@@ -178,6 +178,151 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `git.commit` machine RPC (design §4.4, docs/features/git-write-actions.md
+// Phase 1 — the first *mutating* git RPC; `git.status`/`git.diff`/
+// `git.branches` above are all read-only). `stageAll: true` runs `git add
+// -A` before committing, so the commit includes exactly what the panel's
+// changed-files list shows — untracked files included; omitted/`false`
+// commits only already-tracked changes (`git commit -a`). Unlike its
+// read-only siblings, a retried `git.commit` MUST replay the prior
+// commit's result rather than mint a second commit — see `machineRpc.ts`'s
+// `withIdempotencyCache`. `amend` was deliberately left off this schema: no
+// UI consumes it yet, and the additive-only policy means it can be added
+// later without a breaking change.
+export const GitCommitParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  message: z.string(),
+  stageAll: z.boolean().optional(),
+});
+export type GitCommitParams = z.infer<typeof GitCommitParamsSchema>;
+
+// `nothingToCommit: true` (with `committed: false`) is the clean "nothing
+// changed" outcome, not an error — the working tree was already clean (or
+// `stageAll` staged nothing new). `commitSha` is set whenever `committed`
+// is true.
+export const GitCommitResultSchema = z.object({
+  committed: z.boolean(),
+  commitSha: z.string().optional(),
+  nothingToCommit: z.boolean().optional(),
+});
+export type GitCommitResult = z.infer<typeof GitCommitResultSchema>;
+
+// `git.push` machine RPC (design §4.4, docs/features/git-write-actions.md
+// Phase 1). `force: true` maps to `--force-with-lease`, NEVER the raw
+// `--force` flag — the raw flag is deliberately unreachable over the wire
+// as a data-loss containment measure (a lease-checked force-push still
+// fails, rather than silently discarding, when the remote moved since the
+// caller's last fetch). Also idempotency-cached, same rationale as
+// `git.commit`: re-pushing the same commits is close to a natural no-op,
+// but a force-push-with-lease can fail differently on replay, so it's
+// cached too rather than assumed safe to blindly re-run.
+export const GitPushParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  remote: z.string().optional(),
+  branch: z.string().optional(),
+  force: z.boolean().optional(),
+  setUpstream: z.boolean().optional(),
+});
+export type GitPushParams = z.infer<typeof GitPushParamsSchema>;
+
+export const GitPushResultSchema = z.object({
+  ok: z.literal(true),
+  remote: z.string(),
+  branch: z.string(),
+  forced: z.boolean(),
+});
+export type GitPushResult = z.infer<typeof GitPushResultSchema>;
+
+// `git.renameBranch` machine RPC (design §4.4, docs/features/
+// git-write-actions.md Phase 1): local-only `git branch -m` (the remote
+// branch, if any, keeps its old name until the next push — `hadUpstream`
+// tells the UI to surface that warning).
+export const GitRenameBranchParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  to: z.string(),
+  from: z.string().optional(),
+});
+export type GitRenameBranchParams = z.infer<typeof GitRenameBranchParamsSchema>;
+
+export const GitRenameBranchResultSchema = z.object({
+  ok: z.literal(true),
+  branch: z.string(),
+  hadUpstream: z.boolean(),
+});
+export type GitRenameBranchResult = z.infer<typeof GitRenameBranchResultSchema>;
+
+// `github.checks` machine RPC (design §4.4; docs/features/github-pr-ci.md
+// "GitHub PR/CI integration", docs/competitive-notes-omnara.md #4).
+// Structural clone of `git.status`/`git.branches`'s params shape above —
+// the daemon resolves the PR/CI state for the current branch of
+// `params.worktree` using a machine-local GitHub token, never one held by
+// the server (design §5.3/§6.1: the server decrypts nothing).
+export const GithubChecksParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GithubChecksParams = z.infer<typeof GithubChecksParamsSchema>;
+
+// One GitHub check-run (a single job within a PR's combined CI status).
+// `startedAt`/`completedAt` are unix seconds, matching `GitBranchInfoSchema`'s
+// own `lastCommitAt` precedent above.
+export const CheckRunSchema = z.object({
+  name: z.string(),
+  status: z.enum(["queued", "in_progress", "completed"]),
+  conclusion: z
+    .enum([
+      "success",
+      "failure",
+      "neutral",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "stale",
+    ])
+    .optional(),
+  detailsUrl: z.string().optional(),
+  startedAt: z.number().optional(),
+  completedAt: z.number().optional(),
+});
+export type CheckRun = z.infer<typeof CheckRunSchema>;
+
+export const PullRequestInfoSchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  url: z.string(),
+  state: z.enum(["open", "closed", "merged"]),
+  headSha: z.string(),
+  draft: z.boolean().optional(),
+});
+export type PullRequestInfo = z.infer<typeof PullRequestInfoSchema>;
+
+// `state` covers every case the "Checks" tab / Settings → Git CTA copy
+// derives from (design principle #3 — never stored, always recomputed):
+//   - "no-token":            GitHub is not connected on this machine — the
+//                             daemon's Settings CTA ("Login to GitHub…").
+//   - "unsupported-remote":  the configured remote isn't github.com (or is
+//                             detached HEAD/unparseable) — `message` carries
+//                             the specific reason.
+//   - "not-pushed":          the current branch hasn't been pushed to the
+//                             remote yet — "commit and push, then create a
+//                             PR" copy.
+//   - "no-pr":                pushed, but no open PR exists for this branch.
+//   - "ok":                   `pr` + `checks` are populated from the PR's
+//                             head commit.
+export const GithubChecksResultSchema = z.object({
+  state: z.enum(["no-token", "unsupported-remote", "not-pushed", "no-pr", "ok"]),
+  repo: z.object({ owner: z.string(), name: z.string() }).optional(),
+  branch: z.string().optional(),
+  pr: PullRequestInfoSchema.optional(),
+  checks: z.array(CheckRunSchema).optional(),
+  message: z.string().optional(),
+});
+export type GithubChecksResult = z.infer<typeof GithubChecksResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),

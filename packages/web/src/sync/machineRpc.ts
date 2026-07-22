@@ -6,7 +6,9 @@
  * spawn-fresh-folder-register (Piece A)"), the Git panel's
  * `git.status`/`git.diff`, and `git.branches` (docs/features/
  * worktree-isolation.md — the New Session wizard's existing-branch worktree
- * picker). This is
+ * picker), plus the mutating `git.commit`/`git.push`/`git.renameBranch`
+ * (docs/features/git-write-actions.md — the Git panel's write actions).
+ * This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
  * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
@@ -29,6 +31,11 @@
  * every sibling method here, doesn't export paired `AdoptListParams`/
  * `AdoptListResult` type aliases — so those two are derived locally via
  * `z.infer` instead of imported, same values either way.
+ *
+ * `github.checks` (docs/features/github-pr-ci.md "GitHub PR/CI
+ * integration", docs/competitive-notes-omnara.md #4) is the Checks tab's
+ * data source (`features/github-checks/`) — same read-only, no-
+ * idempotency-cache shape as `git.status`/`git.diff`/`git.branches` above.
  */
 import {
   type AdoptListParamsSchema,
@@ -43,8 +50,16 @@ import {
   FsMkdirResultSchema,
   type GitBranchesParams,
   GitBranchesResultSchema,
+  type GitCommitParams,
+  GitCommitResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
+  type GithubChecksParams,
+  GithubChecksResultSchema,
+  type GitPushParams,
+  GitPushResultSchema,
+  type GitRenameBranchParams,
+  GitRenameBranchResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
   type SpawnParams,
@@ -61,7 +76,11 @@ export type {
   FsListParams,
   FsMkdirParams,
   GitBranchesParams,
+  GitCommitParams,
   GitDiffParams,
+  GithubChecksParams,
+  GitPushParams,
+  GitRenameBranchParams,
   GitStatusParams,
   SpawnParams,
   WorkspaceRegisterParams,
@@ -82,6 +101,10 @@ export interface MachineRpcParams {
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
   "git.branches": GitBranchesParams;
+  "git.commit": GitCommitParams;
+  "git.push": GitPushParams;
+  "git.renameBranch": GitRenameBranchParams;
+  "github.checks": GithubChecksParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -96,6 +119,10 @@ export interface MachineRpcResults {
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
   "git.branches": import("@falcon/wire").GitBranchesResult;
+  "git.commit": import("@falcon/wire").GitCommitResult;
+  "git.push": import("@falcon/wire").GitPushResult;
+  "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
+  "github.checks": import("@falcon/wire").GithubChecksResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -111,6 +138,10 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
   "git.branches": GitBranchesResultSchema,
+  "git.commit": GitCommitResultSchema,
+  "git.push": GitPushResultSchema,
+  "git.renameBranch": GitRenameBranchResultSchema,
+  "github.checks": GithubChecksResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */
@@ -147,6 +178,18 @@ function rpcTarget(machineId: string, method: MachineRpcMethod): string {
   return `m:${machineId}:${method}`;
 }
 
+/** Structural check for the daemon's sealed error-box shape — see the call site's doc comment. */
+function isHandlerErrorBox(value: unknown): value is { ok: false; error: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "ok" in value &&
+    (value as { ok: unknown }).ok === false &&
+    "error" in value &&
+    typeof (value as { error: unknown }).error === "string"
+  );
+}
+
 export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
   return {
     async call(method, params) {
@@ -160,6 +203,21 @@ export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
       const opened = await deps.crypto.open<unknown>(response.result);
       if (opened === null) {
         throw new MachineRpcError(`failed to decrypt the '${method}' RPC result`, "decrypt-failed");
+      }
+
+      // The daemon's own `onRpcRequest` (`daemon/machineRpc.ts`) seals a
+      // `{ok:false, error}` box — not a `MachineRpcResults[M]` shape — when
+      // the handler rejected/threw or a dispatch-level check failed (bad
+      // method/params/etc). Every real success result is sealed bare (no
+      // `ok`/`error` envelope — see `RESULT_SCHEMAS`), so this shape is
+      // unambiguous. Checked BEFORE schema validation: falling through to
+      // `safeParse` here would always fail (an error box never matches a
+      // result schema) and replace the handler's real message — e.g. a
+      // `GitExecError`'s git stderr, the whole point of docs/features/
+      // git-write-actions.md's "not a Falcon abstraction" credential-failure
+      // UX — with a useless generic "failed schema validation" string.
+      if (isHandlerErrorBox(opened)) {
+        throw new MachineRpcError(opened.error, "handler-error");
       }
 
       const parsed = RESULT_SCHEMAS[method].safeParse(opened);
