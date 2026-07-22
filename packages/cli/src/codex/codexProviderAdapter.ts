@@ -1,4 +1,7 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { shimBinDir } from "../shim/paths.js";
 
 /**
  * `ProviderAdapter.detect()`/`startLocal()` for Codex (design §7.3/§7.7,
@@ -56,13 +59,47 @@ export interface DetectCodexOptions {
   resolveVersion?: () => string | null;
 }
 
-function defaultResolveVersion(): string | null {
+/**
+ * Resolves the real `codex` binary's path via the system PATH, skipping
+ * Falcon's own `codex` PATH shim (`falcon shim install`, FR-9.6) — mirrors
+ * `provider/claudeCliLocator.ts`'s `findClaudeInPath` shim-skip guard, for
+ * exactly the same reason. `~/.falcon/bin/codex` is `exec falcon codex
+ * "$@"`, and it sits ahead of any real install on PATH once the shim is
+ * installed; resolving through it here would call straight back into this
+ * very detection path (`falcon codex --version` → `detectCodex` →
+ * `execFileSync("codex", ...)` → the shim → `falcon codex --version` →
+ * `detectCodex` → ...) — a runaway recursive process chain instead of an
+ * honest "not installed" (the bug this guards against: daemon-boot-codex-
+ * shim-recursion).
+ */
+function findCodexInPath(env: NodeJS.ProcessEnv): string | null {
+  try {
+    const command = process.platform === "win32" ? "where codex" : "which codex";
+    const result = execSync(command, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+
+    const codexPath = result.split("\n")[0]?.trim();
+    if (!codexPath) return null;
+    if (!existsSync(codexPath)) return null;
+    if (path.dirname(codexPath) === shimBinDir({ env })) return null;
+
+    return codexPath;
+  } catch {
+    // `codex` not on PATH.
+    return null;
+  }
+}
+
+function defaultResolveVersion(env: NodeJS.ProcessEnv): string | null {
+  const codexPath = findCodexInPath(env);
+  if (!codexPath) return null;
   try {
     // `timeout: 3000` matches `claudeCliLocator.ts`/`claudeAuth.ts`'s own
     // version-check calls — PRD FR-2.7's "never hang" applies here too: a
     // `codex` on PATH that reads stdin or hangs must not block detection
-    // forever.
-    return execFileSync("codex", ["--version"], { encoding: "utf8", timeout: 3000 }).trim();
+    // forever. Spawning the resolved absolute path directly (rather than
+    // the bare `codex` command) means this never repeats `findCodexInPath`'s
+    // own PATH lookup, so there's nothing left to re-resolve into the shim.
+    return execFileSync(codexPath, ["--version"], { encoding: "utf8", timeout: 3000 }).trim();
   } catch {
     return null;
   }
@@ -80,7 +117,8 @@ function defaultResolveVersion(): string | null {
 export async function detectCodex(
   options: DetectCodexOptions = {},
 ): Promise<ProviderDetectionResult> {
-  const resolveVersion = options.resolveVersion ?? defaultResolveVersion;
+  const env = options.env ?? process.env;
+  const resolveVersion = options.resolveVersion ?? (() => defaultResolveVersion(env));
   const version = resolveVersion();
 
   if (!version) {
