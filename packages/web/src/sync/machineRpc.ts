@@ -31,6 +31,11 @@
  * every sibling method here, doesn't export paired `AdoptListParams`/
  * `AdoptListResult` type aliases — so those two are derived locally via
  * `z.infer` instead of imported, same values either way.
+ *
+ * `github.checks` (docs/features/github-pr-ci.md "GitHub PR/CI
+ * integration", docs/competitive-notes-omnara.md #4) is the Checks tab's
+ * data source (`features/github-checks/`) — same read-only, no-
+ * idempotency-cache shape as `git.status`/`git.diff`/`git.branches` above.
  */
 import {
   type AdoptListParamsSchema,
@@ -49,6 +54,8 @@ import {
   GitCommitResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
+  type GithubChecksParams,
+  GithubChecksResultSchema,
   type GitPushParams,
   GitPushResultSchema,
   type GitRenameBranchParams,
@@ -71,6 +78,7 @@ export type {
   GitBranchesParams,
   GitCommitParams,
   GitDiffParams,
+  GithubChecksParams,
   GitPushParams,
   GitRenameBranchParams,
   GitStatusParams,
@@ -96,6 +104,7 @@ export interface MachineRpcParams {
   "git.commit": GitCommitParams;
   "git.push": GitPushParams;
   "git.renameBranch": GitRenameBranchParams;
+  "github.checks": GithubChecksParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -113,6 +122,7 @@ export interface MachineRpcResults {
   "git.commit": import("@falcon/wire").GitCommitResult;
   "git.push": import("@falcon/wire").GitPushResult;
   "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
+  "github.checks": import("@falcon/wire").GithubChecksResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -131,6 +141,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.commit": GitCommitResultSchema,
   "git.push": GitPushResultSchema,
   "git.renameBranch": GitRenameBranchResultSchema,
+  "github.checks": GithubChecksResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

@@ -286,6 +286,33 @@ packages/
 │                             implementations rather than duplicating CLI detection).
 │                             Standalone module — no dependency on the claim store or
 │                             `@falcon/wire` changes from the same phase.
+│                             GitHub PR/CI integration (docs/features/github-pr-ci.md,
+│                             docs/competitive-notes-omnara.md #4) joins the Git panel's RPC
+│                             family: `daemon/githubChecks.ts`'s `getGithubChecks` resolves the
+│                             workspace's remote → owner/repo (`parseGithubRemote` — scp-like
+│                             `git@github.com:...`, `ssh://`, and `https://` forms; any non-
+│                             github.com host, including GitHub Enterprise, is out of scope for
+│                             MVP), the current branch, the open PR for that branch head, and
+│                             the PR head commit's check-runs via the GitHub REST API,
+│                             registered as the `github.checks` machine RPC in `machineRpc.ts`
+│                             alongside `git.status`/`git.diff`/`git.branches` (same no-
+│                             idempotency-cache reasoning — read-only). Authenticated with a
+│                             machine-local GitHub token (`github/githubAuth.ts`'s
+│                             `~/.falcon/github.key`, 0600, same sync-fs port-of-
+│                             `auth/credentials.ts` pattern) obtained via the new `falcon github
+│                             login [--token] [--client-id <id>] | logout | status` command
+│                             (`commands/github.ts`): `--token` prompts for a PAT on stdin
+│                             (never accepted as a bare argv value); otherwise the GitHub OAuth
+│                             device authorization flow (`github/deviceFlow.ts`'s
+│                             `requestDeviceCode`/`pollForToken`) — client id resolved
+│                             `--client-id` → `FALCON_GITHUB_CLIENT_ID` → an empty
+│                             `DEFAULT_GITHUB_CLIENT_ID` (no Falcon GitHub OAuth app with Device
+│                             Flow enabled exists yet, so a bare `falcon github login` fails
+│                             fast with an explicit "use --token instead" message rather than
+│                             hanging). The token is read fresh per RPC call (a login while the
+│                             daemon is already running takes effect immediately) and never
+│                             logged. Zero server involvement — the token and all CI data stay
+│                             machine-local, same E2E invariant as every other machine RPC.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -441,7 +468,36 @@ packages/
                               (`app/(protected)/settings/git/`, linked from `app-shell.tsx`'s
                               settings nav) that seeds the wizard's starting `branchMode`
                               ("repo-root" or "new-branch" — "existing-branch" is inherently
-                              per-session, never a global default).
+                              per-session, never a global default). GitHub PR/CI integration
+                              (`src/features/github-checks/`, docs/features/github-pr-ci.md,
+                              docs/competitive-notes-omnara.md #4) is a structural clone of
+                              `features/git-diff/`: `ChecksPanel` (delegating its by-state
+                              render to an extracted, directly-testable `ChecksBody`) +
+                              `CheckRunRow` (status/conclusion icon, relative duration,
+                              external `detailsUrl` link) composed by `SessionChecksScreen`,
+                              driven by `use-checks-panel.ts`'s `useQuery` (60s
+                              `refetchInterval`, foreground-only — GitHub's 5000/hr rate
+                              budget). `sync/machineRpc.ts` gained `github.checks` alongside
+                              `git.status`/`git.diff`/`git.branches`; `live-actions.ts` maps an
+                              older daemon's sealed `"unknown-method"` rejection to a typed
+                              `DaemonUnsupportedError` so the panel can show "update falcon and
+                              restart the daemon" instead of a generic failure. Mounted at the
+                              new `/session/[id]/checks/` route (linked from the timeline
+                              header's "Checks" button, beside "Files changed") and — the one
+                              place this feature reaches outside its own directory —
+                              `SessionSidePanel`'s previously-always-placeholder Checks tab now
+                              renders the live panel once `SessionTimelineScreen.tsx` threads
+                              the session's `machineId`/`workspaceId` into it (falls back to
+                              the original placeholder cards otherwise). Settings → Git gained
+                              a GitHub informational card (`falcon github login` instructions)
+                              rather than a connect/disconnect toggle — the token is
+                              per-machine, not per-account, so a single toggle here would need
+                              the server to broker it (design §5.3 violation). Same
+                              not-yet-wired-to-a-live-socket-by-default state as every other
+                              feature area in this list — `useLiveGithubChecksActions` is
+                              real and gated on the shared per-machine DEK unwrap
+                              (`use-machine-crypto.ts`), it's just that no screen threads a
+                              live `apiSocket` connection through yet.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

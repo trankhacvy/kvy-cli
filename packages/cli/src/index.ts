@@ -6,6 +6,7 @@ import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
 import { runAdaptersInstallCommand, runAdaptersUpgradeCommand } from "./commands/adapters.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
+import { runGithubLogin, runGithubLogout, runGithubStatus } from "./commands/github.js";
 import { runResumeCommand } from "./commands/resume.js";
 import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
@@ -151,6 +152,8 @@ Usage:
   falcon shim install|uninstall|status
                                      Manage the claude/codex PATH shim (Tier 3 adoption)
   falcon adapters install|upgrade   Install/upgrade the pinned ACP adapter packages
+  falcon github login [--token] [--client-id <id>] | logout | status
+                                     Connect this machine to GitHub for PR/CI checks
   falcon update                     Check for and install a newer falcon version
   falcon notify -p <message>        Send a test push notification
   falcon --help, -h                 Show this help
@@ -403,6 +406,27 @@ async function runAdapters(command: Extract<FalconCommand, { type: "adapters" }>
 }
 
 /**
+ * `falcon github login|logout|status` (docs/features/github-pr-ci.md
+ * "GITHUB AUTH") — see `commands/github.ts` for the token-store/device-flow
+ * logic. Deliberately does **not** call `ensureDaemon()`, same rationale as
+ * `shim`/`workspace config`/`adapters`: a local `~/.falcon/github.key` write
+ * plus a direct GitHub API call, no daemon interaction at all — the
+ * daemon's `github.checks` RPC handler reads the same token file fresh off
+ * disk on its own next call.
+ */
+async function runGithub(command: Extract<FalconCommand, { type: "github" }>): Promise<number> {
+  const deps = { homeDir: resolveHomeDir() };
+  switch (command.action) {
+    case "login":
+      return runGithubLogin({ useToken: command.token, clientId: command.clientId }, deps);
+    case "logout":
+      return runGithubLogout(deps);
+    case "status":
+      return runGithubStatus(deps);
+  }
+}
+
+/**
  * `falcon sessions list` (plan.md §16 "4.2 Adoption Tier 3 + polish") — see
  * `commands/sessionsList.ts` for the actual local+remote listing logic.
  * `ensureDaemon()` runs first for consistency with every other
@@ -534,6 +558,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runShim(command);
     case "adapters":
       return runAdapters(command);
+    case "github":
+      return runGithub(command);
     case "update":
       return runUpdate();
     case "workspace-config":
