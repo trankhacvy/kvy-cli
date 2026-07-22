@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { FileTree, FileTreeFile, FileTreeFolder } from "@/components/ai-elements/file-tree";
 import { Button } from "@/components/ui/button";
+import { ChecksPanel } from "@/features/github-checks";
 import { cn } from "@/lib/utils";
 
 type PanelTab = "changes" | "files" | "checks";
@@ -97,7 +98,20 @@ function RepoFilesTab() {
   );
 }
 
-function ChecksTab() {
+/**
+ * Real once `machineId`/`worktree` are both threaded in (`SessionTimelineScreen.tsx`
+ * — both already resolved there off the session row's own plaintext
+ * `machineId`/`workspaceId` fields, design §5.3): renders the live
+ * `github.checks`-backed `ChecksPanel` (docs/features/github-pr-ci.md).
+ * Falls back to the original placeholder — two dummy check cards, an
+ * explicit "not connected yet" caption — when either is absent, e.g. a
+ * standalone render with no session context.
+ */
+function ChecksTab({ machineId, worktree }: { machineId?: string; worktree?: string }) {
+  if (machineId && worktree) {
+    return <ChecksPanel machineId={machineId} worktree={worktree} />;
+  }
+
   return (
     <div className="flex flex-col gap-2 p-3">
       <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs">
@@ -124,12 +138,26 @@ function ChecksTab() {
 /**
  * The session screen's right-side workspace panel (Changes / Repo Files /
  * Checks tabs + branch header + "Commit & Push"), à la the Cursor agent
- * layout. **Placeholder UI**: everything here renders dummy data — the real
- * git view remains the `/session/[id]/git` route, and none of the buttons
- * perform work. `defaultTab` lets the header chips deep-link a tab (e.g.
- * "Repo root" opens the file tree).
+ * layout. **Mostly still placeholder UI**: Changes/Repo Files render dummy
+ * data and none of the header buttons perform work — the real changed-files
+ * view remains the `/session/[id]/git` route. The Checks tab is the one
+ * exception (docs/features/github-pr-ci.md): once both `machineId` and
+ * `worktree` are threaded in (`SessionTimelineScreen.tsx`), it renders the
+ * live `github.checks`-backed panel instead of its own placeholder cards —
+ * see `ChecksTab`'s own doc comment. `defaultTab` lets the header chips
+ * deep-link a tab (e.g. "Repo root" opens the file tree).
  */
-export function SessionSidePanel({ defaultTab = "changes" }: { defaultTab?: PanelTab }) {
+export function SessionSidePanel({
+  defaultTab = "changes",
+  machineId,
+  worktree,
+}: {
+  defaultTab?: PanelTab;
+  /** The session's owning machine (`SessionRow.machineId`) — with `worktree`, gates the Checks tab's live `ChecksPanel` instead of its placeholder. */
+  machineId?: string;
+  /** The session's workspace path (`SessionRow.workspaceId`) — same gating as `machineId` above. */
+  worktree?: string;
+}) {
   const [tab, setTab] = useState<PanelTab>(defaultTab);
 
   return (
@@ -189,7 +217,7 @@ export function SessionSidePanel({ defaultTab = "changes" }: { defaultTab?: Pane
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === "changes" && <ChangesTab />}
         {tab === "files" && <RepoFilesTab />}
-        {tab === "checks" && <ChecksTab />}
+        {tab === "checks" && <ChecksTab machineId={machineId} worktree={worktree} />}
       </div>
     </aside>
   );

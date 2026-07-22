@@ -29,6 +29,11 @@
  * every sibling method here, doesn't export paired `AdoptListParams`/
  * `AdoptListResult` type aliases — so those two are derived locally via
  * `z.infer` instead of imported, same values either way.
+ *
+ * `github.checks` (docs/features/github-pr-ci.md "GitHub PR/CI
+ * integration", docs/competitive-notes-omnara.md #4) is the Checks tab's
+ * data source (`features/github-checks/`) — same read-only, no-
+ * idempotency-cache shape as `git.status`/`git.diff`/`git.branches` above.
  */
 import {
   type AdoptListParamsSchema,
@@ -45,6 +50,8 @@ import {
   GitBranchesResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
+  type GithubChecksParams,
+  GithubChecksResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
   type SpawnParams,
@@ -62,6 +69,7 @@ export type {
   FsMkdirParams,
   GitBranchesParams,
   GitDiffParams,
+  GithubChecksParams,
   GitStatusParams,
   SpawnParams,
   WorkspaceRegisterParams,
@@ -82,6 +90,7 @@ export interface MachineRpcParams {
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
   "git.branches": GitBranchesParams;
+  "github.checks": GithubChecksParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -96,6 +105,7 @@ export interface MachineRpcResults {
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
   "git.branches": import("@falcon/wire").GitBranchesResult;
+  "github.checks": import("@falcon/wire").GithubChecksResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -111,6 +121,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
   "git.branches": GitBranchesResultSchema,
+  "github.checks": GithubChecksResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

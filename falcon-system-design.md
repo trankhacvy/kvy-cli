@@ -259,6 +259,14 @@ RPC method names are scope-prefixed: `m:<machineId>:<method>` and `s:<sessionId>
 'listSessions' ()             → { sessions: LocalSessionInfo[] }
 'git.status'   ({worktree})   → { branch, ahead, behind, files: FileStatus[] }
 'git.diff'     ({worktree, path?, baseRef?}) → { inline?: string; blobRef?: string }
+'git.branches' ({worktree})   → { branches: GitBranchInfo[] }
+'github.checks'({worktree})   → { state: 'no-token'|'unsupported-remote'|'not-pushed'|'no-pr'|'ok';
+                                   repo?; branch?; pr?: PullRequestInfo; checks?: CheckRun[] }
+                              // "Checks" tab (docs/features/github-pr-ci.md). Authenticated with a
+                              // machine-local GitHub token (~/.falcon/github.key, `falcon github
+                              // login`) — never held by the server, same custody model as every
+                              // other machine-local secret (§5.3/§6.1). `state` is derived fresh on
+                              // every call, never stored (design principle #3).
 'fs.read'      ({worktree, path, range?})   → { inline?: string; blobRef?: string; truncated }
 'adopt.list'   ({workspaceId})→ { items: ProviderSessionSummary[] }   // FR-9.1/9.2
 'adopt.take'   ({providerSessionId, mode: 'takeover'|'fork'}) → { sessionId } // FR-9.3/9.4

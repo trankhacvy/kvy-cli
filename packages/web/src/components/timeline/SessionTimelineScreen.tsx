@@ -87,6 +87,10 @@ export function SessionTimelineScreen({
   // relies on (design §5.3: the server is allowed to see this field, unlike
   // `metadata`'s encrypted title, so no decrypt is needed here either).
   const workspacePath = session?.workspaceId ?? null;
+  // Same plaintext-on-the-row convention as `workspacePath` above — threaded
+  // into `SessionSidePanel`'s Checks tab (docs/features/github-pr-ci.md) so
+  // it can gate its live `ChecksPanel` on both being present.
+  const machineId = session?.machineId ?? null;
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -138,6 +142,7 @@ export function SessionTimelineScreen({
         modelChip={modelChip}
         sessionStatus={sessionStatus}
         workspacePath={workspacePath}
+        machineId={machineId}
       />
     </SessionControlProvider>
   );
@@ -162,6 +167,7 @@ function SessionTimelineBody({
   modelChip,
   sessionStatus,
   workspacePath,
+  machineId,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), or `null` until it's
@@ -188,6 +194,10 @@ function SessionTimelineBody({
    * `null` until the row has synced/recorded one — the header's copy chip
    * (docs/competitive-notes-omnara.md #21) is hidden entirely in that case. */
   workspacePath: string | null;
+  /** The session's owning machine (`SessionRow.machineId`), or `null` until
+   * synced — threaded into `SessionSidePanel`'s Checks tab alongside
+   * `workspacePath` (docs/features/github-pr-ci.md). */
+  machineId: string | null;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
@@ -207,6 +217,9 @@ function SessionTimelineBody({
           <div className="flex shrink-0 items-center gap-2">
             <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/session/${sessionId}/checks/`}>Checks</Link>
             </Button>
             <Button
               type="button"
@@ -277,7 +290,12 @@ function SessionTimelineBody({
           />
         </div>
       </div>
-      {panelOpen && <SessionSidePanel />}
+      {panelOpen && (
+        <SessionSidePanel
+          machineId={machineId ?? undefined}
+          worktree={workspacePath ?? undefined}
+        />
+      )}
     </div>
   );
 }

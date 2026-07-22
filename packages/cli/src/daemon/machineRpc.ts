@@ -13,7 +13,8 @@
  * `adopt.take`/`adopt.mirror`, and the Git panel's `git.status`/`git.diff`
  * (plan.md §16 "4.1 Git panel") — plus `git.branches` (docs/features/
  * worktree-isolation.md, the New Session wizard's existing-branch worktree
- * picker) — are in scope here —
+ * picker) and `github.checks` (docs/features/github-pr-ci.md, the "Checks"
+ * tab's PR/CI status) — are in scope here —
  * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
  * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
  * the same way without touching this module's dispatch shape.
@@ -36,13 +37,14 @@
  * `workspace.register` needs none either, for the same reason as
  * `fs.mkdir`: registering an already-registered directory is a no-op
  * (`workspace/registry.ts`'s own idempotent contract). `git.status`/
- * `git.diff`/`git.branches` need none either, for the same reason as
- * `fs.list`: they only read current repository state, so a retry just
- * re-reads it — unlike `adopt.mirror`'s "re-reading a file mid-write twice"
- * hazard, there's no mid-write file here to race. All three still carry
- * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
- * carries a caller-minted key") for uniformity with the rest of this RPC
- * family, it's just unused by these handlers.
+ * `git.diff`/`git.branches`/`github.checks` need none either, for the same
+ * reason as `fs.list`: they only read current repository (or, for
+ * `github.checks`, GitHub API) state, so a retry just re-reads it — unlike
+ * `adopt.mirror`'s "re-reading a file mid-write twice" hazard, there's no
+ * mid-write file here to race. All four still carry `idempotencyKey` on the
+ * wire (design: "every caller-retriable machine RPC carries a caller-minted
+ * key") for uniformity with the rest of this RPC family, it's just unused
+ * by these handlers.
  * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
  * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
  * retried resume of the same session is not a "double spawn" risk:
@@ -102,6 +104,10 @@ import {
   GitDiffParamsSchema,
   type GitDiffResult,
   GitDiffResultSchema,
+  type GithubChecksParams,
+  GithubChecksParamsSchema,
+  type GithubChecksResult,
+  GithubChecksResultSchema,
   type GitStatusParams,
   GitStatusParamsSchema,
   type GitStatusResult,
@@ -126,6 +132,7 @@ import {
 } from "./fsBrowse.js";
 import { getGitBranches as getGitBranchesDefault } from "./gitBranches.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
+import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
@@ -138,6 +145,7 @@ export const MACHINE_RPC_METHODS = [
   "git.status",
   "git.diff",
   "git.branches",
+  "github.checks",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -164,6 +172,8 @@ export interface MachineRpcDeps {
   getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
   /** Backs the `git.branches` RPC (New Session wizard's existing-branch worktree picker, docs/features/worktree-isolation.md). Injectable for tests; defaults to `gitBranches.ts`'s real `git for-each-ref` parse. Throws on failure. */
   getGitBranches?: (params: GitBranchesParams) => Promise<GitBranchesResult>;
+  /** Backs the `github.checks` RPC (Checks tab, docs/features/github-pr-ci.md). Injectable for tests; defaults to `githubChecks.ts`'s real PR/CI resolution against a machine-local GitHub token. Throws on an unexpected failure (a handled "nothing to show yet" case is a `GithubChecksResult.state`, not a throw). */
+  getGithubChecks?: (params: GithubChecksParams) => Promise<GithubChecksResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -290,6 +300,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
+  const getGithubChecks = deps.getGithubChecks ?? getGithubChecksDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
 
@@ -369,6 +380,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GitBranchesParamsSchema,
       resultSchema: GitBranchesResultSchema,
       handle: getGitBranches as (params: unknown) => Promise<unknown>,
+    },
+    "github.checks": {
+      paramsSchema: GithubChecksParamsSchema,
+      resultSchema: GithubChecksResultSchema,
+      handle: getGithubChecks as (params: unknown) => Promise<unknown>,
     },
     "adopt.take": {
       paramsSchema: AdoptTakeParamsSchema,

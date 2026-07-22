@@ -60,6 +60,33 @@ export default function GitSettingsPage() {
         This only sets the New Session wizard's starting choice — it's always changeable per
         session, and is per-device, not synced across your other devices.
       </p>
+
+      {/*
+       * GitHub PR/CI integration (docs/features/github-pr-ci.md, docs/
+       * competitive-notes-omnara.md #4): deliberately an informational card,
+       * not a live connect/disconnect toggle. The GitHub token is a
+       * machine-local secret (`~/.falcon/github.key`, `falcon github
+       * login`) — it lives on whichever machine's daemon runs the session,
+       * never on this account or this browser. A single account-level
+       * "Connect GitHub" toggle would need the *server* to hold that token
+       * (or at least broker the connect flow) so it could show one
+       * consistent state here — a direct violation of the "server holds no
+       * keys, decrypts nothing" invariant (design §5.3). The per-machine
+       * model also means there's no single "connected: yes/no" this page
+       * could show correctly without a machine selector it doesn't have —
+       * so this stays an instructions-only card rather than guessing.
+       */}
+      <div className="flex w-full flex-col gap-2 rounded-lg border border-border p-4 text-left">
+        <h2 className="text-sm font-semibold">GitHub</h2>
+        <p className="text-sm text-muted-foreground">
+          GitHub is not connected through this app. CI checks connect per machine: run{" "}
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">
+            falcon github login
+          </code>{" "}
+          in a terminal on the machine that hosts your sessions, then open a session&apos;s Checks
+          tab.
+        </p>
+      </div>
     </main>
   );
 }

@@ -178,6 +178,75 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `github.checks` machine RPC (design §4.4; docs/features/github-pr-ci.md
+// "GitHub PR/CI integration", docs/competitive-notes-omnara.md #4).
+// Structural clone of `git.status`/`git.branches`'s params shape above —
+// the daemon resolves the PR/CI state for the current branch of
+// `params.worktree` using a machine-local GitHub token, never one held by
+// the server (design §5.3/§6.1: the server decrypts nothing).
+export const GithubChecksParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GithubChecksParams = z.infer<typeof GithubChecksParamsSchema>;
+
+// One GitHub check-run (a single job within a PR's combined CI status).
+// `startedAt`/`completedAt` are unix seconds, matching `GitBranchInfoSchema`'s
+// own `lastCommitAt` precedent above.
+export const CheckRunSchema = z.object({
+  name: z.string(),
+  status: z.enum(["queued", "in_progress", "completed"]),
+  conclusion: z
+    .enum([
+      "success",
+      "failure",
+      "neutral",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "stale",
+    ])
+    .optional(),
+  detailsUrl: z.string().optional(),
+  startedAt: z.number().optional(),
+  completedAt: z.number().optional(),
+});
+export type CheckRun = z.infer<typeof CheckRunSchema>;
+
+export const PullRequestInfoSchema = z.object({
+  number: z.number(),
+  title: z.string(),
+  url: z.string(),
+  state: z.enum(["open", "closed", "merged"]),
+  headSha: z.string(),
+  draft: z.boolean().optional(),
+});
+export type PullRequestInfo = z.infer<typeof PullRequestInfoSchema>;
+
+// `state` covers every case the "Checks" tab / Settings → Git CTA copy
+// derives from (design principle #3 — never stored, always recomputed):
+//   - "no-token":            GitHub is not connected on this machine — the
+//                             daemon's Settings CTA ("Login to GitHub…").
+//   - "unsupported-remote":  the configured remote isn't github.com (or is
+//                             detached HEAD/unparseable) — `message` carries
+//                             the specific reason.
+//   - "not-pushed":          the current branch hasn't been pushed to the
+//                             remote yet — "commit and push, then create a
+//                             PR" copy.
+//   - "no-pr":                pushed, but no open PR exists for this branch.
+//   - "ok":                   `pr` + `checks` are populated from the PR's
+//                             head commit.
+export const GithubChecksResultSchema = z.object({
+  state: z.enum(["no-token", "unsupported-remote", "not-pushed", "no-pr", "ok"]),
+  repo: z.object({ owner: z.string(), name: z.string() }).optional(),
+  branch: z.string().optional(),
+  pr: PullRequestInfoSchema.optional(),
+  checks: z.array(CheckRunSchema).optional(),
+  message: z.string().optional(),
+});
+export type GithubChecksResult = z.infer<typeof GithubChecksResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),

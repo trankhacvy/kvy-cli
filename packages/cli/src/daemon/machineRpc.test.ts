@@ -140,6 +140,10 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:github.checks" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -622,6 +626,36 @@ describe("registerMachineRpcHandlers", () => {
         socket,
         "git.branches",
         seal({ idempotencyKey: "idem_git_branches_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+    });
+  });
+
+  describe("github.checks", () => {
+    it("decrypts params, calls getGithubChecks, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGithubChecks = vi.fn(async () => ({ state: "no-token" as const }));
+      register(socket, { getGithubChecks });
+
+      const params = { idempotencyKey: "idem_github_checks_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "github.checks", seal(params, DEK));
+
+      expect(getGithubChecks).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ state: "no-token" });
+    });
+
+    it("replies with a sealed error when getGithubChecks throws (e.g. a GitHub API 500)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getGithubChecks: vi.fn(async () => {
+          throw new Error("GitHub API request failed: HTTP 500");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "github.checks",
+        seal({ idempotencyKey: "idem_github_checks_2", worktree: "/repo" }, DEK),
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
     });
