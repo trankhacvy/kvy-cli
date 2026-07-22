@@ -2304,6 +2304,95 @@
       }
     }
   },
+  "GitBranchesParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitBranchInfoSchema": {
+    "kind": "object",
+    "fields": {
+      "checkedOutAt": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "isCurrent": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "lastCommitAt": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "name": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "upstream": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "GitBranchesResultSchema": {
+    "kind": "object",
+    "fields": {
+      "branches": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "checkedOutAt": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            },
+            "isCurrent": {
+              "kind": "leaf",
+              "type": "boolean"
+            },
+            "lastCommitAt": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "number"
+              }
+            },
+            "name": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "upstream": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
   "FsReadParamsSchema": {
     "kind": "object",
     "fields": {

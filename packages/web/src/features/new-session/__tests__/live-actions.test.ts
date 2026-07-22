@@ -125,4 +125,20 @@ describe("machineRpcToActions", () => {
       expect.objectContaining({ workspaceId: "/repo" }),
     );
   });
+
+  it("listBranches calls git.branches with the directory as worktree and returns the branches", async () => {
+    const branches = [
+      { name: "main", isCurrent: true },
+      { name: "wf/foo", isCurrent: false, checkedOutAt: "/repo/.worktrees/wf/foo" },
+    ];
+    const call = vi.fn(async () => ({ branches }));
+    const actions = machineRpcToActions(fakeRpc(call as unknown as MachineRpcClient["call"]));
+
+    const result = await actions.listBranches("/repo");
+    expect(result).toEqual(branches);
+    expect(call).toHaveBeenCalledWith(
+      "git.branches",
+      expect.objectContaining({ worktree: "/repo" }),
+    );
+  });
 });

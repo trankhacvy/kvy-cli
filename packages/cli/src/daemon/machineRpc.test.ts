@@ -136,6 +136,10 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:git.branches" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -509,9 +513,7 @@ describe("registerMachineRpcHandlers", () => {
         expect(open(response, DEK)).toEqual({ ok: true });
 
         const written = JSON.parse(await readFile(path.join(homeDir, "workspaces.json"), "utf8"));
-        expect(written.workspaces).toContainEqual(
-          expect.objectContaining({ path: target }),
-        );
+        expect(written.workspaces).toContainEqual(expect.objectContaining({ path: target }));
       });
     });
   });
@@ -582,6 +584,46 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_git_diff_2" }, DEK),
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+  });
+
+  describe("git.branches", () => {
+    it("decrypts params, calls getGitBranches, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGitBranches = vi.fn(async () => ({
+        branches: [
+          { name: "main", isCurrent: true },
+          { name: "wf/foo", isCurrent: false, checkedOutAt: "/repo/.worktrees/wf/foo" },
+        ],
+      }));
+      register(socket, { getGitBranches });
+
+      const params = { idempotencyKey: "idem_git_branches_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "git.branches", seal(params, DEK));
+
+      expect(getGitBranches).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        branches: [
+          { name: "main", isCurrent: true },
+          { name: "wf/foo", isCurrent: false, checkedOutAt: "/repo/.worktrees/wf/foo" },
+        ],
+      });
+    });
+
+    it("replies with a sealed error when getGitBranches throws (e.g. not a git repo)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getGitBranches: vi.fn(async () => {
+          throw new Error("fatal: not a git repository");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.branches",
+        seal({ idempotencyKey: "idem_git_branches_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
     });
   });
 

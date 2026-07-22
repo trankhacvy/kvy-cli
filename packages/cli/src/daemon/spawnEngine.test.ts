@@ -300,6 +300,52 @@ describe("spawnSession", () => {
       expect(trackSpawned).toHaveBeenCalledExactlyOnceWith(4242, realRoot);
     });
 
+    it("keys dedup on the FINAL post-worktree directory: a live session at repo root does not dedupe a worktree-mode spawn for the same repo (docs/features/worktree-isolation.md Phase 3)", async () => {
+      const git = vi.fn(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+      const realRoot = await realpath(root);
+      const deps = baseDeps({
+        gitWorktreeDeps: { git },
+        findLiveSessionInDirectory: (directory) =>
+          directory === realRoot ? "sess_repo_root_live" : null,
+      });
+
+      const result = await spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+        deps,
+      );
+
+      // A live session at the (pre-worktree) repo root must NOT be returned
+      // for a worktree-mode spawn — the worktree directory is different, so
+      // this proceeds to a real launch there instead.
+      expect(result).toEqual({ sessionId: "sess_new" });
+      expect(deps.launchProcess).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ cwd: path.join(realRoot, ".worktrees", "task-1") }),
+        undefined,
+      );
+    });
+
+    it("dedupes a second worktree-mode spawn for the same branch against the session already tracked in that worktree directory", async () => {
+      const git = vi.fn(async () => "");
+      const realRoot = await realpath(root);
+      const worktreeDir = path.join(realRoot, ".worktrees", "task-1");
+      const deps = baseDeps({
+        gitWorktreeDeps: { git },
+        findLiveSessionInDirectory: (directory) =>
+          directory === worktreeDir ? "sess_worktree_live" : null,
+      });
+
+      const result = await spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+        deps,
+      );
+
+      expect(result).toEqual({ sessionId: "sess_worktree_live" });
+      expect(deps.launchProcess).not.toHaveBeenCalled();
+    });
+
     it("does not regress FL3.1: a fresh, never-registered workspaceId still resolves to the register-workspace approval, not the dedup path", async () => {
       // `findLiveSessionInDirectory` is wired (as the real daemon composition
       // always wires it) and would (wrongly, if ever reached) claim a live

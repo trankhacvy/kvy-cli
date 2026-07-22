@@ -24,6 +24,9 @@ import type { NewSessionActions, SpawnOutcome } from "./types";
  * throwing `unknown-workspace`; `registerWorkspace` below (the new
  * `workspace.register` RPC) is what `spawn-flow.ts`'s `runSpawnFlow` calls
  * to resolve that, mirroring `createDirectory`/`create-directory` exactly.
+ * `listBranches` (docs/features/worktree-isolation.md, the existing-branch
+ * worktree picker) reuses the same convention once more for `git.branches`'
+ * own `worktree` param.
  */
 export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
   return {
@@ -72,6 +75,14 @@ export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
         workspaceId: directory,
       });
       return result.items;
+    },
+
+    async listBranches(directory) {
+      const result = await rpc.call("git.branches", {
+        idempotencyKey: crypto.randomUUID(),
+        worktree: directory,
+      });
+      return result.branches;
     },
   };
 }

@@ -37,6 +37,20 @@ export interface BranchOption {
   createWorktree: boolean;
 }
 
+/**
+ * One local branch the daemon's `git.branches` machine RPC surfaced —
+ * mirrors `@falcon/wire`'s `GitBranchInfo` (docs/features/worktree-isolation.md
+ * Phase 4). Backs the existing-branch worktree picker in `OptionsStep`.
+ */
+export interface BranchItem {
+  name: string;
+  isCurrent: boolean;
+  /** Absolute path of the worktree this branch is already checked out in, if any — git forbids the same branch in two worktrees, so a row with this set should render disabled. */
+  checkedOutAt?: string;
+  upstream?: string;
+  lastCommitAt?: number;
+}
+
 export interface SpawnRequest {
   directory: string;
   provider: NewSessionProvider;
@@ -106,6 +120,8 @@ export interface NewSessionActions {
   spawn(request: SpawnRequest): Promise<SpawnOutcome>;
   /** Lists recent plain `claude`/`codex` sessions for `directory` (the daemon's `adopt.list` RPC, keyed by workspace — `directory` doubles as the workspace id, same convention `spawn`'s `workspaceId` already uses in `live-actions.ts`) — the session-import step's data source (falcon-prd.md FR-7.8 UC7). Throws on failure (unreachable machine, ...); an empty array means "none found", not an error. */
   listImportCandidates(directory: string): Promise<ImportCandidate[]>;
+  /** Lists local branches at `directory` (the daemon's `git.branches` RPC, docs/features/worktree-isolation.md — `directory` doubles as the RPC's `worktree` param, same "a workspaceId/worktree IS a directory path" convention as `spawn`/`listImportCandidates` above) — the existing-branch worktree picker's data source. Throws on failure (unreachable machine, not a git repo, ...); an empty array means "no local branches", not an error. */
+  listBranches(directory: string): Promise<BranchItem[]>;
 }
 
 /** One machine RPC actions client per chosen machine — mirrors `UseSessionControl = (sessionId) => SessionControlActions`. */

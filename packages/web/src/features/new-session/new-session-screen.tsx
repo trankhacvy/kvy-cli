@@ -6,11 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { generateBranchName } from "./auto-branch";
 import { DirectoryStep } from "./components/directory-step";
 import { ImportStep } from "./components/import-step";
 import { MachineStep } from "./components/machine-step";
 import { OptionsStep } from "./components/options-step";
 import { applyFavoriteDefaults, getFavoriteMachineId } from "./favorites";
+import { getDefaultBranchMode } from "./git-defaults";
 import { useLiveNewSessionActions, useLiveNewSessionMachines } from "./live-source";
 import { PROVIDER_META } from "./provider-meta";
 import { runSpawnFlow } from "./spawn-flow";
@@ -25,6 +27,18 @@ import {
   WIZARD_STEPS,
   type WizardStep,
 } from "./wizard-state";
+
+/** Renders the review step's "Branch:" summary line for `form`'s current `branchMode` (docs/features/worktree-isolation.md Phase 4). */
+function branchSummary(form: NewSessionForm): string {
+  switch (form.branchMode) {
+    case "repo-root":
+      return "Repo root";
+    case "new-branch":
+      return `New branch ${form.branchName.trim()}${form.createWorktree ? " (worktree)" : ""}`;
+    case "existing-branch":
+      return `Existing branch ${form.branchName.trim()} (worktree)`;
+  }
+}
 
 const STEP_LABEL: Record<WizardStep, string> = {
   machine: "Machine",
@@ -86,10 +100,19 @@ export function NewSessionScreen({
   // #22 "Favorite/star a default machine, provider, and model") — the
   // starred *machine* can't be resolved here since `machines` hasn't loaded
   // yet on first render; see the effect below for that half.
-  const [form, setForm] = useState<NewSessionForm>(() => ({
-    ...INITIAL_FORM,
-    ...applyFavoriteDefaults(INITIAL_FORM),
-  }));
+  const [form, setForm] = useState<NewSessionForm>(() => {
+    // Settings → Git's per-device default (docs/features/worktree-isolation.md
+    // Phase 5) — "new-branch" gets a pre-filled auto-generated name up
+    // front so the options step opens ready to go, not with an empty
+    // required field.
+    const branchMode = getDefaultBranchMode();
+    return {
+      ...INITIAL_FORM,
+      ...applyFavoriteDefaults(INITIAL_FORM),
+      branchMode,
+      branchName: branchMode === "new-branch" ? generateBranchName() : INITIAL_FORM.branchName,
+    };
+  });
   const [spawnState, setSpawnState] = useState<SpawnState>({ phase: "idle" });
   const approvalDecision = useRef<((approved: boolean) => void) | null>(null);
 
@@ -192,7 +215,14 @@ export function NewSessionScreen({
               onSelect={(importCandidate) => patchForm({ importCandidate })}
             />
           )}
-          {step === "options" && <OptionsStep form={form} onChange={patchForm} />}
+          {step === "options" && form.directory && (
+            <OptionsStep
+              form={form}
+              onChange={patchForm}
+              listBranches={actions.listBranches}
+              directory={form.directory}
+            />
+          )}
           {step === "review" && (
             <div className="flex flex-col gap-2 text-sm">
               <p>
@@ -222,12 +252,9 @@ export function NewSessionScreen({
                   <span className="text-muted-foreground">Model:</span> {form.model.trim()}
                 </p>
               )}
-              {form.branchEnabled && (
-                <p>
-                  <span className="text-muted-foreground">Branch:</span> {form.branchName.trim()}
-                  {form.createWorktree ? " (new worktree)" : ""}
-                </p>
-              )}
+              <p>
+                <span className="text-muted-foreground">Branch:</span> {branchSummary(form)}
+              </p>
 
               {spawnState.phase === "pending-approval" && (
                 <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3">

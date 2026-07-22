@@ -3,8 +3,10 @@
  * §4.4 "Machine RPCs — registered by the daemon"; plan.md §16 "3.1 Remote
  * spawn" / "4.1 Git panel"): `spawn`, the New Session directory picker's
  * `fs.list`/`fs.mkdir`/`workspace.register` (plan.md §16 "Flow 3 —
- * spawn-fresh-folder-register (Piece A)"), and the Git panel's
- * `git.status`/`git.diff`. This is
+ * spawn-fresh-folder-register (Piece A)"), the Git panel's
+ * `git.status`/`git.diff`, and `git.branches` (docs/features/
+ * worktree-isolation.md — the New Session wizard's existing-branch worktree
+ * picker). This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
  * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
@@ -39,6 +41,8 @@ import {
   FsListResultSchema,
   type FsMkdirParams,
   FsMkdirResultSchema,
+  type GitBranchesParams,
+  GitBranchesResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
   type GitStatusParams,
@@ -56,6 +60,7 @@ export type {
   AdoptTakeParams,
   FsListParams,
   FsMkdirParams,
+  GitBranchesParams,
   GitDiffParams,
   GitStatusParams,
   SpawnParams,
@@ -76,6 +81,7 @@ export interface MachineRpcParams {
   "adopt.mirror": AdoptMirrorParams;
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
+  "git.branches": GitBranchesParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -89,6 +95,7 @@ export interface MachineRpcResults {
   "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
+  "git.branches": import("@falcon/wire").GitBranchesResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -103,6 +110,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "adopt.mirror": AdoptMirrorResultSchema,
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
+  "git.branches": GitBranchesResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

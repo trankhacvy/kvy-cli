@@ -151,6 +151,33 @@ export const GitDiffResultSchema = z.object({
 });
 export type GitDiffResult = z.infer<typeof GitDiffResultSchema>;
 
+// `git.branches` machine RPC (design §4.4, docs/features/worktree-isolation.md
+// Phase 1): lists local branches for the existing-branch worktree picker.
+// Structural clone of `git.status`'s params shape above.
+export const GitBranchesParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GitBranchesParams = z.infer<typeof GitBranchesParamsSchema>;
+
+// `checkedOutAt` is the absolute worktree path currently holding this branch
+// (git forbids the same branch in two worktrees — callers should disable
+// such rows). `lastCommitAt` is unix seconds from `%(committerdate:unix)`.
+// Local `refs/heads` only for MVP — no remote-tracking branches.
+export const GitBranchInfoSchema = z.object({
+  name: z.string(),
+  isCurrent: z.boolean(),
+  checkedOutAt: z.string().optional(),
+  upstream: z.string().optional(),
+  lastCommitAt: z.number().optional(),
+});
+export type GitBranchInfo = z.infer<typeof GitBranchInfoSchema>;
+
+export const GitBranchesResultSchema = z.object({
+  branches: z.array(GitBranchInfoSchema),
+});
+export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),

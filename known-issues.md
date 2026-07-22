@@ -38,3 +38,35 @@ round-trip test (`FL4.2`, already landed).
 
 **Status:** open, waiting on a human-authored and human-approved design doc. Not something
 an automated workflow can produce or check off.
+
+## Automatic per-session git worktree isolation — deliberately deferred follow-ups
+
+**Where:** `docs/features/worktree-isolation.md` (all 6 phases landed).
+
+**What's open:** four items the feature's own plan flagged as consciously out of scope for
+this pass, not bugs:
+
+- **Local `falcon -b <branch>` parity.** `args.ts` still parses `-b`/`--branch` but
+  `commands/start.ts` never consumes it — local-mode sessions don't create a worktree at
+  all today (only remote `spawn` does, via `gitWorktree.ts`). `index.ts`'s own help text
+  advertises the flag, so this is a real CLI/remote parity gap, not just an omission.
+  A real fix would call `ensureBranchWorkspace` before launching the local TUI, the same
+  way `spawnEngine.ts` does for a remote spawn.
+- **No worktree cleanup lifecycle.** Nothing ever runs `git worktree remove` or deletes the
+  branch once a session ends — `.worktrees/<branch>` directories (and their branches)
+  accumulate forever. The new `.git/info/exclude` entry (Phase 3) only hides them from
+  `git status`; it doesn't reclaim disk. This ties to the separate "session lifecycle
+  actions" competitive item and should land before the global default (below) flips.
+- **`git.branches` is local-only.** The RPC lists `refs/heads` only — no remote-tracking
+  branches. Fine for the MVP existing-branch picker (you can only worktree a branch that
+  already exists locally on that machine anyway), but worth revisiting if a "check out a
+  remote branch" flow is ever wanted.
+- **Global default stays `repo-root`.** Settings → Git ships with "Repo root" as the shipped
+  default (no silent behavior change), diverging from Omnara's worktree-by-default framing.
+  Revisit flipping `git-defaults.ts`'s fallback to `"new-branch"` once the cleanup lifecycle
+  above exists — recommending "New worktree" daily without any cleanup story would be a
+  worse default, not a better one.
+
+**Status:** all four are scope decisions the feature's plan doc made explicitly, not defects
+in what landed — parking them here so the next planner finds them instead of rediscovering
+them from scratch.

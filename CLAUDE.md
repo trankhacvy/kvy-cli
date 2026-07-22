@@ -177,7 +177,31 @@ packages/
 │                             past a 60KB budget rather than a real blob upload, since that
 │                             subsystem doesn't exist yet; `daemon/gitExec.ts` is the shared
 │                             `execFile` wrapper both use), registered in `machineRpc.ts`
-│                             alongside the rest; `src/workspaceConfig.ts` (`~/.falcon/
+│                             alongside the rest. `git.branches` (docs/features/
+│                             worktree-isolation.md — automatic per-session git worktree
+│                             isolation, docs/competitive-notes-omnara.md #2) joins that
+│                             same RPC family: `daemon/gitBranches.ts`'s `getGitBranches`
+│                             is a structural clone of `gitStatus.ts` — parses `git
+│                             for-each-ref refs/heads` (current branch, checked-out-in-
+│                             another-worktree path via `%(worktreepath)`, upstream,
+│                             last-commit time) into a `GitBranchInfo[]`, registered in
+│                             `machineRpc.ts` alongside `git.status`/`git.diff`. It backs
+│                             the New Session wizard's existing-branch worktree picker, on
+│                             top of the pre-existing `gitWorktree.ts`'s `ensureBranchWorkspace`
+│                             (already wired into `spawnEngine.ts` via `SpawnParams.branch`)
+│                             — that module gained two hardening pieces of its own: a typed
+│                             `GitWorktreeError` when a branch is already checked out in a
+│                             different worktree (pre-flighted via the same
+│                             `%(worktreepath)` atom, instead of letting git's raw stderr
+│                             surface), and an idempotent `.worktrees/` line appended to the
+│                             parent repo's `.git/info/exclude` after each worktree
+│                             creation (best-effort — a write failure never fails the
+│                             spawn). `spawnEngine.ts`'s directory-dedup guard (Flow 3) now
+│                             also keys on the *final*, post-worktree `spawnDirectory`
+│                             rather than the pre-worktree `realDirectory` — the worktree
+│                             directory a session actually launches in is what dedup must
+│                             protect, and `ensureBranchWorkspace` being idempotent makes
+│                             checking after it safe. `src/workspaceConfig.ts` (`~/.falcon/
 │                             settings.json`'s new `workspaces` map, keyed by real/symlink-
 │                             resolved directory path) backs both `git.diff`'s base-ref
 │                             fallback and the new `falcon workspace config [--base-ref
@@ -352,7 +376,33 @@ packages/
                               `machineRpcToGitDiffActions` vs. the default
                               `mock-source.ts`) — no live `apiSocket`/per-machine crypto
                               client wired in yet, same not-yet-wired state as everything
-                              else in this list.
+                              else in this list. The New Session wizard
+                              (`src/features/new-session/`, `/session/new/`, falcon-system-design.md
+                              §9.2 "New session" row, falcon-prd.md FR-7.5/UC5) is a five-step
+                              flow — machine → directory picker → optional session-import →
+                              options (provider/mode/model/branch) → review — driven by
+                              `wizard-state.ts`'s pure step/form logic and an injectable
+                              `NewSessionActions` seam (`live-actions.ts`'s
+                              `machineRpcToActions` vs. the default `mock-source.ts`, same
+                              not-yet-wired-to-a-live-socket state as the rest of this list).
+                              Automatic per-session git worktree isolation (docs/features/
+                              worktree-isolation.md, docs/competitive-notes-omnara.md #2)
+                              surfaces the daemon's `gitWorktree.ts`/`SpawnParams.branch` as
+                              a first-class 3-way `branchMode` on the options step — "Repo
+                              root" / "New branch" (recommended, auto-generated
+                              `wf/<yyyyMMdd>-<4 chars>` name via the new `auto-branch.ts`,
+                              worktree-isolated by default) / "Existing branch" (always
+                              isolated in a fresh worktree, never switches the main
+                              checkout) — backed by the new `git.branches` machine RPC
+                              (`sync/machineRpc.ts`, a structural clone of `git.status`) for
+                              the existing-branch picker's branch list + disabled
+                              already-checked-out-elsewhere rows. `git-defaults.ts` (a
+                              strict copy of `favorites.ts`'s per-device `localStorage`
+                              pattern) backs a new Settings → Git page
+                              (`app/(protected)/settings/git/`, linked from `app-shell.tsx`'s
+                              settings nav) that seeds the wizard's starting `branchMode`
+                              ("repo-root" or "new-branch" — "existing-branch" is inherently
+                              per-session, never a global default).
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

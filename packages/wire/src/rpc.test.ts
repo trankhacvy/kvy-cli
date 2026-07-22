@@ -11,6 +11,9 @@ import {
   FsMkdirParamsSchema,
   FsMkdirResultSchema,
   FsReadParamsSchema,
+  GitBranchesParamsSchema,
+  GitBranchesResultSchema,
+  GitBranchInfoSchema,
   GitDiffParamsSchema,
   GitDiffResultSchema,
   GitStatusParamsSchema,
@@ -81,6 +84,11 @@ describe("idempotencyKey on caller-retriable machine RPCs", () => {
       GitDiffParamsSchema.safeParse({ idempotencyKey: "idem-5", worktree: "/repo" }).success,
     ).toBe(true);
 
+    expect(GitBranchesParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      GitBranchesParamsSchema.safeParse({ idempotencyKey: "idem-8", worktree: "/repo" }).success,
+    ).toBe(true);
+
     expect(FsReadParamsSchema.safeParse({ worktree: "/repo", path: "a.ts" }).success).toBe(false);
     expect(
       FsReadParamsSchema.safeParse({ idempotencyKey: "idem-6", worktree: "/repo", path: "a.ts" })
@@ -138,6 +146,32 @@ describe("git.status / git.diff result shapes", () => {
     expect(GitDiffResultSchema.safeParse({ blobRef: "blob-1", truncated: false }).success).toBe(
       true,
     );
+  });
+
+  it("GitBranchInfoSchema requires name/isCurrent; checkedOutAt/upstream/lastCommitAt stay optional", () => {
+    expect(GitBranchInfoSchema.safeParse({ name: "main", isCurrent: true }).success).toBe(true);
+    expect(
+      GitBranchInfoSchema.safeParse({
+        name: "wf/foo",
+        isCurrent: false,
+        checkedOutAt: "/repo/.worktrees/wf/foo",
+        upstream: "origin/wf/foo",
+        lastCommitAt: 1_700_000_000,
+      }).success,
+    ).toBe(true);
+    expect(GitBranchInfoSchema.safeParse({ name: "main" }).success).toBe(false);
+  });
+
+  it("GitBranchesResultSchema carries a list of GitBranchInfo", () => {
+    expect(
+      GitBranchesResultSchema.safeParse({
+        branches: [
+          { name: "main", isCurrent: true },
+          { name: "wf/foo", isCurrent: false, checkedOutAt: "/repo/.worktrees/wf/foo" },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(GitBranchesResultSchema.safeParse({ branches: [{ name: "main" }] }).success).toBe(false);
   });
 });
 
