@@ -51,6 +51,30 @@ describe("findLiveOrphanedSessions", () => {
     expect(listProcesses).not.toHaveBeenCalled();
   });
 
+  it("skips a record with pid 0 (falsy/never-a-real-pid sentinel) without listing processes", async () => {
+    const listProcesses = vi.fn(async () => {
+      throw new Error("should never be called");
+    });
+    const result = await findLiveOrphanedSessions(
+      { sess_1: fixture({ pid: 0 }) },
+      baseDeps({ listProcesses }),
+    );
+    expect(result).toEqual([]);
+    expect(listProcesses).not.toHaveBeenCalled();
+  });
+
+  it("skips a record with a live pid but no persisted directory, without listing processes", async () => {
+    const listProcesses = vi.fn(async () => {
+      throw new Error("should never be called");
+    });
+    const result = await findLiveOrphanedSessions(
+      { sess_1: fixture({ directory: undefined }) },
+      baseDeps({ listProcesses }),
+    );
+    expect(result).toEqual([]);
+    expect(listProcesses).not.toHaveBeenCalled();
+  });
+
   it("re-adopts a session whose pid is alive, classifies as a falcon session, and whose cwd matches the persisted directory", async () => {
     const session = fixture();
     const result = await findLiveOrphanedSessions({ sess_1: session }, baseDeps());

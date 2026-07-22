@@ -281,8 +281,13 @@ describe("sessionRegistry", () => {
 
     expect(readopted).toBe(1);
     expect(scanForLiveSessionInDirectory(second.getSessions(), realDirectory)).toBe("sess_1");
+    // The re-adopted session is fully live-tracked, not just scannable —
+    // getLivePid/stopSession must also see it (design's acceptance checklist).
+    expect(second.getLivePid("sess_1")).toBe(51245);
+    expect(second.stopSession("sess_1")).toBe(true);
     // The durable resumable record is left in place as a harmless backstop.
     expect(second.findResumable("sess_1")).not.toBeNull();
+    expect(second.findResumable("sess_1")?.directory).toBe(realDirectory);
   });
 
   it("readoptLiveSessions re-adopts nothing when the persisted pid is no longer alive", async () => {
