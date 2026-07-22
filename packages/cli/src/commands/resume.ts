@@ -40,6 +40,7 @@ import type {
   SpawnFn,
 } from "../daemon/processLauncher.js";
 import {
+  resolveResumeDirectoryFromRecord,
   type ResumeSessionDeps,
   ResumeSessionError,
   resumeSession,
@@ -166,7 +167,16 @@ async function runDaemonManagedResume(
   const resumeDeps: ResumeSessionDeps = {
     registry,
     awaiter: createSpawnAwaiter(),
-    resolveDirectory: () => deps.workingDirectory,
+    // Re-resolve the session's own persisted directory (packages/cli/src/daemon
+    // /resumeSession.ts's resolveResumeDirectoryFromRecord — the same default the
+    // RPC-triggered resume path uses) rather than the CLI invocation's own cwd:
+    // `falcon resume <id>` run from an arbitrary directory must relaunch the
+    // session where it actually started, not wherever the command happened to be
+    // run from (known-issues.md "`falcon resume` (CLI command) ignores the
+    // persisted session directory"). Fails the resume cleanly (no directory
+    // resolved) for a session with no persisted directory, matching this file's
+    // own "fail rather than guess" convention for resolveDirectory.
+    resolveDirectory: resolveResumeDirectoryFromRecord,
     launchProcess: deps.launchProcess,
     launchDeps: deps.launchDeps,
     falconEntrypoint: deps.falconEntrypoint ?? defaultFalconEntrypoint,

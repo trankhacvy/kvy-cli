@@ -81,28 +81,6 @@ passing pre-merge (the 2 reds are the pre-existing `transcriptIndexer` fs-watch 
 above, confirmed passing in isolation); independently re-confirmed post-merge with the same
 result plus 2 more pre-existing `scanner.test.ts` flakes counted (6 total, all pre-existing).
 
-## `falcon resume` (CLI command) ignores the persisted session directory
-
-**Where:** `packages/cli/src/commands/resume.ts:169`. Found while live-testing the
-spawn-dedup-restart fix above (a "bonus check" on whether `resolveResumeDirectoryFromRecord`
-actually helps `falcon resume`).
-
-**What's broken:** the RPC-triggered resume path (`daemon/commands.ts`,
-`daemon/machineIntegration.ts`) now correctly defaults `resolveResumeDirectory` to
-`resolveResumeDirectoryFromRecord`, which re-resolves the session's persisted directory. But
-the separate CLI command `falcon resume <id>` hardcodes its own
-`resolveDirectory: () => deps.workingDirectory` — the CLI invocation's *own* current directory,
-not the session's original one. A real test run of `falcon resume` from an arbitrary directory
-relaunched the session rooted in that arbitrary directory instead of where it actually started.
-
-**What a real fix needs:** thread the same `resolveResumeDirectoryFromRecord` (or an equivalent
-lookup against the session's persisted `directory`) into `commands/resume.ts`'s own dependency
-wiring, so both entry points (RPC-triggered and CLI-triggered resume) agree on where a session
-resumes.
-
-**Status:** open, not yet fixed. Pre-existing, unrelated to the spawn-dedup fix itself — just
-surfaced by testing near it.
-
 ## Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`
 
 **Where:** `docs/plan-flows-3-4-5.md`, execution unit `FL4.1`

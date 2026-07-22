@@ -1,7 +1,7 @@
 import type { ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -135,6 +135,7 @@ describe("runResumeCommand", () => {
           provider: "claude-code" as const,
           encryption: { encryptionKey: "k", seq: 1, metadataVersion: 1, agentStateVersion: 1 },
           savedAt: Date.now(),
+          directory: workspacePath,
         })),
       });
 
@@ -156,6 +157,77 @@ describe("runResumeCommand", () => {
       expect(code).toBe(0);
       expect(launchProcess).toHaveBeenCalledOnce();
       expect(written.join("")).toContain("resumed session sess_1");
+    });
+
+    it("relaunches into the session's own persisted directory, not the CLI invocation's cwd (known-issues.md: `falcon resume` ignores the persisted session directory)", async () => {
+      // A directory distinct from `workspacePath` (the CLI's own cwd, per `baseDeps()` below) —
+      // proves resume uses the SESSION's directory, not wherever `falcon resume` was run from.
+      const sessionOwnDir = join(baseDir, "session-own-dir");
+      await mkdir(sessionOwnDir, { recursive: true });
+      const expectedCwd = await realpath(sessionOwnDir);
+
+      const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+      const registry = fakeRegistry({
+        findResumable: vi.fn(() => ({
+          sessionId: "sess_1",
+          provider: "claude-code" as const,
+          encryption: { encryptionKey: "k", seq: 1, metadataVersion: 1, agentStateVersion: 1 },
+          savedAt: Date.now(),
+          directory: sessionOwnDir,
+        })),
+      });
+
+      const code = await runResumeCommand(
+        "sess_1",
+        baseDeps({
+          // workingDirectory (the CLI's own cwd) is `workspacePath` — deliberately
+          // different from `sessionOwnDir` above.
+          resumeSessionOverrides: {
+            registry,
+            awaiter: {
+              waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })),
+              resolve: vi.fn(),
+            },
+            launchProcess,
+            falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+          },
+        }),
+      );
+
+      expect(code).toBe(0);
+      expect(launchProcess).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: expectedCwd }),
+        undefined,
+      );
+    });
+
+    it("fails cleanly (does not fall back to the CLI's cwd) when the persisted session has no directory recorded", async () => {
+      const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+      const registry = fakeRegistry({
+        findResumable: vi.fn(() => ({
+          sessionId: "sess_1",
+          provider: "claude-code" as const,
+          encryption: { encryptionKey: "k", seq: 1, metadataVersion: 1, agentStateVersion: 1 },
+          savedAt: Date.now(),
+          // no `directory` — an old, pre-persistence-fix sessions.json record.
+        })),
+      });
+
+      const code = await runResumeCommand(
+        "sess_1",
+        baseDeps({
+          resumeSessionOverrides: {
+            registry,
+            awaiter: { waitFor: vi.fn(), resolve: vi.fn() },
+            launchProcess,
+            falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+          },
+        }),
+      );
+
+      expect(code).toBe(1);
+      expect(launchProcess).not.toHaveBeenCalled();
+      expect(written.join("")).toContain("could not resolve a working directory");
     });
 
     it("reports a ResumeSessionError's message and returns 1 on failure", async () => {
@@ -213,6 +285,7 @@ describe("runResumeCommand", () => {
           provider: "claude-code" as const,
           encryption: { encryptionKey: "k", seq: 1, metadataVersion: 1, agentStateVersion: 1 },
           savedAt: Date.now(),
+          directory: workspacePath,
         })),
       });
       const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
