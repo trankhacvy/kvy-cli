@@ -34,6 +34,7 @@ import { SessionActionsMenu } from "./SessionActionsMenu";
 import { SessionSidePanel } from "./SessionSidePanel";
 import { Timeline } from "./Timeline";
 import { TimelineSkeleton } from "./TimelineSkeleton";
+import { WorkingDirectoryChip } from "./WorkingDirectoryChip";
 
 /**
  * Session timeline screen (falcon-system-design.md §9.2 "Session" row,
@@ -79,8 +80,13 @@ export function SessionTimelineScreen({
   // until the snapshot has loaded or this session id isn't (yet) present in
   // it; treated the same as `"active"` below (the default a fresh session
   // row is created with) — never as "ended"/"failed" by absence alone.
-  const sessionStatus: SessionRow["status"] =
-    useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId)?.status ?? "active";
+  const session = useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId);
+  const sessionStatus: SessionRow["status"] = session?.status ?? "active";
+  // `workspaceId` (when set) *is* the workspace's real absolute directory
+  // path — same plaintext-on-the-row convention `SessionGitScreen` already
+  // relies on (design §5.3: the server is allowed to see this field, unlike
+  // `metadata`'s encrypted title, so no decrypt is needed here either).
+  const workspacePath = session?.workspaceId ?? null;
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -131,6 +137,7 @@ export function SessionTimelineScreen({
         onLoadEarlier={loadEarlier}
         modelChip={modelChip}
         sessionStatus={sessionStatus}
+        workspacePath={workspacePath}
       />
     </SessionControlProvider>
   );
@@ -154,6 +161,7 @@ function SessionTimelineBody({
   onLoadEarlier,
   modelChip,
   sessionStatus,
+  workspacePath,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), or `null` until it's
@@ -176,6 +184,10 @@ function SessionTimelineBody({
    * CLI records one there (plan-v2.md W4.2 "header model chip"). */
   modelChip: string | null;
   sessionStatus: SessionRow["status"];
+  /** The session's registered workspace path (`SessionRow.workspaceId`), or
+   * `null` until the row has synced/recorded one — the header's copy chip
+   * (docs/competitive-notes-omnara.md #21) is hidden entirely in that case. */
+  workspacePath: string | null;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
@@ -188,7 +200,10 @@ function SessionTimelineBody({
     <div className="flex h-full min-h-0">
       <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl min-w-0 flex-col overflow-hidden">
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
-          <p className="min-w-0 truncate text-base font-semibold">{title ?? sessionId}</p>
+          <div className="flex min-w-0 items-center gap-2">
+            <p className="min-w-0 truncate text-base font-semibold">{title ?? sessionId}</p>
+            {workspacePath && <WorkingDirectoryChip path={workspacePath} />}
+          </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
