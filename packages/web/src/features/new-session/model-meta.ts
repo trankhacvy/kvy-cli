@@ -37,6 +37,16 @@ export const MODEL_OPTIONS: Record<NewSessionProvider, ModelOption[]> = {
     { value: "sonnet", label: "Sonnet" },
     { value: "opus", label: "Opus" },
     { value: "haiku", label: "Haiku" },
+    // 1M-context variants (docs/competitive-notes-omnara.md #13): distinct
+    // curated picks, not a checkbox modifier on the base model — same
+    // "resolves against the CLI's own --model flag" contract as every other
+    // option here. `claude`'s `--model` accepts the base alias with a
+    // `[1m]` suffix to opt into the long-context beta (1M-token window)
+    // for that model; Haiku has no 1M variant, so it's intentionally
+    // excluded. Codex has no announced 1M-context tier, so `codex` below
+    // stays as-is.
+    { value: "sonnet[1m]", label: "Sonnet (1M)" },
+    { value: "opus[1m]", label: "Opus (1M)" },
   ],
   codex: [
     DEFAULT_MODEL_OPTION,
