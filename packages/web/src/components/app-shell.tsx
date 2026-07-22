@@ -3,6 +3,7 @@
 import {
   BellIcon,
   BotIcon,
+  CreditCardIcon,
   GitBranchIcon,
   HomeIcon,
   LifeBuoyIcon,
@@ -41,6 +42,7 @@ const settingsNav: NavItem[] = [
   { href: "/settings/agent/", label: "Agent", icon: BotIcon },
   { href: "/settings/appearance/", label: "Appearance", icon: PaletteIcon },
   { href: "/settings/git/", label: "Git", icon: GitBranchIcon },
+  { href: "/settings/providers/", label: "Providers", icon: CreditCardIcon },
   { href: "/settings/notifications/", label: "Notifications", icon: BellIcon },
   { href: "/settings/recovery/", label: "Recovery", icon: ShieldCheckIcon },
   { href: "/settings/support/", label: "Support", icon: LifeBuoyIcon },

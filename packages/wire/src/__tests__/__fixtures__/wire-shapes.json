@@ -2893,6 +2893,120 @@
       }
     }
   },
+  "ProviderAccountParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "provider": {
+        "kind": "enum",
+        "options": [
+          "claude-code",
+          "codex"
+        ]
+      }
+    }
+  },
+  "ProviderUsageMeterSchema": {
+    "kind": "object",
+    "fields": {
+      "label": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "percentUsed": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "resetsAt": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "ProviderAccountResultSchema": {
+    "kind": "object",
+    "fields": {
+      "authType": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "authenticated": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "billingType": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "email": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "lastRefreshedAt": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "organization": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "organizationRole": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "provider": {
+        "kind": "enum",
+        "options": [
+          "claude-code",
+          "codex"
+        ]
+      },
+      "usage": {
+        "kind": "optional",
+        "inner": {
+          "kind": "array",
+          "element": {
+            "kind": "object",
+            "fields": {
+              "label": {
+                "kind": "leaf",
+                "type": "string"
+              },
+              "percentUsed": {
+                "kind": "leaf",
+                "type": "number"
+              },
+              "resetsAt": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
   "FsReadParamsSchema": {
     "kind": "object",
     "fields": {

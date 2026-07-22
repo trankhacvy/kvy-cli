@@ -18,10 +18,13 @@
  * `git.diff`/`git.branches` above are read-only) which round out the Git
  * panel's RPC surface, `github.checks` (docs/features/github-pr-ci.md,
  * the "Checks" tab's PR/CI status), `commands.list` ("/" slash-command
- * autocomplete, docs/competitive-notes-omnara.md #18), and `git.files`/
+ * autocomplete, docs/competitive-notes-omnara.md #18), `git.files`/
  * `fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file browser" —
- * the Repo Files sidebar tab's file-tree listing and file-content fetch) —
- * are in scope here —
+ * the Repo Files sidebar tab's file-tree listing and file-content fetch),
+ * and `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
+ * account inspection + usage metering" — Settings → Providers' per-machine
+ * account card, `providerAccountInfo.ts`'s local-config read) — are in
+ * scope here —
  * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
  * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
  * same way without touching this module's dispatch shape.
@@ -50,15 +53,18 @@
  * unlike `adopt.mirror`'s "re-reading a file mid-write twice" hazard,
  * there's no mid-write file here to race. `commands.list` needs none for
  * the same reason again — it only reads the current `.claude/commands/`
- * tree. `fs.read` is the one exception in this read-only cluster that
- * *does* carry the same mid-write hazard `@falcon/wire`'s own `rpc.ts` doc
- * comment calls out for `adopt.mirror` ("or re-reading a file mid-write
- * twice") — but a re-read simply returns whatever the file currently
- * contains, which is still a valid (if possibly different) answer, not a
- * corrupted one, so no idempotency cache is needed for it either. All of
- * these still carry `idempotencyKey` on the wire (design: "every
- * caller-retriable machine RPC carries a caller-minted key") for uniformity
- * with the rest of this RPC family, it's just unused by these handlers.
+ * tree. `provider.account` joins this same no-cache group for the same
+ * reason again — it only reads whatever's currently on disk in the local
+ * CLI's own config files, so a retry is just another read. `fs.read` is the
+ * one exception in this read-only cluster that *does* carry the same
+ * mid-write hazard `@falcon/wire`'s own `rpc.ts` doc comment calls out for
+ * `adopt.mirror` ("or re-reading a file mid-write twice") — but a re-read
+ * simply returns whatever the file currently contains, which is still a
+ * valid (if possibly different) answer, not a corrupted one, so no
+ * idempotency cache is needed for it either. All of these still carry
+ * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
+ * carries a caller-minted key") for uniformity with the rest of this RPC
+ * family, it's just unused by these handlers.
  * `git.commit`/`git.push`/`git.renameBranch` (docs/features/
  * git-write-actions.md) are the opposite of their read-only siblings just
  * above — they're the first git RPCs whose whole point IS a side effect, so
@@ -153,6 +159,10 @@ import {
   GitStatusParamsSchema,
   type GitStatusResult,
   GitStatusResultSchema,
+  type ProviderAccountParams,
+  ProviderAccountParamsSchema,
+  type ProviderAccountResult,
+  ProviderAccountResultSchema,
   ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
   type SlashCommandsListParams,
@@ -184,6 +194,7 @@ import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
 import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
 import { handleGitRenameBranch as handleGitRenameBranchDefault } from "./gitRenameBranch.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
+import { getProviderAccountInfo as getProviderAccountInfoDefault } from "./providerAccountInfo.js";
 import { listSlashCommands as listSlashCommandsDefault } from "./slashCommands.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
@@ -203,6 +214,7 @@ export const MACHINE_RPC_METHODS = [
   "commands.list",
   "git.files",
   "fs.read",
+  "provider.account",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -243,6 +255,8 @@ export interface MachineRpcDeps {
   getGitFiles?: (params: GitFilesParams) => Promise<GitFilesResult>;
   /** Backs the `fs.read` RPC (Repo Files sidebar tab's file-content fetch, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `fsRead.ts`'s real, worktree-contained file read. Throws on failure (missing/escaping/binary/directory target). */
   readFile?: (params: FsReadParams) => Promise<FsReadResult>;
+  /** Backs the `provider.account` RPC (Settings → Providers, docs/competitive-notes-omnara.md #9). Injectable for tests; defaults to `providerAccountInfo.ts`'s real local-config read. Never throws (see that module's own doc comment). */
+  getProviderAccountInfo?: (params: ProviderAccountParams) => Promise<ProviderAccountResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -373,6 +387,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGithubChecks = deps.getGithubChecks ?? getGithubChecksDefault;
   const getGitFiles = deps.getGitFiles ?? getGitFilesDefault;
   const readFile = deps.readFile ?? readFileDefault;
+  const getProviderAccountInfo = deps.getProviderAccountInfo ?? getProviderAccountInfoDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
   // `git.commit`/`git.push`/`git.renameBranch` are the first git RPCs that DO
@@ -497,6 +512,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GithubChecksParamsSchema,
       resultSchema: GithubChecksResultSchema,
       handle: getGithubChecks as (params: unknown) => Promise<unknown>,
+    },
+    "provider.account": {
+      paramsSchema: ProviderAccountParamsSchema,
+      resultSchema: ProviderAccountResultSchema,
+      handle: getProviderAccountInfo as (params: unknown) => Promise<unknown>,
     },
     "adopt.take": {
       paramsSchema: AdoptTakeParamsSchema,

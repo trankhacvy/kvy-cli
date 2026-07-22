@@ -7,9 +7,11 @@
  * `git.status`/`git.diff`, `git.branches` (docs/features/
  * worktree-isolation.md — the New Session wizard's existing-branch worktree
  * picker), plus the mutating `git.commit`/`git.push`/`git.renameBranch`
- * (docs/features/git-write-actions.md — the Git panel's write actions), and
+ * (docs/features/git-write-actions.md — the Git panel's write actions),
  * `commands.list` ("/" slash-command autocomplete, docs/
- * competitive-notes-omnara.md #18 — `features/slash-commands/`). This is
+ * competitive-notes-omnara.md #18 — `features/slash-commands/`), and
+ * `provider.account` (docs/competitive-notes-omnara.md #9 — Settings →
+ * Providers' per-machine account card). This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
  * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
@@ -73,6 +75,8 @@ import {
   GitRenameBranchResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
+  type ProviderAccountParams,
+  ProviderAccountResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
   type SpawnParams,
@@ -97,6 +101,7 @@ export type {
   GitPushParams,
   GitRenameBranchParams,
   GitStatusParams,
+  ProviderAccountParams,
   SlashCommandsListParams,
   SpawnParams,
   WorkspaceRegisterParams,
@@ -124,6 +129,7 @@ export interface MachineRpcParams {
   "commands.list": SlashCommandsListParams;
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
+  "provider.account": ProviderAccountParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -145,6 +151,7 @@ export interface MachineRpcResults {
   "commands.list": import("@falcon/wire").SlashCommandsListResult;
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
+  "provider.account": import("@falcon/wire").ProviderAccountResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -167,6 +174,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "commands.list": SlashCommandsListResultSchema,
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
+  "provider.account": ProviderAccountResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

@@ -168,6 +168,10 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:provider.account" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -1012,6 +1016,68 @@ describe("registerMachineRpcHandlers", () => {
       expect(open(response, DEK)).toEqual({
         ok: false,
         error: "looks like a binary file",
+      });
+    });
+  });
+
+  describe("provider.account", () => {
+    it("decrypts params, calls getProviderAccountInfo, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getProviderAccountInfo = vi.fn(async () => ({
+        provider: "claude-code" as const,
+        authenticated: true,
+        authType: "oauth",
+        email: "dev@example.com",
+        organization: "Acme Org",
+        organizationRole: "admin",
+        billingType: "stripe_subscription",
+        lastRefreshedAt: 1_700_000_000_000,
+        usage: [{ label: "Weekly", percentUsed: 93, resetsAt: "2026-07-20T18:00:00.000Z" }],
+      }));
+      register(socket, { getProviderAccountInfo });
+
+      const params = {
+        idempotencyKey: "idem_provider_account_1",
+        provider: "claude-code" as const,
+      };
+      const response = await callAndAwaitAck(socket, "provider.account", seal(params, DEK));
+
+      expect(getProviderAccountInfo).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        provider: "claude-code",
+        authenticated: true,
+        authType: "oauth",
+        email: "dev@example.com",
+        organization: "Acme Org",
+        organizationRole: "admin",
+        billingType: "stripe_subscription",
+        lastRefreshedAt: 1_700_000_000_000,
+        usage: [{ label: "Weekly", percentUsed: 93, resetsAt: "2026-07-20T18:00:00.000Z" }],
+      });
+    });
+
+    it("replies with a sealed error when getProviderAccountInfo throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getProviderAccountInfo: vi.fn(async () => {
+          throw new Error("unexpected failure");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "provider.account",
+        seal({ idempotencyKey: "idem_provider_account_2", provider: "codex" as const }, DEK),
+      );
+      // The shared `onRpcRequest` catch clause forwards the handler's own
+      // thrown message (see this module's doc comment / `git.commit`'s
+      // sibling test above) rather than a flat "handler-error" placeholder —
+      // this test predates that change (docs/features/git-write-actions.md),
+      // so it's updated to match the now-current, strictly more useful
+      // behavior every handler shares.
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "unexpected failure",
       });
     });
   });
