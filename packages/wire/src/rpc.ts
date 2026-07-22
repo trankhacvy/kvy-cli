@@ -178,6 +178,37 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `commands.list` machine RPC ("/" slash-command autocomplete,
+// docs/competitive-notes-omnara.md #18): lists the project's own custom
+// Claude Code slash commands, read live from `.claude/commands/` in the
+// session's worktree — a structural clone of `git.branches`'s params shape
+// above (same "no idempotency-key replay needed, just uniformity" reasoning
+// as `git.status`/`git.diff`/`git.branches`: this only reads the current
+// `.claude/commands/` tree, so a retry just re-reads it).
+export const SlashCommandsListParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type SlashCommandsListParams = z.infer<typeof SlashCommandsListParamsSchema>;
+
+// `name` is the command's full invocation name, including any subdirectory
+// namespace prefix joined with `:` (`.claude/commands/git/commit.md` ->
+// `"git:commit"`) — matching Claude Code's own subdirectory-namespacing
+// convention. `description`/`argumentHint` come from the command file's
+// optional YAML-ish frontmatter (`description: ...` / `argument-hint: ...`)
+// — both absent when the file has no frontmatter block at all.
+export const SlashCommandInfoSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  argumentHint: z.string().optional(),
+});
+export type SlashCommandInfo = z.infer<typeof SlashCommandInfoSchema>;
+
+export const SlashCommandsListResultSchema = z.object({
+  commands: z.array(SlashCommandInfoSchema),
+});
+export type SlashCommandsListResult = z.infer<typeof SlashCommandsListResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),

@@ -13,7 +13,16 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { Badge } from "@/components/ui/badge";
 import { loadDraft, saveDraft } from "@/features/session-control";
+import type { SlashCommand } from "@/features/slash-commands";
 import { formatBytes } from "@/lib/format";
+import { SlashCommandMenu } from "./SlashCommandMenu";
+import {
+  applySlashCommandSelection,
+  clampSlashSelection,
+  detectSlashQuery,
+  filterSlashCommands,
+  moveSlashSelection,
+} from "./slash-command-state";
 
 /** Whether `file` should get an object-URL image thumbnail in the
  * in-flight attachment strip, vs. just a name/size chip. Extracted as a
@@ -53,6 +62,19 @@ interface AttachmentPreview {
  *    follow-up rather than blocking, so the submit button never morphs into
  *    a stop button. Interrupt is a separate stop button shown only while
  *    `working` (it would otherwise steal the queue path).
+ *  - **"/" slash-command autocomplete** (docs/competitive-notes-omnara.md
+ *    #18): while the *entire* current text is one bare leading-slash token
+ *    (`detectSlashQuery`, `slash-command-state.ts`), a `SlashCommandMenu`
+ *    popover lists the project's own custom commands (`slashCommands` prop
+ *    — fetched by the caller via `commands.list`, read live from the
+ *    session's `.claude/commands/`, never a fixed built-in list) filtered
+ *    to the typed query. Arrow keys move the selection, Enter/Tab accepts
+ *    it (replacing the whole textarea with `/name `), Escape dismisses the
+ *    menu for that query. All keyboard handling runs in this component's own
+ *    `onKeyDown` — `preventDefault()` there stops `PromptInputTextarea`'s
+ *    own Enter-submits-the-form handling from also firing (see that
+ *    component's own "if the external handler prevented default" doc
+ *    comment).
  *
  * `footerControls` is a render slot for session-scoped chips (model, mode
  * selector, take-control) that need `SessionControlProvider` context — this
@@ -75,6 +97,7 @@ export function Composer({
   working = false,
   onStop,
   footerControls,
+  slashCommands = [],
 }: {
   sessionId: string;
   onSend: (text: string) => void;
@@ -94,10 +117,26 @@ export function Composer({
   /** Left-side footer chips (model / mode / take-control), rendered by the
    * caller inside its session-control context. */
   footerControls?: React.ReactNode;
+  /** The project's own custom slash commands (docs/competitive-notes-omnara.md
+   * #18), already fetched by the caller (`use-slash-commands.ts`'s
+   * `commands.list` machine RPC) — this component stays provider-free (see
+   * this file's own doc comment), so it takes the list as data rather than
+   * fetching it itself. Defaults to `[]` (no autocomplete) for every
+   * existing call site/test that doesn't pass one. */
+  slashCommands?: SlashCommand[];
 }) {
   const [text, setText] = useState(() => loadDraft(sessionId));
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [dismissedSlashQuery, setDismissedSlashQuery] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const slashQuery = detectSlashQuery(text);
+  const filteredSlashCommands =
+    slashQuery !== null ? filterSlashCommands(slashCommands, slashQuery) : [];
+  const slashMenuOpen =
+    slashQuery !== null && slashQuery !== dismissedSlashQuery && filteredSlashCommands.length > 0;
+  const clampedSlashIndex = clampSlashSelection(slashSelectedIndex, filteredSlashCommands.length);
 
   // A session switch remounts this component in practice (`sessionId` is
   // part of the route), but reload explicitly on the id changing too, so a
@@ -125,6 +164,7 @@ export function Composer({
   function handleTextChange(next: string) {
     setText(next);
     saveDraft(sessionId, next);
+    setSlashSelectedIndex(0);
   }
 
   function handleSubmit() {
@@ -132,6 +172,41 @@ export function Composer({
     onSend(text);
     setText("");
     saveDraft(sessionId, "");
+  }
+
+  function handleSlashCommandSelect(command: SlashCommand) {
+    const next = applySlashCommandSelection(command);
+    setText(next);
+    saveDraft(sessionId, next);
+    setSlashSelectedIndex(0);
+  }
+
+  function handleTextareaKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!slashMenuOpen) return;
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSlashSelectedIndex((i) => moveSlashSelection(i, filteredSlashCommands.length, 1));
+        return;
+      case "ArrowUp":
+        e.preventDefault();
+        setSlashSelectedIndex((i) => moveSlashSelection(i, filteredSlashCommands.length, -1));
+        return;
+      case "Enter":
+      case "Tab": {
+        const command = filteredSlashCommands[clampedSlashIndex];
+        if (!command) return;
+        e.preventDefault();
+        handleSlashCommandSelect(command);
+        return;
+      }
+      case "Escape":
+        e.preventDefault();
+        setDismissedSlashQuery(slashQuery);
+        return;
+      default:
+        return;
+    }
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -178,63 +253,74 @@ export function Composer({
       )}
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
-      <PromptInput onSubmit={handleSubmit}>
-        <PromptInputBody>
-          <PromptInputTextarea
-            className="max-h-[32vh] overflow-y-auto"
-            value={text}
-            disabled={disabled}
-            onChange={(e) => handleTextChange(e.currentTarget.value)}
-            placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
+      <div className="relative">
+        {slashMenuOpen && (
+          <SlashCommandMenu
+            commands={filteredSlashCommands}
+            selectedIndex={clampedSlashIndex}
+            onHover={setSlashSelectedIndex}
+            onSelect={handleSlashCommandSelect}
           />
-        </PromptInputBody>
-        <PromptInputFooter>
-          <PromptInputTools>{footerControls}</PromptInputTools>
-          <PromptInputTools>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={handleFileChange}
-              aria-hidden
+        )}
+        <PromptInput onSubmit={handleSubmit}>
+          <PromptInputBody>
+            <PromptInputTextarea
+              className="max-h-[32vh] overflow-y-auto"
+              value={text}
+              disabled={disabled}
+              onChange={(e) => handleTextChange(e.currentTarget.value)}
+              onKeyDown={handleTextareaKeyDown}
+              placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
             />
-            <PromptInputButton
-              disabled={disabled || isSending || !cryptoReady}
-              tooltip={
-                cryptoReady
-                  ? "Attach a file"
-                  : "Session key isn't ready yet — try again in a moment."
-              }
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Attach a file"
-            >
-              <Paperclip className="size-4" />
-            </PromptInputButton>
-            <PromptInputButton
-              disabled
-              tooltip="Voice input isn't available yet"
-              aria-label="Voice input"
-            >
-              <Mic className="size-4" />
-            </PromptInputButton>
-            {working && (
+          </PromptInputBody>
+          <PromptInputFooter>
+            <PromptInputTools>{footerControls}</PromptInputTools>
+            <PromptInputTools>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileChange}
+                aria-hidden
+              />
               <PromptInputButton
-                variant="destructive"
-                tooltip="Interrupt the current turn"
-                onClick={onStop}
-                aria-label="Interrupt"
+                disabled={disabled || isSending || !cryptoReady}
+                tooltip={
+                  cryptoReady
+                    ? "Attach a file"
+                    : "Session key isn't ready yet — try again in a moment."
+                }
+                onClick={() => fileInputRef.current?.click()}
+                aria-label="Attach a file"
               >
-                <Square className="size-3.5" />
+                <Paperclip className="size-4" />
               </PromptInputButton>
-            )}
-            <PromptInputSubmit
-              className="rounded-full"
-              disabled={disabled || isSending || text.trim().length === 0}
-            />
-          </PromptInputTools>
-        </PromptInputFooter>
-      </PromptInput>
+              <PromptInputButton
+                disabled
+                tooltip="Voice input isn't available yet"
+                aria-label="Voice input"
+              >
+                <Mic className="size-4" />
+              </PromptInputButton>
+              {working && (
+                <PromptInputButton
+                  variant="destructive"
+                  tooltip="Interrupt the current turn"
+                  onClick={onStop}
+                  aria-label="Interrupt"
+                >
+                  <Square className="size-3.5" />
+                </PromptInputButton>
+              )}
+              <PromptInputSubmit
+                className="rounded-full"
+                disabled={disabled || isSending || text.trim().length === 0}
+              />
+            </PromptInputTools>
+          </PromptInputFooter>
+        </PromptInput>
+      </div>
     </div>
   );
 }

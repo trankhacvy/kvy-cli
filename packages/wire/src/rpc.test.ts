@@ -23,6 +23,9 @@ import {
   PermAnswerResultSchema,
   RpcCallSchema,
   SetModeResultSchema,
+  SlashCommandInfoSchema,
+  SlashCommandsListParamsSchema,
+  SlashCommandsListResultSchema,
   SpawnParamsSchema,
   SpawnResultSchema,
   WorkspaceRegisterParamsSchema,
@@ -87,6 +90,12 @@ describe("idempotencyKey on caller-retriable machine RPCs", () => {
     expect(GitBranchesParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
     expect(
       GitBranchesParamsSchema.safeParse({ idempotencyKey: "idem-8", worktree: "/repo" }).success,
+    ).toBe(true);
+
+    expect(SlashCommandsListParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      SlashCommandsListParamsSchema.safeParse({ idempotencyKey: "idem-9", worktree: "/repo" })
+        .success,
     ).toBe(true);
 
     expect(FsReadParamsSchema.safeParse({ worktree: "/repo", path: "a.ts" }).success).toBe(false);
@@ -172,6 +181,29 @@ describe("git.status / git.diff result shapes", () => {
       }).success,
     ).toBe(true);
     expect(GitBranchesResultSchema.safeParse({ branches: [{ name: "main" }] }).success).toBe(false);
+  });
+});
+
+describe("commands.list result shapes", () => {
+  it("SlashCommandInfoSchema requires name; description/argumentHint stay optional", () => {
+    expect(SlashCommandInfoSchema.safeParse({ name: "compact" }).success).toBe(true);
+    expect(
+      SlashCommandInfoSchema.safeParse({
+        name: "git:commit",
+        description: "Create a commit",
+        argumentHint: "[message]",
+      }).success,
+    ).toBe(true);
+    expect(SlashCommandInfoSchema.safeParse({ description: "no name" }).success).toBe(false);
+  });
+
+  it("SlashCommandsListResultSchema carries a list of SlashCommandInfo", () => {
+    expect(
+      SlashCommandsListResultSchema.safeParse({
+        commands: [{ name: "compact" }, { name: "git:commit", description: "Create a commit" }],
+      }).success,
+    ).toBe(true);
+    expect(SlashCommandsListResultSchema.safeParse({ commands: [{}] }).success).toBe(false);
   });
 });
 

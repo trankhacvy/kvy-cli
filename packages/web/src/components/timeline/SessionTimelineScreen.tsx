@@ -24,6 +24,7 @@ import {
   useSessionTitle,
   useTabAttention,
 } from "@/features/session-control";
+import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { cn } from "@/lib/utils";
 import { messagesQueryKey } from "@/sync";
@@ -87,6 +88,13 @@ export function SessionTimelineScreen({
   // relies on (design §5.3: the server is allowed to see this field, unlike
   // `metadata`'s encrypted title, so no decrypt is needed here either).
   const workspacePath = session?.workspaceId ?? null;
+  // The session's owning machine (`SessionRow.machineId`, same plaintext-on-
+  // the-row convention as `workspacePath` above) — `null` until the row has
+  // synced. Needed alongside `workspacePath` to fetch this session's custom
+  // slash commands (docs/competitive-notes-omnara.md #18): `commands.list`
+  // is a *machine*-scoped RPC (`m:<machineId>:commands.list`), so both ids
+  // are required before it can even be attempted.
+  const machineId = session?.machineId ?? null;
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -138,6 +146,7 @@ export function SessionTimelineScreen({
         modelChip={modelChip}
         sessionStatus={sessionStatus}
         workspacePath={workspacePath}
+        machineId={machineId}
       />
     </SessionControlProvider>
   );
@@ -162,6 +171,7 @@ function SessionTimelineBody({
   modelChip,
   sessionStatus,
   workspacePath,
+  machineId,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), or `null` until it's
@@ -188,6 +198,11 @@ function SessionTimelineBody({
    * `null` until the row has synced/recorded one — the header's copy chip
    * (docs/competitive-notes-omnara.md #21) is hidden entirely in that case. */
   workspacePath: string | null;
+  /** The session's owning machine id (`SessionRow.machineId`), or `null`
+   * until the row has synced — `commands.list` (docs/competitive-notes-
+   * omnara.md #18) is a *machine*-scoped RPC, so both this and
+   * `workspacePath` gate the "/" autocomplete's fetch below. */
+  machineId: string | null;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
@@ -195,6 +210,19 @@ function SessionTimelineBody({
   const [panelOpen, setPanelOpen] = useState(true);
 
   const isDisabled = isSessionControlDisabled(sessionStatus);
+
+  // "/" slash-command autocomplete (docs/competitive-notes-omnara.md #18):
+  // `useLiveSlashCommandsActions` needs *a* machine id to call the hook
+  // (rules of hooks), even before this session's row has synced one — it
+  // degrades to a permanently-pending client until then, same as
+  // `features/git-diff`'s own `machineId`-gated seam. The actual fetch stays
+  // gated on both ids being present via `useSlashCommands`'s `worktree`
+  // argument below.
+  const slashCommandsActions = useLiveSlashCommandsActions(machineId ?? "");
+  const slashCommands = useSlashCommands(
+    slashCommandsActions,
+    machineId && workspacePath ? workspacePath : null,
+  );
 
   return (
     <div className="flex h-full min-h-0">
@@ -266,6 +294,7 @@ function SessionTimelineBody({
             notice={notice}
             working={working}
             onStop={() => actions.interrupt()}
+            slashCommands={slashCommands}
             footerControls={
               <ComposerControls
                 mode={permissionMode}

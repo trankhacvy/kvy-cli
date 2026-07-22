@@ -140,6 +140,10 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:commands.list" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -622,6 +626,40 @@ describe("registerMachineRpcHandlers", () => {
         socket,
         "git.branches",
         seal({ idempotencyKey: "idem_git_branches_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+    });
+  });
+
+  describe("commands.list", () => {
+    it("decrypts params, calls listSlashCommands, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const listSlashCommands = vi.fn(async () => ({
+        commands: [{ name: "compact" }, { name: "git:commit", description: "Create a commit" }],
+      }));
+      register(socket, { listSlashCommands });
+
+      const params = { idempotencyKey: "idem_commands_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "commands.list", seal(params, DEK));
+
+      expect(listSlashCommands).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        commands: [{ name: "compact" }, { name: "git:commit", description: "Create a commit" }],
+      });
+    });
+
+    it("replies with a sealed error when listSlashCommands throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        listSlashCommands: vi.fn(async () => {
+          throw new Error("boom");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "commands.list",
+        seal({ idempotencyKey: "idem_commands_2", worktree: "/repo" }, DEK),
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
     });
