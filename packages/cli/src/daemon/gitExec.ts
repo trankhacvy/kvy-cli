@@ -31,7 +31,7 @@ export class GitExecError extends Error {
   }
 }
 
-/** Runs `git <args>` in `cwd`, resolving stdout or rejecting with a `GitExecError` carrying git's own stderr. Injectable for tests. */
+/** Runs `git <args>` in `cwd`, resolving stdout or rejecting with a `GitExecError` carrying git's own failure message. Injectable for tests. */
 export type GitExec = (args: string[], cwd: string) => Promise<string>;
 
 /** Bounds any single `git` invocation — see this module's doc comment ("first network-touching caller"). */
@@ -50,7 +50,18 @@ export const runGit: GitExec = (args, cwd) =>
       },
       (error, stdout, stderr) => {
         if (error) {
-          reject(new GitExecError(stderr.toString().trim() || error.message));
+          // Most `git` failures (e.g. `fatal: ...`) write to stderr, but some —
+          // notably `git commit` on a clean tree, which prints "nothing to
+          // commit, working tree clean" and exits non-zero — write their
+          // whole message to STDOUT instead, leaving stderr empty. Falling
+          // back to only `error.message` (Node's generic "Command failed:
+          // git commit ..." wrapper text) in that case silently breaks any
+          // caller matching on git's actual wording — `gitCommit.ts`'s
+          // `NOTHING_TO_COMMIT_RE` in particular, which would otherwise never
+          // match in the single most common real-world case it exists for.
+          reject(
+            new GitExecError(stderr.toString().trim() || stdout.toString().trim() || error.message),
+          );
           return;
         }
         resolve(stdout.toString());

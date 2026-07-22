@@ -37,4 +37,12 @@ describe("useLiveGitDiffActions", () => {
     await expect(actions.fetchStatus("/repo")).rejects.toThrow(/isn't unwrapped yet/i);
     await expect(actions.fetchDiff("/repo")).rejects.toThrow(/isn't unwrapped yet/i);
   });
+
+  it("rejects commit/push/renameBranch/listBranches the same way before the machine key has unwrapped", async () => {
+    const actions = renderActions("mach-1");
+    await expect(actions.commit("/repo", "fix")).rejects.toThrow(/isn't unwrapped yet/i);
+    await expect(actions.push("/repo")).rejects.toThrow(/isn't unwrapped yet/i);
+    await expect(actions.renameBranch("/repo", "renamed")).rejects.toThrow(/isn't unwrapped yet/i);
+    await expect(actions.listBranches("/repo")).rejects.toThrow(/isn't unwrapped yet/i);
+  });
 });

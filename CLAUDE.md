@@ -201,7 +201,28 @@ packages/
 │                             rather than the pre-worktree `realDirectory` — the worktree
 │                             directory a session actually launches in is what dedup must
 │                             protect, and `ensureBranchWorkspace` being idempotent makes
-│                             checking after it safe. `src/workspaceConfig.ts` (`~/.falcon/
+│                             checking after it safe. Real git write actions (design §4.4,
+│                             plan.md §16 "4.1 Git panel", docs/features/git-write-actions.md,
+│                             docs/competitive-notes-omnara.md #3) round out the Git panel:
+│                             `git.commit`/`git.push`/`git.renameBranch` are the first git
+│                             machine RPCs whose whole point is a side effect — unlike their
+│                             read-only siblings, they're gated in `machineRpc.ts` on a new
+│                             registered-workspace authorizer (`daemon/gitWriteGuard.ts`'s
+│                             `createRegistryWorktreeAuthorizer`, backed by
+│                             `workspace/registry.ts`'s `isWithinRegisteredWorkspace` — design
+│                             §12 "no arbitrary-directory execution from remote"; the read
+│                             RPCs stay ungated, a documented follow-up) and wrapped in the
+│                             existing `withIdempotencyCache` (a lost-ack retry replays the
+│                             prior commit's SHA rather than minting a second commit).
+│                             `daemon/gitCommit.ts` defaults one-click commit to `git add -A`
+│                             (`stageAll`); `daemon/gitPush.ts` maps `force` to
+│                             `--force-with-lease` only — the raw `--force` flag is
+│                             deliberately unreachable over the wire; `daemon/
+│                             gitRenameBranch.ts` (`git branch -m`, local-only) reuses
+│                             `gitWorktree.ts`'s now-exported `assertSafeBranchName`. All
+│                             three are registered in `machineRpc.ts` alongside
+│                             `git.status`/`git.diff`/`git.branches`. `src/workspaceConfig.ts`
+│                             (`~/.falcon/
 │                             settings.json`'s new `workspaces` map, keyed by real/symlink-
 │                             resolved directory path) backs both `git.diff`'s base-ref
 │                             fallback and the new `falcon workspace config [--base-ref
@@ -386,24 +407,42 @@ packages/
                               timeline) plus the real per-session crypto client, and
                               auth-gating the Home route, are still [planned]. The Git panel
                               (`src/features/git-diff/`, plan.md §16 "4.1 Git panel",
-                              falcon-prd.md FR-7.7) is landed as its own feature area,
-                              read-only for the MVP: `ChangedFilesList` + `UnifiedDiffViewer`
-                              (parses `git diff` unified-diff text via the new
-                              `lib/unifiedDiff.ts`, shiki-highlights each line via the new
-                              `lib/diffHighlight.ts` — `codeToTokens` rendered to plain
-                              `<span>`s, same no-`dangerouslySetInnerHTML` rule as
-                              `markdown.ts`), composed by `GitDiffPanel` and driven by
-                              `use-git-panel.ts` (two `@tanstack/react-query` queries:
-                              `git.status` once per worktree, `git.diff` re-fetched on file
-                              selection). `sync/machineRpc.ts` gained `git.status`/`git.diff`
+                              falcon-prd.md FR-7.7, docs/features/git-write-actions.md) is
+                              landed as its own feature area — no longer read-only:
+                              `ChangedFilesList` + `UnifiedDiffViewer` (parses `git diff`
+                              unified-diff text via the new `lib/unifiedDiff.ts`,
+                              shiki-highlights each line via the new `lib/diffHighlight.ts` —
+                              `codeToTokens` rendered to plain `<span>`s, same
+                              no-`dangerouslySetInnerHTML` rule as `markdown.ts`), plus a
+                              `GitToolbar` (inline branch rename, one-click commit — defaults
+                              to `git add -A` so untracked files are included — Push, and
+                              Force Push behind a confirm dialog; its pure inline-rename/
+                              commit-submit logic lives in `git-toolbar-state.ts`) and a
+                              `CompareAgainstSelect` ("Compare against": workspace default /
+                              `HEAD` (uncommitted) / any local branch / a free-text ref,
+                              client-side rejecting a `-`-prefixed custom ref the same way the
+                              daemon's `isSafeRevision` does — pure logic in
+                              `compare-against-select-state.ts`), all composed by
+                              `GitDiffPanel` and driven by `use-git-panel.ts` (three
+                              `@tanstack/react-query` queries — `git.status` once per
+                              worktree, `git.diff` re-fetched on file selection or
+                              `compareRef` change — via the pure `git-diff-query.ts`'s
+                              `buildDiffFetchOptions` — and `git.branches` for the compare
+                              selector; three `useMutation`s — commit/push/renameBranch —
+                              invalidating the status/diff/branches queries on success).
+                              `sync/machineRpc.ts` gained `git.status`/`git.diff`/
+                              `git.branches`/`git.commit`/`git.push`/`git.renameBranch`
                               alongside `spawn`/`fs.*`. Mounted at the new `/session/[id]/git/`
                               route (linked from the timeline header's "Files changed"
                               button) and, like every other feature here, takes an injectable
                               `UseGitDiffActions` seam (`live-actions.ts`'s
-                              `machineRpcToGitDiffActions` vs. the default
-                              `mock-source.ts`) — no live `apiSocket`/per-machine crypto
-                              client wired in yet, same not-yet-wired state as everything
-                              else in this list. The New Session wizard
+                              `machineRpcToGitDiffActions` vs. the default `mock-source.ts`)
+                              — unlike most of the rest of this list, this one IS wired to a
+                              live `apiSocket`/per-machine crypto client already
+                              (`use-live-git-diff-actions.ts`, gated on
+                              `use-machine-crypto.ts`'s DEK unwrap) — a stale claim to the
+                              contrary in an earlier revision of this file has been corrected.
+                              The New Session wizard
                               (`src/features/new-session/`, `/session/new/`, falcon-system-design.md
                               §9.2 "New session" row, falcon-prd.md FR-7.5/UC5) is a five-step
                               flow — machine → directory picker → optional session-import →
