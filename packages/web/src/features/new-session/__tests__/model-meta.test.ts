@@ -30,6 +30,20 @@ describe("MODEL_OPTIONS", () => {
       }
     }
   });
+
+  it("exposes 1M-context variants for claude-code's Sonnet and Opus, distinct from the base model (docs/competitive-notes-omnara.md #13)", () => {
+    const claudeOptions = MODEL_OPTIONS["claude-code"];
+    expect(claudeOptions).toContainEqual({ value: "sonnet[1m]", label: "Sonnet (1M)" });
+    expect(claudeOptions).toContainEqual({ value: "opus[1m]", label: "Opus (1M)" });
+    // Distinct picks, not a modifier on the base entries.
+    expect(claudeOptions.some((o) => o.value === "sonnet")).toBe(true);
+    expect(claudeOptions.some((o) => o.value === "opus")).toBe(true);
+  });
+
+  it("does not add a 1M variant for Haiku (no long-context tier) or for codex (no 1M-context tier)", () => {
+    expect(MODEL_OPTIONS["claude-code"].some((o) => o.value === "haiku[1m]")).toBe(false);
+    expect(MODEL_OPTIONS.codex.some((o) => o.value.includes("1m"))).toBe(false);
+  });
 });
 
 describe("isCuratedModel", () => {
@@ -50,6 +64,12 @@ describe("isCuratedModel", () => {
 
   it("is false for an arbitrary custom model id", () => {
     expect(isCuratedModel("claude-code", "claude-3-5-sonnet-20241022")).toBe(false);
+  });
+
+  it("treats the curated 1M-context variants as curated, separate from their base model", () => {
+    expect(isCuratedModel("claude-code", "sonnet[1m]")).toBe(true);
+    expect(isCuratedModel("claude-code", "opus[1m]")).toBe(true);
+    expect(isCuratedModel("codex", "sonnet[1m]")).toBe(false);
   });
 });
 
