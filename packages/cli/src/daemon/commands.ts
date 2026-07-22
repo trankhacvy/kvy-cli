@@ -21,8 +21,9 @@ import {
   type MachineIntegrationDeps,
   startMachineIntegration,
 } from "./machineIntegration.js";
+import { listProcesses, type ProcessEntry, resolveProcessCwd } from "./processScan.js";
 import type { ProviderSessionResolver } from "./providerSessionResolver.js";
-import type { ResumeSessionDeps } from "./resumeSession.js";
+import { type ResumeSessionDeps, resolveResumeDirectoryFromRecord } from "./resumeSession.js";
 import {
   captureBundleMtimeMs as captureBundleMtimeMsDefault,
   hasBundleBeenReplaced as hasBundleBeenReplacedDefault,
@@ -88,11 +89,15 @@ import type { WorkspaceRootLookup } from "./workspacePath.js";
  * `machineIntegration.ts`), and the transcript indexer
  * (`transcriptIndexer.ts`, started from within `machineIntegration.ts` once
  * a machine client is up) fs-watches actually-registered workspaces instead
- * of nothing. `resolveProviderSession`/`resolveResumeDirectory` still have
- * no real default (resolving a bare provider session id back to a
- * workspace needs transcript-content scanning, a different, later
- * composition — see `providerSessionResolver.ts`'s own doc comment) — they
- * honestly report "unresolved" rather than guessing. `DaemonCommandDeps`
+ * of nothing. `resolveResumeDirectory` now defaults to the real
+ * `resolveResumeDirectoryFromRecord` (`resumeSession.ts`), re-resolving a
+ * persisted session's stored spawn `directory` via `realpath` so
+ * spawn-directory-dedup survives a daemon restart (plan.md §16 "Flow 3 —
+ * spawn-directory-dedup"). `resolveProviderSession` still has no real default
+ * (resolving a bare provider session id back to a workspace needs
+ * transcript-content scanning, a different, later composition — see
+ * `providerSessionResolver.ts`'s own doc comment) — it honestly reports
+ * "unresolved" rather than guessing. `DaemonCommandDeps`
  * exposes all of these as overridable so tests (and any future real
  * `resolveProviderSession`) can plug in a different implementation without
  * touching this wiring again.
@@ -109,6 +114,10 @@ export interface DaemonCommandDeps {
   /** Sends `signal` to `pid`; swallows ESRCH (process already gone). */
   killPid: (pid: number, signal: NodeJS.Signals) => void;
   isProcessAlive: (pid: number) => boolean;
+  /** Lists every OS process visible to this user. Defaults to `processScan.ts`'s real `ps`-backed implementation. Used at boot to re-adopt live orphaned sessions (`readoptSessions.ts`). */
+  listProcesses: () => Promise<ProcessEntry[]>;
+  /** Resolves a pid's current working directory. Defaults to `processScan.ts`'s real implementation. Used alongside `listProcesses` for boot-time re-adoption. */
+  resolveProcessCwd: (pid: number) => Promise<string | null>;
   /** Used for the control server's `/stop` (graceful shutdown) and `status`'s liveness probe. */
   fetchImpl: typeof fetch;
   /** Registers OS shutdown signals for `start-sync`; returns an unregister function. */
@@ -153,7 +162,7 @@ export interface DaemonCommandDeps {
   listWorkspaces: () => Promise<RegisteredWorkspace[]>;
   /** Resolves `adopt.take`/`adopt.mirror`'s bare provider session id to a registered workspace. No real default yet — see this module's own doc comment. */
   resolveProviderSession: ProviderSessionResolver;
-  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in. No real default yet — see this module's own doc comment. */
+  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in. Defaults to `resumeSession.ts`'s `resolveResumeDirectoryFromRecord` (re-`realpath`s the persisted session's stored `directory`) — see this module's own doc comment. */
   resolveResumeDirectory: (
     session: PersistedSession,
   ) => string | null | undefined | Promise<string | null | undefined>;
@@ -251,6 +260,8 @@ export function createDaemonCommandDeps(
     spawnStartSync: defaultSpawnStartSync,
     killPid: defaultKillPid,
     isProcessAlive,
+    listProcesses,
+    resolveProcessCwd,
     fetchImpl: fetch,
     registerShutdownSignals: defaultRegisterShutdownSignals,
     readyTimeoutMs: 5000,
@@ -266,7 +277,7 @@ export function createDaemonCommandDeps(
     resolveWorkspaceRoot: createWorkspaceRootLookup({ homeDir }),
     listWorkspaces: createTranscriptIndexerWorkspaceLister({ homeDir }),
     resolveProviderSession: async () => null,
-    resolveResumeDirectory: () => undefined,
+    resolveResumeDirectory: resolveResumeDirectoryFromRecord,
     ...overrides,
   };
 }
@@ -325,6 +336,22 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   const restoredCount = await registry.restore();
   if (restoredCount > 0) {
     logger.info("daemon start-sync: restored persisted sessions", { count: restoredCount });
+  }
+
+  // Re-adopt any live orphaned session (plan.md §16 "Flow 3 —
+  // spawn-directory-dedup"): a still-running session process a prior daemon
+  // spawned but this restart never got a chance to re-track. Must happen
+  // BEFORE the control server (and any spawn RPC) starts serving, so
+  // spawn-directory-dedup sees it immediately rather than racing a fresh
+  // duplicate spawn.
+  const readoptedCount = await registry.readoptLiveSessions({
+    listProcesses: deps.listProcesses,
+    resolveCwd: deps.resolveProcessCwd,
+  });
+  if (readoptedCount > 0) {
+    logger.info("daemon start-sync: re-adopted live orphaned sessions after restart", {
+      count: readoptedCount,
+    });
   }
 
   // Matches the launched process's pid to its `/session-started` webhook —

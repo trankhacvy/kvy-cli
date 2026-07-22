@@ -67,7 +67,30 @@ describe("resumeSession", () => {
       }),
       undefined,
     );
-    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(555);
+    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(555, "/tmp/proj");
+  });
+
+  it("re-tracks the relaunched pid WITH the resolved directory, so spawn-dedup survives across the resume (Flow 3 — spawn-directory-dedup)", async () => {
+    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 777 }));
+    const registry = fakeRegistry();
+
+    await resumeSession("sess_1", {
+      registry,
+      awaiter: fakeAwaiter({ waitFor: vi.fn(async (pid: number) => ({ sessionId: "sess_1", pid })) }),
+      // The resolved directory the relaunch runs in — this exact string must
+      // be threaded into `trackSpawned` so `scanForLiveSessionInDirectory`
+      // can match the resumed session again.
+      resolveDirectory: () => "/Users/vy/projects/falcon",
+      launchProcess,
+      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      baseEnv: {},
+    });
+
+    // Not just "called" — called with the directory as the second argument.
+    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(
+      777,
+      "/Users/vy/projects/falcon",
+    );
   });
 
   it("uses the codex CLI name for a persisted codex session", async () => {

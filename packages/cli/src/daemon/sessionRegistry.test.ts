@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSessionRegistry } from "./sessionRegistry.js";
 import { persistSession, readPersistedSessions } from "./sessionsStore.js";
+import { scanForLiveSessionInDirectory } from "./spawnEngine.js";
 
 const ENCRYPTION = {
   encryptionKey: "wrapped-dek",
@@ -105,6 +106,44 @@ describe("sessionRegistry", () => {
     });
   });
 
+  it("a session's spawn directory survives a daemon restart end-to-end, so spawn-dedup matches it again (plan.md §16 'Flow 3 — spawn-directory-dedup')", async () => {
+    const realDirectory = "/Users/vy/projects/falcon";
+
+    // --- daemon instance #1: a daemon-spawned session, tracked with its
+    //     directory, whose /session-started webhook lands and persists it ---
+    const first = createSessionRegistry({ homeDir });
+    first.trackSpawned(4242, realDirectory);
+    first.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
+
+    // onSessionStarted's persistSession() fires-and-forgets — let it land on
+    // disk (with the directory) before we simulate the restart.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const onDisk = await readPersistedSessions(homeDir);
+    expect(onDisk.sess_1?.directory).toBe(realDirectory);
+
+    // --- daemon restart: a BRAND-NEW registry, no shared in-memory state,
+    //     restoring purely from sessions.json ---
+    const second = createSessionRegistry({ homeDir });
+    expect(await second.restore()).toBe(1);
+
+    // (1) the restored resumable record carries the directory...
+    const resumable = second.findResumable("sess_1");
+    expect(resumable?.directory).toBe(realDirectory);
+
+    // (2) ...and once re-tracked the way an actual `resumeSession` relaunch
+    //     does (trackSpawned with the resolved directory, then the relaunched
+    //     process's /session-started webhook landing), spawn-directory-dedup
+    //     matches the session in that directory again — the whole point of
+    //     persisting `directory`. Before this fix the restored session came
+    //     back with `directory: undefined` and could never match.
+    second.trackSpawned(5555, resumable?.directory);
+    second.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 5555);
+    expect(scanForLiveSessionInDirectory(second.getSessions(), realDirectory)).toBe("sess_1");
+
+    // Let the second registry's own fire-and-forget persist land before teardown.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+
   it("persists to sessions.json whenever the webhook carries encryption material", async () => {
     const registry = createSessionRegistry({ homeDir });
     registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
@@ -200,6 +239,75 @@ describe("sessionRegistry", () => {
 
     expect(registry.hasLiveSessions()).toBe(true);
     expect(registry.getSessions()).toHaveLength(1);
+  });
+
+  it("toPersisted/findResumable carry the live pid through, so a restart can re-adopt it (readoptSessions.ts)", async () => {
+    const registry = createSessionRegistry({ homeDir });
+    registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
+
+    expect(registry.findResumable("sess_1")).toMatchObject({ sessionId: "sess_1", pid: 4242 });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const persisted = await readPersistedSessions(homeDir);
+    expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1", pid: 4242 });
+  });
+
+  it("readoptLiveSessions re-adds a still-live orphaned session into the live map after a restart, without dropping the durable resumable record", async () => {
+    const realDirectory = "/Users/vy/projects/falcon";
+
+    // --- daemon instance #1: spawns a session, its webhook lands, it persists
+    //     with a pid — then the daemon "restarts" without the process dying ---
+    const first = createSessionRegistry({ homeDir });
+    first.trackSpawned(51245, realDirectory);
+    first.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 51245);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // --- daemon restart: brand-new registry, restore() only seeds `resumable` ---
+    const second = createSessionRegistry({ homeDir });
+    expect(await second.restore()).toBe(1);
+    expect(second.getSessions()).toEqual([]); // live map starts empty — the bug this fixes
+
+    const readopted = await second.readoptLiveSessions({
+      listProcesses: async () => [
+        {
+          pid: 51245,
+          ppid: 1,
+          command: "falcon claude --starting-mode remote --started-by daemon",
+        },
+      ],
+      resolveCwd: async () => realDirectory,
+      realpath: async (p) => p,
+    });
+
+    expect(readopted).toBe(1);
+    expect(scanForLiveSessionInDirectory(second.getSessions(), realDirectory)).toBe("sess_1");
+    // The re-adopted session is fully live-tracked, not just scannable —
+    // getLivePid/stopSession must also see it (design's acceptance checklist).
+    expect(second.getLivePid("sess_1")).toBe(51245);
+    expect(second.stopSession("sess_1")).toBe(true);
+    // The durable resumable record is left in place as a harmless backstop.
+    expect(second.findResumable("sess_1")).not.toBeNull();
+    expect(second.findResumable("sess_1")?.directory).toBe(realDirectory);
+  });
+
+  it("readoptLiveSessions re-adopts nothing when the persisted pid is no longer alive", async () => {
+    await persistSession(homeDir, {
+      sessionId: "sess_1",
+      encryption: ENCRYPTION,
+      savedAt: Date.now(),
+      directory: "/Users/vy/projects/falcon",
+      pid: 99999,
+    });
+    const registry = createSessionRegistry({ homeDir });
+    await registry.restore();
+
+    const readopted = await registry.readoptLiveSessions({
+      listProcesses: async () => [],
+      resolveCwd: async () => null,
+    });
+
+    expect(readopted).toBe(0);
+    expect(registry.getSessions()).toEqual([]);
   });
 
   it("hasLiveSessions reflects the pid-tracked map only, not the resumable set", async () => {

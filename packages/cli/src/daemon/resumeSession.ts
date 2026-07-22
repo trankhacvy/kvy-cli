@@ -31,6 +31,7 @@
  * pattern) before proceeding to launch the replacement process, closing the
  * window where both could otherwise be alive at once.
  */
+import { realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Logger } from "../logger.js";
 import {
@@ -58,7 +59,14 @@ export interface ResumeSessionRegistry {
   stopSession(sessionId: string): boolean;
   /** The pid currently tracked live for `sessionId`, or `null` if none — used to poll for exit after `stopSession`. */
   getLivePid(sessionId: string): number | null;
-  trackSpawned(pid: number): void;
+  /**
+   * Re-tracks the relaunched pid. `directory` is the resolved real path the
+   * session is being resumed into (plan.md §16 "Flow 3 —
+   * spawn-directory-dedup"): passing it through keeps the restored session
+   * matchable by `spawnEngine.ts`'s `scanForLiveSessionInDirectory` after a
+   * daemon restart, instead of coming back with `directory: undefined`.
+   */
+  trackSpawned(pid: number, directory?: string): void;
 }
 
 export interface ResumeSessionDeps {
@@ -279,7 +287,11 @@ export async function resumeSession(
     );
   }
 
-  deps.registry.trackSpawned(launched.pid);
+  // Re-record the directory this session was resumed into, so a
+  // subsequent spawn into the same directory still dedups against it — the
+  // whole point of persisting `PersistedSession.directory` across a daemon
+  // restart (plan.md §16 "Flow 3 — spawn-directory-dedup").
+  deps.registry.trackSpawned(launched.pid, directory);
   logger.info("[resume-session] launched provider process", {
     method: launched.method,
     pid: launched.pid,
@@ -295,5 +307,29 @@ export async function resumeSession(
         error instanceof Error ? error.message : String(error)
       }`,
     );
+  }
+}
+
+/**
+ * The real default `resolveDirectory` for a `resumeSession` relaunch, now that
+ * `PersistedSession` carries the session's spawn `directory` across a daemon
+ * restart (plan.md §16 "Flow 3 — spawn-directory-dedup"). Re-resolves the
+ * stored path via `realpath` rather than trusting the stored string verbatim:
+ * spawn-dedup matches directories by exact string equality against a
+ * *freshly* `realpath`-resolved spawn target (`spawnEngine.ts`'s
+ * `scanForLiveSessionInDirectory`), so the resumed session must be re-tracked
+ * under that same canonical form to line up. Returns `undefined` — failing the
+ * resume cleanly rather than guessing — when the record carries no directory,
+ * or when `realpath` throws (directory deleted/unmounted since it was
+ * persisted).
+ */
+export async function resolveResumeDirectoryFromRecord(
+  session: PersistedSession,
+): Promise<string | undefined> {
+  if (!session.directory) return undefined;
+  try {
+    return await realpath(session.directory);
+  } catch {
+    return undefined;
   }
 }
