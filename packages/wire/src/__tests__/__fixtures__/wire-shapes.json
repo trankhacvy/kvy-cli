@@ -2794,6 +2794,73 @@
       }
     }
   },
+  "SlashCommandsListParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "SlashCommandInfoSchema": {
+    "kind": "object",
+    "fields": {
+      "argumentHint": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "description": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "name": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "SlashCommandsListResultSchema": {
+    "kind": "object",
+    "fields": {
+      "commands": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "argumentHint": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            },
+            "description": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            },
+            "name": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
   "FsReadParamsSchema": {
     "kind": "object",
     "fields": {

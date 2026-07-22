@@ -16,8 +16,9 @@
  * picker), `git.commit`/`git.push`/`git.renameBranch` (docs/features/
  * git-write-actions.md — the first *mutating* git RPCs; `git.status`/
  * `git.diff`/`git.branches` above are read-only) which round out the Git
- * panel's RPC surface, and `github.checks` (docs/features/github-pr-ci.md,
- * the "Checks" tab's PR/CI status) — are in scope here —
+ * panel's RPC surface, `github.checks` (docs/features/github-pr-ci.md,
+ * the "Checks" tab's PR/CI status), and `commands.list` ("/" slash-command
+ * autocomplete, docs/competitive-notes-omnara.md #18) — are in scope here —
  * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
  * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
  * the same way without touching this module's dispatch shape.
@@ -44,10 +45,11 @@
  * reason as `fs.list`: they only read current repository (or, for
  * `github.checks`, GitHub API) state, so a retry just re-reads it — unlike
  * `adopt.mirror`'s "re-reading a file mid-write twice" hazard, there's no
- * mid-write file here to race. All four still carry `idempotencyKey` on the
- * wire (design: "every caller-retriable machine RPC carries a caller-minted
- * key") for uniformity with the rest of this RPC family, it's just unused
- * by these handlers.
+ * mid-write file here to race. `commands.list` needs none for the same
+ * reason again — it only reads the current `.claude/commands/` tree. All of
+ * these still carry `idempotencyKey` on the wire (design: "every
+ * caller-retriable machine RPC carries a caller-minted key") for uniformity
+ * with the rest of this RPC family, it's just unused by these handlers.
  * `git.commit`/`git.push`/`git.renameBranch` (docs/features/
  * git-write-actions.md) are the opposite of their read-only siblings just
  * above — they're the first git RPCs whose whole point IS a side effect, so
@@ -136,6 +138,10 @@ import {
   GitStatusResultSchema,
   ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
+  type SlashCommandsListParams,
+  SlashCommandsListParamsSchema,
+  type SlashCommandsListResult,
+  SlashCommandsListResultSchema,
   type SpawnParams,
   SpawnParamsSchema,
   type SpawnResult,
@@ -159,6 +165,7 @@ import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
 import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
 import { handleGitRenameBranch as handleGitRenameBranchDefault } from "./gitRenameBranch.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
+import { listSlashCommands as listSlashCommandsDefault } from "./slashCommands.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
 export const MACHINE_RPC_METHODS = [
@@ -174,6 +181,7 @@ export const MACHINE_RPC_METHODS = [
   "git.push",
   "git.renameBranch",
   "github.checks",
+  "commands.list",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -208,6 +216,8 @@ export interface MachineRpcDeps {
   gitRenameBranch?: (params: GitRenameBranchParams) => Promise<GitRenameBranchResult>;
   /** Backs the `github.checks` RPC (Checks tab, docs/features/github-pr-ci.md). Injectable for tests; defaults to `githubChecks.ts`'s real PR/CI resolution against a machine-local GitHub token. Throws on an unexpected failure (a handled "nothing to show yet" case is a `GithubChecksResult.state`, not a throw). */
   getGithubChecks?: (params: GithubChecksParams) => Promise<GithubChecksResult>;
+  /** Backs the `commands.list` RPC ("/" slash-command autocomplete, docs/competitive-notes-omnara.md #18). Injectable for tests; defaults to `slashCommands.ts`'s real `.claude/commands/` walk. Never throws — see that module's own doc comment. */
+  listSlashCommands?: (params: SlashCommandsListParams) => Promise<SlashCommandsListResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -334,6 +344,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
+  const listSlashCommands = deps.listSlashCommands ?? listSlashCommandsDefault;
   const getGithubChecks = deps.getGithubChecks ?? getGithubChecksDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
@@ -424,6 +435,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GitBranchesParamsSchema,
       resultSchema: GitBranchesResultSchema,
       handle: getGitBranches as (params: unknown) => Promise<unknown>,
+    },
+    "commands.list": {
+      paramsSchema: SlashCommandsListParamsSchema,
+      resultSchema: SlashCommandsListResultSchema,
+      handle: listSlashCommands as (params: unknown) => Promise<unknown>,
     },
     "git.commit": {
       paramsSchema: GitCommitParamsSchema,

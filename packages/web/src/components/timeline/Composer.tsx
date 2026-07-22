@@ -21,10 +21,19 @@ import {
   mockFileMentionActions,
 } from "@/features/file-mentions";
 import { loadDraft, saveDraft } from "@/features/session-control";
+import type { SlashCommand } from "@/features/slash-commands";
 import { formatBytes } from "@/lib/format";
 import { appendTranscript, describeSpeechError } from "@/lib/speech-input";
 import { useSpeechInput } from "@/lib/use-speech-input";
 import { FileMentionMenu } from "./FileMentionMenu";
+import { SlashCommandMenu } from "./SlashCommandMenu";
+import {
+  applySlashCommandSelection,
+  clampSlashSelection,
+  detectSlashQuery,
+  filterSlashCommands,
+  moveSlashSelection,
+} from "./slash-command-state";
 
 /** Whether `file` should get an object-URL image thumbnail in the
  * in-flight attachment strip, vs. just a name/size chip. Extracted as a
@@ -73,6 +82,19 @@ interface AttachmentPreview {
  *    phrase shows as a live italic preview instead of being merged into the
  *    editable text, so it never fights the user's own typing in the same
  *    box.
+ *  - **"/" slash-command autocomplete** (docs/competitive-notes-omnara.md
+ *    #18): while the *entire* current text is one bare leading-slash token
+ *    (`detectSlashQuery`, `slash-command-state.ts`), a `SlashCommandMenu`
+ *    popover lists the project's own custom commands (`slashCommands` prop
+ *    — fetched by the caller via `commands.list`, read live from the
+ *    session's `.claude/commands/`, never a fixed built-in list) filtered
+ *    to the typed query. Arrow keys move the selection, Enter/Tab accepts
+ *    it (replacing the whole textarea with `/name `), Escape dismisses the
+ *    menu for that query. All keyboard handling runs in this component's own
+ *    `onKeyDown` — `preventDefault()` there stops `PromptInputTextarea`'s
+ *    own Enter-submits-the-form handling from also firing (see that
+ *    component's own "if the external handler prevented default" doc
+ *    comment).
  *
  * `footerControls` is a render slot for session-scoped chips (model, mode
  * selector, take-control) that need `SessionControlProvider` context — this
@@ -109,6 +131,7 @@ export function Composer({
   working = false,
   onStop,
   footerControls,
+  slashCommands = [],
   fileMentionActions = mockFileMentionActions,
 }: {
   sessionId: string;
@@ -129,6 +152,13 @@ export function Composer({
   /** Left-side footer chips (model / mode / take-control), rendered by the
    * caller inside its session-control context. */
   footerControls?: React.ReactNode;
+  /** The project's own custom slash commands (docs/competitive-notes-omnara.md
+   * #18), already fetched by the caller (`use-slash-commands.ts`'s
+   * `commands.list` machine RPC) — this component stays provider-free (see
+   * this file's own doc comment), so it takes the list as data rather than
+   * fetching it itself. Defaults to `[]` (no autocomplete) for every
+   * existing call site/test that doesn't pass one. */
+  slashCommands?: SlashCommand[];
   /** Data source for the "@" file-mention popover — defaults to a static
    * mock set (`@/features/file-mentions`'s `mockFileMentionActions`) until
    * a caller wires in `createFsFileMentionActions` against a live machine
@@ -137,6 +167,8 @@ export function Composer({
 }) {
   const [text, setText] = useState(() => loadDraft(sessionId));
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
+  const [dismissedSlashQuery, setDismissedSlashQuery] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -168,6 +200,13 @@ export function Composer({
   useEffect(() => {
     if (disabled) speech.stop();
   }, [disabled]);
+
+  const slashQuery = detectSlashQuery(text);
+  const filteredSlashCommands =
+    slashQuery !== null ? filterSlashCommands(slashCommands, slashQuery) : [];
+  const slashMenuOpen =
+    slashQuery !== null && slashQuery !== dismissedSlashQuery && filteredSlashCommands.length > 0;
+  const clampedSlashIndex = clampSlashSelection(slashSelectedIndex, filteredSlashCommands.length);
 
   // A session switch remounts this component in practice (`sessionId` is
   // part of the route), but reload explicitly on the id changing too, so a
@@ -266,6 +305,7 @@ export function Composer({
   function handleTextChange(next: string) {
     setText(next);
     saveDraft(sessionId, next);
+    setSlashSelectedIndex(0);
   }
 
   function handleSubmit() {
@@ -273,6 +313,56 @@ export function Composer({
     onSend(text);
     setText("");
     saveDraft(sessionId, "");
+  }
+
+  function handleSlashCommandSelect(command: SlashCommand) {
+    const next = applySlashCommandSelection(command);
+    setText(next);
+    saveDraft(sessionId, next);
+    setSlashSelectedIndex(0);
+  }
+
+  function handleTextareaKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!slashMenuOpen) return;
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSlashSelectedIndex((i) => moveSlashSelection(i, filteredSlashCommands.length, 1));
+        return;
+      case "ArrowUp":
+        e.preventDefault();
+        setSlashSelectedIndex((i) => moveSlashSelection(i, filteredSlashCommands.length, -1));
+        return;
+      case "Enter":
+      case "Tab": {
+        const command = filteredSlashCommands[clampedSlashIndex];
+        if (!command) return;
+        e.preventDefault();
+        handleSlashCommandSelect(command);
+        return;
+      }
+      case "Escape":
+        e.preventDefault();
+        setDismissedSlashQuery(slashQuery);
+        return;
+      default:
+        return;
+    }
+  }
+
+  // Combines the "/" slash-command menu's keyboard handling with the "@"
+  // file-mention menu's — both are keyed off the SAME textarea `onKeyDown`,
+  // so each one only acts (and calls `preventDefault()`) while its own menu
+  // is actually open (`handleTextareaKeyDown`/`handleMentionKeyDown` both
+  // no-op immediately otherwise). The two triggers are mutually exclusive in
+  // practice (slash requires the *entire* text to be a bare `/`-token, which
+  // can't also contain an "@" mention), but chaining them defensively (skip
+  // the mention handler once slash already consumed the keystroke) keeps
+  // that invariant from being load-bearing.
+  function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    handleTextareaKeyDown(e);
+    if (e.defaultPrevented) return;
+    handleMentionKeyDown(e);
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -326,6 +416,14 @@ export function Composer({
         <p className="text-xs text-destructive">{describeSpeechError(speech.error)}</p>
       )}
       <div className="relative">
+        {slashMenuOpen && (
+          <SlashCommandMenu
+            commands={filteredSlashCommands}
+            selectedIndex={clampedSlashIndex}
+            onHover={setSlashSelectedIndex}
+            onSelect={handleSlashCommandSelect}
+          />
+        )}
         {mentionTrigger && (
           <FileMentionMenu
             query={mentionTrigger.query}
@@ -352,7 +450,7 @@ export function Composer({
                 const el = e.currentTarget;
                 refreshMentionTrigger(el.value, el.selectionStart ?? el.value.length);
               }}
-              onKeyDown={handleMentionKeyDown}
+              onKeyDown={handleComposerKeyDown}
               onBlur={closeMention}
               placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
             />
