@@ -44,13 +44,67 @@ export interface GithubCommandDeps {
   readSecretLine?: (prompt: string) => Promise<string>;
 }
 
+/**
+ * Masks the pasted PAT with `*` instead of echoing it in cleartext (flagged by an independent
+ * Test & Review pass on this feature: a bare `rl.question()` echoes every character typed/
+ * pasted). Raw-mode masking needs a real TTY on stdin; falls back to the plain `rl.question()`
+ * prompt when stdin is piped/redirected (e.g. CI, or a test harness), since raw mode isn't
+ * meaningful there and forcing it would hang non-interactive callers.
+ */
 async function defaultReadSecretLine(prompt: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    return (await rl.question(prompt)).trim();
-  } finally {
-    rl.close();
+  const stdin = process.stdin;
+  if (!stdin.isTTY) {
+    const rl = createInterface({ input: stdin, output: process.stdout });
+    try {
+      return (await rl.question(prompt)).trim();
+    } finally {
+      rl.close();
+    }
   }
+
+  return new Promise<string>((resolve, reject) => {
+    process.stdout.write(prompt);
+    let value = "";
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding("utf8");
+
+    const cleanup = () => {
+      stdin.removeListener("data", onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+    };
+
+    const onData = (chunk: string) => {
+      for (const char of chunk) {
+        if (char === "\r" || char === "\n") {
+          cleanup();
+          process.stdout.write("\n");
+          resolve(value.trim());
+          return;
+        }
+        if (char === "\u0003") {
+          // Ctrl-C: restore the terminal and let the process exit normally, same as an
+          // interactive readline prompt would on SIGINT.
+          cleanup();
+          process.stdout.write("\n");
+          reject(new Error("aborted"));
+          return;
+        }
+        if (char === "\u007f" || char === "\b") {
+          if (value.length > 0) {
+            value = value.slice(0, -1);
+            process.stdout.write("\b \b");
+          }
+          continue;
+        }
+        value += char;
+        process.stdout.write("*");
+      }
+    };
+
+    stdin.on("data", onData);
+  });
 }
 
 function resolveClientId(options: GithubLoginOptions, env: NodeJS.ProcessEnv): string {

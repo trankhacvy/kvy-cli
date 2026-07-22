@@ -132,6 +132,43 @@ describe("runGithubLogin", () => {
     expect(readGithubToken(homeDir)).toBeNull();
   });
 
+  it("--token: the REAL (non-injected) prompt reads a pasted token via its non-TTY fallback without echoing it back on stdout", async () => {
+    // Exercises `defaultReadSecretLine` itself (no `readSecretLine` override) rather than the
+    // test seam every other case here uses — this is what actually runs in a real headless/
+    // piped-stdin context (CI, this test runner). The raw-mode masking branch needs a real
+    // TTY and isn't exercised here, but this proves the prompt never echoes the raw token
+    // through `process.stdout.write` regardless of which branch runs.
+    const { Readable } = await import("node:stream");
+    const fakeStdin = Readable.from(["gho_realpastetoken\n"]) as unknown as NodeJS.ReadStream;
+    Object.assign(fakeStdin, { isTTY: false });
+    const originalStdin = process.stdin;
+    Object.defineProperty(process, "stdin", { value: fakeStdin, configurable: true });
+
+    const stdoutChunks: string[] = [];
+    const stdoutSpy = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation((chunk: string | Uint8Array) => {
+        stdoutChunks.push(String(chunk));
+        return true;
+      });
+
+    try {
+      const { write, lines } = collectWrites();
+      const code = await runGithubLogin({ useToken: true }, { homeDir, write });
+
+      expect(code).toBe(0);
+      expect(lines.join("")).toContain("Saved GitHub token");
+      expect(readGithubToken(homeDir)).toMatchObject({
+        token: "gho_realpastetoken",
+        method: "pat",
+      });
+      expect(stdoutChunks.join("")).not.toContain("gho_realpastetoken");
+    } finally {
+      stdoutSpy.mockRestore();
+      Object.defineProperty(process, "stdin", { value: originalStdin, configurable: true });
+    }
+  });
+
   it("device flow: fails fast with an explicit message when no client id is configured", async () => {
     const { write, lines } = collectWrites();
     const code = await runGithubLogin({ useToken: false }, { homeDir, write, env: {} });
