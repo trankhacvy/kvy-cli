@@ -275,6 +275,28 @@ describe("createMachineRpcClient", () => {
     );
   });
 
+  it("throws MachineRpcError with the daemon handler's own message (not a generic schema-validation error) when the daemon replies with a sealed {ok:false,error} box", async () => {
+    // Reproduces the daemon's `onRpcRequest` catch path (`daemon/machineRpc.ts`):
+    // a thrown `GitExecError`/`Error` is sealed as `{ok:false, error: <message>}`,
+    // which structurally can never satisfy a real result schema — this must be
+    // special-cased BEFORE schema validation, or the caller only ever sees a
+    // useless "'method' RPC result failed schema validation" instead of the
+    // actual git stderr (docs/features/git-write-actions.md's credential-failure
+    // UX depends on this).
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ ok: false, error: "fatal: could not read Username for 'https://...'" }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    await expect(
+      client.call("git.push", { idempotencyKey: "idem-8", worktree: "/repo" }),
+    ).rejects.toThrow("fatal: could not read Username for 'https://...'");
+  });
+
   it("throws MachineRpcError when the sealed result fails to decrypt", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: true, result: box({ ok: true }) })),

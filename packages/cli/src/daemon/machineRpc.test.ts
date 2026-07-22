@@ -205,7 +205,7 @@ describe("registerMachineRpcHandlers", () => {
 
       const params = spawnParams();
       const first = await callAndAwaitAck(socket, "spawn", seal(params, DEK));
-      expect(open(first, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(first, DEK)).toEqual({ ok: false, error: "workspace path rejected" });
 
       const second = await callAndAwaitAck(socket, "spawn", seal(params, DEK));
       expect(spawnSession).toHaveBeenCalledTimes(2);
@@ -323,7 +323,7 @@ describe("registerMachineRpcHandlers", () => {
       });
 
       const response = await callAndAwaitAck(socket, "spawn", seal(spawnParams(), DEK));
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "boom" });
     });
   });
 
@@ -375,7 +375,7 @@ describe("registerMachineRpcHandlers", () => {
         "resumeSession",
         seal({ sessionId: "sess_1" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "no such session" });
     });
   });
 
@@ -415,7 +415,7 @@ describe("registerMachineRpcHandlers", () => {
         "fs.list",
         seal({ idempotencyKey: "idem_fs_2" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "directory not found" });
     });
   });
 
@@ -483,7 +483,10 @@ describe("registerMachineRpcHandlers", () => {
         "workspace.register",
         seal({ idempotencyKey: "idem_ws_3", directory: "/tmp/fresh-project" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "failed to acquire workspace registry lock",
+      });
     });
 
     describe("with the real default (no mocked-away side effect)", () => {
@@ -566,7 +569,7 @@ describe("registerMachineRpcHandlers", () => {
         "git.status",
         seal({ idempotencyKey: "idem_git_status_2", worktree: "/repo" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
     });
   });
 
@@ -635,7 +638,7 @@ describe("registerMachineRpcHandlers", () => {
         "git.branches",
         seal({ idempotencyKey: "idem_git_branches_2", worktree: "/repo" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
     });
   });
 
@@ -665,7 +668,7 @@ describe("registerMachineRpcHandlers", () => {
         "git.commit",
         seal({ idempotencyKey: "idem_git_commit_2", worktree: "/repo", message: "fix" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
     });
 
     it("replays the cached result for a retried idempotencyKey instead of committing again", async () => {
@@ -692,7 +695,10 @@ describe("registerMachineRpcHandlers", () => {
 
       const params = { idempotencyKey: "idem_git_commit_4", worktree: "/repo", message: "fix" };
       const first = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
-      expect(open(first, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(first, DEK)).toEqual({
+        ok: false,
+        error: "fatal: unable to write commit object",
+      });
 
       const second = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
       expect(gitCommit).toHaveBeenCalledTimes(2);
@@ -761,7 +767,7 @@ describe("registerMachineRpcHandlers", () => {
         "git.push",
         seal({ idempotencyKey: "idem_git_push_2", worktree: "/repo" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: could not read Username" });
     });
 
     it("replays the cached result for a retried idempotencyKey instead of pushing again", async () => {
@@ -813,7 +819,10 @@ describe("registerMachineRpcHandlers", () => {
         "git.renameBranch",
         seal({ idempotencyKey: "idem_git_rename_2", worktree: "/repo", to: "renamed" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "fatal: a branch named 'renamed' already exists",
+      });
     });
 
     it("replays the cached result for a retried idempotencyKey instead of renaming again", async () => {
@@ -889,7 +898,7 @@ describe("registerMachineRpcHandlers", () => {
 
       const params = adoptTakeParams();
       const first = await callAndAwaitAck(socket, "adopt.take", seal(params, DEK));
-      expect(open(first, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(first, DEK)).toEqual({ ok: false, error: "no such provider session" });
 
       const second = await callAndAwaitAck(socket, "adopt.take", seal(params, DEK));
       expect(adoptTake).toHaveBeenCalledTimes(2);
@@ -986,7 +995,7 @@ describe("registerMachineRpcHandlers", () => {
         "adopt.mirror",
         seal(adoptMirrorParams(), DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "ENOENT" });
     });
 
     it("replies with a sealed error when params fail AdoptMirrorParamsSchema", async () => {

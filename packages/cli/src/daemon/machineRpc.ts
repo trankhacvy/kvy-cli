@@ -497,11 +497,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       }
       callback?.(seal(parsedResult.data, deps.dek));
     } catch (error) {
-      logger.error("[machine-rpc] handler threw", {
-        method,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      callback?.(errorBox(deps.dek, "handler-error"));
+      // Forward the handler's own error message (e.g. `GitExecError`'s git
+      // stderr) rather than a flat "handler-error" placeholder — the git
+      // write-action toolbar (docs/features/git-write-actions.md Phase 5)
+      // depends on the real message reaching the user for its
+      // credential-failure UX ("git's own stderr, not a Falcon
+      // abstraction"), and every other handler benefits the same way (e.g.
+      // "fatal: not a git repository" instead of an opaque placeholder).
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("[machine-rpc] handler threw", { method, error: message });
+      callback?.(errorBox(deps.dek, message));
     }
   }
 

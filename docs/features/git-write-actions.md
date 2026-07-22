@@ -164,3 +164,65 @@ pre-existing, repo-wide lint debt in files this feature never touched (verified 
 `packages/cli/src/api/outbox.test.ts`, etc., all last modified by unrelated prior commits — not
 introduced by this work). Every file this feature added or modified was checked in isolation
 (`biome check` scoped to exactly that file list) and is lint-clean.
+
+## Test & Review notes
+
+Independent verification pass (separate agent, worktree `.worktrees/feature-git-write-actions`).
+Ran `pnpm build && pnpm typecheck && pnpm test` repo-wide (all green as reported: falcon
+140 files/1596 tests, `@falcon/web` 110 files/846 tests, `@falcon/server`/e2e cached-clean), then
+verified each phase's acceptance criteria against the real code rather than trusting the
+checkboxes — reading every new daemon handler/wire schema/web module, re-confirming the
+`--force-with-lease`-only grep, the registry-authorization gate (unit tests + a real temp-repo
+integration script), the idempotency-cache replay tests, and the toolbar/select pure-state
+modules. Two real bugs were found and fixed (both re-tested, full suite re-run green after each):
+
+1. **The credential-failure/error-message UX the whole feature is built around didn't actually
+   work.** `daemon/machineRpc.ts`'s `onRpcRequest` caught every handler error (`GitExecError`
+   included) and replaced it with a hardcoded literal `"handler-error"` string before sealing the
+   response — so no caller could ever see git's own stderr, no matter what `gitPush.ts`/
+   `gitCommit.ts` threw. Compounding it, the web `sync/machineRpc.ts` client never checked for
+   that `{ok:false, error}` shape in the *decrypted* result before running it through the
+   method's result-schema `safeParse` (which can only ever fail for an error box, since a real
+   success result never has an `ok` field) — so even a correctly-forwarded message would have
+   been discarded again and replaced with a second, generic `"'method' RPC result failed schema
+   validation"` string. `gitPush.test.ts`'s own "e.g. no credentials configured" test
+   demonstrated this without the implementer noticing: it asserts `error: "handler-error"` for a
+   thrown `"fatal: could not read Username"` — i.e. the test that was supposed to prove the
+   credential-failure UX instead pinned the bug. Fixed both ends: the daemon now seals the
+   handler's real `error.message` (all 13 existing "handler-error"-literal assertions across
+   `machineRpc.test.ts`/`machineRpc.takeoverRace.test.ts` updated to their actual thrown
+   messages, since this is shared dispatch code used by every machine RPC, not just git's), and
+   the web client checks the inner error-box shape before schema validation (new regression test
+   in `sync/__tests__/machineRpc.test.ts`). This also fixes the same, previously-broken error
+   surfacing for the pre-existing read-only `git.status`/`git.diff`/`git.branches` (and every
+   other machine RPC) — not just the new write actions.
+2. **`gitCommit.ts`'s "nothing to commit" detection was unreachable in real usage.** Verified by
+   actually driving the real handlers against a live scratch git repo + a local bare "remote"
+   (never this repo's own origin — see the safety constraints this review operates under): a
+   real `git commit` on a clean tree writes "nothing to commit, working tree clean" to **stdout**
+   and exits non-zero, but `daemon/gitExec.ts`'s `runGit` only ever captured `stderr` for the
+   `GitExecError` message, falling back to Node's generic `"Command failed: git commit -m ..."`
+   wrapper text when stderr was empty — so `gitCommit.ts`'s `NOTHING_TO_COMMIT_RE` could never
+   match against real git output; every unit test that exercised it did so by hand-constructing
+   a `GitExecError` with the right text directly, never through the real stdout/stderr capture
+   that produces it. Fixed `runGit` to fall back to stdout (then `error.message`) when stderr is
+   empty, and added `daemon/gitExec.test.ts` — the first test file in this module that spawns the
+   real `git` binary against a real temp repo (init/config/commit, a `fatal: not a git
+   repository` case confirming stderr-based errors are unaffected, and the stdout-only
+   "nothing to commit" case this bug was about). Re-ran the full real-repo drive afterward
+   (commit → nothing-to-commit → push → rename → push renamed branch → force-push-with-lease →
+   rejected-unauthorized-worktree) end-to-end against the scratch repo/remote and confirmed the
+   bare remote actually received the renamed branch and both commits.
+
+Everything else held up: the wire schemas are genuinely additive and frozen in
+`wire-shapes.json`; `gitWriteGuard.ts`'s registered-workspace authorization rejects before any
+`git` invocation (verified both via the existing unit tests and the real drive script's
+unauthorized-`/tmp` case); `gitPush.ts` never emits bare `--force` (grep-confirmed); the
+`withIdempotencyCache` replay tests genuinely prove single-invocation-per-key semantics; and the
+web toolbar/compare-ref pure-state modules (`git-toolbar-state.ts`,
+`compare-against-select-state.ts`, `git-diff-query.ts`) correctly implement everything their
+acceptance notes claim. The two honestly-flagged jsdom/`@testing-library/react` gaps (compareRef
+re-fetch, force-push dialog gating) are real repo-wide constraints, not something this review
+could close, and are left as-is per the plan's own notes.
+
+No unresolved issues — both bugs found were fixed and re-verified in this same worktree.

@@ -167,6 +167,18 @@ function rpcTarget(machineId: string, method: MachineRpcMethod): string {
   return `m:${machineId}:${method}`;
 }
 
+/** Structural check for the daemon's sealed error-box shape — see the call site's doc comment. */
+function isHandlerErrorBox(value: unknown): value is { ok: false; error: string } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "ok" in value &&
+    (value as { ok: unknown }).ok === false &&
+    "error" in value &&
+    typeof (value as { error: unknown }).error === "string"
+  );
+}
+
 export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
   return {
     async call(method, params) {
@@ -180,6 +192,21 @@ export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
       const opened = await deps.crypto.open<unknown>(response.result);
       if (opened === null) {
         throw new MachineRpcError(`failed to decrypt the '${method}' RPC result`, "decrypt-failed");
+      }
+
+      // The daemon's own `onRpcRequest` (`daemon/machineRpc.ts`) seals a
+      // `{ok:false, error}` box — not a `MachineRpcResults[M]` shape — when
+      // the handler rejected/threw or a dispatch-level check failed (bad
+      // method/params/etc). Every real success result is sealed bare (no
+      // `ok`/`error` envelope — see `RESULT_SCHEMAS`), so this shape is
+      // unambiguous. Checked BEFORE schema validation: falling through to
+      // `safeParse` here would always fail (an error box never matches a
+      // result schema) and replace the handler's real message — e.g. a
+      // `GitExecError`'s git stderr, the whole point of docs/features/
+      // git-write-actions.md's "not a Falcon abstraction" credential-failure
+      // UX — with a useless generic "failed schema validation" string.
+      if (isHandlerErrorBox(opened)) {
+        throw new MachineRpcError(opened.error, "handler-error");
       }
 
       const parsed = RESULT_SCHEMAS[method].safeParse(opened);
