@@ -22,7 +22,7 @@ import {
   startMachineIntegration,
 } from "./machineIntegration.js";
 import type { ProviderSessionResolver } from "./providerSessionResolver.js";
-import type { ResumeSessionDeps } from "./resumeSession.js";
+import { type ResumeSessionDeps, resolveResumeDirectoryFromRecord } from "./resumeSession.js";
 import {
   captureBundleMtimeMs as captureBundleMtimeMsDefault,
   hasBundleBeenReplaced as hasBundleBeenReplacedDefault,
@@ -88,11 +88,15 @@ import type { WorkspaceRootLookup } from "./workspacePath.js";
  * `machineIntegration.ts`), and the transcript indexer
  * (`transcriptIndexer.ts`, started from within `machineIntegration.ts` once
  * a machine client is up) fs-watches actually-registered workspaces instead
- * of nothing. `resolveProviderSession`/`resolveResumeDirectory` still have
- * no real default (resolving a bare provider session id back to a
- * workspace needs transcript-content scanning, a different, later
- * composition — see `providerSessionResolver.ts`'s own doc comment) — they
- * honestly report "unresolved" rather than guessing. `DaemonCommandDeps`
+ * of nothing. `resolveResumeDirectory` now defaults to the real
+ * `resolveResumeDirectoryFromRecord` (`resumeSession.ts`), re-resolving a
+ * persisted session's stored spawn `directory` via `realpath` so
+ * spawn-directory-dedup survives a daemon restart (plan.md §16 "Flow 3 —
+ * spawn-directory-dedup"). `resolveProviderSession` still has no real default
+ * (resolving a bare provider session id back to a workspace needs
+ * transcript-content scanning, a different, later composition — see
+ * `providerSessionResolver.ts`'s own doc comment) — it honestly reports
+ * "unresolved" rather than guessing. `DaemonCommandDeps`
  * exposes all of these as overridable so tests (and any future real
  * `resolveProviderSession`) can plug in a different implementation without
  * touching this wiring again.
@@ -153,7 +157,7 @@ export interface DaemonCommandDeps {
   listWorkspaces: () => Promise<RegisteredWorkspace[]>;
   /** Resolves `adopt.take`/`adopt.mirror`'s bare provider session id to a registered workspace. No real default yet — see this module's own doc comment. */
   resolveProviderSession: ProviderSessionResolver;
-  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in. No real default yet — see this module's own doc comment. */
+  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in. Defaults to `resumeSession.ts`'s `resolveResumeDirectoryFromRecord` (re-`realpath`s the persisted session's stored `directory`) — see this module's own doc comment. */
   resolveResumeDirectory: (
     session: PersistedSession,
   ) => string | null | undefined | Promise<string | null | undefined>;
@@ -266,7 +270,7 @@ export function createDaemonCommandDeps(
     resolveWorkspaceRoot: createWorkspaceRootLookup({ homeDir }),
     listWorkspaces: createTranscriptIndexerWorkspaceLister({ homeDir }),
     resolveProviderSession: async () => null,
-    resolveResumeDirectory: () => undefined,
+    resolveResumeDirectory: resolveResumeDirectoryFromRecord,
     ...overrides,
   };
 }

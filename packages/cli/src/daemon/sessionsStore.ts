@@ -21,8 +21,15 @@ import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SessionEncryptionData } from "./types.js";
 
-/** Bumped whenever this shape changes; written into every sessions.json. */
-export const SESSIONS_SCHEMA_VERSION = 1;
+/**
+ * Bumped whenever this shape changes; written into every sessions.json.
+ * v2 added the optional `directory` field below. No migration branch is
+ * needed: the read path (`readPersistedSessions`/`isPersistedSession`) is
+ * version-agnostic and the change is purely additive — a v1 file whose
+ * records have no `directory` key still loads fine (`directory === undefined`).
+ * The bump is only an honest on-disk marker of the current shape.
+ */
+export const SESSIONS_SCHEMA_VERSION = 2;
 
 /**
  * A single session's durable resume record. `metadata` is whatever opaque
@@ -36,6 +43,19 @@ export interface PersistedSession {
   encryption: SessionEncryptionData;
   /** `Date.now()` at the time this record was last written — drives expiry below. */
   savedAt: number;
+  /**
+   * The resolved real (symlink-followed) directory this session was spawned
+   * into (`TrackedSession.directory`, plan.md §16 "Flow 3 —
+   * spawn-directory-dedup"). Persisted so the spawn-dedup guard survives a
+   * daemon restart: without it, a session restored from disk and re-tracked
+   * by a `resumeSession` relaunch would come back with `directory:
+   * undefined` and could never match `spawnEngine.ts`'s
+   * `scanForLiveSessionInDirectory` again. Optional — absent for a
+   * terminal-started session the daemon only learned about via
+   * `/session-started` (no `trackSpawned` recorded a directory), and absent
+   * from any pre-v2 `sessions.json`.
+   */
+  directory?: string;
 }
 
 interface SessionsFileShape {
@@ -69,6 +89,7 @@ function isPersistedSession(value: unknown): value is PersistedSession {
   if (c.provider !== undefined && c.provider !== "claude-code" && c.provider !== "codex") {
     return false;
   }
+  if (c.directory !== undefined && typeof c.directory !== "string") return false;
   return isSessionEncryptionData(c.encryption);
 }
 

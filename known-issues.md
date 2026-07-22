@@ -3,6 +3,66 @@
 Tracks issues found during testing, whether still open (why it was parked, what a real fix
 needs) or resolved (`~~struck through~~`, what landed and how it was verified).
 
+## ~~Flow 3's spawn-dedup guard doesn't survive a daemon restart~~ — RESOLVED (in worktree, not yet merged)
+
+**Status:** Fixed on a git worktree off `v2-pty-injection` (branch left for the user to merge —
+not yet landed on `v2-pty-injection` itself). Full `pnpm build`/`typecheck` clean; the three new
+tests and the full `packages/cli` suite pass (the only red is `transcriptIndexer.test.ts`'s
+two fs-watch timing tests, which flake under full-suite parallel CPU contention and pass in
+isolation — unrelated to this change, which touches nothing on that path).
+
+**Where:** `packages/cli/src/daemon/` — `types.ts` (`TrackedSession.directory`),
+`sessionsStore.ts` (`PersistedSession`), `sessionRegistry.ts`, `resumeSession.ts`,
+`commands.ts`, `machineIntegration.ts`.
+
+**What was broken:** `FL3.2` ("spawn-directory-dedup") added `TrackedSession.directory` so the
+web wizard couldn't spawn two `falcon claude --starting-mode remote` processes in the same
+directory (`spawnEngine.ts`'s `scanForLiveSessionInDirectory`, exact-string-equality on
+`session.directory === realDirectory`). But that field was **in-memory only**: `PersistedSession`
+(`sessions.json`) had no `directory`, so it was never written to disk. On daemon restart,
+`resumeSession.ts`'s relaunch called `deps.registry.trackSpawned(launched.pid)` with no directory
+(the `ResumeSessionRegistry.trackSpawned(pid)` interface didn't even declare one), so every
+session restored after a restart came back with `directory: undefined` and could never dedup-match
+again.
+
+**Fix landed (matches the design):**
+1. **`sessionsStore.ts`** — added optional `directory?: string` to `PersistedSession` (purely
+   additive; a pre-v2 `sessions.json` with no `directory` key still loads fine as `undefined`),
+   with a light `typeof` guard in `isPersistedSession`. Bumped `SESSIONS_SCHEMA_VERSION` 1→2 as an
+   honest on-disk marker (no migration branch — the read path is version-agnostic and additive,
+   documented in a comment).
+2. **`sessionRegistry.ts`** — `toPersisted()` and `findResumable()`'s live branch now both carry
+   `directory` through (from `session.directory` / `live.directory`).
+3. **`resumeSession.ts`** — widened `ResumeSessionRegistry.trackSpawned` to
+   `(pid: number, directory?: string)` (the real `SessionRegistry.trackSpawned` already accepted
+   the optional second param, so no impl change there) and passed the already-resolved `directory`
+   variable through at the relaunch call site.
+4. **`resolveResumeDirectory`** — replaced the `() => undefined` stub in **both** `commands.ts`
+   and `machineIntegration.ts` with a shared, exported `resolveResumeDirectoryFromRecord`
+   (`resumeSession.ts`): re-resolves `session.directory` via `realpath` (`node:fs/promises`,
+   matching `workspacePath.ts`'s convention) and returns it, or `undefined` when unset or `realpath`
+   throws (directory deleted/unmounted) — failing the resume cleanly rather than guessing. Design
+   recommendation followed: re-resolve rather than trust the stored string, since dedup matching is
+   exact-string-equality against a freshly-resolved spawn target.
+
+**Deviation from the design:** the design described giving each of the two stubs its own real
+implementation; instead a single shared `resolveResumeDirectoryFromRecord` is exported from
+`resumeSession.ts` and referenced from both call sites (DRY, identical behavior). No other
+deviations. `FL3.2` had already landed the in-memory half (`TrackedSession.directory`,
+`trackSpawned(pid, directory?)`, the dedup scan), so this pass only added the durability half.
+
+**Out of scope (deliberately left open):** a still-running session that's never explicitly
+resumed after a restart stays invisible to spawn-dedup — that's a separate, still-undesigned
+issue and was not touched here.
+
+**Verified:** `pnpm build` + `pnpm typecheck` clean across all packages. New coverage:
+`sessionRegistry.test.ts` (end-to-end persist → discard in-memory state → fresh registry →
+restore → re-track → `scanForLiveSessionInDirectory` matches again), `resumeSession.test.ts`
+(the relaunch calls `trackSpawned` with the resolved directory as its second argument),
+`sessionsStore.test.ts` (a `schemaVersion:1` record with no `directory` key loads as
+`directory === undefined`, no data loss). Full `packages/cli` suite: 1515/1517 (the 2 reds are
+the pre-existing `transcriptIndexer` fs-watch flakes noted above).
+
 ## ~~Recovery code can silently create a disconnected account instead of failing~~ — RESOLVED
 
 **Where:** `docs/bug-fix-plan.md` issue #12 / execution unit `BF3.2` ("recovery-code-restore").

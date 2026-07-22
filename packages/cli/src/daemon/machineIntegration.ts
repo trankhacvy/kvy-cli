@@ -115,6 +115,7 @@ import type { ProviderSessionResolver } from "./providerSessionResolver.js";
 import {
   type ResumeSessionDeps,
   type ResumeSessionRegistry,
+  resolveResumeDirectoryFromRecord,
   resumeSession as resumeSessionCore,
 } from "./resumeSession.js";
 import type { PersistedSession } from "./sessionsStore.js";
@@ -159,7 +160,7 @@ export interface MachineIntegrationDeps {
   listWorkspaces: () => Promise<RegisteredWorkspace[]>;
   /** Resolves `adopt.take`/`adopt.mirror`'s bare provider session id back to a registered workspace. No real default yet — see module header. */
   resolveProviderSession: ProviderSessionResolver;
-  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in, from its persisted record. No real default yet (matches `resumeSession.ts`'s own doc comment: honestly fail rather than guess). */
+  /** Resolves the working directory to relaunch a `resumeSession` RPC's target in, from its persisted record. Defaults to `resumeSession.ts`'s `resolveResumeDirectoryFromRecord` — re-`realpath`s the persisted `directory` (honestly fails, returning `undefined`, when it's unset or no longer resolvable, rather than guessing). */
   resolveResumeDirectory: (
     session: PersistedSession,
   ) => string | null | undefined | Promise<string | null | undefined>;
@@ -204,7 +205,7 @@ export function createMachineIntegrationDeps(
     resolveWorkspaceRoot: () => null,
     listWorkspaces: async () => [],
     resolveProviderSession: async () => null,
-    resolveResumeDirectory: () => undefined,
+    resolveResumeDirectory: resolveResumeDirectoryFromRecord,
     heartbeatIntervalMs: 60_000,
     ...required,
     ...overrides,

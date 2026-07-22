@@ -116,6 +116,11 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
       encryption: session.encryption,
       metadata: session.metadata,
       savedAt: now(),
+      // Carried through so spawn-directory-dedup survives a daemon restart
+      // (plan.md §16 "Flow 3 — spawn-directory-dedup"): a session restored
+      // from disk and re-tracked by a `resumeSession` relaunch keeps the
+      // directory `scanForLiveSessionInDirectory` matches against.
+      directory: session.directory,
     };
   }
 
@@ -191,6 +196,7 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
           encryption: live.encryption,
           metadata: live.metadata,
           savedAt: now(),
+          directory: live.directory,
         };
       }
       return resumable.get(sessionId) ?? null;

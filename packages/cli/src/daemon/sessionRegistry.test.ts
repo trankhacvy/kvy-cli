@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createSessionRegistry } from "./sessionRegistry.js";
 import { persistSession, readPersistedSessions } from "./sessionsStore.js";
+import { scanForLiveSessionInDirectory } from "./spawnEngine.js";
 
 const ENCRYPTION = {
   encryptionKey: "wrapped-dek",
@@ -103,6 +104,44 @@ describe("sessionRegistry", () => {
       sessionId: "sess_1",
       directory: "/Users/vy/projects/falcon",
     });
+  });
+
+  it("a session's spawn directory survives a daemon restart end-to-end, so spawn-dedup matches it again (plan.md §16 'Flow 3 — spawn-directory-dedup')", async () => {
+    const realDirectory = "/Users/vy/projects/falcon";
+
+    // --- daemon instance #1: a daemon-spawned session, tracked with its
+    //     directory, whose /session-started webhook lands and persists it ---
+    const first = createSessionRegistry({ homeDir });
+    first.trackSpawned(4242, realDirectory);
+    first.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
+
+    // onSessionStarted's persistSession() fires-and-forgets — let it land on
+    // disk (with the directory) before we simulate the restart.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const onDisk = await readPersistedSessions(homeDir);
+    expect(onDisk.sess_1?.directory).toBe(realDirectory);
+
+    // --- daemon restart: a BRAND-NEW registry, no shared in-memory state,
+    //     restoring purely from sessions.json ---
+    const second = createSessionRegistry({ homeDir });
+    expect(await second.restore()).toBe(1);
+
+    // (1) the restored resumable record carries the directory...
+    const resumable = second.findResumable("sess_1");
+    expect(resumable?.directory).toBe(realDirectory);
+
+    // (2) ...and once re-tracked the way an actual `resumeSession` relaunch
+    //     does (trackSpawned with the resolved directory, then the relaunched
+    //     process's /session-started webhook landing), spawn-directory-dedup
+    //     matches the session in that directory again — the whole point of
+    //     persisting `directory`. Before this fix the restored session came
+    //     back with `directory: undefined` and could never match.
+    second.trackSpawned(5555, resumable?.directory);
+    second.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 5555);
+    expect(scanForLiveSessionInDirectory(second.getSessions(), realDirectory)).toBe("sess_1");
+
+    // Let the second registry's own fire-and-forget persist land before teardown.
+    await new Promise((resolve) => setTimeout(resolve, 20));
   });
 
   it("persists to sessions.json whenever the webhook carries encryption material", async () => {

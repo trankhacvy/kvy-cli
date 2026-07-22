@@ -103,6 +103,54 @@ describe("sessionsStore", () => {
     });
   });
 
+  it("round-trips the optional directory field (Flow 3 — spawn-directory-dedup)", async () => {
+    const session = fixture({ directory: "/Users/vy/projects/falcon" });
+    await persistSession(homeDir, session);
+
+    expect((await readPersistedSessions(homeDir)).sess_1?.directory).toBe(
+      "/Users/vy/projects/falcon",
+    );
+  });
+
+  it("loads a pre-v2 schemaVersion:1 record with no `directory` key as `directory === undefined` (backward compat)", async () => {
+    // Hand-written to look exactly like a `sessions.json` a prior daemon
+    // version wrote — schemaVersion 1, and a record with no `directory` key
+    // at all. The `directory` field is purely additive, so this must still
+    // load without throwing or dropping the entry.
+    await writeFile(
+      sessionsFilePath(homeDir),
+      JSON.stringify({
+        schemaVersion: 1,
+        sessions: {
+          sess_legacy: {
+            sessionId: "sess_legacy",
+            provider: "claude-code",
+            encryption: {
+              encryptionKey: "wrapped-dek",
+              seq: 7,
+              metadataVersion: 2,
+              agentStateVersion: 3,
+            },
+            savedAt: FIXED_SAVED_AT,
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const all = await readPersistedSessions(homeDir);
+    const legacy = all.sess_legacy;
+    expect(legacy).toBeDefined();
+    expect(legacy?.directory).toBeUndefined();
+    // No data loss on the other fields.
+    expect(legacy).toEqual({
+      sessionId: "sess_legacy",
+      provider: "claude-code",
+      encryption: { encryptionKey: "wrapped-dek", seq: 7, metadataVersion: 2, agentStateVersion: 3 },
+      savedAt: FIXED_SAVED_AT,
+    });
+  });
+
   it("removePersistedSession deletes only the named entry", async () => {
     await persistSession(homeDir, fixture({ sessionId: "sess_1" }));
     await persistSession(homeDir, fixture({ sessionId: "sess_2" }));
