@@ -69,4 +69,17 @@ describe("createMockNewSessionActions", () => {
     const candidates = await actions.listImportCandidates("/Users/vy/Documents");
     expect(candidates).toEqual([]);
   });
+
+  it("listBranches returns the seeded branches, including one current and one already checked out elsewhere", async () => {
+    const actions = createMockNewSessionActions("mach-1");
+    const branches = await actions.listBranches("/Users/vy/projects/falcon");
+    expect(branches.some((b) => b.isCurrent)).toBe(true);
+    expect(branches.some((b) => b.checkedOutAt !== undefined)).toBe(true);
+  });
+
+  it("listBranches returns an empty array for a directory with none", async () => {
+    const actions = createMockNewSessionActions("mach-1");
+    const branches = await actions.listBranches("/Users/vy/Documents");
+    expect(branches).toEqual([]);
+  });
 });

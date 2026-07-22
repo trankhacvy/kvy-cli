@@ -34,14 +34,32 @@ describe("canAdvance", () => {
     expect(canAdvance("import", { ...base, importCandidate: CANDIDATE })).toBe(true);
   });
 
-  it("options step: fine when branch is disabled, requires a non-blank name when enabled", () => {
+  it("options step: fine in repo-root mode, requires a non-blank name in new-branch/existing-branch mode", () => {
     const base = { ...INITIAL_FORM, machineId: "m1", directory: "/tmp" };
     expect(canAdvance("options", base)).toBe(true);
-    expect(canAdvance("options", { ...base, branchEnabled: true, branchName: "" })).toBe(false);
-    expect(canAdvance("options", { ...base, branchEnabled: true, branchName: "  " })).toBe(false);
-    expect(canAdvance("options", { ...base, branchEnabled: true, branchName: "task-1" })).toBe(
-      true,
-    );
+    expect(
+      canAdvance("options", { ...base, branchMode: "new-branch" as const, branchName: "" }),
+    ).toBe(false);
+    expect(
+      canAdvance("options", { ...base, branchMode: "new-branch" as const, branchName: "  " }),
+    ).toBe(false);
+    expect(
+      canAdvance("options", { ...base, branchMode: "new-branch" as const, branchName: "task-1" }),
+    ).toBe(true);
+    expect(
+      canAdvance("options", {
+        ...base,
+        branchMode: "existing-branch" as const,
+        branchName: "",
+      }),
+    ).toBe(false);
+    expect(
+      canAdvance("options", {
+        ...base,
+        branchMode: "existing-branch" as const,
+        branchName: "main",
+      }),
+    ).toBe(true);
   });
 
   it("review step is always advanceable", () => {
@@ -72,7 +90,7 @@ describe("buildSpawnRequest", () => {
     expect(() => buildSpawnRequest(INITIAL_FORM)).toThrow();
   });
 
-  it("omits model when blank and branch when disabled", () => {
+  it("omits model when blank and branch in repo-root mode", () => {
     const request = buildSpawnRequest({
       ...INITIAL_FORM,
       machineId: "m1",
@@ -89,13 +107,13 @@ describe("buildSpawnRequest", () => {
     });
   });
 
-  it("trims model and includes the branch/worktree option when enabled", () => {
+  it("trims model and includes the branch/worktree option in new-branch mode", () => {
     const request = buildSpawnRequest({
       ...INITIAL_FORM,
       machineId: "m1",
       directory: "/repo",
       model: " opus ",
-      branchEnabled: true,
+      branchMode: "new-branch",
       branchName: " task-1 ",
       createWorktree: true,
     });
@@ -107,6 +125,30 @@ describe("buildSpawnRequest", () => {
       branch: { name: "task-1", createWorktree: true },
       continueFrom: undefined,
     });
+  });
+
+  it("respects createWorktree: false in new-branch mode", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      branchMode: "new-branch",
+      branchName: "task-1",
+      createWorktree: false,
+    });
+    expect(request.branch).toEqual({ name: "task-1", createWorktree: false });
+  });
+
+  it("existing-branch mode always isolates in a fresh worktree, regardless of createWorktree", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      branchMode: "existing-branch",
+      branchName: "main",
+      createWorktree: false,
+    });
+    expect(request.branch).toEqual({ name: "main", createWorktree: true });
   });
 
   it("carries the picked provider (e.g. codex) through to the spawn request", () => {

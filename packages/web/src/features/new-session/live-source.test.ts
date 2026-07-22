@@ -105,6 +105,7 @@ describe("useLiveNewSessionActions", () => {
       actions.spawn({ directory: "/tmp", provider: "claude-code", permissionMode: "default" }),
     ).rejects.toThrow(/isn't unwrapped yet/i);
     await expect(actions.listImportCandidates("/tmp")).rejects.toThrow(/isn't unwrapped yet/i);
+    await expect(actions.listBranches("/tmp")).rejects.toThrow(/isn't unwrapped yet/i);
   });
 
   it("also stays pending for an empty machineId (no machine chosen yet)", async () => {

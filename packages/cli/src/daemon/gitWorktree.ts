@@ -19,12 +19,36 @@
  * failing — `git worktree add` is not itself idempotent, so this checks
  * first.
  *
+ * **Checked-out-elsewhere guard** (docs/features/worktree-isolation.md
+ * Phase 3): git forbids the same branch from being checked out in two
+ * worktrees at once — attempting it fails with a raw `fatal: '<branch>' is
+ * already used by worktree at '<path>'` from the underlying `git checkout`/
+ * `git worktree add` call. `assertNotCheckedOutElsewhere` pre-flights this
+ * (via `git for-each-ref --format=%(worktreepath)`) and throws a typed,
+ * readable `GitWorktreeError` instead, on both the in-place-checkout path
+ * (`createWorktree: false`) and the worktree-creation path. A branch already
+ * checked out at the exact target directory is fine (the idempotent-reuse
+ * case above already returns early for a worktree that exists on disk, but
+ * this also covers "worktree dir doesn't exist locally yet — race with
+ * another daemon/process" the same way).
+ *
+ * **`.git/info/exclude` entry:** after creating a worktree, this
+ * idempotently appends a `.worktrees/` line to the parent repo's
+ * `.git/info/exclude` so the container directory doesn't show up as
+ * untracked clutter in the repo's own `git status`. Best-effort only — see
+ * `ensureWorktreesExcluded`'s own doc comment for why a failure here is
+ * swallowed rather than failing the spawn. `git >= 2.31` is required for
+ * `%(worktreepath)` to actually populate; an older git silently returns an
+ * empty column, degrading the checked-out-elsewhere guard to a no-op for
+ * that one atom (not a crash) — there is no minimum-git-version check
+ * anywhere in the daemon today.
+ *
  * Every git invocation is a plain `execFile` call, hand-wrapped (not
  * `util.promisify`) for the same mockability reason as `processScan.ts`'s
  * `runPs` — no dependence on `execFile`'s `promisify.custom` symbol.
  */
 import { execFile } from "node:child_process";
-import { mkdir, stat } from "node:fs/promises";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { SpawnParams } from "@falcon/wire";
 
@@ -64,6 +88,89 @@ async function branchExists(git: GitExec, cwd: string, branchName: string): Prom
   }
 }
 
+/**
+ * Returns the absolute path of the worktree `branchName` is currently
+ * checked out in, or `undefined` if it isn't checked out in any worktree
+ * (including: the branch doesn't exist yet, git predates 2.31's
+ * `%(worktreepath)` atom and silently returns an empty column, or the
+ * branch is simply free). Callers only call this once `branchExists` has
+ * already confirmed the branch is real — `for-each-ref` on a nonexistent
+ * ref just yields no output either way, so this alone can't distinguish
+ * "doesn't exist" from "not checked out anywhere."
+ */
+async function findCheckedOutWorktree(
+  git: GitExec,
+  cwd: string,
+  branchName: string,
+): Promise<string | undefined> {
+  const output = await git(
+    ["for-each-ref", `--format=%(worktreepath)`, `refs/heads/${branchName}`],
+    cwd,
+  );
+  const trimmed = output.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/**
+ * Throws a typed, human-readable `GitWorktreeError` — instead of letting
+ * git's own raw stderr ("fatal: '<branch>' is already used by worktree at
+ * '<path>'") surface — when `branchName` is already checked out in some
+ * worktree other than `targetDir` (git forbids the same branch in two
+ * worktrees at once, whether via `checkout` or `worktree add`;
+ * docs/features/worktree-isolation.md Phase 3). A no-op when the branch is
+ * either unchecked-out or already checked out at `targetDir` itself (the
+ * idempotent-reuse case).
+ */
+async function assertNotCheckedOutElsewhere(
+  git: GitExec,
+  repoDirectory: string,
+  branchName: string,
+  targetDir: string,
+): Promise<void> {
+  const checkedOutAt = await findCheckedOutWorktree(git, repoDirectory, branchName);
+  if (checkedOutAt !== undefined && checkedOutAt !== targetDir) {
+    throw new GitWorktreeError(
+      `branch "${branchName}" is already checked out at ${checkedOutAt} — a branch can only be checked out in one worktree`,
+    );
+  }
+}
+
+/**
+ * Idempotently ensures the parent repo's `.git/info/exclude` ignores the
+ * `.worktrees/` container this module creates worktrees under, so a
+ * worktree-mode spawn doesn't show up as untracked clutter in the repo's
+ * own `git status` (docs/features/worktree-isolation.md Phase 3). Purely a
+ * git-status hygiene nicety, not the actual protection against anything —
+ * best-effort: `repoDirectory` not being a plain repo (e.g. itself a
+ * worktree, where `.git` is a file, not a directory) or any read/write
+ * failure is swallowed rather than failing the spawn. This module has no
+ * logger to report the swallow through (unlike `gitDiff.ts`'s injected
+ * `Logger`), so there is nothing else to do with a failure here besides
+ * ignore it.
+ */
+async function ensureWorktreesExcluded(repoDirectory: string): Promise<void> {
+  const excludePath = path.join(repoDirectory, ".git", "info", "exclude");
+  try {
+    const gitDirStat = await stat(path.join(repoDirectory, ".git"));
+    if (!gitDirStat.isDirectory()) return;
+
+    let existing = "";
+    try {
+      existing = await readFile(excludePath, "utf8");
+    } catch {
+      // Missing `info/exclude` is fine — every line in it, including the
+      // one below, is written fresh.
+    }
+    const lines = existing.split("\n");
+    if (lines.some((line) => line.trim() === ".worktrees/")) return;
+
+    const separator = existing === "" || existing.endsWith("\n") ? "" : "\n";
+    await writeFile(excludePath, `${existing}${separator}.worktrees/\n`, "utf8");
+  } catch {
+    // Best-effort: an exclude-write failure must not fail the spawn.
+  }
+}
+
 /** Rejects a branch name that could be used to escape `.worktrees/` via `path.join`. */
 function assertSafeBranchName(branchName: string): void {
   if (branchName.trim() === "" || branchName.split("/").some((segment) => segment === "..")) {
@@ -92,6 +199,9 @@ export async function ensureBranchWorkspace(
 
   if (!branch.createWorktree) {
     const exists = await branchExists(git, repoDirectory, branch.name);
+    if (exists) {
+      await assertNotCheckedOutElsewhere(git, repoDirectory, branch.name, repoDirectory);
+    }
     await git(exists ? ["checkout", branch.name] : ["checkout", "-b", branch.name], repoDirectory);
     return { directory: repoDirectory };
   }
@@ -108,11 +218,15 @@ export async function ensureBranchWorkspace(
 
   await mkdir(path.dirname(worktreeDir), { recursive: true });
   const exists = await branchExists(git, repoDirectory, branch.name);
+  if (exists) {
+    await assertNotCheckedOutElsewhere(git, repoDirectory, branch.name, worktreeDir);
+  }
   await git(
     exists
       ? ["worktree", "add", worktreeDir, branch.name]
       : ["worktree", "add", worktreeDir, "-b", branch.name],
     repoDirectory,
   );
+  await ensureWorktreesExcluded(repoDirectory);
   return { directory: worktreeDir };
 }

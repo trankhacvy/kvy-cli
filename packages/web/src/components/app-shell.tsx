@@ -2,6 +2,7 @@
 
 import {
   BellIcon,
+  GitBranchIcon,
   HomeIcon,
   type LucideIcon,
   PaletteIcon,
@@ -37,6 +38,7 @@ const workspaceNav: NavItem[] = [
 const settingsNav: NavItem[] = [
   { href: "/settings/appearance/", label: "Appearance", icon: PaletteIcon },
   { href: "/settings/notifications/", label: "Notifications", icon: BellIcon },
+  { href: "/settings/git/", label: "Git", icon: GitBranchIcon },
   { href: "/settings/recovery/", label: "Recovery", icon: ShieldCheckIcon },
 ];
 

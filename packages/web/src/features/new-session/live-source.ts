@@ -128,6 +128,7 @@ function pendingNewSessionActions(): NewSessionActions {
     registerWorkspace: notReady,
     spawn: notReady,
     listImportCandidates: notReady,
+    listBranches: notReady,
   };
 }
 

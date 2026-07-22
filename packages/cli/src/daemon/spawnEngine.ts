@@ -47,14 +47,24 @@
  * so nothing stops two wizard submissions (or a retried RPC with a fresh
  * `idempotencyKey`, since idempotency-key replay only dedups an *exact*
  * retry) from launching two independent provider processes in the same
- * directory. Right after workspace validation resolves `realDirectory` —
- * before any branch/worktree resolution or launch — `deps.
- * findLiveSessionInDirectory` (when supplied) is consulted; a match returns
- * that session's existing `sessionId` instead of spawning a duplicate. The
- * daemon composition (`machineIntegration.ts`) wires this to a scan of the
- * session registry's `getSessions()` for a live `TrackedSession` whose
- * `directory` matches (`scanForLiveSessionInDirectory` below) — this module
- * stays registry-agnostic, same "injected seam" convention as
+ * directory. AFTER workspace validation resolves `realDirectory` AND (when
+ * `params.branch` is set) branch/worktree resolution has picked the final
+ * `spawnDirectory` — but before any launch — `deps.
+ * findLiveSessionInDirectory` (when supplied) is consulted against
+ * `spawnDirectory`; a match returns that session's existing `sessionId`
+ * instead of spawning a duplicate. Keying on the *final* directory (not the
+ * pre-worktree `realDirectory`, docs/features/worktree-isolation.md Phase 3)
+ * is what makes dedup actually protect the directory the session runs in —
+ * repo root for repo-root spawns, `.worktrees/<branch>` for worktree spawns
+ * — at the cost of two worktree-mode submissions for the *same* branch never
+ * deduping against a *third* submission at the bare repo root; checking
+ * after `ensureBranchWorkspace` (itself idempotent) is safe, since creating/
+ * reusing the worktree before discovering a live session there has no
+ * side effect worth avoiding. The daemon composition (`machineIntegration.ts`)
+ * wires `findLiveSessionInDirectory` to a scan of the session registry's
+ * `getSessions()` for a live `TrackedSession` whose `directory` matches
+ * (`scanForLiveSessionInDirectory` below) — this module stays
+ * registry-agnostic, same "injected seam" convention as
  * `resolveWorkspaceRoot`. Symmetrically, `deps.trackSpawned` (when supplied)
  * is called with the launched pid and `spawnDirectory` right after a
  * successful launch, so a *later* spawn's dedup scan can find THIS session —
@@ -206,20 +216,6 @@ export async function spawnSession(
     throw new SpawnError(`workspace path rejected (${validation.reason}): ${params.directory}`);
   }
 
-  const existingSessionId = deps.findLiveSessionInDirectory?.(validation.realDirectory);
-  if (existingSessionId) {
-    // A live session is already tracked in this exact directory — return it
-    // instead of launching a second, competing process there (plan.md §16
-    // "Flow 3 — spawn-directory-dedup"). Checked before any branch/worktree
-    // resolution or launch attempt, so a duplicate submission never even
-    // reaches the process launcher.
-    logger.info(
-      "[spawn-engine] a live session already exists in this directory, returning it instead of spawning a duplicate",
-      { directory: validation.realDirectory, sessionId: existingSessionId },
-    );
-    return { sessionId: existingSessionId };
-  }
-
   let spawnDirectory = validation.realDirectory;
   if (params.branch) {
     try {
@@ -233,6 +229,25 @@ export async function spawnSession(
         `branch/worktree setup failed: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
+  }
+
+  // Dedup must protect the directory the session will actually run in —
+  // repo root for repo-root spawns, `.worktrees/<branch>` for worktree
+  // spawns — so this is checked against `spawnDirectory` (the *final*,
+  // post-branch-resolution target), not `validation.realDirectory` (plan.md
+  // §16 "Flow 3 — spawn-directory-dedup", docs/features/worktree-isolation.md
+  // Phase 3). Checking after `ensureBranchWorkspace` is safe: that call is
+  // idempotent, so creating/reusing the worktree before discovering an
+  // existing live session there never has a side effect worth avoiding.
+  const existingSessionId = deps.findLiveSessionInDirectory?.(spawnDirectory);
+  if (existingSessionId) {
+    // A live session is already tracked in this exact directory — return it
+    // instead of launching a second, competing process there.
+    logger.info(
+      "[spawn-engine] a live session already exists in this directory, returning it instead of spawning a duplicate",
+      { directory: spawnDirectory, sessionId: existingSessionId },
+    );
+    return { sessionId: existingSessionId };
   }
 
   const expanded = expandEnvVars(deps.envTemplate ?? {}, baseEnv);

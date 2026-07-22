@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -109,5 +109,149 @@ describe("ensureBranchWorkspace", () => {
         { git },
       ),
     ).rejects.toThrow(/not a git repository/);
+  });
+
+  describe("checked-out-elsewhere guard (docs/features/worktree-isolation.md Phase 3)", () => {
+    it("throws a typed error instead of running `worktree add` when the branch is already checked out in a different worktree", async () => {
+      const otherWorktree = path.join(root, "elsewhere");
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") return ""; // branch exists
+        if (args[0] === "for-each-ref") return `${otherWorktree}\n`;
+        throw new Error(`unexpected git call: ${args.join(" ")}`);
+      });
+
+      await expect(
+        ensureBranchWorkspace(
+          { repoDirectory: root, branch: { name: "shared-branch", createWorktree: true } },
+          { git },
+        ),
+      ).rejects.toThrow(/shared-branch.*already checked out at.*elsewhere/);
+      expect(git).not.toHaveBeenCalledWith(
+        expect.arrayContaining(["worktree", "add"]),
+        expect.anything(),
+      );
+    });
+
+    it("throws the same typed error on the in-place checkout path (createWorktree: false)", async () => {
+      const otherWorktree = path.join(root, ".worktrees", "shared-branch");
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") return "";
+        if (args[0] === "for-each-ref") return `${otherWorktree}\n`;
+        throw new Error(`unexpected git call: ${args.join(" ")}`);
+      });
+
+      await expect(
+        ensureBranchWorkspace(
+          { repoDirectory: root, branch: { name: "shared-branch", createWorktree: false } },
+          { git },
+        ),
+      ).rejects.toThrow(GitWorktreeError);
+      expect(git).not.toHaveBeenCalledWith(["checkout", "shared-branch"], root);
+    });
+
+    it("does not throw when the branch is already checked out at the exact target worktree directory (idempotent reuse)", async () => {
+      const expectedDir = path.join(root, ".worktrees", "task-1");
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") return "";
+        if (args[0] === "for-each-ref") return `${expectedDir}\n`;
+        return "";
+      });
+
+      const result = await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
+        { git },
+      );
+      expect(result).toEqual({ directory: expectedDir });
+      expect(git).toHaveBeenCalledWith(["worktree", "add", expectedDir, "task-1"], root);
+    });
+  });
+
+  describe("idempotent .git/info/exclude entry (docs/features/worktree-isolation.md Phase 3)", () => {
+    it("adds '.worktrees/' to a fresh .git/info/exclude after creating a worktree", async () => {
+      await mkdir(path.join(root, ".git", "info"), { recursive: true });
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        if (args[0] === "for-each-ref") return "";
+        return "";
+      });
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
+        { git },
+      );
+
+      const contents = await readFile(path.join(root, ".git", "info", "exclude"), "utf8");
+      expect(contents).toBe(".worktrees/\n");
+    });
+
+    it("only gains the '.worktrees/' line once across two calls", async () => {
+      await mkdir(path.join(root, ".git", "info"), { recursive: true });
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        if (args[0] === "for-each-ref") return "";
+        return "";
+      });
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
+        { git },
+      );
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-2", createWorktree: true } },
+        { git },
+      );
+
+      const contents = await readFile(path.join(root, ".git", "info", "exclude"), "utf8");
+      expect(contents.split("\n").filter((line) => line.trim() === ".worktrees/")).toHaveLength(1);
+    });
+
+    it("preserves existing exclude content and appends on its own line", async () => {
+      await mkdir(path.join(root, ".git", "info"), { recursive: true });
+      await writeFile(path.join(root, ".git", "info", "exclude"), "*.log", "utf8");
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        if (args[0] === "for-each-ref") return "";
+        return "";
+      });
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
+        { git },
+      );
+
+      const contents = await readFile(path.join(root, ".git", "info", "exclude"), "utf8");
+      expect(contents).toBe("*.log\n.worktrees/\n");
+    });
+
+    it("does not fail the spawn when .git isn't a directory (repoDirectory is itself a worktree)", async () => {
+      await writeFile(path.join(root, ".git"), "gitdir: /elsewhere/.git/worktrees/task-1", "utf8");
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        if (args[0] === "for-each-ref") return "";
+        return "";
+      });
+
+      const result = await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
+        { git },
+      );
+      expect(result).toEqual({ directory: path.join(root, ".worktrees", "task-1") });
+    });
+
+    it("does not reject when the exclude write itself fails", async () => {
+      // No `.git` directory at all in `root` — `stat` throws, caught silently.
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        if (args[0] === "for-each-ref") return "";
+        return "";
+      });
+
+      await expect(
+        ensureBranchWorkspace(
+          { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
+          { git },
+        ),
+      ).resolves.toEqual({ directory: path.join(root, ".worktrees", "task-1") });
+    });
   });
 });

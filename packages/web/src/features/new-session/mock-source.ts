@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import type {
+  BranchItem,
   DirectoryListing,
   ImportCandidate,
   NewSessionActions,
@@ -60,6 +61,35 @@ const MOCK_IMPORT_CANDIDATES: Map<string, ImportCandidate[]> = new Map([
         title: "Wire up the git diff panel",
         lastActivityAt: Date.now() - 2 * 60 * 60_000,
         running: false,
+      },
+    ],
+  ],
+]);
+
+/**
+ * `directory` → simulated `git.branches` result — only `/Users/vy/projects/falcon`
+ * has any (same "not every seeded directory needs one" precedent as
+ * `MOCK_IMPORT_CANDIDATES` above), and includes one `isCurrent` branch plus
+ * one with `checkedOutAt` set so the existing-branch picker's disabled-row
+ * UI is exercisable against the mock even before the real sync-engine
+ * wiring lands.
+ */
+const MOCK_BRANCHES: Map<string, BranchItem[]> = new Map([
+  [
+    "/Users/vy/projects/falcon",
+    [
+      { name: "main", isCurrent: true, lastCommitAt: Math.floor(Date.now() / 1000) - 3_600 },
+      {
+        name: "wf/in-progress",
+        isCurrent: false,
+        checkedOutAt: "/Users/vy/projects/falcon/.worktrees/wf/in-progress",
+        lastCommitAt: Math.floor(Date.now() / 1000) - 7_200,
+      },
+      {
+        name: "wf/done-task",
+        isCurrent: false,
+        upstream: "origin/wf/done-task",
+        lastCommitAt: Math.floor(Date.now() / 1000) - 86_400,
       },
     ],
   ],
@@ -135,6 +165,11 @@ export function createMockNewSessionActions(_machineId: string): NewSessionActio
     async listImportCandidates(directory) {
       await delay(LATENCY_MS);
       return MOCK_IMPORT_CANDIDATES.get(directory) ?? [];
+    },
+
+    async listBranches(directory) {
+      await delay(LATENCY_MS);
+      return MOCK_BRANCHES.get(directory) ?? [];
     },
   };
 }
