@@ -140,6 +140,22 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:git.commit" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:git.push" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:git.renameBranch" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:github.checks" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:commands.list" },
     });
     expect(socket.emitted).toContainEqual({
@@ -197,7 +213,7 @@ describe("registerMachineRpcHandlers", () => {
 
       const params = spawnParams();
       const first = await callAndAwaitAck(socket, "spawn", seal(params, DEK));
-      expect(open(first, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(first, DEK)).toEqual({ ok: false, error: "workspace path rejected" });
 
       const second = await callAndAwaitAck(socket, "spawn", seal(params, DEK));
       expect(spawnSession).toHaveBeenCalledTimes(2);
@@ -315,7 +331,7 @@ describe("registerMachineRpcHandlers", () => {
       });
 
       const response = await callAndAwaitAck(socket, "spawn", seal(spawnParams(), DEK));
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "boom" });
     });
   });
 
@@ -367,7 +383,7 @@ describe("registerMachineRpcHandlers", () => {
         "resumeSession",
         seal({ sessionId: "sess_1" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "no such session" });
     });
   });
 
@@ -407,7 +423,7 @@ describe("registerMachineRpcHandlers", () => {
         "fs.list",
         seal({ idempotencyKey: "idem_fs_2" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "directory not found" });
     });
   });
 
@@ -475,7 +491,10 @@ describe("registerMachineRpcHandlers", () => {
         "workspace.register",
         seal({ idempotencyKey: "idem_ws_3", directory: "/tmp/fresh-project" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "failed to acquire workspace registry lock",
+      });
     });
 
     describe("with the real default (no mocked-away side effect)", () => {
@@ -558,7 +577,7 @@ describe("registerMachineRpcHandlers", () => {
         "git.status",
         seal({ idempotencyKey: "idem_git_status_2", worktree: "/repo" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
     });
   });
 
@@ -627,7 +646,247 @@ describe("registerMachineRpcHandlers", () => {
         "git.branches",
         seal({ idempotencyKey: "idem_git_branches_2", worktree: "/repo" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
+    });
+  });
+
+  describe("git.commit", () => {
+    it("decrypts params, calls gitCommit, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const gitCommit = vi.fn(async () => ({ committed: true, commitSha: "abc1234" }));
+      register(socket, { gitCommit });
+
+      const params = { idempotencyKey: "idem_git_commit_1", worktree: "/repo", message: "fix" };
+      const response = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
+
+      expect(gitCommit).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ committed: true, commitSha: "abc1234" });
+    });
+
+    it("replies with a sealed error when gitCommit throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        gitCommit: vi.fn(async () => {
+          throw new Error("fatal: not a git repository");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.commit",
+        seal({ idempotencyKey: "idem_git_commit_2", worktree: "/repo", message: "fix" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of committing again", async () => {
+      const socket = new FakeSocket();
+      const gitCommit = vi.fn(async () => ({ committed: true, commitSha: "abc1234" }));
+      register(socket, { gitCommit });
+
+      const params = { idempotencyKey: "idem_git_commit_3", worktree: "/repo", message: "fix" };
+      const first = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
+      const second = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
+
+      expect(gitCommit).toHaveBeenCalledOnce();
+      expect(open(first, DEK)).toEqual({ committed: true, commitSha: "abc1234" });
+      expect(open(second, DEK)).toEqual({ committed: true, commitSha: "abc1234" });
+    });
+
+    it("does NOT cache a rejected attempt — a retry re-runs gitCommit", async () => {
+      const socket = new FakeSocket();
+      const gitCommit = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("fatal: unable to write commit object"))
+        .mockResolvedValueOnce({ committed: true, commitSha: "def5678" });
+      register(socket, { gitCommit });
+
+      const params = { idempotencyKey: "idem_git_commit_4", worktree: "/repo", message: "fix" };
+      const first = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
+      expect(open(first, DEK)).toEqual({
+        ok: false,
+        error: "fatal: unable to write commit object",
+      });
+
+      const second = await callAndAwaitAck(socket, "git.commit", seal(params, DEK));
+      expect(gitCommit).toHaveBeenCalledTimes(2);
+      expect(open(second, DEK)).toEqual({ committed: true, commitSha: "def5678" });
+    });
+
+    it("re-runs gitCommit for the same idempotencyKey with different params", async () => {
+      const socket = new FakeSocket();
+      const gitCommit = vi
+        .fn()
+        .mockResolvedValueOnce({ committed: true, commitSha: "aaa1111" })
+        .mockResolvedValueOnce({ committed: true, commitSha: "bbb2222" });
+      register(socket, { gitCommit });
+
+      const key = "idem_git_commit_5";
+      const first = await callAndAwaitAck(
+        socket,
+        "git.commit",
+        seal({ idempotencyKey: key, worktree: "/repo", message: "first" }, DEK),
+      );
+      const second = await callAndAwaitAck(
+        socket,
+        "git.commit",
+        seal({ idempotencyKey: key, worktree: "/repo", message: "second" }, DEK),
+      );
+
+      expect(gitCommit).toHaveBeenCalledTimes(2);
+      expect(open(first, DEK)).toEqual({ committed: true, commitSha: "aaa1111" });
+      expect(open(second, DEK)).toEqual({ committed: true, commitSha: "bbb2222" });
+    });
+  });
+
+  describe("git.push", () => {
+    it("decrypts params, calls gitPush, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const gitPush = vi.fn(async () => ({
+        ok: true as const,
+        remote: "origin",
+        branch: "main",
+        forced: false,
+      }));
+      register(socket, { gitPush });
+
+      const params = { idempotencyKey: "idem_git_push_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "git.push", seal(params, DEK));
+
+      expect(gitPush).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        ok: true,
+        remote: "origin",
+        branch: "main",
+        forced: false,
+      });
+    });
+
+    it("replies with a sealed error when gitPush throws (e.g. no credentials configured)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        gitPush: vi.fn(async () => {
+          throw new Error("fatal: could not read Username");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.push",
+        seal({ idempotencyKey: "idem_git_push_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: could not read Username" });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of pushing again", async () => {
+      const socket = new FakeSocket();
+      const gitPush = vi.fn(async () => ({
+        ok: true as const,
+        remote: "origin",
+        branch: "main",
+        forced: true,
+      }));
+      register(socket, { gitPush });
+
+      const params = { idempotencyKey: "idem_git_push_3", worktree: "/repo", force: true };
+      const first = await callAndAwaitAck(socket, "git.push", seal(params, DEK));
+      const second = await callAndAwaitAck(socket, "git.push", seal(params, DEK));
+
+      expect(gitPush).toHaveBeenCalledOnce();
+      expect(open(first, DEK)).toEqual(open(second, DEK));
+    });
+  });
+
+  describe("git.renameBranch", () => {
+    it("decrypts params, calls gitRenameBranch, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const gitRenameBranch = vi.fn(async () => ({
+        ok: true as const,
+        branch: "renamed",
+        hadUpstream: true,
+      }));
+      register(socket, { gitRenameBranch });
+
+      const params = { idempotencyKey: "idem_git_rename_1", worktree: "/repo", to: "renamed" };
+      const response = await callAndAwaitAck(socket, "git.renameBranch", seal(params, DEK));
+
+      expect(gitRenameBranch).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ ok: true, branch: "renamed", hadUpstream: true });
+    });
+
+    it("replies with a sealed error when gitRenameBranch throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        gitRenameBranch: vi.fn(async () => {
+          throw new Error("fatal: a branch named 'renamed' already exists");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.renameBranch",
+        seal({ idempotencyKey: "idem_git_rename_2", worktree: "/repo", to: "renamed" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "fatal: a branch named 'renamed' already exists",
+      });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of renaming again", async () => {
+      const socket = new FakeSocket();
+      const gitRenameBranch = vi.fn(async () => ({
+        ok: true as const,
+        branch: "renamed",
+        hadUpstream: false,
+      }));
+      register(socket, { gitRenameBranch });
+
+      const params = { idempotencyKey: "idem_git_rename_3", worktree: "/repo", to: "renamed" };
+      const first = await callAndAwaitAck(socket, "git.renameBranch", seal(params, DEK));
+      const second = await callAndAwaitAck(socket, "git.renameBranch", seal(params, DEK));
+
+      expect(gitRenameBranch).toHaveBeenCalledOnce();
+      expect(open(first, DEK)).toEqual(open(second, DEK));
+    });
+  });
+
+  describe("github.checks", () => {
+    it("decrypts params, calls getGithubChecks, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGithubChecks = vi.fn(async () => ({ state: "no-token" as const }));
+      register(socket, { getGithubChecks });
+
+      const params = { idempotencyKey: "idem_github_checks_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "github.checks", seal(params, DEK));
+
+      expect(getGithubChecks).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ state: "no-token" });
+    });
+
+    it("replies with a sealed error when getGithubChecks throws (e.g. a GitHub API 500)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getGithubChecks: vi.fn(async () => {
+          throw new Error("GitHub API request failed: HTTP 500");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "github.checks",
+        seal({ idempotencyKey: "idem_github_checks_2", worktree: "/repo" }, DEK),
+      );
+      // The shared `onRpcRequest` catch clause forwards the handler's own
+      // thrown message (see this module's doc comment / `git.commit`'s
+      // sibling test above) rather than a flat "handler-error" placeholder —
+      // this test predates that change (docs/features/git-write-actions.md),
+      // so it's updated to match the now-current, strictly more useful
+      // behavior every handler shares.
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "GitHub API request failed: HTTP 500",
+      });
     });
   });
 
@@ -661,7 +920,13 @@ describe("registerMachineRpcHandlers", () => {
         "commands.list",
         seal({ idempotencyKey: "idem_commands_2", worktree: "/repo" }, DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      // The shared `onRpcRequest` catch clause forwards the handler's own
+      // thrown message (see this module's doc comment / `git.commit`'s
+      // sibling test above) rather than a flat "handler-error" placeholder —
+      // this test predates that change (docs/features/git-write-actions.md),
+      // so it's updated to match the now-current, strictly more useful
+      // behavior every handler shares.
+      expect(open(response, DEK)).toEqual({ ok: false, error: "boom" });
     });
   });
 
@@ -720,7 +985,7 @@ describe("registerMachineRpcHandlers", () => {
 
       const params = adoptTakeParams();
       const first = await callAndAwaitAck(socket, "adopt.take", seal(params, DEK));
-      expect(open(first, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(first, DEK)).toEqual({ ok: false, error: "no such provider session" });
 
       const second = await callAndAwaitAck(socket, "adopt.take", seal(params, DEK));
       expect(adoptTake).toHaveBeenCalledTimes(2);
@@ -817,7 +1082,7 @@ describe("registerMachineRpcHandlers", () => {
         "adopt.mirror",
         seal(adoptMirrorParams(), DEK),
       );
-      expect(open(response, DEK)).toEqual({ ok: false, error: "handler-error" });
+      expect(open(response, DEK)).toEqual({ ok: false, error: "ENOENT" });
     });
 
     it("replies with a sealed error when params fail AdoptMirrorParamsSchema", async () => {

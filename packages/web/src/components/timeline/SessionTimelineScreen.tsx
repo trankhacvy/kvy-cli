@@ -31,6 +31,7 @@ import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ComposerControls } from "./ComposerControls";
+import { MobileHandoffButton } from "./MobileHandoffDialog";
 import { SessionActionsMenu } from "./SessionActionsMenu";
 import { SessionSidePanel } from "./SessionSidePanel";
 import { Timeline } from "./Timeline";
@@ -93,7 +94,9 @@ export function SessionTimelineScreen({
   // synced. Needed alongside `workspacePath` to fetch this session's custom
   // slash commands (docs/competitive-notes-omnara.md #18): `commands.list`
   // is a *machine*-scoped RPC (`m:<machineId>:commands.list`), so both ids
-  // are required before it can even be attempted.
+  // are required before it can even be attempted. Also threaded into
+  // `SessionSidePanel`'s Checks tab (docs/features/github-pr-ci.md) so it
+  // can gate its live `ChecksPanel` on both being present.
   const machineId = session?.machineId ?? null;
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
@@ -201,7 +204,9 @@ function SessionTimelineBody({
   /** The session's owning machine id (`SessionRow.machineId`), or `null`
    * until the row has synced — `commands.list` (docs/competitive-notes-
    * omnara.md #18) is a *machine*-scoped RPC, so both this and
-   * `workspacePath` gate the "/" autocomplete's fetch below. */
+   * `workspacePath` gate the "/" autocomplete's fetch below. Also threaded
+   * into `SessionSidePanel`'s Checks tab alongside `workspacePath`
+   * (docs/features/github-pr-ci.md). */
   machineId: string | null;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
@@ -236,6 +241,9 @@ function SessionTimelineBody({
             <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
             </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/session/${sessionId}/checks/`}>Checks</Link>
+            </Button>
             <Button
               type="button"
               variant={panelOpen ? "secondary" : "outline"}
@@ -256,6 +264,7 @@ function SessionTimelineBody({
               <Globe className="size-3.5" />
               Preview
             </Button>
+            <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu sessionId={sessionId} disabled={isDisabled} />
           </div>
         </header>
@@ -306,7 +315,12 @@ function SessionTimelineBody({
           />
         </div>
       </div>
-      {panelOpen && <SessionSidePanel />}
+      {panelOpen && (
+        <SessionSidePanel
+          machineId={machineId ?? undefined}
+          worktree={workspacePath ?? undefined}
+        />
+      )}
     </div>
   );
 }

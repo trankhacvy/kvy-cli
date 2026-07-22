@@ -171,9 +171,20 @@ async function ensureWorktreesExcluded(repoDirectory: string): Promise<void> {
   }
 }
 
-/** Rejects a branch name that could be used to escape `.worktrees/` via `path.join`. */
-function assertSafeBranchName(branchName: string): void {
-  if (branchName.trim() === "" || branchName.split("/").some((segment) => segment === "..")) {
+/**
+ * Rejects a branch name that could be used to escape `.worktrees/` via
+ * `path.join`, or be parsed as a `git` option instead of a ref (a
+ * leading `-`). Exported: `gitRenameBranch.ts` (docs/features/
+ * git-write-actions.md Phase 2) reuses this verbatim to guard its own
+ * user-controlled `to`/`from` branch names — same argv-injection hazard,
+ * different call site.
+ */
+export function assertSafeBranchName(branchName: string): void {
+  if (
+    branchName.trim() === "" ||
+    branchName.startsWith("-") ||
+    branchName.split("/").some((segment) => segment === "..")
+  ) {
     throw new GitWorktreeError(`unsafe branch name: ${branchName}`);
   }
 }

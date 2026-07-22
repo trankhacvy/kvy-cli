@@ -37,6 +37,7 @@ export type FalconCommand =
   | { type: "adopt"; list: boolean; remote: boolean }
   | { type: "shim"; action: "install" | "uninstall" | "status" }
   | { type: "adapters"; action: "install" | "upgrade" }
+  | { type: "github"; action: "login" | "logout" | "status"; token: boolean; clientId?: string }
   | { type: "update" };
 
 /** Thrown for malformed Falcon-level commands. Never thrown for provider passthrough. */
@@ -105,6 +106,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseShim(rest);
     case "adapters":
       return parseAdapters(rest);
+    case "github":
+      return parseGithub(rest);
     case "update":
       return { type: "update" };
     default:
@@ -349,6 +352,40 @@ function parseAdapters(rest: string[]): FalconCommand {
     `Unknown "falcon adapters" action: ${action ?? "(none)"}`,
     "falcon adapters install|upgrade",
   );
+}
+
+const GITHUB_USAGE = "falcon github login [--token] [--client-id <id>] | logout | status";
+
+/** `falcon github login|logout|status` (docs/features/github-pr-ci.md "GITHUB AUTH"). `login`'s `--token` takes no inline value — it's a bare toggle for the stdin-prompt path (`commands/github.ts`), never a flag a token could be passed to directly (that would leak into shell history/`ps`). */
+function parseGithub(rest: string[]): FalconCommand {
+  const [action, ...opts] = rest;
+  if (action === "logout" || action === "status") {
+    return { type: "github", action, token: false };
+  }
+  if (action === "login") {
+    let token = false;
+    let clientId: string | undefined;
+    for (let i = 0; i < opts.length; i++) {
+      const flag = opts[i] as string;
+      if (flag === "--token") {
+        token = true;
+        continue;
+      }
+      if (flag === "--client-id") {
+        clientId = requireValue(flag, opts[i + 1], GITHUB_USAGE);
+        i++;
+        continue;
+      }
+      throw new ArgParseError(`Unknown "falcon github login" flag: ${flag}`, GITHUB_USAGE);
+    }
+    return {
+      type: "github",
+      action: "login",
+      token,
+      ...(clientId !== undefined ? { clientId } : {}),
+    };
+  }
+  throw new ArgParseError(`Unknown "falcon github" action: ${action ?? "(none)"}`, GITHUB_USAGE);
 }
 
 function requireValue(flag: string, value: string | undefined, usage: string): string {

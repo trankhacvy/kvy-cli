@@ -1,7 +1,7 @@
 "use client";
 
 import { Mic, Paperclip, Square } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PromptInput,
   PromptInputBody,
@@ -12,9 +12,20 @@ import {
   PromptInputTools,
 } from "@/components/ai-elements/prompt-input";
 import { Badge } from "@/components/ui/badge";
+import {
+  applyMentionSelection,
+  type FileMentionActions,
+  type FileMentionEntry,
+  findMentionTrigger,
+  type MentionTrigger,
+  mockFileMentionActions,
+} from "@/features/file-mentions";
 import { loadDraft, saveDraft } from "@/features/session-control";
 import type { SlashCommand } from "@/features/slash-commands";
 import { formatBytes } from "@/lib/format";
+import { appendTranscript, describeSpeechError } from "@/lib/speech-input";
+import { useSpeechInput } from "@/lib/use-speech-input";
+import { FileMentionMenu } from "./FileMentionMenu";
 import { SlashCommandMenu } from "./SlashCommandMenu";
 import {
   applySlashCommandSelection,
@@ -62,6 +73,15 @@ interface AttachmentPreview {
  *    follow-up rather than blocking, so the submit button never morphs into
  *    a stop button. Interrupt is a separate stop button shown only while
  *    `working` (it would otherwise steal the queue path).
+ *  - **Voice input** (docs/competitive-notes-omnara.md #19): the mic button
+ *    drives `useSpeechInput` (`@/lib/use-speech-input`), a thin wrapper
+ *    around the browser's `SpeechRecognition` — disabled with an
+ *    explanatory tooltip in browsers lacking it (Firefox and most
+ *    non-Chromium browsers). Each finalized phrase appends to the draft
+ *    (`appendTranscript`, `@/lib/speech-input`); the still-being-spoken
+ *    phrase shows as a live italic preview instead of being merged into the
+ *    editable text, so it never fights the user's own typing in the same
+ *    box.
  *  - **"/" slash-command autocomplete** (docs/competitive-notes-omnara.md
  *    #18): while the *entire* current text is one bare leading-slash token
  *    (`detectSlashQuery`, `slash-command-state.ts`), a `SlashCommandMenu`
@@ -83,6 +103,20 @@ interface AttachmentPreview {
  *
  * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
  * says the underlying CLI process is gone (`ended`/`failed`).
+ *
+ * **"@" file-mention autocomplete** (docs/competitive-notes-omnara.md #17):
+ * typing "@" opens a searchable popover over real repo files
+ * (`@/features/file-mentions` — `fileMentionActions` defaults to that
+ * feature's `mockFileMentionActions`, same not-yet-wired-to-a-live-backend
+ * seam as every other `features/*` actions prop in this app). Trigger
+ * detection/insertion is pure logic (`mention-trigger.ts`) driven off the
+ * textarea's own `onChange`/`onSelect` (cursor moves without typing, e.g.
+ * arrow keys or a click, still update/close the popover); `ArrowUp`/
+ * `ArrowDown`/`Enter`/`Tab`/`Escape` are intercepted in `onKeyDown` — passed
+ * to `PromptInputTextarea` as the *external* handler, which
+ * `PromptInputTextarea` itself always calls first and skips its own
+ * Enter-submits-the-form behavior when we've already called
+ * `preventDefault()`.
  */
 export function Composer({
   sessionId,
@@ -98,6 +132,7 @@ export function Composer({
   onStop,
   footerControls,
   slashCommands = [],
+  fileMentionActions = mockFileMentionActions,
 }: {
   sessionId: string;
   onSend: (text: string) => void;
@@ -124,12 +159,47 @@ export function Composer({
    * fetching it itself. Defaults to `[]` (no autocomplete) for every
    * existing call site/test that doesn't pass one. */
   slashCommands?: SlashCommand[];
+  /** Data source for the "@" file-mention popover — defaults to a static
+   * mock set (`@/features/file-mentions`'s `mockFileMentionActions`) until
+   * a caller wires in `createFsFileMentionActions` against a live machine
+   * RPC client. */
+  fileMentionActions?: FileMentionActions;
 }) {
   const [text, setText] = useState(() => loadDraft(sessionId));
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [dismissedSlashQuery, setDismissedSlashQuery] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [mentionTrigger, setMentionTrigger] = useState<MentionTrigger | null>(null);
+  const [mentionEntries, setMentionEntries] = useState<FileMentionEntry[]>([]);
+  const [mentionHighlight, setMentionHighlight] = useState(0);
+  const mentionRequestRef = useRef(0);
+
+  // A finalized voice-dictation phrase appends to whatever's already in the
+  // draft (functional update so a same-tick keystroke and a same-tick
+  // dictated phrase can't clobber one another) and persists it exactly like
+  // `handleTextChange` below.
+  const handleDictatedText = useCallback(
+    (transcript: string) => {
+      setText((prev) => {
+        const next = appendTranscript(prev, transcript);
+        saveDraft(sessionId, next);
+        return next;
+      });
+    },
+    [sessionId],
+  );
+  const speech = useSpeechInput(handleDictatedText);
+
+  // The session ending mid-dictation (`disabled` flips true) should close
+  // the mic rather than leave it silently listening into a composer that
+  // can no longer send.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `speech.stop` is stable (useCallback, no deps) — only re-run when `disabled` itself flips.
+  useEffect(() => {
+    if (disabled) speech.stop();
+  }, [disabled]);
 
   const slashQuery = detectSlashQuery(text);
   const filteredSlashCommands =
@@ -144,7 +214,78 @@ export function Composer({
   // gets the right draft rather than the previous session's leftover text.
   useEffect(() => {
     setText(loadDraft(sessionId));
+    setMentionTrigger(null);
+    setMentionEntries([]);
   }, [sessionId]);
+
+  // Re-derives the "@" trigger from the textarea's current text + cursor
+  // position on every change and cursor move, kicking off a (possibly
+  // async) search when one is active. Guards against out-of-order
+  // responses via a monotonic request id — only the most recent call's
+  // result is ever applied.
+  function refreshMentionTrigger(value: string, cursor: number) {
+    const trigger = findMentionTrigger(value, cursor);
+    setMentionTrigger(trigger);
+    setMentionHighlight(0);
+    if (!trigger) {
+      setMentionEntries([]);
+      return;
+    }
+    const requestId = ++mentionRequestRef.current;
+    fileMentionActions.search(trigger.query).then(
+      (results) => {
+        if (mentionRequestRef.current === requestId) setMentionEntries(results);
+      },
+      () => {
+        if (mentionRequestRef.current === requestId) setMentionEntries([]);
+      },
+    );
+  }
+
+  function closeMention() {
+    setMentionTrigger(null);
+    setMentionEntries([]);
+  }
+
+  function selectMention(entry: FileMentionEntry) {
+    if (!mentionTrigger) return;
+    const result = applyMentionSelection(text, mentionTrigger, entry.path);
+    handleTextChange(result.text);
+    closeMention();
+    // The textarea is controlled (`value={text}`) — its DOM value only
+    // reflects `result.text` after this render commits, so the caret can
+    // only be repositioned on the next frame.
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(result.cursor, result.cursor);
+      }
+    });
+  }
+
+  function handleMentionKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (!mentionTrigger) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setMentionHighlight((i) =>
+        mentionEntries.length === 0 ? 0 : (i + 1) % mentionEntries.length,
+      );
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setMentionHighlight((i) =>
+        mentionEntries.length === 0 ? 0 : (i - 1 + mentionEntries.length) % mentionEntries.length,
+      );
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      const chosen = mentionEntries[mentionHighlight];
+      if (!chosen) return; // no suggestions yet — let Enter submit / Tab move focus as usual
+      e.preventDefault();
+      selectMention(chosen);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      closeMention();
+    }
+  }
 
   // Clears the in-flight attachment strip (and revokes its object URLs) once
   // every attach call this render started has settled — not per-file (this
@@ -209,6 +350,21 @@ export function Composer({
     }
   }
 
+  // Combines the "/" slash-command menu's keyboard handling with the "@"
+  // file-mention menu's — both are keyed off the SAME textarea `onKeyDown`,
+  // so each one only acts (and calls `preventDefault()`) while its own menu
+  // is actually open (`handleTextareaKeyDown`/`handleMentionKeyDown` both
+  // no-op immediately otherwise). The two triggers are mutually exclusive in
+  // practice (slash requires the *entire* text to be a bare `/`-token, which
+  // can't also contain an "@" mention), but chaining them defensively (skip
+  // the mention handler once slash already consumed the keystroke) keeps
+  // that invariant from being load-bearing.
+  function handleComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    handleTextareaKeyDown(e);
+    if (e.defaultPrevented) return;
+    handleMentionKeyDown(e);
+  }
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = ""; // allow re-selecting the same file(s) consecutively
@@ -253,6 +409,12 @@ export function Composer({
       )}
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
+      {speech.listening && speech.interimText && (
+        <p className="text-xs text-muted-foreground italic">{speech.interimText}…</p>
+      )}
+      {speech.error && speech.error !== "no-speech" && speech.error !== "aborted" && (
+        <p className="text-xs text-destructive">{describeSpeechError(speech.error)}</p>
+      )}
       <div className="relative">
         {slashMenuOpen && (
           <SlashCommandMenu
@@ -262,14 +424,34 @@ export function Composer({
             onSelect={handleSlashCommandSelect}
           />
         )}
+        {mentionTrigger && (
+          <FileMentionMenu
+            query={mentionTrigger.query}
+            entries={mentionEntries}
+            highlightedIndex={mentionHighlight}
+            onHighlight={setMentionHighlight}
+            onSelect={selectMention}
+          />
+        )}
         <PromptInput onSubmit={handleSubmit}>
           <PromptInputBody>
             <PromptInputTextarea
+              ref={textareaRef}
               className="max-h-[32vh] overflow-y-auto"
               value={text}
               disabled={disabled}
-              onChange={(e) => handleTextChange(e.currentTarget.value)}
-              onKeyDown={handleTextareaKeyDown}
+              onChange={(e) => {
+                const value = e.currentTarget.value;
+                const cursor = e.currentTarget.selectionStart ?? value.length;
+                handleTextChange(value);
+                refreshMentionTrigger(value, cursor);
+              }}
+              onSelect={(e) => {
+                const el = e.currentTarget;
+                refreshMentionTrigger(el.value, el.selectionStart ?? el.value.length);
+              }}
+              onKeyDown={handleComposerKeyDown}
+              onBlur={closeMention}
               placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
             />
           </PromptInputBody>
@@ -297,11 +479,20 @@ export function Composer({
                 <Paperclip className="size-4" />
               </PromptInputButton>
               <PromptInputButton
-                disabled
-                tooltip="Voice input isn't available yet"
-                aria-label="Voice input"
+                disabled={disabled || !speech.supported}
+                variant={speech.listening ? "destructive" : "ghost"}
+                tooltip={
+                  speech.supported
+                    ? speech.listening
+                      ? "Stop voice input"
+                      : "Voice input"
+                    : "Voice input isn't supported in this browser"
+                }
+                onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                aria-label={speech.listening ? "Stop voice input" : "Voice input"}
+                aria-pressed={speech.listening}
               >
-                <Mic className="size-4" />
+                <Mic className={speech.listening ? "size-4 animate-pulse" : "size-4"} />
               </PromptInputButton>
               {working && (
                 <PromptInputButton
