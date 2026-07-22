@@ -13,7 +13,10 @@
  * `adopt.take`/`adopt.mirror`, and the Git panel's `git.status`/`git.diff`
  * (plan.md §16 "4.1 Git panel") — plus `git.branches` (docs/features/
  * worktree-isolation.md, the New Session wizard's existing-branch worktree
- * picker) — are in scope here —
+ * picker) and `provider.account` (docs/competitive-notes-omnara.md #9
+ * "Provider account inspection + usage metering" — Settings → Providers'
+ * per-machine account card, `providerAccountInfo.ts`'s local-config read) —
+ * are in scope here —
  * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
  * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
  * the same way without touching this module's dispatch shape.
@@ -39,10 +42,13 @@
  * `git.diff`/`git.branches` need none either, for the same reason as
  * `fs.list`: they only read current repository state, so a retry just
  * re-reads it — unlike `adopt.mirror`'s "re-reading a file mid-write twice"
- * hazard, there's no mid-write file here to race. All three still carry
- * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
- * carries a caller-minted key") for uniformity with the rest of this RPC
- * family, it's just unused by these handlers.
+ * hazard, there's no mid-write file here to race. `provider.account` joins
+ * this same no-cache group for the same reason again — it only reads
+ * whatever's currently on disk in the local CLI's own config files, so a
+ * retry is just another read. All four still carry `idempotencyKey` on the
+ * wire (design: "every caller-retriable machine RPC carries a caller-minted
+ * key") for uniformity with the rest of this RPC family, it's just unused by
+ * these handlers.
  * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
  * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
  * retried resume of the same session is not a "double spawn" risk:
@@ -106,6 +112,10 @@ import {
   GitStatusParamsSchema,
   type GitStatusResult,
   GitStatusResultSchema,
+  type ProviderAccountParams,
+  ProviderAccountParamsSchema,
+  type ProviderAccountResult,
+  ProviderAccountResultSchema,
   ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
   type SpawnParams,
@@ -127,6 +137,7 @@ import {
 import { getGitBranches as getGitBranchesDefault } from "./gitBranches.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
+import { getProviderAccountInfo as getProviderAccountInfoDefault } from "./providerAccountInfo.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
 export const MACHINE_RPC_METHODS = [
@@ -138,6 +149,7 @@ export const MACHINE_RPC_METHODS = [
   "git.status",
   "git.diff",
   "git.branches",
+  "provider.account",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -164,6 +176,8 @@ export interface MachineRpcDeps {
   getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
   /** Backs the `git.branches` RPC (New Session wizard's existing-branch worktree picker, docs/features/worktree-isolation.md). Injectable for tests; defaults to `gitBranches.ts`'s real `git for-each-ref` parse. Throws on failure. */
   getGitBranches?: (params: GitBranchesParams) => Promise<GitBranchesResult>;
+  /** Backs the `provider.account` RPC (Settings → Providers, docs/competitive-notes-omnara.md #9). Injectable for tests; defaults to `providerAccountInfo.ts`'s real local-config read. Never throws (see that module's own doc comment). */
+  getProviderAccountInfo?: (params: ProviderAccountParams) => Promise<ProviderAccountResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -290,6 +304,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
+  const getProviderAccountInfo = deps.getProviderAccountInfo ?? getProviderAccountInfoDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
 
@@ -369,6 +384,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GitBranchesParamsSchema,
       resultSchema: GitBranchesResultSchema,
       handle: getGitBranches as (params: unknown) => Promise<unknown>,
+    },
+    "provider.account": {
+      paramsSchema: ProviderAccountParamsSchema,
+      resultSchema: ProviderAccountResultSchema,
+      handle: getProviderAccountInfo as (params: unknown) => Promise<unknown>,
     },
     "adopt.take": {
       paramsSchema: AdoptTakeParamsSchema,

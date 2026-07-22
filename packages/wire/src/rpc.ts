@@ -178,6 +178,58 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `provider.account` machine RPC (docs/competitive-notes-omnara.md #9
+// "Provider account inspection + usage metering"): Settings → Providers'
+// per-machine, per-provider account snapshot — read straight off the local
+// CLI's own auth config files (`~/.claude.json`'s `oauthAccount`/
+// `cachedUsageUtilization`, `~/.codex/auth.json`'s ChatGPT id-token claims —
+// see `packages/cli/src/daemon/providerAccountInfo.ts`), never a live call
+// to the provider's own API. `idempotencyKey` is carried for uniformity
+// with the rest of this RPC family (this module's own header comment) even
+// though the handler is a pure read with nothing to replay, same as
+// `git.status`/`git.branches`.
+export const ProviderAccountParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  provider: z.enum(["claude-code", "codex"]),
+});
+export type ProviderAccountParams = z.infer<typeof ProviderAccountParamsSchema>;
+
+// One usage-limit window as the local CLI's own cache reports it (Claude
+// Code's `~/.claude.json` `cachedUsageUtilization.utilization.{five_hour,
+// seven_day}` today) — `label` and the bucket period itself come straight
+// from whatever the CLI happens to track, never invented or normalized to a
+// fixed "monthly" cadence the CLI doesn't actually use.
+export const ProviderUsageMeterSchema = z.object({
+  label: z.string(),
+  /** 0-100 in the common case; a provider can report a promo/grace overage above 100. */
+  percentUsed: z.number(),
+  /** ISO 8601 instant this usage window resets. */
+  resetsAt: z.string(),
+});
+export type ProviderUsageMeter = z.infer<typeof ProviderUsageMeterSchema>;
+
+// Every field past `provider`/`authenticated` is optional and omitted
+// rather than fabricated whenever the local config doesn't carry it (design
+// principle: no silent data loss, but also no invented data) — e.g. Codex's
+// local auth file caches no usage utilization at all, so `usage` is simply
+// absent for it, and an API-key-authenticated account has no email/org to
+// show.
+export const ProviderAccountResultSchema = z.object({
+  provider: z.enum(["claude-code", "codex"]),
+  authenticated: z.boolean(),
+  /** e.g. "oauth", "api-key", "chatgpt" — the local auth mechanism in use, read from the CLI's own config. */
+  authType: z.string().optional(),
+  email: z.string().optional(),
+  organization: z.string().optional(),
+  organizationRole: z.string().optional(),
+  /** Raw value from the CLI's own config (e.g. "stripe_subscription", "free") — the caller formats it for display. */
+  billingType: z.string().optional(),
+  /** Unix ms — when the CLI itself last refreshed this cached account/usage snapshot (`profileFetchedAt`/`last_refresh`), not "now". */
+  lastRefreshedAt: z.number().optional(),
+  usage: z.array(ProviderUsageMeterSchema).optional(),
+});
+export type ProviderAccountResult = z.infer<typeof ProviderAccountResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),

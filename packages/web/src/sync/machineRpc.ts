@@ -4,9 +4,10 @@
  * spawn" / "4.1 Git panel"): `spawn`, the New Session directory picker's
  * `fs.list`/`fs.mkdir`/`workspace.register` (plan.md §16 "Flow 3 —
  * spawn-fresh-folder-register (Piece A)"), the Git panel's
- * `git.status`/`git.diff`, and `git.branches` (docs/features/
+ * `git.status`/`git.diff`, `git.branches` (docs/features/
  * worktree-isolation.md — the New Session wizard's existing-branch worktree
- * picker). This is
+ * picker), and `provider.account` (docs/competitive-notes-omnara.md #9 —
+ * Settings → Providers' per-machine account card). This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
  * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
@@ -47,6 +48,8 @@ import {
   GitDiffResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
+  type ProviderAccountParams,
+  ProviderAccountResultSchema,
   type SpawnParams,
   SpawnResultSchema,
   type WorkspaceRegisterParams,
@@ -63,6 +66,7 @@ export type {
   GitBranchesParams,
   GitDiffParams,
   GitStatusParams,
+  ProviderAccountParams,
   SpawnParams,
   WorkspaceRegisterParams,
 };
@@ -82,6 +86,7 @@ export interface MachineRpcParams {
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
   "git.branches": GitBranchesParams;
+  "provider.account": ProviderAccountParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -96,6 +101,7 @@ export interface MachineRpcResults {
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
   "git.branches": import("@falcon/wire").GitBranchesResult;
+  "provider.account": import("@falcon/wire").ProviderAccountResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -111,6 +117,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
   "git.branches": GitBranchesResultSchema,
+  "provider.account": ProviderAccountResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */
