@@ -111,6 +111,80 @@ describe("ensureBranchWorkspace", () => {
     ).rejects.toThrow(/not a git repository/);
   });
 
+  describe("base-branch picker (docs/competitive-notes-omnara.md #16)", () => {
+    it("passes `from` as the start-point of `checkout -b` when creating a new branch in place", async () => {
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "feature/x", createWorktree: false, from: "main" } },
+        { git },
+      );
+
+      expect(git).toHaveBeenCalledWith(["checkout", "-b", "feature/x", "main"], root);
+    });
+
+    it("passes `from` as the start-point of `worktree add -b` when creating a new branch in a fresh worktree", async () => {
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+
+      const result = await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "task-1", createWorktree: true, from: "develop" } },
+        { git },
+      );
+
+      const expectedDir = path.join(root, ".worktrees", "task-1");
+      expect(result).toEqual({ directory: expectedDir });
+      expect(git).toHaveBeenCalledWith(
+        ["worktree", "add", expectedDir, "-b", "task-1", "develop"],
+        root,
+      );
+    });
+
+    it("omits the start-point argument entirely when `from` is undefined (unchanged pre-existing behavior)", async () => {
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "feature/x", createWorktree: false } },
+        { git },
+      );
+
+      expect(git).toHaveBeenCalledWith(["checkout", "-b", "feature/x"], root);
+    });
+
+    it("omits the start-point argument when `from` is a blank string", async () => {
+      const git = vi.fn<GitExec>(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "feature/x", createWorktree: false, from: "   " } },
+        { git },
+      );
+
+      expect(git).toHaveBeenCalledWith(["checkout", "-b", "feature/x"], root);
+    });
+
+    it("ignores `from` when the branch already exists (no base ref to speak of)", async () => {
+      const git = vi.fn<GitExec>(async () => "");
+
+      await ensureBranchWorkspace(
+        { repoDirectory: root, branch: { name: "main", createWorktree: false, from: "develop" } },
+        { git },
+      );
+
+      expect(git).toHaveBeenCalledWith(["checkout", "main"], root);
+    });
+  });
+
   describe("checked-out-elsewhere guard (docs/features/worktree-isolation.md Phase 3)", () => {
     it("throws a typed error instead of running `worktree add` when the branch is already checked out in a different worktree", async () => {
       const otherWorktree = path.join(root, "elsewhere");

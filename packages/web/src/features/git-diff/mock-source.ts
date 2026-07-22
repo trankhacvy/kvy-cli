@@ -1,3 +1,4 @@
+import type { GitBranchInfo } from "@falcon/wire";
 import { useMemo } from "react";
 import type { GitDiffActions, GitDiffContent, GitStatusSnapshot, UseGitDiffActions } from "./types";
 
@@ -68,6 +69,12 @@ const MOCK_DIFFS: Record<string, string> = {
   ].join("\n"),
 };
 
+const MOCK_BRANCHES: GitBranchInfo[] = [
+  { name: MOCK_STATUS.branch, isCurrent: true, upstream: `origin/${MOCK_STATUS.branch}` },
+  { name: "main", isCurrent: false, upstream: "origin/main" },
+  { name: "wf/other-task", isCurrent: false },
+];
+
 function defaultDiffFor(path: string): string {
   return [
     `diff --git a/${path} b/${path}`,
@@ -96,6 +103,26 @@ export function createMockGitDiffActions(_machineId: string): GitDiffActions {
         ? (MOCK_DIFFS[path] ?? defaultDiffFor(path))
         : Object.values(MOCK_DIFFS).join("");
       return { inline, truncated: false };
+    },
+
+    async commit(_worktree, _message, _options) {
+      await delay(LATENCY_MS);
+      return { committed: true, commitSha: "abc1234" };
+    },
+
+    async push(_worktree, options) {
+      await delay(LATENCY_MS);
+      return { remote: "origin", branch: MOCK_STATUS.branch, forced: options?.force === true };
+    },
+
+    async renameBranch(_worktree, to) {
+      await delay(LATENCY_MS);
+      return { branch: to, hadUpstream: true };
+    },
+
+    async listBranches(_worktree) {
+      await delay(LATENCY_MS);
+      return MOCK_BRANCHES;
     },
   };
 }

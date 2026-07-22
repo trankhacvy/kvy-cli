@@ -35,6 +35,14 @@ export type NewSessionProvider = "claude-code" | "codex";
 export interface BranchOption {
   name: string;
   createWorktree: boolean;
+  /**
+   * The base ref a brand-new branch is created from (docs/competitive-notes-omnara.md
+   * #16 "searchable base-branch picker") — e.g. `main`/`master` instead of
+   * always forking off whatever's currently checked out. Only meaningful
+   * when this branch doesn't exist yet; `undefined` preserves the old
+   * "branch from current HEAD" behavior.
+   */
+  from?: string;
 }
 
 /**

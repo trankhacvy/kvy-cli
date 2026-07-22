@@ -260,6 +260,51 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ inline: "diff --git a/x b/x", truncated: false });
   });
 
+  it("round-trips a git.files call and result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ files: ["README.md", "src/a.ts"] }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("git.files", {
+      idempotencyKey: "idem-8",
+      worktree: "/repo",
+    });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:git.files",
+      "git.files",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({ files: ["README.md", "src/a.ts"] });
+  });
+
+  it("round-trips an fs.read call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ inline: "const a = 1;\n", truncated: false }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("fs.read", {
+      idempotencyKey: "idem-9",
+      worktree: "/repo",
+      path: "src/a.ts",
+    });
+
+    expect(result).toEqual({ inline: "const a = 1;\n", truncated: false });
+  });
+
   it("throws MachineRpcError when the transport reports failure", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: false, error: "target-offline" })),
@@ -273,6 +318,28 @@ describe("createMachineRpcClient", () => {
     await expect(client.call("fs.list", { idempotencyKey: "idem-1" })).rejects.toThrow(
       "target-offline",
     );
+  });
+
+  it("throws MachineRpcError with the daemon handler's own message (not a generic schema-validation error) when the daemon replies with a sealed {ok:false,error} box", async () => {
+    // Reproduces the daemon's `onRpcRequest` catch path (`daemon/machineRpc.ts`):
+    // a thrown `GitExecError`/`Error` is sealed as `{ok:false, error: <message>}`,
+    // which structurally can never satisfy a real result schema — this must be
+    // special-cased BEFORE schema validation, or the caller only ever sees a
+    // useless "'method' RPC result failed schema validation" instead of the
+    // actual git stderr (docs/features/git-write-actions.md's credential-failure
+    // UX depends on this).
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ ok: false, error: "fatal: could not read Username for 'https://...'" }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    await expect(
+      client.call("git.push", { idempotencyKey: "idem-8", worktree: "/repo" }),
+    ).rejects.toThrow("fatal: could not read Username for 'https://...'");
   });
 
   it("throws MachineRpcError when the sealed result fails to decrypt", async () => {

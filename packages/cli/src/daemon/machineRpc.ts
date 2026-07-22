@@ -13,13 +13,21 @@
  * `adopt.take`/`adopt.mirror`, and the Git panel's `git.status`/`git.diff`
  * (plan.md §16 "4.1 Git panel") — plus `git.branches` (docs/features/
  * worktree-isolation.md, the New Session wizard's existing-branch worktree
- * picker) and `provider.account` (docs/competitive-notes-omnara.md #9
- * "Provider account inspection + usage metering" — Settings → Providers'
- * per-machine account card, `providerAccountInfo.ts`'s local-config read) —
- * are in scope here —
- * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
- * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
- * the same way without touching this module's dispatch shape.
+ * picker), `git.commit`/`git.push`/`git.renameBranch` (docs/features/
+ * git-write-actions.md — the first *mutating* git RPCs; `git.status`/
+ * `git.diff`/`git.branches` above are read-only) which round out the Git
+ * panel's RPC surface, `github.checks` (docs/features/github-pr-ci.md,
+ * the "Checks" tab's PR/CI status), `commands.list` ("/" slash-command
+ * autocomplete, docs/competitive-notes-omnara.md #18), `git.files`/
+ * `fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file browser" —
+ * the Repo Files sidebar tab's file-tree listing and file-content fetch),
+ * and `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
+ * account inspection + usage metering" — Settings → Providers' per-machine
+ * account card, `providerAccountInfo.ts`'s local-config read) — are in
+ * scope here —
+ * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
+ * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
+ * same way without touching this module's dispatch shape.
  *
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
  * double-spawn"; the same rationale extends to `adopt.take`'s kill+spawn
@@ -39,16 +47,31 @@
  * `workspace.register` needs none either, for the same reason as
  * `fs.mkdir`: registering an already-registered directory is a no-op
  * (`workspace/registry.ts`'s own idempotent contract). `git.status`/
- * `git.diff`/`git.branches` need none either, for the same reason as
- * `fs.list`: they only read current repository state, so a retry just
- * re-reads it — unlike `adopt.mirror`'s "re-reading a file mid-write twice"
- * hazard, there's no mid-write file here to race. `provider.account` joins
- * this same no-cache group for the same reason again — it only reads
- * whatever's currently on disk in the local CLI's own config files, so a
- * retry is just another read. All four still carry `idempotencyKey` on the
- * wire (design: "every caller-retriable machine RPC carries a caller-minted
- * key") for uniformity with the rest of this RPC family, it's just unused by
- * these handlers.
+ * `git.diff`/`git.branches`/`github.checks`/`git.files` need none either,
+ * for the same reason as `fs.list`: they only read current repository (or,
+ * for `github.checks`, GitHub API) state, so a retry just re-reads it —
+ * unlike `adopt.mirror`'s "re-reading a file mid-write twice" hazard,
+ * there's no mid-write file here to race. `commands.list` needs none for
+ * the same reason again — it only reads the current `.claude/commands/`
+ * tree. `provider.account` joins this same no-cache group for the same
+ * reason again — it only reads whatever's currently on disk in the local
+ * CLI's own config files, so a retry is just another read. `fs.read` is the
+ * one exception in this read-only cluster that *does* carry the same
+ * mid-write hazard `@falcon/wire`'s own `rpc.ts` doc comment calls out for
+ * `adopt.mirror` ("or re-reading a file mid-write twice") — but a re-read
+ * simply returns whatever the file currently contains, which is still a
+ * valid (if possibly different) answer, not a corrupted one, so no
+ * idempotency cache is needed for it either. All of these still carry
+ * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
+ * carries a caller-minted key") for uniformity with the rest of this RPC
+ * family, it's just unused by these handlers.
+ * `git.commit`/`git.push`/`git.renameBranch` (docs/features/
+ * git-write-actions.md) are the opposite of their read-only siblings just
+ * above — they're the first git RPCs whose whole point IS a side effect, so
+ * (like `spawn`/`adopt.take`/`adopt.mirror`) they DO need
+ * `withIdempotencyCache`: a lost-ack retry of `git.commit` must replay the
+ * prior commit's SHA rather than mint a second commit, and likewise for a
+ * repeated `git.push`/`git.renameBranch`.
  * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
  * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
  * retried resume of the same session is not a "double spawn" risk:
@@ -100,14 +123,38 @@ import {
   FsMkdirParamsSchema,
   type FsMkdirResult,
   FsMkdirResultSchema,
+  type FsReadParams,
+  FsReadParamsSchema,
+  type FsReadResult,
+  FsReadResultSchema,
   type GitBranchesParams,
   GitBranchesParamsSchema,
   type GitBranchesResult,
   GitBranchesResultSchema,
+  type GitCommitParams,
+  GitCommitParamsSchema,
+  type GitCommitResult,
+  GitCommitResultSchema,
   type GitDiffParams,
   GitDiffParamsSchema,
   type GitDiffResult,
   GitDiffResultSchema,
+  type GitFilesParams,
+  GitFilesParamsSchema,
+  type GitFilesResult,
+  GitFilesResultSchema,
+  type GithubChecksParams,
+  GithubChecksParamsSchema,
+  type GithubChecksResult,
+  GithubChecksResultSchema,
+  type GitPushParams,
+  GitPushParamsSchema,
+  type GitPushResult,
+  GitPushResultSchema,
+  type GitRenameBranchParams,
+  GitRenameBranchParamsSchema,
+  type GitRenameBranchResult,
+  GitRenameBranchResultSchema,
   type GitStatusParams,
   GitStatusParamsSchema,
   type GitStatusResult,
@@ -118,6 +165,10 @@ import {
   ProviderAccountResultSchema,
   ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
+  type SlashCommandsListParams,
+  SlashCommandsListParamsSchema,
+  type SlashCommandsListResult,
+  SlashCommandsListResultSchema,
   type SpawnParams,
   SpawnParamsSchema,
   type SpawnResult,
@@ -134,10 +185,17 @@ import {
   createDirectory as createDirectoryDefault,
   listDirectory as listDirectoryDefault,
 } from "./fsBrowse.js";
+import { readFile as readFileDefault } from "./fsRead.js";
 import { getGitBranches as getGitBranchesDefault } from "./gitBranches.js";
+import { handleGitCommit as handleGitCommitDefault } from "./gitCommit.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
+import { getGitFiles as getGitFilesDefault } from "./gitFiles.js";
+import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
+import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
+import { handleGitRenameBranch as handleGitRenameBranchDefault } from "./gitRenameBranch.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import { getProviderAccountInfo as getProviderAccountInfoDefault } from "./providerAccountInfo.js";
+import { listSlashCommands as listSlashCommandsDefault } from "./slashCommands.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
 export const MACHINE_RPC_METHODS = [
@@ -149,6 +207,13 @@ export const MACHINE_RPC_METHODS = [
   "git.status",
   "git.diff",
   "git.branches",
+  "git.commit",
+  "git.push",
+  "git.renameBranch",
+  "github.checks",
+  "commands.list",
+  "git.files",
+  "fs.read",
   "provider.account",
   "adopt.take",
   "adopt.mirror",
@@ -176,6 +241,20 @@ export interface MachineRpcDeps {
   getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
   /** Backs the `git.branches` RPC (New Session wizard's existing-branch worktree picker, docs/features/worktree-isolation.md). Injectable for tests; defaults to `gitBranches.ts`'s real `git for-each-ref` parse. Throws on failure. */
   getGitBranches?: (params: GitBranchesParams) => Promise<GitBranchesResult>;
+  /** Backs the `git.commit` RPC (docs/features/git-write-actions.md — the first *mutating* git RPC). Injectable for tests; defaults to `gitCommit.ts`'s real `git add`/`git commit`, gated on the registered-workspace authorizer. Throws on failure. */
+  gitCommit?: (params: GitCommitParams) => Promise<GitCommitResult>;
+  /** Backs the `git.push` RPC (docs/features/git-write-actions.md). Injectable for tests; defaults to `gitPush.ts`'s real `git push` (`force` maps to `--force-with-lease` only), gated on the registered-workspace authorizer. Throws on failure. */
+  gitPush?: (params: GitPushParams) => Promise<GitPushResult>;
+  /** Backs the `git.renameBranch` RPC (docs/features/git-write-actions.md). Injectable for tests; defaults to `gitRenameBranch.ts`'s real `git branch -m`, gated on the registered-workspace authorizer. Throws on failure. */
+  gitRenameBranch?: (params: GitRenameBranchParams) => Promise<GitRenameBranchResult>;
+  /** Backs the `github.checks` RPC (Checks tab, docs/features/github-pr-ci.md). Injectable for tests; defaults to `githubChecks.ts`'s real PR/CI resolution against a machine-local GitHub token. Throws on an unexpected failure (a handled "nothing to show yet" case is a `GithubChecksResult.state`, not a throw). */
+  getGithubChecks?: (params: GithubChecksParams) => Promise<GithubChecksResult>;
+  /** Backs the `commands.list` RPC ("/" slash-command autocomplete, docs/competitive-notes-omnara.md #18). Injectable for tests; defaults to `slashCommands.ts`'s real `.claude/commands/` walk. Never throws — see that module's own doc comment. */
+  listSlashCommands?: (params: SlashCommandsListParams) => Promise<SlashCommandsListResult>;
+  /** Backs the `git.files` RPC (Repo Files sidebar tab's file tree, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `gitFiles.ts`'s real `git ls-files` listing. Throws on failure (e.g. `worktree` isn't a git repo). */
+  getGitFiles?: (params: GitFilesParams) => Promise<GitFilesResult>;
+  /** Backs the `fs.read` RPC (Repo Files sidebar tab's file-content fetch, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `fsRead.ts`'s real, worktree-contained file read. Throws on failure (missing/escaping/binary/directory target). */
+  readFile?: (params: FsReadParams) => Promise<FsReadResult>;
   /** Backs the `provider.account` RPC (Settings → Providers, docs/competitive-notes-omnara.md #9). Injectable for tests; defaults to `providerAccountInfo.ts`'s real local-config read. Never throws (see that module's own doc comment). */
   getProviderAccountInfo?: (params: ProviderAccountParams) => Promise<ProviderAccountResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
@@ -304,9 +383,23 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
+  const listSlashCommands = deps.listSlashCommands ?? listSlashCommandsDefault;
+  const getGithubChecks = deps.getGithubChecks ?? getGithubChecksDefault;
+  const getGitFiles = deps.getGitFiles ?? getGitFilesDefault;
+  const readFile = deps.readFile ?? readFileDefault;
   const getProviderAccountInfo = deps.getProviderAccountInfo ?? getProviderAccountInfoDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
+  // `git.commit`/`git.push`/`git.renameBranch` are the first git RPCs that DO
+  // need idempotency-key replay caching — unlike their read-only siblings
+  // above, a lost-ack retry of a real mutation must replay the prior
+  // attempt's result (e.g. the commit's own SHA), never re-run the side
+  // effect and mint a second commit/push/rename.
+  const cachedGitCommit = withIdempotencyCache(deps.gitCommit ?? handleGitCommitDefault);
+  const cachedGitPush = withIdempotencyCache(deps.gitPush ?? handleGitPushDefault);
+  const cachedGitRenameBranch = withIdempotencyCache(
+    deps.gitRenameBranch ?? handleGitRenameBranchDefault,
+  );
 
   function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
     const cached = spawnResults.get(params.idempotencyKey);
@@ -385,6 +478,41 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       resultSchema: GitBranchesResultSchema,
       handle: getGitBranches as (params: unknown) => Promise<unknown>,
     },
+    "git.files": {
+      paramsSchema: GitFilesParamsSchema,
+      resultSchema: GitFilesResultSchema,
+      handle: getGitFiles as (params: unknown) => Promise<unknown>,
+    },
+    "fs.read": {
+      paramsSchema: FsReadParamsSchema,
+      resultSchema: FsReadResultSchema,
+      handle: readFile as (params: unknown) => Promise<unknown>,
+    },
+    "commands.list": {
+      paramsSchema: SlashCommandsListParamsSchema,
+      resultSchema: SlashCommandsListResultSchema,
+      handle: listSlashCommands as (params: unknown) => Promise<unknown>,
+    },
+    "git.commit": {
+      paramsSchema: GitCommitParamsSchema,
+      resultSchema: GitCommitResultSchema,
+      handle: cachedGitCommit as (params: unknown) => Promise<unknown>,
+    },
+    "git.push": {
+      paramsSchema: GitPushParamsSchema,
+      resultSchema: GitPushResultSchema,
+      handle: cachedGitPush as (params: unknown) => Promise<unknown>,
+    },
+    "git.renameBranch": {
+      paramsSchema: GitRenameBranchParamsSchema,
+      resultSchema: GitRenameBranchResultSchema,
+      handle: cachedGitRenameBranch as (params: unknown) => Promise<unknown>,
+    },
+    "github.checks": {
+      paramsSchema: GithubChecksParamsSchema,
+      resultSchema: GithubChecksResultSchema,
+      handle: getGithubChecks as (params: unknown) => Promise<unknown>,
+    },
     "provider.account": {
       paramsSchema: ProviderAccountParamsSchema,
       resultSchema: ProviderAccountResultSchema,
@@ -457,11 +585,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       }
       callback?.(seal(parsedResult.data, deps.dek));
     } catch (error) {
-      logger.error("[machine-rpc] handler threw", {
-        method,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      callback?.(errorBox(deps.dek, "handler-error"));
+      // Forward the handler's own error message (e.g. `GitExecError`'s git
+      // stderr) rather than a flat "handler-error" placeholder — the git
+      // write-action toolbar (docs/features/git-write-actions.md Phase 5)
+      // depends on the real message reaching the user for its
+      // credential-failure UX ("git's own stderr, not a Falcon
+      // abstraction"), and every other handler benefits the same way (e.g.
+      // "fatal: not a git repository" instead of an opaque placeholder).
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error("[machine-rpc] handler threw", { method, error: message });
+      callback?.(errorBox(deps.dek, message));
     }
   }
 
