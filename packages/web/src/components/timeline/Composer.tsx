@@ -1,7 +1,7 @@
 "use client";
 
 import { Mic, Paperclip, Square } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   PromptInput,
   PromptInputBody,
@@ -14,6 +14,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { loadDraft, saveDraft } from "@/features/session-control";
 import { formatBytes } from "@/lib/format";
+import { appendTranscript, describeSpeechError } from "@/lib/speech-input";
+import { useSpeechInput } from "@/lib/use-speech-input";
 
 /** Whether `file` should get an object-URL image thumbnail in the
  * in-flight attachment strip, vs. just a name/size chip. Extracted as a
@@ -53,6 +55,15 @@ interface AttachmentPreview {
  *    follow-up rather than blocking, so the submit button never morphs into
  *    a stop button. Interrupt is a separate stop button shown only while
  *    `working` (it would otherwise steal the queue path).
+ *  - **Voice input** (docs/competitive-notes-omnara.md #19): the mic button
+ *    drives `useSpeechInput` (`@/lib/use-speech-input`), a thin wrapper
+ *    around the browser's `SpeechRecognition` — disabled with an
+ *    explanatory tooltip in browsers lacking it (Firefox and most
+ *    non-Chromium browsers). Each finalized phrase appends to the draft
+ *    (`appendTranscript`, `@/lib/speech-input`); the still-being-spoken
+ *    phrase shows as a live italic preview instead of being merged into the
+ *    editable text, so it never fights the user's own typing in the same
+ *    box.
  *
  * `footerControls` is a render slot for session-scoped chips (model, mode
  * selector, take-control) that need `SessionControlProvider` context — this
@@ -98,6 +109,30 @@ export function Composer({
   const [text, setText] = useState(() => loadDraft(sessionId));
   const [previews, setPreviews] = useState<AttachmentPreview[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // A finalized voice-dictation phrase appends to whatever's already in the
+  // draft (functional update so a same-tick keystroke and a same-tick
+  // dictated phrase can't clobber one another) and persists it exactly like
+  // `handleTextChange` below.
+  const handleDictatedText = useCallback(
+    (transcript: string) => {
+      setText((prev) => {
+        const next = appendTranscript(prev, transcript);
+        saveDraft(sessionId, next);
+        return next;
+      });
+    },
+    [sessionId],
+  );
+  const speech = useSpeechInput(handleDictatedText);
+
+  // The session ending mid-dictation (`disabled` flips true) should close
+  // the mic rather than leave it silently listening into a composer that
+  // can no longer send.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `speech.stop` is stable (useCallback, no deps) — only re-run when `disabled` itself flips.
+  useEffect(() => {
+    if (disabled) speech.stop();
+  }, [disabled]);
 
   // A session switch remounts this component in practice (`sessionId` is
   // part of the route), but reload explicitly on the id changing too, so a
@@ -178,6 +213,12 @@ export function Composer({
       )}
       {notice && <p className="text-xs text-muted-foreground">{notice}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
+      {speech.listening && speech.interimText && (
+        <p className="text-xs text-muted-foreground italic">{speech.interimText}…</p>
+      )}
+      {speech.error && speech.error !== "no-speech" && speech.error !== "aborted" && (
+        <p className="text-xs text-destructive">{describeSpeechError(speech.error)}</p>
+      )}
       <PromptInput onSubmit={handleSubmit}>
         <PromptInputBody>
           <PromptInputTextarea
@@ -212,11 +253,20 @@ export function Composer({
               <Paperclip className="size-4" />
             </PromptInputButton>
             <PromptInputButton
-              disabled
-              tooltip="Voice input isn't available yet"
-              aria-label="Voice input"
+              disabled={disabled || !speech.supported}
+              variant={speech.listening ? "destructive" : "ghost"}
+              tooltip={
+                speech.supported
+                  ? speech.listening
+                    ? "Stop voice input"
+                    : "Voice input"
+                  : "Voice input isn't supported in this browser"
+              }
+              onClick={() => (speech.listening ? speech.stop() : speech.start())}
+              aria-label={speech.listening ? "Stop voice input" : "Voice input"}
+              aria-pressed={speech.listening}
             >
-              <Mic className="size-4" />
+              <Mic className={speech.listening ? "size-4 animate-pulse" : "size-4"} />
             </PromptInputButton>
             {working && (
               <PromptInputButton
