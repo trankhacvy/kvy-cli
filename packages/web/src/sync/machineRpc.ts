@@ -6,7 +6,9 @@
  * spawn-fresh-folder-register (Piece A)"), the Git panel's
  * `git.status`/`git.diff`, and `git.branches` (docs/features/
  * worktree-isolation.md — the New Session wizard's existing-branch worktree
- * picker). This is
+ * picker), plus the mutating `git.commit`/`git.push`/`git.renameBranch`
+ * (docs/features/git-write-actions.md — the Git panel's write actions).
+ * This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
  * (seal params under the crypto client's active key, `apiSocket.rpcCall` to
@@ -43,8 +45,14 @@ import {
   FsMkdirResultSchema,
   type GitBranchesParams,
   GitBranchesResultSchema,
+  type GitCommitParams,
+  GitCommitResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
+  type GitPushParams,
+  GitPushResultSchema,
+  type GitRenameBranchParams,
+  GitRenameBranchResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
   type SpawnParams,
@@ -61,7 +69,10 @@ export type {
   FsListParams,
   FsMkdirParams,
   GitBranchesParams,
+  GitCommitParams,
   GitDiffParams,
+  GitPushParams,
+  GitRenameBranchParams,
   GitStatusParams,
   SpawnParams,
   WorkspaceRegisterParams,
@@ -82,6 +93,9 @@ export interface MachineRpcParams {
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
   "git.branches": GitBranchesParams;
+  "git.commit": GitCommitParams;
+  "git.push": GitPushParams;
+  "git.renameBranch": GitRenameBranchParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -96,6 +110,9 @@ export interface MachineRpcResults {
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
   "git.branches": import("@falcon/wire").GitBranchesResult;
+  "git.commit": import("@falcon/wire").GitCommitResult;
+  "git.push": import("@falcon/wire").GitPushResult;
+  "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -111,6 +128,9 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
   "git.branches": GitBranchesResultSchema,
+  "git.commit": GitCommitResultSchema,
+  "git.push": GitPushResultSchema,
+  "git.renameBranch": GitRenameBranchResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

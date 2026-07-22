@@ -178,6 +178,82 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `git.commit` machine RPC (design §4.4, docs/features/git-write-actions.md
+// Phase 1 — the first *mutating* git RPC; `git.status`/`git.diff`/
+// `git.branches` above are all read-only). `stageAll: true` runs `git add
+// -A` before committing, so the commit includes exactly what the panel's
+// changed-files list shows — untracked files included; omitted/`false`
+// commits only already-tracked changes (`git commit -a`). Unlike its
+// read-only siblings, a retried `git.commit` MUST replay the prior
+// commit's result rather than mint a second commit — see `machineRpc.ts`'s
+// `withIdempotencyCache`. `amend` was deliberately left off this schema: no
+// UI consumes it yet, and the additive-only policy means it can be added
+// later without a breaking change.
+export const GitCommitParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  message: z.string(),
+  stageAll: z.boolean().optional(),
+});
+export type GitCommitParams = z.infer<typeof GitCommitParamsSchema>;
+
+// `nothingToCommit: true` (with `committed: false`) is the clean "nothing
+// changed" outcome, not an error — the working tree was already clean (or
+// `stageAll` staged nothing new). `commitSha` is set whenever `committed`
+// is true.
+export const GitCommitResultSchema = z.object({
+  committed: z.boolean(),
+  commitSha: z.string().optional(),
+  nothingToCommit: z.boolean().optional(),
+});
+export type GitCommitResult = z.infer<typeof GitCommitResultSchema>;
+
+// `git.push` machine RPC (design §4.4, docs/features/git-write-actions.md
+// Phase 1). `force: true` maps to `--force-with-lease`, NEVER the raw
+// `--force` flag — the raw flag is deliberately unreachable over the wire
+// as a data-loss containment measure (a lease-checked force-push still
+// fails, rather than silently discarding, when the remote moved since the
+// caller's last fetch). Also idempotency-cached, same rationale as
+// `git.commit`: re-pushing the same commits is close to a natural no-op,
+// but a force-push-with-lease can fail differently on replay, so it's
+// cached too rather than assumed safe to blindly re-run.
+export const GitPushParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  remote: z.string().optional(),
+  branch: z.string().optional(),
+  force: z.boolean().optional(),
+  setUpstream: z.boolean().optional(),
+});
+export type GitPushParams = z.infer<typeof GitPushParamsSchema>;
+
+export const GitPushResultSchema = z.object({
+  ok: z.literal(true),
+  remote: z.string(),
+  branch: z.string(),
+  forced: z.boolean(),
+});
+export type GitPushResult = z.infer<typeof GitPushResultSchema>;
+
+// `git.renameBranch` machine RPC (design §4.4, docs/features/
+// git-write-actions.md Phase 1): local-only `git branch -m` (the remote
+// branch, if any, keeps its old name until the next push — `hadUpstream`
+// tells the UI to surface that warning).
+export const GitRenameBranchParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  to: z.string(),
+  from: z.string().optional(),
+});
+export type GitRenameBranchParams = z.infer<typeof GitRenameBranchParamsSchema>;
+
+export const GitRenameBranchResultSchema = z.object({
+  ok: z.literal(true),
+  branch: z.string(),
+  hadUpstream: z.boolean(),
+});
+export type GitRenameBranchResult = z.infer<typeof GitRenameBranchResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),
