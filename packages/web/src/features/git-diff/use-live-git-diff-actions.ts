@@ -16,6 +16,10 @@ function pendingGitDiffActions(): GitDiffActions {
   return {
     fetchStatus: notReady,
     fetchDiff: notReady,
+    commit: notReady,
+    push: notReady,
+    renameBranch: notReady,
+    listBranches: notReady,
   };
 }
 

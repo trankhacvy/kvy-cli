@@ -139,6 +139,44 @@ describe("buildSpawnRequest", () => {
     expect(request.branch).toEqual({ name: "task-1", createWorktree: false });
   });
 
+  it("includes `from` in new-branch mode when a base branch was picked (docs/competitive-notes-omnara.md #16)", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      branchMode: "new-branch",
+      branchName: "task-1",
+      baseBranch: " main ",
+    });
+    expect(request.branch).toEqual({ name: "task-1", createWorktree: true, from: "main" });
+  });
+
+  it("omits `from` in new-branch mode when no base branch was picked (falls back to branching off HEAD)", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      branchMode: "new-branch",
+      branchName: "task-1",
+      baseBranch: "",
+    });
+    expect(request.branch).toEqual({ name: "task-1", createWorktree: true });
+    expect(request.branch?.from).toBeUndefined();
+  });
+
+  it("omits `from` in existing-branch mode even if a stale baseBranch value is left over from new-branch mode", () => {
+    const request = buildSpawnRequest({
+      ...INITIAL_FORM,
+      machineId: "m1",
+      directory: "/repo",
+      branchMode: "existing-branch",
+      branchName: "main",
+      baseBranch: "develop",
+    });
+    expect(request.branch).toEqual({ name: "main", createWorktree: true });
+    expect(request.branch?.from).toBeUndefined();
+  });
+
   it("existing-branch mode always isolates in a fresh worktree, regardless of createWorktree", () => {
     const request = buildSpawnRequest({
       ...INITIAL_FORM,

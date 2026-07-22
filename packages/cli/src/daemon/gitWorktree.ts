@@ -1,6 +1,6 @@
 /**
  * Git worktree/branch setup for the daemon `spawn` RPC's optional `branch`
- * field (`@falcon/wire`'s `SpawnParams.branch: {name, createWorktree}`,
+ * field (`@falcon/wire`'s `SpawnParams.branch: {name, createWorktree, from}`,
  * falcon-prd.md FR-1.2 "`falcon -b <branch>`" / FR-4.3, plan.md §16 "3.1
  * Remote spawn" — "Branch/worktree option (-b): `git worktree add` via
  * daemon"). Called from `spawnEngine.ts` after workspace-path validation,
@@ -13,6 +13,15 @@
  * itself, so a remote spawn on a new branch never touches the caller's
  * existing checkout. `createWorktree: false` just checks out (creating if
  * needed) the branch in `repoDirectory` directly, no new worktree.
+ *
+ * `from` (docs/competitive-notes-omnara.md #16 "searchable base-branch
+ * picker") is the optional base ref a brand-new branch forks from — passed
+ * straight through to `git checkout -b`/`git worktree add -b` as the
+ * trailing start-point argument (`startPointArgs`) instead of always
+ * forking off whatever's currently checked out at `repoDirectory`. Ignored
+ * when the branch already exists (there's no "base" to speak of once a
+ * branch is real) and when omitted/blank, which preserves the pre-existing
+ * behavior exactly.
  *
  * Idempotent by construction: a retried `spawn` (same `idempotencyKey`,
  * same branch) reuses an already-created worktree/branch rather than
@@ -171,9 +180,34 @@ async function ensureWorktreesExcluded(repoDirectory: string): Promise<void> {
   }
 }
 
-/** Rejects a branch name that could be used to escape `.worktrees/` via `path.join`. */
-function assertSafeBranchName(branchName: string): void {
-  if (branchName.trim() === "" || branchName.split("/").some((segment) => segment === "..")) {
+/**
+ * Trailing `git checkout -b`/`git worktree add -b` argv for a brand-new
+ * branch's start point (docs/competitive-notes-omnara.md #16 "searchable
+ * base-branch picker") — `[from]` when a base ref was picked, or `[]` to
+ * fall back to git's own default (branch from whatever's currently checked
+ * out), preserving the pre-existing behavior when the wizard's base-branch
+ * picker is left at its default. Only meaningful on the branch-doesn't-exist
+ * path — an already-existing branch has no "base" to speak of, so callers
+ * never reach here with `exists === true`.
+ */
+function startPointArgs(from: string | undefined): string[] {
+  return from === undefined || from.trim() === "" ? [] : [from];
+}
+
+/**
+ * Rejects a branch name that could be used to escape `.worktrees/` via
+ * `path.join`, or be parsed as a `git` option instead of a ref (a
+ * leading `-`). Exported: `gitRenameBranch.ts` (docs/features/
+ * git-write-actions.md Phase 2) reuses this verbatim to guard its own
+ * user-controlled `to`/`from` branch names — same argv-injection hazard,
+ * different call site.
+ */
+export function assertSafeBranchName(branchName: string): void {
+  if (
+    branchName.trim() === "" ||
+    branchName.startsWith("-") ||
+    branchName.split("/").some((segment) => segment === "..")
+  ) {
     throw new GitWorktreeError(`unsafe branch name: ${branchName}`);
   }
 }
@@ -202,7 +236,12 @@ export async function ensureBranchWorkspace(
     if (exists) {
       await assertNotCheckedOutElsewhere(git, repoDirectory, branch.name, repoDirectory);
     }
-    await git(exists ? ["checkout", branch.name] : ["checkout", "-b", branch.name], repoDirectory);
+    await git(
+      exists
+        ? ["checkout", branch.name]
+        : ["checkout", "-b", branch.name, ...startPointArgs(branch.from)],
+      repoDirectory,
+    );
     return { directory: repoDirectory };
   }
 
@@ -224,7 +263,7 @@ export async function ensureBranchWorkspace(
   await git(
     exists
       ? ["worktree", "add", worktreeDir, branch.name]
-      : ["worktree", "add", worktreeDir, "-b", branch.name],
+      : ["worktree", "add", worktreeDir, "-b", branch.name, ...startPointArgs(branch.from)],
     repoDirectory,
   );
   await ensureWorktreesExcluded(repoDirectory);

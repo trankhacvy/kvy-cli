@@ -37,17 +37,38 @@ describe("Composer disabled wiring", () => {
     const html = renderComposer(false);
     // Two disabled controls here: the send button (by `text.trim().length === 0`,
     // not by `disabled`, since there's no text yet on a fresh render) and the
-    // always-disabled dummy voice-input button (not a real feature yet).
+    // voice-input mic button — disabled because this vitest config's
+    // `environment: "node"` has no `window.SpeechRecognition`, so
+    // `useSpeechInput` reports `supported: false` here exactly like it would
+    // in a real unsupported browser (Firefox, most non-Chromium browsers).
     expect(html.match(/disabled=""/g)).toHaveLength(2);
     expect(html).toContain("Send a follow-up…");
     expect(html).not.toContain("This session has ended.");
+    expect(html).toContain('aria-label="Voice input"');
   });
 
   it("disables the textarea, attach button, and send button when disabled", () => {
     const html = renderComposer(true);
     // One disabled attribute for each of: attach button, textarea, send button —
-    // plus the always-disabled dummy voice-input button.
+    // plus the mic button (already unconditionally disabled here by the lack
+    // of `window.SpeechRecognition`, same as the default-`disabled` case above).
     expect(html.match(/disabled=""/g)).toHaveLength(4);
     expect(html).toContain("This session has ended.");
+  });
+});
+
+/**
+ * "@" file-mention popover wiring (docs/competitive-notes-omnara.md #17) — a
+ * static-markup render can't fire real keyboard/change events (no
+ * jsdom/@testing-library here, see this file's own top-of-file note), so
+ * the interactive trigger→search→select flow is covered by
+ * `features/file-mentions`' pure-logic unit tests instead and was verified
+ * end-to-end by hand against a running dev server. This just locks in that
+ * a fresh, untouched render never shows the popover.
+ */
+describe("Composer file-mention popover — default (untriggered) render", () => {
+  it("renders no mention listbox before '@' has been typed", () => {
+    const html = renderComposer(false);
+    expect(html).not.toContain('role="listbox"');
   });
 });

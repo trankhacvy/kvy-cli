@@ -5,6 +5,7 @@ import {
   BotIcon,
   GitBranchIcon,
   HomeIcon,
+  LifeBuoyIcon,
   type LucideIcon,
   PaletteIcon,
   PlusIcon,
@@ -42,6 +43,7 @@ const settingsNav: NavItem[] = [
   { href: "/settings/git/", label: "Git", icon: GitBranchIcon },
   { href: "/settings/notifications/", label: "Notifications", icon: BellIcon },
   { href: "/settings/recovery/", label: "Recovery", icon: ShieldCheckIcon },
+  { href: "/settings/support/", label: "Support", icon: LifeBuoyIcon },
 ];
 
 function isActive(pathname: string, href: string): boolean {
