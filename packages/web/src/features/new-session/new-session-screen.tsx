@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { DirectoryStep } from "./components/directory-step";
 import { ImportStep } from "./components/import-step";
 import { MachineStep } from "./components/machine-step";
 import { OptionsStep } from "./components/options-step";
+import { applyFavoriteDefaults, getFavoriteMachineId } from "./favorites";
 import { useLiveNewSessionActions, useLiveNewSessionMachines } from "./live-source";
 import { PROVIDER_META } from "./provider-meta";
 import { runSpawnFlow } from "./spawn-flow";
@@ -81,7 +82,14 @@ export function NewSessionScreen({
 }) {
   const machines = useMachines();
   const [step, setStep] = useState<WizardStep>("machine");
-  const [form, setForm] = useState<NewSessionForm>(INITIAL_FORM);
+  // Seeded from this device's starred provider/model (docs/competitive-notes-omnara.md
+  // #22 "Favorite/star a default machine, provider, and model") — the
+  // starred *machine* can't be resolved here since `machines` hasn't loaded
+  // yet on first render; see the effect below for that half.
+  const [form, setForm] = useState<NewSessionForm>(() => ({
+    ...INITIAL_FORM,
+    ...applyFavoriteDefaults(INITIAL_FORM),
+  }));
   const [spawnState, setSpawnState] = useState<SpawnState>({ phase: "idle" });
   const approvalDecision = useRef<((approved: boolean) => void) | null>(null);
 
@@ -90,6 +98,21 @@ export function NewSessionScreen({
   function patchForm(patch: Partial<NewSessionForm>) {
     setForm((prev) => ({ ...prev, ...patch }));
   }
+
+  // Pre-select this device's starred machine once the (async) machine list
+  // loads, same "favorite a default" feature as above — only while nothing's
+  // been picked yet, and only when the starred machine is actually online
+  // (an offline favorite is no more selectable here than any other offline
+  // machine).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-check when `machines` changes — reading `form.machineId` here is just this effect's own "already picked" guard, not something it should re-run for.
+  useEffect(() => {
+    if (form.machineId !== null) return;
+    const favoriteId = getFavoriteMachineId();
+    if (favoriteId === null) return;
+    if (machines.some((m) => m.id === favoriteId && m.online)) {
+      patchForm({ machineId: favoriteId });
+    }
+  }, [machines]);
 
   function resolveApproval(approved: boolean) {
     approvalDecision.current?.(approved);
