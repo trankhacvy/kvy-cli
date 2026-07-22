@@ -200,16 +200,26 @@ consistent with `githubAuth.ts`'s own (both fall through to the same
 `FALCON_HOME_DIR`-aware default when the daemon calls them with no
 explicit override).
 
-**Unresolved / left as-is (flagged, not fixed):** the CLI's `--token` PAT
-prompt (`defaultReadSecretLine`) echoes the pasted token to the terminal —
-`readline`'s `question()` has no built-in mask, and there was no existing
-masked-secret-input precedent elsewhere in this codebase to reuse
-(`auth/credentials.ts`'s flows never prompt for a raw secret this way).
-Low severity (local terminal echo/scrollback exposure only, same class of
-risk the plan's own "one `cat ~/.falcon/github.key` away" risk note
-already accepts for the file itself) and out of scope for a same-day fix
-without pulling in a masking dependency or hand-rolling raw-mode stdin
-handling — noted here for a future pass rather than papered over.
+**Unresolved / left as-is (flagged, not fixed):** ~~the CLI's `--token` PAT
+prompt (`defaultReadSecretLine`) echoes the pasted token to the terminal~~
+— **fixed in a follow-up pass** (main-loop reconciliation, after the
+Verification stage): `defaultReadSecretLine` now reads raw stdin itself
+when it's a real TTY, echoing `*` per character (backspace supported)
+instead of the pasted value, falling back to the original plain
+`readline` prompt when stdin isn't a TTY (CI, tests, piped input — raw
+mode isn't meaningful there). Covered by a new test exercising the real
+(non-injected) prompt via its non-TTY fallback, asserting the raw token
+never reaches `process.stdout.write`. `pnpm build && pnpm typecheck &&
+pnpm test` re-run clean after the fix (cli 1619 tests, +1 for the new
+case); touched files re-linted clean via the direct biome binary.
 
 No other correctness gaps found. All five phases' acceptance criteria hold
-for real, with the two fixes above applied on top.
+for real, with the three fixes above (two from Test & Review, one from
+main-loop reconciliation) applied on top.
+
+## Status (update)
+
+Merged into `v2-pty-injection` after the main loop's independent
+verification pass required the PAT-masking fix above before landing (the
+workflow gates merge on ANY unresolved issue, not just `verified: false`).
+See the repo's merge commit for the final sha.
