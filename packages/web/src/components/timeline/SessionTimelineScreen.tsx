@@ -30,6 +30,7 @@ import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ComposerControls } from "./ComposerControls";
+import { MobileHandoffButton } from "./MobileHandoffDialog";
 import { SessionActionsMenu } from "./SessionActionsMenu";
 import { SessionSidePanel } from "./SessionSidePanel";
 import { Timeline } from "./Timeline";
@@ -228,6 +229,7 @@ function SessionTimelineBody({
               <Globe className="size-3.5" />
               Preview
             </Button>
+            <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu sessionId={sessionId} disabled={isDisabled} />
           </div>
         </header>
