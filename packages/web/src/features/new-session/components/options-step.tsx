@@ -1,7 +1,8 @@
 "use client";
 
 import type { PermissionMode } from "@falcon/wire";
-import { useState } from "react";
+import { Star } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -10,6 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import {
+  getFavoriteModel,
+  getFavoriteProvider,
+  setFavoriteModel,
+  setFavoriteProvider,
+} from "../favorites";
 import {
   CUSTOM_MODEL_VALUE,
   curatedModelSelectValue,
@@ -18,10 +26,54 @@ import {
   MODEL_OPTIONS,
 } from "../model-meta";
 import { PROVIDER_META, PROVIDER_OPTIONS, shouldShowBetaBanner } from "../provider-meta";
+import type { NewSessionProvider } from "../types";
 import type { NewSessionForm } from "../wizard-state";
 
 const INPUT_CLASS =
   "rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring";
+
+/**
+ * Star toggle rendered inline inside a `<SelectItem>` (docs/competitive-notes-omnara.md
+ * #22 "Favorite/star a default machine, provider, and model") — a plain
+ * `<button>`, not the `Button` component, kept minimal since it nests inside
+ * Radix's `Select.Item` (a `role="option"` `<div>` that selects on
+ * `pointerup`/`click`). Stopping propagation on both is required: Radix
+ * fires `handleSelect` from `onPointerUp` for mouse input and from
+ * `onClick` for touch/keyboard (`@radix-ui/react-select`'s `SelectItem`) —
+ * missing either would let starring a row also select it.
+ */
+function FavoriteStar({
+  favorite,
+  label,
+  onToggle,
+}: {
+  favorite: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={favorite ? `Unstar ${label}` : `Star ${label} as default`}
+      aria-label={favorite ? `Unstar ${label}` : `Star ${label} as default`}
+      aria-pressed={favorite}
+      className="flex size-5 shrink-0 items-center justify-center rounded hover:bg-accent"
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+      }}
+    >
+      <Star
+        className={cn(
+          "size-3.5",
+          favorite ? "fill-amber-400 text-amber-400" : "text-muted-foreground",
+        )}
+      />
+    </button>
+  );
+}
 
 const PERMISSION_MODE_OPTIONS: Array<{ value: PermissionMode; label: string }> = [
   { value: "default", label: "Default (ask each time)" },
@@ -50,6 +102,35 @@ export function OptionsStep({
   const [customOpen, setCustomOpen] = useState(() => !isCuratedModel(form.provider, form.model));
   const modelSelectValue = customOpen ? CUSTOM_MODEL_VALUE : curatedModelSelectValue(form.model);
 
+  // Starred provider/model (docs/competitive-notes-omnara.md #22): read once
+  // per mount, then updated locally on toggle — mirrors `MachineStep`'s own
+  // favorite-state pattern.
+  const [favoriteProvider, setFavoriteProviderState] = useState<NewSessionProvider | null>(() =>
+    getFavoriteProvider(),
+  );
+  const [favoriteModel, setFavoriteModelState] = useState<string | null>(() =>
+    getFavoriteModel(form.provider),
+  );
+  // Re-read the starred model whenever the selected provider changes — a
+  // starred model is scoped per-provider (see `favorites.ts`), so switching
+  // provider must re-resolve against the *new* provider's own star, not
+  // carry the old one's over.
+  useEffect(() => {
+    setFavoriteModelState(getFavoriteModel(form.provider));
+  }, [form.provider]);
+
+  function toggleFavoriteProvider(provider: NewSessionProvider) {
+    const next = favoriteProvider === provider ? null : provider;
+    setFavoriteProvider(next);
+    setFavoriteProviderState(next);
+  }
+
+  function toggleFavoriteModel(modelValue: string) {
+    const next = favoriteModel === modelValue ? null : modelValue;
+    setFavoriteModel(form.provider, next);
+    setFavoriteModelState(next);
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="new-session-provider">
@@ -72,7 +153,17 @@ export function OptionsStep({
           </SelectTrigger>
           <SelectContent>
             {PROVIDER_OPTIONS.map(([value, meta]) => (
-              <SelectItem key={value} value={value}>
+              <SelectItem
+                key={value}
+                value={value}
+                endAdornment={
+                  <FavoriteStar
+                    favorite={value === favoriteProvider}
+                    label={meta.label}
+                    onToggle={() => toggleFavoriteProvider(value)}
+                  />
+                }
+              >
                 {meta.label}
                 {meta.beta ? " (beta)" : ""}
               </SelectItem>
@@ -128,11 +219,28 @@ export function OptionsStep({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {modelOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
+            {modelOptions.map((option) => {
+              // The favorites store keeps the form's real value (`""` for
+              // "Provider default"), same as `form.model` itself — translate
+              // the sentinel back before comparing/storing, same as
+              // `onValueChange` above does.
+              const formValue = option.value === DEFAULT_MODEL_VALUE ? "" : option.value;
+              return (
+                <SelectItem
+                  key={option.value}
+                  value={option.value}
+                  endAdornment={
+                    <FavoriteStar
+                      favorite={formValue === favoriteModel}
+                      label={option.label}
+                      onToggle={() => toggleFavoriteModel(formValue)}
+                    />
+                  }
+                >
+                  {option.label}
+                </SelectItem>
+              );
+            })}
             <SelectItem value={CUSTOM_MODEL_VALUE}>Custom…</SelectItem>
           </SelectContent>
         </Select>

@@ -106,8 +106,21 @@ function SelectLabel({
 function SelectItem({
   className,
   children,
+  endAdornment,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+}: React.ComponentProps<typeof SelectPrimitive.Item> & {
+  /**
+   * Rendered as a plain sibling of `Select.ItemText`, *outside* it — unlike
+   * `children`, this never gets mirrored into the trigger's closed-state
+   * `Select.Value` (per Radix's own `Select.ItemText` contract: whatever's
+   * passed as its children is exactly what `Select.Value` also displays).
+   * For per-row controls that must stay row-only, e.g. a favorite/star
+   * toggle (docs/competitive-notes-omnara.md #22) — putting one inside
+   * `children` instead would duplicate it into the closed trigger as a
+   * genuine nested `<button>`.
+   */
+  endAdornment?: React.ReactNode
+}) {
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -123,6 +136,7 @@ function SelectItem({
         </SelectPrimitive.ItemIndicator>
       </span>
       <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+      {endAdornment}
     </SelectPrimitive.Item>
   )
 }
