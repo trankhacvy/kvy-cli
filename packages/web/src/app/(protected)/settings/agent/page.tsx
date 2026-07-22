@@ -23,27 +23,46 @@ import {
 import { PROVIDER_OPTIONS } from "@/features/new-session/provider-meta";
 import type { NewSessionProvider } from "@/features/new-session/types";
 import { INITIAL_FORM } from "@/features/new-session/wizard-state";
+import {
+  CODEX_EFFORT_OPTIONS,
+  type CodexEffort,
+  getCodexEffort,
+  setCodexEffort,
+} from "@/lib/codex-effort";
 
 /**
- * Settings → Agent (docs/competitive-notes-omnara.md #15 "Global default
- * provider + default model per provider"): a dedicated, discoverable place
- * to review/change the same starred provider/model `features/new-session/
- * favorites.ts` already backs the "New session" wizard's inline star
- * buttons with (`options-step.tsx`'s `FavoriteStar`, #22) — this page is
- * just a second, more prominent surface onto the exact same store, so
- * starring a model here or in the wizard stays in sync either way. Same
- * "per-device localStorage convenience, never authoritative, safe to lose"
- * reasoning as `favorites.ts`/`use-theme.ts` (design principle #3) — there's
- * no account-wide settings-sync backend for preferences like this yet, so
- * "persisted account-wide" (the feature note's phrasing) means "same device,
- * same durability as the rest of Settings," not a new server round trip.
+ * Settings → Agent: default settings for how agents run, independent of
+ * which session you start.
  *
- * Model dropdowns intentionally reuse `model-meta.ts`'s curated
- * `MODEL_OPTIONS` only (no free-text "Custom…" escape hatch like the
- * wizard's own Options step has) — `OptionsStep`'s `FavoriteStar` is only
- * ever rendered next to a curated option, so a starred model is always one
- * of `MODEL_OPTIONS[provider]` or `""` ("Provider default"); this page never
- * needs to represent anything else.
+ * - "Default provider" / "Default model" (docs/competitive-notes-omnara.md
+ *   #15 "Global default provider + default model per provider"): a
+ *   dedicated, discoverable place to review/change the same starred
+ *   provider/model `features/new-session/favorites.ts` already backs the
+ *   "New session" wizard's inline star buttons with (`options-step.tsx`'s
+ *   `FavoriteStar`, #22) — this page is just a second, more prominent
+ *   surface onto the exact same store, so starring a model here or in the
+ *   wizard stays in sync either way. Same "per-device localStorage
+ *   convenience, never authoritative, safe to lose" reasoning as
+ *   `favorites.ts`/`use-theme.ts` (design principle #3) — there's no
+ *   account-wide settings-sync backend for preferences like this yet, so
+ *   "persisted account-wide" (the feature note's phrasing) means "same
+ *   device, same durability as the rest of Settings," not a new server
+ *   round trip.
+ *
+ *   Model dropdowns intentionally reuse `model-meta.ts`'s curated
+ *   `MODEL_OPTIONS` only (no free-text "Custom…" escape hatch like the
+ *   wizard's own Options step has) — `OptionsStep`'s `FavoriteStar` is only
+ *   ever rendered next to a curated option, so a starred model is always one
+ *   of `MODEL_OPTIONS[provider]` or `""` ("Provider default"); this page
+ *   never needs to represent anything else.
+ *
+ * - "Codex effort" (docs/competitive-notes-omnara.md #14 "Codex 'Effort'
+ *   setting"): a persisted global default for Codex's reasoning effort
+ *   level, independent of any per-session model choice (`new-session`'s
+ *   `OptionsStep` picks the model; this is a separate, standing preference
+ *   set once here). Read once on mount and updated locally on change, same
+ *   pattern `NotificationSettingsPage`/`AppearanceSettingsPage` already use
+ *   for their own simple preference toggles.
  */
 export default function AgentSettingsPage() {
   // Lazy `useState` initializers, same pattern as `OptionsStep`'s own
@@ -60,6 +79,7 @@ export default function AgentSettingsPage() {
   const [codexModel, setCodexModelState] = useState<string>(
     () => getFavoriteModel("codex") ?? INITIAL_FORM.model,
   );
+  const [effort, setEffortState] = useState<CodexEffort>(() => getCodexEffort());
 
   function selectProvider(next: NewSessionProvider) {
     setFavoriteProvider(next);
@@ -76,6 +96,12 @@ export default function AgentSettingsPage() {
     else setCodexModelState(model);
   }
 
+  function handleEffortChange(value: string) {
+    const next = value as CodexEffort;
+    setCodexEffort(next);
+    setEffortState(next);
+  }
+
   const modelByProvider: Record<NewSessionProvider, string> = {
     "claude-code": claudeModel,
     codex: codexModel,
@@ -86,8 +112,7 @@ export default function AgentSettingsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Agent</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose which provider "New session" starts with, and which model each provider defaults
-          to.
+          Default settings for how agents run, independent of which session you start.
         </p>
       </div>
 
@@ -135,6 +160,32 @@ export default function AgentSettingsPage() {
             </Select>
           </label>
         ))}
+      </section>
+
+      <section className="flex w-full flex-col gap-3 text-left">
+        <div>
+          <h2 className="text-sm font-medium">Codex effort</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            How much reasoning effort Codex sessions default to. Applies regardless of which model
+            you pick when starting a session.
+          </p>
+        </div>
+
+        <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="codex-effort">
+          Effort
+          <Select value={effort} onValueChange={handleEffortChange}>
+            <SelectTrigger id="codex-effort" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CODEX_EFFORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </label>
       </section>
     </main>
   );
