@@ -1,15 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   BellIcon,
   HomeIcon,
+  type LucideIcon,
   PaletteIcon,
   PlusIcon,
   ShieldCheckIcon,
-  type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -45,6 +45,26 @@ function isActive(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
+/**
+ * Any route that's "inside" a session (timeline, its git panel, or an
+ * unmanaged session) — as opposed to the session list or the new-session
+ * wizard. Collapsing the nav on these routes fully hides it (see
+ * `sidebarCollapsible` below) rather than shrinking to an icon rail, so the
+ * session content gets the full width (competitive-notes-omnara.md #20).
+ */
+export function isSessionRoute(pathname: string): boolean {
+  return pathname.startsWith("/session/") && pathname !== "/session/new/";
+}
+
+/**
+ * `"offcanvas"` fully removes the sidebar (width 0) when collapsed, giving a
+ * genuinely full-width view; `"icon"` (the default everywhere else) leaves a
+ * narrow icon-only rail so the rest of the app keeps quick nav access.
+ */
+export function sidebarCollapsible(pathname: string): "icon" | "offcanvas" {
+  return isSessionRoute(pathname) ? "offcanvas" : "icon";
+}
+
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Sessions";
   if (pathname === "/session/new/") return "New session";
@@ -77,9 +97,7 @@ function NavigationGroup({
               >
                 <Link
                   href={item.href}
-                  aria-current={
-                    isActive(pathname, item.href) ? "page" : undefined
-                  }
+                  aria-current={isActive(pathname, item.href) ? "page" : undefined}
                 >
                   <item.icon aria-hidden="true" />
                   <span>{item.label}</span>
@@ -96,14 +114,11 @@ function NavigationGroup({
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const title = pageTitle(pathname);
-  const isSessionDetailRoute =
-    pathname.startsWith("/session/") &&
-    pathname !== "/session/new/" &&
-    !pathname.includes("/git/");
+  const isSessionDetailRoute = isSessionRoute(pathname) && !pathname.includes("/git/");
 
   return (
     <SidebarProvider className="h-svh overflow-hidden">
-      <Sidebar collapsible="icon">
+      <Sidebar collapsible={sidebarCollapsible(pathname)}>
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -119,16 +134,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <NavigationGroup
-            label="Workspace"
-            items={workspaceNav}
-            pathname={pathname}
-          />
-          <NavigationGroup
-            label="Settings"
-            items={settingsNav}
-            pathname={pathname}
-          />
+          <NavigationGroup label="Workspace" items={workspaceNav} pathname={pathname} />
+          <NavigationGroup label="Settings" items={settingsNav} pathname={pathname} />
         </SidebarContent>
         <SidebarFooter>
           <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
@@ -150,7 +157,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         </header>
         <div
-          className={isSessionDetailRoute ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto"}
+          className={
+            isSessionDetailRoute ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto"
+          }
         >
           {children}
         </div>
