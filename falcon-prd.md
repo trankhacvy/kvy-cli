@@ -205,7 +205,7 @@ A responsive web app (desktop + mobile browser), installable as a PWA.
 - **[P0] FR-7.4 Permission approval UX.** Permission requests render as blocking cards with Allow / Deny / Allow-for-session and (for edits) the proposed change preview. Answering from web resolves the CLI-side promise within 1 s.
 - **[P0] FR-7.5 New session flow.** Machine picker (online machines) → workspace/directory picker (daemon-provided) → provider, permission mode, model → optional new branch/worktree `[P1]` → spawn (UC5).
 - **[P0] FR-7.6 Notifications.** Web Push (service worker) for: permission request, agent question, session completed, session failed. Notification tap deep-links to the exact session. **Presence-aware suppression:** no push when the user has the session visibly open in a focused tab (client reports app/tab focus state; server suppresses). Do this at MVP — notification fatigue is the top churn risk, and per-message pushes are explicitly out (Omnara/Happy both learned this).
-- **[P1] FR-7.7 Git panel.** For the active session's worktree: file-level diff list vs configured base ref, per-file unified diff view (executed on the machine via daemon RPC, streamed encrypted). Commit + push + "create PR" (via `gh`) = `[P2]` fast-follow (Omnara ships this; MVP ships read-only diffs).
+- **[P1] FR-7.7 Git panel.** For the active session's worktree: file-level diff list vs configured base ref, per-file unified diff view (executed on the machine via daemon RPC, streamed encrypted), plus real one-click Commit, Push, and Force Push (`--force-with-lease` only, behind a confirm dialog), inline branch rename, and a "Compare against" selector accepting any local branch, `HEAD` (uncommitted), or a free-text ref — docs/features/git-write-actions.md. "Create PR" (via `gh`) remains `[P2]` fast-follow.
 - **[P1] FR-7.8 Session import (UC7).** "Continue from a recent CLI session": daemon lists recent plain `claude`/`codex` sessions for the workspace (from provider transcript dirs), user picks one, Falcon imports the JSONL history into a new Falcon session and resumes with context.
 - **[P1] FR-7.9** Tab title + favicon reflect pending-attention state (cheap, high-value web ergonomics).
 - **[P2] FR-7.10** Command palette, keyboard shortcuts, session search.
@@ -370,7 +370,7 @@ Fast-follows post-MVP (ordered): git commit/push/PR → live previews (cloudflar
 | Providers: Claude Code + Codex, bundled auth reuse | ✅ | §5.2 |
 | Notifications (permission/question/done) | ✅ + presence suppression | §5.8 |
 | Session import ("continue recent CLI session") | ✅ P1 | FR-7.8 |
-| Git integration (diffs, commit, push, PR via relay) | ◐ Read-only diffs P1; write ops fast-follow | FR-7.7 |
+| Git integration (diffs, commit, push, PR via relay) | ✅ Diffs + commit/push/rename P1; PR via relay fast-follow | FR-7.7 |
 | Live previews (cloudflared tunnel + tokenized links) | ⏭ Fast-follow | protocol namespace reserved |
 | Remote sandboxing (Cloudflare containers, checkpoints, GitHub App, cloud credits) | ⏭ **Deferred by requirement** | schema stubs only, §6.4 |
 | Session migration to cloud ("sessions never die") | ⏭ Deferred (depends on sandboxing) | |

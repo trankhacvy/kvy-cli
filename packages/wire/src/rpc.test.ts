@@ -14,8 +14,14 @@ import {
   GitBranchesParamsSchema,
   GitBranchesResultSchema,
   GitBranchInfoSchema,
+  GitCommitParamsSchema,
+  GitCommitResultSchema,
   GitDiffParamsSchema,
   GitDiffResultSchema,
+  GitPushParamsSchema,
+  GitPushResultSchema,
+  GitRenameBranchParamsSchema,
+  GitRenameBranchResultSchema,
   GitStatusParamsSchema,
   GitStatusResultSchema,
   MessageRpcResultSchema,
@@ -23,6 +29,9 @@ import {
   PermAnswerResultSchema,
   RpcCallSchema,
   SetModeResultSchema,
+  SlashCommandInfoSchema,
+  SlashCommandsListParamsSchema,
+  SlashCommandsListResultSchema,
   SpawnParamsSchema,
   SpawnResultSchema,
   WorkspaceRegisterParamsSchema,
@@ -117,6 +126,12 @@ describe("idempotencyKey on caller-retriable machine RPCs", () => {
       GitBranchesParamsSchema.safeParse({ idempotencyKey: "idem-8", worktree: "/repo" }).success,
     ).toBe(true);
 
+    expect(SlashCommandsListParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      SlashCommandsListParamsSchema.safeParse({ idempotencyKey: "idem-9", worktree: "/repo" })
+        .success,
+    ).toBe(true);
+
     expect(FsReadParamsSchema.safeParse({ worktree: "/repo", path: "a.ts" }).success).toBe(false);
     expect(
       FsReadParamsSchema.safeParse({ idempotencyKey: "idem-6", worktree: "/repo", path: "a.ts" })
@@ -200,6 +215,127 @@ describe("git.status / git.diff result shapes", () => {
       }).success,
     ).toBe(true);
     expect(GitBranchesResultSchema.safeParse({ branches: [{ name: "main" }] }).success).toBe(false);
+  });
+});
+
+describe("commands.list result shapes", () => {
+  it("SlashCommandInfoSchema requires name; description/argumentHint stay optional", () => {
+    expect(SlashCommandInfoSchema.safeParse({ name: "compact" }).success).toBe(true);
+    expect(
+      SlashCommandInfoSchema.safeParse({
+        name: "git:commit",
+        description: "Create a commit",
+        argumentHint: "[message]",
+      }).success,
+    ).toBe(true);
+    expect(SlashCommandInfoSchema.safeParse({ description: "no name" }).success).toBe(false);
+  });
+
+  it("SlashCommandsListResultSchema carries a list of SlashCommandInfo", () => {
+    expect(
+      SlashCommandsListResultSchema.safeParse({
+        commands: [{ name: "compact" }, { name: "git:commit", description: "Create a commit" }],
+      }).success,
+    ).toBe(true);
+    expect(SlashCommandsListResultSchema.safeParse({ commands: [{}] }).success).toBe(false);
+  });
+});
+
+describe("git.commit / git.push / git.renameBranch (write RPCs)", () => {
+  it("GitCommitParamsSchema requires idempotencyKey/worktree/message; stageAll stays optional", () => {
+    expect(GitCommitParamsSchema.safeParse({ worktree: "/repo", message: "fix" }).success).toBe(
+      false,
+    );
+    expect(
+      GitCommitParamsSchema.safeParse({
+        idempotencyKey: "idem-9",
+        worktree: "/repo",
+        message: "fix",
+      }).success,
+    ).toBe(true);
+    expect(
+      GitCommitParamsSchema.safeParse({
+        idempotencyKey: "idem-9",
+        worktree: "/repo",
+        message: "fix",
+        stageAll: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      GitCommitParamsSchema.safeParse({ idempotencyKey: "idem-9", worktree: "/repo" }).success,
+    ).toBe(false);
+  });
+
+  it("GitCommitResultSchema requires `committed`; commitSha/nothingToCommit stay optional", () => {
+    expect(GitCommitResultSchema.safeParse({}).success).toBe(false);
+    expect(GitCommitResultSchema.safeParse({ committed: true }).success).toBe(true);
+    expect(GitCommitResultSchema.safeParse({ committed: true, commitSha: "abc1234" }).success).toBe(
+      true,
+    );
+    expect(
+      GitCommitResultSchema.safeParse({ committed: false, nothingToCommit: true }).success,
+    ).toBe(true);
+  });
+
+  it("GitPushParamsSchema requires idempotencyKey/worktree; remote/branch/force/setUpstream stay optional", () => {
+    expect(GitPushParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      GitPushParamsSchema.safeParse({ idempotencyKey: "idem-10", worktree: "/repo" }).success,
+    ).toBe(true);
+    expect(
+      GitPushParamsSchema.safeParse({
+        idempotencyKey: "idem-10",
+        worktree: "/repo",
+        remote: "origin",
+        branch: "main",
+        force: true,
+        setUpstream: true,
+      }).success,
+    ).toBe(true);
+  });
+
+  it("GitPushResultSchema requires ok:true/remote/branch/forced", () => {
+    expect(
+      GitPushResultSchema.safeParse({ ok: true, remote: "origin", branch: "main", forced: false })
+        .success,
+    ).toBe(true);
+    expect(
+      GitPushResultSchema.safeParse({ ok: false, remote: "origin", branch: "main" }).success,
+    ).toBe(false);
+    expect(
+      GitPushResultSchema.safeParse({ ok: true, remote: "origin", branch: "main" }).success,
+    ).toBe(false);
+  });
+
+  it("GitRenameBranchParamsSchema requires idempotencyKey/worktree/to; from stays optional", () => {
+    expect(
+      GitRenameBranchParamsSchema.safeParse({ worktree: "/repo", to: "renamed" }).success,
+    ).toBe(false);
+    expect(
+      GitRenameBranchParamsSchema.safeParse({
+        idempotencyKey: "idem-11",
+        worktree: "/repo",
+        to: "renamed",
+      }).success,
+    ).toBe(true);
+    expect(
+      GitRenameBranchParamsSchema.safeParse({
+        idempotencyKey: "idem-11",
+        worktree: "/repo",
+        from: "old-name",
+        to: "renamed",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("GitRenameBranchResultSchema requires ok:true/branch/hadUpstream", () => {
+    expect(
+      GitRenameBranchResultSchema.safeParse({ ok: true, branch: "renamed", hadUpstream: true })
+        .success,
+    ).toBe(true);
+    expect(GitRenameBranchResultSchema.safeParse({ ok: true, branch: "renamed" }).success).toBe(
+      false,
+    );
   });
 });
 
