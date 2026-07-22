@@ -178,6 +178,31 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `git.files` machine RPC (design §4.4's "fs.read"/Repo Files sidebar tab,
+// docs/competitive-notes-omnara.md #5 "Full repo file browser"): the flat
+// file listing that backs the file tree, joining `git.status`/`git.diff`/
+// `git.branches` in the `git.*` family above. `git ls-files --cached
+// --others --exclude-standard` (tracked + untracked-but-not-ignored) is the
+// listing source rather than a raw recursive `fs.readdir` walk: a repo file
+// browser has no business surfacing `node_modules`/build output/anything
+// `.gitignore` already excludes, and git already knows exactly which paths
+// those are without this needing its own ignore-file parser. Structural
+// clone of `git.status`'s params shape.
+export const GitFilesParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GitFilesParams = z.infer<typeof GitFilesParamsSchema>;
+
+// Flat list of worktree-relative paths (posix-separated, as git itself
+// emits) — the web file tree groups these into a nested structure
+// client-side rather than this RPC returning a pre-built tree, keeping the
+// wire contract a plain, cheap-to-cache array.
+export const GitFilesResultSchema = z.object({
+  files: z.array(z.string()),
+});
+export type GitFilesResult = z.infer<typeof GitFilesResultSchema>;
+
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),

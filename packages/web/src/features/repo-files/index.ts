@@ -1,0 +1,10 @@
+export { FileTree } from "./components/FileTree";
+export { FileViewer } from "./components/FileViewer";
+export { RepoFilesPanel } from "./components/RepoFilesPanel";
+export { SessionFilesScreen } from "./components/SessionFilesScreen";
+export { buildFileTree } from "./file-tree-logic";
+export { machineRpcToRepoFilesActions } from "./live-actions";
+export { createMockRepoFilesActions, useMockRepoFilesActions } from "./mock-source";
+export type { FileTreeNode, RepoFileContent, RepoFilesActions, UseRepoFilesActions } from "./types";
+export { useLiveRepoFilesActions } from "./use-live-repo-files-actions";
+export { useRepoFiles } from "./use-repo-files";

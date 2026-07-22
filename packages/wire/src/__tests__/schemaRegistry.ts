@@ -33,6 +33,8 @@ export const schemaRegistry: Record<string, z.ZodTypeAny> = {
   GitBranchesParamsSchema: wire.GitBranchesParamsSchema,
   GitBranchInfoSchema: wire.GitBranchInfoSchema,
   GitBranchesResultSchema: wire.GitBranchesResultSchema,
+  GitFilesParamsSchema: wire.GitFilesParamsSchema,
+  GitFilesResultSchema: wire.GitFilesResultSchema,
   FsReadParamsSchema: wire.FsReadParamsSchema,
   FsReadResultSchema: wire.FsReadResultSchema,
   FsListParamsSchema: wire.FsListParamsSchema,

@@ -260,6 +260,51 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ inline: "diff --git a/x b/x", truncated: false });
   });
 
+  it("round-trips a git.files call and result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ files: ["README.md", "src/a.ts"] }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("git.files", {
+      idempotencyKey: "idem-8",
+      worktree: "/repo",
+    });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:git.files",
+      "git.files",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({ files: ["README.md", "src/a.ts"] });
+  });
+
+  it("round-trips an fs.read call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ inline: "const a = 1;\n", truncated: false }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("fs.read", {
+      idempotencyKey: "idem-9",
+      worktree: "/repo",
+      path: "src/a.ts",
+    });
+
+    expect(result).toEqual({ inline: "const a = 1;\n", truncated: false });
+  });
+
   it("throws MachineRpcError when the transport reports failure", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: false, error: "target-offline" })),

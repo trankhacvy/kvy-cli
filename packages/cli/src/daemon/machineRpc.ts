@@ -13,10 +13,12 @@
  * `adopt.take`/`adopt.mirror`, and the Git panel's `git.status`/`git.diff`
  * (plan.md §16 "4.1 Git panel") — plus `git.branches` (docs/features/
  * worktree-isolation.md, the New Session wizard's existing-branch worktree
- * picker) — are in scope here —
- * `stopSession`/`listSessions`/`fs.read`/`adopt.list` are separate, later
- * plan bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods`
- * the same way without touching this module's dispatch shape.
+ * picker) and `git.files`/`fs.read` (docs/competitive-notes-omnara.md #5
+ * "Full repo file browser" — the Repo Files sidebar tab's file-tree listing
+ * and file-content fetch) — are in scope here —
+ * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
+ * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
+ * same way without touching this module's dispatch shape.
  *
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
  * double-spawn"; the same rationale extends to `adopt.take`'s kill+spawn
@@ -36,13 +38,17 @@
  * `workspace.register` needs none either, for the same reason as
  * `fs.mkdir`: registering an already-registered directory is a no-op
  * (`workspace/registry.ts`'s own idempotent contract). `git.status`/
- * `git.diff`/`git.branches` need none either, for the same reason as
- * `fs.list`: they only read current repository state, so a retry just
- * re-reads it — unlike `adopt.mirror`'s "re-reading a file mid-write twice"
- * hazard, there's no mid-write file here to race. All three still carry
- * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
- * carries a caller-minted key") for uniformity with the rest of this RPC
- * family, it's just unused by these handlers.
+ * `git.diff`/`git.branches`/`git.files` need none either, for the same
+ * reason as `fs.list`: they only read current repository state, so a retry
+ * just re-reads it. `fs.read` is the one exception in this read-only
+ * cluster that *does* carry the same mid-write hazard `@falcon/wire`'s own
+ * `rpc.ts` doc comment calls out for `adopt.mirror` ("or re-reading a file
+ * mid-write twice") — but a re-read simply returns whatever the file
+ * currently contains, which is still a valid (if possibly different)
+ * answer, not a corrupted one, so no idempotency cache is needed for it
+ * either. All four still carry `idempotencyKey` on the wire (design: "every
+ * caller-retriable machine RPC carries a caller-minted key") for uniformity
+ * with the rest of this RPC family, it's just unused by these handlers.
  * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
  * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
  * retried resume of the same session is not a "double spawn" risk:
@@ -94,6 +100,10 @@ import {
   FsMkdirParamsSchema,
   type FsMkdirResult,
   FsMkdirResultSchema,
+  type FsReadParams,
+  FsReadParamsSchema,
+  type FsReadResult,
+  FsReadResultSchema,
   type GitBranchesParams,
   GitBranchesParamsSchema,
   type GitBranchesResult,
@@ -102,6 +112,10 @@ import {
   GitDiffParamsSchema,
   type GitDiffResult,
   GitDiffResultSchema,
+  type GitFilesParams,
+  GitFilesParamsSchema,
+  type GitFilesResult,
+  GitFilesResultSchema,
   type GitStatusParams,
   GitStatusParamsSchema,
   type GitStatusResult,
@@ -124,8 +138,10 @@ import {
   createDirectory as createDirectoryDefault,
   listDirectory as listDirectoryDefault,
 } from "./fsBrowse.js";
+import { readFile as readFileDefault } from "./fsRead.js";
 import { getGitBranches as getGitBranchesDefault } from "./gitBranches.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
+import { getGitFiles as getGitFilesDefault } from "./gitFiles.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
@@ -138,6 +154,8 @@ export const MACHINE_RPC_METHODS = [
   "git.status",
   "git.diff",
   "git.branches",
+  "git.files",
+  "fs.read",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -164,6 +182,10 @@ export interface MachineRpcDeps {
   getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
   /** Backs the `git.branches` RPC (New Session wizard's existing-branch worktree picker, docs/features/worktree-isolation.md). Injectable for tests; defaults to `gitBranches.ts`'s real `git for-each-ref` parse. Throws on failure. */
   getGitBranches?: (params: GitBranchesParams) => Promise<GitBranchesResult>;
+  /** Backs the `git.files` RPC (Repo Files sidebar tab's file tree, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `gitFiles.ts`'s real `git ls-files` listing. Throws on failure (e.g. `worktree` isn't a git repo). */
+  getGitFiles?: (params: GitFilesParams) => Promise<GitFilesResult>;
+  /** Backs the `fs.read` RPC (Repo Files sidebar tab's file-content fetch, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `fsRead.ts`'s real, worktree-contained file read. Throws on failure (missing/escaping/binary/directory target). */
+  readFile?: (params: FsReadParams) => Promise<FsReadResult>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -290,6 +312,8 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
+  const getGitFiles = deps.getGitFiles ?? getGitFilesDefault;
+  const readFile = deps.readFile ?? readFileDefault;
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
 
@@ -369,6 +393,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GitBranchesParamsSchema,
       resultSchema: GitBranchesResultSchema,
       handle: getGitBranches as (params: unknown) => Promise<unknown>,
+    },
+    "git.files": {
+      paramsSchema: GitFilesParamsSchema,
+      resultSchema: GitFilesResultSchema,
+      handle: getGitFiles as (params: unknown) => Promise<unknown>,
+    },
+    "fs.read": {
+      paramsSchema: FsReadParamsSchema,
+      resultSchema: FsReadResultSchema,
+      handle: readFile as (params: unknown) => Promise<unknown>,
     },
     "adopt.take": {
       paramsSchema: AdoptTakeParamsSchema,

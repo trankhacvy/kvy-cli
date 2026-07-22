@@ -29,6 +29,12 @@
  * every sibling method here, doesn't export paired `AdoptListParams`/
  * `AdoptListResult` type aliases — so those two are derived locally via
  * `z.infer` instead of imported, same values either way.
+ *
+ * `git.files`/`fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file
+ * browser") join the same method table for `features/repo-files/`'s Repo
+ * Files sidebar tab: `git.files` lists every worktree-relative path
+ * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
+ * one file's content once a path is picked.
  */
 import {
   type AdoptListParamsSchema,
@@ -41,10 +47,14 @@ import {
   FsListResultSchema,
   type FsMkdirParams,
   FsMkdirResultSchema,
+  type FsReadParams,
+  FsReadResultSchema,
   type GitBranchesParams,
   GitBranchesResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
+  type GitFilesParams,
+  GitFilesResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
   type SpawnParams,
@@ -60,8 +70,10 @@ export type {
   AdoptTakeParams,
   FsListParams,
   FsMkdirParams,
+  FsReadParams,
   GitBranchesParams,
   GitDiffParams,
+  GitFilesParams,
   GitStatusParams,
   SpawnParams,
   WorkspaceRegisterParams,
@@ -82,6 +94,8 @@ export interface MachineRpcParams {
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
   "git.branches": GitBranchesParams;
+  "git.files": GitFilesParams;
+  "fs.read": FsReadParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -96,6 +110,8 @@ export interface MachineRpcResults {
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
   "git.branches": import("@falcon/wire").GitBranchesResult;
+  "git.files": import("@falcon/wire").GitFilesResult;
+  "fs.read": import("@falcon/wire").FsReadResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -111,6 +127,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
   "git.branches": GitBranchesResultSchema,
+  "git.files": GitFilesResultSchema,
+  "fs.read": FsReadResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */
