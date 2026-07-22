@@ -43,9 +43,20 @@ export function createFsFileMentionActions(
   rpc: MachineRpcClient,
   root: string,
 ): FileMentionActions {
+  // Cached across calls on this one actions instance (one per mounted
+  // Composer) rather than re-walked on every keystroke — the composer calls
+  // `search` on every "@" trigger update, and a full `fs.list` BFS per
+  // keystroke would be needlessly slow/chatty once this is actually wired
+  // to a live daemon. A session-lived cache is a fine tradeoff here: the
+  // popover is asking "what files exist", not "what changed just now", and
+  // a stale list only means a brand-new file created mid-session doesn't
+  // show up until the next remount — never a wrong/broken result.
+  let filesPromise: Promise<FileMentionEntry[]> | null = null;
+
   return {
     async search(query) {
-      const files = await collectFiles(rpc, root);
+      if (!filesPromise) filesPromise = collectFiles(rpc, root);
+      const files = await filesPromise;
       return filterFileMentions(files, query);
     },
   };

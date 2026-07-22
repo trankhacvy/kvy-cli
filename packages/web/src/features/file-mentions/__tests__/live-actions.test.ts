@@ -65,6 +65,28 @@ describe("createFsFileMentionActions", () => {
     await expect(actions.search("anything")).resolves.toEqual([]);
   });
 
+  it("only walks the tree once per actions instance — a second search reuses the cached file list", async () => {
+    const call = vi.fn(async (_method: string, params: { path?: string }) => {
+      if (params.path === "/repo") {
+        return {
+          path: "/repo",
+          parent: "/",
+          entries: [{ name: "CLAUDE.md", isDirectory: false }],
+        };
+      }
+      throw new Error(`unexpected path ${params.path}`);
+    });
+    const actions = createFsFileMentionActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+      "/repo",
+    );
+
+    await actions.search("claude");
+    await actions.search("CLAUDE");
+
+    expect(call).toHaveBeenCalledTimes(1);
+  });
+
   it("passes an idempotencyKey with each fs.list call", async () => {
     const call = vi.fn(async () => ({ path: "/repo", parent: null, entries: [] }));
     const actions = createFsFileMentionActions(
