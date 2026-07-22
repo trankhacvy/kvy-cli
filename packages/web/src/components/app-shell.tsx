@@ -2,6 +2,7 @@
 
 import {
   BellIcon,
+  BotIcon,
   HomeIcon,
   type LucideIcon,
   PaletteIcon,
@@ -36,6 +37,7 @@ const workspaceNav: NavItem[] = [
 
 const settingsNav: NavItem[] = [
   { href: "/settings/appearance/", label: "Appearance", icon: PaletteIcon },
+  { href: "/settings/agent/", label: "Agent", icon: BotIcon },
   { href: "/settings/notifications/", label: "Notifications", icon: BellIcon },
   { href: "/settings/recovery/", label: "Recovery", icon: ShieldCheckIcon },
 ];
