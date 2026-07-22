@@ -314,10 +314,26 @@ function BranchModePanel({
   function selectMode(mode: BranchMode) {
     // Seed a fresh auto-generated name the first time "new branch" is picked
     // with an empty name — never overwrites a name the user already typed
-    // (e.g. switching away and back), and never applies to "existing branch"
-    // mode, which has no sensible auto-generated value.
+    // (e.g. switching away and back).
     if (mode === "new-branch" && form.branchName.trim() === "") {
       onChange({ branchMode: mode, branchName: generateBranchName() });
+      return;
+    }
+    // "existing branch" mode always clears `branchName` on entry — unlike
+    // "new branch", it has no sensible auto-generated value, and critically,
+    // a name left over from a *different* mode (e.g. "new branch"'s
+    // auto-generated `wf/...` suggestion, or a previously-picked existing
+    // branch from an earlier visit to this same mode) is never a real
+    // selection from the picker below. Leaving it in place would let
+    // `canAdvance`'s bare "non-empty branchName" check pass without the user
+    // ever clicking a row, and `buildSpawnRequest` would then silently spawn
+    // with `createWorktree: true` on a branch that doesn't exist yet —
+    // `gitWorktree.ts`'s `ensureBranchWorkspace` treats "doesn't exist" as
+    // "create it", so the daemon would quietly create a brand-new branch
+    // instead of checking out an existing one, contradicting this mode's
+    // entire purpose. Clearing forces an explicit pick every time.
+    if (mode === "existing-branch") {
+      onChange({ branchMode: mode, branchName: "" });
       return;
     }
     onChange({ branchMode: mode });

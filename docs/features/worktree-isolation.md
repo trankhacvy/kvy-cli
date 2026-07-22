@@ -128,3 +128,90 @@ All 6 phases implemented and verified:
 Full-repo `pnpm build && pnpm typecheck && pnpm test` (via `node_modules/.bin/biome` for lint, see note above) all green. Deliberately deferred, non-blocking follow-ups are tracked in `known-issues.md`: local `falcon -b` CLI/remote parity, worktree cleanup lifecycle, `git.branches` remote-tracking-refs support, and revisiting the global default once cleanup exists — none of these were promised by this plan's acceptance criteria.
 
 Two flaky, pre-existing (unrelated-to-this-task) test failures were observed under full-monorepo-test-suite resource contention — `src/index.test.ts`'s `--help` test and `src/daemon/sessionRegistry.test.ts`'s persistence-timing test — both pass reliably in isolation and on a repeated clean full-suite run; neither touches any file this task modified.
+
+## Test & Review notes (independent verification pass)
+
+Re-ran everything from a clean worktree rather than trusting the checked boxes above.
+
+**Full-repo commands:** `pnpm build`, `pnpm typecheck`, `pnpm test` (11/11 tasks each, 1558 cli /
+792 web / all wire+server+e2e tests) all green, matching the phase-by-phase claims.
+`node_modules/.bin/biome check .` reproduces the same pre-existing 95 errors/132 warnings, and
+`biome check` on every file this feature touched individually reports zero issues — the
+`pnpm lint`-via-`pnpm-exec` sandbox crash is real and reproduces exactly as described, unrelated
+to this task.
+
+**Phase 1 (wire):** confirmed the `wire-shapes.json` diff for this feature's commit is purely
+additive (89 insertions, 0 deletions) via `git diff <parent> <commit>`. Schema shapes, exports,
+and round-trip tests all check out.
+
+**Phase 2 (daemon `git.branches`):** read `gitBranches.ts` and its tests; verified against a real
+git repo (`git init` + `git worktree add` in a scratch directory) that `for-each-ref`'s
+`%(worktreepath)` atom is populated for *every* branch checked out anywhere, including the
+current branch in the primary worktree — not just branches in secondary worktrees. The unit
+test fixture ("marks the HEAD branch as current and leaves checkedOutAt ... unset") models an
+unrealistic case (real git always populates `checkedOutAt` for the current branch too), but this
+doesn't cause a behavior bug: `parseBranchLine` handles a populated `worktreepath` column for
+any branch, current or not, and the picker's `isCurrent` fallback in `options-step.tsx` (flagged
+by the implementer as a deviation) turns out to be redundant rather than load-bearing, since real
+git already sets `checkedOutAt` for the current branch. Not fixed — it's a test-realism nitpick,
+not a defect. Also independently verified with real git that attempting `git worktree add` for a
+branch already checked out elsewhere fails exactly the way `assertNotCheckedOutElsewhere`
+anticipates (`fatal: '<branch>' is already used by worktree at '<path>'`).
+
+**Phase 3 (spawn dedup relocation + checked-out-elsewhere guard + exclude entry):** read the full
+diff of `spawnEngine.ts`/`gitWorktree.ts` against the pre-existing versions; the dedup check
+relocation is exactly as documented (now keyed on the post-`ensureBranchWorkspace` `spawnDirectory`),
+and the new guard/exclude-file logic matches the doc comments. Test coverage for both matches the
+acceptance criteria.
+
+**Phase 4/5 (web wizard, live browser verification):** the implementer's own status notes flagged
+"no live-browser click-test (no browser harness in this environment)" for both phases. Built a
+temporary, unpublished QA harness page (mounted `NewSessionScreen` with `mock-source.ts`'s actions,
+deleted after use — never committed) and drove the real wizard through Chrome:
+- Confirmed the 3-way `Repo root` / `New branch` / `Existing branch` radio group renders and
+  the auto-generated `wf/<yyyyMMdd>-<4 chars>` name seeds correctly on selecting "New branch".
+- Confirmed the existing-branch picker lists branches from the mock's `git.branches` fixture,
+  correctly disables the current branch and a branch checked out elsewhere with an "In use at
+  <path>" hint, and lets a free branch be selected.
+- Confirmed the Review step's branch summary line matches `branchSummary()`'s exact wording for
+  an existing-branch pick.
+- Confirmed Phase 5's own unverified manual-check acceptance criterion: setting
+  `localStorage['falcon:git-default-branch-mode'] = 'new-branch'` and opening a fresh wizard does
+  open the Options step pre-seeded to "New branch" mode with an auto-generated name filled in.
+
+**Bug found and fixed (Phase 4):** switching `branchMode` from `"new-branch"` (or any prior state
+that had left a non-empty `branchName`) to `"existing-branch"` did not clear `branchName`. Since
+`canAdvance("options")` only checks "`branchMode === "repo-root"` or `branchName` is non-empty",
+the wizard let a user advance past Options — and all the way to Review, and (had this gone
+un-caught) to `Create session` — in "Existing branch" mode having never clicked a row in the
+picker, silently carrying over a stale name (e.g. the auto-generated `wf/...` suggestion from a
+moment spent in "New branch" mode). Reproduced live in the browser: entering "Existing branch"
+right after visiting "New branch" left `Next` enabled with no picker row highlighted, and Review
+showed `Branch: Existing branch wf/20260722-e707 (worktree)` for a branch that was never selected
+and does not exist. Since `existing-branch` mode always maps to
+`{ name, createWorktree: true }` and `gitWorktree.ts`'s `ensureBranchWorkspace` treats a
+not-found branch name as "create it" (`git worktree add <dir> -b <name>`), spawning here would
+have silently created a brand-new branch under a leftover/accidental name — directly
+contradicting "Existing branch"'s entire purpose, with no error or warning surfaced anywhere.
+**Fix:** `options-step.tsx`'s `selectMode` now clears `branchName` whenever `"existing-branch"`
+is selected, forcing an explicit re-pick from the list every time the mode is entered (mirrors
+the existing "seed a fresh name" precedent for `"new-branch"`). Re-verified live in the browser
+after the fix: entering "Existing branch" now correctly disables `Next` until a row is clicked,
+and re-enables it once one is. No existing test exercised this path (no component-level tests
+exist for any step component in this feature, matching the rest of the codebase's convention of
+testing only the pure `wizard-state.ts`/`auto-branch.ts`/etc. logic layers) — the fix was
+verified by hand against the real component in a real browser rather than added as a new test
+harness pattern the feature doesn't otherwise use.
+
+**Not independently re-verified:** the Settings → Git page's own button-toggle UI (code-reviewed
+only, matches `AppearanceSettingsPage`'s shape) and the real (non-mock) `/session/new/` route
+behind `RequireAuth` + live `apiSocket`/crypto client, since neither has any live server/auth
+infra available in this environment — same limitation the implementer already reported, not
+newly discovered.
+
+**Verdict:** feature substantially matches its plan and all six phases' acceptance criteria hold
+under independent re-verification, with one real bug found in Phase 4's mode-switch handling and
+fixed in this pass (`options-step.tsx`). No checkbox in the phase list above needed correcting —
+each phase's own listed acceptance criteria were, in fact, met; the bug was in an interaction the
+plan's acceptance bullets didn't explicitly spell out (mode-switch/stale-state hygiene) rather
+than a checked-off criterion that didn't hold.
