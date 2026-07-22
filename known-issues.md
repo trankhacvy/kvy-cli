@@ -1,167 +1,175 @@
 # Known issues
 
-Tracks issues found during testing, whether still open (why it was parked, what a real fix
-needs) or resolved (`~~struck through~~`, what landed and how it was verified).
+Tracks open issues found during testing/planning — why it's parked and what a real fix
+needs. Resolved issues are removed once verified rather than kept as a growing archive;
+history for anything previously listed here lives in git (this file's own commit log) and,
+for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 
-## ~~Recovery code can silently create a disconnected account instead of failing~~ — RESOLVED
+## Flow 3's spawn-dedup guard doesn't survive a daemon restart — PARTIALLY fixed, live repro still fails
 
-**Where:** `docs/bug-fix-plan.md` issue #12 / execution unit `BF3.2` ("recovery-code-restore").
-Originally parked on branch `wf/BF3.2` (never merged) because the client-side UI alone couldn't
-close the gap — it needed a crypto format change plus a server-side capability that didn't
-exist yet. Both landed in this pass.
+**Status:** a real fix for the *persistence* half landed on worktree branch
+`worktree-agent-a762cdc54ca15c830` (off `v2-pty-injection`), commit `812fc36` — not yet merged.
+Unit-level verification is clean (`pnpm build`/`typecheck` clean; 39/39 new tests; full
+`packages/cli` suite 1511/1517, the only 6 reds being the same pre-existing
+`scanner.test.ts`/`transcriptIndexer.test.ts` timing flakes documented elsewhere, confirmed
+identical on the base branch). **But a live end-to-end re-test of the ORIGINAL bug repro — spawn
+→ restart the daemon → resubmit the wizard for the same directory — still produced a genuine
+duplicate process.** The persistence fix is necessary but not sufficient; see the next entry
+below for why, which this fix does not close on its own. Do not merge this expecting the
+original bug report to be resolved — it isn't yet.
 
-**What was broken:** `decodeRecoveryCode` (`packages/crypto/src/recovery.ts`) had no
-checksum/HMAC tying a code to a real account — it accepted *any* input that happened to decode
-to exactly 32 bytes. Combined with `/v1/auth` being upsert-based (never answered "no such
-account," only "found or created"), a wrong-but-correctly-shaped recovery code silently minted
-a brand-new, empty account instead of failing.
+**Where:** `packages/cli/src/daemon/{types.ts,sessionRegistry.ts,sessionsStore.ts}`. Found
+during the live-verification pass for `FL3.2` ("spawn-directory-dedup",
+`docs/plan-flows-3-4-5.md` `TC-F3-3`) — flagged there as a finding adjacent to that test, not
+a failure of the test itself (the dedup guard works fine without a restart in between).
 
-**Fix landed:**
-1. **Crypto (`packages/crypto/src/recovery.ts`):** the encoded payload is now
-   `masterSecret (32B) || checksum (4B)` — checksum is `sha512(masterSecret).slice(0, 4)` via
-   `tweetnacl.hash` (already a dependency, no new one added). `decodeRecoveryCode` recomputes
-   and constant-time-compares the checksum, returning `null` on any mismatch — a garbled or
-   made-up code now fails client-side, before any network call. Clean wire-format break (no
-   real user depended on an old-format code pre-launch), noted plainly in the module doc.
-2. **Server (`packages/server/src/app/routes/auth.ts`):** `POST /v1/auth`'s response gained
-   `accountStatus: "found" | "created"`, derived from Postgres's `xmax = 0` trick on the
-   upsert's `RETURNING` row (no separate pre-check query needed) — purely additive, the normal
-   sign-in path is unchanged.
-3. **Client (`packages/web/src/app/(public)/signin/`, `lib/restore-recovery-code.ts`):** a
-   "restore from recovery code" entry point in the `needs-signup` state. A malformed code
-   never touches the network. A well-formed code whose sign-in reports `accountStatus:
-   "created"` (i.e. never actually matched a real account) is rolled back (`bridge.clear()`)
-   and reported as "no account found," instead of being accepted as a successful restore. This
-   is a from-scratch reimplementation of `wf/BF3.2`'s intent (that branch's diff didn't apply
-   cleanly after the sign-in page was redesigned), reusing its decode → init → sign-in →
-   rollback shape.
+**What's broken:** `TrackedSession.directory` (added by `FL3.2` to prevent the wizard from
+spawning two processes in the same folder) is an in-memory-only annotation. It's never
+written to `~/.falcon/sessions.json` — `PersistedSession` (`sessionsStore.ts`) has no
+`directory` field at all. On daemon restart, `resumeSession` re-tracks a restored session by
+calling `trackSpawned(pid, directory)` with `directory` omitted
+(`sessionRegistry.ts` doc comment confirms this is deliberate: a resume "isn't establishing a
+*new* live-directory fact"), so every session that predates the restart comes back with
+`directory: undefined`. The dedup check
+(`scanForLiveSessionInDirectory`'s `session.directory === realDirectory` match) can then never
+match that session again.
 
-**Verified:** fresh `pnpm build`/`typecheck`/`test` all clean across every package
-(crypto/server/web/cli), including an exhaustive single-bit-flip test over every position of a
-genuine code (every corruption caught by the checksum) and the exact original negative case: a
-well-formed-looking but never-issued code now shows an error and leaves no account behind.
+**Reproduced live:** spawned a session in a fresh directory, restarted the daemon (a normal,
+expected lifecycle event — not exotic; this project's own self-update/heartbeat logic
+restarts the daemon routinely), then resubmitted the wizard for the *same* directory. The
+daemon spawned a genuine second `falcon claude --starting-mode remote` process — two live
+pids, two tmux sessions, same directory, confirmed via `ps`/`tmux ls`.
 
-## ~~Model-switch service line is clean but invisible in the web timeline~~ — RESOLVED
+**What a real fix needs:** persist `directory` as part of `PersistedSession` in
+`sessionsStore.ts` (a schema-version bump, same additive-migration pattern the file's other
+fields already follow), and have `resumeSession`'s restore path pass the restored directory
+through to `trackSpawned` instead of omitting it. Needs a test proving the dedup guard still
+catches a duplicate spawn attempt *after* a simulated daemon restart, not just within one
+daemon's lifetime.
 
-**Where:** `docs/bug-fix-plan.md` issue #4 / execution unit `BF1.2` ("model-switch-render-fix"),
-merged to `v2-pty-injection` (`7a22dde`). Found during the Phase 4 live-verification pass;
-fixed same day.
+**Fix plan, designed (not yet implemented):**
+1. Add `directory?: string` to `PersistedSession` (`sessionsStore.ts`) — purely additive; an
+   old `sessions.json` with no `directory` key still loads fine as `undefined`.
+2. Thread `directory` through `sessionRegistry.ts`'s `toPersisted()` and `findResumable()` so
+   every persisted/resumable record carries it.
+3. Widen `ResumeSessionRegistry.trackSpawned`'s signature (`resumeSession.ts`) to accept an
+   optional `directory`, and pass the resolved directory through at the relaunch call site
+   (currently `deps.registry.trackSpawned(launched.pid)` with no second argument).
+4. Give `resolveResumeDirectory` (currently a hardcoded `() => undefined` in both
+   `daemon/commands.ts` and `daemon/machineIntegration.ts`) a real implementation: re-`realpath`
+   the persisted directory, fail the resume cleanly if it no longer exists. This is a bonus —
+   resume currently cannot work in production at all without it, since it never has a
+   directory to relaunch into; this fix is a strict superset that also makes resume functional.
+5. Tests: a `sessionRegistry.test.ts` case that persists → discards in-memory state (simulating
+   restart) → restores → re-tracks → proves the dedup scan matches again (not just that a
+   field round-trips); a `resumeSession.test.ts` spy-based test proving `trackSpawned` is
+   called with the resolved directory; a backward-compat case reading an old file with no
+   `directory` key.
 
-**What was broken:** `/model haiku` in the live TUI produced a genuinely clean `service`
-envelope server-side (verified by decryption: `"Set model to Haiku 4.5 and saved as your
-default for new sessions"`, no XML tags, no ANSI codes — the CLI-side fix was already correct),
-but the web timeline never showed it. A pre-existing filter —
-`packages/web/src/components/timeline/transcript-view.ts`'s `isHiddenTimelineItem` —
-unconditionally hid every `service`-kind `RenderItem`, clean or not.
+The implementation followed the re-resolve-via-`realpath` recommendation: a new shared
+`resolveResumeDirectoryFromRecord` (`resumeSession.ts`) re-`realpath`s the persisted directory
+(or returns `undefined` if unset/unresolvable, failing the resume cleanly rather than
+guessing), and both `commands.ts`/`machineIntegration.ts`'s previously-stubbed
+`resolveResumeDirectory: () => undefined` now default to it — which as a side effect makes
+`resumeSession` actually functional in production for the first time (it previously could never
+resolve a directory to relaunch into at all).
 
-**Fix landed:** added a `quiet: boolean` field to `ServiceItem`
-(`packages/web/src/sync/reducer/types.ts`), computed by the reducer via a small
-`ROUTINE_SERVICE_TEXTS` allowlist (`reduce.ts` — today just `"session started"`; everything
-else, including model-switch confirmations, compaction notices, omitted-attachment notes, and
-remote-session errors, is `quiet: false`). `transcript-view.ts`'s `isHiddenTimelineItem` now
-only hides `service` items where `quiet` is true.
+## A still-running session that's never explicitly resumed stays invisible to spawn-dedup after a restart
 
-While fixing this, found and fixed a **second layer of the same bug**: `RenderItemGroups.tsx`'s
-own `isMessageGroupItem` allowlist didn't include `"service"` at all, so a visible service item
-would have still been silently dropped before ever reaching `TimelineRow`. `service` is now a
-`StandaloneGroupItem` (alongside `subagent-group`), rendered as its own row between messages via
-`ServiceLine` — appropriate since these items often carry no `turn` and aren't part of an
-adjacent message bubble's content.
+**This is now confirmed to be the actual blocker on the original bug report, not just a
+theoretical adjacent gap.** A live test of commit `812fc36` (the persistence fix above) with a
+real daemon restart reproduced this exactly: spawned a session (pid `51245`,
+`falcon claude --starting-mode remote`, real `directory` now correctly written to
+`sessions.json` as `schemaVersion: 2` — the persistence fix genuinely works), restarted the
+daemon, immediately resubmitted the wizard for the same directory — the daemon logged
+`"[spawn-engine] launched provider process"` (not the dedup "returning it instead" branch) and
+spawned a second, distinct pid (`52292`) with a new `sessionId`. Both processes confirmed alive
+simultaneously via `ps`, same directory.
 
-**Verified:** fresh `pnpm build`/`typecheck`/`test` all clean (1481 tests). New coverage in
-`reduce.test.ts`, `transcript-view.test.ts`, and `RenderItemGroups.test.ts` (including the
-standalone-grouping behavior); the `trace_dedupe_and_reorder.json` golden fixture was updated
-for the new field.
+**Where:** `packages/cli/src/daemon/sessionRegistry.ts` (`restore()`, `getSessions()`/
+`pidToSession`) and `spawnEngine.ts` (`scanForLiveSessionInDirectory`). Found as a deliberately
+out-of-scope gap while designing the fix for the entry above ("Flow 3's spawn-dedup guard
+doesn't survive a daemon restart") — that fix closes the resume-then-respawn path, but not
+this one.
 
-## ~~TaskCreate/TaskUpdate render as raw JSON instead of a checklist card~~ — RESOLVED
+**What's broken:** on daemon boot, `restore()` only seeds the `resumable` map from
+`sessions.json` — it never re-adds anything to `pidToSession`, the live map
+`scanForLiveSessionInDirectory`/`getSessions()` actually scans. A session whose process is
+still genuinely running (a detached child that outlived the restart) only re-enters the live
+map once something explicitly calls `resumeSession` for it. Until then, the dedup guard has no
+idea that session — or its directory — exists, even though the process is real and live.
 
-**Where:** `docs/bug-fix-plan.md` issue #7 / execution unit `BF2.1` ("plan-and-task-cards").
-Originally left unfixed on purpose: the investigating agent refused to build a card from a
-guessed schema, since nobody had ever captured what `TaskCreate`/`TaskUpdate` (Claude Code's
-current task/checklist tool pair, replacing the older `TodoWrite`) actually look like on the
-wire in this codebase. Verified and fixed via a dedicated subagent pass.
+**Consequence:** after a daemon restart, submitting the wizard for a directory that already
+has a still-running (but never-resumed) session in it will spawn a genuine duplicate process,
+even once the entry above is fixed — that fix only protects sessions that get resumed before
+someone resubmits the wizard for the same folder.
 
-**What was broken:** `TaskCreate`/`TaskUpdate` had no entry in the web tool-card registry
-(`packages/web/src/components/timeline/tool-cards/registry.tsx`), so both fell through to the
-generic raw-JSON `McpGenericCard` fallback.
+**What a real fix needs:** a "re-adopt live orphaned children on boot" mechanism — e.g. on
+daemon start, for each `resumable` entry, check whether its pid is still alive (and actually
+the right process, not a recycled pid) and if so re-add it to `pidToSession` directly, without
+waiting for an explicit resume. Confirmed in code exactly why nothing does this today:
+`restore()` (`sessionRegistry.ts:123-126`) only calls `resumable.set(id, session)` — it never
+touches `pidToSession`, and `resumeSession()` is only ever invoked from one place,
+`machineRpc.ts:317`, an explicit client-triggered RPC — there is no boot-time path that calls
+it automatically. This is genuinely new scope (process-liveness verification + pid-recycling
+safety, not just wiring an existing field through) — not a small addition to the fix above, and
+deliberately not bundled with it.
 
-**Real shape, captured not guessed:** a genuine prior Claude Code session transcript on this
-machine (this repo's own history) was found and trimmed into
-`packages/cli/src/claude/__fixtures__/task-create-update-session.jsonl`. Confirmed: `TaskCreate`
-args are `{subject, description, activeForm}` — one call creates exactly one task.
-`TaskUpdate` args are a **partial patch by id** (`{taskId, status}` most commonly; also seen
-patching `subject`/`description`/`activeForm`, and an older `task_id` snake_case spelling) —
-never the full list. Tool-end `output` is a plain confirmation string (e.g. `"Task #1 created
-successfully: ..."`); the richer `{success, taskId, updatedFields, statusChange}` object Claude
-Code also writes lives only in its own `toolUseResult` field, which `envelopeMapper.ts` never
-reads (confirmed generic passthrough, pinned with a new `envelopeMapper.test.ts` case).
+**Status:** open, confirmed via live daemon-restart test as the actual remaining blocker on the
+original bug report; not yet designed in detail.
 
-**Fix landed:** `parseTaskCreateArgs`/`parseTaskUpdateArgs` in `packages/web/src/lib/
-tool-args.ts` (dual `taskId`/`task_id` tolerance); a new `TaskEntryCard.tsx` (sibling of
-`TodoCard`) registered for both tool names. Renders each call as its own standalone entry
-(heading + status indicator + optional description) rather than a cumulative checklist —
-documented why: `TaskUpdate` never carries the full list and a `ToolItem` has no access to
-sibling calls in the same session to reconstruct one; a persistent live checklist would need
-folding at the reducer level across the whole session, out of scope here.
+## `falcon resume` (CLI command) ignores the persisted session directory
 
-**Verified:** fresh `pnpm build`/`typecheck`/`test` all clean (1482 tests, worktree-isolated
-implementation independently re-verified — fixture re-inspected by hand, all new tests re-run
-outside the implementing agent — before merging into the working tree). New coverage in
-`tool-args.test.ts`, `TaskEntryCard.test.ts`, `registry.test.ts`, and `envelopeMapper.test.ts`.
+**Where:** `packages/cli/src/commands/resume.ts:169`. Found while live-testing the
+spawn-dedup-restart fix above (a "bonus check" on whether `resolveResumeDirectoryFromRecord`
+actually helps `falcon resume`).
 
-## ~~Permission-mode web sync misses a session's very first mode~~ — RESOLVED
+**What's broken:** the RPC-triggered resume path (`daemon/commands.ts`,
+`daemon/machineIntegration.ts`) now correctly defaults `resolveResumeDirectory` to
+`resolveResumeDirectoryFromRecord`, which re-resolves the session's persisted directory. But
+the separate CLI command `falcon resume <id>` hardcodes its own
+`resolveDirectory: () => deps.workingDirectory` — the CLI invocation's *own* current directory,
+not the session's original one. A real test run of `falcon resume` from an arbitrary directory
+relaunched the session rooted in that arbitrary directory instead of where it actually started.
 
-**Where:** `docs/bug-fix-plan.md` issue #5 / execution unit `BF1.3` ("permission-mode-sync"),
-merged to `v2-pty-injection` (`a107aeb`). Found during the Phase 4 live-verification pass;
-fixed same day.
+**What a real fix needs:** thread the same `resolveResumeDirectoryFromRecord` (or an equivalent
+lookup against the session's persisted `directory`) into `commands/resume.ts`'s own dependency
+wiring, so both entry points (RPC-triggered and CLI-triggered resume) agree on where a session
+resumes.
 
-**What was broken:** `pretoolPermissionBridge.ts`'s `cachePermissionMode` never emitted a
-`permission-mode` event for the very first mode a hook ever reported in a session
-(`lastPermissionMode` started `null`, and the emit condition required
-`this.lastPermissionMode !== null`). If a user switched mode via Shift+Tab *before* their first
-tool call, that first hook call reported the already-switched mode as if it had always been
-that way — no transition was ever recorded, so the web chip stayed stuck on "Default" until an
-unrelated second switch.
+**Status:** open, not yet fixed. Pre-existing, unrelated to the spawn-dedup fix itself — just
+surfaced by testing near it.
 
-**Fix landed:** new `extractPermissionModeFlag()`
-(`packages/cli/src/session/permissionModeFlag.ts`, mirrors the existing `extractModelFlag()`
-pattern) reads a `--permission-mode` passthrough flag from `falcon claude`'s args. `start.ts`'s
-`runLocalPty()` now passes `extractPermissionModeFlag(claudeArgs) ?? "default"` as a new
-`initialPermissionMode` option, threaded through `remotePermissionHook.ts` into
-`PreToolPermissionBridge`'s constructor, which seeds `lastPermissionMode` from it instead of
-always starting at `null`. The very first hook echo now has a real baseline to diff against, so
-a pre-first-tool-call Shift+Tab is a genuine, emittable transition. A caller that doesn't
-provide `initialPermissionMode` (any untouched call site) keeps the exact old behavior — the
-seed is opt-in, not a forced default.
+## Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`
 
-**Verified:** fresh `pnpm build`/`typecheck`/`test` all clean (1481 tests). New coverage in
-`pretoolPermissionBridge.test.ts` (seeded-baseline emit/no-emit cases, plus a check that the
-unseeded path is unchanged), `permissionModeFlag.test.ts`, and `start.test.ts` (confirms the
-flag threads through end-to-end, and the `"default"` fallback when absent).
+**Where:** `docs/plan-flows-3-4-5.md`, execution unit `FL4.1`
+("session-sharing-design-review"), Phase 2.
 
-## ~~OfflineBanner shows a misleading "Reconnecting…" on pages with no connection to reconnect~~ — RESOLVED
+**What's open:** Flow 4 — letting a genuinely different person view/approve your session
+from their own account/device — is not implemented and, more importantly, not yet
+*designed*. There's no schema, no authorization model, and no invite flow decided for it.
+The two implementation units that would build it (`FL4.3` schema/authz, `FL4.4`
+socket/web UI) are explicitly blocked on `FL4.1` and must not start until it's done.
 
-**Where:** `docs/bug-fix-plan.md` issues #9/#10 / execution unit `BF3.1`
-("jwt-expiry-and-reconnect"), merged to `v2-pty-injection` (`3d0d54a`). Found during the Phase 4
-live-verification pass; fixed same day.
+**What a real fix needs:** a written design doc (recommended path:
+`docs/design-session-sharing.md`) that settles, at minimum:
 
-**What was broken:** the globally-mounted `OfflineBanner` (in `app/providers.tsx`, wrapping
-every route including public ones) showed the generic "Reconnecting to Falcon…" message
-indefinitely on `/signin/` itself, which was misleading — nothing was trying to reconnect
-there. Root cause: `apiSocket.connect()` is only ever called from `use-sync-snapshot.ts`, which
-only mounts inside authenticated screens, so on `/signin/` `wsConnected` stayed at its default
-`false` forever with no connection ever attempted.
+- Threat/trust model for a second identity accessing someone else's session.
+- The sharing schema (a `session_shares`-style table — per-session vs per-workspace scope,
+  what roles exist: view-only vs. can-approve).
+- The authorization-helper mechanism that replaces the ~15 existing
+  `eq(sessions.accountId, accountId)` checks server-side.
+- The RPC-routing fix for `packages/server/src/app/socket/rpcHandler.ts` — its rooms are
+  keyed by the *caller's* account today, so a teammate's `perm.answer`/`message`/interrupt
+  calls would silently resolve to nothing without this.
+- The invite/handshake flow (how the owner learns a teammate's `contentPubKey`).
+- Revocation semantics, including the honest fact that a key already delivered to a
+  teammate's device can't be un-taught by revoking server-side access alone.
 
-**Fix landed:** moved `<OfflineBanner />` out of the global `app/providers.tsx` (option (a) from
-the original real-fix plan) into `app/(protected)/layout.tsx`, inside `RequireAuth` — it now
-only ever mounts on authenticated screens, where `apiSocket.connect()` is actually called and
-`wsConnected`/`authExpired` reflect something real. It never renders on `/signin/`, `/pair/`, or
-`/auth/callback/*` anymore, since there's nothing meaningful for it to report there.
+One piece is already de-risked and needs no new design: the crypto primitive
+(`wrapDek`/`unwrapDek` in `packages/crypto/src/dek.ts`) already supports wrapping a
+session's DEK to any content public key, not just the owner's — confirmed by a real
+round-trip test (`FL4.2`, already landed).
 
-**Verified:** fresh `pnpm build`/`typecheck`/`test` all clean (741 web tests). Confirmed live in
-the browser: cleared the crypto identity (IndexedDB) to force the `needs-signup` state on
-`/signin/` — no banner appears, while the sign-in form (including the recovery-code restore
-option) renders normally. New source-wiring tests (same technique as `signin/page.test.ts`,
-since `RequireAuth`'s `useRouter()` can't run under this package's DOM-less vitest config):
-`(protected)/layout.test.ts` confirms the banner mounts inside `RequireAuth`, before `AppShell`;
-`providers.test.ts` confirms it's no longer wired globally.
+**Status:** open, waiting on a human-authored and human-approved design doc. Not something
+an automated workflow can produce or check off.
