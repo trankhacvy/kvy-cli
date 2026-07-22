@@ -103,8 +103,9 @@ export function ChecksBody({
           {checks.pr && <PullRequestHeader pr={checks.pr} />}
           {checks.checks && checks.checks.length > 0 ? (
             <ul className="flex flex-col gap-2">
-              {checks.checks.map((check) => (
-                <CheckRunRow key={check.name} check={check} />
+              {checks.checks.map((check, index) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: `check.name` alone isn't a stable unique key — GitHub's check-runs list for one commit commonly contains multiple runs with the same name (a re-run creates a new entry rather than replacing the old one) — and the CheckRun wire shape carries no id; the list is replaced wholesale on every poll rather than reordered in place, same reasoning as UnifiedDiffViewer's/DiffView's own index-key precedent.
+                <CheckRunRow key={`${check.name}-${index}`} check={check} />
               ))}
             </ul>
           ) : (

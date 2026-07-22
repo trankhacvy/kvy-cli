@@ -97,3 +97,119 @@ Implementation complete, all five phases. `pnpm build && pnpm typecheck && pnpm 
 **What's real and tested:** the full `github.checks` machine RPC family (wire schemas, daemon handler with real `parseGithubRemote`/state-machine logic, machineRpc.ts registration), `falcon github login|logout|status` (device-flow + `--token` PAT paste, smoke-tested against a scratch home dir + one real read-only GitHub API call), the web `features/github-checks/` area (mock + live data sources, react-query polling, all six UI states render-tested), the `/session/[id]/checks/` route (confirmed via a real `next build` static export), `SessionSidePanel`'s Checks tab going live when threaded a machineId/worktree, and the Settings → Git informational card.
 
 **What's not verified (documented gap, needs a live/browser pass):** the actual end-to-end smoke against a real daemon + real pushed branch + real open GitHub PR, observed through a real browser — this sandbox has no daemon-plus-browser harness to drive that. Also honestly out of scope per the plan's own risk notes (not gaps introduced by this implementation): no Falcon GitHub OAuth app with Device Flow exists yet, so `falcon github login` only works via `--token`/`FALCON_GITHUB_CLIENT_ID` until one is created; fork-workflow PRs and >100-check-run PRs are documented MVP limitations; ETag conditional requests are deferred.
+
+## Test & Review notes (independent verification pass)
+
+Reviewed as a genuinely independent tester (did not write this code), in
+`.worktrees/feature-github-pr-ci` on `wf/feature-github-pr-ci`.
+
+**What was checked for real, not just trusted from checked boxes:**
+- `pnpm build && pnpm typecheck && pnpm test` run from a clean `--force` (no
+  turbo cache) at the repo root: all green, matching the reported counts
+  exactly — `@falcon/wire` 111, `falcon` cli 1618, `@falcon/web` 818,
+  `@falcon/server` 316, `@falcon/e2e` 1.
+- `pnpm lint` genuinely does hang/fail in this sandbox for *every* biome/pnpm
+  invocation (`pnpm exec biome --version` fails identically to `pnpm lint`),
+  confirming the implementer's own claim rather than trusting it — it's an
+  environment-level interception of `pnpm exec`/`npx`, not a lint problem;
+  running the installed `@biomejs/biome` binary directly
+  (`node node_modules/.pnpm/@biomejs+biome@2.5.4/.../bin/biome`) bypasses it
+  and gives real output: 95 pre-existing errors / 132 warnings repo-wide
+  (unrelated debt, none in files this feature touches), and a clean 0
+  errors/0 warnings on every one of the 26 files this feature actually
+  added or touched.
+- Read and manually traced `daemon/githubChecks.ts`'s full state machine
+  (`parseGithubRemote`'s scp/`ssh://`/`https://` forms, the
+  not-pushed/no-pr split via `ls-remote`, 401→no-token, merged-PR mapping)
+  against `githubChecks.test.ts`'s 21 cases — all real, not tautological.
+- Smoke-tested the CLI for real against a scratch `FALCON_HOME_DIR` (no
+  real GitHub account touched): `falcon github login --token` (piped a
+  fake PAT via stdin) created `~/.falcon/github.key` at mode `0600`
+  (verified via `stat`); `falcon github status` made one real, read-only
+  `GET https://api.github.com/user` call and correctly reported "invalid
+  token — GitHub rejected it"; `falcon github logout` removed the file;
+  `falcon github login` with no client id configured fails fast with the
+  documented "--token instead" message rather than hanging. Confirmed via
+  `grep` that neither `githubAuth.ts`/`githubChecks.ts`/`commands/github.ts`
+  contains any `logger.*` call at all, so the token has no logging surface
+  to leak from.
+- Verified the `"unknown-method"` string `live-actions.ts` matches against
+  is the literal string `daemon/machineRpc.ts` seals for an unrecognized
+  RPC target (`errorBox(deps.dek, "unknown-method")`) and that
+  `MachineRpcError`'s `.message` is `response.error` verbatim — the
+  `DaemonUnsupportedError` mapping is real, not just plausible-looking.
+  Traced `machineRpc.ts`'s `github.checks` registration and
+  `machineRpc.test.ts`'s sealed round-trip case.
+- Read every new web file (`types.ts`, `mock-source.ts`, `live-actions.ts`,
+  `use-checks-panel.ts`, `use-live-github-checks-actions.ts`,
+  `ChecksPanel.tsx`/`ChecksBody`, `CheckRunRow.tsx`) plus the
+  `SessionSidePanel.tsx`/`SessionTimelineScreen.tsx`/settings-git-page
+  wiring, and the 18 new web tests (`ChecksPanel.test.ts` 9,
+  `live-actions.test.ts` 4, `mock-source.test.ts` 4,
+  `use-live-github-checks-actions.test.ts` 1) — all six UI states really
+  are exercised via `ChecksBody`'s extracted pure-props render test using
+  `renderToStaticMarkup`, matching the codebase's existing
+  jsdom-free-render-test convention (`SessionTimelineScreen.tsx`'s own
+  precedent).
+
+**Bugs found and fixed in this pass:**
+1. **`gitExec.ts`'s `runGit` had no non-interactive/timeout guard, and
+   `github.checks` is the first RPC in this family to ever touch the
+   network via `git`.** `git.status`/`git.diff`/`git.branches` only ever
+   run local, non-network git commands, so this never mattered before.
+   `getGithubChecks`'s "not-pushed" vs "no-pr" branch runs a real
+   `git ls-remote --heads <remote> <branch>` against the actual configured
+   remote — reproduced this for real against a local bare-repo remote and
+   confirmed the subprocess call is genuine (not just a `fakeGit`
+   stand-in). The daemon is a long-running, headless background process
+   with no controlling terminal; a remote that needs interactive
+   credentials (an HTTPS remote with no cached credential helper, or a
+   GUI `core.askpass` invoked anyway) could hang that `ls-remote` — and
+   therefore that whole RPC call — indefinitely, since `execFile` was
+   given no `timeout` and git was never told to skip terminal prompts.
+   Fixed by adding `GIT_TERMINAL_PROMPT: "0"` to the child's env and a
+   15s `timeout` to the shared `runGit`'s `execFile` call — a no-op for
+   every existing local-only caller, and directly targeted at the one new
+   network-touching call site. This does *not* change the deliberate
+   "throw on any git failure other than a missing remote" design decision
+   `getGithubChecks`'s own doc comment documents (which is intentional,
+   not a gap) — it only bounds how long that throw can take to happen.
+2. **`ChecksPanel.tsx`'s check-run list used `key={check.name}` alone.**
+   GitHub's check-runs endpoint commonly returns multiple entries with the
+   identical `name` for one commit (a workflow re-run creates a new check
+   run rather than replacing the old one in the API response), which is a
+   React key collision, not just a theoretical one. Fixed by folding the
+   array index into the key (`` `${check.name}-${index}` ``), with a
+   `biome-ignore lint/suspicious/noArrayIndexKey` comment matching this
+   codebase's existing precedent for the same tradeoff
+   (`UnifiedDiffViewer.tsx`/`DiffView.tsx`: no stable id exists on the wire
+   shape, and the list is replaced wholesale each poll rather than
+   reordered in place).
+
+**Verified as correct, not just present** (specifically checked because
+they looked like plausible bug locations and turned out fine): PR-state
+mapping (open/closed/merged via `merged_at`) only ever runs on
+already-open-filtered PRs, so the closed/merged branches are dead-in-practice
+but harmless; ISO→unix-seconds timestamp conversion; the `--token` argv
+flag genuinely rejects a bare pasted value (`falcon github login --token
+gho_x` throws `Unknown "falcon github login" flag`, confirmed by both
+reading `args.ts`'s flag loop and its test); 0600 file mode on
+`github.key` (confirmed via `stat`, not just code inspection);
+`resolveHomeDir`/`readWorkspaceGitConfig`'s home-dir resolution paths are
+consistent with `githubAuth.ts`'s own (both fall through to the same
+`FALCON_HOME_DIR`-aware default when the daemon calls them with no
+explicit override).
+
+**Unresolved / left as-is (flagged, not fixed):** the CLI's `--token` PAT
+prompt (`defaultReadSecretLine`) echoes the pasted token to the terminal —
+`readline`'s `question()` has no built-in mask, and there was no existing
+masked-secret-input precedent elsewhere in this codebase to reuse
+(`auth/credentials.ts`'s flows never prompt for a raw secret this way).
+Low severity (local terminal echo/scrollback exposure only, same class of
+risk the plan's own "one `cat ~/.falcon/github.key` away" risk note
+already accepts for the file itself) and out of scope for a same-day fix
+without pulling in a masking dependency or hand-rolling raw-mode stdin
+handling — noted here for a future pass rather than papered over.
+
+No other correctness gaps found. All five phases' acceptance criteria hold
+for real, with the two fixes above applied on top.
