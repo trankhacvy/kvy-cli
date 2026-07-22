@@ -28,13 +28,21 @@ import {
   type WizardStep,
 } from "./wizard-state";
 
-/** Renders the review step's "Branch:" summary line for `form`'s current `branchMode` (docs/features/worktree-isolation.md Phase 4). */
+/**
+ * Renders the review step's "Branch:" summary line for `form`'s current
+ * `branchMode` (docs/features/worktree-isolation.md Phase 4). `new-branch`
+ * mode also surfaces the base-branch picker's pick (docs/competitive-notes-omnara.md
+ * #16), when one was made, so the review step doesn't silently omit it.
+ */
 function branchSummary(form: NewSessionForm): string {
   switch (form.branchMode) {
     case "repo-root":
       return "Repo root";
-    case "new-branch":
-      return `New branch ${form.branchName.trim()}${form.createWorktree ? " (worktree)" : ""}`;
+    case "new-branch": {
+      const baseBranch = form.baseBranch.trim();
+      const from = baseBranch === "" ? "" : ` from ${baseBranch}`;
+      return `New branch ${form.branchName.trim()}${from}${form.createWorktree ? " (worktree)" : ""}`;
+    }
     case "existing-branch":
       return `Existing branch ${form.branchName.trim()} (worktree)`;
   }

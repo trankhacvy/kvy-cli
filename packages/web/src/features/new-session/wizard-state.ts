@@ -35,6 +35,13 @@ export interface NewSessionForm {
   branchName: string;
   /** Only meaningful in `"new-branch"` mode — `"existing-branch"` always isolates in a fresh worktree regardless of this flag. */
   createWorktree: boolean;
+  /**
+   * The searchable base-branch picker's pick (docs/competitive-notes-omnara.md
+   * #16), only meaningful in `"new-branch"` mode — the real local branch
+   * `branchName` forks from (e.g. `main`/`master`), or `""` to fall back to
+   * git's own default of branching from whatever's currently checked out.
+   */
+  baseBranch: string;
   /** The session-import step's pick (falcon-prd.md FR-7.8 UC7), or `null` to start fresh — the default, and always a valid choice (the step is optional). */
   importCandidate: ImportCandidate | null;
 }
@@ -48,6 +55,7 @@ export const INITIAL_FORM: NewSessionForm = {
   branchMode: "repo-root",
   branchName: "",
   createWorktree: true,
+  baseBranch: "",
   importCandidate: null,
 };
 
@@ -79,23 +87,33 @@ export function previousStep(step: WizardStep): WizardStep {
 }
 
 /**
- * Maps `form.branchMode` (+ `branchName`/`createWorktree`) to
+ * Maps `form.branchMode` (+ `branchName`/`createWorktree`/`baseBranch`) to
  * `SpawnRequest.branch`: `"repo-root"` → `undefined` (no branch/worktree
- * involved); `"new-branch"` → `{name, createWorktree: form.createWorktree}`
- * (worktree isolation is the recommended default but user-toggleable);
- * `"existing-branch"` → `{name, createWorktree: true}` always — the wizard
- * never switches the main checkout's branch out from under the user, so
- * checking out an existing branch always isolates in a fresh worktree
- * regardless of `form.createWorktree`.
+ * involved); `"new-branch"` → `{name, createWorktree: form.createWorktree,
+ * from: form.baseBranch}` (worktree isolation is the recommended default but
+ * user-toggleable; `from` is the searchable base-branch picker's pick —
+ * docs/competitive-notes-omnara.md #16 — omitted when left blank so the
+ * daemon falls back to branching off whatever's currently checked out);
+ * `"existing-branch"` → `{name, createWorktree: true}` always, no `from` —
+ * the wizard never switches the main checkout's branch out from under the
+ * user, so checking out an existing branch always isolates in a fresh
+ * worktree regardless of `form.createWorktree`, and there's no "base" to
+ * speak of for a branch that already exists.
  */
 function branchOptionFromForm(
   form: NewSessionForm,
-): { name: string; createWorktree: boolean } | undefined {
+): { name: string; createWorktree: boolean; from?: string } | undefined {
   switch (form.branchMode) {
     case "repo-root":
       return undefined;
-    case "new-branch":
-      return { name: form.branchName.trim(), createWorktree: form.createWorktree };
+    case "new-branch": {
+      const from = form.baseBranch.trim();
+      return {
+        name: form.branchName.trim(),
+        createWorktree: form.createWorktree,
+        from: from === "" ? undefined : from,
+      };
+    }
     case "existing-branch":
       return { name: form.branchName.trim(), createWorktree: true };
   }
