@@ -223,3 +223,16 @@ Merged into `v2-pty-injection` after the main loop's independent
 verification pass required the PAT-masking fix above before landing (the
 workflow gates merge on ANY unresolved issue, not just `verified: false`).
 See the repo's merge commit for the final sha.
+
+Landing required reconciling real conflicts against #3 (git-write-actions,
+docs/features/git-write-actions.md), which merged onto `v2-pty-injection`
+concurrently and touched the same shared RPC-registry files
+(`packages/wire/src/rpc.ts`, `schemaRegistry.ts`/`wire-shapes.json`,
+`packages/cli/src/daemon/machineRpc.ts` + its test, `packages/web/src/sync/
+machineRpc.ts`, plus `packages/cli/src/daemon/gitExec.ts`'s shared `runGit`).
+All resolved as an additive union — both features' RPCs/schemas/toolbar code
+coexist, nothing clobbered — with one test fixup (a stale `github.checks`
+error-handling assertion updated to match #3's legitimate shared improvement
+to `onRpcRequest`'s error forwarding). `pnpm build && pnpm typecheck && pnpm
+test` all green post-merge (145 test files, 1660 tests in the `falcon` cli
+package alone). Merged into `v2-pty-injection` at `4ba6ef70d74fd88677501c5c5e17354ba651811a`.
