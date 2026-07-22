@@ -1,0 +1,85 @@
+/**
+ * Boot-time re-adoption matcher (plan.md §16 "Flow 3 — spawn-directory-dedup"):
+ * finds persisted sessions whose recorded pid is STILL a live falcon session
+ * process running in the recorded directory — the ones a daemon restart
+ * orphaned but did not kill.
+ *
+ * `sessionRegistry.ts`'s `restore()` only seeds the durable `resumable` map
+ * from `sessions.json`; it never touches the live `pidToSession` map. So a
+ * still-running orphaned `falcon claude --starting-mode remote --started-by
+ * daemon` child stays invisible to `spawnEngine.ts`'s
+ * `scanForLiveSessionInDirectory` (which only scans live-tracked sessions)
+ * until an explicit `resumeSession` RPC re-tracks it — and nothing triggers
+ * that automatically. This module is the discovery half of the fix;
+ * `sessionRegistry.ts`'s `readoptLiveSessions` owns the map insertion.
+ *
+ * Guards pid recycling: `kill(pid,0)`-style liveness alone is NOT enough (a
+ * reused pid could be an unrelated process, or another falcon session in a
+ * different dir), so the live pid's `ps` command line must classify as a
+ * falcon `session` AND its resolved cwd must equal the persisted
+ * (realpath-canonicalized) directory.
+ */
+import { realpath as realpathDefault } from "node:fs/promises";
+import { classifyFalconCommand } from "./markers.js";
+import type { ProcessEntry } from "./processScan.js";
+import type { PersistedSession } from "./sessionsStore.js";
+
+export interface ReadoptProbeDeps {
+  listProcesses: () => Promise<ProcessEntry[]>;
+  resolveCwd: (pid: number) => Promise<string | null>;
+  realpath?: (p: string) => Promise<string>;
+}
+
+export interface ReadoptCandidate {
+  sessionId: string;
+  session: PersistedSession;
+  pid: number;
+}
+
+/**
+ * Finds persisted sessions whose recorded pid is STILL a live falcon session
+ * process running in the recorded directory — the ones a daemon restart
+ * orphaned but did not kill. Guards pid recycling: kill(pid,0) alone is NOT
+ * enough (a reused pid could be an unrelated process, or another falcon
+ * session in a different dir), so the live pid's `ps` command line must
+ * classify as a falcon `session` AND its resolved cwd must equal the
+ * persisted (realpath-canonicalized) directory.
+ */
+export async function findLiveOrphanedSessions(
+  persisted: Record<string, PersistedSession>,
+  deps: ReadoptProbeDeps,
+): Promise<ReadoptCandidate[]> {
+  const canon = deps.realpath ?? realpathDefault;
+  const candidates = Object.entries(persisted).filter(
+    ([, s]) => typeof s.pid === "number" && s.pid > 0 && typeof s.directory === "string",
+  );
+  if (candidates.length === 0) return [];
+
+  const byPid = new Map((await deps.listProcesses()).map((p) => [p.pid, p]));
+  const result: ReadoptCandidate[] = [];
+
+  for (const [sessionId, session] of candidates) {
+    const pid = session.pid as number;
+    const proc = byPid.get(pid);
+    if (!proc) continue; // pid not alive
+
+    if (classifyFalconCommand(proc.command)?.kind !== "session") continue; // recycled/unrelated
+
+    const cwd = await deps.resolveCwd(pid);
+    if (!cwd) continue;
+
+    let liveDir: string;
+    let wantDir: string;
+    try {
+      liveDir = await canon(cwd);
+      wantDir = await canon(session.directory as string);
+    } catch {
+      continue; // dir deleted/unmounted
+    }
+    if (liveDir !== wantDir) continue; // wrong dir → not this session
+
+    result.push({ sessionId, session, pid });
+  }
+
+  return result;
+}

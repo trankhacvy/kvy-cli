@@ -5,63 +5,86 @@ needs) or resolved (`~~struck through~~`, what landed and how it was verified).
 
 ## ~~Flow 3's spawn-dedup guard doesn't survive a daemon restart~~ — RESOLVED (in worktree, not yet merged)
 
-**Status:** Fixed on a git worktree off `v2-pty-injection` (branch left for the user to merge —
-not yet landed on `v2-pty-injection` itself). Full `pnpm build`/`typecheck` clean; the three new
-tests and the full `packages/cli` suite pass (the only red is `transcriptIndexer.test.ts`'s
-two fs-watch timing tests, which flake under full-suite parallel CPU contention and pass in
-isolation — unrelated to this change, which touches nothing on that path).
+**Status:** Fixed in two passes on a git worktree branched from
+`worktree-agent-a762cdc54ca15c830` (commit `812fc36`) — branch left for the user to merge, not
+yet landed on `v2-pty-injection`. Full `pnpm build`/`typecheck` clean; new tests and the full
+`packages/cli` suite pass (the only red is `transcriptIndexer.test.ts`'s two fs-watch timing
+tests, which flake under full-suite parallel CPU contention and pass in isolation — unrelated to
+this change, which touches nothing on that path).
 
-**Where:** `packages/cli/src/daemon/` — `types.ts` (`TrackedSession.directory`),
-`sessionsStore.ts` (`PersistedSession`), `sessionRegistry.ts`, `resumeSession.ts`,
-`commands.ts`, `machineIntegration.ts`.
+**Where:** `packages/cli/src/daemon/` — `types.ts` (`TrackedSession.directory`/`.pid`),
+`sessionsStore.ts` (`PersistedSession`), `sessionRegistry.ts`, `readoptSessions.ts` (new),
+`resumeSession.ts`, `commands.ts`, `machineIntegration.ts`.
 
-**What was broken:** `FL3.2` ("spawn-directory-dedup") added `TrackedSession.directory` so the
-web wizard couldn't spawn two `falcon claude --starting-mode remote` processes in the same
-directory (`spawnEngine.ts`'s `scanForLiveSessionInDirectory`, exact-string-equality on
-`session.directory === realDirectory`). But that field was **in-memory only**: `PersistedSession`
-(`sessions.json`) had no `directory`, so it was never written to disk. On daemon restart,
-`resumeSession.ts`'s relaunch called `deps.registry.trackSpawned(launched.pid)` with no directory
-(the `ResumeSessionRegistry.trackSpawned(pid)` interface didn't even declare one), so every
-session restored after a restart came back with `directory: undefined` and could never dedup-match
-again.
+**Pass 1 — persistence half (`812fc36`, already landed before this pass started):** `FL3.2`
+("spawn-directory-dedup") added `TrackedSession.directory` so the web wizard couldn't spawn two
+`falcon claude --starting-mode remote` processes in the same directory (`spawnEngine.ts`'s
+`scanForLiveSessionInDirectory`, exact-string-equality on `session.directory === realDirectory`).
+But that field was **in-memory only**: `PersistedSession` (`sessions.json`) had no `directory`, so
+it was never written to disk, and every session restored after a restart came back with
+`directory: undefined` and could never dedup-match again. Fixed by adding `PersistedSession
+.directory?: string` (`SESSIONS_SCHEMA_VERSION` 1→2), threading it through
+`toPersisted()`/`findResumable()`, widening `trackSpawned(pid, directory?)`, and replacing the
+`resolveResumeDirectory` stub with a real `resolveResumeDirectoryFromRecord` (re-`realpath`s the
+stored directory).
 
-**Fix landed (matches the design):**
-1. **`sessionsStore.ts`** — added optional `directory?: string` to `PersistedSession` (purely
-   additive; a pre-v2 `sessions.json` with no `directory` key still loads fine as `undefined`),
-   with a light `typeof` guard in `isPersistedSession`. Bumped `SESSIONS_SCHEMA_VERSION` 1→2 as an
-   honest on-disk marker (no migration branch — the read path is version-agnostic and additive,
-   documented in a comment).
-2. **`sessionRegistry.ts`** — `toPersisted()` and `findResumable()`'s live branch now both carry
-   `directory` through (from `session.directory` / `live.directory`).
-3. **`resumeSession.ts`** — widened `ResumeSessionRegistry.trackSpawned` to
-   `(pid: number, directory?: string)` (the real `SessionRegistry.trackSpawned` already accepted
-   the optional second param, so no impl change there) and passed the already-resolved `directory`
-   variable through at the relaunch call site.
-4. **`resolveResumeDirectory`** — replaced the `() => undefined` stub in **both** `commands.ts`
-   and `machineIntegration.ts` with a shared, exported `resolveResumeDirectoryFromRecord`
-   (`resumeSession.ts`): re-resolves `session.directory` via `realpath` (`node:fs/promises`,
-   matching `workspacePath.ts`'s convention) and returns it, or `undefined` when unset or `realpath`
-   throws (directory deleted/unmounted) — failing the resume cleanly rather than guessing. Design
-   recommendation followed: re-resolve rather than trust the stored string, since dedup matching is
-   exact-string-equality against a freshly-resolved spawn target.
+**Pass 2 — boot-time re-adoption (this pass), the actual remaining blocker:** Pass 1 alone did
+NOT fix the bug end-to-end. `sessionRegistry.ts`'s `restore()` seeds only the durable `resumable`
+map from `sessions.json` — it never touches the live `pidToSession` map, and `getSessions()`
+(what `scanForLiveSessionInDirectory` scans) returns only `[...pidToSession.values()]`. So after a
+daemon restart, a still-running orphaned `falcon claude --starting-mode remote --started-by
+daemon` child stayed invisible to spawn-dedup until an explicit `resumeSession` RPC re-tracked
+it — and nothing ever triggered that automatically. Resubmitting the web wizard for the same
+directory still spawned a genuine duplicate (confirmed live pre-fix: pid then a second, different
+pid, both alive, same directory). Fixed by:
+1. **`sessionsStore.ts`** — added optional `pid?: number` to `PersistedSession` (purely additive;
+   `SESSIONS_SCHEMA_VERSION` 2→3, no migration branch, same reasoning as `directory`'s v2 bump),
+   with a `typeof` guard in `isPersistedSession`.
+2. **`sessionRegistry.ts`** — `toPersisted()`/`findResumable()`'s live branch now also carry `pid`
+   through. New `readoptLiveSessions(probe)` method: runs `readoptSessions.ts`'s matcher over the
+   restored `resumable` set and inserts every verified-live candidate straight into `pidToSession`
+   (carrying `sessionId`/`encryption`/`directory` so dedup, `stopSession`, and `findResumable` all
+   see it) — the durable `resumable` entry is deliberately left in place as a harmless backstop.
+3. **`readoptSessions.ts`** (new, pure/testable) — `findLiveOrphanedSessions()`: for each
+   persisted record carrying both a `pid` and a `directory`, checks the pid is still alive in a
+   real process scan, that its `ps` command line classifies as a falcon `session`
+   (`markers.ts`'s `classifyFalconCommand`) — guarding pid recycling, since liveness alone can't
+   tell a reused pid from the real thing — and that its resolved cwd `realpath`-matches the
+   persisted directory.
+4. **`commands.ts`** — `DaemonCommandDeps` gained injectable `listProcesses`/`resolveProcessCwd`
+   (defaulting to `processScan.ts`'s real `ps`/`lsof`-backed implementations).
+   `runDaemonStartSync` calls `registry.readoptLiveSessions(...)` right after `restore()`, before
+   the control server (and any spawn RPC) starts serving.
 
-**Deviation from the design:** the design described giving each of the two stubs its own real
-implementation; instead a single shared `resolveResumeDirectoryFromRecord` is exported from
-`resumeSession.ts` and referenced from both call sites (DRY, identical behavior). No other
-deviations. `FL3.2` had already landed the in-memory half (`TrackedSession.directory`,
-`trackSpawned(pid, directory?)`, the dedup scan), so this pass only added the durability half.
+**Correction to the original bug write-up carried into this pass:** the write-up assumed boot
+re-adoption could just "check whether its pid is still alive," but `PersistedSession` never had a
+`pid` field — Pass 1 didn't add one, and `resumeSession` relaunches a **new** process rather than
+reconnecting, so no pid was ever persisted to check. This pass added the `pid` field for exactly
+this purpose (Option A from the design's judgment call, over pure cwd-only process discovery,
+since matching by pid is unambiguous and still independently verified against `ps`
+classification + cwd rather than trusted blindly).
 
-**Out of scope (deliberately left open):** a still-running session that's never explicitly
-resumed after a restart stays invisible to spawn-dedup — that's a separate, still-undesigned
-issue and was not touched here.
+**Deviations from the design:** none beyond Pass 1's already-recorded one (a single shared
+`resolveResumeDirectoryFromRecord` instead of two separate stub implementations).
 
-**Verified:** `pnpm build` + `pnpm typecheck` clean across all packages. New coverage:
-`sessionRegistry.test.ts` (end-to-end persist → discard in-memory state → fresh registry →
-restore → re-track → `scanForLiveSessionInDirectory` matches again), `resumeSession.test.ts`
-(the relaunch calls `trackSpawned` with the resolved directory as its second argument),
-`sessionsStore.test.ts` (a `schemaVersion:1` record with no `directory` key loads as
-`directory === undefined`, no data loss). Full `packages/cli` suite: 1515/1517 (the 2 reds are
-the pre-existing `transcriptIndexer` fs-watch flakes noted above).
+**Out of scope (deliberately left open):** none remaining for this specific bug — the "still
+open" gap this entry's Pass 1 write-up flagged (a live session invisible to spawn-dedup after a
+restart) is exactly what Pass 2 closes.
+
+**Verified:** `pnpm build` + `pnpm typecheck` clean across all packages. New/extended coverage:
+`readoptSessions.test.ts` (fake-probe unit cases covering pid-dead, pid-recycled-to-a-non-session,
+pid-recycled-to-a-different-falcon-process-kind, cwd-unresolvable, wrong-directory,
+realpath-symlink-transparency, deleted/unmounted-directory, and multi-candidate independence —
+plus a **real-process black-box** `describe` block that spawns an actual child process with a
+falcon-session-shaped argv and runs the matcher against the real `processScan.ts`
+`listProcesses`/`resolveProcessCwd`, both for the live and post-kill case, since a fake probe
+alone proved the wiring but not genuine `ps`/`lsof` discovery — exactly the gap that let Pass 1
+look complete while the bug still reproduced live), `sessionRegistry.test.ts` (`readoptLiveSessions`
+re-adds a live orphaned session into the live map post-restart without dropping the durable
+backstop, and correctly re-adopts nothing for a dead pid), `sessionsStore.test.ts` (`pid`
+round-trip, rejects a non-numeric `pid`, and a `schemaVersion:2` record with no `pid` key loads as
+`pid === undefined`). Full `packages/cli` suite: 1533/1535 passing (the 2 reds are the
+pre-existing `transcriptIndexer` fs-watch flakes noted above, confirmed passing in isolation).
 
 ## ~~Recovery code can silently create a disconnected account instead of failing~~ — RESOLVED
 

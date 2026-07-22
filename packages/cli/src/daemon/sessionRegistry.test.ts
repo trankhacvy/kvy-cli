@@ -241,6 +241,70 @@ describe("sessionRegistry", () => {
     expect(registry.getSessions()).toHaveLength(1);
   });
 
+  it("toPersisted/findResumable carry the live pid through, so a restart can re-adopt it (readoptSessions.ts)", async () => {
+    const registry = createSessionRegistry({ homeDir });
+    registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
+
+    expect(registry.findResumable("sess_1")).toMatchObject({ sessionId: "sess_1", pid: 4242 });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const persisted = await readPersistedSessions(homeDir);
+    expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1", pid: 4242 });
+  });
+
+  it("readoptLiveSessions re-adds a still-live orphaned session into the live map after a restart, without dropping the durable resumable record", async () => {
+    const realDirectory = "/Users/vy/projects/falcon";
+
+    // --- daemon instance #1: spawns a session, its webhook lands, it persists
+    //     with a pid — then the daemon "restarts" without the process dying ---
+    const first = createSessionRegistry({ homeDir });
+    first.trackSpawned(51245, realDirectory);
+    first.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 51245);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // --- daemon restart: brand-new registry, restore() only seeds `resumable` ---
+    const second = createSessionRegistry({ homeDir });
+    expect(await second.restore()).toBe(1);
+    expect(second.getSessions()).toEqual([]); // live map starts empty — the bug this fixes
+
+    const readopted = await second.readoptLiveSessions({
+      listProcesses: async () => [
+        {
+          pid: 51245,
+          ppid: 1,
+          command: "falcon claude --starting-mode remote --started-by daemon",
+        },
+      ],
+      resolveCwd: async () => realDirectory,
+      realpath: async (p) => p,
+    });
+
+    expect(readopted).toBe(1);
+    expect(scanForLiveSessionInDirectory(second.getSessions(), realDirectory)).toBe("sess_1");
+    // The durable resumable record is left in place as a harmless backstop.
+    expect(second.findResumable("sess_1")).not.toBeNull();
+  });
+
+  it("readoptLiveSessions re-adopts nothing when the persisted pid is no longer alive", async () => {
+    await persistSession(homeDir, {
+      sessionId: "sess_1",
+      encryption: ENCRYPTION,
+      savedAt: Date.now(),
+      directory: "/Users/vy/projects/falcon",
+      pid: 99999,
+    });
+    const registry = createSessionRegistry({ homeDir });
+    await registry.restore();
+
+    const readopted = await registry.readoptLiveSessions({
+      listProcesses: async () => [],
+      resolveCwd: async () => null,
+    });
+
+    expect(readopted).toBe(0);
+    expect(registry.getSessions()).toEqual([]);
+  });
+
   it("hasLiveSessions reflects the pid-tracked map only, not the resumable set", async () => {
     await persistSession(homeDir, {
       sessionId: "sess_1",

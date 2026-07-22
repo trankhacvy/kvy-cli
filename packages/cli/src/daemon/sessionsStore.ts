@@ -23,13 +23,14 @@ import type { SessionEncryptionData } from "./types.js";
 
 /**
  * Bumped whenever this shape changes; written into every sessions.json.
- * v2 added the optional `directory` field below. No migration branch is
- * needed: the read path (`readPersistedSessions`/`isPersistedSession`) is
- * version-agnostic and the change is purely additive — a v1 file whose
- * records have no `directory` key still loads fine (`directory === undefined`).
+ * v2 added the optional `directory` field below; v3 added the optional
+ * `pid` field below. No migration branch is needed: the read path
+ * (`readPersistedSessions`/`isPersistedSession`) is version-agnostic and
+ * both changes are purely additive — an older file whose records have no
+ * `directory`/`pid` key still loads fine (`directory`/`pid === undefined`).
  * The bump is only an honest on-disk marker of the current shape.
  */
-export const SESSIONS_SCHEMA_VERSION = 2;
+export const SESSIONS_SCHEMA_VERSION = 3;
 
 /**
  * A single session's durable resume record. `metadata` is whatever opaque
@@ -56,6 +57,17 @@ export interface PersistedSession {
    * from any pre-v2 `sessions.json`.
    */
   directory?: string;
+  /**
+   * The OS pid of the still-live session process, recorded at
+   * /session-started time. Persisted so daemon boot can re-adopt a session
+   * whose process outlived the restart (plan.md §16 "Flow 3 — spawn-directory-
+   * dedup"): without a pid there is no way to find the orphaned child and
+   * re-enter it into the live map, so spawn-dedup misses it and spawns a
+   * duplicate. Verified against pid recycling on boot (readoptSessions.ts),
+   * never trusted blindly. Optional/absent from pre-v3 files and from records
+   * whose session never reported a real pid.
+   */
+  pid?: number;
 }
 
 interface SessionsFileShape {
@@ -90,6 +102,7 @@ function isPersistedSession(value: unknown): value is PersistedSession {
     return false;
   }
   if (c.directory !== undefined && typeof c.directory !== "string") return false;
+  if (c.pid !== undefined && typeof c.pid !== "number") return false;
   return isSessionEncryptionData(c.encryption);
 }
 

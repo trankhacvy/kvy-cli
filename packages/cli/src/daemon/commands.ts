@@ -21,6 +21,7 @@ import {
   type MachineIntegrationDeps,
   startMachineIntegration,
 } from "./machineIntegration.js";
+import { listProcesses, type ProcessEntry, resolveProcessCwd } from "./processScan.js";
 import type { ProviderSessionResolver } from "./providerSessionResolver.js";
 import { type ResumeSessionDeps, resolveResumeDirectoryFromRecord } from "./resumeSession.js";
 import {
@@ -113,6 +114,10 @@ export interface DaemonCommandDeps {
   /** Sends `signal` to `pid`; swallows ESRCH (process already gone). */
   killPid: (pid: number, signal: NodeJS.Signals) => void;
   isProcessAlive: (pid: number) => boolean;
+  /** Lists every OS process visible to this user. Defaults to `processScan.ts`'s real `ps`-backed implementation. Used at boot to re-adopt live orphaned sessions (`readoptSessions.ts`). */
+  listProcesses: () => Promise<ProcessEntry[]>;
+  /** Resolves a pid's current working directory. Defaults to `processScan.ts`'s real implementation. Used alongside `listProcesses` for boot-time re-adoption. */
+  resolveProcessCwd: (pid: number) => Promise<string | null>;
   /** Used for the control server's `/stop` (graceful shutdown) and `status`'s liveness probe. */
   fetchImpl: typeof fetch;
   /** Registers OS shutdown signals for `start-sync`; returns an unregister function. */
@@ -255,6 +260,8 @@ export function createDaemonCommandDeps(
     spawnStartSync: defaultSpawnStartSync,
     killPid: defaultKillPid,
     isProcessAlive,
+    listProcesses,
+    resolveProcessCwd,
     fetchImpl: fetch,
     registerShutdownSignals: defaultRegisterShutdownSignals,
     readyTimeoutMs: 5000,
@@ -329,6 +336,22 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   const restoredCount = await registry.restore();
   if (restoredCount > 0) {
     logger.info("daemon start-sync: restored persisted sessions", { count: restoredCount });
+  }
+
+  // Re-adopt any live orphaned session (plan.md §16 "Flow 3 —
+  // spawn-directory-dedup"): a still-running session process a prior daemon
+  // spawned but this restart never got a chance to re-track. Must happen
+  // BEFORE the control server (and any spawn RPC) starts serving, so
+  // spawn-directory-dedup sees it immediately rather than racing a fresh
+  // duplicate spawn.
+  const readoptedCount = await registry.readoptLiveSessions({
+    listProcesses: deps.listProcesses,
+    resolveCwd: deps.resolveProcessCwd,
+  });
+  if (readoptedCount > 0) {
+    logger.info("daemon start-sync: re-adopted live orphaned sessions after restart", {
+      count: readoptedCount,
+    });
   }
 
   // Matches the launched process's pid to its `/session-started` webhook —

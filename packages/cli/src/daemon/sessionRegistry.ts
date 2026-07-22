@@ -25,6 +25,7 @@
  *    once at boot and kept current as live sessions die (`pruneDeadSessions`).
  */
 import type { Logger } from "../logger.js";
+import { findLiveOrphanedSessions, type ReadoptProbeDeps } from "./readoptSessions.js";
 import { type PersistedSession, persistSession, readPersistedSessions } from "./sessionsStore.js";
 import type { SessionEncryptionData, TrackedSession } from "./types.js";
 
@@ -40,6 +41,14 @@ export interface SessionRegistryDeps {
 export interface SessionRegistry {
   /** Loads not-yet-expired `sessions.json` entries into the resumable set. Call once at daemon boot, before serving any RPC. Returns how many were restored. */
   restore(): Promise<number>;
+  /**
+   * After restore(), re-adopts any resumable session whose process is still
+   * alive (verified, not recycled) into the live pid map, so spawn-directory-
+   * dedup, stopSession, and findResumable see it without waiting for an
+   * explicit resumeSession RPC. Returns how many were re-adopted. Call once at
+   * boot, right after restore().
+   */
+  readoptLiveSessions(probe: ReadoptProbeDeps): Promise<number>;
   /**
    * Registers a pid this daemon just spawned, ahead of its
    * `/session-started` webhook arriving — lets `onSessionStarted` recognize
@@ -121,6 +130,10 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
       // from disk and re-tracked by a `resumeSession` relaunch keeps the
       // directory `scanForLiveSessionInDirectory` matches against.
       directory: session.directory,
+      // Persisted so a future daemon boot can re-adopt this session if its
+      // process outlives the restart (`readoptSessions.ts`,
+      // `readoptLiveSessions` below) — `TrackedSession.pid` is always set.
+      pid: session.pid,
     };
   }
 
@@ -132,6 +145,27 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
       }
       logger.info("[session-registry] restored persisted sessions", { count: resumable.size });
       return resumable.size;
+    },
+
+    async readoptLiveSessions(probe) {
+      const candidates = await findLiveOrphanedSessions(Object.fromEntries(resumable), probe);
+      for (const { session, pid } of candidates) {
+        pidToSession.set(pid, {
+          startedBy: "daemon",
+          pid,
+          sessionId: session.sessionId,
+          provider: session.provider,
+          metadata: session.metadata,
+          encryption: session.encryption,
+          directory: session.directory,
+        });
+        logger.info("[session-registry] re-adopted live orphaned session after restart", {
+          sessionId: session.sessionId,
+          pid,
+          directory: session.directory,
+        });
+      }
+      return candidates.length;
     },
 
     trackSpawned(pid, directory) {
@@ -197,6 +231,7 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
           metadata: live.metadata,
           savedAt: now(),
           directory: live.directory,
+          pid: live.pid,
         };
       }
       return resumable.get(sessionId) ?? null;
