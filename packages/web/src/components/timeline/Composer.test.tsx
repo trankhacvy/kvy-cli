@@ -51,3 +51,19 @@ describe("Composer disabled wiring", () => {
     expect(html).toContain("This session has ended.");
   });
 });
+
+/**
+ * "@" file-mention popover wiring (docs/competitive-notes-omnara.md #17) — a
+ * static-markup render can't fire real keyboard/change events (no
+ * jsdom/@testing-library here, see this file's own top-of-file note), so
+ * the interactive trigger→search→select flow is covered by
+ * `features/file-mentions`' pure-logic unit tests instead and was verified
+ * end-to-end by hand against a running dev server. This just locks in that
+ * a fresh, untouched render never shows the popover.
+ */
+describe("Composer file-mention popover — default (untriggered) render", () => {
+  it("renders no mention listbox before '@' has been typed", () => {
+    const html = renderComposer(false);
+    expect(html).not.toContain('role="listbox"');
+  });
+});
