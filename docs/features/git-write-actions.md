@@ -165,6 +165,8 @@ pre-existing, repo-wide lint debt in files this feature never touched (verified 
 introduced by this work). Every file this feature added or modified was checked in isolation
 (`biome check` scoped to exactly that file list) and is lint-clean.
 
+Merged into v2-pty-injection at c41777764496fc9cc8c04851aff3315959ca54d3.
+
 ## Test & Review notes
 
 Independent verification pass (separate agent, worktree `.worktrees/feature-git-write-actions`).
