@@ -47,6 +47,34 @@ describe("RpcCallSchema", () => {
   });
 });
 
+describe("SpawnParamsSchema.branch.from (docs/competitive-notes-omnara.md #16 searchable base-branch picker)", () => {
+  const base = {
+    idempotencyKey: "idem-1",
+    workspaceId: "w1",
+    directory: "/tmp",
+    provider: "claude-code" as const,
+    permissionMode: "default" as const,
+  };
+
+  it("accepts a branch option with a `from` base ref", () => {
+    expect(
+      SpawnParamsSchema.safeParse({
+        ...base,
+        branch: { name: "task-1", createWorktree: true, from: "main" },
+      }).success,
+    ).toBe(true);
+  });
+
+  it("still accepts a branch option with no `from` (additive, backward-compatible)", () => {
+    expect(
+      SpawnParamsSchema.safeParse({
+        ...base,
+        branch: { name: "task-1", createWorktree: true },
+      }).success,
+    ).toBe(true);
+  });
+});
+
 describe("idempotencyKey on caller-retriable machine RPCs", () => {
   it("requires idempotencyKey on spawn/adopt.*/git.*/fs.read", () => {
     expect(

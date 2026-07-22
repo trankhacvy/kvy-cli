@@ -38,6 +38,13 @@ export const SpawnParamsSchema = z.object({
     .object({
       name: z.string(),
       createWorktree: z.boolean(),
+      // The base ref a brand-new branch is created from (docs/competitive-notes-omnara.md
+      // #16 "searchable base-branch picker") — e.g. `main`/`master` instead of
+      // always forking off whatever's currently checked out at `directory`.
+      // Optional and additive: omitted (or a branch that already exists, where
+      // there's no "base" to speak of) preserves the old behavior of branching
+      // from the current HEAD.
+      from: z.string().optional(),
     })
     .optional(),
   continueFrom: z
