@@ -2018,6 +2018,13 @@
               "kind": "leaf",
               "type": "boolean"
             },
+            "from": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            },
             "name": {
               "kind": "leaf",
               "type": "string"
@@ -2389,6 +2396,31 @@
               }
             }
           }
+        }
+      }
+    }
+  },
+  "GitFilesParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "GitFilesResultSchema": {
+    "kind": "object",
+    "fields": {
+      "files": {
+        "kind": "array",
+        "element": {
+          "kind": "leaf",
+          "type": "string"
         }
       }
     }

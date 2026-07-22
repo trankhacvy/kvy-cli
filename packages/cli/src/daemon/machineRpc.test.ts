@@ -160,6 +160,14 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:git.files" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:fs.read" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -927,6 +935,84 @@ describe("registerMachineRpcHandlers", () => {
       // so it's updated to match the now-current, strictly more useful
       // behavior every handler shares.
       expect(open(response, DEK)).toEqual({ ok: false, error: "boom" });
+    });
+  });
+
+  describe("git.files", () => {
+    it("decrypts params, calls getGitFiles, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGitFiles = vi.fn(async () => ({ files: ["README.md", "src/a.ts"] }));
+      register(socket, { getGitFiles });
+
+      const params = { idempotencyKey: "idem_git_files_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "git.files", seal(params, DEK));
+
+      expect(getGitFiles).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ files: ["README.md", "src/a.ts"] });
+    });
+
+    it("replies with a sealed error when getGitFiles throws (e.g. not a git repo)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getGitFiles: vi.fn(async () => {
+          throw new Error("fatal: not a git repository");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.files",
+        seal({ idempotencyKey: "idem_git_files_2", worktree: "/repo" }, DEK),
+      );
+      // The shared `onRpcRequest` catch clause forwards the handler's own
+      // thrown message (see this module's doc comment / `git.commit`'s
+      // sibling test above) rather than a flat "handler-error" placeholder —
+      // this test predates that change (docs/features/git-write-actions.md),
+      // so it's updated to match the now-current, strictly more useful
+      // behavior every handler shares.
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "fatal: not a git repository",
+      });
+    });
+  });
+
+  describe("fs.read", () => {
+    it("decrypts params, calls readFile, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const readFileHandler = vi.fn(async () => ({ inline: "const a = 1;\n", truncated: false }));
+      register(socket, { readFile: readFileHandler });
+
+      const params = { idempotencyKey: "idem_fs_read_1", worktree: "/repo", path: "src/a.ts" };
+      const response = await callAndAwaitAck(socket, "fs.read", seal(params, DEK));
+
+      expect(readFileHandler).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ inline: "const a = 1;\n", truncated: false });
+    });
+
+    it("replies with a sealed error when readFile throws (e.g. binary/missing file)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        readFile: vi.fn(async () => {
+          throw new Error("looks like a binary file");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "fs.read",
+        seal({ idempotencyKey: "idem_fs_read_2", worktree: "/repo", path: "img.png" }, DEK),
+      );
+      // The shared `onRpcRequest` catch clause forwards the handler's own
+      // thrown message (see this module's doc comment / `git.commit`'s
+      // sibling test above) rather than a flat "handler-error" placeholder —
+      // this test predates that change (docs/features/git-write-actions.md),
+      // so it's updated to match the now-current, strictly more useful
+      // behavior every handler shares.
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "looks like a binary file",
+      });
     });
   });
 

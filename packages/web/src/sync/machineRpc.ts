@@ -37,6 +37,12 @@
  * integration", docs/competitive-notes-omnara.md #4) is the Checks tab's
  * data source (`features/github-checks/`) — same read-only, no-
  * idempotency-cache shape as `git.status`/`git.diff`/`git.branches` above.
+ *
+ * `git.files`/`fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file
+ * browser") join the same method table for `features/repo-files/`'s Repo
+ * Files sidebar tab: `git.files` lists every worktree-relative path
+ * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
+ * one file's content once a path is picked.
  */
 import {
   type AdoptListParamsSchema,
@@ -49,12 +55,16 @@ import {
   FsListResultSchema,
   type FsMkdirParams,
   FsMkdirResultSchema,
+  type FsReadParams,
+  FsReadResultSchema,
   type GitBranchesParams,
   GitBranchesResultSchema,
   type GitCommitParams,
   GitCommitResultSchema,
   type GitDiffParams,
   GitDiffResultSchema,
+  type GitFilesParams,
+  GitFilesResultSchema,
   type GithubChecksParams,
   GithubChecksResultSchema,
   type GitPushParams,
@@ -78,9 +88,11 @@ export type {
   AdoptTakeParams,
   FsListParams,
   FsMkdirParams,
+  FsReadParams,
   GitBranchesParams,
   GitCommitParams,
   GitDiffParams,
+  GitFilesParams,
   GithubChecksParams,
   GitPushParams,
   GitRenameBranchParams,
@@ -110,6 +122,8 @@ export interface MachineRpcParams {
   "git.renameBranch": GitRenameBranchParams;
   "github.checks": GithubChecksParams;
   "commands.list": SlashCommandsListParams;
+  "git.files": GitFilesParams;
+  "fs.read": FsReadParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -129,6 +143,8 @@ export interface MachineRpcResults {
   "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
   "github.checks": import("@falcon/wire").GithubChecksResult;
   "commands.list": import("@falcon/wire").SlashCommandsListResult;
+  "git.files": import("@falcon/wire").GitFilesResult;
+  "fs.read": import("@falcon/wire").FsReadResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -149,6 +165,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.renameBranch": GitRenameBranchResultSchema,
   "github.checks": GithubChecksResultSchema,
   "commands.list": SlashCommandsListResultSchema,
+  "git.files": GitFilesResultSchema,
+  "fs.read": FsReadResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

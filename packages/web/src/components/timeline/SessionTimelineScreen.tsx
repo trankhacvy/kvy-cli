@@ -244,6 +244,9 @@ function SessionTimelineBody({
             <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/checks/`}>Checks</Link>
             </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/session/${sessionId}/files/`}>Repo files</Link>
+            </Button>
             <Button
               type="button"
               variant={panelOpen ? "secondary" : "outline"}

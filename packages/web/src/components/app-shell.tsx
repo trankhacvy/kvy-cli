@@ -76,6 +76,7 @@ function pageTitle(pathname: string): string {
   if (pathname === "/session/new/") return "New session";
   if (pathname.startsWith("/settings/")) return "Settings";
   if (pathname.includes("/git/")) return "Files changed";
+  if (pathname.includes("/files/")) return "Repo files";
   if (pathname.startsWith("/session/")) return "Session";
   return "Falcon";
 }
