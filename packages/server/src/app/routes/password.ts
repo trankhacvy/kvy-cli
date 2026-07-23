@@ -17,7 +17,11 @@ import type { Database } from "../../db/types.js";
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h — long enough to fetch an email, short enough to bound abuse
 
 const ErrorSchema = z.object({ error: z.string() });
-const SessionResponseSchema = z.object({ success: z.literal(true), token: z.string() });
+const SessionResponseSchema = z.object({
+  success: z.literal(true),
+  token: z.string(),
+  refreshToken: z.string(),
+});
 const OkResponseSchema = z.object({ success: z.literal(true) });
 
 function normalizeEmail(email: string): string {
@@ -52,7 +56,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
             to: identifier,
             resetUrl: "(account already exists — use 'forgot password' to sign back in)",
           });
-          return reply.send({ success: true, token: "" });
+          return reply.send({ success: true, token: "", refreshToken: "" });
         }
 
         const passwordHash = await hashPassword(request.body.password);
@@ -75,8 +79,11 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
           verifyUrl: `(verification is not yet a real flow — account ${accountId} registered)`,
         });
 
-        const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
-        return reply.send({ success: true, token: accessToken });
+        const { accessToken, refreshToken } = await issueSession(db, {
+          accountId,
+          clientKind: "web",
+        });
+        return reply.send({ success: true, token: accessToken, refreshToken });
       },
     );
 
@@ -106,11 +113,11 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         const valid = await verifyPassword(identity.passwordHash, request.body.password);
         if (!valid) return genericError();
 
-        const { accessToken } = await issueSession(db, {
+        const { accessToken, refreshToken } = await issueSession(db, {
           accountId: identity.accountId,
           clientKind: "web",
         });
-        return reply.send({ success: true, token: accessToken });
+        return reply.send({ success: true, token: accessToken, refreshToken });
       },
     );
 

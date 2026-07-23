@@ -186,6 +186,33 @@ export function createCryptoWorkerHandler(storage: KeyStorage): CryptoWorkerHand
           return { id: request.id, ok: true, result: encodeRecoveryCode(masterSecret) };
         }
 
+        case "bindKeysProof": {
+          await ensureStartupLoaded();
+          if (!keyTree) {
+            return { id: request.id, ok: false, error: "not-initialized" };
+          }
+          await ready;
+          const contentPubKey = keyTree.content.publicKey;
+          const accountIdBytes = new TextEncoder().encode(request.accountId);
+          const nonce = decodeBase64(request.nonce);
+          const signed = new Uint8Array(
+            accountIdBytes.length + contentPubKey.length + nonce.length,
+          );
+          signed.set(accountIdBytes, 0);
+          signed.set(contentPubKey, accountIdBytes.length);
+          signed.set(nonce, accountIdBytes.length + contentPubKey.length);
+          const signature = signDetached(signed, keyTree.signing.secretKey);
+          return {
+            id: request.id,
+            ok: true,
+            result: {
+              signPubKey: encodeBase64(keyTree.signing.publicKey),
+              contentPubKey: encodeBase64(contentPubKey),
+              signature: encodeBase64(signature),
+            },
+          };
+        }
+
         case "sealForPeer": {
           await ensureStartupLoaded();
           if (!keyTree) {

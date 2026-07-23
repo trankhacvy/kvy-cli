@@ -33,6 +33,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
     }),
     exportRecoveryCode: notImplemented,
     sealForPeer: notImplemented,
+    bindKeysProof: notImplemented,
     terminate: () => {},
     ...overrides,
   };

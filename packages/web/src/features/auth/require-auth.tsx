@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { isSignedIn } from "@/lib/session";
+import { isSignedIn, silentRefresh } from "@/lib/session";
 
 /**
  * Where a signed-out visitor to an auth-gated route is sent. Exported so
@@ -59,18 +59,35 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (shouldRedirectToSignin(isSignedIn())) {
-      router.replace(SIGNIN_PATH);
-      return;
-    }
-    setChecked(true);
+    let cancelled = false;
 
-    const interval = setInterval(() => {
-      if (shouldRedirectToSignin(isSignedIn())) {
+    // issue-4-plan.md §6.4: an expired/missing access token attempts ONE silent refresh
+    // (via the stored refresh token) before redirecting to sign-in — the whole point of
+    // the 15-minute access-token TTL flip (§8 Phase 6) is that this should be invisible
+    // to the user on every normal page load, not just a fresh sign-in.
+    async function checkAuth(): Promise<void> {
+      if (isSignedIn()) {
+        if (!cancelled) setChecked(true);
+        return;
+      }
+      const refreshed = await silentRefresh();
+      if (cancelled) return;
+      if (refreshed) {
+        setChecked(true);
+      } else {
         router.replace(SIGNIN_PATH);
       }
+    }
+
+    void checkAuth();
+
+    const interval = setInterval(() => {
+      void checkAuth();
     }, EXPIRY_CHECK_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [router]);
 
   if (!checked) return null;

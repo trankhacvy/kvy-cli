@@ -25,6 +25,7 @@ function fakeBridge(): CryptoBridgeClient {
     signInChallenge: notImplemented,
     exportRecoveryCode: notImplemented,
     sealForPeer: notImplemented,
+    bindKeysProof: notImplemented,
     terminate: () => {},
   };
 }

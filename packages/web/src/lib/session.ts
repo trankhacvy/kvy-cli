@@ -8,8 +8,15 @@
  * component's effect/handler, but guarding costs nothing and avoids a hard
  * crash if that ever changes.
  */
+import { refreshSession } from "./api.js";
 
 const TOKEN_KEY = "falcon:token";
+// issue-4-plan.md §6.4: the refresh token is the actual long-lived credential now (60-day
+// absolute lifetime, §4.6) — the access token above is short-lived (15m, §8 Phase 6) and
+// silently re-minted from this one. Same `localStorage` custody as the access token: it's
+// a scoped, revocable, hashed-server-side credential, not key material (that stays in
+// IndexedDB via the crypto worker, untouched by this file).
+const REFRESH_TOKEN_KEY = "falcon:refreshToken";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -28,6 +35,32 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   if (!hasLocalStorage()) return;
   window.localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getRefreshToken(): string | null {
+  if (!hasLocalStorage()) return null;
+  return window.localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setRefreshToken(refreshToken: string): void {
+  if (!hasLocalStorage()) return;
+  window.localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+}
+
+export function clearRefreshToken(): void {
+  if (!hasLocalStorage()) return;
+  window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+/** Stores both halves of a freshly-issued or freshly-rotated session (§4.2/§4.3). */
+export function setSession(tokens: { accessToken: string; refreshToken: string }): void {
+  setToken(tokens.accessToken);
+  setRefreshToken(tokens.refreshToken);
+}
+
+export function clearSession(): void {
+  clearToken();
+  clearRefreshToken();
 }
 
 /** Base64url-decodes a JWT's payload segment — no signature verification
@@ -81,4 +114,26 @@ export function isTokenExpired(): boolean {
 
 export function isSignedIn(): boolean {
   return getToken() !== null && !isTokenExpired();
+}
+
+/**
+ * issue-4-plan.md §6.4: attempt one silent refresh using the stored refresh token —
+ * `require-auth.tsx` calls this before redirecting to `/signin/` on an expired/missing
+ * access token, and `apiSocket.ts` calls it on an auth `connect_error`, so a normal
+ * 15-minute access-token boundary never forces a visible re-login. Resolves `false`
+ * (and clears the session) when there's no refresh token to try, or the server rejects
+ * it (dead/revoked) — the caller is then responsible for redirecting to sign-in.
+ */
+export async function silentRefresh(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const tokens = await refreshSession(refreshToken);
+    setSession(tokens);
+    return true;
+  } catch {
+    clearSession();
+    return false;
+  }
 }

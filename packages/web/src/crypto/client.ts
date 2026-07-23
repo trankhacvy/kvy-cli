@@ -11,6 +11,7 @@
  */
 import type { EncryptedBox } from "@falcon/crypto/web";
 import type {
+  BindKeysProofResult,
   CryptoWorkerRequest,
   CryptoWorkerRequestPayload,
   CryptoWorkerResponse,
@@ -52,6 +53,8 @@ export interface CryptoBridgeClient {
   exportRecoveryCode(): Promise<string>;
   /** Seal the master secret to a pairing peer's ephemeral X25519 public key (base64). */
   sealForPeer(ephPub: string): Promise<string>;
+  /** Sign a server-issued `keys/bind` nonce (issue-4-plan.md §6.2). Rejects if not initialized. */
+  bindKeysProof(accountId: string, nonce: string): Promise<BindKeysProofResult>;
   /** Terminate the underlying worker. */
   terminate(): void;
 }
@@ -120,6 +123,8 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     signInChallenge: () => call<SignInChallengeResult>({ type: "signInChallenge" }),
     exportRecoveryCode: () => call<string>({ type: "exportRecoveryCode" }),
     sealForPeer: (ephPub) => call<string>({ type: "sealForPeer", ephPub }),
+    bindKeysProof: (accountId, nonce) =>
+      call<BindKeysProofResult>({ type: "bindKeysProof", accountId, nonce }),
     terminate: () => {
       rejectAllPending(new Error("crypto-bridge worker terminated"));
       worker.terminate?.();

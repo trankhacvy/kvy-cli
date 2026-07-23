@@ -107,6 +107,21 @@ export interface SealForPeerRequest {
   ephPub: string;
 }
 
+/**
+ * issue-4-plan.md §6.2 "keys/bind": sign the server-issued nonce so
+ * `POST /v1/auth/keys/bind` can verify this device really holds the identity's
+ * signing secret key. The signed payload is `accountId‖contentPubKey‖nonce`
+ * (matching `server/src/app/routes/keys.ts` byte-for-byte) — a bare signed
+ * nonce alone would let a signature minted for one account/content-key pair
+ * be replayed against another.
+ */
+export interface BindKeysProofRequest {
+  id: string;
+  type: "bindKeysProof";
+  accountId: string;
+  nonce: string;
+}
+
 export type CryptoWorkerRequest =
   | InitRequest
   | SetSessionKeyRequest
@@ -118,7 +133,8 @@ export type CryptoWorkerRequest =
   | GetIdentityRequest
   | SignInChallengeRequest
   | ExportRecoveryCodeRequest
-  | SealForPeerRequest;
+  | SealForPeerRequest
+  | BindKeysProofRequest;
 
 /** Public identity (base64-encoded keys) provisioned on this device. */
 export interface DeviceIdentity {
@@ -129,6 +145,11 @@ export interface DeviceIdentity {
 /** Everything `POST /v1/auth` needs, freshly minted. */
 export interface SignInChallengeResult extends DeviceIdentity {
   challenge: string;
+  signature: string;
+}
+
+/** Everything `POST /v1/auth/keys/bind` needs, for the caller's `nonce`. */
+export interface BindKeysProofResult extends DeviceIdentity {
   signature: string;
 }
 
@@ -149,6 +170,7 @@ export interface CryptoWorkerResults {
   signInChallenge: SignInChallengeResult;
   exportRecoveryCode: string;
   sealForPeer: string;
+  bindKeysProof: BindKeysProofResult;
 }
 
 export interface CryptoWorkerOkResponse<T = unknown> {

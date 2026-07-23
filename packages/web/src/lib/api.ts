@@ -118,6 +118,68 @@ export function exchangeGithubCode(body: {
   return postJson("/v1/auth/oauth/github/exchange", body);
 }
 
+/** `POST /v1/auth/password/register` — issue-4-plan.md §5.2: email+password sign-up. */
+export function passwordRegister(body: {
+  email: string;
+  password: string;
+}): Promise<{ success: true; token: string; refreshToken: string }> {
+  return postJson("/v1/auth/password/register", body);
+}
+
+/** `POST /v1/auth/password/login` — issue-4-plan.md §5.2: email+password sign-in. */
+export function passwordLogin(body: {
+  email: string;
+  password: string;
+}): Promise<{ success: true; token: string; refreshToken: string }> {
+  return postJson("/v1/auth/password/login", body);
+}
+
+/** `POST /v1/auth/refresh` — issue-4-plan.md §4.3: rotate the refresh token, mint a fresh access token. */
+export function refreshSession(
+  refreshToken: string,
+): Promise<{ accessToken: string; refreshToken: string }> {
+  return postJson("/v1/auth/refresh", { refreshToken });
+}
+
+/** `POST /v1/auth/keys/challenge` — issue-4-plan.md §6.2: mint a server nonce for `keys/bind`. */
+export function keysChallenge(token: string): Promise<{ nonce: string }> {
+  return postJson("/v1/auth/keys/challenge", undefined, token);
+}
+
+/** `POST /v1/auth/keys/bind` — issue-4-plan.md §6.2: bind (first-bind only, in this flow) this device's key material. */
+export function keysBind(
+  token: string,
+  body: { signPubKey: string; contentPubKey: string; nonce: string; signature: string },
+): Promise<{ success: true; keyEpoch: number }> {
+  return postJson("/v1/auth/keys/bind", body, token);
+}
+
+/** `GET /v1/auth/sessions` — issue-4-plan.md §4.4: this account's active device sessions. */
+export function listDeviceSessions(token: string): Promise<{
+  sessions: Array<{
+    id: string;
+    clientKind: string;
+    label: string | null;
+    machineId: string | null;
+    createdAt: string;
+    lastRefreshedAt: string | null;
+    expiresAt: string;
+    isCurrent: boolean;
+  }>;
+}> {
+  return getJson("/v1/auth/sessions", token);
+}
+
+/** `POST /v1/auth/sessions/:id/revoke` — issue-4-plan.md §4.4. */
+export function revokeSession(token: string, sessionId: string): Promise<{ success: true }> {
+  return postJson(`/v1/auth/sessions/${sessionId}/revoke`, undefined, token);
+}
+
+/** `POST /v1/auth/sessions/revoke-others` — issue-4-plan.md §4.4: log out every other device. */
+export function revokeOtherSessions(token: string): Promise<{ success: true; revoked: number }> {
+  return postJson("/v1/auth/sessions/revoke-others", undefined, token);
+}
+
 /** `POST /v1/auth/pair/approve` — an already-authenticated device approves a pairing request. */
 export function approvePairing(
   token: string,
