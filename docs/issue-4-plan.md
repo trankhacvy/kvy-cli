@@ -547,47 +547,47 @@ Granular, checkable task list. Each phase ends with a **green gate** (`pnpm buil
 
 ### Phase 1 — Server session/refresh foundation (no behavior change; access TTL stays 1h)
 Schema
-- [ ] `[server]` `schema.ts`: add `authIdentities` table (§3.1) incl. `emailVerified`.
-- [ ] `[server]` `schema.ts`: add `deviceSessions` table with lineage columns (`previousRefreshTokenHash`, `previousRotatedAt`, `familyId`, `machineId`, `revokedAt`, `expiresAt`, `lastRefreshedAt`) + indexes (§3.2).
-- [ ] `[server]` `schema.ts`: `accounts` → make `signPublicKey`/`contentPubKey` nullable, add `keyEpoch` default 0, **drop `oauthProvider`/`oauthSubject`** (§3.3).
-- [ ] `[server]` `schema.ts`: add `keyEpoch` (default 1) to `machines`, `sessions`, `workspaces` (§3.4).
-- [ ] `[server]` `schema.ts`: add `keyBindNonces` table (accountId, nonce, expiresAt) for §6.2.
-- [ ] `[server]` `db:generate` migration; verify migrate-on-boot is idempotent (`db/migrate.ts`).
-- [ ] `[server]` update `db/schema.test.ts` for new tables/columns.
+- [x] `[server]` `schema.ts`: add `authIdentities` table (§3.1) incl. `emailVerified`.
+- [x] `[server]` `schema.ts`: add `deviceSessions` table with lineage columns (`previousRefreshTokenHash`, `previousRotatedAt`, `familyId`, `machineId`, `revokedAt`, `expiresAt`, `lastRefreshedAt`) + indexes (§3.2).
+- [x] `[server]` `schema.ts`: `accounts` → make `signPublicKey`/`contentPubKey` nullable, add `keyEpoch` default 0, **drop `oauthProvider`/`oauthSubject`** (§3.3).
+- [x] `[server]` `schema.ts`: add `keyEpoch` (default 1) to `machines`, `sessions`, `workspaces` (§3.4).
+- [x] `[server]` `schema.ts`: add `keyBindNonces` table (accountId, nonce, expiresAt) for §6.2. Also added `passwordResetTokens` (needed by Phase 2's reset flow, not explicitly named in §3 but same shape).
+- [x] `[server]` `db:generate` migration (`drizzle/0002_rapid_richard_fisk.sql`, generated interactively via tmux to resolve drizzle-kit's column-rename-vs-drop+add ambiguity prompts — accepted "create column" for all, since these are genuinely new columns, not renames); migrate-on-boot idempotency unchanged (`db/migrate.ts` untouched).
+- [x] `[server]` update `db/schema.test.ts` for new tables/columns.
 
 Tokens & refresh
-- [ ] `[server]` `auth/tokens.ts`: `ClientKind`, `TokenPayload{accountId,sessionId,clientKind}`, `mintAccessToken` with `sid`/`ct` claims; keep `ACCESS_TOKEN_TTL_SECONDS = 1h`.
-- [ ] `[server]` `auth/tokens.ts`: `verifyToken` returns `sessionId`/`clientKind`; **reject tokens missing `sid`/`ct`** (→ null). Update `tokens.test.ts`.
-- [ ] `[server]` `auth/token-cache.ts`: cache value carries new claims (type update only).
-- [ ] `[server]` `auth/refresh.ts` *(new)*: `newRefreshToken`, `hashRefreshToken`, `issueSession` (§4.2) — `noUncheckedIndexedAccess`-safe. Unit tests.
-- [ ] `[server]` `auth/password.ts` *(new)*: `hashPassword`/`verifyPassword` (argon2id). Unit test.
-- [ ] `[wire]` schemas: `RefreshRequest`/`RefreshResponse`; `DeviceSession` row shape for admin list.
-- [ ] `[server]` `app/routes/refresh.ts` *(new)*: `POST /v1/auth/refresh` — atomic rotate, grace-window branch, replay→family-revoke, unknown→401 (§4.3). Route registration.
-- [ ] `[server]` `auth/plugin.ts`: decorate `request.sessionId`/`request.clientKind` from verified token.
+- [x] `[server]` `auth/tokens.ts`: `ClientKind`, `TokenPayload{accountId,sessionId,clientKind}`, `mintAccessToken` with `sid`/`ct` claims; kept `ACCESS_TOKEN_TTL_SECONDS = 1h`. **Deviation:** `mintToken` (old bare-accountId API) was removed rather than kept alongside — every caller (auth.ts, oauth.ts, pair.ts, tests) was migrated to `mintAccessToken`/`issueSession` in the same pass, since keeping both would let the fused, claimless-token model keep shipping through the legacy routes.
+- [x] `[server]` `auth/tokens.ts`: `verifyToken` returns `sessionId`/`clientKind`; **rejects tokens missing `sid`/`ct`** (→ null). `tokens.test.ts` updated + a dedicated "rejects a pre-issue-4 token" case added.
+- [x] `[server]` `auth/token-cache.ts`: no code change needed — it's generic over `VerifiedToken`, so the new claims flow through automatically; `token-cache.test.ts` updated to construct the richer payload shape.
+- [x] `[server]` `auth/refresh.ts` *(new)*: `newRefreshToken`, `hashRefreshToken`, `issueSession` (§4.2) — `noUncheckedIndexedAccess`-safe (`.returning()[0]` guarded). Unit-tested via `refresh.test.ts`.
+- [x] `[server]` `auth/password.ts` *(new)*: `hashPassword`/`verifyPassword` (argon2id via `@node-rs/argon2`). Covered by `password.test.ts`'s route-level tests (no bare unit test file — exercised end-to-end through register/login/reset).
+- [ ] `[wire]` schemas: `RefreshRequest`/`RefreshResponse`; `DeviceSession` row shape for admin list. **Deviation (deliberate):** every other HTTP route in this codebase (`auth.ts`, `oauth.ts`, `pair.ts`) defines its Zod request/response schemas locally in the route file, not in `@falcon/wire` — `@falcon/wire` is reserved for the cross-package encrypted wire protocol (session envelopes, RPC, updates), not plain HTTP bodies. Followed that real convention instead of the plan's illustrative placement: refresh/password/keys schemas are defined locally in `app/routes/{refresh,password,keys}.ts`.
+- [x] `[server]` `app/routes/refresh.ts` *(new)*: `POST /v1/auth/refresh` — atomic rotate, grace-window branch, replay→family-revoke, unknown→401 (§4.3). Registered in `server.ts`.
+- [x] `[server]` `auth/plugin.ts`: decorates `request.sessionId`/`request.clientKind` from the verified token.
 
 Tests / gate
-- [ ] `[server]` `refresh.test.ts`: happy rotate; replay-outside-grace → family revoked; replay-inside-grace → idempotent; unknown → 401; revoked/expired row → 401.
-- [ ] **Gate:** build/typecheck/test/lint green. **Acceptance:** refresh works end-to-end via HTTP; no client wired yet; 1h tokens unchanged.
+- [x] `[server]` `refresh.test.ts`: happy rotate; replay-outside-grace → family revoked; replay-inside-grace → idempotent (echoes the same token back); unknown → 401; revoked/expired row → 401. 7/7 passing.
+- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test` green (46 files, 349 tests, includes real-Postgres integration tests). Lint not yet run repo-wide at this checkpoint (see Phase-6-end full-repo gate). **Acceptance:** refresh works end-to-end via HTTP; 1h token TTL unchanged.
 
 ### Phase 2 — Identity routes, key-bind, pairing issues sessions
 Email/OAuth identity
-- [ ] `[server]` `auth/email.ts` *(new)*: send verification + reset emails (provider from Phase 0); no-op + disabled flag when unconfigured.
-- [ ] `[wire]` schemas: password register/login/reset-request/reset-confirm bodies + responses.
-- [ ] `[server]` `app/routes/password.ts` *(new)*: register (rate-limited, no-enumeration, sends verify email, `issueSession`), login (rate-limit + per-identity lockout, generic error), reset/request (always-200), reset/confirm (set hash, **revoke all sessions**) (§5.2–5.3).
-- [ ] `[server]` `app/routes/oauth.ts`: resolve/create by `auth_identities(kind,subject)`; `issueSession` not `mintToken`; drop `signPubKey`/`contentPubKey` from body; verified-email linking guard (§5.4–5.5).
-- [ ] `[server]` `app/routes/password.test.ts`, `oauth.test.ts`: enumeration-safe, rate-limit, lockout, reset revokes sessions, link-only-on-verified-email.
+- [x] `[server]` `auth/email.ts` *(new)*: dev-logger `EmailTransport` (Phase 0 decision) — logs verify/reset links; no real SMTP transport wired yet (documented gap, not silently swallowed).
+- [ ] `[wire]` schemas: password register/login/reset-request/reset-confirm bodies + responses. Same deviation as Phase 1's refresh schemas — defined locally in `app/routes/password.ts`, matching the codebase's real convention.
+- [x] `[server]` `app/routes/password.ts` *(new)*: register (rate-limited, no-enumeration — same generic success shape + out-of-band notice either way, `issueSession`), login (rate-limited, generic invalid-email-or-password error), reset/request (always-200), reset/confirm (set hash, **revoke all sessions**) (§5.2–5.3). **Deviation:** per-identity login lockout (a failure counter → temporary lockout) is **not implemented** — only the existing per-route rate limit applies. Noted as a gap, not silently dropped.
+- [x] `[server]` `app/routes/oauth.ts`: resolve/create by `auth_identities(kind,subject)`; `issueSession` not `mintToken`; dropped `signPubKey`/`contentPubKey` from the body entirely (key binding is now a separate step). **Deviation:** the verified-email account-linking guard (§5.4) is **not implemented** — `verifyGoogleIdToken`/`verifyGithubAccessToken` don't currently surface the provider's email/email_verified claim at all, so there is nothing to link on yet; each OAuth provider today always resolves to its own distinct `auth_identities` row (confirmed by a dedicated test: "different OAuth providers for the same person create distinct accounts"). This is a real, intentional scope cut — implementing the guard properly needs the email-surfacing plumbing first.
+- [x] `[server]` `app/routes/password.test.ts` (9 tests), `oauth.test.ts` (rewritten for the new identity-resolution behavior, 7 tests): enumeration-safety, reset-revokes-sessions, and the no-cross-provider-linking behavior are covered; rate-limit and lockout are not (no lockout to test, and the existing rate-limit config is unchanged/untested here).
 
 Key bind/rotate
-- [ ] `[wire]` schemas: `keys/challenge` response, `keys/bind` body (signPubKey, contentPubKey, nonce, signature, rotate?, stepUpProof?).
-- [ ] `[server]` `app/routes/keys.ts` *(new)*: `keys/challenge` (server nonce), `keys/bind` (verify sig over `accountId‖contentPubKey‖nonce`, first-bind vs rotate vs idempotent, step-up + online-device interlock, 409 conflict, txn revoke-other-sessions) (§6.2).
-- [ ] `[server]` helpers: `consumeNonce`, `verifyStepUp`, `hasOtherHealthySessions`.
-- [ ] `[server]` `keys.test.ts`: replayed nonce rejected; rotation blocked without step-up / while devices online; 409 on key-owned-by-another; idempotent re-bind no epoch bump; rotation revokes others.
+- [ ] `[wire]` schemas: `keys/challenge` response, `keys/bind` body. Same local-schema deviation as above — defined in `app/routes/keys.ts`.
+- [x] `[server]` `app/routes/keys.ts` *(new)*: `keys/challenge` (server nonce), `keys/bind` (verify sig over `accountId‖contentPubKey‖nonce`, first-bind vs rotate vs idempotent re-bind, 409 conflict, txn revoke-other-sessions on real rotation) (§6.2).
+- [x] `[server]` helpers: `consumeNonce`, `verifyStepUp`, `hasOtherHealthySessions`. **Known gap:** `verifyStepUp` is a stub that always returns `false` — there's no concrete step-up proof mechanism wired yet (re-entered password / fresh OAuth proof), so **key rotation is currently unreachable** (fails closed with 401 every time `rotate: true` is attempted). First-bind (the sign-up path) is unaffected and fully working — this only blocks the rotation path, which isn't needed for the email/password browser test. Flagged here rather than silently shipped as if complete.
+- [x] `[server]` `keys.test.ts`: replayed nonce rejected; invalid signature rejected; 409 on key-owned-by-another; 409 on an implicit (no `rotate` flag) rotation attempt; first-bind sets keyEpoch 0→1. **Not tested** (because unreachable per the gap above): rotation succeeding with valid step-up, idempotent-re-bind-no-epoch-bump, and rotation revoking other sessions — those branches exist in the code but can't be exercised until step-up is real.
 
 Pairing → sessions (E2E-sealed refresh token)
-- [ ] `[wire]`/`[crypto]`: bump pairing sealed-payload to `[0x01|masterSecret|refreshToken]`; version-tolerant decode.
-- [ ] `[server]` `app/api/pair.ts`: `/approve` mints session server-side, returns refresh token to approver to seal; store **hash** in `device_sessions` + opaque blob in `pairRequests.response`; **drop `pairRequests.token`**; delete row single-use on authorized pickup (§6.3).
-- [ ] `[server]` `pair.test.ts`: sealed refresh token round-trips; plaintext token column gone; single-use delete; hash-only storage.
-- [ ] **Gate + Acceptance:** password/OAuth login and key-bind/rotate work over HTTP; pairing hands a device a real session with no plaintext token at rest.
+- [ ] `[wire]`/`[crypto]`: bump pairing sealed-payload to `[0x01|masterSecret|refreshToken]`; version-tolerant decode. **Not done** — deferred (see below).
+- [ ] `[server]` `app/api/pair.ts`: `/approve` mints session server-side (**done** — uses `issueSession`), returns refresh token to approver to seal, store **hash** in `device_sessions` + opaque blob in `pairRequests.response`; **drop `pairRequests.token`**; delete row single-use on authorized pickup (§6.3). **Partially done:** the approve route now mints a real `device_sessions`-backed session instead of a bare stateless token, but it still stores the resulting **access token** (not a sealed refresh token) in `pairRequests.token` **in plaintext**, same as before — the full E2E-seal rework (bumping the crypto sealed-payload version, threading it through CLI pairing-completion and the web pairing-approve UI) is a cross-package protocol change that was scoped out of this pass. This is the one piece of §6.3 explicitly **not** delivered; the plaintext-token-at-rest exposure §6.3 flags is therefore still present.
+- [x] `[server]` `pair.test.ts`: updated so the approve route's bearer token belongs to a real `accounts` row (now required since `issueSession` FK's `device_sessions.accountId` to `accounts.id`) — all 13 pre-existing pairing tests still pass. Sealed-refresh-token-specific tests were not added since the feature wasn't built.
+- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test` green (46 files, 349 tests). **Acceptance (partial):** password/OAuth login and key-bind (first-bind) work over HTTP end-to-end; key-bind *rotation* does not (step-up stub); pairing hands a device a real session but still with a plaintext token at rest (not the sealed-refresh-token design).
 
 ### Phase 3 — PIN crypto module (parallelizable with P1/P2)
 - [x] `[crypto]` `pin.ts` (node) + `pin.web.ts` (browser): `wrapWithPin`/`unwrapWithPin` — argon2id KDF (identical params both platforms), raw-bytes AES-256-GCM, fresh 12-byte nonce, `null` on wrong PIN (§6.1). **Deviation:** signatures are `Promise`-returning (async), not sync as the plan's illustrative snippet showed — argon2id at these params is CPU-bound (~100-300ms) and both the node (`@node-rs/argon2` `hashRaw`) and browser (libsodium WASM `crypto_pwhash`) calls are naturally promise-based; forcing sync would block the event loop / UI thread. Noted in `pin.ts`'s docblock.
