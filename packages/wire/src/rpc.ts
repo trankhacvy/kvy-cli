@@ -581,6 +581,51 @@ export const AdoptMirrorResultSchema = z.object({
 });
 export type AdoptMirrorResult = z.infer<typeof AdoptMirrorResultSchema>;
 
+// `sleepInhibit.get`/`sleepInhibit.set` machine RPCs (docs/features/
+// sleep-inhibit.md, docs/competitive-notes-omnara.md #12 "Sleep-inhibit
+// control"): a per-machine tri-state policy that makes the daemon hold an
+// OS "don't sleep" assertion via `caffeinate` (macOS only for MVP) so a Mac
+// won't sleep mid-session. `"off"` holds no assertion; `"onPower"` maps to
+// `caffeinate -s` (system-sleep prevention, but macOS itself only honors
+// `-s` while on AC power — no battery polling needed daemon-side);
+// `"always"` maps to `caffeinate -i` (idle-sleep prevention regardless of
+// power source). Both flags are always paired with `-w <daemon pid>`
+// (`daemon/sleepInhibit.ts`) so the OS itself releases the assertion the
+// instant the daemon process exits — the leak-safety guard, in place of any
+// `doctor`/`markers` reaping. `idempotencyKey` is carried for family
+// uniformity only (this module's header comment): `get` is a pure read,
+// `set` is naturally idempotent (applying the same mode twice converges to
+// the same single child), same rationale as `provider.account`/`git.status`.
+export const SleepInhibitModeSchema = z.enum(["off", "onPower", "always"]);
+export type SleepInhibitMode = z.infer<typeof SleepInhibitModeSchema>;
+
+// Shared result shape for BOTH RPCs — `set` returns the post-apply state so
+// the caller needs no follow-up `get`. `supported: false` is the honest
+// answer on any non-darwin `platform` (the RPC never spawns a real
+// assertion there, and `mode`/`active` are reported as `"off"`/`false`
+// regardless of the requested mode). `active` reports whether a caffeinate
+// child is currently live — `false` when `mode` is `"off"`, when
+// unsupported, or when the child failed to spawn (a Mac missing
+// `/usr/bin/caffeinate` is broken-but-survivable, never thrown).
+export const SleepInhibitStateSchema = z.object({
+  supported: z.boolean(),
+  platform: z.string(),
+  mode: SleepInhibitModeSchema,
+  active: z.boolean(),
+});
+export type SleepInhibitState = z.infer<typeof SleepInhibitStateSchema>;
+
+export const SleepInhibitGetParamsSchema = z.object({
+  idempotencyKey: z.string(),
+});
+export type SleepInhibitGetParams = z.infer<typeof SleepInhibitGetParamsSchema>;
+
+export const SleepInhibitSetParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  mode: SleepInhibitModeSchema,
+});
+export type SleepInhibitSetParams = z.infer<typeof SleepInhibitSetParamsSchema>;
+
 // ---------------------------------------------------------------------------
 // Session RPCs — registered by the session process (design §4.4)
 // ---------------------------------------------------------------------------

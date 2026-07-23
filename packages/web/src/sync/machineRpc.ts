@@ -46,6 +46,13 @@
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
  *
+ * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
+ * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") back
+ * Settings → Machines' per-machine Off/While-on-Power/Always card
+ * (`features/machine-settings/`) — both share the one `SleepInhibitState`
+ * result shape (`set` returns the post-apply state, no follow-up `get`
+ * needed).
+ *
  * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
  * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts")
  * join the table for `features/run-panel/`: the read-only workspace config
@@ -96,6 +103,9 @@ import {
   RunStopResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
+  type SleepInhibitGetParams,
+  type SleepInhibitSetParams,
+  SleepInhibitStateSchema,
   type SpawnParams,
   SpawnResultSchema,
   type WorkspaceGetConfigParams,
@@ -126,6 +136,8 @@ export type {
   RunStatusParams,
   RunStopParams,
   SlashCommandsListParams,
+  SleepInhibitGetParams,
+  SleepInhibitSetParams,
   SpawnParams,
   WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
@@ -154,6 +166,8 @@ export interface MachineRpcParams {
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
+  "sleepInhibit.get": SleepInhibitGetParams;
+  "sleepInhibit.set": SleepInhibitSetParams;
   "workspace.getConfig": WorkspaceGetConfigParams;
   "run.start": RunStartParams;
   "run.stop": RunStopParams;
@@ -181,6 +195,8 @@ export interface MachineRpcResults {
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
+  "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
+  "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
   "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
   "run.start": import("@falcon/wire").RunStartResult;
   "run.stop": import("@falcon/wire").RunStopResult;
@@ -209,6 +225,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
+  "sleepInhibit.get": SleepInhibitStateSchema,
+  "sleepInhibit.set": SleepInhibitStateSchema,
   "workspace.getConfig": WorkspaceGetConfigResultSchema,
   "run.start": RunStartResultSchema,
   "run.stop": RunStopResultSchema,

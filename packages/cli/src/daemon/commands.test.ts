@@ -1,8 +1,10 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { SleepInhibitMode, SleepInhibitState } from "@falcon/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
+import { readSettings, updateSettings } from "../persistence.js";
 import {
   createDaemonCommandDeps,
   type DaemonCommandDeps,
@@ -13,6 +15,7 @@ import {
 } from "./commands.js";
 import { acquireDaemonLock, lockFilePath } from "./lock.js";
 import { persistSession } from "./sessionsStore.js";
+import type { SleepInhibitManager } from "./sleepInhibit.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
 function noopLogger(): Logger {
@@ -35,6 +38,27 @@ function buildDeps(homeDir: string, overrides: Partial<DaemonCommandDeps> = {}):
     stopWaitTimeoutMs: 200,
     ...overrides,
   });
+}
+
+/** Fake sleep-inhibit manager (docs/features/sleep-inhibit.md) recording every `applyMode`/`stop` call into a shared, cross-call-site-ordered `events` array — never spawns anything real. */
+function fakeSleepInhibitManager(events: string[]): SleepInhibitManager {
+  let mode: SleepInhibitMode = "off";
+  return {
+    applyMode: (nextMode: SleepInhibitMode): SleepInhibitState => {
+      events.push(`applyMode:${nextMode}`);
+      mode = nextMode;
+      return { supported: true, platform: "darwin", mode, active: mode !== "off" };
+    },
+    getState: (): SleepInhibitState => ({
+      supported: true,
+      platform: "darwin",
+      mode,
+      active: mode !== "off",
+    }),
+    stop: () => {
+      events.push("stop");
+    },
+  };
 }
 
 describe("daemon commands", () => {
@@ -224,6 +248,86 @@ describe("daemon commands", () => {
       expect(code).toBe(0);
       expect(spawnStartSync).toHaveBeenCalledOnce();
       expect(await readDaemonState(homeDir)).toBeNull();
+    });
+  });
+
+  describe("runDaemonStartSync — sleep-inhibit boot re-apply (docs/features/sleep-inhibit.md)", () => {
+    it("boots and applies the persisted sleepInhibit mode via the injected fake manager, unconditionally (even with no stored credentials)", async () => {
+      await updateSettings((current) => ({ ...current, sleepInhibit: "always" }), { homeDir });
+      const events: string[] = [];
+      const deps = buildDeps(homeDir, {
+        createSleepInhibitManager: () => fakeSleepInhibitManager(events),
+        registerShutdownSignals: (onShutdown) => {
+          setTimeout(() => onShutdown(), 10);
+          return () => {};
+        },
+      });
+
+      const code = await runDaemonStartSync(deps);
+
+      expect(code).toBe(0);
+      expect(events.filter((e) => e.startsWith("applyMode:"))).toEqual(["applyMode:always"]);
+    });
+
+    it("defaults to 'off' when settings.json has no sleepInhibit field", async () => {
+      const events: string[] = [];
+      const deps = buildDeps(homeDir, {
+        createSleepInhibitManager: () => fakeSleepInhibitManager(events),
+        registerShutdownSignals: (onShutdown) => {
+          setTimeout(() => onShutdown(), 10);
+          return () => {};
+        },
+      });
+
+      await runDaemonStartSync(deps);
+
+      expect(events).toContain("applyMode:off");
+    });
+
+    it("stops the sleep-inhibit manager BEFORE spawning the replacement daemon in the self-update handoff", async () => {
+      const events: string[] = [];
+      const deps = buildDeps(homeDir, {
+        createSleepInhibitManager: () => fakeSleepInhibitManager(events),
+        spawnStartSync: vi.fn(() => events.push("spawnStartSync")),
+        heartbeatIntervalMs: 5,
+        captureBundleMtimeMs: () => 111,
+        hasBundleBeenReplaced: () => true,
+        registerShutdownSignals: () => () => {},
+      });
+
+      const code = await runDaemonStartSync(deps);
+
+      expect(code).toBe(0);
+      const stopIndex = events.indexOf("stop");
+      const spawnIndex = events.indexOf("spawnStartSync");
+      expect(stopIndex).toBeGreaterThanOrEqual(0);
+      expect(spawnIndex).toBeGreaterThan(stopIndex);
+    });
+
+    it("the setSleepInhibit persist-only-when-supported invariant round-trips through settings.json", async () => {
+      // Mirrors (in isolation) the exact `setSleepInhibit` closure
+      // `runDaemonStartSync` wires into `MachineIntegrationDeps` — the real
+      // closure, reached over a real sealed socket RPC round trip, is
+      // proven end-to-end in commands.machineWiring.integration.test.ts's
+      // "sleepInhibit.set persists to settings.json" case.
+      const manager = fakeSleepInhibitManager([]);
+      const setSleepInhibit = async ({ mode }: { mode: SleepInhibitMode }) => {
+        const state = manager.applyMode(mode);
+        if (state.supported) {
+          await updateSettings((current) => ({ ...current, sleepInhibit: mode }), { homeDir });
+        }
+        return state;
+      };
+
+      const result = await setSleepInhibit({ mode: "onPower" });
+
+      expect(result).toEqual({
+        supported: true,
+        platform: "darwin",
+        mode: "onPower",
+        active: true,
+      });
+      expect((await readSettings({ homeDir })).sleepInhibit).toBe("onPower");
     });
   });
 

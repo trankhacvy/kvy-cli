@@ -450,6 +450,49 @@ describe("createMachineRpcClient", () => {
     ).rejects.toThrow("fatal: could not read Username for 'https://...'");
   });
 
+  it("round-trips sleepInhibit.get and sleepInhibit.set calls and results (docs/features/sleep-inhibit.md)", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ supported: true, platform: "darwin", mode: "always", active: true }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const getResult = await client.call("sleepInhibit.get", { idempotencyKey: "idem-9" });
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:sleepInhibit.get",
+      "sleepInhibit.get",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(getResult).toEqual({
+      supported: true,
+      platform: "darwin",
+      mode: "always",
+      active: true,
+    });
+
+    const setResult = await client.call("sleepInhibit.set", {
+      idempotencyKey: "idem-10",
+      mode: "always",
+    });
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:sleepInhibit.set",
+      "sleepInhibit.set",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(setResult).toEqual({
+      supported: true,
+      platform: "darwin",
+      mode: "always",
+      active: true,
+    });
+  });
+
   it("throws MachineRpcError when the sealed result fails to decrypt", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: true, result: box({ ok: true }) })),

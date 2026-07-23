@@ -108,6 +108,9 @@ import type {
   RunStatusResult,
   RunStopParams,
   RunStopResult,
+  SleepInhibitGetParams,
+  SleepInhibitSetParams,
+  SleepInhibitState,
   SpawnParams,
   SpawnResult,
   WorkspaceGetConfigParams,
@@ -192,6 +195,10 @@ export interface MachineIntegrationDeps {
   spawnEngineOverrides?: Partial<SpawnEngineDeps>;
   /** Same, for `resumeSession.ts`. */
   resumeSessionOverrides?: Partial<ResumeSessionDeps>;
+  /** Backs the `sleepInhibit.get` RPC (docs/features/sleep-inhibit.md). Defaults to an honest "no manager wired" stub here — `commands.ts` supplies the real `daemon/sleepInhibit.ts` manager's `getState`, since the manager itself is created at that composition root (boot re-apply must work even in local-only mode, where this module's `startMachineIntegration` never runs at all). */
+  getSleepInhibit?: (params: SleepInhibitGetParams) => Promise<SleepInhibitState>;
+  /** Backs the `sleepInhibit.set` RPC. Same "real default lives in commands.ts" note as `getSleepInhibit` above. */
+  setSleepInhibit?: (params: SleepInhibitSetParams) => Promise<SleepInhibitState>;
 }
 
 export interface MachineIntegrationHandle {
@@ -201,6 +208,11 @@ export interface MachineIntegrationHandle {
 
 function defaultLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
+}
+
+/** Honest "no manager wired" stub — see `MachineIntegrationDeps.getSleepInhibit`'s own doc comment for why the real default lives in `commands.ts` instead of here. */
+async function defaultSleepInhibitStub(): Promise<SleepInhibitState> {
+  return { supported: false, platform: process.platform, mode: "off", active: false };
 }
 
 export function createMachineIntegrationDeps(
@@ -220,6 +232,8 @@ export function createMachineIntegrationDeps(
     resolveProviderSession: async () => null,
     resolveResumeDirectory: resolveResumeDirectoryFromRecord,
     heartbeatIntervalMs: 60_000,
+    getSleepInhibit: defaultSleepInhibitStub,
+    setSleepInhibit: defaultSleepInhibitStub,
     ...required,
     ...overrides,
   };
@@ -468,6 +482,8 @@ export async function startMachineIntegration(
     adoptTake: adoptTakeHandler,
     adoptMirror: adoptMirrorHandler,
     getGitDiff: getGitDiffHandler,
+    getSleepInhibit: deps.getSleepInhibit,
+    setSleepInhibit: deps.setSleepInhibit,
     getWorkspaceConfig: getWorkspaceConfigHandler,
     runStart: runStartHandler,
     runStop: runStopHandler,

@@ -131,6 +131,18 @@ export interface Settings {
    * `falcon update` child so a stream of invocations doesn't hammer GitHub.
    */
   lastUpdateCheckAt?: number;
+  /**
+   * Per-machine sleep-inhibit policy (docs/features/sleep-inhibit.md,
+   * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") —
+   * re-applied via `daemon/sleepInhibit.ts`'s `createSleepInhibitManager`
+   * at every `runDaemonStartSync` boot (independent of login state, so a
+   * previously persisted "always" is enforced even in local-only mode),
+   * and written by the `sleepInhibit.set` machine RPC handler whenever the
+   * manager reports `supported: true` for the local platform. Absent (or
+   * omitted from a settings.json an older `falcon` wrote) means "off" —
+   * same lenient, unknown-value-tolerant precedent as `daemonAutoStart`.
+   */
+  sleepInhibit?: "off" | "onPower" | "always";
 }
 
 const defaultSettings: Settings = {
@@ -182,6 +194,13 @@ function normalizeSettings(raw: Record<string, unknown>): Settings {
   }
   if (typeof raw.lastUpdateCheckAt === "number" && Number.isFinite(raw.lastUpdateCheckAt)) {
     settings.lastUpdateCheckAt = raw.lastUpdateCheckAt;
+  }
+  if (
+    raw.sleepInhibit === "off" ||
+    raw.sleepInhibit === "onPower" ||
+    raw.sleepInhibit === "always"
+  ) {
+    settings.sleepInhibit = raw.sleepInhibit;
   }
   return settings;
 }

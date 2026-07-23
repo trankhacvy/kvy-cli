@@ -87,6 +87,32 @@ describe("readSettings", () => {
     const settings = await readSettings({ homeDir });
     expect(settings.adoptedSessions).toEqual({ "old-1": ["old-1", "new-1"] });
   });
+
+  it("normalizes sleepInhibit, ignoring any value outside the tri-state (docs/features/sleep-inhibit.md)", async () => {
+    writeFileSync(
+      path.join(homeDir, "settings.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        onboardingCompleted: false,
+        sleepInhibit: "always",
+      }),
+    );
+    const settings = await readSettings({ homeDir });
+    expect(settings.sleepInhibit).toBe("always");
+  });
+
+  it("drops an unknown sleepInhibit value rather than throwing", async () => {
+    writeFileSync(
+      path.join(homeDir, "settings.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        onboardingCompleted: false,
+        sleepInhibit: "forever",
+      }),
+    );
+    const settings = await readSettings({ homeDir });
+    expect(settings.sleepInhibit).toBeUndefined();
+  });
 });
 
 describe("updateSettings", () => {
@@ -152,6 +178,16 @@ describe("updateSettings", () => {
 
     const final = await readSettings({ homeDir });
     expect(final.machineId).toBe(String(concurrency));
+  });
+
+  it("round-trips a valid sleepInhibit mode through updateSettings", async () => {
+    const updated = await updateSettings((current) => ({ ...current, sleepInhibit: "onPower" }), {
+      homeDir,
+    });
+    expect(updated.sleepInhibit).toBe("onPower");
+
+    const reread = await readSettings({ homeDir });
+    expect(reread.sleepInhibit).toBe("onPower");
   });
 });
 
