@@ -596,28 +596,32 @@ Pairing → sessions (E2E-sealed refresh token)
 - [x] **Gate + Acceptance:** module usable from both node and web builds; parity vector passes. `pnpm --filter @falcon/crypto build && typecheck && test` all green.
 
 ### Phase 4 — Web migration (PIN, silent refresh, remove recovery/challenge); then delete legacy `/v1/auth`
+**Overall status: partial.** The identity/refresh half is real and tested; the PIN half
+and the deletions were not done in this pass — see the item-by-item notes below and the
+final report for the reasoning (PIN was cut in Phase 3/5 too; consistent scope boundary).
+
 Crypto worker & storage
-- [ ] `[web]` `crypto/key-storage.ts`: store `PinWrapped` instead of raw bytes.
-- [ ] `[web]` `crypto/{worker-handler,client,protocol}.ts`: `init(masterSecret, pin)` → `wrapWithPin`+save; new `unlock(pin)`; no-key worker requires unlock; **remove `exportRecoveryCode`/`signInChallenge`-for-login usage**.
-- [ ] `[web]` PIN UI: set-PIN (signup), enter-PIN (unlock on load), attempt counter → offer "start new key epoch" on repeated failure.
+- [ ] `[web]` `crypto/key-storage.ts`: store `PinWrapped` instead of raw bytes. **Not done** — no PIN exists, so key-storage still stores raw `masterSecret` bytes exactly as before.
+- [x] `[web]` `crypto/{worker-handler,client,protocol}.ts`: added a new `bindKeysProof` request (signs the `keys/bind` server nonce) instead of the plan's `init(masterSecret, pin)`/`unlock(pin)` pair. **Deviation:** `exportRecoveryCode`/`signInChallenge` were NOT removed — the legacy OAuth-challenge sign-in path they back is untouched in this pass (see Deletions below).
+- [ ] `[web]` PIN UI: set-PIN (signup), enter-PIN (unlock on load), attempt counter → offer "start new key epoch" on repeated failure. **Not implemented.**
 
 Identity & refresh
-- [ ] `[web]` `lib/api.ts`: add refresh/password/reset/keys calls; remove `signIn` (challenge) wrapper.
-- [ ] `[web]` `lib/session.ts`: refresh-token custody via **httpOnly cookie** (preferred) or worker-held; access token in memory; silent-refresh helper; cross-tab lock (`navigator.locks`).
-- [ ] `[web]` password sign-in / sign-up pages + PIN set; wire OAuth callbacks to `issueSession` responses.
-- [ ] `[web]` `lib/complete-oauth-sign-in.ts`: after register, generate masterSecret → set PIN → `keys/challenge`+`keys/bind` (epoch 1); **no recovery code shown**.
-- [ ] `[web]` `features/auth/require-auth.tsx`: attempt one silent refresh before redirecting to `/signin/`.
-- [ ] `[web]` `sync/apiSocket.ts`/`socket-factory.ts`: single silent refresh on auth `connect_error` before surfacing `authError` (renew event wired in P6).
+- [x] `[web]` `lib/api.ts`: added `passwordRegister`/`passwordLogin`/`refreshSession`/`keysChallenge`/`keysBind`/`listDeviceSessions`/`revokeSession`/`revokeOtherSessions`. **Deviation:** the legacy `signIn` (challenge) wrapper was NOT removed — still used by the untouched `/signin/` OAuth page.
+- [x] `[web]` `lib/session.ts`: refresh token stored in `localStorage` (same custody as the access token) — **not** the plan's httpOnly-cookie-or-worker-held design; `silentRefresh()` added. **Deviation, honestly weaker than the plan's stated design:** the plan explicitly wanted the refresh token somewhere JS can't read it (httpOnly cookie or worker-internal) specifically to blunt XSS; `localStorage` is script-readable like everything else in this codebase's existing token custody. No cross-tab `navigator.locks` serialization either — a real gap if two tabs refresh concurrently (the server's grace-window tolerance, §4.3, absorbs this correctly regardless, just less efficiently).
+- [x] `[web]` password sign-in/sign-up page (`app/(public)/password/page.tsx`) — plain, no design polish, explicitly a testing surface not a finished product page. **Not done:** no PIN set step (doesn't exist); OAuth callbacks were NOT rewired to `issueSession` responses — `complete-oauth-sign-in.ts` still calls the untouched legacy `/v1/auth/register` flow as before.
+- [ ] `[web]` `lib/complete-oauth-sign-in.ts`: **not touched** — still the pre-issue-4 OAuth flow (no PIN step to add, no keys/bind wiring). A new sibling, `lib/complete-password-sign-in.ts`, does the register→masterSecret→keys/bind flow for the password path only.
+- [x] `[web]` `features/auth/require-auth.tsx`: attempts one silent refresh before redirecting to `/signin/`.
+- [ ] `[web]` `sync/apiSocket.ts`/`socket-factory.ts`: **not done** — the live Socket.IO client's own silent-refresh-on-`connect_error` and proactive `renew-token` emit are not wired on the web side (the CLI side, `machineClient.ts`, has this; the web's `apiSocket.ts` does not yet).
 
 Deletions
-- [ ] `[web]` delete `lib/complete-challenge-sign-in.ts`, `lib/restore-recovery-code.ts`, `components/auth/recovery-code-*`, `features/settings/.../RecoverySection.tsx`, and the sign-in-page recovery restore branch.
-- [ ] `[server]` **delete `app/routes/auth.ts`** (`POST /v1/auth`) + its registration, once the web no longer calls it. Remove `auth.test.ts`.
-- [ ] `[crypto]` remove `encodeRecoveryCode`/`decodeRecoveryCode` exports (and `recovery.ts` if fully unused) — after web deletions land.
+- [ ] `[web]` delete `lib/complete-challenge-sign-in.ts`, `lib/restore-recovery-code.ts`, `components/auth/recovery-code-*`, `features/settings/.../RecoverySection.tsx`, and the sign-in-page recovery restore branch. **Not done** — all left in place and still reachable from `/signin/`; deleting them was explicitly deferred because the legacy `/v1/auth` route they depend on was not deleted either (see next line), and the plan itself sequences the two together.
+- [ ] `[server]` **delete `app/routes/auth.ts`** (`POST /v1/auth`) + its registration. **Not done** — left in place (still migrated to `issueSession` internally in Phase 1, so it's compatible with the new session model, just not removed). Deleting it now would break the still-live OAuth-challenge sign-in path on `/signin/`, which was not migrated off it in this pass.
+- [ ] `[crypto]` remove `encodeRecoveryCode`/`decodeRecoveryCode` exports. **Not done** — still in active use by the untouched recovery-code UI.
 
 New-device chooser
-- [ ] `[web]` "new device, no local key" screen: **pair from existing device** vs **start new key epoch** (destructive, confirms data loss copy from §5.4/§6.2).
-- [ ] `[web]` tests: unlock flow; silent refresh replaces redirect; recovery UI gone; new-device chooser.
-- [ ] **Gate + Acceptance:** full web signup/login/unlock/new-device works on 1h tokens; legacy route gone; no recovery code anywhere.
+- [ ] `[web]` "new device, no local key" screen. **Not implemented** — no PIN/key-epoch UI exists to make this meaningful yet.
+- [ ] `[web]` tests: unlock flow; silent refresh replaces redirect; recovery UI gone; new-device chooser. **Partial:** no new automated test specifically exercises `silentRefresh()`/the password page (verified manually instead — see the final report's browser-testing section); "recovery UI gone" and "new-device chooser" don't apply since neither was built/removed.
+- [ ] **Gate:** `pnpm --filter @falcon/web build/typecheck/test` green (real Next.js static-export build, 149 files/1100 tests) — but this is a **partial** Phase 4, not the full acceptance criterion below. **Acceptance (not met in full):** legacy route is NOT gone; recovery code is NOT gone; PIN/new-device-chooser don't exist. What IS demonstrated (see final report): email+password signup lands authenticated, a page reload silently refreshes instead of forcing re-login, and a revoked/other-device session can be logged out via the (untested-from-web-UI, but real and server-tested) sessions-admin routes called directly.
 
 ### Phase 5 — CLI/daemon migration (token provider, re-auth, custody)
 - [x] `[cli]` `auth/credentials.ts`: new shape + zod; read/write/clear; round-trip test. **Deviation:** ships as `{refreshToken, masterSecretOrContentBundle}` — the plan's `keyMaterial: pin|device|plaintext-fallback` discriminated union (PIN-wrap / OS-keychain wrap) is **not implemented**; `masterSecretOrContentBundle` stays a bare base64 string, same 0600-file-only at-rest custody as before. This is a real, documented scope cut (see Phase 3's own note: the plan itself calls the daemon-custody improvement low-value anyway, §6.5) — the refresh-token fix is what actually closes known-issues.md #4's daemon-dies-after-1h gap; PIN-wrap/device-key-wrap did not ship in this pass.
@@ -632,16 +636,17 @@ New-device chooser
 - [x] **Gate:** `pnpm --filter falcon build/typecheck/test` green (160 files, 1880 tests). **Acceptance (partial):** `falcon auth login` → daemon runs, self-heals its access token via the tokenProvider on reconnect/`connect_error`, and — proven by the real-server integration test plus the browser/tmux verification pass below — survives past the old 1h access-token boundary. No PIN step exists (not implemented).
 
 ### Phase 6 — Flip to short TTL + live WS lifecycle + admin UI
-- [ ] `[server]` `auth/tokens.ts`: `ACCESS_TOKEN_TTL_SECONDS = 15m`.
-- [ ] `[server]` `app/socket.ts`: connect-time revocation check (`revokedAt`/`expiresAt`); `renew-token` handler (re-validate, re-arm timer, no drop); expiry disconnect timer; `disconnectSession` (§4.5).
-- [ ] `[server]` `app/events/eventRouter.ts`: `connectionsForAccount` accessor.
-- [ ] `[wire]`/`[server]` `app/routes/sessions-admin.ts` *(new)*: list sessions, revoke one, revoke-others → disconnect live sockets.
-- [ ] `[web]` proactive `renew-token` ~1m pre-exp; settings **device-sessions list + "log out other devices."**
-- [ ] `[cli]` confirm proactive `renew-token` emit works against server; keep-alive across expiry (no flap).
-- [ ] tests: revoked session dropped **immediately** on live WS; `renew-token` keeps socket up across expiry; no machine-presence flap at token boundary; revoke-others.
-- [ ] **Gate + Acceptance:** 15m tokens with zero user-visible logout/flap; revocation immediate on WS, ≤15m on HTTP.
+- [x] `[server]` `auth/tokens.ts`: `ACCESS_TOKEN_TTL_SECONDS = 15m`.
+- [x] `[server]` `app/socket.ts`: connect-time revocation check (`revokedAt`/`expiresAt`); `renew-token` handler (re-validate, re-arm timer, no drop); expiry disconnect timer; `disconnectSession` (§4.5).
+- [x] `[server]` `app/events/eventRouter.ts`: `connectionsForAccount` accessor + `disconnectSession` helper.
+- [x] `[server]` `app/routes/sessionsAdmin.ts` *(new)*: list sessions, revoke one, revoke-others → disconnect live sockets. **Deviation:** no `[wire]` schemas — same local-schema convention as Phases 1-2 (defined in the route file itself).
+- [ ] `[web]` proactive `renew-token` ~1m pre-exp; settings **device-sessions list + "log out other devices."** **Not implemented** — Phase 4 (web) itself is only minimally done (see below); no UI consumes the new sessions-admin routes yet. The server-side capability is real and tested; nothing in the web app calls it yet.
+- [x] `[cli]` confirms proactive `renew-token` emit works against a real server: `machineClient.ts` emits it every 10 minutes on a live socket (unit-tested), and `socket.test.ts`'s new revocation tests prove the server-side handler it targets actually re-arms/rejects correctly. Not verified against a real 15-minute wall-clock wait in this pass (impractical for a test run) — verified via the mechanism's unit/integration coverage instead.
+- [x] tests: revoked session dropped **immediately** on live WS (`sessionsAdmin.test.ts`, real Socket.IO + real disconnect assertion); `renew-token` keeps socket up / rejects a revoked renewal (`socket.test.ts`, 3 new tests); revoke-others (`sessionsAdmin.test.ts`). **Not tested:** "no machine-presence flap at token boundary" as its own dedicated scenario — covered indirectly (the renew-token mechanism is proven to keep the same socket alive, which is what prevents the flap), not as a machine-presence-specific assertion.
+- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test` green (47 files, 356 tests); `pnpm --filter falcon test` green (160 files, 1880 tests) after the same TTL flip. **Acceptance (server-side, partial overall):** 15m tokens; revocation immediate on WS (proven); ≤15m on HTTP (by construction — access tokens are stateless and simply expire). Web-side admin UI and "zero user-visible logout" are not demonstrated end-to-end in the browser in this pass (see final report).
 
 ### Phase 7 — Cloud sandbox (deferred; design lands, build later)
+**Deliberately skipped in this pass** — per explicit instruction, Phase 7 is design-only/deferred and its build was not started. The design in §7 above stands as-is; no code changes.
 - [ ] `[server]` accept `clientKind:"cloud-sandbox"` device sessions tied to a server-provisioned `machines` row.
 - [ ] `[server]` per-session key custody for sandbox sessions (server-held or sandbox-wrapped DEK); flag via `workspaces.syncEnabled`/`sandboxConfig`.
 - [ ] provisioning + revoke flow for a sandbox device session.

@@ -61,6 +61,68 @@ wherever E2E claims are made publicly — never marketed without it.
 
 Design doc: [§5.3 trust boundary](../falcon-system-design.md#53-what-the-server-cancannot-see-published-table-fr-64), [§12 Security Considerations](../falcon-system-design.md#12-security-considerations).
 
+## 5. Identity vs. key custody (issue-4-plan.md, issue #4 rework)
+
+As of the issue-4 auth rework, §2's "Auth flows" above is superseded for
+**how you prove who you are** (still evolving separately from **whether you
+can decrypt**):
+
+- **Identity (authentication)**: email+password (argon2id, `auth_identities`)
+  or OAuth (Google/GitHub), each a real login identity — not derived from
+  `masterSecret` anymore. A session is a `device_sessions` row: a rotating
+  refresh token (opaque, hashed server-side, 60-day absolute lifetime) mints
+  short-lived access tokens (15 minutes) carrying `sid`/`ct` claims. Refresh
+  rotation tracks one level of lineage (`previousRefreshTokenHash` +
+  `previousRotatedAt`) — a stale token replayed outside a 60s grace window
+  revokes the whole session family (theft detection), inside the window is
+  tolerated as a benign multi-tab race.
+- **Key custody (encryption)**: `masterSecret` still never leaves a client
+  unwrapped, still lives only in `signPublicKey`/`contentPubKey` derived from
+  it. `accounts.keyEpoch` makes the bound key **rotatable**: losing every
+  device holding the PIN/masterSecret is recoverable by starting a new epoch
+  (destructive — old data becomes "archived, previous key," not lost/broken)
+  rather than losing the account entirely. Every DEK-bearing row
+  (`machines`/`sessions`/`workspaces`) is tagged with the epoch its `dek` was
+  wrapped under, so a client can render "archived" instead of erroring on an
+  old-epoch row.
+- **PIN honesty**: the client-side PIN (`@falcon/crypto`'s `pin.ts`/
+  `pin.web.ts`, argon2id + AES-256-GCM, identical KDF params both platforms)
+  protects `masterSecret` at rest against **casual/opportunistic** access to
+  a lost or shared device. It is **not** a defense against a determined
+  offline attacker — an attacker holding the device has the encrypted blob
+  and can brute-force the PIN at KDF speed with no server involved (and no
+  server involvement is deliberate: uploading the PIN would make it
+  server-brute-forceable instead, worse). A longer alphanumeric passphrase is
+  the honest recommendation for anyone who wants more than "casual access"
+  protection; never imply a short PIN plus an attempt counter makes it
+  strong — a local attacker fully controls whether that counter is honored.
+- **Daemon custody is weaker by necessity**: a headless, self-starting daemon
+  cannot prompt a human for a PIN, so its default posture is a
+  reduced-custody **content bundle** (can decrypt session data, cannot mint
+  new pairings or derive the signing key) rather than the full
+  `masterSecret` — smaller blast radius on a compromised dev box. On the
+  primary target (headless Linux over SSH) there is usually no unlocked OS
+  keyring to wrap it with either, so the honest fallback is the same 0600
+  file this codebase has always used — this phase delivers little
+  additional at-rest protection on daemon boxes specifically. **As shipped**
+  (see docs/issue-4-plan.md's Phase 5 notes): the CLI's PIN-wrap and
+  OS-keychain device-key wrap were not implemented in this pass —
+  `~/.falcon/access.key` still stores `masterSecretOrContentBundle` as a
+  bare base64 string, 0600-permissioned, the same at-rest posture as before.
+  What changed is the *credential* alongside it: a rotating refresh token
+  instead of a fixed 1h/15m access token, which is what actually fixes a
+  daemon "silently dying" after its token expired.
+- **Revocation**: immediate on a live WebSocket (the connect handshake and an
+  in-band `renew-token` both check the `device_sessions` row; a revoke
+  disconnects any live socket for that session right away). Bounded by the
+  access token's own TTL (now 15 minutes, down from 1 hour) on plain HTTP,
+  since access tokens are stateless by design (no per-request DB hit).
+
+Design doc: [§5.2 Auth flows](../falcon-system-design.md#52-auth-flows) still
+describes the pre-issue-4 shape; `docs/issue-4-plan.md` is the current
+source of truth for the identity/session layer until falcon-system-design.md
+itself is updated (tracked as a follow-up, not done in this pass).
+
 ## Encrypted-schema evolution policy
 
 The server can never migrate ciphertext. Every encrypted payload carries a
