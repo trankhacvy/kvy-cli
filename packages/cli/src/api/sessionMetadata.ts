@@ -10,7 +10,13 @@ const CasConflictSchema = z.object({
   }),
 });
 
-const SessionMetadataValueSchema = z.object({
+// `looseObject`, not `object`: this blob is also written by the web (Pin —
+// docs/features/session-lifecycle-actions.md Phase 3/4 — and any future
+// field), which the CLI knows nothing about. A strict schema would silently
+// strip those unknown keys on parse, and the next CLI-side updateModel CAS
+// write would then re-seal a blob missing them — clobbering a concurrent
+// writer instead of converging with it.
+const SessionMetadataValueSchema = z.looseObject({
   title: z.string(),
   path: z.string(),
   providerSessionId: z.string().nullable().optional(),
@@ -22,6 +28,7 @@ export interface SessionMetadataValue {
   path: string;
   providerSessionId?: string | null;
   model?: string | null;
+  [extra: string]: unknown;
 }
 
 export interface SessionMetadataUpdaterOptions {
@@ -38,10 +45,17 @@ export interface SessionMetadataUpdater {
   updateModel(model: string): Promise<void>;
 }
 
-function normalizeMetadata(
-  metadata: SessionMetadataValue,
-): Required<SessionMetadataValue> {
+type NormalizedMetadata = Required<
+  Pick<SessionMetadataValue, "title" | "path" | "providerSessionId" | "model">
+> &
+  Record<string, unknown>;
+
+// Spreads ALL parsed keys (preserving unknown fields like the web's
+// `pinned`) and then overlays only the four fields this module actually
+// knows about, so a round-trip through here never drops a foreign key.
+function normalizeMetadata(metadata: SessionMetadataValue): NormalizedMetadata {
   return {
+    ...metadata,
     title: metadata.title,
     path: metadata.path,
     providerSessionId: metadata.providerSessionId ?? null,
@@ -60,13 +74,11 @@ function describeFailure(status: number, bodyText: string): Error {
 function readMetadataFromBox(
   box: z.infer<typeof EncryptedBoxSchema>,
   dek: Uint8Array,
-): Required<SessionMetadataValue> {
+): NormalizedMetadata {
   const opened = open(box, dek);
   const parsed = SessionMetadataValueSchema.safeParse(opened);
   if (!parsed.success) {
-    throw new Error(
-      "session metadata update conflict returned unreadable metadata",
-    );
+    throw new Error("session metadata update conflict returned unreadable metadata");
   }
   return normalizeMetadata(parsed.data);
 }
@@ -83,14 +95,10 @@ export function createSessionMetadataUpdater(
 
   async function persistModel(nextModel: string): Promise<void> {
     const normalizedModel = nextModel.trim();
-    if (
-      normalizedModel.length === 0 ||
-      currentMetadata.model === normalizedModel
-    )
-      return;
+    if (normalizedModel.length === 0 || currentMetadata.model === normalizedModel) return;
 
     for (;;) {
-      const nextMetadata: Required<SessionMetadataValue> = {
+      const nextMetadata: NormalizedMetadata = {
         ...currentMetadata,
         model: normalizedModel,
       };
@@ -120,10 +128,7 @@ export function createSessionMetadataUpdater(
         const parsed = CasConflictSchema.parse(await response.json());
         currentVersion = parsed.current.version;
         if (parsed.current.value) {
-          currentMetadata = readMetadataFromBox(
-            parsed.current.value,
-            options.dek,
-          );
+          currentMetadata = readMetadataFromBox(parsed.current.value, options.dek);
           if (currentMetadata.model === normalizedModel) return;
         }
         continue;
@@ -136,9 +141,7 @@ export function createSessionMetadataUpdater(
 
   return {
     async updateModel(model: string): Promise<void> {
-      const nextTask = queue
-        .catch(() => undefined)
-        .then(() => persistModel(model));
+      const nextTask = queue.catch(() => undefined).then(() => persistModel(model));
       queue = nextTask;
       return nextTask;
     },

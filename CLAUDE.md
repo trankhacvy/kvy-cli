@@ -357,6 +357,74 @@ packages/
 │                             link; docs/features/dev-server-preview.md's Decisions log is
 │                             the accepted-exception record for this against design §12's
 │                             loopback-only posture.
+│                             Sleep-inhibit control (docs/features/sleep-inhibit.md,
+│                             docs/competitive-notes-omnara.md #12): a per-machine tri-state
+│                             policy (Off / While on Power / Always) so a Mac won't sleep
+│                             mid-session, joining the same machine-RPC family as
+│                             `provider.account`/`github.checks` — zero server/DB changes.
+│                             `daemon/sleepInhibit.ts`'s `createSleepInhibitManager` owns a
+│                             `caffeinate` child (macOS only; `-s` = AC-only system-sleep
+│                             assertion for `onPower`, `-i` = idle assertion for `always`,
+│                             both always paired with `-w <daemon pid>` so the OS itself
+│                             releases the assertion the instant the daemon process exits —
+│                             the leak-safety guard, replacing any `doctor`/`markers`
+│                             reaping) and a single-respawn-then-give-up guard against an
+│                             unexpected child exit. Registered as `sleepInhibit.get`/
+│                             `sleepInhibit.set` in `machineRpc.ts` (no idempotency cache
+│                             needed — `get` is a pure read, `set` converges to the same
+│                             single child on a repeat). The manager is created and
+│                             boot-re-applied in `commands.ts`'s `runDaemonStartSync`
+│                             (unconditionally, before `startMachineIntegration`, so a
+│                             previously persisted "always" is enforced even in
+│                             logged-out/local-only mode) and released before any
+│                             self-update restart handoff. Persisted via a lenient,
+│                             optional `sleepInhibit` field on `persistence.ts`'s `Settings`
+│                             (exact `daemonAutoStart` precedent).
+│                             Per-workspace Setup/Run scripts (docs/features/
+│                             setup-run-scripts.md, docs/competitive-notes-omnara.md #7):
+│                             `workspaceConfig.ts`'s per-workspace store gains `setupScript`/
+│                             `runScript` fields (empty-string patch clears a field), surfaced via
+│                             `falcon workspace config --setup-script/--run-script <script>`
+│                             (`commands/workspaceConfig.ts`, `args.ts`) — script DEFINITION stays
+│                             CLI-only (design §12's local-consent boundary; no machine RPC params
+│                             schema ever carries a script string). `gitWorktree.ts`'s
+│                             `ensureBranchWorkspace` now also reports `createdWorktree: boolean`
+│                             (true only after a real `git worktree add`, false on reuse/in-place
+│                             checkout) — `spawnEngine.ts` uses it to fire-and-forget
+│                             `daemon/setupScript.ts`'s `runSetupScript` (cross-spawn under
+│                             `daemon/shellCommand.ts`'s `buildShellInvocation` — `/bin/sh -c`/
+│                             `cmd.exe /c` — with stdout/stderr appended to a fresh-truncated
+│                             `~/.falcon/logs/setup-<hash>.log`) exactly once, right after a
+│                             genuine fresh-worktree creation, never on a reused/idempotent spawn.
+│                             `daemon/runStateStore.ts` (`~/.falcon/run-state.json`, same
+│                             tmp-write+rename+per-homeDir-write-queue durability pattern as
+│                             `sessionsStore.ts`) persists both that setup outcome and the new
+│                             long-lived `run.*` process's state, keyed by the worktree's real
+│                             path. `daemon/runProcess.ts` is the subsystem's core: a shared
+│                             `resolveRunContext` (the design-§12 auth gate — `worktree` must
+│                             resolve inside a registered workspace — AND the config-key resolver,
+│                             since `.worktrees/<branch>` dirs are never config keys themselves)
+│                             backs `handleRunStart`/`handleRunStop`/`handleRunStatus`/
+│                             `handleRunSetup` — `run.start` reuses `processLauncher.ts`'s
+│                             `launchProviderProcess` (tmux-preferred) unchanged, wrapping the
+│                             script with a log-redirect (`>> <logFile> 2>&1`, so the tmux pane
+│                             itself shows nothing — the log file is the single source `run.status`'s
+│                             `logTail` and a `tmux attach`'d `tail -f` both read); liveness is
+│                             probed lazily via `tmux has-session`/`process.kill(pid,0)`, no
+│                             boot-time re-adoption needed. `daemon/workspaceConfigRpc.ts`'s
+│                             `handleWorkspaceGetConfig` is the read-only surface for the web
+│                             Workspace Settings UI. All five —
+│                             `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/
+│                             `run.setup` — are registered in `machineRpc.ts` alongside the rest
+│                             (`run.start`/`run.stop`/`run.setup` idempotency-cached like
+│                             `git.commit`; `run.start` additionally gets a
+│                             `withResourceGuard`-keyed-on-`worktree` join, generalized from
+│                             `adopt.take`'s own provider-session guard, so two devices pressing
+│                             play concurrently join one launch attempt) and wired in
+│                             `machineIntegration.ts` (bound to this boot's `homeDir`/`logger`,
+│                             same pattern as `getGitDiffHandler`'s `uploadBlob` binding;
+│                             `spawnSessionHandler`/`spawnSessionForAdoptTake` both gain the
+│                             `runSetupScript` dep too).
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -576,6 +644,50 @@ packages/
                               https://*.trycloudflare.com` allowance for `TunnelFrame`'s embed
                               — `frame-ancestors 'none'`/`X-Frame-Options: DENY` (protecting
                               Falcon itself) and every other directive are untouched.
+                              Settings → Machines
+                              (`src/features/machine-settings/`, docs/features/
+                              sleep-inhibit.md, docs/competitive-notes-omnara.md #12
+                              "Sleep-inhibit control") is a structural clone of
+                              `features/provider-accounts/`: one `SleepInhibitCard` per
+                              machine (Off / While on Power / Always, a shadcn `Select`)
+                              driven by `use-machine-settings.ts` (`useQuery` for
+                              `sleepInhibit.get` + a `useMutation` for `sleepInhibit.set`
+                              that writes the returned state straight into the query cache
+                              via `setQueryData` — the set result IS the fresh state, no
+                              invalidate round-trip), composed by `MachinesSettingsScreen`
+                              and reusing `features/session-list`'s machine-list snapshot,
+                              same "one place owns this" precedent as `ProvidersSettingsScreen`.
+                              `sync/machineRpc.ts` gained `sleepInhibit.get`/
+                              `sleepInhibit.set` alongside `provider.account`. Mounted at the
+                              new `/settings/machines/` route (linked from `app-shell.tsx`'s
+                              settings nav, alongside Providers) — gating (macOS-only
+                              support, "not currently holding the assertion") comes entirely
+                              from the RPC result's `supported`/`active` fields, never from
+                              any machine metadata field. Same not-yet-wired-to-a-live-socket-
+                              by-default state as every other feature area in this list.
+                              The Setup/Run scripts
+                              panel (`src/features/run-panel/`, docs/features/
+                              setup-run-scripts.md, docs/competitive-notes-omnara.md #7) is
+                              another structural clone of the git-diff/github-checks seam
+                              layout: `RunPanel`/`RunPanelBody` (play/stop button, run-state
+                              badge, a setup section with its own state badge + exit code on
+                              failure + "Re-run setup" button, and a monospace scrollable log
+                              tail for each) driven by `use-run-panel.ts` (`workspace.getConfig`
+                              fetched once per worktree, `run.status` polled every 5s only while
+                              `run.state==='running'` or `setup.state==='running'`, and
+                              start/stop/setup `useMutation`s that invalidate `run-status` on
+                              settle). `sync/machineRpc.ts` gained the five new methods
+                              alongside the rest. `use-live-run-panel-actions.ts` is real and
+                              gated on the shared per-machine DEK unwrap, same
+                              not-yet-wired-to-a-live-socket-by-default state as every other
+                              feature area — defaults `RunPanel`'s injectable `useActions` prop
+                              regardless, mirroring `GitDiffPanel`/`ChecksPanel`'s own default.
+                              Mounted at the new `/session/[id]/run/` route (`SessionRunScreen`,
+                              linked from the timeline header's "Setup / Run" button, beside
+                              "Repo files") — script DEFINITION is never exposed here at all
+                              (design §12: CLI-only, `falcon workspace config --setup-script/
+                              --run-script`), only the configured scripts' names and live
+                              run/setup state.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

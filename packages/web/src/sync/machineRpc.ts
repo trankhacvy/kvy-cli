@@ -56,6 +56,31 @@
  * resulting tunnel URL is a PUBLIC, unauthenticated link whose traffic is
  * NOT E2E-encrypted (unlike this RPC call itself) — see that feature
  * folder's consent-dialog copy.
+ *
+ * `resumeSession` (docs/features/session-lifecycle-actions.md Phase 6 —
+ * Restart) drives the daemon's `resumeSession` RPC (`daemon/resumeSession.ts`
+ * — kills any still-live process for the session, then re-spawns it with
+ * `FALCON_RECONNECT_*` env). The daemon side has been registered since the
+ * spawn-RPC task; this is only the caller-side registry entry, structural
+ * clone of `spawn`'s own listing above. Like `adopt.list`, `@falcon/wire`
+ * exports no paired `ResumeSessionParams`/`ResumeSessionResult` type
+ * aliases — derived locally via `z.infer` instead.
+ *
+ * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
+ * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") back
+ * Settings → Machines' per-machine Off/While-on-Power/Always card
+ * (`features/machine-settings/`) — both share the one `SleepInhibitState`
+ * result shape (`set` returns the post-apply state, no follow-up `get`
+ * needed).
+ *
+ * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
+ * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts")
+ * join the table for `features/run-panel/`: the read-only workspace config
+ * surface plus the long-lived, remotely start/stop-able `run.*` process.
+ * Same no-idempotency-cache reasoning as `git.status` for
+ * `workspace.getConfig`/`run.status` (read-only); `run.start`/`run.stop`/
+ * `run.setup` DO carry idempotency-key replay caching daemon-side, same as
+ * `git.commit`.
  */
 import {
   type AdoptListParamsSchema,
@@ -96,10 +121,25 @@ import {
   PreviewTunnelsResultSchema,
   type ProviderAccountParams,
   ProviderAccountResultSchema,
+  type ResumeSessionParamsSchema,
+  ResumeSessionResultSchema,
+  type RunSetupParams,
+  RunSetupResultSchema,
+  type RunStartParams,
+  RunStartResultSchema,
+  type RunStatusParams,
+  RunStatusResultSchema,
+  type RunStopParams,
+  RunStopResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
+  type SleepInhibitGetParams,
+  type SleepInhibitSetParams,
+  SleepInhibitStateSchema,
   type SpawnParams,
   SpawnResultSchema,
+  type WorkspaceGetConfigParams,
+  WorkspaceGetConfigResultSchema,
   type WorkspaceRegisterParams,
   WorkspaceRegisterResultSchema,
 } from "@falcon/wire";
@@ -125,13 +165,22 @@ export type {
   PreviewPortsParams,
   PreviewTunnelsParams,
   ProviderAccountParams,
+  RunSetupParams,
+  RunStartParams,
+  RunStatusParams,
+  RunStopParams,
   SlashCommandsListParams,
+  SleepInhibitGetParams,
+  SleepInhibitSetParams,
   SpawnParams,
+  WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
 };
 
 export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
 export type AdoptListResult = z.infer<typeof AdoptListResultSchema>;
+export type ResumeSessionParams = z.infer<typeof ResumeSessionParamsSchema>;
+export type ResumeSessionResult = z.infer<typeof ResumeSessionResultSchema>;
 
 /** Params shape per method. */
 export interface MachineRpcParams {
@@ -157,6 +206,14 @@ export interface MachineRpcParams {
   "preview.tunnels": PreviewTunnelsParams;
   "preview.open": PreviewOpenParams;
   "preview.close": PreviewCloseParams;
+  resumeSession: ResumeSessionParams;
+  "sleepInhibit.get": SleepInhibitGetParams;
+  "sleepInhibit.set": SleepInhibitSetParams;
+  "workspace.getConfig": WorkspaceGetConfigParams;
+  "run.start": RunStartParams;
+  "run.stop": RunStopParams;
+  "run.status": RunStatusParams;
+  "run.setup": RunSetupParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -183,6 +240,14 @@ export interface MachineRpcResults {
   "preview.tunnels": import("@falcon/wire").PreviewTunnelsResult;
   "preview.open": import("@falcon/wire").PreviewOpenResult;
   "preview.close": import("@falcon/wire").PreviewCloseResult;
+  resumeSession: ResumeSessionResult;
+  "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
+  "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
+  "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
+  "run.start": import("@falcon/wire").RunStartResult;
+  "run.stop": import("@falcon/wire").RunStopResult;
+  "run.status": import("@falcon/wire").RunStatusResult;
+  "run.setup": import("@falcon/wire").RunSetupResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -210,6 +275,14 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "preview.tunnels": PreviewTunnelsResultSchema,
   "preview.open": PreviewOpenResultSchema,
   "preview.close": PreviewCloseResultSchema,
+  resumeSession: ResumeSessionResultSchema,
+  "sleepInhibit.get": SleepInhibitStateSchema,
+  "sleepInhibit.set": SleepInhibitStateSchema,
+  "workspace.getConfig": WorkspaceGetConfigResultSchema,
+  "run.start": RunStartResultSchema,
+  "run.stop": RunStopResultSchema,
+  "run.status": RunStatusResultSchema,
+  "run.setup": RunSetupResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

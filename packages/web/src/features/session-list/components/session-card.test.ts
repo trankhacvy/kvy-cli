@@ -14,6 +14,7 @@ function session(overrides: Partial<SessionListSession> = {}): SessionListSessio
     provider: "claude",
     status: "active",
     updatedAt: 0,
+    pinned: false,
     items: [],
     attention: null,
     ...overrides,

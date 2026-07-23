@@ -144,7 +144,7 @@ Usage:
   falcon resume <session-id>        Reattach a terminal to an existing local or daemon-managed session
   falcon adopt [--remote] [--list]  Adopt the most recent plain claude session in this directory
   falcon --continue                 Alias for "falcon adopt" (most recent, local)
-  falcon workspace config [--base-ref <ref>] [--remote <name>] [--directory <path>]
+  falcon workspace config [--base-ref <ref>] [--remote <name>] [--setup-script <script>] [--run-script <script>] [--directory <path>]
   falcon workspace register [--directory <path>] [--name <display-name>]
   falcon workspace list             List registered workspace directories
   falcon workspace unregister [--directory <path>]
@@ -481,19 +481,27 @@ async function runAdopt(command: Extract<FalconCommand, { type: "adopt" }>): Pro
 }
 
 /**
- * `falcon workspace config [--base-ref/--remote/--directory]` (plan.md §16
- * "4.1 Git panel") — reads/writes `~/.falcon/settings.json` directly (see
- * `commands/workspaceConfig.ts`). Deliberately does **not** call
+ * `falcon workspace config [--base-ref/--remote/--setup-script/--run-script/
+ * --directory]` (plan.md §16 "4.1 Git panel"; docs/features/
+ * setup-run-scripts.md) — reads/writes `~/.falcon/settings.json` directly
+ * (see `commands/workspaceConfig.ts`). Deliberately does **not** call
  * `ensureDaemon()`: unlike `adopt`/`start`/`auth`, this command has no
- * daemon interaction at all — the daemon's `git.diff` RPC handler reads the
- * same store straight off disk the next time it runs, same rationale as
- * `doctor` skipping the daemon-auto-start step.
+ * daemon interaction at all — the daemon's `git.diff` RPC handler (and, as
+ * of setup-run-scripts, `setupScript.ts`/`runProcess.ts`) reads the same
+ * store straight off disk the next time it runs, same rationale as `doctor`
+ * skipping the daemon-auto-start step.
  */
 async function runWorkspaceConfig(
   command: Extract<FalconCommand, { type: "workspace-config" }>,
 ): Promise<number> {
   return runWorkspaceConfigCommand(
-    { baseRef: command.baseRef, remote: command.remote, directory: command.directory },
+    {
+      baseRef: command.baseRef,
+      remote: command.remote,
+      setupScript: command.setupScript,
+      runScript: command.runScript,
+      directory: command.directory,
+    },
     { workingDirectory: process.cwd() },
   );
 }

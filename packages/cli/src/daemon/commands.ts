@@ -10,6 +10,7 @@ import {
 } from "../auth/credentials.js";
 import { resolveHomeDir } from "../home.js";
 import { createLogger, type Logger } from "../logger.js";
+import { readSettings, updateSettings } from "../persistence.js";
 import {
   createTranscriptIndexerWorkspaceLister,
   createWorkspaceRootLookup,
@@ -30,6 +31,11 @@ import {
 } from "./selfUpdate.js";
 import { createSessionRegistry } from "./sessionRegistry.js";
 import type { PersistedSession } from "./sessionsStore.js";
+import {
+  createSleepInhibitManager as createSleepInhibitManagerDefault,
+  type SleepInhibitManager,
+  type SleepInhibitManagerDeps,
+} from "./sleepInhibit.js";
 import { createSpawnAwaiter } from "./spawnAwaiter.js";
 import type { SpawnEngineDeps } from "./spawnEngine.js";
 import { clearDaemonState, type DaemonState, readDaemonState, writeDaemonState } from "./state.js";
@@ -170,6 +176,20 @@ export interface DaemonCommandDeps {
   spawnEngineOverrides?: Partial<SpawnEngineDeps>;
   /** Same, for `resumeSession.ts`. */
   resumeSessionOverrides?: Partial<ResumeSessionDeps>;
+
+  // --- Sleep-inhibit (docs/features/sleep-inhibit.md, docs/competitive-notes-omnara.md #12) ---
+
+  /**
+   * Creates the sleep-inhibit assertion manager (`daemon/sleepInhibit.ts`).
+   * Injectable so tests use a fake manager instead of ever spawning a real
+   * `caffeinate`; defaults to the real `createSleepInhibitManager`. The
+   * manager is created and boot-applied here in `runDaemonStartSync`
+   * (unconditionally, BEFORE `startMachineIntegration`) rather than inside
+   * `machineIntegration.ts`, because a previously persisted "always" must
+   * still be enforced even in logged-out/local-only mode, where
+   * `startMachineIntegration` returns `null` and never runs its own wiring.
+   */
+  createSleepInhibitManager: (deps: SleepInhibitManagerDeps) => SleepInhibitManager;
 }
 
 function readCliVersion(): string {
@@ -278,6 +298,7 @@ export function createDaemonCommandDeps(
     listWorkspaces: createTranscriptIndexerWorkspaceLister({ homeDir }),
     resolveProviderSession: async () => null,
     resolveResumeDirectory: resolveResumeDirectoryFromRecord,
+    createSleepInhibitManager: createSleepInhibitManagerDefault,
     ...overrides,
   };
 }
@@ -423,6 +444,17 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   await writeDaemonState(homeDir, payload);
   logger.info("daemon start-sync: ready", { pid: payload.pid, port: payload.port });
 
+  // Sleep-inhibit (docs/features/sleep-inhibit.md, docs/competitive-notes-
+  // omnara.md #12): created and boot-re-applied here, unconditionally and
+  // BEFORE `startMachineIntegration` below — a previously persisted "always"
+  // must still hold the OS assertion even in logged-out/local-only mode,
+  // where `startMachineIntegration` returns `null` and never runs. Only
+  // created once the singleton lock is actually held (never spawn
+  // `caffeinate` from a daemon that lost the boot race).
+  const sleepInhibitManager = deps.createSleepInhibitManager({ logger, daemonPid: process.pid });
+  const persistedSettings = await readSettings({ homeDir });
+  sleepInhibitManager.applyMode(persistedSettings.sleepInhibit ?? "off");
+
   // Open the machine-scoped WS client + register the real machine RPC
   // handlers (design §4.4/§8, plan.md §16 "3.1"/"3.2"/"3.3") now that the
   // lock is held and the registry is restored — a `null` result just means
@@ -442,6 +474,20 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
       heartbeatIntervalMs: deps.machineHeartbeatIntervalMs,
       spawnEngineOverrides: deps.spawnEngineOverrides,
       resumeSessionOverrides: deps.resumeSessionOverrides,
+      getSleepInhibit: async () => sleepInhibitManager.getState(),
+      // Persist only when the platform actually supports the assertion —
+      // recording a mode on a non-Mac would remember an intent the daemon
+      // can never honor, which `sleepInhibit.set`'s wire contract explicitly
+      // treats as indistinguishable from "unsupported" (see machineRpc.ts's
+      // own doc comment). Apply-then-persist is safe here because the
+      // support check gates the persist, not the apply.
+      setSleepInhibit: async ({ mode }) => {
+        const state = sleepInhibitManager.applyMode(mode);
+        if (state.supported) {
+          await updateSettings((current) => ({ ...current, sleepInhibit: mode }), { homeDir });
+        }
+        return state;
+      },
     },
   );
   const machineIntegration = await startMachineIntegration(machineIntegrationDeps);
@@ -478,8 +524,17 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
 
   // Stop taking new machine RPCs / heartbeats before tearing down the
   // control server and releasing the lock, mirroring the boot order above
-  // (machine client started last, stopped first).
+  // (machine client started last, stopped first). `machineIntegration.stop()`
+  // is awaited — it now also closes every tracked dev-server preview tunnel
+  // (`closeAllTunnels`, docs/features/dev-server-preview.md) before
+  // resolving. `sleepInhibitManager.stop()` MUST run before
+  // `deps.spawnStartSync()` can fire in the restart-handoff branch below —
+  // release-then-fresh-daemon-reapplies is what prevents two daemons briefly
+  // holding two caffeinate children during a self-update handoff (the `-w`
+  // tether is the crash-path backstop; this is the polite path for the
+  // ordinary case).
   await machineIntegration?.stop();
+  sleepInhibitManager.stop();
   await controlServer.stop();
   await lockResult.handle.release();
   await clearDaemonState(homeDir);

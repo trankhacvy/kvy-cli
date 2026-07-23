@@ -24,6 +24,7 @@ import {
   useSessionTitle,
   useTabAttention,
 } from "@/features/session-control";
+import { deriveMachineOnline, useMachinePresence } from "@/features/session-list";
 import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,16 @@ export function SessionTimelineScreen({
   // `SessionSidePanel`'s Checks tab (docs/features/github-pr-ci.md) so it
   // can gate its live `ChecksPanel` on both being present.
   const machineId = session?.machineId ?? null;
+  // Restart's enable condition (docs/features/session-lifecycle-actions.md
+  // Phase 6) needs to know whether the owning machine is actually online,
+  // not just that it exists — same `deriveMachineOnline` (live
+  // `machine-presence` ephemeral, falling back to the `lastSeenAt`
+  // heuristic) `features/session-list`'s Home screen already uses.
+  const machinePresence = useMachinePresence();
+  const machineRow = useSyncSnapshotQuery().data?.machines.find((m) => m.id === machineId);
+  const machineOnline = machineRow
+    ? deriveMachineOnline(machineRow, machinePresence, Date.now())
+    : false;
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -150,6 +161,7 @@ export function SessionTimelineScreen({
         sessionStatus={sessionStatus}
         workspacePath={workspacePath}
         machineId={machineId}
+        machineOnline={machineOnline}
       />
     </SessionControlProvider>
   );
@@ -175,6 +187,7 @@ function SessionTimelineBody({
   sessionStatus,
   workspacePath,
   machineId,
+  machineOnline,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), or `null` until it's
@@ -208,6 +221,11 @@ function SessionTimelineBody({
    * into `SessionSidePanel`'s Checks tab alongside `workspacePath`
    * (docs/features/github-pr-ci.md). */
   machineId: string | null;
+  /** Whether `machineId`'s machine is currently online — Restart's enable
+   * condition (docs/features/session-lifecycle-actions.md Phase 6),
+   * `deriveMachineOnline`'d in the parent alongside every other
+   * machine-row-derived value passed down here. */
+  machineOnline: boolean;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
@@ -250,6 +268,9 @@ function SessionTimelineBody({
             <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/preview/`}>Preview</Link>
             </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/session/${sessionId}/run/`}>Setup / Run</Link>
+            </Button>
             <Button
               type="button"
               variant={panelOpen ? "secondary" : "outline"}
@@ -261,7 +282,14 @@ function SessionTimelineBody({
               Repo root
             </Button>
             <MobileHandoffButton sessionId={sessionId} />
-            <SessionActionsMenu sessionId={sessionId} disabled={isDisabled} />
+            <SessionActionsMenu
+              sessionId={sessionId}
+              title={title ?? sessionId}
+              status={sessionStatus}
+              machineId={machineId}
+              machineOnline={machineOnline}
+              disabled={isDisabled}
+            />
           </div>
         </header>
         {decryptError && (

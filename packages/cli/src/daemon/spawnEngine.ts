@@ -134,6 +134,20 @@ export interface SpawnEngineDeps {
    * care about dedup can simply omit it.
    */
   trackSpawned?: (pid: number, directory: string) => void;
+  /**
+   * Fire-and-forget setup-script kickoff (docs/features/
+   * setup-run-scripts.md Phase 2) — called with `(workspaceRoot,
+   * spawnDirectory)` exactly once, right after `ensureBranchWorkspace`
+   * reports a genuine fresh worktree creation (`createdWorktree: true`),
+   * never on a reused/idempotent worktree, an in-place checkout, or a
+   * no-branch spawn. Not awaited: `spawnSession` must not block on an
+   * arbitrary-length setup script under the RPC pipeline's ack timeout.
+   * `machineIntegration.ts` wires the real default
+   * (`setupScript.ts`'s `runSetupScript`, bound to this boot's
+   * `homeDir`/`logger`) — tests that don't care about setup scripts can
+   * simply omit it.
+   */
+  runSetupScript?: (workspaceRoot: string, spawnDirectory: string) => void;
   logger?: Logger;
 }
 
@@ -224,6 +238,18 @@ export async function spawnSession(
         deps.gitWorktreeDeps,
       );
       spawnDirectory = branchResult.directory;
+      // Fire-and-forget setup-script kickoff (docs/features/
+      // setup-run-scripts.md Phase 2) — ONLY on a genuine fresh-worktree
+      // creation, never on a retried/idempotent spawn that reuses an
+      // existing worktree, an in-place checkout, or a no-branch spawn. Never
+      // awaited: the RPC pipeline's 30s/35s ack timeouts forbid blocking
+      // spawn on an arbitrary-length `npm install`. `deps.runSetupScript`
+      // itself must never throw synchronously (see its own doc comment) —
+      // this call site doesn't (and can't) catch a rejection from a
+      // fire-and-forget call.
+      if (branchResult.createdWorktree) {
+        deps.runSetupScript?.(validation.realDirectory, spawnDirectory);
+      }
     } catch (error) {
       throw new SpawnError(
         `branch/worktree setup failed: ${error instanceof Error ? error.message : String(error)}`,

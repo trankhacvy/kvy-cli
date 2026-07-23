@@ -79,4 +79,38 @@ describe("setWorkspaceGitConfig", () => {
     // there's no symlink indirection, so the config is still found.
     expect(await readWorkspaceGitConfig(missing, { homeDir })).toEqual({ baseRef: "main" });
   });
+
+  it("persists setupScript/runScript and reads them back (docs/features/setup-run-scripts.md)", async () => {
+    const result = await setWorkspaceGitConfig(
+      workspaceDir,
+      { setupScript: "npm install", runScript: "npm run dev" },
+      { homeDir },
+    );
+    expect(result).toEqual({ setupScript: "npm install", runScript: "npm run dev" });
+    expect(await readWorkspaceGitConfig(workspaceDir, { homeDir })).toEqual({
+      setupScript: "npm install",
+      runScript: "npm run dev",
+    });
+  });
+
+  it("a patch field set to the empty string deletes that key entirely (clear semantics)", async () => {
+    await setWorkspaceGitConfig(
+      workspaceDir,
+      { baseRef: "main", setupScript: "npm install", runScript: "npm run dev" },
+      { homeDir },
+    );
+
+    const cleared = await setWorkspaceGitConfig(workspaceDir, { runScript: "" }, { homeDir });
+    expect(cleared).toEqual({ baseRef: "main", setupScript: "npm install" });
+    expect(await readWorkspaceGitConfig(workspaceDir, { homeDir })).toEqual({
+      baseRef: "main",
+      setupScript: "npm install",
+    });
+  });
+
+  it("omitting a field from the patch entirely leaves it untouched (not cleared)", async () => {
+    await setWorkspaceGitConfig(workspaceDir, { setupScript: "npm install" }, { homeDir });
+    const result = await setWorkspaceGitConfig(workspaceDir, { baseRef: "main" }, { homeDir });
+    expect(result).toEqual({ baseRef: "main", setupScript: "npm install" });
+  });
 });

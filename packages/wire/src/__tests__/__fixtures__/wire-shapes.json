@@ -3293,6 +3293,65 @@
       }
     }
   },
+  "SleepInhibitModeSchema": {
+    "kind": "enum",
+    "options": [
+      "always",
+      "off",
+      "onPower"
+    ]
+  },
+  "SleepInhibitStateSchema": {
+    "kind": "object",
+    "fields": {
+      "active": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "mode": {
+        "kind": "enum",
+        "options": [
+          "always",
+          "off",
+          "onPower"
+        ]
+      },
+      "platform": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "supported": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "SleepInhibitGetParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "SleepInhibitSetParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "mode": {
+        "kind": "enum",
+        "options": [
+          "always",
+          "off",
+          "onPower"
+        ]
+      }
+    }
+  },
   "MessageRpcParamsSchema": {
     "kind": "object",
     "fields": {
@@ -4377,6 +4436,264 @@
     "kind": "object",
     "fields": {
       "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "WorkspaceGetConfigParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "WorkspaceGetConfigResultSchema": {
+    "kind": "object",
+    "fields": {
+      "baseRef": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "remote": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "runScript": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      },
+      "setupScript": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "RunStartParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "RunStartResultSchema": {
+    "kind": "object",
+    "fields": {
+      "alreadyRunning": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "method": {
+        "kind": "optional",
+        "inner": {
+          "kind": "enum",
+          "options": [
+            "detached",
+            "tmux"
+          ]
+        }
+      },
+      "pid": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "started": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "tmuxSessionName": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "RunStopParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "RunStopResultSchema": {
+    "kind": "object",
+    "fields": {
+      "stopped": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "wasRunning": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "RunStatusParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "RunStatusResultSchema": {
+    "kind": "object",
+    "fields": {
+      "run": {
+        "kind": "object",
+        "fields": {
+          "logTail": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          },
+          "method": {
+            "kind": "optional",
+            "inner": {
+              "kind": "enum",
+              "options": [
+                "detached",
+                "tmux"
+              ]
+            }
+          },
+          "pid": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          },
+          "startedAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          },
+          "state": {
+            "kind": "enum",
+            "options": [
+              "none",
+              "running",
+              "stopped"
+            ]
+          }
+        }
+      },
+      "setup": {
+        "kind": "object",
+        "fields": {
+          "exitCode": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          },
+          "finishedAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          },
+          "logTail": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          },
+          "startedAt": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "number"
+            }
+          },
+          "state": {
+            "kind": "enum",
+            "options": [
+              "failed",
+              "not-run",
+              "running",
+              "succeeded"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "RunSetupParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "worktree": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "RunSetupResultSchema": {
+    "kind": "object",
+    "fields": {
+      "alreadyRunning": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
+      "started": {
         "kind": "leaf",
         "type": "boolean"
       }

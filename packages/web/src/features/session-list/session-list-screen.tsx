@@ -37,6 +37,12 @@ import type { UseSessionListSnapshot } from "./types";
  * is passed alongside it to grey out `UnmanagedSection`'s "View"/"Take over"
  * entry points instead of letting them silently pretend to succeed against a
  * real row.
+ *
+ * Archived ("Mark done") sessions are excluded here (docs/features/
+ * session-lifecycle-actions.md Phase 5) — they live on the dedicated
+ * `/completed/` screen (`CompletedSessionsScreen`) instead. `group.ts` itself
+ * stays filter-free so that screen can reuse the exact same
+ * `groupSessionsByWorkspace` over the complementary (archived-only) subset.
  */
 export function SessionListScreen({
   useData = useLiveSessionListSnapshot,
@@ -48,7 +54,11 @@ export function SessionListScreen({
   useUnmanagedActions?: UseUnmanagedActions;
 }) {
   const snapshot = useData();
-  const groups = useMemo(() => groupSessionsByWorkspace(snapshot), [snapshot]);
+  const activeSnapshot = useMemo(
+    () => ({ ...snapshot, sessions: snapshot.sessions.filter((s) => s.status !== "archived") }),
+    [snapshot],
+  );
+  const groups = useMemo(() => groupSessionsByWorkspace(activeSnapshot), [activeSnapshot]);
   const machinesById = useMemo(() => new Map(snapshot.machines.map((m) => [m.id, m])), [snapshot]);
   const unmanagedSnapshot = useUnmanagedSnapshot();
 
@@ -87,9 +97,14 @@ export function SessionListScreen({
     <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-tight">Sessions</h1>
-        <Button asChild size="sm">
-          <Link href="/session/new/">New session</Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" size="sm">
+            <Link href="/completed/">Completed</Link>
+          </Button>
+          <Button asChild size="sm">
+            <Link href="/session/new/">New session</Link>
+          </Button>
+        </div>
       </div>
       {groups.map((group) => (
         <WorkspaceSection key={group.workspace.id} group={group} machinesById={machinesById} />

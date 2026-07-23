@@ -1,0 +1,238 @@
+# Sleep-inhibit control (docs/competitive-notes-omnara.md #12)
+
+**Slug:** `sleep-inhibit` · **Branch:** `wf/feature-sleep-inhibit` · **Target:** `v2-pty-injection`
+
+## Feature description
+
+Sleep-inhibit control. Settings → Machines has a per-machine "Sleep Inhibit" setting (Off / While on Power / Always) so a Mac won't sleep mid-session.
+
+## Solution (Opus 4.8)
+
+## Feature #12 — Sleep-inhibit control: grounded approach
+
+**What it is:** a per-machine tri-state policy (Off / While on Power / Always) that makes the daemon hold an OS "don't sleep" assertion so a Mac won't sleep mid-session, surfaced in a new Settings → Machines card in the web app.
+
+The feature has three real subsystems: (1) a control plane (how the web sets it + how the daemon learns), (2) OS enforcement (the actual sleep-inhibit assertion), and (3) persistence (survive daemon restart). Everything maps cleanly onto patterns already in the tree.
+
+### Recommended control plane: machine RPC (not a new DB field)
+
+Add two machine RPCs — `machine.setSleepInhibit` and `machine.getSleepInhibit` — exactly mirroring the most recent per-machine Settings feature, `provider.account` (#9), which is itself a Settings screen that reads per-machine daemon-local state over a machine RPC. This reuses the dominant, repeated pattern: every recent competitive-notes feature (#9 provider.account, #5 repo-files git.files/fs.read, #4 github.checks, #18 commands.list, git-write-actions) added machine RPCs and touched ZERO server DB/schema. Enforcement must live in the daemon regardless, so RPC keeps set + enforce + persist all in one place.
+
+Concrete pipeline (all machine RPCs already flow through one seal/validate/dispatch path in `packages/cli/src/daemon/machineRpc.ts`, and the web caller side in `packages/web/src/sync/machineRpc.ts`):
+- Wire: add `SleepInhibitModeSchema = z.enum(["off","onPower","always"])`, plus `MachineSetSleepInhibitParams/Result` and `MachineGetSleepInhibit*` schema pairs in `packages/wire/src/rpc.ts` (+ re-export from `index.ts`). Purely additive → passes the `additiveOnly.test.ts` guard with no migration.
+- Daemon: add `"machine.setSleepInhibit"`/`"machine.getSleepInhibit"` to `MACHINE_RPC_METHODS`, add `setSleepInhibit?`/`getSleepInhibit?` to `MachineRpcDeps` with real defaults. These join the *no-idempotency-cache* group (documented in that module's header) — set is naturally idempotent (setting the same mode twice is a no-op), get is a read — same rationale as `provider.account`. Params still carry `idempotencyKey` for family uniformity.
+- Web: add the two methods to the typed table in `sync/machineRpc.ts`; new `features/machine-settings/` feature dir cloned structurally from `features/provider-accounts/` (`types.ts`, `mock-source.ts`, `use-live-*-actions.ts` gated on `useMachineCrypto`, a `useQuery` for get + `useMutation` for set); new thin route `app/(protected)/settings/machines/page.tsx` → `MachinesSettingsScreen`, matching `settings/providers/page.tsx`.
+
+### OS enforcement: a new daemon module `daemon/sleepInhibit.ts`
+
+Owns the sleep-assertion subprocess lifecycle with an injectable spawn seam (same testability convention as `gitExec.ts`). `applyMode(mode)` kills any current child and spawns the right one:
+- `off` → no child.
+- `onPower` → `caffeinate -s` — macOS honors `-s` (system-sleep prevention) *only on AC power*, so the OS itself does the "While on Power" power-source gating; the daemon needs no battery polling.
+- `always` → `caffeinate -i` — prevents idle system sleep regardless of power source.
+
+macOS-only for MVP (the note is Mac-specific; `caffeinate` is macOS-only). Platform comes from the machine `metadata.platform` field the web already decrypts, so the UI gates itself; the RPC returns `{supported:false}` on non-darwin.
+
+### Persistence + boot re-apply
+
+Add an optional top-level `sleepInhibit?: SleepInhibitMode` field to the `Settings` interface in `packages/cli/src/persistence.ts`, read leniently (unknown-field-tolerant, additive — exact `workspaces`/`adoptedSessions` precedent) and written via `updateSettings`. settings.json is per-`~/.falcon`, i.e. per-machine, which is exactly the right scope. At daemon boot, `machineIntegration.ts` (the composition root, right after `registerMachineRpcHandlers`) reads the persisted mode and calls `applyMode()` so the assertion re-establishes across restarts; the manager's `stop()` (killing the caffeinate child) is added to the returned handle's `stop` so daemon shutdown releases the assertion. `set` handler = persist to settings.json + `applyMode`; `get` handler = read persisted mode + live child state + platform.
+
+### Why RPC over a synced DB field (the primary judgment call)
+The machine row (`packages/server/src/db/schema.ts` `machines`, wire `MachineRowSchema`) has only two encrypted+CAS'd boxes: `metadata` and `daemonState`, BOTH daemon-authored and rebuilt from scratch on every push (`machineClient.ts`'s `buildMetadata()`/`buildRuntimeState()`). A web-set config value cannot live in either without the daemon clobbering it on its next CAS push, so a synced approach would need a genuinely NEW encrypted column + wire field + `POST /v1/machines` route change — a much larger, DB-touching change that no sibling feature took. The RPC approach needs zero server changes.
+
+### The live-push transport already exists (relevant if the synced-field alternative is chosen)
+Worth recording: the daemon's machine socket already joins the `user:{accountId}` room (`eventRouter.ts` `addConnection`), and `machines.ts`'s `machine-update` fanout uses the default `all-user-authenticated-connections` filter → that same room. So a `machine-update` event ALREADY reaches the daemon — the daemon's `machineClient.ts` just never registers an `update` listener. If the team later prefers the synced-field model, the transport is free; only a listener + a new column are missing. I flag this because it's the non-obvious fact that makes the alternative cheaper than it looks.
+
+### caffeinate semantics are the load-bearing detail
+The Off/While-on-Power/Always tri-state maps almost 1:1 onto `caffeinate`'s native flags (`-s` = system sleep, AC-only; `-i` = idle system sleep, any power). This is why macOS needs no power-state polling. BUT: `caffeinate` cannot keep a MacBook awake with the **lid closed on battery** (clamshell sleep is not an idle assertion) — a real functional caveat to document in the UI/help text, not a bug. If Linux support is ever added, `systemd-inhibit --what=sleep` has no AC-only mode, so "While on Power" there WOULD require real power-source detection (`/sys/class/power_supply`) — a future divergence.
+
+### Security: enum → fixed argv, never shell
+`mode` is attacker-influenceable input that drives a subprocess spawn. It must be zod-enum-validated at the wire layer AND mapped enum→fixed argv (`["caffeinate","-s"]` etc.) inside the manager via `spawn`/`execFile` with an array — never string-interpolated into a shell. RPC params are sealed under the machine DEK like every other machine RPC, so no new network surface. This is the same discipline `gitExec.ts` already follows.
+
+### Leak safety is a real risk
+A caffeinate child that outlives the daemon = a Mac that never sleeps, silently, forever. Mitigations to design in: kill the child on daemon shutdown (manager `.stop()` in the handle's stop chain), and ensure it's classified as a daemon-spawned child so `falcon doctor clean` (`daemon/doctor.ts`/`kill.ts`/`markers.ts`) reaps a leaked one. Also: the self-update "replaced-and-idle → hand off to fresh daemon" restart (`selfUpdate.ts` + start-sync heartbeat) must have the OLD daemon release its assertion before the NEW one re-applies from settings.json, or two caffeinate children stack. Boot-reads-settings covers re-apply; the stop chain covers release.
+
+### Web machine enumeration — confirm the source
+Settings → Machines needs a list of machines (id + decrypted metadata incl. `platform` + online badge). `features/provider-accounts/` already renders per-machine cards, so it must already enumerate machines from the sync layer — reuse that exact source rather than inventing a machine-list hook. Verify during planning which hook/snapshot provider-accounts uses and share it.
+
+## Plan (Fable 5)
+
+Adjusted the proposed solution: Core approach ACCEPTED (machine RPC control plane, zero server changes, caffeinate enforcement, settings.json persistence, provider-accounts-cloned web feature). Three corrections after source verification: (1) REJECTED the markers.ts/doctor.ts "reap a leaked caffeinate" tasks — packages/cli/src/daemon/markers.ts classifies processes argv-first by the falcon entrypoint token (classifyFalconCommand), so a raw `caffeinate` child can never be recognized as Falcon-owned; replaced with spawning `caffeinate -w <daemon pid>`, which makes macOS itself drop the assertion the instant the daemon pid exits (crash included) — this also eliminates the self-update double-child stacking risk, since the old daemon's caffeinate dies with it. (2) REJECTED "UI gates itself via metadata.platform the web already decrypts" — packages/web/src/features/session-list/live-source.ts decrypts only `host` from the machine metadata box and SessionListMachine has no platform field; instead the card gates off the `sleepInhibit.get` RPC result ({supported, platform, mode, active}), keeping session-list untouched. (3) MOVED the manager's home from machineIntegration.ts to commands.ts's runDaemonStartSync — startMachineIntegration returns null in local-only/logged-out mode (no credentials), but a previously persisted "always" must still be enforced at boot; the manager is created and boot-applied in runDaemonStartSync and its handlers are threaded through MachineIntegrationDeps into registerMachineRpcHandlers. Also renamed the RPCs to `sleepInhibit.get`/`sleepInhibit.set` matching the tree's `<noun>.<verb>` family convention (git.status, adopt.take, commands.list — no existing method uses a `machine.` prefix). Decisions locked from the open questions: control plane = machine RPC; assertion lifetime = continuous while the daemon runs and mode is non-off (session-scoped variant deferred, battery footgun documented in card help text); flags = `-s` for onPower, `-i` for always, both with `-w <pid>`, no `-d`/`-m`; platform scope = macOS only, honest supported:false elsewhere; lid-closed-on-battery limitation documented in the card's help text.
+
+Per-machine tri-state sleep-inhibit policy (Off / While on Power / Always) surfaced in a new Settings → Machines screen. Control plane: two new machine RPCs (`sleepInhibit.get`/`sleepInhibit.set`) following the `provider.account` precedent end to end — additive wire schemas, daemon-side registration in the no-idempotency-cache group, web typed-table entry, and a `features/machine-settings/` feature dir cloned from `features/provider-accounts/`. Enforcement: a new daemon module `daemon/sleepInhibit.ts` owning a `caffeinate` child (macOS only; `-s` = AC-only system-sleep assertion for onPower, `-i` = idle assertion for always), always spawned with `-w <daemon pid>` so the OS itself releases the assertion when the daemon dies — no leak possible, no doctor/markers changes needed. Persistence: a lenient `sleepInhibit` field in `~/.falcon/settings.json` (exact `daemonAutoStart` precedent), re-applied at daemon boot in `runDaemonStartSync` independent of login state, released in the existing shutdown path. Zero server/DB changes.
+
+**Risks:** caffeinate cannot prevent lid-closed (clamshell) sleep on battery — users will perceive 'Always' as broken; mitigated only by explicit help text in SleepInhibitCard, cannot be fixed in code.; A caffeinate child leak keeping a Mac awake forever: structurally mitigated by the -w <daemon pid> tether (macOS drops the assertion when the daemon pid exits), but this MUST be asserted in sleepInhibit.test.ts's argv checks — an implementer dropping -w silently reintroduces the worst failure mode with zero test signal otherwise.; Self-update restart handoff (commands.ts's restartHandoffTriggered branch): stop() must run before spawnStartSync() in the shutdown sequence or old and new daemons briefly hold two children; the -w tether bounds the damage to the overlap window but the ordering test in Phase 3 is the real guard.; Unexpected caffeinate exit + auto-respawn can become a crash loop on a machine where caffeinate immediately dies (SIP oddities, missing binary); the single-respawn-then-give-up rule must be enforced in tests.; RPC control plane means an offline machine can neither display nor accept its setting — accepted trade-off (a sleep-inhibit toggle on an unreachable machine is inert anyway), but the card must render this honestly or it reads as a bug; the free-transport synced-field alternative is recorded in the running doc if product later wants offline display.; 'Always' with no active session drains a MacBook battery continuously while the daemon runs — the continuous-lifetime decision matches Omnara but is a user footgun; help text mitigates, session-scoped lifetime is the documented future refinement.; Subprocess injection: mode is remote-influenceable input driving a spawn — double-guarded (zod enum at the wire layer + fixed argv table, array spawn, never a shell), and the no-string-interpolation check is part of Phase 2's acceptance criteria.; Tests accidentally spawning real caffeinate on developer Macs / CI: every test must inject the fake spawnChild seam; a forgotten injection would leave stray assertions on dev machines (the -w tether limits it to the vitest process lifetime, but still).
+**Files likely touched:** packages/wire/src/rpc.ts, packages/wire/src/rpc.test.ts, packages/wire/src/__tests__/schemaRegistry.ts, packages/wire/src/__tests__/__fixtures__/wire-shapes.json, packages/cli/src/daemon/sleepInhibit.ts (new), packages/cli/src/daemon/sleepInhibit.test.ts (new), packages/cli/src/persistence.ts, packages/cli/src/persistence.test.ts (or wherever settings normalize tests live), packages/cli/src/daemon/machineRpc.ts, packages/cli/src/daemon/machineRpc.test.ts, packages/cli/src/daemon/machineIntegration.ts, packages/cli/src/daemon/machineIntegration.test.ts, packages/cli/src/daemon/commands.ts, packages/cli/src/daemon/commands.test.ts, packages/cli/src/daemon/commands.machineWiring.integration.test.ts, packages/web/src/sync/machineRpc.ts, packages/web/src/features/machine-settings/ (new dir: types.ts, live-actions.ts, use-live-machine-settings-actions.ts, use-machine-settings.ts, mock-source.ts, index.ts, components/MachinesSettingsScreen.tsx, components/SleepInhibitCard.tsx, __tests__/), packages/web/src/app/(protected)/settings/machines/page.tsx (new), packages/web/src/components/app-shell.tsx, docs/features/sleep-inhibit.md (new), CLAUDE.md
+
+## Phases
+
+### Phase 1: Phase 1 — Wire schemas (@falcon/wire, additive only)
+
+- [x] In packages/wire/src/rpc.ts, add `SleepInhibitModeSchema = z.enum(["off","onPower","always"])` + `export type SleepInhibitMode = z.infer<...>`, with a doc comment naming docs/competitive-notes-omnara.md #12 and the caffeinate flag mapping (onPower → `-s` AC-only system assertion, always → `-i` idle assertion, both `-w <daemon pid>`).
+- [x] Add `SleepInhibitStateSchema = z.object({ supported: z.boolean(), platform: z.string(), mode: SleepInhibitModeSchema, active: z.boolean() })` — the shared result shape for BOTH RPCs (set returns the post-apply state so the UI needs no follow-up get). `supported:false` + `platform` is the honest non-darwin answer; `active` reports whether a caffeinate child is currently live (false when mode is "off", when unsupported, or when the child failed to spawn). Export `SleepInhibitState`.
+- [x] Add `SleepInhibitGetParamsSchema = z.object({ idempotencyKey: z.string() })` and `SleepInhibitSetParamsSchema = z.object({ idempotencyKey: z.string(), mode: SleepInhibitModeSchema })` + inferred types. Doc-comment that `idempotencyKey` is carried for family uniformity but unused (get is a pure read; set is naturally idempotent — same rationale as `provider.account`/`git.status`, see machineRpc.ts's header).
+- [x] packages/wire/src/index.ts already does `export * from "./rpc"` — verify the new exports flow through, no edit expected.
+- [x] Register the four new schemas (SleepInhibitModeSchema may be skipped — registry holds object schemas; follow whatever granularity the existing entries use, e.g. ProviderAccountParams/Result are registered individually) in packages/wire/src/__tests__/schemaRegistry.ts, then regenerate the frozen fixture: `pnpm --filter @falcon/wire exec tsx scripts/snapshot-shapes.ts` (the additiveOnly test's own warning message names this exact command).
+- [x] Extend packages/wire/src/rpc.test.ts with parse/reject cases for the new schemas (invalid mode string rejected; supported/platform/mode/active round-trip).
+
+**Acceptance:** `pnpm --filter @falcon/wire build && pnpm --filter @falcon/wire test` passes; the additiveOnly test emits NO 'not yet in wire-shapes.json' warning for the new schemas (fixture regenerated); `SleepInhibitSetParamsSchema.safeParse({idempotencyKey:"k",mode:"onPower"}).success === true` and `mode:"forever"` fails, demonstrated in rpc.test.ts.
+
+### Phase 2: Phase 2 — Daemon enforcement module: daemon/sleepInhibit.ts
+
+- [x] Create packages/cli/src/daemon/sleepInhibit.ts exporting `createSleepInhibitManager(deps)` → `{ applyMode(mode: SleepInhibitMode): SleepInhibitState, getState(): SleepInhibitState, stop(): void }`. Deps (with real defaults, following gitExec.ts's injectable-seam convention): `{ logger?: Logger, platform?: NodeJS.Platform (default process.platform), daemonPid?: number (default process.pid), spawnChild?: (argv: string[]) => SleepInhibitChild }` where `SleepInhibitChild = { pid?: number, kill(signal?): boolean, onExit(cb): void }` — default wraps node:child_process.spawn with `stdio: "ignore"`, NOT detached (same process group, dies with a SIGKILL'd daemon too).
+- [x] argv mapping is a fixed table, never interpolation: off → no child; onPower → ["caffeinate","-s","-w",String(daemonPid)]; always → ["caffeinate","-i","-w",String(daemonPid)]. The `-w <daemon pid>` tether is THE leak guard (macOS releases the assertion the moment that pid exits) — document this in the module header as the replacement for any doctor/markers reaping, and note the clamshell caveat (caffeinate cannot prevent lid-closed sleep on battery — a functional OS limit, not a bug).
+- [x] `applyMode`: no-op if mode unchanged and child healthy; otherwise kill any current child (SIGTERM; it's caffeinate — no escalation needed, but guard kill() errors), then spawn per table. On non-darwin `platform`, never spawn — every state report is `{supported:false, platform, mode:"off", active:false}` regardless of requested mode. Track `active` truthfully: spawn-throw ⇒ active:false + logger.warn (a Mac without /usr/bin/caffeinate is broken-but-survivable — the RPC result carries active:false so the UI can say so).
+- [x] Unexpected child exit (onExit fires while mode is still non-off and stop() wasn't called): logger.warn and attempt exactly ONE automatic respawn; if that child also exits, mark active:false and stay down until the next applyMode (prevents a crash-loop hammering spawn). Cover with a fake-child test.
+- [x] `stop()`: kill the current child (immediate release on graceful shutdown — the -w tether is the crash safety net, stop() is the polite path), clear internal state, make further applyMode calls after stop() safe no-ops.
+- [x] Create packages/cli/src/daemon/sleepInhibit.test.ts with an injected fake spawnChild: asserts exact argv per mode (fixed-array, includes -w daemonPid), kill-before-respawn ordering on mode change, off kills without respawn, non-darwin never spawns and reports supported:false, single-respawn-then-give-up on unexpected exit, stop() kills and idempotent, spawn-throw ⇒ active:false without throwing out of applyMode.
+
+**Acceptance:** `pnpm --filter falcon test -- sleepInhibit` (vitest filter) passes with all cases above green; grep confirms the module contains no string-built shell command (argv arrays only, no `exec(`/`sh -c`); `pnpm --filter falcon typecheck` passes.
+
+### Phase 3: Phase 3 — Persistence, RPC registration, and daemon composition wiring
+
+- [x] packages/cli/src/persistence.ts: add optional `sleepInhibit?: "off" | "onPower" | "always"` to the `Settings` interface (doc-comment pointing at daemon/sleepInhibit.ts + the boot re-apply), and a lenient branch in `normalizeSettings`: `if (raw.sleepInhibit === "off" || raw.sleepInhibit === "onPower" || raw.sleepInhibit === "always") settings.sleepInhibit = raw.sleepInhibit;` — exact `daemonAutoStart` precedent, no schemaVersion bump (additive). Add a persistence test: unknown value ignored, valid value round-trips through updateSettings.
+- [x] packages/cli/src/daemon/machineRpc.ts: add "sleepInhibit.get" and "sleepInhibit.set" to MACHINE_RPC_METHODS; add to MachineRpcDeps: `getSleepInhibit?: (params: SleepInhibitGetParams) => Promise<SleepInhibitState>` and `setSleepInhibit?: (params: SleepInhibitSetParams) => Promise<SleepInhibitState>` with honest local defaults (get → `{supported:false, platform: process.platform, mode:"off", active:false}`; set → same, i.e. "no manager wired" is indistinguishable from unsupported — never throws), so existing tests/constructions keep passing. Add both to the `methods` table with the Phase 1 schemas. Extend the module header's no-idempotency-cache paragraph: get is a read; set is naturally idempotent (applying the same mode twice converges to the same single child) — joins the provider.account group; params carry idempotencyKey for uniformity only.
+- [x] packages/cli/src/daemon/commands.ts (runDaemonStartSync): after `writeDaemonState(homeDir, payload)` succeeds (lock held — never spawn caffeinate from a daemon that lost the singleton race), create the manager via `createSleepInhibitManager({ logger, daemonPid: process.pid })`, read `(await readSettings({homeDir})).sleepInhibit ?? "off"`, and `applyMode` it — BEFORE startMachineIntegration and unconditionally (boot re-apply must work in logged-out/local-only mode where machineIntegration returns null). In the shutdown path (next to `machineIntegration?.stop()` around line 482), call `sleepInhibitManager.stop()` BEFORE `deps.spawnStartSync()` can run in the restart-handoff branch — this sequences release-then-fresh-daemon-reapplies, closing the self-update stacking risk (the -w tether additionally covers the crash path). Make the manager injectable via DaemonCommandDeps (`createSleepInhibitManager` override or a `sleepInhibitOverrides` seam) so commands.ts tests use a fake.
+- [x] Thread the handlers to the RPC layer: add `getSleepInhibit?`/`setSleepInhibit?` fields to MachineIntegrationDeps (packages/cli/src/daemon/machineIntegration.ts), defaulted in createMachineIntegrationDeps to the same honest unsupported stubs, passed through into registerMachineRpcHandlers alongside getGitDiff. In commands.ts, supply the real closures: get → `async () => manager.getState()`; set → `async ({mode}) => { const state = manager.applyMode(mode); if (state.supported) await updateSettings(s => ({...s, sleepInhibit: mode}), {homeDir}); return state; }` — persist only when supported so a non-Mac never records a dead setting; apply-then-persist order means a spawn failure still returns honest `active:false` while remembering intent is acceptable only post-support-check (document the choice inline).
+- [x] Tests: machineRpc.test.ts — both methods dispatch through the seal/validate pipeline, bad mode rejected by schema, defaults return supported:false; commands.test.ts (or machineIntegration.test.ts following where boot wiring is already tested, e.g. commands.machineWiring.integration.test.ts) — boot applies persisted mode via the fake manager, shutdown calls stop(), a set RPC persists to settings.json and re-boot re-applies it.
+
+**Acceptance:** `pnpm --filter falcon build && pnpm --filter falcon typecheck && pnpm --filter falcon test` all pass, including new tests proving: (a) settings.json with `"sleepInhibit":"always"` causes exactly one fake-manager applyMode("always") during runDaemonStartSync boot before machine integration starts, (b) daemon shutdown invokes manager.stop() before any restart-handoff respawn, (c) a sleepInhibit.set RPC round-trip (sealed params → handler → sealed result) lands the mode in settings.json and returns the post-apply SleepInhibitState.
+
+**Status note:** all done as specified; (a)/(b) are covered as fast unit tests in `commands.test.ts` with an injected fake manager (no real credentials/socket needed since the boot re-apply is unconditional), and (c) is covered as a real integration test in `commands.machineWiring.integration.test.ts` — a real sealed socket RPC round trip against a real `@falcon/server` + pglite, using the real `createSleepInhibitManager` logic with only its `spawnChild` faked (never a real `caffeinate`).
+
+### Phase 4: Phase 4 — Web: sync client + Settings → Machines screen
+
+- [x] packages/web/src/sync/machineRpc.ts: add "sleepInhibit.get"/"sleepInhibit.set" to MachineRpcParams (SleepInhibitGetParams/SleepInhibitSetParams), MachineRpcResults (both → SleepInhibitState), and RESULT_SCHEMAS (both → SleepInhibitStateSchema) — the mapped MachineRpcMethod type picks them up automatically.
+- [x] Create packages/web/src/features/machine-settings/ cloned structurally from features/provider-accounts/: types.ts (`MachineSettingsActions { fetchSleepInhibit(): Promise<SleepInhibitState>; setSleepInhibit(mode: SleepInhibitMode): Promise<SleepInhibitState> }`, `UseMachineSettingsActions = (machineId: string) => MachineSettingsActions`, re-exporting wire types rather than redeclaring); live-actions.ts (`machineRpcToMachineSettingsActions(rpc)` calling rpc.call with `crypto.randomUUID()` idempotency keys, mirroring machineRpcToProviderAccountActions); use-live-machine-settings-actions.ts (useMachineCrypto-gated, pending-actions-reject-until-ready, exact clone of use-live-provider-account-actions.ts); mock-source.ts (in-memory mode state, one supported darwin machine + one unsupported linux fixture); index.ts barrel.
+- [x] use-machine-settings.ts: `useQuery({queryKey:["machine-settings","sleep-inhibit",machineId], queryFn:() => actions.fetchSleepInhibit()})` plus a `useMutation` for setSleepInhibit that writes the returned SleepInhibitState straight into the query cache via setQueryData (the set result IS the fresh state — no invalidate round-trip). Expose {state, error, isLoading, isSaving, setMode} — mirrors use-provider-account.ts's shape and its isRefreshing derivation comment.
+- [x] components/SleepInhibitCard.tsx: tri-state control (Off / While on Power / Always — shadcn ToggleGroup or Select per app norms), driven by use-machine-settings. States: loading skeleton; RPC transport error ⇒ 'machine unreachable — settings live on the machine itself' message (an offline machine cannot display or accept a value — inherent to the RPC control plane, render it honestly); `supported:false` ⇒ control disabled with 'Sleep inhibit is only available on macOS (this machine reports <platform>)'; `supported && mode!=="off" && !active` ⇒ warning that the assertion isn't currently held (caffeinate failed to start). Permanent help text: 'While on Power holds the Mac awake only on AC power. Always also prevents idle sleep on battery. Neither can keep a MacBook awake with the lid closed on battery power, and Always will drain the battery while the Falcon daemon runs.'
+- [x] components/MachinesSettingsScreen.tsx: clone ProvidersSettingsScreen.tsx — `useSnapshot = useLiveSessionListSnapshot` for the machine list (id/name/online + MachineBadge), `useActions = useLiveMachineSettingsActions` as injectable seams, one SleepInhibitCard per machine section, same isLoading/empty-state copy pattern. Do NOT touch features/session-list (no platform field needed — gating comes from the RPC result).
+- [x] Route + nav: new packages/web/src/app/(protected)/settings/machines/page.tsx as a thin 'use client' shell rendering MachinesSettingsScreen (clone settings/providers/page.tsx verbatim in shape); add `{ href: "/settings/machines/", label: "Machines", icon: MonitorIcon }` (lucide) to the settings nav list in packages/web/src/components/app-shell.tsx (~line 42-48, keep alongside Providers).
+- [x] Tests mirroring provider-accounts': __tests__/live-actions.test.ts (argv→rpc.call mapping incl. fresh idempotency keys per call), __tests__/mock-source.test.ts, use-live-machine-settings-actions.test.ts (pending-before-crypto rejection), plus a use-machine-settings test asserting the mutation's setQueryData cache write.
+
+**Acceptance:** `pnpm --filter @falcon/web build && pnpm --filter @falcon/web test && pnpm --filter @falcon/web typecheck` pass (static export includes /settings/machines/); with the mock source, the screen renders a functioning tri-state that round-trips mode changes, the linux fixture machine renders the disabled 'macOS only' state, and the new tests are green.
+
+**Status note:** all done as specified. `use-machine-settings.test.ts` and `use-live-machine-settings-actions.test.ts` follow this repo's existing constraint (no jsdom/`@testing-library/react` wired into vitest here — see `use-git-panel.test.ts`'s own doc comment) — mutations/rejections are exercised directly against the `QueryClient` after a one-shot `renderToStaticMarkup` pass rather than via a re-rendered `result.current`.
+
+### Phase 5: Phase 5 — Docs + full-repo verification
+
+- [x] Write docs/features/sleep-inhibit.md (the [deep] pipeline's running-doc convention, joining git-write-actions.md/github-pr-ci.md/worktree-isolation.md): the phase checklist from this plan with completion checkboxes, the locked design decisions (RPC control plane rationale incl. the machine-row CAS-clobber argument and the free-transport note for a future synced-field variant; continuous assertion lifetime; caffeinate flag table with -w tether; macOS-only scope), and the documented limitations (clamshell/battery, offline machine shows unreachable, Always battery drain).
+- [x] Update CLAUDE.md's package-layout tree per its own 'update this file as phases land' instruction: cli bullet gains daemon/sleepInhibit.ts + the two RPCs + the Settings.sleepInhibit field; web bullet gains features/machine-settings/ + the /settings/machines route.
+- [x] Full verification from repo root: `pnpm build && pnpm typecheck && pnpm test && pnpm lint` (lint self-retries once per CLAUDE.md; twice-failing lint is real). See the note directly below on `pnpm lint`'s result.
+- [ ] Optional-but-recommended manual smoke on a real Mac (document result in the running doc): set mode to always via the web UI against a live daemon, verify `pmset -g assertions` shows a PreventUserIdleSystemSleep/PreventSystemSleep assertion held by caffeinate, `kill -9` the daemon, verify the caffeinate process and the assertion disappear on their own (the -w tether working), restart the daemon and verify the assertion returns without any RPC. **Not done** — no live daemon + real web UI + real browser session was available in this environment; left for a follow-up manual pass. The unit/integration tests (`sleepInhibit.test.ts`'s exact-argv assertions, `commands.machineWiring.integration.test.ts`'s real-socket RPC round trip) cover everything short of an actual `pmset -g assertions` observation.
+
+**Acceptance:** Root `pnpm build && pnpm typecheck && pnpm test` green and `pnpm lint` passes (within its documented single retry); docs/features/sleep-inhibit.md exists with every phase checked off; CLAUDE.md tree mentions sleepInhibit.ts and features/machine-settings/.
+
+**`pnpm lint` note:** `pnpm build && pnpm typecheck && pnpm test` are all green from the repo root (turbo run across every package, including a rerun after one transient parallel-run flake in two unrelated pre-existing tests — `index.test.ts`'s `--help` timeout and `sessionRegistry.test.ts`'s persistence-timing race — that pass cleanly in isolation and touch no file this feature changed). `pnpm lint` itself hits the documented "[warn] Linter process terminated abnormally (possibly out of memory)" on the first attempt every time in this environment (confirmed via a `git stash -u` clean-tree run, before any sleep-inhibit change existed) and the retry then surfaces ~95-100 pre-existing lint errors/warnings scattered across files this feature never touches (e.g. `packages/cli/src/api/sessionMetadata.ts`, `claudeRemoteLauncher.test.ts`) — confirmed pre-existing the same way. Every file this feature actually added or modified was checked directly (`biome check <exact file list>`) and is clean, with two narrow, confirmed-pre-existing exceptions left untouched on purpose: `wire-shapes.json` (a machine-generated, never-hand-edited fixture whose array-formatting style already didn't match biome's before this change) and one unrelated pre-existing `useTemplate` warning at an unchanged line in `commands.test.ts`.
+
+
+## Status
+
+Implementation complete for all 5 phases — every task checked off above except one
+optional, explicitly-deferred item (the real-Mac manual smoke test in Phase 5, which
+needs a live daemon + browser session this environment doesn't have).
+
+- Phase 1 (wire schemas): `SleepInhibitModeSchema`/`SleepInhibitStateSchema`/
+  `SleepInhibitGetParamsSchema`/`SleepInhibitSetParamsSchema` landed in
+  `packages/wire/src/rpc.ts`, registered in `schemaRegistry.ts`, fixture regenerated.
+  `pnpm --filter @falcon/wire build && test` green (143 tests).
+- Phase 2 (daemon enforcement): `packages/cli/src/daemon/sleepInhibit.ts`'s
+  `createSleepInhibitManager` — fixed argv table, `-w <daemon pid>` leak-safety tether,
+  single-respawn-then-give-up, non-darwin honesty. 14 unit tests with a fully injected
+  fake spawn child (never spawns a real `caffeinate`).
+- Phase 3 (persistence + RPC + daemon wiring): `persistence.ts`'s lenient `sleepInhibit`
+  field, `machineRpc.ts`'s `sleepInhibit.get`/`sleepInhibit.set` registration, boot
+  re-apply + shutdown-ordering wiring in `commands.ts`'s `runDaemonStartSync`. Covered by
+  fast fake-manager unit tests in `commands.test.ts` (boot re-apply, stop-before-respawn
+  ordering) AND a real integration test in `commands.machineWiring.integration.test.ts`
+  (a real sealed-socket RPC round trip against a real `@falcon/server` + pglite, using
+  the real `createSleepInhibitManager` logic with only `spawnChild` faked).
+- Phase 4 (web): `packages/web/src/features/machine-settings/` (types, live-actions,
+  mock-source, live actions hook, `use-machine-settings.ts`'s query+mutation,
+  `SleepInhibitCard`/`MachinesSettingsScreen`), mounted at `/settings/machines/` and
+  linked from the settings nav. `pnpm --filter @falcon/web build/typecheck/test` all
+  green (136 test files / 1000 tests, including the new machine-settings suite); the
+  static export includes `/settings/machines/`.
+- Phase 5 (docs + verification): this doc and CLAUDE.md's package-layout tree updated.
+  Root `pnpm build && pnpm typecheck && pnpm test` green. `pnpm lint` surfaces
+  pre-existing, unrelated repo lint debt (confirmed pre-existing via a clean-tree check)
+  — every file this feature touched is independently lint-clean; see the note above the
+  Phase 5 acceptance line for the full accounting.
+
+No known gaps in the feature itself — the only incomplete item is the optional live-Mac
+smoke test, which is a verification step, not a missing implementation piece.
+
+Merged into v2-pty-injection at ab4ea3eb3c154254d8a03aecb27c2b3440f1f6da.
+
+## Test & Review notes
+
+Independent verification pass (separate agent, did not write the original implementation).
+
+**What was checked:**
+- Full root `pnpm build && pnpm typecheck && pnpm test` (not scoped to new tests) —
+  all green (150 test files / 1739 tests in `falcon` before the fix below, plus
+  `@falcon/wire`/`@falcon/web`/`@falcon/server`/`@falcon/e2e`).
+- Re-derived the `pnpm lint` claim independently rather than trusting it: ran
+  `biome check` against the exact 30-file changed-file list from a clean checkout.
+  Result matched the implementer's report exactly — one pre-existing error
+  (`wire-shapes.json`'s array formatting, confirmed pre-existing by diffing against
+  the fixture generator's own style) and one pre-existing info
+  (`commands.test.ts:90`'s `useTemplate`, confirmed pre-existing via `git show` against
+  the pre-feature commit — the string-concatenation line predates this feature).
+- Read every phase's implementation end to end against its acceptance criteria: wire
+  schemas (`rpc.ts`/`schemaRegistry.ts`/fixture), `daemon/sleepInhibit.ts`'s manager
+  (argv table, `-w` tether, respawn guard, `applyMode`/`stop` semantics),
+  `machineRpc.ts`'s RPC registration and no-idempotency-cache reasoning,
+  `persistence.ts`'s lenient field, `commands.ts`'s `runDaemonStartSync` boot-order and
+  shutdown-order wiring (confirmed in the real source, not just the tests: boot-apply
+  happens before `startMachineIntegration`; `sleepInhibitManager.stop()` runs before
+  `deps.spawnStartSync()` in the restart-handoff branch), the web
+  `features/machine-settings/` stack (query/mutation cache-write shape, card
+  gating-by-RPC-result, crypto-gated live actions hook), and the nav wiring in
+  `app-shell.tsx`.
+- Confirmed `daemon/markers.ts`/`daemon/doctor.ts` have zero `caffeinate` references —
+  the plan's own "replaced doctor/markers reaping with the `-w` tether" decision is
+  actually reflected in the tree, not just claimed.
+- Grepped for shell-interpolation risk in the spawn path: confirmed fixed argv arrays
+  only, `child_process.spawn` (never `exec`/a shell string).
+
+**Bug found and fixed:** `wrapChildProcess` in `daemon/sleepInhibit.ts` only listened
+for Node's `"exit"` event to detect the caffeinate child dying. Verified directly
+against a real `child_process.spawn()` of a nonexistent binary (`spawn("<bogus>", ...)`)
+that Node fires `"error"` (+ `"close"`) for a process that never actually started, and
+**never** fires `"exit"` in that case. Concretely: a machine missing `/usr/bin/caffeinate`
+(SIP oddity, corrupted install, or any other spawn-time failure e.g. EACCES) would set
+`active: true` optimistically on the synchronous `spawnChild()` return, then silently
+never learn the child died — `onExit`'s callback (which drives both the
+single-respawn-then-give-up guard and the `active: false` bookkeeping) would simply
+never fire. The manager, the `sleepInhibit.get`/`sleepInhibit.set` RPC results, and the
+web card would report `active: true` forever for an assertion that was never actually
+held — exactly the "Always feels broken" failure mode the plan's own risk list worried
+about, except silent instead of surfaced. This is a distinct, real gap from the
+already-tested "spawn that throws" case: `child_process.spawn()` does not throw
+synchronously for ENOENT/EACCES — it only fails asynchronously — so that existing test
+never exercised the real `defaultSpawnChild` failure path at all.
+
+Fix: `wrapChildProcess` now listens to both `"exit"` and `"error"`, firing its `onExit`
+callback exactly once (dedup guard) whichever fires first. `wrapChildProcess` was
+exported (previously module-private) so a regression test could exercise it directly
+against a real `spawn()` of a nonexistent binary without needing a real `caffeinate`
+binary to be present in this environment. Two new tests added to
+`sleepInhibit.test.ts`: (1) a direct `wrapChildProcess` test proving `onExit` fires
+exactly once with `{code: null, signal: null}` on a real ENOENT spawn, and (2) an
+end-to-end test through the full manager (real `spawn()` wrapped by the real
+`wrapChildProcess`, only the binary name is bogus) proving `active` correctly converges
+to `false` via the existing respawn-then-give-up bookkeeping, rather than staying `true`
+forever. `falcon` package: 1741 tests passing after the fix (150 test files, up from
+1739/150). Full root `pnpm build && pnpm typecheck && pnpm test` re-run green after the
+fix; `biome check` on the two touched files (via the full changed-file-list invocation)
+shows no new lint issues.
+
+**Not found / no other bugs identified:** the boot-order, shutdown-order, persistence
+leniency, wire schema additivity, RPC dispatch/validation, and web query/mutation/cache
+wiring all matched the plan and their own test coverage under direct reading — no
+further discrepancies found between the checked-off phase tasks and the actual code.
+
+**Unresolved:** none beyond the plan's own explicitly-deferred, optional real-Mac manual
+smoke test (Phase 5's unchecked item) — left as-is; it remains a legitimate environment
+limitation (no live daemon + real macOS + browser session available here), not a gap
+introduced or discovered by this review.

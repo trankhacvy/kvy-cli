@@ -50,6 +50,13 @@ export interface SessionListSession {
   provider: string;
   status: SessionRow["status"];
   updatedAt: number;
+  /** Pin/Unpin (docs/features/session-lifecycle-actions.md Phase 4) — lives
+   * in the encrypted metadata blob alongside `title` (account-global, E2E
+   * private: the server never learns which sessions a user pinned).
+   * Defaults to `false` for a row that hasn't decrypted yet or never had the
+   * field set, same as the CLI's `normalizeMetadata` treats a missing
+   * `pinned` key as "not pinned" rather than "unknown". */
+  pinned: boolean;
   /** This session's reduced transcript (`@falcon/web`'s sync reducer output)
    * — the event-stream input `deriveSessionStatus` walks to find an open
    * turn or an unresolved permission (design principle #3: derived, never

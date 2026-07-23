@@ -670,8 +670,8 @@ describe("main()", () => {
       ]);
 
       expect(code).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("base ref: develop"));
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("remote:   origin"));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("base ref:     develop"));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("remote:       origin"));
       stdout.mockRestore();
     });
 
@@ -682,7 +682,7 @@ describe("main()", () => {
       const code = await main(["workspace", "config", "--directory", homeDir]);
 
       expect(code).toBe(0);
-      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("base ref: (none)"));
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining("base ref:     (none)"));
       stdout.mockRestore();
     });
 

@@ -108,8 +108,21 @@ import type {
   PreviewPortsResult,
   PreviewTunnelsParams,
   PreviewTunnelsResult,
+  RunSetupParams,
+  RunSetupResult,
+  RunStartParams,
+  RunStartResult,
+  RunStatusParams,
+  RunStatusResult,
+  RunStopParams,
+  RunStopResult,
+  SleepInhibitGetParams,
+  SleepInhibitSetParams,
+  SleepInhibitState,
   SpawnParams,
   SpawnResult,
+  WorkspaceGetConfigParams,
+  WorkspaceGetConfigResult,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import type { FalconCredentials } from "../auth/credentials.js";
@@ -134,7 +147,9 @@ import {
   resolveResumeDirectoryFromRecord,
   resumeSession as resumeSessionCore,
 } from "./resumeSession.js";
+import { handleRunSetup, handleRunStart, handleRunStatus, handleRunStop } from "./runProcess.js";
 import type { PersistedSession } from "./sessionsStore.js";
+import { runSetupScript } from "./setupScript.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
 import {
   type SpawnEngineDeps,
@@ -155,6 +170,7 @@ import {
   createUnmanagedSessionClientDeps,
   upsertUnmanagedSession,
 } from "./unmanagedSessionClient.js";
+import { handleWorkspaceGetConfig } from "./workspaceConfigRpc.js";
 import type { WorkspaceRootLookup } from "./workspacePath.js";
 
 const DEK_LENGTH_BYTES = 32;
@@ -196,6 +212,10 @@ export interface MachineIntegrationDeps {
   spawnEngineOverrides?: Partial<SpawnEngineDeps>;
   /** Same, for `resumeSession.ts`. */
   resumeSessionOverrides?: Partial<ResumeSessionDeps>;
+  /** Backs the `sleepInhibit.get` RPC (docs/features/sleep-inhibit.md). Defaults to an honest "no manager wired" stub here — `commands.ts` supplies the real `daemon/sleepInhibit.ts` manager's `getState`, since the manager itself is created at that composition root (boot re-apply must work even in local-only mode, where this module's `startMachineIntegration` never runs at all). */
+  getSleepInhibit?: (params: SleepInhibitGetParams) => Promise<SleepInhibitState>;
+  /** Backs the `sleepInhibit.set` RPC. Same "real default lives in commands.ts" note as `getSleepInhibit` above. */
+  setSleepInhibit?: (params: SleepInhibitSetParams) => Promise<SleepInhibitState>;
 }
 
 export interface MachineIntegrationHandle {
@@ -215,6 +235,11 @@ function defaultLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
+/** Honest "no manager wired" stub — see `MachineIntegrationDeps.getSleepInhibit`'s own doc comment for why the real default lives in `commands.ts` instead of here. */
+async function defaultSleepInhibitStub(): Promise<SleepInhibitState> {
+  return { supported: false, platform: process.platform, mode: "off", active: false };
+}
+
 export function createMachineIntegrationDeps(
   required: Pick<MachineIntegrationDeps, "homeDir" | "registry" | "awaiter">,
   overrides: Partial<MachineIntegrationDeps> = {},
@@ -232,6 +257,8 @@ export function createMachineIntegrationDeps(
     resolveProviderSession: async () => null,
     resolveResumeDirectory: resolveResumeDirectoryFromRecord,
     heartbeatIntervalMs: 60_000,
+    getSleepInhibit: defaultSleepInhibitStub,
+    setSleepInhibit: defaultSleepInhibitStub,
     ...required,
     ...overrides,
   };
@@ -340,6 +367,20 @@ export async function startMachineIntegration(
     return { machineId, stop: started.handle.stop };
   }
 
+  // Fire-and-forget setup-script kickoff (docs/features/
+  // setup-run-scripts.md Phase 2/4) — binds `setupScript.ts`'s real runner
+  // to this boot's `homeDir`/`logger`, matching every other homeDir-scoped
+  // handler in this module. `spawnEngine.ts` already guarantees this is
+  // only ever called on a genuine fresh-worktree creation and never awaits
+  // it — see that module's own doc comment for the "never throws" contract
+  // `setupScript.ts`'s `runSetupScript` upholds on its own.
+  function runSetupScriptHandler(workspaceRoot: string, spawnDirectory: string): void {
+    void runSetupScript(
+      { workspaceRoot, directory: spawnDirectory },
+      { homeDir: deps.homeDir, logger: deps.logger },
+    );
+  }
+
   async function spawnSessionHandler(params: SpawnParams): Promise<SpawnResult> {
     return spawnSessionCore(params, {
       resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
@@ -353,6 +394,7 @@ export async function startMachineIntegration(
       findLiveSessionInDirectory: (realDirectory) =>
         scanForLiveSessionInDirectory(deps.registry.getSessions(), realDirectory),
       trackSpawned: deps.registry.trackSpawned,
+      runSetupScript: runSetupScriptHandler,
       ...deps.spawnEngineOverrides,
     });
   }
@@ -378,6 +420,7 @@ export async function startMachineIntegration(
       awaiter: deps.awaiter,
       logger: deps.logger,
       trackSpawned: deps.registry.trackSpawned,
+      runSetupScript: runSetupScriptHandler,
       ...deps.spawnEngineOverrides,
     });
   }
@@ -457,6 +500,30 @@ export async function startMachineIntegration(
     return handlePreviewClose(params, previewTunnelDeps);
   }
 
+  // The Setup/Run scripts subsystem's five RPCs (docs/features/
+  // setup-run-scripts.md Phase 3/4) each need `homeDir` — for
+  // `runStateStore.ts`/the log files under `~/.falcon/logs/` — the same
+  // reason `getGitDiffHandler`'s `uploadBlob` binding above exists: the
+  // dependency only exists at this composition root, not inside
+  // `runProcess.ts`/`workspaceConfigRpc.ts` themselves.
+  async function getWorkspaceConfigHandler(
+    params: WorkspaceGetConfigParams,
+  ): Promise<WorkspaceGetConfigResult> {
+    return handleWorkspaceGetConfig(params, { homeDir: deps.homeDir, logger: deps.logger });
+  }
+  async function runStartHandler(params: RunStartParams): Promise<RunStartResult> {
+    return handleRunStart(params, { homeDir: deps.homeDir, logger: deps.logger });
+  }
+  async function runStopHandler(params: RunStopParams): Promise<RunStopResult> {
+    return handleRunStop(params, { homeDir: deps.homeDir, logger: deps.logger });
+  }
+  async function runStatusHandler(params: RunStatusParams): Promise<RunStatusResult> {
+    return handleRunStatus(params, { homeDir: deps.homeDir, logger: deps.logger });
+  }
+  async function runSetupHandler(params: RunSetupParams): Promise<RunSetupResult> {
+    return handleRunSetup(params, { homeDir: deps.homeDir, logger: deps.logger });
+  }
+
   const rpcHandle = registerMachineRpcHandlers({
     machineId,
     dek,
@@ -470,6 +537,13 @@ export async function startMachineIntegration(
     previewTunnels: previewTunnelsHandler,
     previewOpen: previewOpenHandler,
     previewClose: previewCloseHandler,
+    getSleepInhibit: deps.getSleepInhibit,
+    setSleepInhibit: deps.setSleepInhibit,
+    getWorkspaceConfig: getWorkspaceConfigHandler,
+    runStart: runStartHandler,
+    runStop: runStopHandler,
+    runStatus: runStatusHandler,
+    runSetup: runSetupHandler,
     logger: deps.logger,
   });
 
