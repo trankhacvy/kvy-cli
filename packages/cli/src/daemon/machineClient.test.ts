@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { EncryptedBox } from "@falcon/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import type {
   MachineClientDeps,
@@ -64,13 +65,32 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
+/** issue-4-plan.md §6.6: a fake `TokenProvider` that always resolves the same access
+ * token, tracking `forceRefresh` calls so tests can assert on the connect_error path. */
+function fakeTokenProvider(
+  accessToken = "test-token",
+): TokenProvider & { forceRefreshCalls: number } {
+  const state = {
+    forceRefreshCalls: 0,
+    async getAccessToken() {
+      return accessToken;
+    },
+    async forceRefresh() {
+      state.forceRefreshCalls += 1;
+      return accessToken;
+    },
+    isDead: false,
+  };
+  return state;
+}
+
 function buildDeps(
   overrides: Partial<MachineClientDeps> = {},
   homeDir = "/tmp/unused",
 ): MachineClientDeps {
   return {
     serverUrl: "http://localhost:4000",
-    token: "test-token",
+    tokenProvider: fakeTokenProvider(),
     homeDir,
     encryptionKey: new Uint8Array(32).fill(7),
     encryptionVariant: "legacy",
@@ -335,11 +355,20 @@ describe("startMachineClient", () => {
     expect(result.ok).toBe(true);
     expect(ioFactory).toHaveBeenCalledExactlyOnceWith(
       "http://localhost:4000",
-      expect.objectContaining({
-        path: "/v1/stream",
-        auth: { token: "test-token", clientType: "machine-scoped", machineId: "mach_ws" },
-      }),
+      expect.objectContaining({ path: "/v1/stream" }),
     );
+    // issue-4-plan.md §6.6: `auth` is now an async callback (asks the tokenProvider for
+    // a currently-valid token on every handshake) rather than a static object.
+    const [, socketOpts] = ioFactory.mock.calls[0] as [
+      string,
+      { auth: (cb: (d: unknown) => void) => void },
+    ];
+    const authResult = await new Promise((resolve) => socketOpts.auth(resolve));
+    expect(authResult).toEqual({
+      token: "test-token",
+      clientType: "machine-scoped",
+      machineId: "mach_ws",
+    });
     if (result.ok) expect(result.handle.identity.machineId).toBe("mach_ws");
   });
 
@@ -479,6 +508,31 @@ describe("startMachineClient", () => {
       "[machine-client] connect error",
       expect.objectContaining({ error: "Invalid authentication token" }),
     );
+  });
+
+  it("forces a token refresh on an auth-shaped connect_error (issue-4-plan.md §6.6)", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_forcerefresh" })));
+    const fakeSocket = new FakeSocket();
+    const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+    const tokenProvider = fakeTokenProvider();
+    const deps = buildDeps({
+      fetchImpl,
+      ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+      tokenProvider,
+    });
+
+    const result = await startMachineClient(deps);
+    expect(result.ok).toBe(true);
+
+    fakeSocket.trigger("connect_error", new Error("Invalid authentication token"));
+    await vi.waitFor(() => expect(tokenProvider.forceRefreshCalls).toBe(1));
+
+    // A non-auth-shaped error must NOT trigger a refresh — this path is specifically
+    // for a stale/revoked credential, not every possible connect_error.
+    fakeSocket.trigger("connect_error", new Error("xhr poll error"));
+    expect(tokenProvider.forceRefreshCalls).toBe(1);
   });
 
   it("persists the resolved machineId into daemon.state.json when one exists", async () => {

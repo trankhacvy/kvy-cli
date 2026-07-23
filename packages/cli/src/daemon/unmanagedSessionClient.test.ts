@@ -34,7 +34,7 @@ function collectingLogger(): { logger: Logger; warnings: unknown[] } {
 function baseDeps(overrides: Partial<UnmanagedSessionClientDeps> = {}): UnmanagedSessionClientDeps {
   const contentKeyPair = deriveKeyTree(getRandomBytes(32)).content;
   return createUnmanagedSessionClientDeps(
-    { token: "test-token", contentPublicKey: contentKeyPair.publicKey },
+    { getAccessToken: async () => "test-token", contentPublicKey: contentKeyPair.publicKey },
     { serverUrl: "http://server.test", fetchImpl: fakeFetch(201), ...overrides },
   );
 }
@@ -49,7 +49,7 @@ describe("upsertUnmanagedSession", () => {
     }) as unknown as typeof fetch;
 
     const deps = createUnmanagedSessionClientDeps(
-      { token: "tok-1", contentPublicKey: contentKeyPair.publicKey },
+      { getAccessToken: async () => "tok-1", contentPublicKey: contentKeyPair.publicKey },
       { serverUrl: "http://server.test", fetchImpl },
     );
 

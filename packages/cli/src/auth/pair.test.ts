@@ -97,6 +97,7 @@ describe("pairDevice", () => {
       return jsonResponse({
         state: "authorized",
         token: "jwt-token",
+        refreshToken: "refresh-token-1",
         response: encodeBase64(sealed),
       });
     });
@@ -111,6 +112,7 @@ describe("pairDevice", () => {
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
       expect(outcome.result.token).toBe("jwt-token");
+      expect(outcome.result.refreshToken).toBe("refresh-token-1");
       expect(outcome.result.masterSecret).toEqual(masterSecret);
     }
     // Same ephemeral keypair used for every request across the whole dance.
@@ -133,6 +135,7 @@ describe("pairDevice", () => {
       return jsonResponse({
         state: "authorized",
         token: "jwt-token",
+        refreshToken: "refresh-token-1",
         response: encodeBase64(sealed),
       });
     });
@@ -165,6 +168,7 @@ describe("pairDevice", () => {
       return jsonResponse({
         state: "authorized",
         token: "jwt-token",
+        refreshToken: "refresh-token-1",
         response: encodeBase64(sealed),
       });
     });

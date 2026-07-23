@@ -44,8 +44,11 @@ export async function createTestAccount(db: Database) {
     })
     .returning();
   if (!account) throw new Error("createTestAccount: insert returned no row");
-  const { accessToken } = await issueSession(db, { accountId: account.id, clientKind: "web" });
-  return { account, token: accessToken, authHeader: `Bearer ${accessToken}` };
+  const { accessToken, refreshToken } = await issueSession(db, {
+    accountId: account.id,
+    clientKind: "web",
+  });
+  return { account, token: accessToken, refreshToken, authHeader: `Bearer ${accessToken}` };
 }
 
 /**

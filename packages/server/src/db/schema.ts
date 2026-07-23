@@ -88,11 +88,7 @@ export const deviceSessions = pgTable(
     expiresAt: timestamp("expires_at").notNull(),
     revokedAt: timestamp("revoked_at"),
   },
-  (t) => [
-    index().on(t.accountId),
-    index().on(t.familyId),
-    index().on(t.previousRefreshTokenHash),
-  ],
+  (t) => [index().on(t.accountId), index().on(t.familyId), index().on(t.previousRefreshTokenHash)],
 );
 
 // issue-4-plan.md §6.2: single-use, short-lived server nonces for `keys/challenge` +
@@ -223,6 +219,14 @@ export const pairRequests = pgTable("pair_requests", {
   state: text("state").notNull().default("pending"), // 'pending' | 'authorized' | 'expired'
   response: bytea("response"), // sealed box to ephPub: master secret / content key bundle
   token: text("token"), // account access token, set once authorized
+  // issue-4-plan.md §6.3 KNOWN GAP: this should be E2E-sealed inside `response` (the
+  // approver's box), not a second plaintext column — see app/api/pair.ts's docblock.
+  // Relaying it in plaintext, same trust level as the pre-existing `token` column
+  // above, is what lets a paired CLI device refresh its session past the access
+  // token's TTL instead of going stale in 1h with no way back; the real fix (sealing
+  // it into the E2E box so the server never sees the raw refresh token either) is
+  // deferred, not silently dropped.
+  refreshToken: text("refresh_token"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
 });

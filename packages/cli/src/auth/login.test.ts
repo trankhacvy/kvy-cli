@@ -37,7 +37,10 @@ describe("runAuthLogin", () => {
     pairDeviceMock.mockImplementation(
       async (options: { onPairingUrlReady: (u: string) => unknown }) => {
         await options.onPairingUrlReady("http://web.invalid/pair#frag");
-        return { ok: true, result: { token: "jwt-token", masterSecret } };
+        return {
+          ok: true,
+          result: { token: "jwt-token", refreshToken: "refresh-token-1", masterSecret },
+        };
       },
     );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -48,7 +51,7 @@ describe("runAuthLogin", () => {
     expect(code).toBe(0);
     expect(writeCredentialsMock).toHaveBeenCalledTimes(1);
     const written = writeCredentialsMock.mock.calls[0]?.[0];
-    expect(written.token).toBe("jwt-token");
+    expect(written.refreshToken).toBe("refresh-token-1");
     expect(typeof written.masterSecretOrContentBundle).toBe("string");
     expect(displayPairingQrCodeMock).toHaveBeenCalledWith("http://web.invalid/pair#frag");
     expect(logger.info).toHaveBeenCalledWith("auth login: succeeded");

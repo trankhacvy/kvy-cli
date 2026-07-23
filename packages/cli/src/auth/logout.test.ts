@@ -35,7 +35,7 @@ describe("runAuthLogout", () => {
   });
 
   it("clears stored credentials, logs, and exits 0 when logged in", () => {
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const logger = fakeLogger();
 
@@ -47,7 +47,7 @@ describe("runAuthLogout", () => {
   });
 
   it("is idempotent — running logout twice never throws", () => {
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const logger = fakeLogger();
 

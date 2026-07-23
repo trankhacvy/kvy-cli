@@ -31,7 +31,8 @@ export interface UpsertUnmanagedSessionParams {
 
 export interface UnmanagedSessionClientDeps {
   serverUrl: string;
-  token: string;
+  /** issue-4-plan.md §6.6: resolves a fresh access token per call instead of a static string that goes stale. */
+  getAccessToken: () => Promise<string | null>;
   /** Account's X25519 content public key (design §5.1) — wraps the per-row DEK. */
   contentPublicKey: Uint8Array;
   /** Injectable so unit tests never make a real network call. */
@@ -47,7 +48,7 @@ const noopLogger: Logger = {
 };
 
 export function createUnmanagedSessionClientDeps(
-  required: Pick<UnmanagedSessionClientDeps, "token" | "contentPublicKey">,
+  required: Pick<UnmanagedSessionClientDeps, "getAccessToken" | "contentPublicKey">,
   overrides: Partial<UnmanagedSessionClientDeps> = {},
 ): UnmanagedSessionClientDeps {
   return {
@@ -75,11 +76,12 @@ export async function upsertUnmanagedSession(
   const summaryBox = seal(params.summary, dek);
 
   try {
+    const token = (await deps.getAccessToken()) ?? "";
     const response = await deps.fetchImpl(`${deps.serverUrl}/v1/unmanaged-sessions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${deps.token}`,
+        authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         machineId: params.machineId,

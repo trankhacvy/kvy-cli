@@ -23,7 +23,7 @@ function collectingLogger(): { logger: Logger; warnings: unknown[] } {
 
 function baseDeps(overrides: Partial<BlobClientDeps> = {}): BlobClientDeps {
   return createBlobClientDeps(
-    { token: "test-token" },
+    { getAccessToken: async () => "test-token" },
     { serverUrl: "http://server.test", ...overrides },
   );
 }

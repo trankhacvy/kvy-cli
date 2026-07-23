@@ -40,9 +40,9 @@ import type {
   SpawnFn,
 } from "../daemon/processLauncher.js";
 import {
-  resolveResumeDirectoryFromRecord,
   type ResumeSessionDeps,
   ResumeSessionError,
+  resolveResumeDirectoryFromRecord,
   resumeSession,
 } from "../daemon/resumeSession.js";
 import { createSessionRegistry } from "../daemon/sessionRegistry.js";

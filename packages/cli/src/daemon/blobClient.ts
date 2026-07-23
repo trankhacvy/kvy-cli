@@ -28,7 +28,8 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 
 export interface BlobClientDeps {
   serverUrl: string;
-  token: string;
+  /** issue-4-plan.md §6.6: resolves a fresh access token per call (via `auth/tokenProvider.ts`) instead of a static string that goes stale. */
+  getAccessToken: () => Promise<string | null>;
   /** Injectable so unit tests never make a real network call. */
   fetchImpl: typeof fetch;
   logger: Logger;
@@ -42,7 +43,7 @@ const noopLogger: Logger = {
 };
 
 export function createBlobClientDeps(
-  required: Pick<BlobClientDeps, "token">,
+  required: Pick<BlobClientDeps, "getAccessToken">,
   overrides: Partial<BlobClientDeps> = {},
 ): BlobClientDeps {
   return {
@@ -67,9 +68,10 @@ async function fetchJson(
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const token = (await deps.getAccessToken()) ?? "";
     const response = await deps.fetchImpl(`${deps.serverUrl}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${deps.token}` },
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
       signal: controller.signal,
     });

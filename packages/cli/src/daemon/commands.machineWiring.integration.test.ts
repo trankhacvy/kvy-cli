@@ -53,6 +53,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   let app: FastifyInstance;
   let serverUrl: string;
   let token: string;
+  let refreshToken: string;
   let accountId: string;
 
   let homeDir: string;
@@ -75,6 +76,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
 
     const account = await createTestAccount(db);
     token = account.token;
+    refreshToken = account.refreshToken;
     accountId = account.account.id;
   });
 
@@ -89,7 +91,10 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     await execFileAsync("git", ["init"], { cwd: workspaceDir });
 
     masterSecret = getRandomBytes(32);
-    writeCredentials({ token, masterSecretOrContentBundle: encodeBase64(masterSecret) }, homeDir);
+    writeCredentials(
+      { refreshToken, masterSecretOrContentBundle: encodeBase64(masterSecret) },
+      homeDir,
+    );
 
     dek = null;
     triggerShutdown = undefined;
@@ -266,7 +271,10 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     // ambiguously match that OTHER test's row instead of this boot's own.
     const account = await createTestAccount(db);
     writeCredentials(
-      { token: account.token, masterSecretOrContentBundle: encodeBase64(masterSecret) },
+      {
+        refreshToken: account.refreshToken,
+        masterSecretOrContentBundle: encodeBase64(masterSecret),
+      },
       homeDir,
     );
 

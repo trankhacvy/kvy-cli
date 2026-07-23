@@ -121,6 +121,7 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
+import { resolveAccessToken } from "../auth/resolveAccessToken.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
@@ -398,6 +399,27 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
+
+  // issue-4-plan.md §6.6: resolves a fresh access token from the stored refresh token
+  // (rotating it, and persisting the rotation, if the cached one on disk is stale)
+  // instead of reading the old fixed `accessToken` straight off disk. **Known
+  // scope cut:** this is resolved ONCE per `falcon claude` invocation, not re-refreshed
+  // for the lifetime of a long-running interactive session the way the daemon's
+  // `machineClient.ts` now is — a session that outlives the access token's TTL will see
+  // its outbox/status/session-scoped-socket calls start failing until the next `falcon
+  // claude` restart. Threading a live `TokenProvider` through the outbox/status/
+  // session-client HTTP+WS paths here is real follow-up work, not done in this pass.
+  const accessToken = await resolveAccessToken(credentials, {
+    backendUrl,
+    homeDir: deps.homeDir,
+    fetchImpl,
+    logger,
+  });
+  if (!accessToken) {
+    writeError("falcon claude: could not obtain an access token — run `falcon auth login` again\n");
+    return 1;
+  }
+
   const sessionMetadata = {
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,
     path: deps.workingDirectory,
@@ -449,7 +471,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       createBootstrapSessionDeps({
         serverUrl: backendUrl,
         fetchImpl,
-        getAuthToken: () => credentials.token,
+        getAuthToken: () => accessToken,
         logger,
       }),
       {
@@ -514,7 +536,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // so the web can show "Ended"/"Failed" instead of inferring nothing.
   const statusDeps = {
     backendUrl,
-    accessToken: credentials.token,
+    accessToken: accessToken,
     fetchImpl,
     logger,
   };
@@ -595,7 +617,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      headers: { authorization: `Bearer ${credentials.token}` },
+      headers: { authorization: `Bearer ${accessToken}` },
       fetchImpl,
     }),
     homeDir: deps.homeDir,
@@ -604,7 +626,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const sessionMetadataUpdater = createSessionMetadataUpdater({
     sessionId: bootstrap.sessionId,
     serverUrl: backendUrl,
-    token: credentials.token,
+    token: accessToken,
     dek: bootstrap.dek,
     metadata: sessionMetadata,
     metadataVersion: 0,
@@ -629,7 +651,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     createSessionClientDeps(
       {
         serverUrl: backendUrl,
-        token: credentials.token,
+        token: accessToken,
         sessionId: bootstrap.sessionId,
       },
       { logger },

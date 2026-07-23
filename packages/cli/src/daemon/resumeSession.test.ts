@@ -76,7 +76,9 @@ describe("resumeSession", () => {
 
     await resumeSession("sess_1", {
       registry,
-      awaiter: fakeAwaiter({ waitFor: vi.fn(async (pid: number) => ({ sessionId: "sess_1", pid })) }),
+      awaiter: fakeAwaiter({
+        waitFor: vi.fn(async (pid: number) => ({ sessionId: "sess_1", pid })),
+      }),
       // The resolved directory the relaunch runs in — this exact string must
       // be threaded into `trackSpawned` so `scanForLiveSessionInDirectory`
       // can match the resumed session again.
@@ -87,10 +89,7 @@ describe("resumeSession", () => {
     });
 
     // Not just "called" — called with the directory as the second argument.
-    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(
-      777,
-      "/Users/vy/projects/falcon",
-    );
+    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(777, "/Users/vy/projects/falcon");
   });
 
   it("uses the codex CLI name for a persisted codex session", async () => {

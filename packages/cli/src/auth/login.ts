@@ -69,7 +69,7 @@ export async function runAuthLogin(logger: Logger): Promise<number> {
     }
 
     writeCredentials({
-      token: outcome.result.token,
+      refreshToken: outcome.result.refreshToken,
       masterSecretOrContentBundle: encodeBase64(outcome.result.masterSecret),
     });
 

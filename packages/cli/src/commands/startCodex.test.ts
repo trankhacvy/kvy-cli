@@ -15,10 +15,18 @@ import { runStartCodexCommand, type StartCodexCommandDeps } from "./startCodex.j
 
 function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
-    token: "test-token",
+    refreshToken: "test-refresh-token",
     masterSecretOrContentBundle: encodeBase64(getRandomBytes(32)),
     ...overrides,
   };
+}
+
+/** issue-4-plan.md §6.6: default `/v1/auth/refresh` response for resolveAccessToken. */
+async function defaultFetchImpl(): Promise<Response> {
+  return new Response(
+    JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
+    { status: 200 },
+  );
 }
 
 function fakeDaemonState(overrides: Partial<DaemonState> = {}): DaemonState {
@@ -85,6 +93,7 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
     workingDirectory: "/fake/workdir",
     codexArgs: [],
     readCredentials: () => fakeCredentials(),
+    fetchImpl: defaultFetchImpl as unknown as typeof fetch,
     readDaemonState: async () => fakeDaemonState(),
     detectCodex: async () => ({ installed: true, authenticated: true, version: "1.0.0" }),
     bootstrapSession: vi.fn(async () => ({

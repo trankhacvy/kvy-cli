@@ -1,0 +1,1 @@
+ALTER TABLE "pair_requests" ADD COLUMN "refresh_token" text;

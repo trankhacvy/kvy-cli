@@ -27,6 +27,7 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
+import { resolveAccessToken } from "../auth/resolveAccessToken.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import {
   CODEX_NO_LOCAL_MODE_NOTE,
@@ -172,13 +173,27 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
 
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
 
+  // issue-4-plan.md §6.6: same single-resolve-per-invocation approach as
+  // `commands/start.ts` — see that module's own comment for the known scope cut
+  // (no live refresh across a long-running session, only at process start).
+  const accessToken = await resolveAccessToken(credentials, {
+    backendUrl,
+    homeDir: deps.homeDir,
+    fetchImpl,
+    logger,
+  });
+  if (!accessToken) {
+    writeError("falcon codex: could not obtain an access token — run `falcon auth login` again\n");
+    return 1;
+  }
+
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {
     bootstrap = await doBootstrapSession(
       createBootstrapSessionDeps({
         serverUrl: backendUrl,
         fetchImpl,
-        getAuthToken: () => credentials.token,
+        getAuthToken: () => accessToken,
         logger,
       }),
       {
@@ -208,7 +223,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      headers: { authorization: `Bearer ${credentials.token}` },
+      headers: { authorization: `Bearer ${accessToken}` },
       fetchImpl,
     }),
     homeDir: deps.homeDir,
@@ -217,7 +232,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
 
   const sessionClient = startSessionClient(
     createSessionClientDeps(
-      { serverUrl: backendUrl, token: credentials.token, sessionId: bootstrap.sessionId },
+      { serverUrl: backendUrl, token: accessToken, sessionId: bootstrap.sessionId },
       { logger },
     ),
   );

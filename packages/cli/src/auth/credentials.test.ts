@@ -25,7 +25,7 @@ describe("readCredentials", () => {
   });
 
   it("returns null for a malformed credentials file", () => {
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
     // Overwrite with garbage after a valid write ensures the directory already exists.
     const file = credentialsPath(homeDir);
     writeFileSync(file, "not json");
@@ -35,29 +35,32 @@ describe("readCredentials", () => {
 
 describe("writeCredentials / readCredentials round-trip", () => {
   it("persists and reads back the same credentials", () => {
-    writeCredentials({ token: "abc.def.ghi", masterSecretOrContentBundle: "c2VjcmV0" }, homeDir);
+    writeCredentials(
+      { refreshToken: "abc.def.ghi", masterSecretOrContentBundle: "c2VjcmV0" },
+      homeDir,
+    );
     expect(readCredentials(homeDir)).toEqual({
-      token: "abc.def.ghi",
+      refreshToken: "abc.def.ghi",
       masterSecretOrContentBundle: "c2VjcmV0",
     });
   });
 
   it("creates the home directory if missing", () => {
     const nested = path.join(homeDir, "nested", "falcon-home");
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, nested);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, nested);
     expect(existsSync(credentialsPath(nested))).toBe(true);
   });
 
   it("writes the file chmod 0600", () => {
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
     const mode = statSync(credentialsPath(homeDir)).mode & 0o777;
     expect(mode).toBe(0o600);
   });
 
   it("re-chmods to 0600 even if the file previously had looser permissions", () => {
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
     chmodSync(credentialsPath(homeDir), 0o644);
-    writeCredentials({ token: "t2", masterSecretOrContentBundle: "s2" }, homeDir);
+    writeCredentials({ refreshToken: "t2", masterSecretOrContentBundle: "s2" }, homeDir);
     const mode = statSync(credentialsPath(homeDir)).mode & 0o777;
     expect(mode).toBe(0o600);
   });
@@ -65,7 +68,7 @@ describe("writeCredentials / readCredentials round-trip", () => {
 
 describe("clearCredentials", () => {
   it("removes an existing credentials file", () => {
-    writeCredentials({ token: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
     clearCredentials(homeDir);
     expect(existsSync(credentialsPath(homeDir))).toBe(false);
   });

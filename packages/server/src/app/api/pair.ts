@@ -54,7 +54,12 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
           200: z.union([
             z.object({ state: z.literal("pending") }),
             z.object({ state: z.literal("expired") }),
-            z.object({ state: z.literal("authorized"), token: z.string(), response: z.string() }),
+            z.object({
+              state: z.literal("authorized"),
+              token: z.string(),
+              refreshToken: z.string(),
+              response: z.string(),
+            }),
           ]),
           401: ErrorSchema,
         },
@@ -88,10 +93,11 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       if (isExpired(row.expiresAt)) {
         return reply.send({ state: "expired" });
       }
-      if (row.response && row.token) {
+      if (row.response && row.token && row.refreshToken) {
         return reply.send({
           state: "authorized",
           token: row.token,
+          refreshToken: row.refreshToken,
           response: encodeBase64(row.response),
         });
       }
@@ -175,20 +181,27 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       // a second concurrent approve matches zero rows and silently no-ops.
       //
       // issue-4-plan.md §6.3 KNOWN GAP: the approving device now mints a real device
-      // session (not a bare stateless token), but this route still stores the resulting
-      // access token in `pairRequests.token` in PLAINTEXT and serves it back over the
-      // unauthenticated poll route above — the exact escalation §6.3 flags. The full fix
-      // (seal the *refresh* token into the same E2E box as the master secret, store only
-      // its hash, drop this plaintext column) is cross-package (crypto sealed-payload
-      // version bump + CLI/web unseal changes) and is deferred — tracked in
-      // docs/issue-4-plan.md's Phase 2 checklist as not yet done.
-      const { accessToken } = await issueSession(db, {
+      // session (§4.2's `issueSession`) instead of a bare stateless token — the new
+      // device gets a real refresh token, not just a 1h-then-dead access token — but
+      // this route still stores BOTH in `pairRequests` in PLAINTEXT and serves them
+      // back over the unauthenticated poll route above, the exact escalation §6.3
+      // flags. The full fix (seal the refresh token into the same E2E box as the
+      // master secret, store only its hash, drop these plaintext columns) is
+      // cross-package (crypto sealed-payload version bump + CLI/web unseal changes)
+      // and is deferred — tracked in docs/issue-4-plan.md's Phase 2 checklist as not
+      // yet done.
+      const { accessToken, refreshToken } = await issueSession(db, {
         accountId: request.accountId,
         clientKind: "cli-daemon",
       });
       await db
         .update(pairRequests)
-        .set({ response: decodeBase64(response), token: accessToken, state: "authorized" })
+        .set({
+          response: decodeBase64(response),
+          token: accessToken,
+          refreshToken,
+          state: "authorized",
+        })
         .where(and(eq(pairRequests.ephPub, ephPub), isNull(pairRequests.response)));
 
       return reply.send({ success: true });

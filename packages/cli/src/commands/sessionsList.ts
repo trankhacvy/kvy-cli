@@ -32,6 +32,7 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
+import { resolveAccessToken } from "../auth/resolveAccessToken.js";
 import type { Logger } from "../logger.js";
 
 export interface SessionsListCommandDeps {
@@ -70,9 +71,12 @@ async function fetchRemoteSessions(
 ): Promise<RemoteSessionsResult> {
   if (!credentials) return { type: "not-logged-in" };
 
+  const accessToken = await resolveAccessToken(credentials, { backendUrl, fetchImpl, logger });
+  if (!accessToken) return { type: "not-logged-in" };
+
   try {
     const res = await fetchImpl(`${backendUrl}/v1/sessions?limit=${REMOTE_LIST_LIMIT}`, {
-      headers: { authorization: `Bearer ${credentials.token}` },
+      headers: { authorization: `Bearer ${accessToken}` },
       signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS),
     });
     if (!res.ok) {

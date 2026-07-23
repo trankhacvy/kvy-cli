@@ -1,13 +1,11 @@
 /**
- * `falcon auth status` — reports the current local auth state. Deliberately
- * does not verify the stored JWT against the server (that would need a
- * network round trip this command doesn't otherwise make); it decodes the
- * token's claims for display only (see `jwt.ts`) and clearly labels the
- * expiry as unverified.
+ * `falcon auth status` — reports the current local auth state. Deliberately makes no
+ * network call (no live access token is persisted anymore — issue-4-plan.md §6.6 — only
+ * the opaque, non-introspectable refresh token is, so there's nothing to decode
+ * client-side the way the old bare-JWT `token` field allowed).
  */
 import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
 import { credentialsPath, readCredentials } from "./credentials.js";
-import { decodeTokenClaimsUnverified } from "./jwt.js";
 
 function toHex(bytes: Uint8Array): string {
   let hex = "";
@@ -35,14 +33,9 @@ export function runAuthStatus(): number {
     process.stdout.write(`  Account key: ${toHex(signing.publicKey).slice(0, 16)}…\n`);
   }
 
-  const claims = decodeTokenClaimsUnverified(credentials.token);
-  if (claims) {
-    const expiresAt = new Date(claims.expiresAt * 1000);
-    const label = expiresAt.getTime() < Date.now() ? "expired" : "expires";
-    process.stdout.write(`  Token (unverified): ${label} ${expiresAt.toISOString()}\n`);
-  } else {
-    process.stdout.write("  Token: present (could not decode claims for display)\n");
-  }
+  process.stdout.write(
+    "  Refresh token: present (60-day absolute lifetime; no local expiry to show)\n",
+  );
 
   return 0;
 }

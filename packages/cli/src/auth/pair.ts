@@ -57,6 +57,7 @@ export interface PairOptions {
 
 export interface PairSuccess {
   token: string;
+  refreshToken: string;
   masterSecret: Uint8Array;
 }
 
@@ -69,7 +70,12 @@ export type PairOutcome =
 const PairPostResponseSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("pending") }),
   z.object({ state: z.literal("expired") }),
-  z.object({ state: z.literal("authorized"), token: z.string(), response: z.string() }),
+  z.object({
+    state: z.literal("authorized"),
+    token: z.string(),
+    refreshToken: z.string(),
+    response: z.string(),
+  }),
 ]);
 type PairPostResponse = z.infer<typeof PairPostResponseSchema>;
 
@@ -189,5 +195,8 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
   }
   const masterSecret = payload.slice(1);
 
-  return { ok: true, result: { token: state.token, masterSecret } };
+  return {
+    ok: true,
+    result: { token: state.token, refreshToken: state.refreshToken, masterSecret },
+  };
 }
