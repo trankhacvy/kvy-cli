@@ -201,7 +201,10 @@ export async function buildTestStack(): Promise<TestStack> {
   await execFileAsync("git", ["init"], { cwd: workspaceDir });
 
   const masterSecret = getRandomBytes(32);
-  writeCredentials({ token, masterSecretOrContentBundle: encodeBase64(masterSecret) }, homeDir);
+  writeCredentials(
+    { refreshToken: account.refreshToken, masterSecretOrContentBundle: encodeBase64(masterSecret) },
+    homeDir,
+  );
   const keyTree = deriveKeyTree(masterSecret);
 
   const sessions = new Map<string, TrackedSession>();
