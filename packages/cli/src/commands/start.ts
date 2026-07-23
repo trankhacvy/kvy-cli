@@ -106,7 +106,7 @@
  * child's own exit code.
  */
 import path from "node:path";
-import { decodeBase64, deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
+import { deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
 import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
@@ -125,6 +125,8 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
+import { resolveKeyMaterial } from "../auth/keyMaterial.js";
+import { createTokenProviderForCredentials } from "../auth/resolveAccessToken.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
@@ -387,13 +389,22 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // `location` does not carry into the nested run* closures below.
   const claudeCliPath = location.path;
 
-  const masterSecret = decodeBase64(credentials.masterSecretOrContentBundle);
-  if (masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
+  // issue-4-plan.md §6.1: PIN-mode key material can prompt right here — a real
+  // terminal, a human present — so `falcon claude` unwraps interactively when it can
+  // (`process.stdin.isTTY`), and fails closed with the same honest message a
+  // reduced-custody bundle already produced below when it can't (headless/CI/no TTY,
+  // or the PIN was never entered correctly within the retry budget).
+  const masterSecret = await resolveKeyMaterial(
+    credentials.keyMaterial,
+    deps.homeDir,
+    process.stdin.isTTY === true ? {} : undefined,
+  );
+  if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
     // Mirrors `machineIntegration.ts`'s own same guard: a reduced-custody
     // pairing bundle (rather than a full masterSecret) can't derive a
     // content keypair the same way — honest failure, not a wrong-key crash.
     writeError(
-      "falcon claude: stored credentials can't derive a content key for local sessions (reduced-custody pairing?) — run `falcon auth login` on this machine\n",
+      "falcon claude: stored credentials can't derive a content key for local sessions (reduced-custody pairing, or a PIN unlock that didn't succeed) — run `falcon auth login` on this machine\n",
     );
     return 1;
   }
@@ -415,6 +426,30 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
+
+  // issue-4-plan.md §6.6: one `TokenProvider` for this whole `falcon claude` invocation
+  // — mints/caches access tokens from the stored refresh token, rotating (and
+  // persisting the rotation) as needed. The session-scoped WS client
+  // (`session/sessionClient.ts`, wired below) holds onto this SAME provider for its
+  // entire lifetime, so a long-running interactive session survives the access
+  // token's TTL with proactive in-band renewal + a forced refresh on an auth-shaped
+  // `connect_error` — not just a token resolved once at startup. **Remaining scope
+  // cut:** the outbox/status-report/session-metadata HTTP side channels below still
+  // use the token resolved once here, not re-minted from `tokenProvider` per call —
+  // those are short bursts around session start/exit, not a multi-hour-lived
+  // connection, so this is a narrower gap than the WS client's used to be.
+  const tokenProvider = createTokenProviderForCredentials(credentials, {
+    backendUrl,
+    homeDir: deps.homeDir,
+    fetchImpl,
+    logger,
+  });
+  const accessToken = await tokenProvider.getAccessToken();
+  if (!accessToken) {
+    writeError("falcon claude: could not obtain an access token — run `falcon auth login` again\n");
+    return 1;
+  }
+
   const sessionMetadata = {
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,
     path: deps.workingDirectory,
@@ -484,7 +519,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       createBootstrapSessionDeps({
         serverUrl: backendUrl,
         fetchImpl,
-        getAuthToken: () => credentials.token,
+        getAuthToken: () => accessToken,
         logger,
       }),
       {
@@ -550,7 +585,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // so the web can show "Ended"/"Failed" instead of inferring nothing.
   const statusDeps = {
     backendUrl,
-    accessToken: credentials.token,
+    accessToken: accessToken,
     fetchImpl,
     logger,
   };
@@ -631,7 +666,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      headers: { authorization: `Bearer ${credentials.token}` },
+      headers: { authorization: `Bearer ${accessToken}` },
       fetchImpl,
     }),
     homeDir: deps.homeDir,
@@ -640,7 +675,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const sessionMetadataUpdater = createSessionMetadataUpdater({
     sessionId: bootstrap.sessionId,
     serverUrl: backendUrl,
-    token: credentials.token,
+    token: accessToken,
     dek: bootstrap.dek,
     metadata: sessionMetadata,
     metadataVersion: 0,
@@ -665,7 +700,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     createSessionClientDeps(
       {
         serverUrl: backendUrl,
-        token: credentials.token,
+        tokenProvider,
         sessionId: bootstrap.sessionId,
       },
       { logger },

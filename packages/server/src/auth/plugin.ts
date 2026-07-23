@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { TokenCache } from "./token-cache.js";
+import type { ClientKind } from "./tokens.js";
 import { verifyToken } from "./tokens.js";
 
 declare module "fastify" {
@@ -8,8 +9,8 @@ declare module "fastify" {
     /**
      * Route preHandler (falcon-plan.md §16 "0.4 Server foundation"): rejects the
      * request with 401 unless `Authorization: Bearer <token>` carries a valid,
-     * unexpired token; otherwise sets `request.accountId`. Usage on a route once the
-     * DB layer lands: `{ preHandler: app.authenticate }`.
+     * unexpired token; otherwise sets `request.accountId`/`request.sessionId`/
+     * `request.clientKind`. Usage: `{ preHandler: app.authenticate }`.
      */
     authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void>;
   }
@@ -17,6 +18,10 @@ declare module "fastify" {
   interface FastifyRequest {
     /** Set by `app.authenticate`; only defined on routes that use it as a preHandler. */
     accountId: string;
+    /** The `device_sessions.id` (JWT `sid` claim) the request's access token was minted for. */
+    sessionId: string;
+    /** The `device_sessions.clientKind` (JWT `ct` claim) the request's access token was minted for. */
+    clientKind: ClientKind;
   }
 }
 
@@ -41,6 +46,8 @@ export const authPlugin: FastifyPluginAsync = fp(
     const cache = new TokenCache();
 
     app.decorateRequest("accountId", "");
+    app.decorateRequest("sessionId", "");
+    app.decorateRequest("clientKind", "web");
 
     app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractBearerToken(request.headers.authorization);
@@ -52,6 +59,8 @@ export const authPlugin: FastifyPluginAsync = fp(
       const cached = cache.get(token);
       if (cached) {
         request.accountId = cached.accountId;
+        request.sessionId = cached.sessionId;
+        request.clientKind = cached.clientKind;
         return;
       }
 
@@ -63,6 +72,8 @@ export const authPlugin: FastifyPluginAsync = fp(
 
       cache.set(token, verified);
       request.accountId = verified.accountId;
+      request.sessionId = verified.sessionId;
+      request.clientKind = verified.clientKind;
     });
   },
   { name: "auth-plugin" },

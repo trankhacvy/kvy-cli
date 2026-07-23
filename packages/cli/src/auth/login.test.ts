@@ -4,11 +4,18 @@ const pairDeviceMock = vi.fn();
 const openBrowserMock = vi.fn();
 const displayPairingQrCodeMock = vi.fn();
 const writeCredentialsMock = vi.fn();
+const wrapWithDeviceKeyMock = vi.fn();
 
 vi.mock("./pair.js", () => ({ pairDevice: pairDeviceMock }));
 vi.mock("./browser.js", () => ({ openBrowser: openBrowserMock }));
 vi.mock("./qrcode.js", () => ({ displayPairingQrCode: displayPairingQrCodeMock }));
 vi.mock("./credentials.js", () => ({ writeCredentials: writeCredentialsMock }));
+// Non-interactive test process (`process.stdin.isTTY` is falsy under vitest) always
+// takes `wrapNewKeyMaterial`'s device-key branch — mocked so this suite never shells
+// out to the real macOS Keychain or touches a real `~/.falcon/device.key`.
+vi.mock("./deviceKey.js", () => ({
+  wrapWithDeviceKey: wrapWithDeviceKeyMock,
+}));
 
 const { runAuthLogin } = await import("./login.js");
 
@@ -25,6 +32,7 @@ beforeEach(() => {
   openBrowserMock.mockReset().mockResolvedValue(false);
   displayPairingQrCodeMock.mockReset();
   writeCredentialsMock.mockReset();
+  wrapWithDeviceKeyMock.mockReset().mockReturnValue({ v: 1, nonce: "n", ct: "c" });
 });
 
 afterEach(() => {
@@ -37,7 +45,10 @@ describe("runAuthLogin", () => {
     pairDeviceMock.mockImplementation(
       async (options: { onPairingUrlReady: (u: string) => unknown }) => {
         await options.onPairingUrlReady("http://web.invalid/pair#frag");
-        return { ok: true, result: { token: "jwt-token", masterSecret } };
+        return {
+          ok: true,
+          result: { refreshToken: "refresh-token-1", masterSecret },
+        };
       },
     );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -48,8 +59,10 @@ describe("runAuthLogin", () => {
     expect(code).toBe(0);
     expect(writeCredentialsMock).toHaveBeenCalledTimes(1);
     const written = writeCredentialsMock.mock.calls[0]?.[0];
-    expect(written.token).toBe("jwt-token");
-    expect(typeof written.masterSecretOrContentBundle).toBe("string");
+    expect(written.refreshToken).toBe("refresh-token-1");
+    // Non-interactive test process -> device-key mode (mocked above), never PIN mode.
+    expect(written.keyMaterial).toEqual({ mode: "device", wrapped: { v: 1, nonce: "n", ct: "c" } });
+    expect(wrapWithDeviceKeyMock).toHaveBeenCalledWith(masterSecret, expect.any(String));
     expect(displayPairingQrCodeMock).toHaveBeenCalledWith("http://web.invalid/pair#frag");
     expect(logger.info).toHaveBeenCalledWith("auth login: succeeded");
     expect(joinedOutput(stdout)).toContain("Logged in to Falcon.");

@@ -1,11 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
+import { getRandomBytes } from "@falcon/crypto";
 import { createEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { AcpRemoteHandle } from "../acp/acpRemote.js";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { ProviderDetectionResult } from "../codex/index.js";
 import type { DaemonState } from "../daemon/state.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
@@ -15,10 +16,18 @@ import { runStartCodexCommand, type StartCodexCommandDeps } from "./startCodex.j
 
 function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
-    token: "test-token",
-    masterSecretOrContentBundle: encodeBase64(getRandomBytes(32)),
+    refreshToken: "test-refresh-token",
+    keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
     ...overrides,
   };
+}
+
+/** issue-4-plan.md §6.6: default `/v1/auth/refresh` response for resolveAccessToken. */
+async function defaultFetchImpl(): Promise<Response> {
+  return new Response(
+    JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
+    { status: 200 },
+  );
 }
 
 function fakeDaemonState(overrides: Partial<DaemonState> = {}): DaemonState {
@@ -85,6 +94,7 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
     workingDirectory: "/fake/workdir",
     codexArgs: [],
     readCredentials: () => fakeCredentials(),
+    fetchImpl: defaultFetchImpl as unknown as typeof fetch,
     readDaemonState: async () => fakeDaemonState(),
     detectCodex: async () => ({ installed: true, authenticated: true, version: "1.0.0" }),
     bootstrapSession: vi.fn(async () => ({

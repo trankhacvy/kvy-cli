@@ -15,6 +15,34 @@
       "when": 1784212700933,
       "tag": "0001_clear_starjammers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1784812717922,
+      "tag": "0002_rapid_richard_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1784813253464,
+      "tag": "0003_closed_ravenous",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784819133898,
+      "tag": "0004_elite_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784828743191,
+      "tag": "0005_broad_wong",
+      "breakpoints": true
     }
   ]
 }

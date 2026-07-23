@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { PGlite } from "@electric-sql/pglite";
-import { deriveKeyTree, encodeBase64, getRandomBytes, open, seal, unwrapDek } from "@falcon/crypto";
+import { deriveKeyTree, getRandomBytes, open, seal, unwrapDek } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
@@ -19,6 +19,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { createTestAccount, createTestDb } from "../../../server/src/app/routes/testHelpers.js";
 import { buildServer } from "../../../server/src/app/server.js";
 import { writeCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { Logger } from "../logger.js";
 import { readSettings } from "../persistence.js";
 import { createDaemonCommandDeps, type DaemonCommandDeps, runDaemonStartSync } from "./commands.js";
@@ -53,6 +54,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   let app: FastifyInstance;
   let serverUrl: string;
   let token: string;
+  let refreshToken: string;
   let accountId: string;
 
   let homeDir: string;
@@ -75,6 +77,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
 
     const account = await createTestAccount(db);
     token = account.token;
+    refreshToken = account.refreshToken;
     accountId = account.account.id;
   });
 
@@ -89,7 +92,10 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     await execFileAsync("git", ["init"], { cwd: workspaceDir });
 
     masterSecret = getRandomBytes(32);
-    writeCredentials({ token, masterSecretOrContentBundle: encodeBase64(masterSecret) }, homeDir);
+    writeCredentials(
+      { refreshToken, keyMaterial: plaintextFallbackKeyMaterial(masterSecret) },
+      homeDir,
+    );
 
     dek = null;
     triggerShutdown = undefined;
@@ -266,7 +272,10 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     // ambiguously match that OTHER test's row instead of this boot's own.
     const account = await createTestAccount(db);
     writeCredentials(
-      { token: account.token, masterSecretOrContentBundle: encodeBase64(masterSecret) },
+      {
+        refreshToken: account.refreshToken,
+        keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+      },
       homeDir,
     );
 

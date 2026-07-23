@@ -36,7 +36,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "libsodium-wrappers": "^0.8.2",
+    "libsodium-wrappers-sumo": "^0.8.2",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {

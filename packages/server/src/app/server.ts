@@ -8,8 +8,10 @@ import {
 } from "fastify-type-provider-zod";
 import {
   authPlugin,
+  createDevLoggerEmailTransport,
   defaultGithubCodeExchanger,
   defaultOAuthVerifier,
+  type EmailTransport,
   type GithubCodeExchanger,
   type OAuthVerifier,
 } from "../auth/index.js";
@@ -25,22 +27,29 @@ import type { Database } from "../db/types.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
 import { pairRoutes } from "./api/pair.js";
-import { eventRouter as defaultEventRouter, type EventRouterPort } from "./events/eventRouter.js";
+import {
+  eventRouter as defaultEventRouter,
+  disconnectSession,
+  type EventRouterPort,
+} from "./events/eventRouter.js";
 import { buildPushDispatcher } from "./push/dispatch.js";
 import type { PushDispatcherPort } from "./push/types.js";
-import { buildAuthRoutes } from "./routes/auth.js";
 import { buildBlobsRoutes } from "./routes/blobs.js";
+import { buildKeysRoutes } from "./routes/keys.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
 import { metricsRoutes, recordHttpRequest } from "./routes/metrics.js";
 import { buildNotificationSettingsRoutes } from "./routes/notificationSettings.js";
 import { buildOAuthRoutes } from "./routes/oauth.js";
+import { buildPasswordRoutes } from "./routes/password.js";
 import { buildPushRoutes } from "./routes/push.js";
+import { buildRefreshRoutes } from "./routes/refresh.js";
 import { buildSessionArchiveRoutes } from "./routes/sessionArchive.js";
 import { buildSessionCasRoutes } from "./routes/sessionCas.js";
 import { buildSessionNotifyRoutes } from "./routes/sessionNotify.js";
 import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
+import { buildSessionsAdminRoutes } from "./routes/sessionsAdmin.js";
 import { buildSyncRoutes } from "./routes/sync.js";
 import { buildTelegramLinkRoutes } from "./routes/telegramLink.js";
 import { buildUnmanagedSessionsRoutes } from "./routes/unmanagedSessions.js";
@@ -79,6 +88,8 @@ export async function buildServer(
     blobStorage?: BlobStorageDriver;
     /** Only consulted when `blobStorage.kind === "local"`; defaults to `resolveLocalDriverConfig(env)`. Tests inject a throwaway temp dir here instead of touching `~/.falcon/server/blobs` or process env. */
     blobLocalConfig?: LocalDriverConfig;
+    /** Defaults to the dev-logger transport (`auth/email.ts`) — no real SMTP wired up yet (issue-4-plan.md Phase 0). Tests inject a recording fake to assert on. */
+    emailTransport?: EmailTransport;
   } = {},
 ) {
   const db = deps.db ?? defaultDb;
@@ -103,6 +114,8 @@ export async function buildServer(
   // typed route registered below (design §3: "Typed routes").
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+
+  const emailTransport = deps.emailTransport ?? createDevLoggerEmailTransport(app.log);
 
   // HTTP CORS for the split-origin self-host shape (falcon-system-design.md §5.3/§9,
   // plan.md §16 "4.3 Distribution & self-host": web is a static export served from a
@@ -175,12 +188,19 @@ export async function buildServer(
 
   await app.register(healthRoutes);
   await app.register(metricsRoutes);
-  await app.register(buildAuthRoutes(db));
   await app.register(
     buildOAuthRoutes(
       db,
       deps.oauthVerifier ?? defaultOAuthVerifier,
       deps.githubExchanger ?? defaultGithubCodeExchanger,
+    ),
+  );
+  await app.register(buildRefreshRoutes(db));
+  await app.register(buildPasswordRoutes(db, emailTransport));
+  await app.register(buildKeysRoutes(db, deps.oauthVerifier ?? defaultOAuthVerifier));
+  await app.register(
+    buildSessionsAdminRoutes(db, (accountId, sessionId) =>
+      disconnectSession(defaultEventRouter, accountId, sessionId),
     ),
   );
   await app.register(pairRoutes);

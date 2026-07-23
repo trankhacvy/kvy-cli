@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { verifyToken } from "../auth/tokens.js";
 import { env } from "../config.js";
-import { machines } from "../db/schema.js";
+import { deviceSessions, machines } from "../db/schema.js";
 import type { Database } from "../db/types.js";
 import {
   buildMachinePresenceEphemeral,
@@ -86,10 +86,35 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
       return;
     }
 
+    // issue-4-plan.md §4.5a: a stateless access token can't itself carry revocation, so
+    // the one place this server ever hits the DB for it is right here, at connect —
+    // a single cheap row lookup, not a per-request cost, and the reason revocation is
+    // "immediate on live WebSockets" per §9 rather than bounded only by the access
+    // token's own (now 15m) TTL.
+    const deviceSession = await db.query.deviceSessions.findFirst({
+      where: eq(deviceSessions.id, verified.sessionId),
+    });
+    if (
+      !deviceSession ||
+      deviceSession.revokedAt ||
+      deviceSession.expiresAt.getTime() < Date.now()
+    ) {
+      app.log.warn({ module: "websocket" }, "socket connect rejected: session revoked or expired");
+      next(new Error("Session revoked"));
+      return;
+    }
+
     socket.data.accountId = verified.accountId;
     socket.data.clientType = clientType ?? "user-scoped";
     socket.data.sessionId = sessionId;
     socket.data.machineId = machineId;
+    // The access token's own claimed `device_sessions.id` — deliberately a DIFFERENT
+    // field from `sessionId` above, which names the session-*scoped* client's own
+    // provider session (unrelated to auth) and must not be clobbered. `authSessionId` is
+    // what the revoke routes' `disconnectSession` matches against to find this exact
+    // live connection, and what the expiry timer below re-arms on `renew-token` (§4.5b).
+    socket.data.authSessionId = verified.sessionId;
+    socket.data.tokenExpiresAt = verified.expiresAt;
     // Read the initial app-state from the handshake to close the race window between
     // connect and the first async `app-state` event; the `app-state` listener below
     // keeps it current for the rest of the connection's lifetime.
@@ -134,6 +159,40 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
 
     socket.on("app-state", (data: { state?: string }) => {
       socket.data.appState = data?.state === "active" ? "active" : "background";
+    });
+
+    // In-band renewal (§4.5b): a hard disconnect timed to the access token's own `exp`
+    // would flap the connection every 15 minutes for every client — exactly the
+    // "disconnect storm" (and, for the daemon, the machine-presence flap) issue #4
+    // reported. Instead: arm a timer for the CURRENT token's expiry; a client that
+    // refreshes and emits `renew-token` before it fires gets a fresh deadline and the
+    // socket never drops. One that doesn't (dead refresh token, client bug, or a
+    // genuinely revoked session) is disconnected exactly once, at expiry — no earlier.
+    let expiryTimer: ReturnType<typeof setTimeout> | undefined;
+    const armExpiryTimer = (expiresAtEpochSeconds: number): void => {
+      clearTimeout(expiryTimer);
+      const delayMs = Math.max(0, expiresAtEpochSeconds * 1000 - Date.now());
+      expiryTimer = setTimeout(() => socket.disconnect(true), delayMs);
+    };
+    armExpiryTimer(socket.data.tokenExpiresAt as number);
+
+    socket.on("renew-token", async (rawToken: string, ack?: (ok: boolean) => void) => {
+      const verified = await verifyToken(rawToken);
+      const stillSameAccount = verified && verified.accountId === accountId;
+      const deviceSession =
+        stillSameAccount &&
+        (await db.query.deviceSessions.findFirst({
+          where: eq(deviceSessions.id, verified.sessionId),
+        }));
+      if (!stillSameAccount || !deviceSession || deviceSession.revokedAt) {
+        ack?.(false);
+        socket.disconnect(true);
+        return;
+      }
+      socket.data.authSessionId = verified.sessionId;
+      socket.data.tokenExpiresAt = verified.expiresAt;
+      armExpiryTimer(verified.expiresAt);
+      ack?.(true);
     });
 
     // Session-scoped keepalive (`packages/cli/src/session/sessionClient.ts`'s
@@ -195,6 +254,7 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
     }
 
     socket.on("disconnect", () => {
+      clearTimeout(expiryTimer);
       eventRouter.removeConnection(accountId, connection);
       recordWsConnectionClosed(connection.connectionType);
       app.log.info({ module: "websocket" }, `socket disconnected: account=${accountId}`);

@@ -89,14 +89,15 @@ describe("pairDevice", () => {
         return jsonResponse({ state: "pending" });
       }
       // Matches the real approver's wire format exactly (packages/web/src/crypto/
-      // worker-handler.ts's `sealForPeer`: `[version(1) | masterSecret(32)]`) — sealing
-      // the bare masterSecret here would let this test pass while the real pairing
-      // flow (which has the version-byte prefix) still failed to decode.
-      const versionedPayload = new Uint8Array([0x00, ...masterSecret]);
+      // worker-handler.ts's `sealForPeer`: `[version(1) | masterSecret(32) |
+      // refreshToken]`, issue-4-plan.md §6.3) — sealing the bare masterSecret here
+      // would let this test pass while the real pairing flow (which has the
+      // version-byte prefix and the trailing refresh token) still failed to decode.
+      const refreshTokenBytes = new TextEncoder().encode("refresh-token-1");
+      const versionedPayload = new Uint8Array([0x01, ...masterSecret, ...refreshTokenBytes]);
       const sealed = libsodiumEncryptForPublicKey(versionedPayload, decodeBase64(body.ephPub));
       return jsonResponse({
         state: "authorized",
-        token: "jwt-token",
         response: encodeBase64(sealed),
       });
     });
@@ -110,7 +111,7 @@ describe("pairDevice", () => {
 
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
-      expect(outcome.result.token).toBe("jwt-token");
+      expect(outcome.result.refreshToken).toBe("refresh-token-1");
       expect(outcome.result.masterSecret).toEqual(masterSecret);
     }
     // Same ephemeral keypair used for every request across the whole dance.
@@ -132,7 +133,6 @@ describe("pairDevice", () => {
       const sealed = libsodiumEncryptForPublicKey(other, bogusRecipient);
       return jsonResponse({
         state: "authorized",
-        token: "jwt-token",
         response: encodeBase64(sealed),
       });
     });
@@ -157,14 +157,14 @@ describe("pairDevice", () => {
       posts++;
       if (posts === 1) return jsonResponse({ state: "pending" });
       const body = JSON.parse((init?.body as string) ?? "{}") as { ephPub: string };
-      // Opens fine (correct recipient), but isn't the expected `[version | masterSecret]`
-      // shape — a bare 32-byte payload with no version prefix, exactly the bug this test
+      // Opens fine (correct recipient), but isn't the expected
+      // `[version | masterSecret | refreshToken]` shape — a bare 32-byte payload with
+      // no version prefix (and no trailing refresh token), exactly the bug this test
       // guards against regressing to.
       const bareMasterSecret = getRandomBytes(32);
       const sealed = libsodiumEncryptForPublicKey(bareMasterSecret, decodeBase64(body.ephPub));
       return jsonResponse({
         state: "authorized",
-        token: "jwt-token",
         response: encodeBase64(sealed),
       });
     });

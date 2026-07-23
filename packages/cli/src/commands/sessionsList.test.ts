@@ -80,10 +80,23 @@ describe("runSessionsListCommand", () => {
     expect(written.join("")).toContain("not logged in");
   });
 
+  // issue-4-plan.md §6.6: `readCredentials` now only stores a `refreshToken` — resolving
+  // an access token means the command's own `fetchImpl` first sees a `/v1/auth/refresh`
+  // call (via `resolveAccessToken`) before the actual `/v1/sessions` request.
+  function fakeRefresh(accessToken: string) {
+    return async () =>
+      new Response(JSON.stringify({ accessToken, refreshToken: "rotated-refresh" }), {
+        status: 200,
+      });
+  }
+
   it("fetches and formats remote sessions with a bearer token when logged in", async () => {
     const fetchImpl = vi.fn(async (url: string, init: RequestInit) => {
+      if (url.toString().endsWith("/v1/auth/refresh")) return fakeRefresh("test-access-token")();
       expect(url).toBe("http://backend.example/v1/sessions?limit=50");
-      expect((init.headers as Record<string, string>).authorization).toBe("Bearer test-token");
+      expect((init.headers as Record<string, string>).authorization).toBe(
+        "Bearer test-access-token",
+      );
       return new Response(
         JSON.stringify({
           sessions: [
@@ -104,13 +117,16 @@ describe("runSessionsListCommand", () => {
     const code = await runSessionsListCommand(
       baseDeps({
         backendUrl: "http://backend.example",
-        readCredentials: () => ({ token: "test-token", masterSecretOrContentBundle: "x" }),
+        readCredentials: () => ({
+          refreshToken: "test-refresh-token",
+          keyMaterial: { mode: "plaintext-fallback", bundle: "x" },
+        }),
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
     );
 
     expect(code).toBe(0);
-    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
     const output = written.join("");
     expect(output).toContain("row_1");
     expect(output).toContain("machine-a:/proj");
@@ -118,11 +134,17 @@ describe("runSessionsListCommand", () => {
   });
 
   it("reports a network/HTTP failure inline rather than failing the whole command", async () => {
-    const fetchImpl = vi.fn(async () => new Response(null, { status: 500 }));
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.toString().endsWith("/v1/auth/refresh")) return fakeRefresh("test-access-token")();
+      return new Response(null, { status: 500 });
+    });
 
     const code = await runSessionsListCommand(
       baseDeps({
-        readCredentials: () => ({ token: "test-token", masterSecretOrContentBundle: "x" }),
+        readCredentials: () => ({
+          refreshToken: "test-refresh-token",
+          keyMaterial: { mode: "plaintext-fallback", bundle: "x" },
+        }),
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
     );

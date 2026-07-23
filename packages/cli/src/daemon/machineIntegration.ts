@@ -126,6 +126,9 @@ import type {
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { writeCredentials } from "../auth/credentials.js";
+import { resolveKeyMaterial } from "../auth/keyMaterial.js";
+import { createTokenProvider, type TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { createAdoptTakeDeps, handleAdoptTake } from "./adoptTake.js";
 import { createBlobClientDeps, uploadBlob as uploadBlobToServer } from "./blobClient.js";
@@ -283,10 +286,30 @@ export async function startMachineIntegration(
     return null;
   }
 
-  const masterSecret = decodeBase64(credentials.masterSecretOrContentBundle);
-  if (masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
+  // issue-4-plan.md §6.6: one tokenProvider per boot, shared by the machine socket and
+  // every HTTP side-channel client below — a rotated refresh token is persisted back to
+  // `~/.falcon/access.key` immediately so a daemon restart resumes from the latest one,
+  // not a stale one that a prior refresh already superseded.
+  const tokenProvider: TokenProvider = createTokenProvider({
+    backendUrl: deps.serverUrl,
+    refreshToken: credentials.refreshToken,
+    fetchImpl: deps.fetchImpl,
+    now: () => Date.now(),
+    onRotate: (refreshToken) => {
+      writeCredentials({ ...credentials, refreshToken }, deps.homeDir);
+    },
+    logger: deps.logger,
+  });
+
+  // issue-4-plan.md §6.1/§6.5: the daemon never runs interactively (no TTY, nobody to
+  // type a PIN), so it can only ever unwrap `"device"` (its own default, OS-Keychain
+  // custody) or `"plaintext-fallback"` key material — `resolveKeyMaterial` returns
+  // `null` for `"pin"` mode without `pinDeps`, exactly the "skip, don't hang" behavior
+  // this needs.
+  const masterSecret = await resolveKeyMaterial(credentials.keyMaterial, deps.homeDir);
+  if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
     deps.logger.warn(
-      "[machine-integration] stored credentials are not a full masterSecret (reduced-custody pairing?), skipping machine client",
+      "[machine-integration] stored credentials are not an unwrappable full masterSecret (PIN-protected with no one to prompt, or a reduced-custody pairing bundle) — skipping machine client",
     );
     return null;
   }
@@ -322,7 +345,7 @@ export async function startMachineIntegration(
   const machineDeps = createMachineClientDeps(
     {
       serverUrl: deps.serverUrl,
-      token: credentials.token,
+      tokenProvider,
       homeDir: deps.homeDir,
       encryptionKey: dek,
       encryptionVariant: "dataKey",
@@ -455,7 +478,7 @@ export async function startMachineIntegration(
   // the blobRef efficiency win, not the RPC itself.
   const blobKey = deriveBlobKey(dek);
   const blobClientDeps = createBlobClientDeps(
-    { token: credentials.token },
+    { getAccessToken: () => tokenProvider.getAccessToken() },
     { serverUrl: deps.serverUrl, fetchImpl: deps.fetchImpl, logger: deps.logger },
   );
   async function uploadBlobHandler(plaintext: Uint8Array): Promise<string | null> {
@@ -567,7 +590,10 @@ export async function startMachineIntegration(
   // `POST /v1/unmanaged-sessions` — a fresh per-row DEK per upsert
   // (`unmanagedSessionClient.ts`'s own contract), unrelated to `dek` above.
   const unmanagedSessionDeps = createUnmanagedSessionClientDeps(
-    { token: credentials.token, contentPublicKey: keyTree.content.publicKey },
+    {
+      getAccessToken: () => tokenProvider.getAccessToken(),
+      contentPublicKey: keyTree.content.publicKey,
+    },
     { serverUrl: deps.serverUrl, fetchImpl: deps.fetchImpl, logger: deps.logger },
   );
   const transcriptIndexerHandle: TranscriptIndexerHandle = startTranscriptIndexer(

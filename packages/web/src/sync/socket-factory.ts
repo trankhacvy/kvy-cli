@@ -5,25 +5,21 @@
  * `crypto/factory.ts`'s split from `crypto/client.ts`).
  */
 import { io } from "socket.io-client";
+import { API_URL } from "@/lib/config.js";
 import type { ApiSocketAuth, SocketFactory } from "./apiSocket.js";
 
-// Same-origin by default (falcon-system-design.md §6.5: the web app can be
-// served by the API process itself in the self-host shape). Override for
-// local dev, where `next dev` and the API server run on different ports, or
-// when the web app is statically hosted separately from the API (§5.3/§9.1:
-// "served as a PWA from a separate static origin").
-const DEFAULT_SERVER_URL =
-  typeof process !== "undefined" &&
-  process.env.NEXT_PUBLIC_FALCON_API_URL &&
-  process.env.NEXT_PUBLIC_FALCON_API_URL.length > 0
-    ? process.env.NEXT_PUBLIC_FALCON_API_URL
-    : "http://localhost:3005";
-
 /**
- * `serverUrl` defaults to `NEXT_PUBLIC_FALCON_API_URL` (falls back to the
- * local dev server) but is overridable for tests/other environments.
+ * `serverUrl` defaults to `lib/config.ts`'s `API_URL` (the same
+ * `NEXT_PUBLIC_API_URL`-derived base every HTTP call in this app already
+ * uses — see `lib/api.ts`) but is overridable for tests/other environments.
+ * Previously read a second, different env var (`NEXT_PUBLIC_FALCON_API_URL`)
+ * independently of `lib/config.ts` — two names for the same "where's the
+ * server" setting meant a deployment (or a local dev setup) that only set
+ * one of them left the WS client silently pointed at the wrong origin while
+ * every HTTP call worked fine, exactly the kind of split-brain config this
+ * single import now rules out.
  */
-export function createSocketFactory(serverUrl: string = DEFAULT_SERVER_URL): SocketFactory {
+export function createSocketFactory(serverUrl: string = API_URL): SocketFactory {
   return (getAuth: () => ApiSocketAuth) =>
     io(serverUrl, {
       path: "/v1/stream", // matches the server's Socket.IO mount (P1-1.1-server-realtime socket.ts)

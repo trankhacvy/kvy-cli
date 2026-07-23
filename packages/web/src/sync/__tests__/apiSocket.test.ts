@@ -202,6 +202,22 @@ describe("apiSocket", () => {
     expect(sockets[0]?.connected).toBe(false);
   });
 
+  it("treats the server's 'Session revoked' connect_error the same as an auth-rejection (security review finding F2 — a revoked device must actually notice, not retry forever)", () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const client = createApiSocket(factory, source);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("Session revoked"));
+
+    expect(authErrorHandler).toHaveBeenCalledExactlyOnceWith({ message: "Session revoked" });
+    expect(client.isAuthExpired()).toBe(true);
+    expect(client.isConnected()).toBe(false);
+  });
+
   it("fires its own 'disconnect' listeners for the teardown a connect_error triggers", () => {
     // `teardown()` calls `socket.disconnect()` *before* unsubscribing
     // `handleDisconnect` (see apiSocket.ts), so the internal handler that
@@ -391,6 +407,137 @@ describe("apiSocket", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("apiSocket — proactive renew-token + connect_error recovery (issue-4-plan.md §4.5/§6.4)", () => {
+  it("proactively emits renew-token ~10 minutes after connect, re-arming on a successful ack", async () => {
+    vi.useFakeTimers();
+    try {
+      const { factory, sockets } = createFakeSocketFactory();
+      const { source } = createFakeVisibilitySource("active");
+      const renew = vi.fn().mockResolvedValue("fresh-token-1");
+      const client = createApiSocket(factory, source, renew);
+
+      client.connect("tok-1");
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+
+      const renewCall = sockets[0]?.emitted.find((e) => e.event === "renew-token");
+      expect(renewCall?.args[0]).toBe("fresh-token-1");
+      expect(renew).toHaveBeenCalledTimes(1);
+
+      const ack = renewCall?.args[renewCall.args.length - 1] as (ok: boolean) => void;
+      ack(true);
+
+      // Re-armed: another interval later, a second renew-token fires.
+      renew.mockResolvedValue("fresh-token-2");
+      await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+      const renewCalls = sockets[0]?.emitted.filter((e) => e.event === "renew-token");
+      expect(renewCalls?.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not proactively renew when no renew source is wired (default 2-arg construction)", async () => {
+    vi.useFakeTimers();
+    try {
+      const { factory, sockets } = createFakeSocketFactory();
+      const { source } = createFakeVisibilitySource("active");
+      const client = createApiSocket(factory, source);
+
+      client.connect("tok-1");
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+
+      expect(sockets[0]?.emitted.some((e) => e.event === "renew-token")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops the renew timer on disconnect() and after a torn-down connect_error", async () => {
+    vi.useFakeTimers();
+    try {
+      const { factory, sockets } = createFakeSocketFactory();
+      const { source } = createFakeVisibilitySource("active");
+      const renew = vi.fn().mockResolvedValue("fresh-token");
+      const client = createApiSocket(factory, source, renew);
+
+      client.connect("tok-1");
+      client.disconnect();
+
+      await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+      expect(sockets[0]?.emitted.some((e) => e.event === "renew-token")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a stale token on connect_error triggers exactly one silent-refresh attempt and keeps the retry loop alive on success", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const renew = vi.fn().mockResolvedValue("fresh-token");
+    const client = createApiSocket(factory, source, renew);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+    await vi.waitFor(() => expect(renew).toHaveBeenCalledTimes(1));
+
+    // Recovered silently: no authError, no teardown — socket.io's own retry loop
+    // (never disconnected here) presents the fresh token on its next attempt.
+    expect(authErrorHandler).not.toHaveBeenCalled();
+    expect(client.isAuthExpired()).toBe(false);
+    expect(sockets[0]?.connected).toBe(true); // never torn down
+  });
+
+  it("a live 'Session revoked' connect_error (F2's device-revocation path) also triggers a silent-refresh attempt, falling through to teardown + authError once it fails (the revoked session's own refresh token is dead too)", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const renew = vi.fn().mockResolvedValue(null);
+    const client = createApiSocket(factory, source, renew);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("Session revoked"));
+    await vi.waitFor(() => expect(authErrorHandler).toHaveBeenCalledTimes(1));
+
+    expect(renew).toHaveBeenCalledTimes(1);
+    expect(client.isAuthExpired()).toBe(true);
+    expect(client.isConnected()).toBe(false);
+  });
+
+  it("falls back to teardown + authError when the silent-refresh attempt itself fails (dead refresh token)", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const renew = vi.fn().mockResolvedValue(null);
+    const client = createApiSocket(factory, source, renew);
+    client.connect("tok-1");
+
+    const authErrorHandler = vi.fn();
+    client.on("authError", authErrorHandler);
+
+    sockets[0]?.serverEmit("connect_error", new Error("Invalid authentication token"));
+    await vi.waitFor(() => expect(authErrorHandler).toHaveBeenCalledTimes(1));
+
+    expect(client.isAuthExpired()).toBe(true);
+    expect(client.isConnected()).toBe(false);
+  });
+
+  it("never attempts a renew for a non-auth-shaped connect_error", async () => {
+    const { factory, sockets } = createFakeSocketFactory();
+    const { source } = createFakeVisibilitySource("active");
+    const renew = vi.fn().mockResolvedValue("fresh-token");
+    const client = createApiSocket(factory, source, renew);
+    client.connect("tok-1");
+
+    sockets[0]?.serverEmit("connect_error", new Error("xhr poll error"));
+
+    expect(renew).not.toHaveBeenCalled();
   });
 });
 

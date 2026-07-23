@@ -1,22 +1,13 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
+import { getRandomBytes } from "@falcon/crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeCredentials } from "./credentials.js";
+import { plaintextFallbackKeyMaterial } from "./keyMaterial.js";
 import { runAuthStatus } from "./status.js";
 
 let homeDir: string;
-
-function fakeJwt(payload: Record<string, unknown>): string {
-  const b64url = (obj: unknown) =>
-    Buffer.from(JSON.stringify(obj))
-      .toString("base64")
-      .replaceAll("+", "-")
-      .replaceAll("/", "_")
-      .replaceAll("=", "");
-  return `${b64url({ alg: "HS256" })}.${b64url(payload)}.fake-signature`;
-}
 
 function joinedOutput(stdout: { mock: { calls: unknown[][] } }): string {
   return stdout.mock.calls.map((call) => call[0]).join("");
@@ -44,11 +35,12 @@ describe("runAuthStatus", () => {
     expect(joinedOutput(stdout)).toContain("falcon auth login");
   });
 
-  it("reports logged in, the credentials path, derived account key, and unexpired token", () => {
+  it("reports logged in, the credentials path, derived account key, key material mode, and a present refresh token", () => {
     const masterSecret = getRandomBytes(32);
-    const futureExp = Math.floor(Date.now() / 1000) + 3600;
-    const token = fakeJwt({ sub: "acct_123", exp: futureExp });
-    writeCredentials({ token, masterSecretOrContentBundle: encodeBase64(masterSecret) }, homeDir);
+    writeCredentials(
+      { refreshToken: "r1", keyMaterial: plaintextFallbackKeyMaterial(masterSecret) },
+      homeDir,
+    );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
     const code = runAuthStatus();
@@ -57,27 +49,17 @@ describe("runAuthStatus", () => {
     const output = joinedOutput(stdout);
     expect(output).toContain("Logged in.");
     expect(output).toContain("Credentials file:");
+    expect(output).toContain("Key material: unwrapped (plaintext-fallback)");
     expect(output).toContain("Account key:");
-    expect(output).toContain("expires");
-    expect(output).not.toContain("expired");
-  });
-
-  it("labels a past-expiry token as expired", () => {
-    const masterSecret = getRandomBytes(32);
-    const pastExp = Math.floor(Date.now() / 1000) - 3600;
-    const token = fakeJwt({ sub: "acct_123", exp: pastExp });
-    writeCredentials({ token, masterSecretOrContentBundle: encodeBase64(masterSecret) }, homeDir);
-    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-
-    runAuthStatus();
-
-    expect(joinedOutput(stdout)).toContain("Token (unverified): expired");
+    expect(output).toContain("Refresh token: present");
   });
 
   it("skips the derived account key when the secret isn't 32 raw bytes", () => {
-    const token = fakeJwt({ sub: "acct_123", exp: Math.floor(Date.now() / 1000) + 3600 });
     writeCredentials(
-      { token, masterSecretOrContentBundle: encodeBase64(new Uint8Array([1, 2, 3])) },
+      {
+        refreshToken: "r1",
+        keyMaterial: plaintextFallbackKeyMaterial(new Uint8Array([1, 2, 3])),
+      },
       homeDir,
     );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -87,16 +69,24 @@ describe("runAuthStatus", () => {
     expect(joinedOutput(stdout)).not.toContain("Account key:");
   });
 
-  it("falls back to a generic 'present' message when the token can't be decoded", () => {
-    const masterSecret = getRandomBytes(32);
+  it("skips the derived account key (without prompting) for PIN-protected key material", () => {
     writeCredentials(
-      { token: "not-a-jwt", masterSecretOrContentBundle: encodeBase64(masterSecret) },
+      {
+        refreshToken: "r1",
+        keyMaterial: {
+          mode: "pin",
+          wrapped: { v: 1, kdf: "argon2id", salt: "c2FsdA==", nonce: "bm9uY2U=", ct: "Y3Q=" },
+        },
+      },
       homeDir,
     );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 
-    runAuthStatus();
+    const code = runAuthStatus();
 
-    expect(joinedOutput(stdout)).toContain("Token: present (could not decode claims for display)");
+    expect(code).toBe(0);
+    const output = joinedOutput(stdout);
+    expect(output).toContain("Key material: PIN-protected");
+    expect(output).not.toContain("Account key:");
   });
 });

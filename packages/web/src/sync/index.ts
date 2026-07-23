@@ -22,11 +22,26 @@
  * the underlying `useQuery(['sync'], ...)` / `useInfiniteQuery(['messages',
  * sessionId], ...)` fetches.
  */
+import { getToken, silentRefresh } from "@/lib/session";
 import { createApiSocket } from "./apiSocket.js";
 import { createSocketFactory } from "./socket-factory.js";
 import { createBrowserVisibilitySource } from "./visibility.js";
 
-export const apiSocket = createApiSocket(createSocketFactory(), createBrowserVisibilitySource());
+// issue-4-plan.md §4.5/§6.4: `apiSocket`'s own proactive renew-token timer and
+// connect_error recovery both go through `lib/session.ts`'s `silentRefresh()` — the
+// same one `require-auth.tsx` uses on page load — so a live socket survives an
+// access-token boundary the same way a fresh page load would, without ever forcing
+// a visible logout.
+async function renewAccessToken(): Promise<string | null> {
+  const refreshed = await silentRefresh();
+  return refreshed ? getToken() : null;
+}
+
+export const apiSocket = createApiSocket(
+  createSocketFactory(),
+  createBrowserVisibilitySource(),
+  renewAccessToken,
+);
 
 export type {
   ApiSocket,

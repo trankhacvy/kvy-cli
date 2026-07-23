@@ -54,9 +54,7 @@ describe("registerWorkspace (workspace.register RPC backing module)", () => {
     await registerWorkspace({ idempotencyKey: "idem-3", directory: target });
 
     const written = JSON.parse(await readFile(path.join(homeDir, "workspaces.json"), "utf8"));
-    const matches = written.workspaces.filter(
-      (entry: { path: string }) => entry.path === target,
-    );
+    const matches = written.workspaces.filter((entry: { path: string }) => entry.path === target);
     expect(matches).toHaveLength(1);
   });
 });

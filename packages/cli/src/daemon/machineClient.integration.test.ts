@@ -168,7 +168,11 @@ describe("machineClient (integration: real socket.io + machines HTTP mock)", () 
 
     const result = await startMachineClient({
       serverUrl: url,
-      token: "test-token",
+      tokenProvider: {
+        getAccessToken: async () => "test-token",
+        forceRefresh: async () => "test-token",
+        isDead: false,
+      },
       homeDir,
       encryptionKey: new Uint8Array(32).fill(3),
       encryptionVariant: "legacy",

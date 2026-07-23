@@ -6,43 +6,32 @@ import { describe, expect, it } from "vitest";
 /**
  * `page.tsx` can't be rendered directly under this package's `environment:
  * "node"` vitest config: it's a full page component using `next/navigation`'s
- * `useRouter` (throws outside an actual App Router context) plus the
- * `useCryptoBridge` worker-spinning hook, neither of which has a lightweight
- * fake here. Asserting against the shipped source text is the same technique
- * `SessionTimelineScreen.test.tsx` uses for similarly hook-heavy, non-pulled-out
- * JSX — real behavior (the restore submit handler, the outcome-to-status
- * mapping) is covered directly by `restore-handler.test.ts` and
- * `lib/restore-recovery-code.test.ts`; this just confirms the entry point is
- * actually wired into the page, in the right place, once.
+ * `useRouter` (throws outside an actual App Router context), neither of which
+ * has a lightweight fake here. Asserting against the shipped source text is
+ * the same technique `SessionTimelineScreen.test.tsx` uses for similarly
+ * hook-heavy, non-pulled-out JSX.
+ *
+ * issue-4-plan.md §5.5/Phase 4: the legacy challenge-sign-in + recovery-code
+ * restore paths are gone from this page — it's OAuth buttons plus a link to
+ * `/password/`, nothing that reads local key material before a login click.
  */
 const pageSource = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./page.tsx"),
   "utf-8",
 );
 
-describe("signin/page.tsx — recovery-code restore wiring", () => {
-  it("imports RecoveryCodeInput and the restore handler", () => {
-    expect(pageSource).toContain(
-      'import { RecoveryCodeInput } from "@/components/auth/recovery-code-input"',
-    );
-    expect(pageSource).toContain("handleRestoreFromRecoveryCode");
+describe("signin/page.tsx", () => {
+  it("no longer references the deleted recovery-code / challenge-sign-in modules", () => {
+    expect(pageSource).not.toContain("recovery-code-input");
+    expect(pageSource).not.toContain("RecoveryCodeInput");
+    expect(pageSource).not.toContain("complete-challenge-sign-in");
+    expect(pageSource).not.toContain("restore-handler");
+    expect(pageSource).not.toContain("completeChallengeSignIn");
   });
 
-  it("renders RecoveryCodeInput above (before) the Google/GitHub OAuth buttons", () => {
-    const restoreIndex = pageSource.indexOf("<RecoveryCodeInput");
-    const googleIndex = pageSource.indexOf("Continue with Google");
-    const githubIndex = pageSource.indexOf("Continue with GitHub");
-
-    expect(restoreIndex).toBeGreaterThan(-1);
-    expect(googleIndex).toBeGreaterThan(-1);
-    expect(githubIndex).toBeGreaterThan(-1);
-    expect(restoreIndex).toBeLessThan(googleIndex);
-    expect(restoreIndex).toBeLessThan(githubIndex);
-  });
-
-  it("only invokes the restore submit handler when a crypto bridge is available (no-op otherwise, not a crash)", () => {
-    expect(pageSource).toMatch(
-      /function handleRestoreSubmit\(code: string\) \{\s*if \(!bridge\) return;/,
-    );
+  it("offers Google/GitHub OAuth and links to the email+password page", () => {
+    expect(pageSource).toContain("Continue with Google");
+    expect(pageSource).toContain("Continue with GitHub");
+    expect(pageSource).toContain('router.push("/password/")');
   });
 });

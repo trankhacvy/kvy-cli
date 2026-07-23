@@ -11,10 +11,14 @@
  *   3. poll GET /v1/auth/pair/status every 2s until it reports "authorized"
  *      or "expired" (that endpoint deliberately never returns secret
  *      material — see the server route's doc comment);
- *   4. once authorized, POST /v1/auth/pair once more to fetch the token and
- *      sealed box, then open the box with the ephemeral secret key
+ *   4. once authorized, POST /v1/auth/pair once more to fetch the sealed
+ *      box (single-use — the server deletes the row the moment this
+ *      succeeds) and open it with the ephemeral secret key
  *      (`libsodiumDecryptWithSecretKey`, the inverse of the approver's
- *      `libsodiumEncryptForPublicKey`) to recover the masterSecret.
+ *      `libsodiumEncryptForPublicKey`) to recover the masterSecret AND this
+ *      device's own refresh token (issue-4-plan.md §6.3 — sealed together,
+ *      version 0x01; no plaintext token/refreshToken field exists on the
+ *      wire anywhere in this dance anymore).
  *
  * Every network call is wrapped so this module never throws — a failed
  * fetch, a malformed response, or a decrypt failure are all routine "this
@@ -35,13 +39,12 @@ import { z } from "zod";
 const PAIRING_TIMEOUT_MS = 15 * 60 * 1000;
 
 // Mirrors the approver's own payload format exactly (packages/web/src/crypto/
-// worker-handler.ts's `sealForPeer`: `payload[0] = PAIR_PAYLOAD_VERSION;
-// payload.set(masterSecret, 1)`) — the sealed box's plaintext is `[version(1) |
-// masterSecret(32)]`, not the bare 32-byte masterSecret. Skipping this strip left
-// every real pairing login one byte too long for any later 32-byte content-key
-// derivation to accept (surfaced as "reduced-custody pairing?" for what was
-// actually just a normal login).
-const PAIR_PAYLOAD_VERSION = 0x00;
+// worker-handler.ts's `sealForPeer`: `payload = [version(1) | masterSecret(32) |
+// refreshToken(rest)]`, issue-4-plan.md §6.3). v0 (bare `[version|masterSecret]`, no
+// refresh token) is no longer minted by any approver — every current web build seals
+// v1 — so there is nothing left to tolerate-decode; a v0 box would only ever be seen
+// from a stale, already-expired (15-minute TTL) pairing attempt.
+const PAIR_PAYLOAD_VERSION = 0x01;
 const MASTER_SECRET_LENGTH_BYTES = 32;
 
 export interface PairOptions {
@@ -56,7 +59,7 @@ export interface PairOptions {
 }
 
 export interface PairSuccess {
-  token: string;
+  refreshToken: string;
   masterSecret: Uint8Array;
 }
 
@@ -69,7 +72,7 @@ export type PairOutcome =
 const PairPostResponseSchema = z.discriminatedUnion("state", [
   z.object({ state: z.literal("pending") }),
   z.object({ state: z.literal("expired") }),
-  z.object({ state: z.literal("authorized"), token: z.string(), response: z.string() }),
+  z.object({ state: z.literal("authorized"), response: z.string() }),
 ]);
 type PairPostResponse = z.infer<typeof PairPostResponseSchema>;
 
@@ -165,7 +168,9 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
     if (status.status === "expired") return { ok: false, reason: "expired" };
 
     // status.status === "authorized": /status never returns secret material
-    // (see the server route), so fetch the token + sealed box via one more POST.
+    // (see the server route), so fetch the sealed box via one more POST — this is
+    // also the single-use pickup: the server deletes the row the moment this
+    // succeeds, so this exact response can never be re-served to a second poller.
     const authorized = await postPair(backendUrl, ephPub);
     // Server-side expiry can race the last poll tick: GET /status said
     // "authorized" but by the time this POST lands the request has expired.
@@ -182,12 +187,16 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
   const payload = libsodiumDecryptWithSecretKey(sealedBox, keypair.secretKey);
   if (
     !payload ||
-    payload.length !== 1 + MASTER_SECRET_LENGTH_BYTES ||
+    payload.length <= 1 + MASTER_SECRET_LENGTH_BYTES ||
     payload[0] !== PAIR_PAYLOAD_VERSION
   ) {
     return { ok: false, reason: "decrypt-failed" };
   }
-  const masterSecret = payload.slice(1);
+  const masterSecret = payload.slice(1, 1 + MASTER_SECRET_LENGTH_BYTES);
+  const refreshToken = new TextDecoder().decode(payload.slice(1 + MASTER_SECRET_LENGTH_BYTES));
+  if (!refreshToken) {
+    return { ok: false, reason: "decrypt-failed" };
+  }
 
-  return { ok: true, result: { token: state.token, masterSecret } };
+  return { ok: true, result: { refreshToken, masterSecret } };
 }

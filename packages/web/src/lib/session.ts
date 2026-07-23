@@ -1,33 +1,39 @@
 /**
- * Bearer-token storage. The JWT (design §5.2: "1 h, auto-refresh") is not key
- * material — it's a scoped, revocable credential (design §12) — so it's fine
- * in `localStorage`, unlike the master secret, which never leaves the crypto
- * worker/IndexedDB (`src/crypto/`). Guarded for SSR/build time, where
- * `localStorage` doesn't exist: Next prerenders these pages at build time
- * (static export), and every call here happens inside a "use client"
- * component's effect/handler, but guarding costs nothing and avoids a hard
- * crash if that ever changes.
+ * Access-token storage.
+ *
+ * Security review finding F1: this used to also store the 60-day refresh token in
+ * `localStorage` — fully XSS-readable, which undid the whole point of the 15-minute
+ * access-token hardening (an XSS stealing a single `localStorage` read gets a
+ * long-lived, full-account credential). Neither token lives in `localStorage` anymore:
+ *
+ *   - The refresh token only ever exists PIN-wrapped in IndexedDB (`crypto/key-storage.ts`'s
+ *     `StoredKeyRecord.wrappedRefreshToken`) or, briefly, unwrapped in the crypto worker's
+ *     own memory (`crypto/worker-handler.ts`) — never in this module, never on the main
+ *     thread at all. Recovering it (via a PIN unlock) and minting a fresh access token from
+ *     it both happen inside the worker (`refreshSession()`); only the resulting access
+ *     token crosses back out.
+ *   - The access token is kept here as a plain in-memory module variable — cheap to
+ *     re-mint (15m TTL, `refreshSession()` handles it) and, being main-thread state, wiped
+ *     by any full page reload the same way `localStorage` used to persist through. This is
+ *     a real, accepted trade — a same-page XSS with arbitrary code execution can still read
+ *     this variable (or simply hook `fetch`), same as it always could regardless of storage
+ *     location — but it's no longer sitting somewhere that persists across reloads/sessions
+ *     for a passive read to find, and it's never the 60-day credential.
  */
+import { getSharedCryptoBridge } from "./use-crypto-bridge.js";
 
-const TOKEN_KEY = "falcon:token";
-
-function hasLocalStorage(): boolean {
-  return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-}
+let inMemoryAccessToken: string | null = null;
 
 export function getToken(): string | null {
-  if (!hasLocalStorage()) return null;
-  return window.localStorage.getItem(TOKEN_KEY);
+  return inMemoryAccessToken;
 }
 
 export function setToken(token: string): void {
-  if (!hasLocalStorage()) return;
-  window.localStorage.setItem(TOKEN_KEY, token);
+  inMemoryAccessToken = token;
 }
 
 export function clearToken(): void {
-  if (!hasLocalStorage()) return;
-  window.localStorage.removeItem(TOKEN_KEY);
+  inMemoryAccessToken = null;
 }
 
 /** Base64url-decodes a JWT's payload segment — no signature verification
@@ -81,4 +87,27 @@ export function isTokenExpired(): boolean {
 
 export function isSignedIn(): boolean {
   return getToken() !== null && !isTokenExpired();
+}
+
+/**
+ * issue-4-plan.md §6.4 / security review F1: attempt one silent refresh via the crypto
+ * worker's own (PIN-recovered, never-persisted-in-plaintext) refresh token —
+ * `require-auth.tsx` calls this once the worker is confirmed unlocked, and
+ * `apiSocket.ts` calls it on an auth `connect_error`, so a normal 15-minute
+ * access-token boundary never forces a visible re-login. Resolves `false` (and clears
+ * the in-memory access token) when there's no unlocked bridge to ask, no refresh token
+ * recovered into it, or the server rejects the refresh (dead/revoked) — the caller is
+ * then responsible for redirecting to sign-in.
+ */
+export async function silentRefresh(): Promise<boolean> {
+  const bridge = getSharedCryptoBridge();
+  if (!bridge) return false;
+
+  const accessToken = await bridge.refreshSession();
+  if (!accessToken) {
+    clearToken();
+    return false;
+  }
+  setToken(accessToken);
+  return true;
 }

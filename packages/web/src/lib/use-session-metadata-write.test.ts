@@ -26,7 +26,7 @@ async function createTestBridge(): Promise<{ bridge: CryptoBridgeClient; dek: st
 
   const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
   const bridge = createCryptoBridgeClient(worker);
-  await bridge.init(masterSecret);
+  await bridge.init(masterSecret, "123456", "test-refresh-token");
   // Establish the active session key up front so fixture boxes below can be
   // sealed under it (mirroring a real prior write by another client) —
   // `patchSessionMetadataCas` re-sets the same key itself before its own

@@ -3,8 +3,25 @@ import type { AddressInfo } from "node:net";
 import { Server as IoServer } from "socket.io";
 import { io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { startSessionClient } from "./sessionClient.js";
+
+/** issue-4-plan.md §6.6: a fake `TokenProvider` that always resolves the same access
+ * token — this suite exercises the transport/reconnect behavior, not token renewal
+ * (see `sessionClient.test.ts` for the renew-token unit tests), so a fixed token with
+ * a `renewIntervalMs` well outside each test's runtime keeps it out of the way. */
+function fakeTokenProvider(accessToken = "test-token"): TokenProvider {
+  return {
+    async getAccessToken() {
+      return accessToken;
+    },
+    async forceRefresh() {
+      return accessToken;
+    },
+    isDead: false,
+  };
+}
 
 /**
  * Integration test proving the `alive` keepalive and reconnect-after-drop
@@ -53,12 +70,13 @@ describe("sessionClient (integration: real socket.io server)", () => {
     let working = false;
     const handle = startSessionClient({
       serverUrl: url,
-      token: "test-token",
+      tokenProvider: fakeTokenProvider(),
       sessionId: "sess_int_1",
       ioFactory: (u, opts) =>
         ioClient(u, { ...opts, reconnectionDelay: 20, reconnectionDelayMax: 40 }),
       logger: silentLogger(),
       aliveIntervalMs: 50,
+      renewIntervalMs: 999_000,
       getWorking: () => working,
     });
 
@@ -75,12 +93,13 @@ describe("sessionClient (integration: real socket.io server)", () => {
   it("reconnect-after-drop resumes the alive stream under the same sessionId", async () => {
     const handle = startSessionClient({
       serverUrl: url,
-      token: "test-token",
+      tokenProvider: fakeTokenProvider(),
       sessionId: "sess_int_2",
       ioFactory: (u, opts) =>
         ioClient(u, { ...opts, reconnectionDelay: 20, reconnectionDelayMax: 40 }),
       logger: silentLogger(),
       aliveIntervalMs: 50,
+      renewIntervalMs: 999_000,
       getWorking: () => false,
     });
 

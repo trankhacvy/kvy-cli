@@ -1,17 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  decodeBase64,
-  deriveKeyTree,
-  encodeBase64,
-  getRandomBytes,
-  unwrapDek,
-} from "@falcon/crypto";
+import { decodeBase64, deriveKeyTree, getRandomBytes, unwrapDek } from "@falcon/crypto";
 import type { EncryptedBox, MachineRow } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { Logger } from "../logger.js";
 import { createMachineIntegrationDeps, startMachineIntegration } from "./machineIntegration.js";
 import { createSpawnAwaiter } from "./spawnAwaiter.js";
@@ -73,7 +68,18 @@ function fakeServer() {
   let storedDek: string | null = null;
   let registrations = 0;
 
-  const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+  const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+    // issue-4-plan.md §6.6: `startMachineIntegration` now also builds a `TokenProvider`
+    // that calls `/v1/auth/refresh` through this same injected `fetchImpl` — handle it
+    // distinctly so it doesn't fall into (and pollute the registration count of) the
+    // `/v1/machines` branch below.
+    if (url.toString().endsWith("/v1/auth/refresh")) {
+      return new Response(
+        JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
+        { status: 200 },
+      );
+    }
+
     const body = JSON.parse(init?.body as string) as { machineId?: string; dek?: string };
     if (!body.machineId) {
       registrations++;
@@ -116,7 +122,10 @@ describe("startMachineIntegration — DEK survives a crash-restart", () => {
   beforeEach(async () => {
     homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-"));
     masterSecret = getRandomBytes(32);
-    credentials = { token: "test-token", masterSecretOrContentBundle: encodeBase64(masterSecret) };
+    credentials = {
+      refreshToken: "test-refresh-token",
+      keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+    };
   });
 
   afterEach(async () => {
@@ -212,7 +221,10 @@ describe("startMachineIntegration — preview-tunnel wiring", () => {
   beforeEach(async () => {
     homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-preview-"));
     masterSecret = getRandomBytes(32);
-    credentials = { token: "test-token", masterSecretOrContentBundle: encodeBase64(masterSecret) };
+    credentials = {
+      refreshToken: "test-refresh-token",
+      keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+    };
     vi.clearAllMocks();
   });
 

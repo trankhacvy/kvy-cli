@@ -163,6 +163,25 @@ class EventRouter {
     }
   }
 
+  // === REVOCATION (issue-4-plan.md §4.5) ===
+
+  /**
+   * Every live socket for this account — the accessor `app/socket.ts`'s revoke routes
+   * use to find and disconnect a specific `sessionId`'s live connection(s) immediately,
+   * rather than waiting out the access token's own TTL. Thin wrapper over the same
+   * `user:${accountId}` room every connection already joins in `addConnection` above.
+   */
+  connectionsForAccount(accountId: string): Socket[] {
+    const room = this.io.sockets.adapter.rooms.get(`user:${accountId}`);
+    if (!room) return [];
+    const sockets: Socket[] = [];
+    for (const id of room) {
+      const socket = this.io.sockets.sockets.get(id);
+      if (socket) sockets.push(socket);
+    }
+    return sockets;
+  }
+
   // === PRESENCE QUERIES ===
 
   /**
@@ -282,6 +301,16 @@ class EventRouter {
 }
 
 export const eventRouter = new EventRouter();
+
+// issue-4-plan.md §4.5c: the revoke routes' actual "make it immediate" step — finds this
+// account's live socket(s) for exactly `sessionId` (a revoke only ever kills ONE device
+// session, never every connection the account happens to have open) and disconnects
+// them right now, rather than waiting for the access token's own TTL to lapse.
+export function disconnectSession(router: EventRouter, accountId: string, sessionId: string): void {
+  for (const socket of router.connectionsForAccount(accountId)) {
+    if (socket.data.authSessionId === sessionId) socket.disconnect(true);
+  }
+}
 
 // === EVENT BUILDER FUNCTIONS ===
 

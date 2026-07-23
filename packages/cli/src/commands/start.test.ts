@@ -1,10 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeBase64, getRandomBytes, open } from "@falcon/crypto";
+import { getRandomBytes, open } from "@falcon/crypto";
 import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon/wire";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { LoopOptions } from "../claude/loop.js";
 import type {
   PtyClaudeSessionHandle,
@@ -45,10 +46,19 @@ function fakeOutbox(): { outbox: OutboxLike; enqueued: SessionEnvelope[][] } {
 
 function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
-    token: "test-token",
-    masterSecretOrContentBundle: encodeBase64(getRandomBytes(32)),
+    refreshToken: "test-refresh-token",
+    keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
     ...overrides,
   };
+}
+
+/** issue-4-plan.md §6.6: the default response every test's `resolveAccessToken` call
+ * (via `/v1/auth/refresh`) resolves to, unless a test injects its own `fetchImpl`. */
+async function defaultFetchImpl(): Promise<Response> {
+  return new Response(
+    JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
+    { status: 200 },
+  );
 }
 
 function fakeDaemonState(overrides: Partial<DaemonState> = {}): DaemonState {
@@ -145,6 +155,7 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     claudeArgs: [],
     launcherPath: "/fake/launcher.cjs",
     readCredentials: () => fakeCredentials(),
+    fetchImpl: defaultFetchImpl as unknown as typeof fetch,
     readDaemonState: async () => fakeDaemonState(),
     locateClaudeCli: () => fakeClaudeLocation(),
     bootstrapSession: vi.fn(async () => ({
@@ -232,7 +243,7 @@ describe("runStartClaudeCommand — preflight", () => {
       baseDeps({
         readCredentials: () =>
           fakeCredentials({
-            masterSecretOrContentBundle: encodeBase64(getRandomBytes(16)),
+            keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(16)),
           }),
         writeError: (text) => stderr.push(text),
       }),
@@ -474,7 +485,15 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   it("persists a live /model change from PTY transcript envelopes into session metadata", async () => {
     const dek = getRandomBytes(32);
     const fetchCalls: RequestInit[] = [];
-    const fetchImpl: typeof fetch = async (_input, init) => {
+    const fetchImpl: typeof fetch = async (input, init) => {
+      // issue-4-plan.md §6.6: resolveAccessToken's own /v1/auth/refresh call happens
+      // first and isn't part of what this test asserts on.
+      if (input.toString().endsWith("/v1/auth/refresh")) {
+        return new Response(
+          JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
+          { status: 200 },
+        );
+      }
       fetchCalls.push(init ?? {});
       return new Response(JSON.stringify({ version: 1 }), { status: 200 });
     };
@@ -1590,7 +1609,13 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   it("persists a live /model change from remote-loop envelopes into session metadata", async () => {
     const dek = getRandomBytes(32);
     const fetchCalls: RequestInit[] = [];
-    const fetchImpl: typeof fetch = async (_input, init) => {
+    const fetchImpl: typeof fetch = async (input, init) => {
+      if (input.toString().endsWith("/v1/auth/refresh")) {
+        return new Response(
+          JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
+          { status: 200 },
+        );
+      }
       fetchCalls.push(init ?? {});
       return new Response(JSON.stringify({ version: 1 }), { status: 200 });
     };

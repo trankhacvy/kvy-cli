@@ -1,12 +1,10 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
-import tweetnacl from "tweetnacl";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type {
   GithubCodeExchanger,
@@ -16,7 +14,7 @@ import type {
 } from "../../auth/oauth.js";
 import { verifyToken } from "../../auth/tokens.js";
 import * as schema from "../../db/schema.js";
-import { accounts } from "../../db/schema.js";
+import { authIdentities } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 
 const migrationsFolder = path.resolve(
@@ -41,13 +39,10 @@ function fakeVerifier(): OAuthVerifier {
 function registerBody(
   overrides: Partial<{ oauthProvider: OAuthProvider; oauthProof: string }> = {},
 ) {
-  const keypair = tweetnacl.sign.keyPair();
   return {
     body: {
       oauthProvider: overrides.oauthProvider ?? "google",
       oauthProof: overrides.oauthProof ?? "google:google-subject-1",
-      signPubKey: encodeBase64(keypair.publicKey),
-      contentPubKey: encodeBase64(getRandomBytes(32)),
     },
   };
 }
@@ -82,9 +77,12 @@ describe("POST /v1/auth/register", () => {
     expect(verified?.accountId).toEqual(expect.any(String));
 
     const db = drizzle(pglite, { schema });
-    const [row] = await db.select().from(accounts).where(eq(accounts.id, verified!.accountId));
-    expect(row?.oauthProvider).toBe("google");
-    expect(row?.oauthSubject).toBe("alice-sub");
+    const [row] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, verified?.accountId ?? ""));
+    expect(row?.kind).toBe("google");
+    expect(row?.identifier).toBe("alice-sub");
   });
 
   it("returns 401 (not 500) when the OAuth proof fails verification", async () => {
@@ -96,39 +94,16 @@ describe("POST /v1/auth/register", () => {
     expect(response.json()).toEqual({ error: "Invalid OAuth proof" });
   });
 
-  it("returns 400 for a malformed/wrong-length signPubKey", async () => {
-    const { body } = registerBody();
-    body.signPubKey = encodeBase64(new Uint8Array([1, 2, 3, 4]));
-
-    const response = await app.inject({ method: "POST", url: "/v1/auth/register", payload: body });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({ error: "Malformed signPubKey" });
-  });
-
-  it("rebinds oauthProvider/oauthSubject on the same signPubKey rather than creating a second row", async () => {
-    const keypair = tweetnacl.sign.keyPair();
-    const signPubKey = encodeBase64(keypair.publicKey);
-
+  it("signing in twice with the same OAuth identity resolves to one account, not two", async () => {
     const first = await app.inject({
       method: "POST",
       url: "/v1/auth/register",
-      payload: {
-        oauthProvider: "google",
-        oauthProof: "google:bob-google-sub",
-        signPubKey,
-        contentPubKey: encodeBase64(getRandomBytes(32)),
-      },
+      payload: { oauthProvider: "google", oauthProof: "google:bob-google-sub" },
     });
     const second = await app.inject({
       method: "POST",
       url: "/v1/auth/register",
-      payload: {
-        oauthProvider: "github",
-        oauthProof: "github:bob-github-sub",
-        signPubKey,
-        contentPubKey: encodeBase64(getRandomBytes(32)),
-      },
+      payload: { oauthProvider: "google", oauthProof: "google:bob-google-sub" },
     });
 
     expect(first.statusCode).toBe(200);
@@ -136,46 +111,32 @@ describe("POST /v1/auth/register", () => {
 
     const firstVerified = await verifyToken(first.json().token);
     const secondVerified = await verifyToken(second.json().token);
+    expect(firstVerified?.accountId).toBeTruthy();
     expect(firstVerified?.accountId).toBe(secondVerified?.accountId);
 
     const db = drizzle(pglite, { schema });
-    const rows = await db.select().from(accounts).where(eq(accounts.id, firstVerified!.accountId));
+    const rows = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.oauthProvider).toBe("github");
-    expect(rows[0]?.oauthSubject).toBe("bob-github-sub");
   });
 
-  it("the same account row is usable by /v1/auth's challenge/response afterward", async () => {
-    const keypair = tweetnacl.sign.keyPair();
-    const registerResponse = await app.inject({
+  it("different OAuth providers for the same person create distinct accounts (no cross-provider linking)", async () => {
+    const google = await app.inject({
       method: "POST",
       url: "/v1/auth/register",
-      payload: {
-        oauthProvider: "google",
-        oauthProof: "google:carol-sub",
-        signPubKey: encodeBase64(keypair.publicKey),
-        contentPubKey: encodeBase64(getRandomBytes(32)),
-      },
+      payload: { oauthProvider: "google", oauthProof: "google:carol-sub" },
     });
-    expect(registerResponse.statusCode).toBe(200);
-    const registeredAccountId = (await verifyToken(registerResponse.json().token))?.accountId;
-
-    const challenge = getRandomBytes(32);
-    const signature = tweetnacl.sign.detached(challenge, keypair.secretKey);
-    const loginResponse = await app.inject({
+    const github = await app.inject({
       method: "POST",
-      url: "/v1/auth",
-      payload: {
-        publicKey: encodeBase64(keypair.publicKey),
-        contentPublicKey: encodeBase64(getRandomBytes(32)),
-        challenge: encodeBase64(challenge),
-        signature: encodeBase64(signature),
-      },
+      url: "/v1/auth/register",
+      payload: { oauthProvider: "github", oauthProof: "github:carol-sub" },
     });
 
-    expect(loginResponse.statusCode).toBe(200);
-    const loginAccountId = (await verifyToken(loginResponse.json().token))?.accountId;
-    expect(loginAccountId).toBe(registeredAccountId);
+    const googleVerified = await verifyToken(google.json().token);
+    const githubVerified = await verifyToken(github.json().token);
+    expect(googleVerified?.accountId).not.toBe(githubVerified?.accountId);
   });
 });
 

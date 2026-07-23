@@ -84,30 +84,14 @@ function sendJson<T>(
   return request<T>(method, path, body, token);
 }
 
-/** `POST /v1/auth/register` — sign-up: binds a freshly-generated identity to an OAuth proof. */
+/** `POST /v1/auth/register` — OAuth sign-in/sign-up: finds-or-creates the account's
+ * login identity for this provider. Key material (signPubKey/contentPubKey) is bound
+ * separately afterward via `keysChallenge`/`keysBind` (§6.2), same as password sign-up. */
 export function register(body: {
   oauthProvider: "google" | "github" | "dev";
   oauthProof: string;
-  signPubKey: string;
-  contentPubKey: string;
-}): Promise<{ success: true; token: string }> {
+}): Promise<{ success: true; token: string; refreshToken: string }> {
   return postJson("/v1/auth/register", body);
-}
-
-/** `POST /v1/auth` — sign-in: proves possession of an already-provisioned identity.
- * `accountStatus` ("found" vs "created") lets the recovery-restore flow
- * (`lib/restore-recovery-code.ts`) tell a genuine match apart from an
- * upsert that silently minted a brand-new, disconnected account — see
- * `packages/server/src/app/routes/auth.ts`'s module docblock ACCOUNT STATUS
- * note. The normal returning-device sign-in path (`complete-challenge-sign-in.ts`)
- * ignores this field; nothing about its behavior changes. */
-export function signIn(body: {
-  publicKey: string;
-  contentPublicKey: string;
-  challenge: string;
-  signature: string;
-}): Promise<{ success: true; token: string; accountStatus: "found" | "created" }> {
-  return postJson("/v1/auth", body);
 }
 
 /** `POST /v1/auth/oauth/github/exchange` — trades a GitHub authorization code for an access token. */
@@ -118,7 +102,96 @@ export function exchangeGithubCode(body: {
   return postJson("/v1/auth/oauth/github/exchange", body);
 }
 
-/** `POST /v1/auth/pair/approve` — an already-authenticated device approves a pairing request. */
+/** `POST /v1/auth/password/register` — issue-4-plan.md §5.2: email+password sign-up. */
+export function passwordRegister(body: {
+  email: string;
+  password: string;
+}): Promise<{ success: true; token: string; refreshToken: string }> {
+  return postJson("/v1/auth/password/register", body);
+}
+
+/** `POST /v1/auth/password/login` — issue-4-plan.md §5.2: email+password sign-in. */
+export function passwordLogin(body: {
+  email: string;
+  password: string;
+}): Promise<{ success: true; token: string; refreshToken: string }> {
+  return postJson("/v1/auth/password/login", body);
+}
+
+// Security review finding F1: `POST /v1/auth/refresh` is no longer called from here — the
+// refresh token never touches the main thread at all anymore, so the HTTP call itself
+// moved into `crypto/worker-handler.ts`'s `refreshSession` case (a real `fetch` made from
+// inside the crypto worker, against the token it alone holds, PIN-recovered). This file's
+// old `refreshSession()` wrapper (POST /v1/auth/refresh from the main thread) is gone —
+// nothing here is authorized to hold the raw refresh token to call it with.
+
+/** `POST /v1/auth/keys/challenge` — issue-4-plan.md §6.2: mint a server nonce for `keys/bind`. */
+export function keysChallenge(token: string): Promise<{ nonce: string }> {
+  return postJson("/v1/auth/keys/challenge", undefined, token);
+}
+
+/** A step-up proof for `POST /v1/auth/keys/bind`'s explicit-rotation path
+ * (issue-4-plan.md §6.2) — re-proves account ownership right before a rotation fences
+ * out every other session. Password accounts re-enter their password; OAuth-only
+ * accounts re-do the OAuth round trip. */
+export type StepUpProof =
+  | { kind: "password"; password: string }
+  | { kind: "oauth"; provider: "google" | "github" | "dev"; oauthProof: string };
+
+/** `POST /v1/auth/keys/bind` — issue-4-plan.md §6.2: bind (first-bind) or, with
+ * `rotate: true` + a `stepUpProof`, explicitly rotate this device's key material. */
+export function keysBind(
+  token: string,
+  body: {
+    signPubKey: string;
+    contentPubKey: string;
+    nonce: string;
+    signature: string;
+    rotate?: boolean;
+    stepUpProof?: StepUpProof;
+  },
+): Promise<{ success: true; keyEpoch: number }> {
+  return postJson("/v1/auth/keys/bind", body, token);
+}
+
+/** `GET /v1/auth/sessions` — issue-4-plan.md §4.4: this account's active device sessions. */
+export function listDeviceSessions(token: string): Promise<{
+  sessions: Array<{
+    id: string;
+    clientKind: string;
+    label: string | null;
+    machineId: string | null;
+    createdAt: string;
+    lastRefreshedAt: string | null;
+    expiresAt: string;
+    isCurrent: boolean;
+  }>;
+}> {
+  return getJson("/v1/auth/sessions", token);
+}
+
+/** `POST /v1/auth/sessions/:id/revoke` — issue-4-plan.md §4.4. */
+export function revokeSession(token: string, sessionId: string): Promise<{ success: true }> {
+  return postJson(`/v1/auth/sessions/${sessionId}/revoke`, undefined, token);
+}
+
+/** `POST /v1/auth/sessions/revoke-others` — issue-4-plan.md §4.4: log out every other device. */
+export function revokeOtherSessions(token: string): Promise<{ success: true; revoked: number }> {
+  return postJson("/v1/auth/sessions/revoke-others", undefined, token);
+}
+
+/** `POST /v1/auth/pair/mint` — issue-4-plan.md §6.3: mints the new device's session
+ * server-side and hands its refresh token straight back to this (already
+ * authenticated) browser, so the crypto worker can seal it alongside the master
+ * secret BEFORE anything derived from it ever touches Postgres in plaintext. Must be
+ * called before `approvePairing` below for the same `ephPub`. */
+export function mintPairSession(token: string, ephPub: string): Promise<{ refreshToken: string }> {
+  return postJson("/v1/auth/pair/mint", { ephPub }, token);
+}
+
+/** `POST /v1/auth/pair/approve` — an already-authenticated device approves a pairing
+ * request, storing the sealed `[version|masterSecret|refreshToken]` box
+ * (`bridge.sealForPeer`, using the refresh token `mintPairSession` above just minted). */
 export function approvePairing(
   token: string,
   body: { ephPub: string; response: string },

@@ -1,3 +1,4 @@
+export { createDevLoggerEmailTransport, type EmailTransport } from "./email.js";
 export {
   defaultGithubCodeExchanger,
   defaultOAuthVerifier,
@@ -9,11 +10,21 @@ export {
   verifyGithubAccessToken,
   verifyGoogleIdToken,
 } from "./oauth.js";
+export { hashPassword, verifyPassword } from "./password.js";
 export { authPlugin } from "./plugin.js";
+export {
+  hashRefreshToken,
+  type IssuedSession,
+  type IssueSessionParams,
+  issueSession,
+  newRefreshToken,
+  REFRESH_TTL_MS,
+} from "./refresh.js";
 export { TokenCache, type TokenCacheOptions } from "./token-cache.js";
 export {
   ACCESS_TOKEN_TTL_SECONDS,
-  mintToken,
+  type ClientKind,
+  mintAccessToken,
   type TokenOptions,
   type TokenPayload,
   type VerifiedToken,

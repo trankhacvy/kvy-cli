@@ -143,9 +143,26 @@ export interface ApiSocket {
   rpcCall(target: string, method: string, params: EncryptedBox): Promise<RpcCallResult>;
 }
 
+/**
+ * issue-4-plan.md §4.5/§6.4: attempts one silent refresh (via the stored refresh
+ * token) and returns the fresh access token, or `null` if the refresh token is
+ * dead/absent. Kept as an injectable dependency (mirrors `SocketFactory`/
+ * `VisibilitySource`) rather than importing `lib/session.ts`'s `silentRefresh`
+ * directly, so this module stays testable with a fake instead of touching
+ * `localStorage`/making a real HTTP call — `sync/index.ts` wires the real one.
+ */
+export type TokenRenewSource = () => Promise<string | null>;
+
+// Comfortably inside the 15-minute access-token TTL (Phase 6) — same fixed-interval
+// pattern (not exp-derived) as the CLI's `machineClient.ts`/`sessionClient.ts`
+// `armRenewTimer`, for the same reason: simpler than decoding the token's own `exp`
+// claim here, and still leaves 5 minutes of margin either way.
+const RENEW_INTERVAL_MS = 10 * 60 * 1000;
+
 export function createApiSocket(
   socketFactory: SocketFactory,
   visibility: VisibilitySource,
+  renew?: TokenRenewSource,
 ): ApiSocket {
   const listeners = new Map<keyof ApiSocketEventMap, Set<ErasedListener>>();
   function on<K extends keyof ApiSocketEventMap>(
@@ -180,6 +197,41 @@ export function createApiSocket(
   let hasConnectedBefore = false;
   let unsubscribeVisibility: (() => void) | null = null;
   let authExpired = false;
+  let renewTimer: ReturnType<typeof setTimeout> | null = null;
+  // Guards against overlapping renew attempts — a proactive timer fire racing a
+  // connect_error (or two connect_errors in a row) must only ever have one
+  // `renew()` call in flight at a time.
+  let renewInFlight = false;
+
+  function stopRenewTimer(): void {
+    if (renewTimer) {
+      clearTimeout(renewTimer);
+      renewTimer = null;
+    }
+  }
+
+  // issue-4-plan.md §4.5/§6.4: re-authenticates the SAME live socket well before the
+  // access token it originally handshook with expires, via the server's in-band
+  // `renew-token` event — no disconnect, no visible reconnect.
+  function armRenewTimer(): void {
+    stopRenewTimer();
+    if (!renew) return; // no renew source wired (e.g. a test double) — proactive renewal is simply off
+    renewTimer = setTimeout(async () => {
+      if (!socket || renewInFlight) return;
+      renewInFlight = true;
+      try {
+        const fresh = await renew();
+        if (!fresh || !socket) return; // dead refresh token, or torn down while awaiting
+        token = fresh;
+        socket.emit("renew-token", fresh, (ok: boolean) => {
+          if (ok) armRenewTimer();
+          else console.warn("apiSocket: renew-token was rejected by the server");
+        });
+      } finally {
+        renewInFlight = false;
+      }
+    }, RENEW_INTERVAL_MS);
+  }
 
   function handleConnect(): void {
     if (hasConnectedBefore) {
@@ -187,19 +239,57 @@ export function createApiSocket(
     }
     hasConnectedBefore = true;
     emit("connect", undefined);
+    armRenewTimer();
   }
 
   function handleDisconnect(): void {
+    stopRenewTimer();
     emit("disconnect", undefined);
   }
 
   function handleConnectError(err: Error): void {
     // Socket.IO delivers the server's `io.use()` middleware `next(new
     // Error(...))` message verbatim (server's socket.ts: "Missing
-    // authentication token" / "Invalid authentication token") — anything
-    // else (e.g. a transport-level failure to even reach the server) is left
-    // for the infinite-retry engine to keep handling on its own.
-    if (!/authentication token/i.test(err.message)) return;
+    // authentication token" / "Invalid authentication token" / "Session
+    // revoked" — this last one is exactly the F2 device-revocation path:
+    // security-review remediation pass, found live while testing "the revoked
+    // session's socket drops immediately" — the socket DID drop immediately,
+    // but this regex used to only match the first two messages, so a
+    // revoked-elsewhere tab's own automatic reconnect kept silently retrying
+    // the same doomed handshake forever instead of ever reaching the
+    // silentRefresh-then-teardown path below. Widened to match the CLI's own
+    // `machineClient.ts`/`sessionClient.ts` pattern, which already had it
+    // right) — anything else (e.g. a transport-level failure to even reach
+    // the server) is left for the infinite-retry engine to keep handling on
+    // its own.
+    if (!/authentication token|Session revoked/i.test(err.message)) return;
+
+    // issue-4-plan.md §4.5/§6.4: a single silent-refresh attempt before giving up —
+    // the access token presented at this handshake may simply be stale (not
+    // necessarily revoked). No `renew` source wired (or already one in flight)
+    // falls straight through to the same fail-closed teardown as before.
+    if (renew && !renewInFlight) {
+      renewInFlight = true;
+      void renew()
+        .then((fresh) => {
+          if (fresh) {
+            // Update the token so socket.io's own already-running automatic retry
+            // (never torn down here) presents it on the next attempt — no
+            // manual reconnect() call needed, `getAuth` reads `token` fresh
+            // every time (socket-factory.ts).
+            token = fresh;
+            return;
+          }
+          authExpired = true;
+          emit("authError", { message: err.message });
+          teardown();
+        })
+        .finally(() => {
+          renewInFlight = false;
+        });
+      return;
+    }
+
     authExpired = true;
     emit("authError", { message: err.message });
     // The retry loop cannot succeed without a fresh token —
@@ -229,6 +319,7 @@ export function createApiSocket(
   }
 
   function teardown(): void {
+    stopRenewTimer();
     if (socket) {
       // `disconnect()` must run *before* `handleDisconnect` is unsubscribed:
       // a real socket.io-client socket (and the fake test double) fires its

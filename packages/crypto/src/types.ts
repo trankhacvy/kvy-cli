@@ -41,3 +41,20 @@ export interface KeyTree {
   /** Legacy/global blob key, rarely used directly (HKDF("falcon-blob-master")). */
   blobMasterKey: Uint8Array;
 }
+
+/**
+ * A `masterSecret` (or, for the daemon's reduced-custody mode, a content
+ * bundle) PIN-wrapped at rest (issue-4-plan.md §6.1). All fields are base64.
+ * `kdf` is carried explicitly so a future KDF change is a versioned,
+ * detectable migration rather than a silent parameter drift.
+ */
+export interface PinWrapped {
+  v: 1;
+  kdf: "argon2id";
+  /** argon2id salt, 16 bytes. */
+  salt: string;
+  /** AES-256-GCM nonce, 12 bytes. */
+  nonce: string;
+  /** AES-256-GCM ciphertext with the 16-byte auth tag appended. */
+  ct: string;
+}

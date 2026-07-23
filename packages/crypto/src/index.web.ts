@@ -29,5 +29,5 @@ export {
   ready,
 } from "./encryption.web.js";
 export { deriveBlobKey, deriveKeyTree, signDetached, verifyDetached } from "./keys.js";
-export { decodeRecoveryCode, encodeRecoveryCode } from "./recovery.js";
+export { pinReady, unwrapWithPin, wrapWithPin } from "./pin.web.js";
 export * from "./types.js";

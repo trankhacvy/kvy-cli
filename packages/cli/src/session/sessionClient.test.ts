@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import type { SessionClientDeps } from "./sessionClient.js";
 import { createSessionClientDeps, startSessionClient } from "./sessionClient.js";
@@ -7,10 +8,34 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
+/** issue-4-plan.md §6.6: a fake `TokenProvider` that always resolves the same access
+ * token, tracking `forceRefresh` calls so tests can assert on the connect_error path. */
+function fakeTokenProvider(
+  accessToken: string | null = "test-token",
+): TokenProvider & { forceRefreshCalls: number } {
+  const state = {
+    forceRefreshCalls: 0,
+    async getAccessToken() {
+      return accessToken;
+    },
+    async forceRefresh() {
+      state.forceRefreshCalls += 1;
+      return accessToken;
+    },
+    isDead: false,
+  };
+  return state;
+}
+
 /** Minimal fake standing in for a socket.io-client `Socket` (mirrors machineClient.test.ts). */
 class FakeSocket {
   handlers = new Map<string, ((...args: unknown[]) => void)[]>();
-  emitted: { event: string; payload: unknown; volatile: boolean }[] = [];
+  emitted: {
+    event: string;
+    payload: unknown;
+    volatile: boolean;
+    ack?: (...args: unknown[]) => void;
+  }[] = [];
   closed = false;
   volatile = {
     emit: (event: string, payload: unknown) => {
@@ -24,8 +49,8 @@ class FakeSocket {
     this.handlers.set(event, list);
   }
 
-  emit(event: string, payload: unknown): void {
-    this.emitted.push({ event, payload, volatile: false });
+  emit(event: string, payload: unknown, ack?: (...args: unknown[]) => void): void {
+    this.emitted.push({ event, payload, volatile: false, ack });
   }
 
   close(): void {
@@ -43,11 +68,12 @@ class FakeSocket {
 
 function buildDeps(overrides: Partial<SessionClientDeps> = {}): SessionClientDeps {
   return createSessionClientDeps(
-    { serverUrl: "http://localhost:4000", token: "test-token", sessionId: "sess_1" },
+    { serverUrl: "http://localhost:4000", tokenProvider: fakeTokenProvider(), sessionId: "sess_1" },
     {
       ioFactory: vi.fn(),
       logger: silentLogger(),
       aliveIntervalMs: 20_000,
+      renewIntervalMs: 10 * 60 * 1000,
       getWorking: () => false,
       ...overrides,
     },
@@ -55,7 +81,7 @@ function buildDeps(overrides: Partial<SessionClientDeps> = {}): SessionClientDep
 }
 
 describe("startSessionClient", () => {
-  it("opens the socket with clientType session-scoped and returns a handle", () => {
+  it("opens the socket with clientType session-scoped and returns a handle", async () => {
     const fakeSocket = new FakeSocket();
     const ioFactory = vi.fn().mockReturnValue(fakeSocket);
     const deps = buildDeps({ ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"] });
@@ -64,12 +90,20 @@ describe("startSessionClient", () => {
 
     expect(ioFactory).toHaveBeenCalledExactlyOnceWith(
       "http://localhost:4000",
-      expect.objectContaining({
-        path: "/v1/stream",
-        transports: ["websocket"],
-        auth: { token: "test-token", clientType: "session-scoped", sessionId: "sess_1" },
-      }),
+      expect.objectContaining({ path: "/v1/stream", transports: ["websocket"] }),
     );
+    // issue-4-plan.md §6.6: `auth` is now an async callback (asks the tokenProvider for
+    // a currently-valid token on every handshake) rather than a static object.
+    const [, socketOpts] = ioFactory.mock.calls[0] as [
+      string,
+      { auth: (cb: (d: unknown) => void) => void },
+    ];
+    const authResult = await new Promise((resolve) => socketOpts.auth(resolve));
+    expect(authResult).toEqual({
+      token: "test-token",
+      clientType: "session-scoped",
+      sessionId: "sess_1",
+    });
     expect(handle.connected).toBe(false);
   });
 
@@ -209,5 +243,99 @@ describe("startSessionClient", () => {
       "[session-client] connect error",
       expect.objectContaining({ error: "Invalid authentication token" }),
     );
+  });
+
+  it("forces a token refresh on an auth-shaped connect_error (issue-4-plan.md §6.6)", async () => {
+    const fakeSocket = new FakeSocket();
+    const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+    const tokenProvider = fakeTokenProvider();
+    const deps = buildDeps({
+      ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+      tokenProvider,
+    });
+
+    startSessionClient(deps);
+    fakeSocket.trigger("connect_error", new Error("Invalid authentication token"));
+    await vi.waitFor(() => expect(tokenProvider.forceRefreshCalls).toBe(1));
+
+    // A non-auth-shaped error must NOT trigger a refresh.
+    fakeSocket.trigger("connect_error", new Error("xhr poll error"));
+    expect(tokenProvider.forceRefreshCalls).toBe(1);
+  });
+
+  it("proactively renews the same live socket via renew-token, re-arming on success", async () => {
+    vi.useFakeTimers();
+    try {
+      const fakeSocket = new FakeSocket();
+      const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+      const tokenProvider = fakeTokenProvider("fresh-token");
+      const deps = buildDeps({
+        ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+        tokenProvider,
+        renewIntervalMs: 60_000,
+      });
+
+      startSessionClient(deps);
+      fakeSocket.trigger("connect");
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      const renewCall = fakeSocket.emitted.find((e) => e.event === "renew-token");
+      expect(renewCall?.payload).toBe("fresh-token");
+      renewCall?.ack?.(true);
+
+      // Re-armed: another interval later, a second renew-token fires.
+      await vi.advanceTimersByTimeAsync(60_000);
+      const renewCalls = fakeSocket.emitted.filter((e) => e.event === "renew-token");
+      expect(renewCalls.length).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("logs a warning instead of renewing when the token provider can't produce a token", async () => {
+    vi.useFakeTimers();
+    try {
+      const fakeSocket = new FakeSocket();
+      const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+      const warn = vi.fn();
+      const deps = buildDeps({
+        ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+        tokenProvider: fakeTokenProvider(null),
+        renewIntervalMs: 60_000,
+        logger: { ...silentLogger(), warn },
+      });
+
+      startSessionClient(deps);
+      fakeSocket.trigger("connect");
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("could not obtain an access token"),
+      );
+      expect(fakeSocket.emitted.some((e) => e.event === "renew-token")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops the renew timer on stop() and on disconnect", async () => {
+    vi.useFakeTimers();
+    try {
+      const fakeSocket = new FakeSocket();
+      const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+      const deps = buildDeps({
+        ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+        renewIntervalMs: 60_000,
+      });
+
+      const handle = startSessionClient(deps);
+      fakeSocket.trigger("connect");
+      handle.stop();
+
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(fakeSocket.emitted.some((e) => e.event === "renew-token")).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

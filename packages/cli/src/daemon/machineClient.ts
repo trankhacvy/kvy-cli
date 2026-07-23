@@ -30,6 +30,7 @@ import { homedir, hostname, platform } from "node:os";
 import { encodeBase64, encrypt } from "@falcon/crypto";
 import type { EncryptedBox, MachineRow } from "@falcon/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
+import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
@@ -65,7 +66,8 @@ export interface MachineIdentity {
 
 export interface MachineClientDeps {
   serverUrl: string;
-  token: string;
+  /** issue-4-plan.md §6.6: mints/refreshes access tokens from a persistent refresh token — replaces the fixed `token: string` that was the root cause of "daemon silently dies after 1h" (known-issues.md #4). */
+  tokenProvider: TokenProvider;
   homeDir: string;
   encryptionKey: Uint8Array;
   encryptionVariant: EncryptionVariant;
@@ -96,7 +98,7 @@ function defaultMetadata(): MachineMetadata {
 export function createMachineClientDeps(
   required: Pick<
     MachineClientDeps,
-    "serverUrl" | "token" | "homeDir" | "encryptionKey" | "encryptionVariant" | "dek"
+    "serverUrl" | "tokenProvider" | "homeDir" | "encryptionKey" | "encryptionVariant" | "dek"
   >,
   overrides: Partial<MachineClientDeps> = {},
 ): MachineClientDeps {
@@ -154,11 +156,12 @@ async function postMachines(
   },
 ): Promise<MachinePostResult> {
   try {
+    const token = (await deps.tokenProvider.getAccessToken()) ?? "";
     const res = await deps.fetchImpl(`${deps.serverUrl}/v1/machines`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        authorization: `Bearer ${deps.token}`,
+        authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });
@@ -356,14 +359,60 @@ export async function startMachineClient(
   let identity = registered.identity;
   await persistMachineId(deps.homeDir, identity.machineId);
 
+  // issue-4-plan.md §6.6: `auth` as an async callback (not a static object) so every
+  // (re)connection attempt — including automatic reconnects hours or days later — asks
+  // `tokenProvider` for a currently-valid access token instead of replaying whatever was
+  // valid at process start. This is the fix for the "daemon silently dies after 1h"
+  // failure mode (known-issues.md #4): a fixed token in the handshake object would still
+  // go stale the same way the old plain `token: string` did.
   const socket = deps.ioFactory(deps.serverUrl, {
     path: "/v1/stream",
     transports: ["websocket"],
-    auth: { token: deps.token, clientType: "machine-scoped", machineId: identity.machineId },
+    auth: async (cb: (data: Record<string, unknown>) => void) => {
+      const token = (await deps.tokenProvider.getAccessToken()) ?? "";
+      cb({ token, clientType: "machine-scoped", machineId: identity.machineId });
+    },
   });
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  let renewTimer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
+
+  function stopRenewTimer(): void {
+    if (renewTimer) {
+      clearTimeout(renewTimer);
+      renewTimer = null;
+    }
+  }
+
+  // Proactive in-band renewal (§4.5/§6.6): re-authenticates the SAME live socket ~1m
+  // before the current access token's own expiry rather than waiting for the server to
+  // drop the connection. Only takes effect once the server actually implements the
+  // `renew-token` handler (Phase 6) — emitting it against an older server is a harmless
+  // unhandled event, not an error, so this is safe to land ahead of that server change.
+  function armRenewTimer(): void {
+    stopRenewTimer();
+    renewTimer = setTimeout(
+      async () => {
+        if (stopped) return;
+        const token = await deps.tokenProvider.getAccessToken();
+        if (!token) {
+          deps.logger.warn(
+            "[machine-client] could not obtain an access token to renew — re-authentication required, run `falcon auth login`",
+          );
+          return;
+        }
+        socket.emit("renew-token", token, (ok: boolean) => {
+          if (ok) armRenewTimer();
+          else deps.logger.warn("[machine-client] renew-token was rejected by the server");
+        });
+      },
+      // ACCESS_TOKEN_TTL_SECONDS is 1h through Phase 5 (15m from Phase 6) — renewing at
+      // a fixed interval well inside either bound is simpler than decoding the token's
+      // own `exp` claim here and is still comfortably ahead of expiry in both cases.
+      10 * 60 * 1000,
+    );
+  }
 
   function stopHeartbeat(): void {
     if (heartbeatTimer) {
@@ -386,6 +435,7 @@ export async function startMachineClient(
     if (stopped) return;
     deps.logger.info("[machine-client] connected", { machineId: identity.machineId });
     startHeartbeat();
+    armRenewTimer();
 
     pushRuntimeState(deps, identity, deps.buildRuntimeState())
       .then((result) => {
@@ -411,11 +461,23 @@ export async function startMachineClient(
     // logged or a persistent auth/config problem would never be visible
     // (no-silent-failures).
     deps.logger.warn("[machine-client] connect error", { error: error.message });
+
+    // issue-4-plan.md §6.6: an auth-shaped rejection means the access token the last
+    // handshake presented was stale/revoked — force a refresh so the NEXT automatic
+    // reconnect attempt (socket.io-client keeps retrying on its own) presents a fresh
+    // one instead of the same dead credential the old fixed-token client looped on
+    // forever (known-issues.md #4). If the refresh token itself is dead,
+    // `tokenProvider.isDead` will be true and every subsequent handshake keeps failing
+    // with a clear "run falcon auth login" log line rather than a silent retry storm.
+    if (/authentication token|Session revoked/i.test(error.message)) {
+      void deps.tokenProvider.forceRefresh();
+    }
   });
 
   socket.on("disconnect", (reason: string) => {
     deps.logger.info("[machine-client] disconnected", { reason });
     stopHeartbeat();
+    stopRenewTimer();
 
     // socket.io-client auto-reconnects on transport drops, but NOT when the
     // server explicitly disconnects the socket (`reason === "io server
@@ -435,6 +497,7 @@ export async function startMachineClient(
       stop: () => {
         stopped = true;
         stopHeartbeat();
+        stopRenewTimer();
         socket.close();
       },
     },
