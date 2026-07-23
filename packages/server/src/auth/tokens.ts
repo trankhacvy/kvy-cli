@@ -11,16 +11,22 @@ import { env } from "../config.js";
 // tokens without the mint secret — that's the point RS256 would earn its complexity.
 const ALGORITHM = "HS256";
 
-// falcon-system-design.md §5.2: "JWT (1 h, auto-refresh)" — replaces Happy's persistent
-// tokens (falcon-plan.md §4.4 delta D5). Auto-refresh is a client-side concern (re-mint
-// before expiry); this module only enforces the lifetime.
+// issue-4-plan.md §4.1/§8: stays 1h through Phase 1-5, flips to 15m in Phase 6 once web
+// and CLI can silently refresh — a short TTL flip before those consumers exist would
+// regress UX (forced re-login every 15 minutes).
 export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
 
-// The account identity anchor (falcon-system-design.md §6.1: accounts.id). Deliberately
-// minimal — this module is DB-agnostic (per task scope) and knows nothing about the
-// `accounts` table beyond the id string it's handed.
+/** The three surfaces that mint device sessions today (§3.2). Cloud sandboxes join later (§7). */
+export type ClientKind = "web" | "cli-daemon" | "cli-session" | "cloud-sandbox";
+
+// issue-4-plan.md §4.1: an access token now carries session-scoped claims — `sid`
+// (device_sessions.id) and `ct` (clientKind) — not just the bare account id. This is what
+// makes per-session revocation (§4.4/§4.5) and per-client-kind bookkeeping possible; a
+// pre-issue-4 token has neither claim and is rejected by `verifyToken` below.
 export interface TokenPayload {
   accountId: string;
+  sessionId: string;
+  clientKind: ClientKind;
 }
 
 export interface VerifiedToken extends TokenPayload {
@@ -39,18 +45,27 @@ function signingKey(secret?: string): Uint8Array {
   return new TextEncoder().encode(secret ?? env.FALCON_MASTER_SECRET);
 }
 
+function isClientKind(value: unknown): value is ClientKind {
+  return (
+    value === "web" || value === "cli-daemon" || value === "cli-session" || value === "cloud-sandbox"
+  );
+}
+
 /**
- * Mint a short-lived JWT for `accountId`. The token carries no other claims — session,
- * device, and permission state all live server-side, keyed off the account id, so the
- * token itself stays a thin, low-value bearer credential.
+ * Mint a short-lived access JWT for a `device_sessions` row. Stateless (no per-request DB
+ * hit to verify) — revocation is enforced at refresh time and at the WS layer (§4.3/§4.5),
+ * not by checking every access token against the database.
  */
-export async function mintToken(accountId: string, opts: TokenOptions = {}): Promise<string> {
+export async function mintAccessToken(
+  payload: TokenPayload,
+  opts: TokenOptions = {},
+): Promise<string> {
   const ttlSeconds = opts.ttlSeconds ?? ACCESS_TOKEN_TTL_SECONDS;
   const nowSeconds = Math.floor(Date.now() / 1000);
 
-  return new SignJWT({})
+  return new SignJWT({ sid: payload.sessionId, ct: payload.clientKind })
     .setProtectedHeader({ alg: ALGORITHM })
-    .setSubject(accountId)
+    .setSubject(payload.accountId)
     .setIssuedAt(nowSeconds)
     .setExpirationTime(nowSeconds + ttlSeconds)
     .sign(signingKey(opts.secret));
@@ -58,10 +73,12 @@ export async function mintToken(accountId: string, opts: TokenOptions = {}): Pro
 
 /**
  * Verify a token and return its payload, or `null` if the token is missing, malformed,
- * tampered with, signed under a different secret, or expired. Mirrors the crypto
- * package's "unwrap never throws" rule (falcon-system-design.md §5.1) — an invalid
- * token is an expected, routine outcome (expiry, a stale client), not an exceptional
- * one, so callers branch on the return value instead of catching.
+ * tampered with, signed under a different secret, expired, or missing the `sid`/`ct`
+ * claims every issue-4 token carries (a pre-issue-4 token, or a missed `mintAccessToken`
+ * call site — reject rather than default, per §4.1). Mirrors the crypto package's "unwrap
+ * never throws" rule (falcon-system-design.md §5.1) — an invalid token is an expected,
+ * routine outcome (expiry, a stale client), not an exceptional one, so callers branch on
+ * the return value instead of catching.
  */
 export async function verifyToken(
   token: string,
@@ -75,8 +92,15 @@ export async function verifyToken(
     });
     if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
     if (typeof payload.exp !== "number") return null;
+    if (typeof payload.sid !== "string" || payload.sid.length === 0) return null;
+    if (!isClientKind(payload.ct)) return null;
 
-    return { accountId: payload.sub, expiresAt: payload.exp };
+    return {
+      accountId: payload.sub,
+      sessionId: payload.sid,
+      clientKind: payload.ct,
+      expiresAt: payload.exp,
+    };
   } catch {
     // Any failure (bad signature, expired, malformed) collapses to null — see doc
     // comment above. jose's error subtypes aren't distinguished here on purpose: a

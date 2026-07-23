@@ -3,10 +3,10 @@ import { decodeBase64, encodeBase64 } from "@falcon/crypto";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mintToken } from "../../auth/index.js";
+import { mintAccessToken } from "../../auth/index.js";
 import { db } from "../../db/client.js";
 import { runMigrations } from "../../db/migrate.js";
-import { pairRequests } from "../../db/schema.js";
+import { accounts, pairRequests } from "../../db/schema.js";
 import { isDatabaseAvailable } from "../../db/testDbAvailable.js";
 import { buildServer } from "../server.js";
 
@@ -26,6 +26,18 @@ afterAll(async () => {
 
 function freshEphPub(): string {
   return encodeBase64(new Uint8Array(randomBytes(32)));
+}
+
+// The approve route now internally calls `issueSession`, which inserts a real
+// `device_sessions` row FK'd to `accounts.id` — so the bearer token exercising it must
+// belong to a real account row, not just an arbitrary well-formed JWT subject.
+async function createAccountAndToken(): Promise<string> {
+  const [account] = await db
+    .insert(accounts)
+    .values({ signPublicKey: `test-${randomBytes(16).toString("hex")}` })
+    .returning({ id: accounts.id });
+  if (!account) throw new Error("createAccountAndToken: insert returned no row");
+  return mintAccessToken({ accountId: account.id, sessionId: "sess_test", clientKind: "web" });
 }
 
 describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
@@ -133,7 +145,7 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
     });
 
     it("404s when no matching pair request exists", async () => {
-      const token = await mintToken("acct_approver");
+      const token = await createAccountAndToken();
       const response = await approve(freshEphPub(), new Uint8Array([1, 2, 3]), token);
       expect(response.statusCode).toBe(404);
     });
@@ -141,7 +153,7 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
     it("410s when the pair request has expired", async () => {
       const ephPub = freshEphPub();
       await db.insert(pairRequests).values({ ephPub, expiresAt: new Date(Date.now() - 1000) });
-      const token = await mintToken("acct_approver");
+      const token = await createAccountAndToken();
 
       const response = await approve(ephPub, new Uint8Array([1, 2, 3]), token);
       expect(response.statusCode).toBe(410);
@@ -151,7 +163,7 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       const ephPub = freshEphPub();
       await pair(ephPub);
 
-      const approverToken = await mintToken("acct_approver");
+      const approverToken = await createAccountAndToken();
       const sealedBox = new Uint8Array([9, 8, 7, 6, 5]);
       const approveResponse = await approve(ephPub, sealedBox, approverToken);
       expect(approveResponse.statusCode).toBe(200);
@@ -173,8 +185,8 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
 
       const firstBox = new Uint8Array([1, 1, 1]);
       const secondBox = new Uint8Array([2, 2, 2]);
-      const tokenA = await mintToken("acct_a");
-      const tokenB = await mintToken("acct_b");
+      const tokenA = await createAccountAndToken();
+      const tokenB = await createAccountAndToken();
 
       const first = await approve(ephPub, firstBox, tokenA);
       const second = await approve(ephPub, secondBox, tokenB);

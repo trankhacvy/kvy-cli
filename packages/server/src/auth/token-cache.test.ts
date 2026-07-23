@@ -3,7 +3,7 @@ import { TokenCache } from "./token-cache.js";
 import type { VerifiedToken } from "./tokens.js";
 
 function payload(accountId: string, expiresAt: number): VerifiedToken {
-  return { accountId, expiresAt };
+  return { accountId, expiresAt, sessionId: `sess_${accountId}`, clientKind: "web" };
 }
 
 describe("TokenCache", () => {

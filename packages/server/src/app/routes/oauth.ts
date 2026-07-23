@@ -6,25 +6,18 @@
  * near-verbatim `POST /v1/auth` port; see the docblock on `buildOAuthRoutes`
  * below for the full delta rationale.
  */
-import { decodeBase64 } from "@falcon/crypto";
-import type { PgDatabase } from "drizzle-orm/pg-core";
+import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
-import tweetnacl from "tweetnacl";
 import { z } from "zod";
+import { issueSession } from "../../auth/refresh.js";
 import {
   defaultGithubCodeExchanger,
   defaultOAuthVerifier,
   type GithubCodeExchanger,
   type OAuthVerifier,
 } from "../../auth/oauth.js";
-import { mintToken } from "../../auth/tokens.js";
-import { accounts } from "../../db/schema.js";
-import { toHex } from "./hex.js";
-
-// See auth.ts for why both generic slots are erased to `any`: this route only ever
-// calls `db.insert(accounts)...`, whose typing comes from the `accounts` import, not
-// from either driver's generic.
-type Database = PgDatabase<any, any>;
+import { accounts, authIdentities } from "../../db/schema.js";
+import type { Database } from "../../db/types.js";
 
 const RegisterRequestSchema = z.object({
   // "dev" is the `FALCON_DEV_AUTH` local-testing bypass (auth/oauth.ts) — accepted
@@ -34,14 +27,6 @@ const RegisterRequestSchema = z.object({
   // Google: an OpenID Connect ID token (JWT). GitHub: an OAuth access token. Verified
   // server-side by `auth/oauth.ts` — never trusted at face value.
   oauthProof: z.string().min(1),
-  // Ed25519 identity key (base64) minted client-side from the browser-generated
-  // masterSecret (design §5.2 "Sign-up"). Field name matches the design doc's
-  // `POST /v1/auth/register` body shape exactly (`signPubKey`, not `publicKey` as in
-  // the sibling `/v1/auth` challenge-response route — this is a separate endpoint with
-  // its own documented contract).
-  signPubKey: z.string().min(1),
-  // X25519 content key (base64) — stored as `accounts.contentPubKey`, same as `/v1/auth`.
-  contentPubKey: z.string().min(1),
 });
 
 const RegisterResponseSchema = z.object({
@@ -54,21 +39,19 @@ const RegisterErrorSchema = z.object({
 });
 
 /**
- * `POST /v1/auth/register` — Falcon-specific sign-up route, not present in Happy
- * (falcon-plan.md §1.2 delta D5). Per design §5.2: the browser generates masterSecret
- * and derives keys entirely client-side; OAuth (Google/GitHub — email+password
- * deferred, falcon-plan.md §1.2) only binds an identity for account recovery/contact,
- * it is never the account's key material. The server:
+ * `POST /v1/auth/register` — OAuth sign-in/sign-up (issue-4-plan.md §5.5): identity and
+ * key custody are split. OAuth is now a first-class login identity, resolved by
+ * `(kind, subject)` in `auth_identities` (find-or-create, idempotent — signing in with
+ * the same Google/GitHub account twice always resolves to the same account row) — it no
+ * longer binds `signPubKey`/`contentPubKey` at all; that happens afterward via
+ * `keys/challenge` + `keys/bind` (§6.2), once the client has generated or unwrapped its
+ * `masterSecret`. The server:
  *
  *   1. verifies `oauthProof` against the named provider (`auth/oauth.ts`) — a forged
  *      or expired proof is rejected before touching the database;
- *   2. upserts the `accounts` row keyed by the hex-encoded `signPubKey` (idempotent,
- *      same shape as `/v1/auth`'s upsert), stamping `oauthProvider`/`oauthSubject`;
- *   3. mints and returns a JWT, exactly like `/v1/auth`.
- *
- * Re-registering the same `signPubKey` (e.g. the user re-runs sign-up, or switches
- * which OAuth account they bind) rebinds the recovery identity and refreshes
- * `contentPubKey` — the row is otherwise the same one `/v1/auth` logs into afterward.
+ *   2. finds or creates the `auth_identities` row (and its `accounts` row, on first
+ *      sign-in) for `(provider, subject)`;
+ *   3. mints a real device session (`issueSession`) and returns its access token.
  *
  * `db`/`verifier` are injected (mirrors `buildAuthRoutes`) so tests can bind an
  * in-memory Postgres and a fake OAuth verifier without touching `DATABASE_URL` or the
@@ -134,44 +117,37 @@ export function buildOAuthRoutes(
         },
       },
       async (request, reply) => {
-        const signPublicKey = decodeBase64(request.body.signPubKey);
-        if (signPublicKey.length !== tweetnacl.sign.publicKeyLength) {
-          return reply.code(400).send({ error: "Malformed signPubKey" });
-        }
-
         const identity = await verifier.verify(request.body.oauthProvider, request.body.oauthProof);
         if (!identity) {
           return reply.code(401).send({ error: "Invalid OAuth proof" });
         }
 
-        const signPublicKeyHex = toHex(signPublicKey);
-        const contentPubKey = request.body.contentPubKey;
+        // issue-4-plan.md §5.5: OAuth is a first-class login identity now, resolved by
+        // `(kind, subject)` in `auth_identities` — not a key-binding side channel on
+        // `accounts` anymore. Key material (signPubKey/contentPubKey) is bound
+        // separately via `keys/challenge` + `keys/bind` (§6.2), after login.
+        const existing = await db.query.authIdentities.findFirst({
+          where: and(
+            eq(authIdentities.kind, identity.provider),
+            eq(authIdentities.identifier, identity.subject),
+          ),
+        });
 
-        const [account] = await db
-          .insert(accounts)
-          .values({
-            signPublicKey: signPublicKeyHex,
-            contentPubKey,
-            oauthProvider: identity.provider,
-            oauthSubject: identity.subject,
-          })
-          .onConflictDoUpdate({
-            target: accounts.signPublicKey,
-            set: {
-              contentPubKey,
-              oauthProvider: identity.provider,
-              oauthSubject: identity.subject,
-            },
-          })
-          .returning();
+        const accountId = existing
+          ? existing.accountId
+          : await db.transaction(async (tx) => {
+              const [account] = await tx.insert(accounts).values({}).returning({ id: accounts.id });
+              if (!account) throw new Error("oauth register: account insert returned no row");
+              await tx.insert(authIdentities).values({
+                accountId: account.id,
+                kind: identity.provider,
+                identifier: identity.subject,
+              });
+              return account.id;
+            });
 
-        if (!account) {
-          // Unreachable in practice — see auth.ts's identical guard.
-          throw new Error("oauth register: upsert returned no account row");
-        }
-
-        const token = await mintToken(account.id);
-        return reply.send({ success: true, token });
+        const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
+        return reply.send({ success: true, token: accessToken });
       },
     );
   };

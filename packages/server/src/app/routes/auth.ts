@@ -10,7 +10,7 @@ import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import tweetnacl from "tweetnacl";
 import { z } from "zod";
-import { mintToken } from "../../auth/index.js";
+import { issueSession } from "../../auth/index.js";
 import { accounts } from "../../db/schema.js";
 import { toHex } from "./hex.js";
 
@@ -144,10 +144,15 @@ export function buildAuthRoutes(db: Database): FastifyPluginAsyncZod {
           throw new Error("auth: upsert returned no account row");
         }
 
-        const token = await mintToken(account.id);
+        // issue-4-plan.md §4.1/§4.2: every login mints a real device_sessions row (not a
+        // bare stateless token) — this legacy route is slated for deletion once the web
+        // migrates off it (§5.5, Phase 4), but until then it must keep minting sessions
+        // the same way the new password/OAuth routes do so `verifyToken`'s stricter
+        // sid/ct check (§4.1) doesn't reject its tokens.
+        const { accessToken } = await issueSession(db, { accountId: account.id, clientKind: "web" });
         return reply.send({
           success: true,
-          token,
+          token: accessToken,
           accountStatus: account.created ? "created" : "found",
         });
       },

@@ -2,7 +2,11 @@ import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mintToken } from "../../auth/tokens.js";
+import { mintAccessToken } from "../../auth/tokens.js";
+
+function mintToken(accountId: string): Promise<string> {
+  return mintAccessToken({ accountId, sessionId: `sess_${accountId}`, clientKind: "web" });
+}
 import { buildServer } from "../server.js";
 
 // RPC integration tests (plan.md §16 "4.4 Hardening & release gate": "RPC integration

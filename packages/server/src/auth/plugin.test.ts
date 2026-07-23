@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServer } from "../app/server.js";
-import { mintToken } from "./tokens.js";
+import { mintAccessToken } from "./tokens.js";
+
+function mintToken(accountId: string): Promise<string> {
+  return mintAccessToken({ accountId, sessionId: "sess_test", clientKind: "web" });
+}
 
 // Exercises `app.authenticate` (registered by authPlugin in buildServer()) end-to-end
 // through a throwaway protected route, the same way a real route will use it once the

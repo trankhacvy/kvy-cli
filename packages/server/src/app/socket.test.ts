@@ -5,7 +5,11 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { mintToken } from "../auth/tokens.js";
+import { mintAccessToken } from "../auth/tokens.js";
+
+function mintToken(accountId: string): Promise<string> {
+  return mintAccessToken({ accountId, sessionId: `sess_${accountId}`, clientKind: "web" });
+}
 import { encodeBox } from "../db/box.js";
 import { machines } from "../db/schema.js";
 import { eventRouter } from "./events/eventRouter.js";

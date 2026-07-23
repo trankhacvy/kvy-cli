@@ -5,9 +5,10 @@ import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { mintToken } from "../../auth/index.js";
+import { issueSession } from "../../auth/index.js";
 import * as schema from "../../db/schema.js";
 import { accounts } from "../../db/schema.js";
+import type { Database } from "../../db/types.js";
 import type {
   EmitEphemeralParams,
   EmitUpdateParams,
@@ -33,8 +34,8 @@ export async function createTestDb() {
   return { db, pglite };
 }
 
-/** Inserts a bare account row and mints a bearer token for it. */
-export async function createTestAccount(db: ReturnType<typeof drizzle>) {
+/** Inserts a bare account row, issues a device session for it, and mints a bearer token. */
+export async function createTestAccount(db: Database) {
   const [account] = await db
     .insert(accounts)
     .values({
@@ -43,8 +44,8 @@ export async function createTestAccount(db: ReturnType<typeof drizzle>) {
     })
     .returning();
   if (!account) throw new Error("createTestAccount: insert returned no row");
-  const token = await mintToken(account.id);
-  return { account, token, authHeader: `Bearer ${token}` };
+  const { accessToken } = await issueSession(db, { accountId: account.id, clientKind: "web" });
+  return { account, token: accessToken, authHeader: `Bearer ${accessToken}` };
 }
 
 /**

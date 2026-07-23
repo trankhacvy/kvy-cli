@@ -2,7 +2,7 @@ import { decodeBase64, encodeBase64 } from "@falcon/crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { mintToken } from "../../auth/index.js";
+import { issueSession } from "../../auth/index.js";
 import { db } from "../../db/client.js";
 import { pairRequests } from "../../db/schema.js";
 
@@ -173,10 +173,22 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       // conditional UPDATE — the `isNull(response)` guard is Drizzle's equivalent of
       // `onConflictDoNothing` for a row that (unlike an INSERT conflict) already exists:
       // a second concurrent approve matches zero rows and silently no-ops.
-      const token = await mintToken(request.accountId);
+      //
+      // issue-4-plan.md §6.3 KNOWN GAP: the approving device now mints a real device
+      // session (not a bare stateless token), but this route still stores the resulting
+      // access token in `pairRequests.token` in PLAINTEXT and serves it back over the
+      // unauthenticated poll route above — the exact escalation §6.3 flags. The full fix
+      // (seal the *refresh* token into the same E2E box as the master secret, store only
+      // its hash, drop this plaintext column) is cross-package (crypto sealed-payload
+      // version bump + CLI/web unseal changes) and is deferred — tracked in
+      // docs/issue-4-plan.md's Phase 2 checklist as not yet done.
+      const { accessToken } = await issueSession(db, {
+        accountId: request.accountId,
+        clientKind: "cli-daemon",
+      });
       await db
         .update(pairRequests)
-        .set({ response: decodeBase64(response), token, state: "authorized" })
+        .set({ response: decodeBase64(response), token: accessToken, state: "authorized" })
         .where(and(eq(pairRequests.ephPub, ephPub), isNull(pairRequests.response)));
 
       return reply.send({ success: true });

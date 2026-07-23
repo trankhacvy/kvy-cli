@@ -8,9 +8,12 @@ import * as schema from "./schema.js";
 // `drizzle-kit generate` + applying the migration against a real Postgres,
 // not by this suite.
 describe("db schema", () => {
-  it("declares the tables named in the design doc (§6.1)", () => {
+  it("declares the tables named in the design doc (§6.1) and issue-4-plan.md §3", () => {
     const tableNames = [
       schema.accounts,
+      schema.authIdentities,
+      schema.deviceSessions,
+      schema.keyBindNonces,
       schema.machines,
       schema.workspaces,
       schema.sessions,
@@ -24,6 +27,9 @@ describe("db schema", () => {
 
     expect(tableNames).toEqual([
       "accounts",
+      "auth_identities",
+      "device_sessions",
+      "key_bind_nonces",
       "machines",
       "workspaces",
       "sessions",
@@ -34,6 +40,41 @@ describe("db schema", () => {
       "telegram_link_requests",
       "blobs",
     ]);
+  });
+
+  it("makes accounts.signPublicKey/contentPubKey nullable and adds a rotatable keyEpoch (issue-4-plan.md §3.3)", () => {
+    const config = getTableConfig(schema.accounts);
+    const signPublicKey = config.columns.find((c) => c.name === "sign_public_key");
+    const contentPubKey = config.columns.find((c) => c.name === "content_pub_key");
+    const keyEpoch = config.columns.find((c) => c.name === "key_epoch");
+
+    expect(signPublicKey?.notNull).toBe(false);
+    expect(contentPubKey?.notNull).toBe(false);
+    expect(keyEpoch?.notNull).toBe(true);
+  });
+
+  it("tags every DEK-bearing row with the key epoch it was wrapped under (§3.4)", () => {
+    for (const table of [schema.machines, schema.workspaces, schema.sessions]) {
+      const keyEpoch = getTableConfig(table).columns.find((c) => c.name === "key_epoch");
+      expect(keyEpoch?.notNull).toBe(true);
+    }
+  });
+
+  it("device_sessions carries rotation lineage for theft detection (§3.2, §4.3)", () => {
+    const config = getTableConfig(schema.deviceSessions);
+    const columnNames = config.columns.map((c) => c.name);
+    expect(columnNames).toEqual(
+      expect.arrayContaining([
+        "refresh_token_hash",
+        "previous_refresh_token_hash",
+        "previous_rotated_at",
+        "family_id",
+        "expires_at",
+        "revoked_at",
+      ]),
+    );
+    const refreshTokenHash = config.columns.find((c) => c.name === "refresh_token_hash");
+    expect(refreshTokenHash?.isUnique).toBe(true);
   });
 
   it("uses the bytea custom type for every EncryptedBox column", () => {

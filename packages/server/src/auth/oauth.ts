@@ -2,22 +2,22 @@ import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
 import { env } from "../config.js";
 
 /**
- * OAuth binding for account recovery/contact (design §5.2, falcon-plan.md §1.2:
- * "OAuth binding … stored on account for recovery only. Defer email+password.") —
- * this is `accounts.oauthProvider`'s value space; the schema column itself has no
- * enum constraint, but every writer (only `buildRegisterRoute`, see routes/oauth.ts)
- * goes through this module, so this union is the effective source of truth.
+ * OAuth is a first-class login identity now (issue-4-plan.md §5.5), resolved by
+ * `(kind, identifier)` in `auth_identities` — this is that `kind` column's value space.
+ * The schema column itself has no enum constraint, but every writer (only
+ * `buildOAuthRoutes`, see routes/oauth.ts) goes through this module, so this union is
+ * the effective source of truth.
  *
  * "dev" is not a real provider — it's the `FALCON_DEV_AUTH` local-testing bypass
  * (see `verifyDevProof` below), included in this union so it flows through the
- * same register route / account row shape as a real provider rather than needing
+ * same register route / identity row shape as a real provider rather than needing
  * a parallel code path.
  */
 export type OAuthProvider = "google" | "github" | "dev";
 
 export interface OAuthIdentity {
   provider: OAuthProvider;
-  /** The provider's stable user id — becomes `accounts.oauthSubject`. */
+  /** The provider's stable user id — becomes `auth_identities.identifier`. */
   subject: string;
 }
 
