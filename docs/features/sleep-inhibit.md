@@ -161,6 +161,8 @@ needs a live daemon + browser session this environment doesn't have).
 No known gaps in the feature itself — the only incomplete item is the optional live-Mac
 smoke test, which is a verification step, not a missing implementation piece.
 
+Merged into v2-pty-injection at ab4ea3eb3c154254d8a03aecb27c2b3440f1f6da.
+
 ## Test & Review notes
 
 Independent verification pass (separate agent, did not write the original implementation).
