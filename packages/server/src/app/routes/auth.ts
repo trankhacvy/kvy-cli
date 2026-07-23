@@ -6,21 +6,13 @@
  */
 import { decodeBase64 } from "@falcon/crypto";
 import { sql } from "drizzle-orm";
-import type { PgDatabase } from "drizzle-orm/pg-core";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import tweetnacl from "tweetnacl";
 import { z } from "zod";
 import { issueSession } from "../../auth/index.js";
 import { accounts } from "../../db/schema.js";
+import type { Database } from "../../db/types.js";
 import { toHex } from "./hex.js";
-
-// Both generic slots are erased to `any` on purpose: they're the two places
-// `PostgresJsDatabase` (production, db/client.ts) and `PgliteDatabase` (tests, see
-// auth.test.ts) structurally diverge (query-result HKT and relational-schema shape),
-// and this route only ever calls `db.insert(accounts)...` — whose typing comes from
-// the `accounts` table import directly, not from either generic — so nothing is lost
-// by accepting either driver here.
-type Database = PgDatabase<any, any>;
 
 const AuthRequestSchema = z.object({
   // Ed25519 identity key (base64) — the account's `signPublicKey`, hex-encoded below

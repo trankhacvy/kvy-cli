@@ -80,7 +80,7 @@ describe("POST /v1/auth/register", () => {
     const [row] = await db
       .select()
       .from(authIdentities)
-      .where(eq(authIdentities.accountId, verified!.accountId));
+      .where(eq(authIdentities.accountId, verified?.accountId ?? ""));
     expect(row?.kind).toBe("google");
     expect(row?.identifier).toBe("alice-sub");
   });
@@ -118,7 +118,7 @@ describe("POST /v1/auth/register", () => {
     const rows = await db
       .select()
       .from(authIdentities)
-      .where(eq(authIdentities.accountId, firstVerified!.accountId));
+      .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
     expect(rows).toHaveLength(1);
   });
 

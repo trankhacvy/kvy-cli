@@ -70,8 +70,7 @@ export function buildRefreshRoutes(db: Database): FastifyPluginAsyncZod {
           where: eq(deviceSessions.previousRefreshTokenHash, presented),
         });
         if (
-          prior &&
-          prior.previousRotatedAt &&
+          prior?.previousRotatedAt &&
           now.getTime() - prior.previousRotatedAt.getTime() <= GRACE_MS &&
           !prior.revokedAt
         ) {
