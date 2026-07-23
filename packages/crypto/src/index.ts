@@ -22,5 +22,6 @@ export {
   libsodiumPublicKeyFromSecretKey,
 } from "./encryption.js";
 export { deriveBlobKey, deriveKeyTree, signDetached, verifyDetached } from "./keys.js";
+export { unwrapWithPin, wrapWithPin } from "./pin.js";
 export { decodeRecoveryCode, encodeRecoveryCode } from "./recovery.js";
 export * from "./types.js";
