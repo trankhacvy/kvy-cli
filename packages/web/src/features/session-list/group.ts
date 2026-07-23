@@ -22,6 +22,19 @@ function byPinnedThenUpdatedAtDesc(a: SessionListSession, b: SessionListSession)
   return b.updatedAt - a.updatedAt;
 }
 
+/** The group-level "most recently active" key. Deliberately the MAX
+ * `updatedAt` across every session in the group, not `sessions[0]`'s —
+ * since Phase 4's pinned-first sort means `sessions[0]` can be an old
+ * pinned session, which must not make a workspace with genuinely fresher
+ * (but unpinned) activity sort BELOW a less-recently-active workspace. */
+function mostRecentUpdatedAt(sessions: readonly SessionListSession[]): number {
+  let max = 0;
+  for (const session of sessions) {
+    if (session.updatedAt > max) max = session.updatedAt;
+  }
+  return max;
+}
+
 /**
  * Groups sessions by workspace and sorts each group's sessions pinned-first,
  * then by most recently updated. Group order: workspaces with at least one
@@ -49,7 +62,7 @@ export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): Workspa
     if (!workspace) continue; // unreachable given the bucketing above, but keeps this total
     groups.push({ workspace, sessions: [...sessions].sort(byPinnedThenUpdatedAtDesc) });
   }
-  groups.sort((a, b) => (b.sessions[0]?.updatedAt ?? 0) - (a.sessions[0]?.updatedAt ?? 0));
+  groups.sort((a, b) => mostRecentUpdatedAt(b.sessions) - mostRecentUpdatedAt(a.sessions));
 
   const ungrouped = buckets.get(UNGROUPED_WORKSPACE_ID);
   if (ungrouped && ungrouped.length > 0) {

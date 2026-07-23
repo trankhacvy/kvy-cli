@@ -85,7 +85,7 @@ Ship session lifecycle actions (Restart, Stop, Pin, Rename, Mark done + Complete
 - [x] Create a shared RenameSessionDialog component (packages/web/src/features/session-list/components/rename-session-dialog.tsx): controlled Dialog with a text input prefilled from the current title, submit calls useSessionMetadataPatchMutation(sessionId) with patch (cur) => ({ ...cur, title: <trimmed input> }); disable submit on empty/unchanged; show mutation error inline like the delete dialog does. Used from BOTH SessionCardActions and SessionActionsMenu (timeline header — it already has useSessionTitle for the prefill; SessionActionsMenu gained a required `title` prop threaded from SessionTimelineScreen).
 - [x] Pin/Unpin menu item in both menus: calls the same mutation with a functional patch that flips `pinned` (`session-card-actions-logic.ts`'s `buildPinTogglePatch`, unit-tested for both directions). SessionCardActions (which has the decrypted `pinned` value via `SessionListSession`) labels it "Pin"/"Unpin" accurately; SessionActionsMenu (which lacks a decrypted pinned value on the timeline) labels it generically "Pin / Unpin" — the functional patch still toggles correctly either way, per this task's own documented simplification.
 - [x] Thread `pinned` through the read path: in features/session-list/live-source.ts renamed decryptSessionTitle → decryptSessionMeta returning { title, pinned } (pinned = opened.pinned === true; default false on any failure); widened DecryptedTitles' session map value accordingly; buildSnapshot sets session.pinned. Added `pinned: boolean` to SessionListSession in types.ts. (This codebase has no mock-source.ts for session-list — session-list-screen.tsx's `useData` defaults straight to the live source and tests build fixture snapshots inline — so fixture updates landed in group.test.ts/session-card.test.ts/live-source.test.ts instead.)
-- [x] Pinned-first ordering: in group.ts, changed the within-group sort (now `byPinnedThenUpdatedAtDesc`) to pinned-first then updatedAt desc (applies to both branches including the ungrouped bucket); added group.test.ts cases for both. In session-card.tsx render a small pin indicator (lucide `Pin` icon next to the title) when session.pinned.
+- [x] Pinned-first ordering: in group.ts, changed the within-group sort (now `byPinnedThenUpdatedAtDesc`) to pinned-first then updatedAt desc (applies to both branches including the ungrouped bucket); added group.test.ts cases for both. In session-card.tsx render a small pin indicator (lucide `Pin` icon next to the title) when session.pinned. (Test & Review pass found and fixed a regression this introduced in the GROUP-level ordering — see "Test & Review notes" below.)
 - [x] Card-level Stop: added a Stop menu item (disabled when session.status is 'ended'/'failed'/'archived', via the exported `isSessionStoppable` pure helper), opening a confirm dialog that reuses timeline's stop-session-state.ts machine. To avoid one crypto worker per rendered card, the RPC machinery is mounted lazily: a `CardStopConfirmButton` child rendered only while the dialog is open, using `useSessionCrypto(sessionId)` (the same per-session DEK-unwrap hook `features/session-control` already has) then `createSessionRpcClient({ socket: apiSocket, crypto, sessionId }).call('stop', {})` — the same RPC the timeline's 'End session' already uses. Transport errors surface as the dialog's error state.
 - [x] Updated session-card-actions.test.ts (menu item enable/disable matrix via `isSessionStoppable`, pin toggle patch semantics via `buildPinTogglePatch`, closed-dialog render smoke tests — this package's vitest has no jsdom/RTL, so a genuinely open `DropdownMenu`/`Dialog` can't be asserted on directly; the pure logic behind each item's enable state and mutation payload is what's unit-tested instead, mirroring `stop-session-state.ts`'s own "pure module, no mount needed" precedent). SessionActionsMenu itself still has no dedicated test file (none existed before this feature either).
 
@@ -129,3 +129,78 @@ All six phases implemented, tested, and verified:
 Verified: `pnpm build && pnpm typecheck && pnpm test` green across every package (`@falcon/wire`, `@falcon/crypto`, `@falcon/server`, `falcon` (CLI), `@falcon/web`, `@falcon/e2e`) — including `@falcon/wire`'s schemaShape/additiveOnly compat tests, confirming no wire-schema changes leaked in anywhere. `pnpm --filter @falcon/web build` produces the new static `/completed` route. `node_modules/.bin/biome check` is clean on every file this feature touched (the root `pnpm lint`'s own documented "possibly OOM" transient failure — CLAUDE.md's own note — was worked around by invoking the biome binary directly and scoping to this feature's file list; the repo-wide `biome check .` run surfaces ~93 pre-existing errors in files this feature never touched, unrelated drift, not introduced here). Two flaky, unrelated test failures were observed and confirmed non-reproducing on rerun/isolation: `packages/server` db/seq.test.ts's Postgres-lock-timing concurrency test, and `packages/cli` src/index.test.ts's `--help`/`--version` timeout (both pass cleanly in isolation and on a subsequent full run).
 
 Known, deliberate simplifications (documented inline at their respective phase): Restore always resolves a formerly-archived row to `"active"` (the pre-archive status isn't persisted); the timeline header's Pin/Unpin label is generic (no decrypted `pinned` snapshot there) while the Home card's is accurate; the timeline header's Restart confirm copy says "on its machine" rather than a decrypted machine name (Home's card-level dialog does show the real name, since `SessionCard` already has it). None of these block the feature's core flows.
+
+## Test & Review notes
+
+Independent verification pass (worktree `.worktrees/feature-session-lifecycle-actions`), genuinely
+exercising the implementer's claims rather than trusting the checked boxes:
+
+**Full pipeline, unscoped:** `pnpm build && pnpm typecheck && pnpm test` all green across every
+package (`@falcon/wire` 135, `@falcon/crypto` 76, `@falcon/server` 322, `falcon` CLI 1717,
+`@falcon/web` 1033 — one more than the implementer's run, see the fix below —, `@falcon/e2e` 1;
+1717+... total tests, 0 failures) both before and after the fix applied here. `node_modules/.bin/biome
+check .` repo-wide reproduces the same ~93 pre-existing errors/131 warnings the implementer
+described (confirmed by diffing against files this feature touched); `biome check` scoped to
+exactly this feature's 33 changed/added files (the file list in the implementer's own report) is
+clean — 0 errors, 0 warnings — confirming that claim rather than trusting it.
+
+**Per-phase verification** (read the actual diff/behavior for each, not just the checkbox):
+- Phase 1 (server unarchive route): read `sessionArchive.ts` — matches the spec exactly (idempotent,
+  honest non-archived-status passthrough, single fan-out). Confirmed all 4 described test cases
+  exist and pass against a real PGlite-backed integration test (not mocked).
+- Phase 2 (CLI loose schema): read `sessionMetadata.ts` + its test file — `z.looseObject` +
+  spread-then-overlay `normalizeMetadata` genuinely preserve unknown keys (`pinned`) through both
+  the happy path and the 409-reconcile path; all 4 described test scenarios present and passing.
+- Phase 3 (web metadata CAS write): read `api.ts`'s `putSessionMetadataCas` and
+  `use-session-metadata-write.ts`'s `patchSessionMetadataCas` — CAS-retry, bounded to 5 attempts,
+  never seals from `{}` on a decrypt failure. The test file genuinely uses a real loopback-worker
+  crypto bridge (not a hand-rolled fake) and the 409 test decrypts real ciphertext to prove
+  field-level convergence, exactly as claimed.
+- Phase 4 (dropdown menu, Rename, Pin): read `session-card-actions.tsx`,
+  `rename-session-dialog.tsx`, `session-card-actions-logic.ts`, `live-source.ts`'s
+  `decryptSessionMeta`. All match the plan. Confirmed the lazy-mount-on-dialog-open discipline for
+  the Stop confirm button (no per-card crypto worker).
+- Phase 5 (Completed Chats + Restore): read `completed-sessions-screen.tsx`,
+  `session-list-screen.tsx`'s archived filter, `use-session-lifecycle.ts`'s
+  `useRestoreSessionMutation`. Tests render real HTML via `renderToStaticMarkup` and assert on
+  actual content (archived-only, no "New session" CTA, back-link) — genuine behavioral proof, not
+  vacuous smoke tests.
+- Phase 6 (Restart): read `use-restart-session.ts`, `machineRpc.ts`'s registry entry, the daemon-side
+  `machineRpc.ts` registration (confirmed already live, not just claimed), and
+  `restart-session-dialog.tsx`. The enable-matrix (`isRestartEnabled`/`restartDisabledReason`) and
+  the confirm button's disabled-while-in-flight guard (double-click protection called out as a risk
+  in the plan) are both present and correctly implemented.
+
+**Bug found and fixed:** Phase 4's pinned-first sort (`group.ts`'s `byPinnedThenUpdatedAtDesc`)
+changed each workspace group's within-group ordering to pin-first, but the GROUP-level ordering
+("workspaces with at least one session, most-recently-active session first") was left keying off
+`sessions[0]` — which, after the pinned-first sort, can now be an *old pinned* session rather than
+the group's actual most-recently-updated one. Reproduced concretely: a workspace with an old pinned
+session (updatedAt=100) plus a much more recently active unpinned session (updatedAt=5000) sorted
+*below* a second workspace whose only session was moderately recent (updatedAt=3000) — even though
+the first workspace's true most-recent activity (5000) is newer. This is a real, user-visible
+regression (a workspace with fresh activity could silently drop below a staler one on Home, once
+any of its sessions gets pinned), not covered by the existing pre-feature "orders workspace groups by
+their most recently active session" test (which predates pinning and never combines the two).
+Fixed in `group.ts`: group ordering now keys off `mostRecentUpdatedAt(sessions)` (the max
+`updatedAt` across the whole group) instead of `sessions[0]?.updatedAt`. Added a regression test
+("orders groups by their most recently active session even when pinning reorders that session out
+of slot 0") to `group.test.ts` that fails against the old code and passes against the fix. Full
+`@falcon/web` test suite (1033 tests, was 1032) and the full root pipeline re-verified green after
+the fix; the 33-file feature-scoped biome check is still clean.
+
+**Not independently re-verified against a live browser/server** (would require standing up
+Postgres + the auth flow + a live socket connection for the specific manual click-paths): the
+actual DropdownMenu open/close interaction, the Rename/Pin/Restart dialogs' real rendered
+appearance, and the Restore round-trip through a live WS `session-update`. This is the same gap
+the implementer's own report is honest about (`vitest` here has no jsdom/RTL, so even the
+implementer's own tests are logic-level, not interaction-level) — the server-side route tests (real
+PGlite) and the crypto-bridge tests (real loopback worker) are the strongest evidence available
+without that infrastructure, and both are genuine, not mocked away.
+
+**Unresolved / flagged, not papered over:** none found beyond the one bug above, which is fixed.
+The plan's own documented simplifications (Restore→"active" status loss, generic Pin/Unpin label
+and "on its machine" copy on the timeline header) were re-confirmed as intentional, narrow, and
+non-blocking — not silently-introduced gaps.
+
+Verified: **true**, with the one bug found during this pass fixed and re-tested (see above).
