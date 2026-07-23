@@ -160,3 +160,77 @@ needs a live daemon + browser session this environment doesn't have).
 
 No known gaps in the feature itself — the only incomplete item is the optional live-Mac
 smoke test, which is a verification step, not a missing implementation piece.
+
+## Test & Review notes
+
+Independent verification pass (separate agent, did not write the original implementation).
+
+**What was checked:**
+- Full root `pnpm build && pnpm typecheck && pnpm test` (not scoped to new tests) —
+  all green (150 test files / 1739 tests in `falcon` before the fix below, plus
+  `@falcon/wire`/`@falcon/web`/`@falcon/server`/`@falcon/e2e`).
+- Re-derived the `pnpm lint` claim independently rather than trusting it: ran
+  `biome check` against the exact 30-file changed-file list from a clean checkout.
+  Result matched the implementer's report exactly — one pre-existing error
+  (`wire-shapes.json`'s array formatting, confirmed pre-existing by diffing against
+  the fixture generator's own style) and one pre-existing info
+  (`commands.test.ts:90`'s `useTemplate`, confirmed pre-existing via `git show` against
+  the pre-feature commit — the string-concatenation line predates this feature).
+- Read every phase's implementation end to end against its acceptance criteria: wire
+  schemas (`rpc.ts`/`schemaRegistry.ts`/fixture), `daemon/sleepInhibit.ts`'s manager
+  (argv table, `-w` tether, respawn guard, `applyMode`/`stop` semantics),
+  `machineRpc.ts`'s RPC registration and no-idempotency-cache reasoning,
+  `persistence.ts`'s lenient field, `commands.ts`'s `runDaemonStartSync` boot-order and
+  shutdown-order wiring (confirmed in the real source, not just the tests: boot-apply
+  happens before `startMachineIntegration`; `sleepInhibitManager.stop()` runs before
+  `deps.spawnStartSync()` in the restart-handoff branch), the web
+  `features/machine-settings/` stack (query/mutation cache-write shape, card
+  gating-by-RPC-result, crypto-gated live actions hook), and the nav wiring in
+  `app-shell.tsx`.
+- Confirmed `daemon/markers.ts`/`daemon/doctor.ts` have zero `caffeinate` references —
+  the plan's own "replaced doctor/markers reaping with the `-w` tether" decision is
+  actually reflected in the tree, not just claimed.
+- Grepped for shell-interpolation risk in the spawn path: confirmed fixed argv arrays
+  only, `child_process.spawn` (never `exec`/a shell string).
+
+**Bug found and fixed:** `wrapChildProcess` in `daemon/sleepInhibit.ts` only listened
+for Node's `"exit"` event to detect the caffeinate child dying. Verified directly
+against a real `child_process.spawn()` of a nonexistent binary (`spawn("<bogus>", ...)`)
+that Node fires `"error"` (+ `"close"`) for a process that never actually started, and
+**never** fires `"exit"` in that case. Concretely: a machine missing `/usr/bin/caffeinate`
+(SIP oddity, corrupted install, or any other spawn-time failure e.g. EACCES) would set
+`active: true` optimistically on the synchronous `spawnChild()` return, then silently
+never learn the child died — `onExit`'s callback (which drives both the
+single-respawn-then-give-up guard and the `active: false` bookkeeping) would simply
+never fire. The manager, the `sleepInhibit.get`/`sleepInhibit.set` RPC results, and the
+web card would report `active: true` forever for an assertion that was never actually
+held — exactly the "Always feels broken" failure mode the plan's own risk list worried
+about, except silent instead of surfaced. This is a distinct, real gap from the
+already-tested "spawn that throws" case: `child_process.spawn()` does not throw
+synchronously for ENOENT/EACCES — it only fails asynchronously — so that existing test
+never exercised the real `defaultSpawnChild` failure path at all.
+
+Fix: `wrapChildProcess` now listens to both `"exit"` and `"error"`, firing its `onExit`
+callback exactly once (dedup guard) whichever fires first. `wrapChildProcess` was
+exported (previously module-private) so a regression test could exercise it directly
+against a real `spawn()` of a nonexistent binary without needing a real `caffeinate`
+binary to be present in this environment. Two new tests added to
+`sleepInhibit.test.ts`: (1) a direct `wrapChildProcess` test proving `onExit` fires
+exactly once with `{code: null, signal: null}` on a real ENOENT spawn, and (2) an
+end-to-end test through the full manager (real `spawn()` wrapped by the real
+`wrapChildProcess`, only the binary name is bogus) proving `active` correctly converges
+to `false` via the existing respawn-then-give-up bookkeeping, rather than staying `true`
+forever. `falcon` package: 1741 tests passing after the fix (150 test files, up from
+1739/150). Full root `pnpm build && pnpm typecheck && pnpm test` re-run green after the
+fix; `biome check` on the two touched files (via the full changed-file-list invocation)
+shows no new lint issues.
+
+**Not found / no other bugs identified:** the boot-order, shutdown-order, persistence
+leniency, wire schema additivity, RPC dispatch/validation, and web query/mutation/cache
+wiring all matched the plan and their own test coverage under direct reading — no
+further discrepancies found between the checked-off phase tasks and the actual code.
+
+**Unresolved:** none beyond the plan's own explicitly-deferred, optional real-Mac manual
+smoke test (Phase 5's unchecked item) — left as-is; it remains a legitimate environment
+limitation (no live daemon + real macOS + browser session available here), not a gap
+introduced or discovered by this review.

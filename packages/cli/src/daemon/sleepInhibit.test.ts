@@ -1,5 +1,10 @@
+import { spawn } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
-import { createSleepInhibitManager, type SleepInhibitChild } from "./sleepInhibit.js";
+import {
+  createSleepInhibitManager,
+  type SleepInhibitChild,
+  wrapChildProcess,
+} from "./sleepInhibit.js";
 
 /** A fake child the test fully controls: `exit()` simulates the process dying, `kill` is spy-able. */
 function makeFakeChild() {
@@ -193,6 +198,62 @@ describe("createSleepInhibitManager", () => {
 
     expect(state).toEqual({ supported: true, platform: "darwin", mode: "always", active: false });
     expect(logger.warn).toHaveBeenCalled();
+  });
+
+  it("wrapChildProcess's onExit fires (once) on a real ENOENT spawn failure, which never emits Node's 'exit' event — regression for a bug where a missing caffeinate binary left active:true forever", async () => {
+    // A real `child_process.spawn` of a nonexistent binary: Node fires
+    // "error" (ENOENT) but NEVER "exit" for a process that never actually
+    // started — verified directly against the real Node runtime. A
+    // `wrapChildProcess` that only listened to "exit" would silently never
+    // invoke its `onExit` callback in this case, permanently reporting
+    // `active: true` for a caffeinate that never ran.
+    const realChild = spawn("falcon-sleep-inhibit-definitely-not-a-real-binary", [], {
+      stdio: "ignore",
+    });
+    const wrapped = wrapChildProcess(realChild);
+
+    const fired = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("onExit never fired")), 2000);
+        wrapped.onExit((code, signal) => {
+          clearTimeout(timeout);
+          resolve({ code, signal });
+        });
+      },
+    );
+
+    expect(fired).toEqual({ code: null, signal: null });
+  });
+
+  it("a manager using the real (non-injected) spawn path degrades to active:false when caffeinate is missing, via the manager's exit-driven bookkeeping", async () => {
+    // Exercises the same real-spawn ENOENT path as above, but through the
+    // full manager (using a spawnChild that wraps a real child_process.spawn
+    // of a bogus binary, mirroring defaultSpawnChild's own shape) — proves
+    // the fix closes the loop end-to-end: unexpected "exit" (from the error
+    // path) still drives the single-respawn-then-give-up guard and
+    // eventually active:false, rather than active staying true forever.
+    const spawnChild = (_argv: string[]): SleepInhibitChild => {
+      const realChild = spawn("falcon-sleep-inhibit-definitely-not-a-real-binary", [], {
+        stdio: "ignore",
+      });
+      return wrapChildProcess(realChild);
+    };
+    const manager = createSleepInhibitManager({ platform: "darwin", daemonPid: 1, spawnChild });
+
+    manager.applyMode("always");
+    expect(manager.getState().active).toBe(true); // momentarily optimistic, same as a real spawn
+
+    await new Promise<void>((resolve, reject) => {
+      const deadline = Date.now() + 3000;
+      const check = () => {
+        if (!manager.getState().active) return resolve();
+        if (Date.now() > deadline) return reject(new Error("active never went false"));
+        setTimeout(check, 20);
+      };
+      check();
+    });
+
+    expect(manager.getState().active).toBe(false);
   });
 
   it("getState reflects the current state without re-applying anything", () => {

@@ -45,12 +45,30 @@ export interface SleepInhibitChild {
   onExit(cb: (code: number | null, signal: NodeJS.Signals | null) => void): void;
 }
 
-function wrapChildProcess(child: ChildProcess): SleepInhibitChild {
+/** Exported for `sleepInhibit.test.ts`'s real-`child_process.spawn` ENOENT regression test — not part of the module's public dep-injection surface. */
+export function wrapChildProcess(child: ChildProcess): SleepInhibitChild {
   return {
     pid: child.pid,
     kill: (signal) => child.kill(signal),
     onExit: (cb) => {
-      child.once("exit", cb);
+      // A child that spawns and later dies fires "exit" (with a real
+      // code/signal). A child that never actually started — e.g. `caffeinate`
+      // missing from PATH (ENOENT) — does NOT fire "exit" at all; Node fires
+      // "error" instead (verified: `spawn("does-not-exist", ...)` emits
+      // "error"+"close" but never "exit"). Both cases mean the same thing to
+      // this manager ("the assertion is no longer held"), so listen to both
+      // and fire the callback exactly once, whichever comes first — otherwise
+      // a missing-binary machine would report `active: true` forever, with
+      // the single-respawn-then-give-up guard never engaging since it's keyed
+      // off this same callback.
+      let fired = false;
+      const fire = (code: number | null, signal: NodeJS.Signals | null) => {
+        if (fired) return;
+        fired = true;
+        cb(code, signal);
+      };
+      child.once("exit", (code, signal) => fire(code, signal));
+      child.once("error", () => fire(null, null));
     },
   };
 }
