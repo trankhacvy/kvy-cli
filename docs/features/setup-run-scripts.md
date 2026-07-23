@@ -215,3 +215,68 @@ above for exactly what was and wasn't exercised).
 - Windows support of `shellCommand.ts`'s `cmd.exe /c` path is implemented and unit-tested with
   an injectable `platform`, but was never exercised on a real Windows machine (no Windows CI
   in this repo) — the same caveat the original plan's risk list already flagged.
+
+## Test & Review notes (independent verification pass)
+
+Reviewed as an independent tester in `.worktrees/feature-setup-run-scripts` — did not trust the
+checked boxes, re-derived each acceptance criterion from real commands/code reading.
+
+**Full pipeline, run for real:**
+- `pnpm install` — clean.
+- `pnpm build` — green (6/6 tasks, `@falcon/web`'s route table includes `/session/[id]/run`
+  and `/session/demo/run`).
+- `pnpm typecheck` — green (11/11 packages).
+- `pnpm test` (root, turbo, all packages concurrently) — reproduced the exact same 3 flaky
+  failures the implementer documented (`index.test.ts`'s `--help`/`--version` tests timing out
+  at 5s, and `scanner.test.ts`'s hook-gating test) — confirmed these are pre-existing/unrelated
+  to this feature by checking `git show dfc44bd -- packages/cli/src/index.test.ts`: this
+  feature's commit only *added* workspace-config subcommand tests to that file, never touched
+  the `--help`/`--version` tests that failed. Re-ran `pnpm --filter falcon test` standalone
+  immediately after: **154/154 test files, 1795/1795 tests green**, confirming resource
+  contention under full-monorepo-concurrent load, not a regression. `pnpm --filter @falcon/wire
+  test` (153/153) and `pnpm --filter @falcon/web test` (136/136 files, 1020/1020 tests) both
+  green standalone too.
+
+**Real, from-scratch manual smoke test** (independent of the implementer's own walkthrough —
+fresh scratch git repo + scratch `FALCON_HOME_DIR`, real tmux, using the built
+`packages/cli/bin/falcon.mjs` for CLI commands and a direct `tsx` import for the daemon RPC
+handlers): `workspace register` → `workspace config --setup-script --run-script` → verified
+`--setup-script ""` actually clears the field (re-read shows `(none)`) →
+`ensureBranchWorkspace` with a new branch → `createdWorktree: true` → `runSetupScript` →
+confirmed `setup-marker.txt` really exists in the worktree with the right contents →
+`handleRunStart` → real `tmux new-session` (`falcon-run-<hash>`) → `handleRunStatus` reports
+`running` with the real pid/method → `handleWorkspaceGetConfig` reads back both scripts →
+`handleRunStop` → confirmed via `tmux ls` that the tmux server itself had nothing left running
+(the session was really killed, not just marked stopped in the state file) → `handleRunStatus`
+again reports `run: {state: "none"}` while `setup` stays `succeeded`. All 10 steps passed
+exactly as designed. Scratch repo/homeDir/tmux session all cleaned up afterward.
+
+**Code-level verification (not just trusting tests):**
+- `resolveRunContext` is confirmed as the first line of all five handlers
+  (`handleRunStart`/`handleRunStop`/`handleRunStatus`/`handleRunSetup`/
+  `handleWorkspaceGetConfig`) via direct grep — the design §12 auth gate is real, not just
+  claimed.
+- `reserved.ts` is untouched (`git diff` against the target branch shows no output) and no new
+  `preview:` string literal exists anywhere in `packages/wire/src/` beyond the two pre-existing
+  doc-comment mentions.
+- The wire additive-only fixture (`__fixtures__/wire-shapes.json`) has real, detailed frozen
+  shapes for all 10 new schemas (not placeholder/empty entries) — spot-checked
+  `RunStatusResultSchema`'s nested `run`/`setup` enum shapes match `rpc.ts` exactly.
+- `withResourceGuard`'s worktree-keyed concurrent-join for `run.start` and
+  `withIdempotencyCache`'s replay-on-retry are both exercised by real tests
+  (`machineRpc.test.ts`) that actually assert the underlying handler is called exactly once
+  across two racing calls with different idempotency keys — read the test bodies, not just the
+  pass/fail count.
+- `runStateStore.ts`'s durability pattern (tmp-write+rename, per-homeDir write-queue,
+  tolerant corrupt-file reader) is a faithful structural match to `sessionsStore.ts`'s
+  established precedent.
+- Spotted one minor documentation-accuracy nit (not a bug): the plan's Phase 1 checklist text
+  describes `WorkspaceGetConfigParamsSchema`/`RunStatusParamsSchema` as just `{worktree}`, but
+  the actual shipped schemas add `idempotencyKey` to both (matching every other RPC in this
+  codebase, including the read-only `git.status`, which also carries `idempotencyKey` despite
+  never being idempotency-cached) — a sensible consistency choice the implementer made without
+  calling it out as a deviation. No functional impact; noting it here for the record.
+
+**Verdict: no functional bugs found.** Every phase's acceptance criteria actually holds under
+direct, independent re-verification — not just a re-read of the checked boxes. No fixes were
+necessary in this pass.
