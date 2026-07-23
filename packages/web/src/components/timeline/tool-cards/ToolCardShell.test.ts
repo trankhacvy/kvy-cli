@@ -23,7 +23,9 @@ function toolItem(name: string, permission?: PermissionInfo): ToolItem {
  * metadata row and the tool body slot. Reaching into the returned element tree
  * is still enough here; no render environment needed. */
 function permissionSectionChildType(shell: ReactElement): unknown {
-  const toolContent = (shell.props as { children: unknown[] }).children[1] as ReactElement | undefined;
+  const toolContent = (shell.props as { children: unknown[] }).children[1] as
+    | ReactElement
+    | undefined;
   if (!toolContent) return undefined;
   const section = (toolContent.props as { children: unknown[] }).children[2] as
     | ReactElement

@@ -27,9 +27,9 @@ describe("isSessionRoute", () => {
     expect(isSessionRoute("/session/new/")).toBe(false);
   });
 
-  it("is false for the sessions list and settings routes", () => {
+  it("is false for the sessions list and other non-session routes", () => {
     expect(isSessionRoute("/")).toBe(false);
-    expect(isSessionRoute("/settings/appearance/")).toBe(false);
+    expect(isSessionRoute("/signin/")).toBe(false);
   });
 });
 
@@ -49,6 +49,6 @@ describe("sidebarCollapsible", () => {
   it("shrinks to an icon rail everywhere else", () => {
     expect(sidebarCollapsible("/")).toBe("icon");
     expect(sidebarCollapsible("/session/new/")).toBe("icon");
-    expect(sidebarCollapsible("/settings/notifications/")).toBe("icon");
+    expect(sidebarCollapsible("/signin/")).toBe("icon");
   });
 });

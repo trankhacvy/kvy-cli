@@ -35,7 +35,9 @@ function isDeclinedQuestion(item: ToolItem): boolean {
   if (item.permission?.decision?.kind === "deny") return true;
   if (item.ok !== false) return false;
   const outputText = readOutputText(item.output)?.toLowerCase();
-  return outputText ? ASK_DECLINED_OUTPUT_MARKERS.some((marker) => outputText.includes(marker)) : false;
+  return outputText
+    ? ASK_DECLINED_OUTPUT_MARKERS.some((marker) => outputText.includes(marker))
+    : false;
 }
 
 /**

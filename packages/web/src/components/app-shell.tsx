@@ -1,20 +1,9 @@
 "use client";
 
-import {
-  BellIcon,
-  BotIcon,
-  CreditCardIcon,
-  GitBranchIcon,
-  HomeIcon,
-  LifeBuoyIcon,
-  type LucideIcon,
-  MonitorIcon,
-  PaletteIcon,
-  PlusIcon,
-  ShieldCheckIcon,
-} from "lucide-react";
+import { HomeIcon, type LucideIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { NavUser } from "@/components/nav-user";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -37,17 +26,6 @@ type NavItem = { href: string; label: string; icon: LucideIcon };
 const workspaceNav: NavItem[] = [
   { href: "/", label: "Sessions", icon: HomeIcon },
   { href: "/session/new/", label: "New session", icon: PlusIcon },
-];
-
-const settingsNav: NavItem[] = [
-  { href: "/settings/agent/", label: "Agent", icon: BotIcon },
-  { href: "/settings/appearance/", label: "Appearance", icon: PaletteIcon },
-  { href: "/settings/git/", label: "Git", icon: GitBranchIcon },
-  { href: "/settings/providers/", label: "Providers", icon: CreditCardIcon },
-  { href: "/settings/machines/", label: "Machines", icon: MonitorIcon },
-  { href: "/settings/notifications/", label: "Notifications", icon: BellIcon },
-  { href: "/settings/recovery/", label: "Recovery", icon: ShieldCheckIcon },
-  { href: "/settings/support/", label: "Support", icon: LifeBuoyIcon },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -78,7 +56,6 @@ export function sidebarCollapsible(pathname: string): "icon" | "offcanvas" {
 function pageTitle(pathname: string): string {
   if (pathname === "/") return "Sessions";
   if (pathname === "/session/new/") return "New session";
-  if (pathname.startsWith("/settings/")) return "Settings";
   if (pathname.includes("/git/")) return "Files changed";
   if (pathname.includes("/files/")) return "Repo files";
   if (pathname.startsWith("/session/")) return "Session";
@@ -135,10 +112,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <SidebarMenuItem>
               <SidebarMenuButton asChild size="lg" tooltip="Falcon">
                 <Link href="/">
-                  <span className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                  {/*
+                   * `shrink-0` + `aspect-square` keep the logo box a full
+                   * 32×32 when the collapsed icon rail squeezes the button to
+                   * `size-8 p-0` (sidebar.tsx's lg size variant) — without it
+                   * flexbox squishes the logo against the still-visible label
+                   * (the broken-header bug). The label hides in icon mode
+                   * instead. Same shape as shadcn's TeamSwitcher logo box.
+                   */}
+                  <span className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                     F
                   </span>
-                  <span className="font-semibold">Falcon</span>
+                  <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
+                    Falcon
+                  </span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -146,12 +133,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <NavigationGroup label="Workspace" items={workspaceNav} pathname={pathname} />
-          <NavigationGroup label="Settings" items={settingsNav} pathname={pathname} />
         </SidebarContent>
         <SidebarFooter>
-          <p className="px-2 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-            End-to-end encrypted
-          </p>
+          <NavUser />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-h-0 min-w-0">

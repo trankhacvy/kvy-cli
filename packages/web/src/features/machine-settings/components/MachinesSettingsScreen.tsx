@@ -18,6 +18,11 @@ import { SleepInhibitCard } from "./SleepInhibitCard";
  * machine list (id/decrypted name/online) rather than re-deriving it, same
  * "one place owns this" reasoning.
  *
+ * Rendered inside the settings dialog's content pane
+ * (`components/settings-dialog.tsx`) since the `/settings/machines/` route
+ * was removed — the pane supplies the section heading, so this component is
+ * content-only (no page chrome of its own).
+ *
  * `useSnapshot`/`useActions` are the injectable seams (mirrors
  * `ProvidersSettingsScreen`'s own props) — defaulting to the real
  * `useLiveSessionListSnapshot`/`useLiveMachineSettingsActions`, with
@@ -33,13 +38,10 @@ export function MachinesSettingsScreen({
   const snapshot = useSnapshot();
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Machines</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Per-machine settings — sleep inhibit keeps a Mac from sleeping mid-session.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Per-machine settings — sleep inhibit keeps a Mac from sleeping mid-session.
+      </p>
 
       {snapshot.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading machines…</p>
@@ -54,7 +56,7 @@ export function MachinesSettingsScreen({
           ))}
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

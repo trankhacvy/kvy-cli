@@ -3,17 +3,20 @@
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/lib/use-theme";
 
-export default function AppearanceSettingsPage() {
+/**
+ * Settings → Appearance (moved verbatim out of the deleted
+ * `app/(protected)/settings/appearance/page.tsx` route — page chrome
+ * dropped, behavior unchanged): Falcon defaults to dark; switch to light if
+ * you'd rather. Per-device `localStorage` preference via `use-theme.ts`.
+ */
+export function AppearanceSection() {
   const [theme, setTheme] = useTheme();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-8 p-8 text-center">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Appearance</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Falcon defaults to dark. Switch to light if you'd rather.
-        </p>
-      </div>
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Falcon defaults to dark. Switch to light if you'd rather.
+      </p>
 
       <div className="flex gap-2">
         <Button
@@ -33,6 +36,6 @@ export default function AppearanceSettingsPage() {
           Light
         </Button>
       </div>
-    </main>
+    </div>
   );
 }

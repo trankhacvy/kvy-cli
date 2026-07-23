@@ -32,44 +32,31 @@ import {
 
 /**
  * Settings → Agent: default settings for how agents run, independent of
- * which session you start.
+ * which session you start. Moved verbatim out of the deleted
+ * `app/(protected)/settings/agent/page.tsx` route when the settings catalog
+ * became the dialog (`components/settings-dialog.tsx`) — only the page
+ * chrome (`<main>` wrapper + h1) was dropped; every behavior below is
+ * unchanged:
  *
  * - "Default provider" / "Default model" (docs/competitive-notes-omnara.md
- *   #15 "Global default provider + default model per provider"): a
- *   dedicated, discoverable place to review/change the same starred
- *   provider/model `features/new-session/favorites.ts` already backs the
- *   "New session" wizard's inline star buttons with (`options-step.tsx`'s
- *   `FavoriteStar`, #22) — this page is just a second, more prominent
- *   surface onto the exact same store, so starring a model here or in the
- *   wizard stays in sync either way. Same "per-device localStorage
- *   convenience, never authoritative, safe to lose" reasoning as
- *   `favorites.ts`/`use-theme.ts` (design principle #3) — there's no
- *   account-wide settings-sync backend for preferences like this yet, so
- *   "persisted account-wide" (the feature note's phrasing) means "same
- *   device, same durability as the rest of Settings," not a new server
- *   round trip.
+ *   #15): a second, more prominent surface onto the same
+ *   `features/new-session/favorites.ts` store the wizard's inline star
+ *   buttons write to. Per-device localStorage convenience, never
+ *   authoritative, safe to lose — same reasoning as
+ *   `favorites.ts`/`use-theme.ts` (design principle #3).
  *
  *   Model dropdowns intentionally reuse `model-meta.ts`'s curated
  *   `MODEL_OPTIONS` only (no free-text "Custom…" escape hatch like the
- *   wizard's own Options step has) — `OptionsStep`'s `FavoriteStar` is only
- *   ever rendered next to a curated option, so a starred model is always one
- *   of `MODEL_OPTIONS[provider]` or `""` ("Provider default"); this page
- *   never needs to represent anything else.
+ *   wizard's own Options step has).
  *
- * - "Codex effort" (docs/competitive-notes-omnara.md #14 "Codex 'Effort'
- *   setting"): a persisted global default for Codex's reasoning effort
- *   level, independent of any per-session model choice (`new-session`'s
- *   `OptionsStep` picks the model; this is a separate, standing preference
- *   set once here). Read once on mount and updated locally on change, same
- *   pattern `NotificationSettingsPage`/`AppearanceSettingsPage` already use
- *   for their own simple preference toggles.
+ * - "Codex effort" (docs/competitive-notes-omnara.md #14): a persisted
+ *   global default for Codex's reasoning effort level, independent of any
+ *   per-session model choice.
  */
-export default function AgentSettingsPage() {
-  // Lazy `useState` initializers, same pattern as `OptionsStep`'s own
-  // favorite-state (`options-step.tsx`) — `getFavoriteProvider`/
-  // `getFavoriteModel` are guarded for SSR/build-time prerendering
-  // (`favorites.ts`'s `hasLocalStorage`), returning `null` there rather than
-  // throwing, so reading them straight from the initializer is safe.
+export function AgentSection() {
+  // Lazy `useState` initializers — `getFavoriteProvider`/`getFavoriteModel`
+  // are guarded for SSR/build-time prerendering (`favorites.ts`'s
+  // `hasLocalStorage`), returning `null` there rather than throwing.
   const [provider, setProviderState] = useState<NewSessionProvider>(
     () => getFavoriteProvider() ?? INITIAL_FORM.provider,
   );
@@ -108,16 +95,13 @@ export default function AgentSettingsPage() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-8 p-8 text-center">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Agent</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Default settings for how agents run, independent of which session you start.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Default settings for how agents run, independent of which session you start.
+      </p>
 
-      <section className="flex w-full flex-col gap-3 text-left">
-        <h2 className="text-sm font-medium">Default provider</h2>
+      <section className="flex flex-col gap-3">
+        <h3 className="text-sm font-medium">Default provider</h3>
         <div className="flex gap-2">
           {PROVIDER_OPTIONS.map(([value, meta]) => (
             <Button
@@ -134,8 +118,8 @@ export default function AgentSettingsPage() {
         </div>
       </section>
 
-      <section className="flex w-full flex-col gap-4 text-left">
-        <h2 className="text-sm font-medium">Default model</h2>
+      <section className="flex flex-col gap-4">
+        <h3 className="text-sm font-medium">Default model</h3>
         {PROVIDER_OPTIONS.map(([value, meta]) => (
           <label
             key={value}
@@ -162,9 +146,9 @@ export default function AgentSettingsPage() {
         ))}
       </section>
 
-      <section className="flex w-full flex-col gap-3 text-left">
+      <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-sm font-medium">Codex effort</h2>
+          <h3 className="text-sm font-medium">Codex effort</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             How much reasoning effort Codex sessions default to. Applies regardless of which model
             you pick when starting a session.
@@ -187,6 +171,6 @@ export default function AgentSettingsPage() {
           </Select>
         </label>
       </section>
-    </main>
+    </div>
   );
 }

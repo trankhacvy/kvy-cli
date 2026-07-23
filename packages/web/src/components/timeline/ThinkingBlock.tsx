@@ -1,11 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from "@/components/ai-elements/reasoning";
+import { Reasoning, ReasoningContent, ReasoningTrigger } from "@/components/ai-elements/reasoning";
 import { cn } from "@/lib/utils";
 import { Chevron } from "./icons";
 

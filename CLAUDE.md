@@ -458,8 +458,7 @@ packages/
 └─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
                               wired up, dark default theme. Auth pages (OAuth sign-in, key
                               generation, recovery-code export, pairing-approve —
-                              src/app/signin, src/app/auth, src/app/pair,
-                              src/app/settings/recovery) are landed. Crypto worker bridge
+                              src/app/signin, src/app/auth, src/app/pair) are landed. Crypto worker bridge
                               (src/crypto/), the transcript reducer (src/sync/reducer/) —
                               folds `SessionEnvelope[]` into ordered `RenderItem[]` (design
                               §9.1) — apiSocket, the user-scoped Socket.IO client with
@@ -499,8 +498,19 @@ packages/
                               as `apiSocket.ts`; `public/sw.js`, a plain static service
                               worker — `push` shows a generic kind-keyed notification,
                               `notificationclick` deep-links to `/session/<id>/`) is wired
-                              up behind `src/app/settings/notifications/`, a minimal
-                              enable/disable toggle. The Phase 2 web control surface
+                              up behind Settings → Notifications in the settings dialog
+                              (see below), a minimal enable/disable toggle. The settings
+                              catalog is a single dialog, not routes: the `/settings/*`
+                              pages were removed and their content moved verbatim into
+                              `src/features/settings/` (`sections.tsx`'s
+                              `SETTINGS_SECTIONS` registry — Agent/Appearance/Git/Providers/
+                              Machines/Notifications/Recovery/Support, reusing
+                              `ProvidersSettingsScreen`/`MachinesSettingsScreen` as
+                              content-only components). `src/components/settings-dialog.tsx`
+                              renders it — a wide left-nav dialog on desktop, a drill-in
+                              bottom sheet on mobile — opened from the sidebar footer's
+                              account menu (`src/components/nav-user.tsx`, which also owns
+                              sign-out via `src/lib/logout.ts`). The Phase 2 web control surface
                               (`src/features/session-control/`) is also landed: `Composer`
                               (TanStack `useMutation` → the `message` session RPC, optimistic
                               insert reconciled by echo), `PermCard` (Allow/Deny/
@@ -576,9 +586,9 @@ packages/
                               the existing-branch picker's branch list + disabled
                               already-checked-out-elsewhere rows. `git-defaults.ts` (a
                               strict copy of `favorites.ts`'s per-device `localStorage`
-                              pattern) backs a new Settings → Git page
-                              (`app/(protected)/settings/git/`, linked from `app-shell.tsx`'s
-                              settings nav) that seeds the wizard's starting `branchMode`
+                              pattern) backs the Settings → Git section
+                              (in the settings dialog, see below) that seeds the wizard's
+                              starting `branchMode`
                               ("repo-root" or "new-branch" — "existing-branch" is inherently
                               per-session, never a global default). GitHub PR/CI integration
                               (`src/features/github-checks/`, docs/features/github-pr-ci.md,
@@ -658,9 +668,9 @@ packages/
                               and reusing `features/session-list`'s machine-list snapshot,
                               same "one place owns this" precedent as `ProvidersSettingsScreen`.
                               `sync/machineRpc.ts` gained `sleepInhibit.get`/
-                              `sleepInhibit.set` alongside `provider.account`. Mounted at the
-                              new `/settings/machines/` route (linked from `app-shell.tsx`'s
-                              settings nav, alongside Providers) — gating (macOS-only
+                              `sleepInhibit.set` alongside `provider.account`. Lives in the
+                              settings dialog's Machines section (alongside Providers) —
+                              gating (macOS-only
                               support, "not currently holding the assertion") comes entirely
                               from the RPC result's `supported`/`active` fields, never from
                               any machine metadata field. Same not-yet-wired-to-a-live-socket-

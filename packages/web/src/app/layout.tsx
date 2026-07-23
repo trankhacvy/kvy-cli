@@ -42,8 +42,9 @@ export default function RootLayout({
   // personalization at build time anyway. The inline script below is the
   // pre-hydration anti-flash step (next-themes' own pattern): it runs
   // synchronously, before first paint, and removes `.dark` if this browser
-  // previously chose light (`src/app/settings/appearance`, backed by
-  // `use-theme.ts`'s store — plan-v2.md W4.2). `suppressHydrationWarning`
+  // previously chose light (Settings → Appearance in the settings dialog,
+  // backed by `use-theme.ts`'s store — plan-v2.md W4.2).
+  // `suppressHydrationWarning`
   // covers the resulting server/client class mismatch on `<html>` itself.
   //
   // Plain string children (not `dangerouslySetInnerHTML`) — this app's one

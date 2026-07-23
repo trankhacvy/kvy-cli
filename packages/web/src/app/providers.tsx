@@ -16,7 +16,7 @@ import { useTheme } from "@/lib/use-theme";
  * Also the one place sonner's `<Toaster />` is mounted, since it's wanted on
  * every screen, not a per-route concern. `theme` follows `useTheme()` so a
  * toast never looks dark-on-dark/light-on-light against whichever theme the
- * user has picked (`app/settings/appearance`).
+ * user has picked (Settings → Appearance, in the settings dialog).
  *
  * `OfflineBanner` used to mount here too (plan-v2.md W4.2) but moved to
  * `app/(protected)/layout.tsx` — it has nothing meaningful to report on a

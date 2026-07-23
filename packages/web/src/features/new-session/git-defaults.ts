@@ -5,8 +5,8 @@
  * pattern: a per-device `localStorage` preference that only seeds the
  * wizard's *starting* choice, same "never authoritative, safe to lose"
  * reasoning (design principle #3). SSR-guarded the same way — Next
- * prerenders `settings/git`'s route at build time (static export), where
- * `window` doesn't exist.
+ * prerenders every route at build time (static export), where `window`
+ * doesn't exist.
  *
  * Only the two globally-defaultable modes — `"repo-root"` and
  * `"new-branch"` — are valid stored values. `"existing-branch"` is

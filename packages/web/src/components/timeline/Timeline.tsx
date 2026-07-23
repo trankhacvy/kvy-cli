@@ -1,5 +1,6 @@
 "use client";
 
+import { MessagesSquare } from "lucide-react";
 import {
   Conversation,
   ConversationContent,
@@ -9,29 +10,19 @@ import {
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Button } from "@/components/ui/button";
 import type { RenderItem } from "@/sync/reducer";
-import { MessagesSquare } from "lucide-react";
 import { RenderItemGroups } from "./RenderItemGroups";
-import {
-  getVisibleTranscriptItems,
-  shouldShowTranscriptWorking,
-} from "./transcript-view";
+import { getVisibleTranscriptItems, shouldShowTranscriptWorking } from "./transcript-view";
 
 /** Stick-to-bottom threshold: scrolling more than half a viewport away from
  * the bottom pauses following; coming back within that band resumes it. */
-export function isNearBottom(
-  distanceFromBottom: number,
-  viewportHeight: number,
-): boolean {
+export function isNearBottom(distanceFromBottom: number, viewportHeight: number): boolean {
   return distanceFromBottom < viewportHeight * 0.5;
 }
 
 /** Whether the in-timeline "Working…" activity row should render.
  * Suppressed when the last item is itself a running tool card — that card
  * already carries its own in-progress affordance. */
-export function shouldShowActivityRow(
-  working: boolean,
-  items: RenderItem[],
-): boolean {
+export function shouldShowActivityRow(working: boolean, items: RenderItem[]): boolean {
   return shouldShowTranscriptWorking(working, items);
 }
 
@@ -71,11 +62,7 @@ export function Timeline({
   return (
     <Conversation
       className="min-h-0 flex-1 px-4"
-      initial={
-        isAnchorItem(items[items.length - 1] ?? items[0]!)
-          ? "smooth"
-          : "instant"
-      }
+      initial={isAnchorItem(items[items.length - 1] ?? items[0]!) ? "smooth" : "instant"}
     >
       <ConversationContent className="gap-6 px-0 py-5 sm:px-2">
         {hasMore && (

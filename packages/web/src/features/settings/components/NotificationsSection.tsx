@@ -33,10 +33,14 @@ type Status =
 // orchestration logic stays testable against a fake (see push/__tests__/subscribe.test.ts).
 const pushApi: PushApiPort = { subscribe: subscribePush, unsubscribe: unsubscribePush };
 
-// Protected notification settings (design §9.2 Settings screen, FR-7.6/FR-8.3): Web Push
-// enable/disable, fallback channels (Telegram/ntfy — plan.md §10), and quiet
-// controls (mute-all + per-session mute, PRD FR-8.3).
-export default function NotificationSettingsPage() {
+/**
+ * Settings → Notifications (design §9.2 Settings screen, FR-7.6/FR-8.3):
+ * Web Push enable/disable, fallback channels (Telegram/ntfy — plan.md §10),
+ * and quiet controls (mute-all + per-session mute, PRD FR-8.3). Moved
+ * verbatim out of the deleted `app/(protected)/settings/notifications/page.tsx`
+ * route — page chrome dropped, behavior unchanged.
+ */
+export function NotificationsSection() {
   const [status, setStatus] = useState<Status>("checking");
   const [error, setError] = useState<string | null>(null);
 
@@ -204,16 +208,13 @@ export default function NotificationSettingsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col items-center gap-10 p-8 text-center">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Get a push when a session needs your permission, asks a question, finishes, or fails —
-          nothing else. Falcon never pushes on every message.
-        </p>
-      </div>
+    <div className="flex flex-col gap-8">
+      <p className="text-sm text-muted-foreground">
+        Get a push when a session needs your permission, asks a question, finishes, or fails —
+        nothing else. Falcon never pushes on every message.
+      </p>
 
-      <section className="flex w-full flex-col items-center gap-3">
+      <section className="flex flex-col items-start gap-3">
         {status === "checking" && <p className="text-sm text-muted-foreground">Checking…</p>}
 
         {status === "unsupported" && (
@@ -246,16 +247,16 @@ export default function NotificationSettingsPage() {
         {error && <p className="text-sm text-destructive">{error}</p>}
       </section>
 
-      <section className="flex w-full flex-col gap-3 text-left">
+      <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-lg font-medium">Fallback channels</h2>
+          <h3 className="text-sm font-medium">Fallback channels</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Web Push is unreliable on iOS. Link Telegram or ntfy as a backup — same events, same
             rules, no session content.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col items-start gap-2">
           <Button
             type="button"
             variant="outline"
@@ -310,9 +311,9 @@ export default function NotificationSettingsPage() {
         </form>
       </section>
 
-      <section className="flex w-full flex-col gap-3 text-left">
+      <section className="flex flex-col gap-3">
         <div>
-          <h2 className="text-lg font-medium">Quiet controls</h2>
+          <h3 className="text-sm font-medium">Quiet controls</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Mute everything, or just one session.
           </p>
@@ -351,6 +352,6 @@ export default function NotificationSettingsPage() {
         )}
         {sessionsError && <p className="text-sm text-destructive">{sessionsError}</p>}
       </section>
-    </main>
+    </div>
   );
 }

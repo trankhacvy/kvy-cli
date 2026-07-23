@@ -16,9 +16,9 @@ import type { NewSessionProvider } from "./types";
  *
  * Also the backing store for Settings → Agent (docs/competitive-notes-omnara.md
  * #15 "Global default provider + default model per provider") —
- * `app/(protected)/settings/agent/page.tsx` is a second, more discoverable
- * surface onto these same getters/setters, so a star set from either place
- * is honored by the other.
+ * `features/settings/components/AgentSection.tsx` (in the settings dialog)
+ * is a second, more discoverable surface onto these same getters/setters,
+ * so a star set from either place is honored by the other.
  */
 
 const MACHINE_KEY = "falcon:new-session-favorite-machine";

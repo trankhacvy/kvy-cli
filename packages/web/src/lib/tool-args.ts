@@ -9,8 +9,7 @@
  */
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (value === null || typeof value !== "object" || Array.isArray(value))
-    return undefined;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
   return value as Record<string, unknown>;
 }
 
@@ -203,9 +202,7 @@ export interface WebSearchResultItem {
  * `__fixtures__/task_non_sdk.jsonl`) — this pulls the embedded `Links: [...]`
  * array back out. Degrades to `undefined` (raw text fallback) for any other
  * shape, including a future structured-output revision. */
-export function parseWebSearchResults(
-  output: unknown,
-): WebSearchResultItem[] | undefined {
+export function parseWebSearchResults(output: unknown): WebSearchResultItem[] | undefined {
   if (typeof output !== "string") return undefined;
   const match = output.match(/Links:\s*(\[.*?\])/s);
   if (!match?.[1]) return undefined;
@@ -354,9 +351,7 @@ function parseAskQuestion(raw: unknown): AskQuestionParsed | undefined {
   if (!question) return undefined;
   const rawOptions = qr?.options;
   const options = Array.isArray(rawOptions)
-    ? rawOptions
-        .map(parseAskOption)
-        .filter((o): o is AskQuestionOption => o !== undefined)
+    ? rawOptions.map(parseAskOption).filter((o): o is AskQuestionOption => o !== undefined)
     : [];
   return {
     question,
@@ -370,9 +365,7 @@ function parseAskOption(raw: unknown): AskQuestionOption | undefined {
   if (typeof raw === "string") return { label: raw };
   const r = asRecord(raw);
   const label = readString(r, "label");
-  return label
-    ? { label, description: readString(r, "description") }
-    : undefined;
+  return label ? { label, description: readString(r, "description") } : undefined;
 }
 
 /** Reads the `AskUserQuestion` tool's `{questions: [...]}` input shape

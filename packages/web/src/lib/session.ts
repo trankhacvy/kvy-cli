@@ -30,24 +30,41 @@ export function clearToken(): void {
   window.localStorage.removeItem(TOKEN_KEY);
 }
 
-/** Base64url-decodes a JWT's payload segment and reads its `exp` claim — no
- * signature verification (this is a UX freshness check, not a security
- * boundary; the server is the actual authority, see docs/bug-fix-plan.md
- * issue #9). Returns `null` for anything that doesn't parse: not exactly 3
- * dot-separated segments, non-base64 payload, non-JSON payload, or a
- * non-numeric `exp`. */
-function decodeJwtExp(token: string): number | null {
+/** Base64url-decodes a JWT's payload segment — no signature verification
+ * (these are UX reads, not a security boundary; the server is the actual
+ * authority, see docs/bug-fix-plan.md issue #9). Returns `null` for anything
+ * that doesn't parse: not exactly 3 dot-separated segments, non-base64
+ * payload, or non-JSON payload. */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split(".");
   const payloadPart = parts[1];
   if (parts.length !== 3 || !payloadPart) return null;
   try {
     const payloadJson = atob(payloadPart.replace(/-/g, "+").replace(/_/g, "/"));
     const payload: unknown = JSON.parse(payloadJson);
-    const exp = (payload as { exp?: unknown })?.exp;
-    return typeof exp === "number" ? exp : null;
+    if (typeof payload !== "object" || payload === null) return null;
+    return payload as Record<string, unknown>;
   } catch {
     return null;
   }
+}
+
+/** Reads the stored token's `exp` claim, or `null` if missing/non-numeric
+ * (see `decodeJwtPayload`). */
+function decodeJwtExp(token: string): number | null {
+  const exp = decodeJwtPayload(token)?.exp;
+  return typeof exp === "number" ? exp : null;
+}
+
+/** The account id the stored token was minted for (JWT `sub` — the only
+ * identity claim the server puts in the token, see
+ * `server/src/auth/tokens.ts`), or `null` when signed out / unparsable. Used
+ * for display only (the sidebar's account footer). */
+export function getAccountId(): string | null {
+  const token = getToken();
+  if (!token) return null;
+  const sub = decodeJwtPayload(token)?.sub;
+  return typeof sub === "string" && sub.length > 0 ? sub : null;
 }
 
 /** True once the stored token's own `exp` claim has passed (or is unparsable

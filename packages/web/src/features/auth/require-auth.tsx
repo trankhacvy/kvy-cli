@@ -5,11 +5,9 @@ import { useEffect, useState } from "react";
 import { isSignedIn } from "@/lib/session";
 
 /**
- * Where a signed-out visitor to an auth-gated route is sent — the same
- * target `app/page.tsx`, `settings/recovery/page.tsx`, and
- * `settings/notifications/page.tsx` each hardcode for their own hand-rolled
- * gate. Exported so `shouldRedirectToSignin`'s test (below/`__tests__`) locks
- * the value, not just the boolean.
+ * Where a signed-out visitor to an auth-gated route is sent. Exported so
+ * `shouldRedirectToSignin`'s test (below/`__tests__`) locks the value, not
+ * just the boolean.
  */
 export const SIGNIN_PATH = "/signin/";
 

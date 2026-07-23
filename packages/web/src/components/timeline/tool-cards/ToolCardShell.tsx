@@ -9,11 +9,8 @@ import { PermCard } from "../PermCard";
 import { PermissionBadge } from "../PermissionBadge";
 import { hasVisibleTranscriptItems } from "../transcript-view";
 
-function getToolState(
-  item: ToolItem,
-): Parameters<typeof ToolHeader>[0]["state"] {
-  if (item.permission && item.permission.decision === undefined)
-    return "approval-requested";
+function getToolState(item: ToolItem): Parameters<typeof ToolHeader>[0]["state"] {
+  if (item.permission && item.permission.decision === undefined) return "approval-requested";
   if (item.permission?.decision?.kind === "deny") return "output-denied";
   if (item.status === "running") return "input-available";
   return item.ok === false ? "output-error" : "output-available";
@@ -42,32 +39,18 @@ export function ToolCardShell({
   statusVariant?: "secondary" | "success" | "destructive";
   toolStateOverride?: Parameters<typeof ToolHeader>[0]["state"];
 }) {
-  const showPermissionActions =
-    item.permission && item.permission.decision === undefined;
-  const showSubagentActivity = item.subagent
-    ? hasVisibleTranscriptItems(item.subagent)
-    : false;
+  const showPermissionActions = item.permission && item.permission.decision === undefined;
+  const showSubagentActivity = item.subagent ? hasVisibleTranscriptItems(item.subagent) : false;
   const resolvedToolState = toolStateOverride ?? getToolState(item);
   const resolvedStatusLabel =
-    statusLabel ??
-    (item.status === "running"
-      ? "running"
-      : item.ok === false
-        ? "failed"
-        : "done");
+    statusLabel ?? (item.status === "running" ? "running" : item.ok === false ? "failed" : "done");
   const resolvedStatusVariant =
     statusVariant ??
-    (item.status === "running"
-      ? "secondary"
-      : item.ok === false
-        ? "destructive"
-        : "success");
+    (item.status === "running" ? "secondary" : item.ok === false ? "destructive" : "success");
 
   return (
     <Tool
-      defaultOpen={
-        item.status === "running" || item.ok === false || showPermissionActions
-      }
+      defaultOpen={item.status === "running" || item.ok === false || showPermissionActions}
       className="w-full max-w-full overflow-hidden border-border bg-card text-sm"
     >
       <ToolHeader
@@ -87,10 +70,7 @@ export function ToolCardShell({
         {showPermissionActions && item.permission && (
           <div className="border-t border-border/70 pt-3">
             {isAskUserQuestion(item.name) ? (
-              <AskUserQuestionCard
-                args={item.args}
-                permission={item.permission}
-              />
+              <AskUserQuestionCard args={item.args} permission={item.permission} />
             ) : (
               <PermCard
                 name={item.name}

@@ -22,6 +22,11 @@ const PROVIDERS: ProviderAccountProvider[] = ["claude-code", "codex"];
  * reasoning `@/lib/use-machine-crypto.ts`'s own doc comment gives for why
  * it lives in `lib/` instead of being redone per feature.
  *
+ * Rendered inside the settings dialog's content pane
+ * (`components/settings-dialog.tsx`) since the `/settings/providers/` route
+ * was removed — the pane supplies the section heading, so this component is
+ * content-only (no page chrome of its own).
+ *
  * `useSnapshot`/`useActions` are the injectable seams (mirrors
  * `GitDiffPanel`'s `useActions` prop) — defaulting to the real
  * `useLiveSessionListSnapshot`/`useLiveProviderAccountActions`, with
@@ -37,14 +42,11 @@ export function ProvidersSettingsScreen({
   const snapshot = useSnapshot();
 
   return (
-    <main className="mx-auto flex max-w-2xl flex-col gap-8 p-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Providers</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Account status and usage for each provider, per machine — read straight from that
-          machine's own local CLI config, refreshed on demand.
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Account status and usage for each provider, per machine — read straight from that machine's
+        own local CLI config, refreshed on demand.
+      </p>
 
       {snapshot.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading machines…</p>
@@ -60,7 +62,7 @@ export function ProvidersSettingsScreen({
           ))}
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

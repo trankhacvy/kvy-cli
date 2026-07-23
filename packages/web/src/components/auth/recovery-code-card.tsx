@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 /**
  * Displays a grouped-Base32 recovery code (design §5.1 "Recovery": masterSecret
  * exportable as grouped Base32) with a copy-to-clipboard affordance. Used both
- * right after signup (`src/app/signin/page.tsx`) and from Settings
- * (`src/app/settings/recovery/page.tsx`) — the export mechanism is identical,
- * only the surrounding page copy differs.
+ * right after signup (`src/app/signin/page.tsx`) and from Settings → Recovery
+ * (`features/settings/components/RecoverySection.tsx`, inside the settings
+ * dialog) — the export mechanism is identical, only the surrounding copy
+ * differs.
  */
 export function RecoveryCodeCard({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
