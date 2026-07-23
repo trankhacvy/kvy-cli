@@ -2,7 +2,7 @@
 
 import type { PermissionMode, SessionRow } from "@falcon/wire";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderGit2, Globe } from "lucide-react";
+import { FolderGit2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -266,6 +266,9 @@ function SessionTimelineBody({
               <Link href={`/session/${sessionId}/files/`}>Repo files</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
+              <Link href={`/session/${sessionId}/preview/`}>Preview</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/run/`}>Setup / Run</Link>
             </Button>
             <Button
@@ -277,16 +280,6 @@ function SessionTimelineBody({
             >
               <FolderGit2 className="size-3.5" />
               Repo root
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled
-              title="Preview isn't available yet"
-            >
-              <Globe className="size-3.5" />
-              Preview
             </Button>
             <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu

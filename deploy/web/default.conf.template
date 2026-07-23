@@ -30,7 +30,24 @@ server {
     # `experimental.sri`), so a tampered/substituted bundle from a
     # compromised static host or CDN in front of this origin still fails to
     # execute even though inline same-origin script is allowed to run.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${API_ORIGIN} ${API_ORIGIN_WS}; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
+    #
+    # `frame-src https://*.trycloudflare.com` (docs/features/
+    # dev-server-preview.md's droppable Phase 6, "embedded iframe view"): the
+    # ONE deliberate, narrowly-scoped loosening of an otherwise unchanged,
+    # security-reviewed policy — it only permits THIS app to EMBED a
+    # Cloudflare quick-tunnel URL inline (`TunnelFrame.tsx`). It does not
+    # touch `frame-ancestors 'none'`/`X-Frame-Options: DENY` below, which
+    # protect Falcon itself from being framed by someone else — a completely
+    # different directive. `script-src`/`connect-src`/every other directive
+    # are untouched. Without this, a `*.trycloudflare.com` iframe is
+    # hard-blocked (falls back to `default-src 'self'`) — the embed is
+    # progressive enhancement on top of the guaranteed open-in-new-tab path
+    # (Phase 5), so nothing else in the Preview tab depends on this
+    # allowance. If quick tunnels are ever replaced/joined by named tunnels
+    # on a custom domain, this fixed pattern (and the docker-entrypoint.sh
+    # envsubst wiring, currently untouched since the domain isn't
+    # env-configurable) will need revisiting.
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${API_ORIGIN} ${API_ORIGIN_WS}; frame-src https://*.trycloudflare.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header X-Frame-Options "DENY" always;

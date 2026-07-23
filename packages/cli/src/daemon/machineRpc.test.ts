@@ -8,6 +8,10 @@ import type {
   EncryptedBox,
   FsListResult,
   FsMkdirResult,
+  PreviewCloseResult,
+  PreviewOpenResult,
+  PreviewPortsResult,
+  PreviewTunnelsResult,
   SpawnParams,
   SpawnResult,
   WorkspaceRegisterResult,
@@ -64,13 +68,24 @@ function spawnParams(overrides: Partial<SpawnParams> = {}): SpawnParams {
 /** Every `MachineRpcDeps` field besides `machineId`/`dek`/`socket`, defaulted to a never-called `vi.fn()` — individual tests override what they exercise. */
 function baseHandlerDeps(): Pick<
   MachineRpcDeps,
-  "spawnSession" | "resumeSession" | "adoptTake" | "adoptMirror"
+  | "spawnSession"
+  | "resumeSession"
+  | "adoptTake"
+  | "adoptMirror"
+  | "previewPorts"
+  | "previewTunnels"
+  | "previewOpen"
+  | "previewClose"
 > {
   return {
     spawnSession: vi.fn(),
     resumeSession: vi.fn(),
     adoptTake: vi.fn(),
     adoptMirror: vi.fn(),
+    previewPorts: vi.fn(),
+    previewTunnels: vi.fn(),
+    previewOpen: vi.fn(),
+    previewClose: vi.fn(),
   };
 }
 
@@ -185,6 +200,22 @@ describe("registerMachineRpcHandlers", () => {
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
       payload: { target: "m:mach_1:adopt.mirror" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:preview.ports" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:preview.tunnels" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:preview.open" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:preview.close" },
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
@@ -1368,6 +1399,233 @@ describe("registerMachineRpcHandlers", () => {
     });
   });
 
+  describe("preview.ports", () => {
+    it("decrypts params, calls previewPorts, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const previewPorts = vi.fn(
+        async (): Promise<PreviewPortsResult> => ({
+          cloudflared: { installed: true, version: "2024.6.1" },
+          ports: [{ port: 3000, address: "*", pid: 42, processName: "node" }],
+        }),
+      );
+      register(socket, { previewPorts });
+
+      const params = { idempotencyKey: "idem_ports_1" };
+      const response = await callAndAwaitAck(socket, "preview.ports", seal(params, DEK));
+
+      expect(previewPorts).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        cloudflared: { installed: true, version: "2024.6.1" },
+        ports: [{ port: 3000, address: "*", pid: 42, processName: "node" }],
+      });
+    });
+
+    it("replies with a sealed error when params fail PreviewPortsParamsSchema", async () => {
+      const socket = new FakeSocket();
+      register(socket);
+
+      const response = await callAndAwaitAck(socket, "preview.ports", seal({}, DEK));
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+  });
+
+  describe("preview.tunnels", () => {
+    it("decrypts params, calls previewTunnels, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const previewTunnels = vi.fn(
+        async (): Promise<PreviewTunnelsResult> => ({
+          tunnels: [
+            {
+              tunnelId: "t1",
+              port: 3000,
+              url: "https://t1.trycloudflare.com",
+              status: "active",
+              startedAt: 1000,
+            },
+          ],
+        }),
+      );
+      register(socket, { previewTunnels });
+
+      const params = { idempotencyKey: "idem_tunnels_1" };
+      const response = await callAndAwaitAck(socket, "preview.tunnels", seal(params, DEK));
+
+      expect(previewTunnels).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        tunnels: [
+          {
+            tunnelId: "t1",
+            port: 3000,
+            url: "https://t1.trycloudflare.com",
+            status: "active",
+            startedAt: 1000,
+          },
+        ],
+      });
+    });
+  });
+
+  describe("preview.open", () => {
+    function previewOpenParams(overrides: Record<string, unknown> = {}) {
+      return { idempotencyKey: "idem_open_1", port: 3000, ...overrides };
+    }
+
+    it("decrypts params, calls previewOpen, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const previewOpen = vi.fn(
+        async (): Promise<PreviewOpenResult> => ({
+          tunnelId: "t1",
+          url: "https://t1.trycloudflare.com",
+          port: 3000,
+        }),
+      );
+      register(socket, { previewOpen });
+
+      const params = previewOpenParams();
+      const response = await callAndAwaitAck(socket, "preview.open", seal(params, DEK));
+
+      expect(previewOpen).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        tunnelId: "t1",
+        url: "https://t1.trycloudflare.com",
+        port: 3000,
+      });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of spawning again", async () => {
+      const socket = new FakeSocket();
+      const previewOpen = vi.fn(
+        async (): Promise<PreviewOpenResult> => ({
+          tunnelId: "t1",
+          url: "https://t1.trycloudflare.com",
+          port: 3000,
+        }),
+      );
+      register(socket, { previewOpen });
+
+      const params = previewOpenParams();
+      await callAndAwaitAck(socket, "preview.open", seal(params, DEK));
+      await callAndAwaitAck(socket, "preview.open", seal(params, DEK));
+
+      expect(previewOpen).toHaveBeenCalledOnce();
+    });
+
+    it("replies with a sealed error when previewOpen throws (e.g. cloudflared-not-installed)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        previewOpen: vi.fn(async () => {
+          throw new Error("cloudflared-not-installed");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "preview.open",
+        seal(previewOpenParams(), DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "cloudflared-not-installed" });
+    });
+
+    it("replies with a sealed error when params fail PreviewOpenParamsSchema", async () => {
+      const socket = new FakeSocket();
+      register(socket);
+
+      const response = await callAndAwaitAck(
+        socket,
+        "preview.open",
+        seal({ idempotencyKey: "idem_1" }, DEK), // missing port
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("collapses two concurrent calls for the SAME port with DIFFERENT idempotencyKeys into one attempt (port guard)", async () => {
+      const socket = new FakeSocket();
+      let resolveOpen!: (value: PreviewOpenResult) => void;
+      const deferred = new Promise<PreviewOpenResult>((resolve) => {
+        resolveOpen = resolve;
+      });
+      const previewOpen = vi.fn(() => deferred);
+      register(socket, { previewOpen });
+
+      const fromDeviceA = previewOpenParams({ idempotencyKey: "idem_device_a", port: 4000 });
+      const fromDeviceB = previewOpenParams({ idempotencyKey: "idem_device_b", port: 4000 });
+
+      const responseA = callAndAwaitAck(socket, "preview.open", seal(fromDeviceA, DEK));
+      const responseB = callAndAwaitAck(socket, "preview.open", seal(fromDeviceB, DEK));
+
+      // Only one real spawn attempt is allowed for the same port — the
+      // second device joins the first's in-flight attempt.
+      expect(previewOpen).toHaveBeenCalledTimes(1);
+      expect(previewOpen).toHaveBeenCalledWith(fromDeviceA);
+
+      resolveOpen({ tunnelId: "t-shared", url: "https://t-shared.trycloudflare.com", port: 4000 });
+      const [resultA, resultB] = await Promise.all([responseA, responseB]);
+
+      const expected = {
+        tunnelId: "t-shared",
+        url: "https://t-shared.trycloudflare.com",
+        port: 4000,
+      };
+      expect(open(resultA, DEK)).toEqual(expected);
+      expect(open(resultB, DEK)).toEqual(expected);
+      expect(previewOpen).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT collapse concurrent calls for DIFFERENT ports — unrelated opens still run independently", async () => {
+      const socket = new FakeSocket();
+      const previewOpen = vi.fn(
+        async (params: { port: number }): Promise<PreviewOpenResult> => ({
+          tunnelId: `t-${params.port}`,
+          url: `https://t-${params.port}.trycloudflare.com`,
+          port: params.port,
+        }),
+      );
+      register(socket, { previewOpen });
+
+      const responseA = callAndAwaitAck(
+        socket,
+        "preview.open",
+        seal(previewOpenParams({ idempotencyKey: "idem_a", port: 5000 }), DEK),
+      );
+      const responseB = callAndAwaitAck(
+        socket,
+        "preview.open",
+        seal(previewOpenParams({ idempotencyKey: "idem_b", port: 5001 }), DEK),
+      );
+
+      const [resultA, resultB] = await Promise.all([responseA, responseB]);
+
+      expect(previewOpen).toHaveBeenCalledTimes(2);
+      expect(open(resultA, DEK)).toMatchObject({ port: 5000 });
+      expect(open(resultB, DEK)).toMatchObject({ port: 5001 });
+    });
+  });
+
+  describe("preview.close", () => {
+    it("decrypts params, calls previewClose, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const previewClose = vi.fn(async (): Promise<PreviewCloseResult> => ({ ok: true }));
+      register(socket, { previewClose });
+
+      const params = { idempotencyKey: "idem_close_1", tunnelId: "t1" };
+      const response = await callAndAwaitAck(socket, "preview.close", seal(params, DEK));
+
+      expect(previewClose).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ ok: true });
+    });
+
+    it("is not idempotency-cached — every call reaches the handler", async () => {
+      const socket = new FakeSocket();
+      const previewClose = vi.fn(async (): Promise<PreviewCloseResult> => ({ ok: true }));
+      register(socket, { previewClose });
+
+      const params = { idempotencyKey: "idem_close_1", tunnelId: "t1" };
+      await callAndAwaitAck(socket, "preview.close", seal(params, DEK));
+      await callAndAwaitAck(socket, "preview.close", seal(params, DEK));
+
+      expect(previewClose).toHaveBeenCalledTimes(2);
+    });
+  });
   describe("workspace.getConfig (docs/features/setup-run-scripts.md)", () => {
     it("decrypts params, calls getWorkspaceConfig, and seals the result", async () => {
       const socket = new FakeSocket();

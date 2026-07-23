@@ -524,13 +524,16 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
 
   // Stop taking new machine RPCs / heartbeats before tearing down the
   // control server and releasing the lock, mirroring the boot order above
-  // (machine client started last, stopped first). `sleepInhibitManager.stop()`
-  // MUST run before `deps.spawnStartSync()` can fire in the restart-handoff
-  // branch below — release-then-fresh-daemon-reapplies is what prevents two
-  // daemons briefly holding two caffeinate children during a self-update
-  // handoff (the `-w` tether is the crash-path backstop; this is the polite
-  // path for the ordinary case).
-  machineIntegration?.stop();
+  // (machine client started last, stopped first). `machineIntegration.stop()`
+  // is awaited — it now also closes every tracked dev-server preview tunnel
+  // (`closeAllTunnels`, docs/features/dev-server-preview.md) before
+  // resolving. `sleepInhibitManager.stop()` MUST run before
+  // `deps.spawnStartSync()` can fire in the restart-handoff branch below —
+  // release-then-fresh-daemon-reapplies is what prevents two daemons briefly
+  // holding two caffeinate children during a self-update handoff (the `-w`
+  // tether is the crash-path backstop; this is the polite path for the
+  // ordinary case).
+  await machineIntegration?.stop();
   sleepInhibitManager.stop();
   await controlServer.stop();
   await lockResult.handle.release();

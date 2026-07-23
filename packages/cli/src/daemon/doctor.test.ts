@@ -21,7 +21,7 @@ const FIXTURE_PROCESSES: ProcessEntry[] = [
   { pid: 999, ppid: 1, command: "falcon doctor" }, // the invoking process
 ];
 
-/** Fake adapter/provider deps — every `runDoctor()` call below injects these so tests never touch a real `~/.falcon/adapters` install or shell out to a real `claude`/`codex` on PATH. */
+/** Fake adapter/provider deps — every `runDoctor()` call below injects these so tests never touch a real `~/.falcon/adapters` install or shell out to a real `claude`/`codex`/`cloudflared` on PATH. */
 const FAKE_HEALTH_DEPS = {
   checkAdapters: async () => [],
   detectClaudeProvider: async () => ({
@@ -34,6 +34,7 @@ const FAKE_HEALTH_DEPS = {
     authenticated: false,
     error: "not installed",
   }),
+  detectCloudflaredBinary: async () => ({ installed: false }),
 };
 
 describe("runDoctor", () => {
@@ -121,6 +122,7 @@ describe("runDoctor", () => {
         authenticated: false,
         error: "not installed",
       }),
+      detectCloudflaredBinary: async () => ({ installed: true, version: "2024.6.1" }),
     });
 
     expect(report.adapters).toEqual([
@@ -138,6 +140,27 @@ describe("runDoctor", () => {
       version: "2.1.0",
     });
     expect(report.providers.codex.installed).toBe(false);
+    expect(report.preview.cloudflared).toEqual({ installed: true, version: "2024.6.1" });
+    expect(report.preview.tunnels).toEqual([]);
+  });
+
+  it("includes journaled tunnels annotated with a fresh alive/dead check", async () => {
+    const { appendJournalEntry } = await import("./tunnelRegistry.js");
+    await appendJournalEntry(homeDir, { pid: 7001, port: 3000, startedAt: 1000 });
+    await appendJournalEntry(homeDir, { pid: 7002, port: 3001, startedAt: 2000 });
+
+    const report = await runDoctor({
+      homeDir,
+      listProcesses: async () => [],
+      isProcessAlive: (pid) => pid === 7001,
+      currentPid: 999,
+      ...FAKE_HEALTH_DEPS,
+    });
+
+    expect(report.preview.tunnels).toEqual([
+      { pid: 7001, port: 3000, startedAt: 1000, alive: true },
+      { pid: 7002, port: 3001, startedAt: 2000, alive: false },
+    ]);
   });
 });
 
@@ -169,6 +192,10 @@ describe("describeDoctorReport", () => {
         claude: { installed: true, authenticated: true, version: "2.1.0" },
         codex: { installed: false, authenticated: false, error: "not installed" },
       },
+      preview: {
+        cloudflared: { installed: true, version: "2024.6.1" },
+        tunnels: [{ pid: 5000, port: 3000, startedAt: 0, alive: true }],
+      },
     });
 
     expect(text).toContain("daemon: running (pid 100, port 4242, version 0.1.0)");
@@ -178,9 +205,11 @@ describe("describeDoctorReport", () => {
     expect(text).toContain("codex — @agentclientprotocol/codex-acp@1.1.4: not-installed");
     expect(text).toContain("claude: installed (version 2.1.0)");
     expect(text).toContain("codex: not installed");
+    expect(text).toContain("cloudflared: installed (version 2024.6.1)");
+    expect(text).toContain("pid 5000 port 3000 [alive]");
   });
 
-  it("renders a friendly message when no processes are found", () => {
+  it("renders a friendly message when no processes/tunnels are found", () => {
     const text = describeDoctorReport({
       daemon: { running: false },
       resumableSessionCount: 0,
@@ -190,10 +219,13 @@ describe("describeDoctorReport", () => {
         claude: { installed: false, authenticated: false, error: "not installed" },
         codex: { installed: false, authenticated: false, error: "not installed" },
       },
+      preview: { cloudflared: { installed: false }, tunnels: [] },
     });
 
     expect(text).toContain("daemon: not running");
     expect(text).toContain("no falcon-owned processes found");
+    expect(text).toContain("cloudflared: not installed");
+    expect(text).toContain("no journaled tunnels");
   });
 });
 
@@ -210,9 +242,19 @@ function makeKillDeps(overrides: Partial<KillDeps> = {}): KillDeps {
 }
 
 describe("runDoctorClean", () => {
+  let homeDir: string;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-doctor-clean-"));
+  });
+
+  afterEach(async () => {
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
   it("targets only daemon processes and daemon-spawned sessions, not plain terminal sessions", async () => {
     const killPid = vi.fn();
-    const summary = await runDoctorClean(makeKillDeps({ killPid }), 50);
+    const summary = await runDoctorClean(makeKillDeps({ killPid }), 50, homeDir);
 
     expect(summary.targeted.map((p) => p.pid).sort()).toEqual([100, 200]);
     expect(killPid).toHaveBeenCalledWith(100, "SIGTERM");
@@ -221,11 +263,53 @@ describe("runDoctorClean", () => {
   });
 
   it("reports no runaway processes found when there's nothing to target", async () => {
-    const summary = await runDoctorClean(makeKillDeps({ listProcesses: async () => [] }), 50);
+    const summary = await runDoctorClean(
+      makeKillDeps({ listProcesses: async () => [] }),
+      50,
+      homeDir,
+    );
     expect(summary.targeted).toEqual([]);
     expect(describeDoctorCleanSummary(summary)).toBe(
       "falcon doctor clean: no runaway processes found\n",
     );
+  });
+
+  it("also reaps a live journaled cloudflared tunnel (docs/features/dev-server-preview.md)", async () => {
+    const { appendJournalEntry, readTunnelJournal } = await import("./tunnelRegistry.js");
+    await appendJournalEntry(homeDir, { pid: 8000, port: 3000, startedAt: 1000 });
+
+    const killPid = vi.fn();
+    // pid 8000 (the tunnel): alive at reapOrphanedTunnels' pre-kill check,
+    // then reports dead once its own waitForExit polls it after SIGTERM —
+    // same pattern as tunnelRegistry.test.ts's own reap tests. Every other
+    // pid (100/200, the daemon/session runaway-kill targets) stays `false`
+    // throughout, matching this suite's original always-false convention.
+    const aliveCallCounts = new Map<number, number>();
+    const isAlive = vi.fn((pid: number) => {
+      if (pid !== 8000) return false;
+      const count = (aliveCallCounts.get(pid) ?? 0) + 1;
+      aliveCallCounts.set(pid, count);
+      return count === 1;
+    });
+    const summary = await runDoctorClean(
+      makeKillDeps({
+        killPid,
+        isAlive,
+        listProcesses: async () => [
+          ...FIXTURE_PROCESSES,
+          { pid: 8000, ppid: 1, command: "cloudflared tunnel --url http://localhost:3000" },
+        ],
+      }),
+      50,
+      homeDir,
+    );
+
+    // The runaway-process kill (daemon/daemon-spawned-session targets)
+    // stays exactly as before — cloudflared reaping is an ADDITIONAL sweep,
+    // not a replacement.
+    expect(summary.targeted.map((p) => p.pid).sort()).toEqual([100, 200]);
+    expect(killPid).toHaveBeenCalledWith(8000, "SIGTERM");
+    expect(await readTunnelJournal(homeDir)).toEqual([]);
   });
 });
 

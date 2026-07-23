@@ -74,6 +74,10 @@ function register(
     resumeSession: vi.fn(),
     adoptTake: vi.fn(),
     adoptMirror: vi.fn(),
+    previewPorts: vi.fn(),
+    previewTunnels: vi.fn(),
+    previewOpen: vi.fn(),
+    previewClose: vi.fn(),
     ...overrides,
   });
 }

@@ -343,6 +343,100 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ inline: "const a = 1;\n", truncated: false });
   });
 
+  it("round-trips a preview.ports call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({
+          cloudflared: { installed: true, version: "2024.6.1" },
+          ports: [{ port: 3000, address: "*", pid: 42, processName: "node" }],
+        }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("preview.ports", { idempotencyKey: "idem-10" });
+
+    expect(result).toEqual({
+      cloudflared: { installed: true, version: "2024.6.1" },
+      ports: [{ port: 3000, address: "*", pid: 42, processName: "node" }],
+    });
+  });
+
+  it("round-trips a preview.tunnels call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({
+          tunnels: [
+            {
+              tunnelId: "t1",
+              port: 3000,
+              url: "https://t1.trycloudflare.com",
+              status: "active",
+              startedAt: 1000,
+            },
+          ],
+        }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("preview.tunnels", { idempotencyKey: "idem-11" });
+
+    expect(result).toEqual({
+      tunnels: [
+        {
+          tunnelId: "t1",
+          port: 3000,
+          url: "https://t1.trycloudflare.com",
+          status: "active",
+          startedAt: 1000,
+        },
+      ],
+    });
+  });
+
+  it("round-trips a preview.open call and result", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ tunnelId: "t1", url: "https://t1.trycloudflare.com", port: 3000 }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("preview.open", { idempotencyKey: "idem-12", port: 3000 });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:preview.open",
+      "preview.open",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({ tunnelId: "t1", url: "https://t1.trycloudflare.com", port: 3000 });
+  });
+
+  it("round-trips a preview.close call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({ ok: true, result: box({ ok: true }) })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("preview.close", {
+      idempotencyKey: "idem-13",
+      tunnelId: "t1",
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
   it("round-trips a workspace.getConfig call and result (docs/features/setup-run-scripts.md)", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
