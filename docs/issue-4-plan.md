@@ -653,8 +653,33 @@ New-device chooser
 - [ ] docs: mark local = E2E, cloud = server-trusted, per-session.
 
 ### Cross-cutting / docs
-- [ ] Update `docs/encryption.md`: PIN posture (casual-access, not offline-attacker), daemon custody limits, key-epoch rotation semantics, refresh lifetime policy.
-- [ ] Update `docs/protocol.md` / `docs/falcon-system-design.md` §5.2/§6.2: new auth surface (`/auth/refresh`, password, keys, sessions-admin), remove `/v1/auth` challenge route.
-- [ ] Update `docs/uninstall.md` if credential-file shape changes affect cleanup.
-- [ ] Flip `docs/known-issues.md` #4 → Resolved (link this plan) once P1–P6 land.
-- [ ] Security re-review of v2 (reuse-detection grace logic + rotation fence are the two to re-scrutinize) before P1 starts.
+- [x] Update `docs/encryption.md`: PIN posture, daemon custody limits, key-epoch rotation semantics, refresh lifetime policy — new "§5 Identity vs. key custody" section added.
+- [ ] Update `docs/protocol.md` / `docs/falcon-system-design.md` §5.2/§6.2 — **not done**, the legacy `/v1/auth` challenge route was not removed (Phase 4 gap), so falcon-system-design.md's existing description isn't actually wrong yet, just incomplete.
+- [ ] Update `docs/uninstall.md` — **not done**; the credential file's field name changed (`token`→`refreshToken`) but the shape/location (`~/.falcon/access.key`) didn't, so uninstall's `rm -rf ~/.falcon` guidance is unaffected regardless.
+- [ ] Flip `docs/known-issues.md` #4 → Resolved — **could not do**: this worktree's `docs/known-issues.md` has no issue #4 entry at all (only "Flow 4 pairing" and "worktree-isolation follow-ups" are listed) — nothing to flip. Flagged in the final report as a discrepancy between the task brief and the actual repo state, not fabricated.
+- [ ] Security re-review of v2 — **not done** (would need a second reviewer/pass beyond this implementation session).
+
+## Testing evidence (see final report for full detail)
+
+Automated: `pnpm --filter @falcon/crypto build/typecheck/test` (8 pin tests incl. cross-platform
+parity), `pnpm --filter @falcon/server build/typecheck/test` (47 files/356 tests, real Postgres),
+`pnpm --filter falcon build/typecheck/test` (160 files/1880 tests, incl. a real-server daemon
+integration test), `pnpm --filter @falcon/web build/typecheck/test` (real Next.js static-export
+build, 149 files/1100 tests), `pnpm --filter @falcon/e2e test` (20-step conformance harness).
+Full-monorepo `pnpm test` (all packages via turbo in parallel) is flaky on this dev machine under
+combined load — different unrelated tests time out each run — but every package is 100% green
+run on its own, reproducibly; this matches the same resource-contention class CLAUDE.md already
+documents for `pnpm lint`.
+
+Manual (tmux + Chrome MCP, against a real local Postgres + real server + real web dev server):
+register a password account in the browser → real masterSecret generated → real
+keys/challenge+keys/bind → landed authenticated; forced-expired access token + reload →
+silentRefresh() transparently got a fresh one via a real `/v1/auth/refresh` call, no redirect to
+sign-in; `falcon auth login` real pairing dance (QR/URL → browser approve) → CLI received a real
+refresh token; daemon boot registered the machine and opened a machine-scoped socket using a real
+access token from `/v1/auth/refresh`; revoking the daemon's own device session via the
+sessions-admin API from the browser caused an IMMEDIATE `disconnected: "io server disconnect"` on
+the daemon's live socket, a `connect_error: "Session revoked"` on its automatic reconnect attempt,
+a `forceRefresh()` that correctly got rejected (401, dead refresh token), and a clean
+"re-authentication required — run `falcon auth login`" log line with the daemon process still
+alive (not crashed) — re-running `falcon auth login` + a daemon restart fully recovered it.
