@@ -130,6 +130,8 @@ Verified: `pnpm build && pnpm typecheck && pnpm test` green across every package
 
 Known, deliberate simplifications (documented inline at their respective phase): Restore always resolves a formerly-archived row to `"active"` (the pre-archive status isn't persisted); the timeline header's Pin/Unpin label is generic (no decrypted `pinned` snapshot there) while the Home card's is accurate; the timeline header's Restart confirm copy says "on its machine" rather than a decrypted machine name (Home's card-level dialog does show the real name, since `SessionCard` already has it). None of these block the feature's core flows.
 
+Merged into v2-pty-injection at 1222b1dc106ca9dd28b8a16fd10fffe05e949a5a.
+
 ## Test & Review notes
 
 Independent verification pass (worktree `.worktrees/feature-session-lifecycle-actions`), genuinely
