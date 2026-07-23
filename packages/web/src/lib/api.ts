@@ -8,6 +8,7 @@
 import type {
   BlobRequestDownloadResult,
   BlobRequestUploadResult,
+  EncryptedBox,
   PushSubscribeBody,
   SessionRow,
 } from "@falcon/wire";
@@ -206,6 +207,58 @@ export function unarchiveSession(
   sessionId: string,
 ): Promise<{ status: SessionRow["status"] }> {
   return postJson(`/v1/sessions/${sessionId}/unarchive`, undefined, token);
+}
+
+export type PutSessionMetadataCasResult =
+  | { ok: true; version: number }
+  | { ok: false; current: { value: EncryptedBox | null; version: number } };
+
+/** `PUT /v1/sessions/:id/metadata` (server `sessionCas.ts`) — the web's
+ * first encrypted-metadata write path (docs/features/session-lifecycle-
+ * actions.md Phase 3, Rename/Pin). Deliberately doesn't go through
+ * `request()`/`putJson` above: those throw on any non-2xx and discard the
+ * body, but a `409` here carries the CURRENT box the caller needs to
+ * re-open and retry against — cloned from the CLI's own
+ * `cli/src/api/sessionMetadata.ts` updater, which hits this same route the
+ * same way for the same reason. */
+export async function putSessionMetadataCas(
+  token: string,
+  sessionId: string,
+  body: { expectedVersion: number; value: EncryptedBox },
+): Promise<PutSessionMetadataCasResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/v1/sessions/${sessionId}/metadata`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+  }
+
+  if (response.ok) {
+    const parsed = (await response.json()) as { version: number };
+    return { ok: true, version: parsed.version };
+  }
+
+  if (response.status === 409) {
+    const parsed = (await response.json()) as {
+      current: { value: EncryptedBox | null; version: number };
+    };
+    return { ok: false, current: parsed.current };
+  }
+
+  const bodyText = await response.text().catch(() => "");
+  throw new ApiError(
+    bodyText.length > 0
+      ? `session metadata update failed with ${response.status}: ${bodyText}`
+      : `session metadata update failed with ${response.status}`,
+    response.status,
+  );
 }
 
 /** `DELETE /v1/sessions/:id` — permanently deletes a session row (and, via
