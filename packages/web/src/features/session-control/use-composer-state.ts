@@ -9,8 +9,8 @@ import {
   buildFileEnvelope,
   buildMessageEnvelope,
   deliveryNotice,
+  mergeRenderItems,
   type PendingMessage,
-  pendingToRenderItem,
   reconcileByStatus,
   reconcilePending,
 } from "./optimistic-composer";
@@ -18,9 +18,9 @@ import { useSessionControl } from "./session-control-context";
 import { useSessionCrypto } from "./use-session-crypto";
 
 export interface ComposerState {
-  /** `items` with every still-unreconciled pending send appended (design
-   * §9.1: "optimistic timeline insert reconciled by echo update"). Feed this
-   * to `Timeline`, not the raw `items` prop. */
+  /** `items` with every still-unreconciled pending send merged in by `time`
+   * (design §9.1: "optimistic timeline insert reconciled by echo update").
+   * Feed this to `Timeline`, not the raw `items` prop. */
   mergedItems: RenderItem[];
   send(text: string): void;
   /** Encrypts + uploads `file` (composer attach path, plan.md §16 "4.3
@@ -125,7 +125,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
   });
 
   return {
-    mergedItems: [...items, ...pending.map(pendingToRenderItem)],
+    mergedItems: mergeRenderItems(items, pending),
     send: (text) => {
       const trimmed = text.trim();
       if (trimmed.length === 0) return;

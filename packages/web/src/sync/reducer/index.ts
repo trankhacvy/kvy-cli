@@ -4,7 +4,7 @@
  * over `@falcon/wire`'s `SessionEnvelope`/`SessionEvent` schemas; not wired
  * into the sync engine or timeline UI yet (later plan bullets).
  */
-export { reduceEnvelopes } from "./reduce.js";
+export { reduceEnvelopes, stableSortByTime } from "./reduce.js";
 export type {
   FileItem,
   ModeSwitchItem,

@@ -5,6 +5,7 @@ import {
   buildFileEnvelope,
   buildMessageEnvelope,
   deliveryNotice,
+  mergeRenderItems,
   type PendingMessage,
   pendingToRenderItem,
   reconcileByStatus,
@@ -240,6 +241,43 @@ describe("pendingToRenderItem", () => {
       name: "diagram.png",
       size: 2048,
     });
+  });
+});
+
+describe("mergeRenderItems", () => {
+  it("returns items unchanged (same reference) when there's nothing pending", () => {
+    const items: RenderItem[] = [{ id: "a", time: 1, role: "agent", kind: "text", md: "hi", thinking: false }];
+    expect(mergeRenderItems(items, [])).toBe(items);
+  });
+
+  it("slots a pending send into its correct chronological position instead of always appending last", () => {
+    // Reproduces the bug: a tool-call result (e.g. an AskUserQuestion card)
+    // for a queued message can sync into `items` before this composer's own
+    // pending-send echo reconciles — a naive concat would render the result
+    // above the message that caused it.
+    const items: RenderItem[] = [
+      { id: "msg1", time: 100, role: "user", kind: "text", md: "first question please", thinking: false },
+      { id: "card1", time: 200, role: "agent", kind: "text", md: "answered", thinking: false },
+    ];
+    const pending: PendingMessage[] = [
+      { kind: "text", localId: "msg2", text: "second question please", sentAt: 150, queued: true },
+    ];
+    expect(mergeRenderItems(items, pending)).toEqual([
+      items[0],
+      { id: "msg2", time: 150, role: "user", kind: "text", md: "second question please", thinking: false },
+      items[1],
+    ]);
+  });
+
+  it("keeps confirmed items ahead of a pending send that was sent later", () => {
+    const items: RenderItem[] = [
+      { id: "a", time: 1, role: "agent", kind: "text", md: "hi", thinking: false },
+    ];
+    const pending: PendingMessage[] = [
+      { kind: "text", localId: "p1", text: "reply", sentAt: 2, queued: false },
+    ];
+    const merged = mergeRenderItems(items, pending);
+    expect(merged.map((item) => item.id)).toEqual(["a", "p1"]);
   });
 });
 

@@ -390,15 +390,70 @@ export interface AskAnswerEntry {
   answer: string;
 }
 
+/**
+ * Matches one `"question"="answer"` pair, as Claude Code's own real
+ * `AskUserQuestion` tool_result string embeds them (see `parseAskAnswers`'s
+ * own doc comment for the verified full-string shape). Doesn't handle an
+ * embedded literal `"` inside a question/answer (Claude Code's own string
+ * doesn't escape one either, as far as verified) — an unmatched quote there
+ * just fails to match, degrading to the raw-dump fallback like any other
+ * unrecognized shape, never a crash.
+ */
+const ASK_ANSWER_PAIR_PATTERN = /"([^"]*)"="([^"]*)"/g;
+
 /** Reads a completed `AskUserQuestion` tool-end's answer, for the read-only
- * (locally-answered) ToolCard. Two tolerated shapes: `{answers: {question:
- * answer}}` (Falcon's own deny-with-answer convention, in case a future
- * transport ever mirrors it back as a real tool-end) or an array of
- * `{question, answer}` entries. Neither is a verified Claude Code tool-result
- * shape (plan-v2.md W2.1's `[human]` sub-task covers that live check) —
- * degrades to `undefined` on any other shape so the card falls back to a raw
- * dump instead of hiding data. */
+ * (locally-answered) ToolCard. Three tolerated shapes, tried in order:
+ *
+ * 1. A plain string matching Claude Code's own real tool_result `content`
+ *    (verified against real transcripts, Claude Code 2.1.218). A
+ *    picked-option answer, single-question:
+ *    ```
+ *    Your questions have been answered: "Which color do you prefer?"="Blue".
+ *    You can now continue with these answers in mind.
+ *    ```
+ *    or multi-question in one call:
+ *    ```
+ *    Your questions have been answered: "Which color do you prefer?"="Red",
+ *    "Which size?"="Small". You can now continue with these answers in mind.
+ *    ```
+ *    A free-text "Type something" answer uses a genuinely DIFFERENT wrapper
+ *    sentence (verified live, not assumed) — "The user answered: ..." rather
+ *    than "Your questions have been answered: ...":
+ *    ```
+ *    The user answered: "What is your favorite drink?"="Hot chocolate". Read
+ *    the answers carefully — they may request clarification, changes, or
+ *    that you not proceed — and follow what they actually say.
+ *    ```
+ *    Neither the prefix nor suffix sentence is pinned down (a future Claude
+ *    Code build could reword either, and there may be other variants this
+ *    hasn't seen) — this scans the whole string for `"question"="answer"`
+ *    pairs wherever they appear, which is why both wrappers above parse
+ *    identically without special-casing which one it is, and also means an
+ *    answer that itself contains a comma (e.g. "Yes, please") parses
+ *    correctly, since pairs are found by quote-matching, not by splitting on
+ *    `, `. A declined/"Chat about this" tool_result is a third, structurally
+ *    different string ("The user doesn't want to proceed with this tool
+ *    use...", `is_error: true`) with no `"..."="..."` pair in it at all, so
+ *    it naturally falls through to `undefined` here — `isDeclinedQuestion`
+ *    in `AskUserQuestionToolCard.tsx` is what actually recognizes that case,
+ *    entirely independently of this function.
+ * 2. `{answers: {question: answer}}` (Falcon's own deny-with-answer
+ *    convention, in case a future transport ever mirrors it back as a real
+ *    tool-end).
+ * 3. An array of `{question, answer}` entries.
+ *
+ * Degrades to `undefined` on any other shape (including a declined/rejected
+ * tool_result string, which never contains a `"..."="..."` pair) so the card
+ * falls back to a raw dump instead of hiding data.
+ */
 export function parseAskAnswers(output: unknown): AskAnswerEntry[] | undefined {
+  if (typeof output === "string") {
+    const entries = Array.from(output.matchAll(ASK_ANSWER_PAIR_PATTERN))
+      .map((match) => ({ question: match[1] ?? "", answer: match[2] ?? "" }))
+      .filter((entry): entry is AskAnswerEntry => entry.question.length > 0);
+    return entries.length > 0 ? entries : undefined;
+  }
+
   const r = asRecord(output);
   const answersRecord = asRecord(r?.answers);
   if (answersRecord) {

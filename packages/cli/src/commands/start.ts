@@ -32,7 +32,11 @@
  * (`SessionStart`/`Notification`/`Stop`/`PreToolUse`/`PermissionRequest` —
  * `PreToolUse` always defers to Claude Code's own permission engine;
  * `PermissionRequest` is where the web-vs-terminal fork actually lives,
- * plan-v2.md Wave 1.1). Its `settingsEnv`/
+ * plan-v2.md Wave 1.1 — as of docs/known-issues.md issue #5, both sides of
+ * that fork emit a live `perm-request` so web always sees an actionable
+ * card; the fork now only decides whether the hook blocks for a web answer
+ * or hands off to the terminal immediately, tracking the latter via
+ * `resolveLocalOutcome` — see `onEnvelopes` below). Its `settingsEnv`/
  * `settingsPath` are handed to the PTY session (so the spawned `claude` gets
  * `--settings`), its `onSessionId` is routed to the PTY tailer, its
  * `resolvePermission` backs the `perm.answer` RPC, and `markWebTurnStart()`
@@ -747,6 +751,16 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     // forwards the real provider session id into it once the TUI reports it.
     let ptyHandle: PtyClaudeSessionHandle | null = null;
 
+    // `call` -> tool name, learned from each `tool-start` envelope and
+    // consumed by its matching `tool-end` (docs/known-issues.md issue #5):
+    // the tailer's tool-end carries no tool name of its own, but
+    // `permHook.resolveLocalOutcome` needs one to correlate back to a
+    // locally-pending permission/question request. Unbounded but
+    // self-limiting in practice — every `tool-start` is followed by exactly
+    // one `tool-end` for the same `call`, so an entry is removed the instant
+    // it's read.
+    const toolNameByCall = new Map<string, string>();
+
     // The one hook server for this session. A failure here is non-fatal: the
     // session still starts (the terminal TUI's own prompts still work), just
     // without remote permission answering this run.
@@ -837,6 +851,25 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           // open is gone" signal — clears the gate the attention/onPromptLikely
           // wiring above set (plan-v2.md W1.3).
           if (envelopes.some((e) => e.ev.t === "tool-end")) ptyHandle?.setPromptOpen(false);
+          // The same tool-start/tool-end pair is also the "resolved locally"
+          // signal for a permission-gated tool call (docs/known-issues.md
+          // issue #5): Claude Code records a `tool_result` for a call either
+          // way, allowed or denied, so `tool-end`'s own `ok` flag is the real
+          // outcome — correlate it back through `toolNameByCall` (tool-end
+          // itself carries no name) and complete the matching local pending
+          // request, if any (a no-op when there isn't one — e.g. an
+          // auto-allowed tool that never hit a permission hook at all).
+          for (const envelope of envelopes) {
+            if (envelope.ev.t === "tool-start") {
+              toolNameByCall.set(envelope.ev.call, envelope.ev.name);
+            } else if (envelope.ev.t === "tool-end") {
+              const toolName = toolNameByCall.get(envelope.ev.call);
+              toolNameByCall.delete(envelope.ev.call);
+              if (toolName) {
+                permHook?.resolveLocalOutcome(toolName, envelope.ev.ok ? "approved" : "denied");
+              }
+            }
+          }
           handlePossibleModelChange(envelopes);
           outbox.enqueue(envelopes);
         },
