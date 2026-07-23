@@ -26,7 +26,7 @@ describe("ensureBranchWorkspace", () => {
       { git },
     );
 
-    expect(result).toEqual({ directory: root });
+    expect(result).toEqual({ directory: root, createdWorktree: false });
     expect(git).toHaveBeenCalledWith(
       ["show-ref", "--verify", "--quiet", "refs/heads/feature/x"],
       root,
@@ -37,12 +37,13 @@ describe("ensureBranchWorkspace", () => {
   it("checks out an existing branch (no -b) when createWorktree is false and the branch already exists", async () => {
     const git = vi.fn<GitExec>(async () => "");
 
-    await ensureBranchWorkspace(
+    const result = await ensureBranchWorkspace(
       { repoDirectory: root, branch: { name: "main", createWorktree: false } },
       { git },
     );
 
     expect(git).toHaveBeenCalledWith(["checkout", "main"], root);
+    expect(result.createdWorktree).toBe(false);
   });
 
   it("creates a new worktree at <repo>/.worktrees/<branch> with -b for a new branch", async () => {
@@ -57,7 +58,7 @@ describe("ensureBranchWorkspace", () => {
     );
 
     const expectedDir = path.join(root, ".worktrees", "task-1");
-    expect(result).toEqual({ directory: expectedDir });
+    expect(result).toEqual({ directory: expectedDir, createdWorktree: true });
     expect(git).toHaveBeenCalledWith(["worktree", "add", expectedDir, "-b", "task-1"], root);
   });
 
@@ -71,10 +72,10 @@ describe("ensureBranchWorkspace", () => {
 
     const expectedDir = path.join(root, ".worktrees", "existing-branch");
     expect(git).toHaveBeenCalledWith(["worktree", "add", expectedDir, "existing-branch"], root);
-    expect(result).toEqual({ directory: expectedDir });
+    expect(result).toEqual({ directory: expectedDir, createdWorktree: true });
   });
 
-  it("is idempotent: reuses an existing worktree directory without calling git again", async () => {
+  it("is idempotent: reuses an existing worktree directory without calling git again, and reports createdWorktree: false", async () => {
     const worktreeDir = path.join(root, ".worktrees", "task-1");
     await mkdir(worktreeDir, { recursive: true });
     const git = vi.fn<GitExec>(async () => "");
@@ -84,7 +85,7 @@ describe("ensureBranchWorkspace", () => {
       { git },
     );
 
-    expect(result).toEqual({ directory: worktreeDir });
+    expect(result).toEqual({ directory: worktreeDir, createdWorktree: false });
     expect(git).not.toHaveBeenCalled();
   });
 
@@ -138,7 +139,7 @@ describe("ensureBranchWorkspace", () => {
       );
 
       const expectedDir = path.join(root, ".worktrees", "task-1");
-      expect(result).toEqual({ directory: expectedDir });
+      expect(result).toEqual({ directory: expectedDir, createdWorktree: true });
       expect(git).toHaveBeenCalledWith(
         ["worktree", "add", expectedDir, "-b", "task-1", "develop"],
         root,
@@ -235,7 +236,7 @@ describe("ensureBranchWorkspace", () => {
         { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
         { git },
       );
-      expect(result).toEqual({ directory: expectedDir });
+      expect(result).toEqual({ directory: expectedDir, createdWorktree: true });
       expect(git).toHaveBeenCalledWith(["worktree", "add", expectedDir, "task-1"], root);
     });
   });
@@ -309,7 +310,10 @@ describe("ensureBranchWorkspace", () => {
         { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
         { git },
       );
-      expect(result).toEqual({ directory: path.join(root, ".worktrees", "task-1") });
+      expect(result).toEqual({
+        directory: path.join(root, ".worktrees", "task-1"),
+        createdWorktree: true,
+      });
     });
 
     it("does not reject when the exclude write itself fails", async () => {
@@ -325,7 +329,10 @@ describe("ensureBranchWorkspace", () => {
           { repoDirectory: root, branch: { name: "task-1", createWorktree: true } },
           { git },
         ),
-      ).resolves.toEqual({ directory: path.join(root, ".worktrees", "task-1") });
+      ).resolves.toEqual({
+        directory: path.join(root, ".worktrees", "task-1"),
+        createdWorktree: true,
+      });
     });
   });
 });

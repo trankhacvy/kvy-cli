@@ -45,6 +45,15 @@
  * Files sidebar tab: `git.files` lists every worktree-relative path
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
+ *
+ * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
+ * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts")
+ * join the table for `features/run-panel/`: the read-only workspace config
+ * surface plus the long-lived, remotely start/stop-able `run.*` process.
+ * Same no-idempotency-cache reasoning as `git.status` for
+ * `workspace.getConfig`/`run.status` (read-only); `run.start`/`run.stop`/
+ * `run.setup` DO carry idempotency-key replay caching daemon-side, same as
+ * `git.commit`.
  */
 import {
   type AdoptListParamsSchema,
@@ -77,10 +86,20 @@ import {
   GitStatusResultSchema,
   type ProviderAccountParams,
   ProviderAccountResultSchema,
+  type RunSetupParams,
+  RunSetupResultSchema,
+  type RunStartParams,
+  RunStartResultSchema,
+  type RunStatusParams,
+  RunStatusResultSchema,
+  type RunStopParams,
+  RunStopResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
   type SpawnParams,
   SpawnResultSchema,
+  type WorkspaceGetConfigParams,
+  WorkspaceGetConfigResultSchema,
   type WorkspaceRegisterParams,
   WorkspaceRegisterResultSchema,
 } from "@falcon/wire";
@@ -102,8 +121,13 @@ export type {
   GitRenameBranchParams,
   GitStatusParams,
   ProviderAccountParams,
+  RunSetupParams,
+  RunStartParams,
+  RunStatusParams,
+  RunStopParams,
   SlashCommandsListParams,
   SpawnParams,
+  WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
 };
 
@@ -130,6 +154,11 @@ export interface MachineRpcParams {
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
+  "workspace.getConfig": WorkspaceGetConfigParams;
+  "run.start": RunStartParams;
+  "run.stop": RunStopParams;
+  "run.status": RunStatusParams;
+  "run.setup": RunSetupParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -152,6 +181,11 @@ export interface MachineRpcResults {
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
+  "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
+  "run.start": import("@falcon/wire").RunStartResult;
+  "run.stop": import("@falcon/wire").RunStopResult;
+  "run.status": import("@falcon/wire").RunStatusResult;
+  "run.setup": import("@falcon/wire").RunSetupResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -175,6 +209,11 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
+  "workspace.getConfig": WorkspaceGetConfigResultSchema,
+  "run.start": RunStartResultSchema,
+  "run.stop": RunStopResultSchema,
+  "run.status": RunStatusResultSchema,
+  "run.setup": RunSetupResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

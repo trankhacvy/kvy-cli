@@ -222,11 +222,21 @@ export interface EnsureBranchWorkspaceParams {
  * Resolves `params.branch` into the directory the session should actually
  * launch in: either `repoDirectory` itself (branch checked out in place) or
  * a new `.worktrees/<branch>` directory beneath it.
+ *
+ * `createdWorktree: true` iff a real `git worktree add` just ran on THIS
+ * call — `false` on the in-place-checkout path (`createWorktree: false`,
+ * whether the branch is new or already existed) AND on the idempotent-reuse
+ * path (an already-there `.worktrees/<branch>` directory, no git call at
+ * all). This is the setup-script hook's own signal
+ * (docs/features/setup-run-scripts.md Phase 2, `spawnEngine.ts`): the setup
+ * script must run exactly once, right after the worktree is genuinely
+ * created — never on a retried/idempotent spawn that reuses an existing
+ * worktree, and never on a repo-root (no-worktree) spawn.
  */
 export async function ensureBranchWorkspace(
   params: EnsureBranchWorkspaceParams,
   deps: GitWorktreeDeps = {},
-): Promise<{ directory: string }> {
+): Promise<{ directory: string; createdWorktree: boolean }> {
   const git = deps.git ?? ((args: string[], cwd: string) => runGit(args, cwd));
   const { repoDirectory, branch } = params;
   assertSafeBranchName(branch.name);
@@ -242,7 +252,7 @@ export async function ensureBranchWorkspace(
         : ["checkout", "-b", branch.name, ...startPointArgs(branch.from)],
       repoDirectory,
     );
-    return { directory: repoDirectory };
+    return { directory: repoDirectory, createdWorktree: false };
   }
 
   const worktreeDir = path.join(repoDirectory, ".worktrees", branch.name);
@@ -252,7 +262,7 @@ export async function ensureBranchWorkspace(
     () => false,
   );
   if (alreadyThere) {
-    return { directory: worktreeDir };
+    return { directory: worktreeDir, createdWorktree: false };
   }
 
   await mkdir(path.dirname(worktreeDir), { recursive: true });
@@ -267,5 +277,5 @@ export async function ensureBranchWorkspace(
     repoDirectory,
   );
   await ensureWorktreesExcluded(repoDirectory);
-  return { directory: worktreeDir };
+  return { directory: worktreeDir, createdWorktree: true };
 }
