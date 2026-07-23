@@ -216,6 +216,8 @@ above for exactly what was and wasn't exercised).
   an injectable `platform`, but was never exercised on a real Windows machine (no Windows CI
   in this repo) — the same caveat the original plan's risk list already flagged.
 
+Merged into v2-pty-injection at 6cc5605433f428ead632396c73f89a193235198e.
+
 ## Test & Review notes (independent verification pass)
 
 Reviewed as an independent tester in `.worktrees/feature-setup-run-scripts` — did not trust the
