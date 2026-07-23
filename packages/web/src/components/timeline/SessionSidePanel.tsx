@@ -1,224 +1,203 @@
 "use client";
 
-import {
-  CheckCircle2,
-  ChevronDown,
-  File as FileIcon,
-  GitBranch,
-  GitCompareArrows,
-  Pencil,
-  RefreshCw,
-  Search,
-} from "lucide-react";
 import { useState } from "react";
-import { FileTree, FileTreeFile, FileTreeFolder } from "@/components/ai-elements/file-tree";
-import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  ChangedFilesList,
+  CompareAgainstSelect,
+  GitToolbar,
+  useGitPanel,
+  useLiveGitDiffActions,
+} from "@/features/git-diff";
 import { ChecksPanel } from "@/features/github-checks";
-import { cn } from "@/lib/utils";
+import { FileTree, useLiveRepoFilesActions, useRepoFiles } from "@/features/repo-files";
 
 type PanelTab = "changes" | "files" | "checks";
 
+/**
+ * A file/diff the user picked from this panel's Changes/All Files list —
+ * lifted to `SessionTimelineScreen.tsx` (via `onOpenFile`) so it can swap
+ * the main column's Timeline+Composer for a read-only viewer, conductor.build-
+ * style (known-issues.md #7 follow-up). `path: null` (diff only) means "all
+ * changed files" — `ChangedFilesList`'s own aggregate row.
+ */
+export interface OpenFile {
+  kind: "content" | "diff";
+  path: string | null;
+  /** The Changes tab's current "Compare against" selection at the moment this diff was opened, so the main-column viewer matches what the sidebar showed — `null` = workspace default. Unused for `kind: "content"`. */
+  compareRef: string | null;
+}
+
 const TABS: { id: PanelTab; label: string }[] = [
   { id: "changes", label: "Changes" },
-  { id: "files", label: "Repo Files" },
+  { id: "files", label: "All Files" },
   { id: "checks", label: "Checks" },
 ];
 
-/** Dummy changed-file rows (placeholder UI — no git backend wired here yet;
- * the real diff view lives at `/session/[id]/git`). */
-const DUMMY_CHANGES: { path: string; status: "M" | "U" | "A" }[] = [
-  { path: ".agents/skills/migrate-radix-to-base/class-mapping.md", status: "U" },
-  { path: ".agents/skills/migrate-radix-to-base/consumer-props.md", status: "U" },
-  { path: ".agents/skills/migrate-radix-to-base/disclosure.md", status: "U" },
-  { path: ".agents/skills/migrate-radix-to-base/SKILL.md", status: "U" },
-  { path: "packages/web/src/components/timeline/Composer.tsx", status: "M" },
-  { path: "packages/web/src/components/timeline/Timeline.tsx", status: "M" },
-  { path: "packages/web/src/components/ui/message-scroller.tsx", status: "A" },
-];
-
-const STATUS_TONE: Record<string, string> = {
-  M: "text-amber-500",
-  U: "text-emerald-500",
-  A: "text-emerald-500",
-};
-
-function ChangesTab() {
-  return (
-    <div className="flex flex-col gap-2 p-3">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <GitCompareArrows className="size-3.5" />
-        Compare against:
-        <span className="font-medium text-foreground">origin/main</span>
-        <ChevronDown className="size-3.5" />
-      </div>
-      <ul className="flex flex-col">
-        {DUMMY_CHANGES.map((file) => (
-          <li
-            key={file.path}
-            className="flex items-center gap-2 rounded px-1.5 py-1 text-xs hover:bg-muted/50"
-          >
-            <FileIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="min-w-0 flex-1 truncate">{file.path}</span>
-            <span className={cn("font-mono font-medium", STATUS_TONE[file.status])}>
-              {file.status}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function RepoFilesTab() {
-  return (
-    <div className="p-3">
-      <FileTree defaultExpanded={new Set(["packages", "packages/web", "packages/web/src"])}>
-        <FileTreeFolder path="packages" name="packages">
-          <FileTreeFolder path="packages/web" name="web">
-            <FileTreeFolder path="packages/web/src" name="src">
-              <FileTreeFolder path="packages/web/src/components" name="components">
-                <FileTreeFile path="packages/web/src/components/timeline" name="timeline/" />
-                <FileTreeFile path="packages/web/src/components/ui" name="ui/" />
-              </FileTreeFolder>
-              <FileTreeFile path="packages/web/src/app" name="app/" />
-              <FileTreeFile path="packages/web/src/sync" name="sync/" />
-            </FileTreeFolder>
-          </FileTreeFolder>
-          <FileTreeFolder path="packages/server" name="server">
-            <FileTreeFile path="packages/server/src" name="src/" />
-          </FileTreeFolder>
-          <FileTreeFolder path="packages/cli" name="cli">
-            <FileTreeFile path="packages/cli/src" name="src/" />
-          </FileTreeFolder>
-        </FileTreeFolder>
-        <FileTreeFile path="plan.md" name="plan.md" />
-        <FileTreeFile path="falcon-system-design.md" name="falcon-system-design.md" />
-      </FileTree>
-    </div>
-  );
-}
-
 /**
- * Real once `machineId`/`worktree` are both threaded in (`SessionTimelineScreen.tsx`
- * — both already resolved there off the session row's own plaintext
- * `machineId`/`workspaceId` fields, design §5.3): renders the live
- * `github.checks`-backed `ChecksPanel` (docs/features/github-pr-ci.md).
- * Falls back to the original placeholder — two dummy check cards, an
- * explicit "not connected yet" caption — when either is absent, e.g. a
- * standalone render with no session context.
+ * Changes tab: branch/write-toolbar + "Compare against" + the changed-files
+ * list — picking a row no longer renders a diff inline here (that made the
+ * panel unusably cramped, a two-column layout built for a full page squeezed
+ * into a narrow rail). It calls `onOpenFile` instead; the diff itself now
+ * renders in the main column (`FileViewerColumn.tsx`).
  */
-function ChecksTab({ machineId, worktree }: { machineId?: string; worktree?: string }) {
-  if (machineId && worktree) {
-    return <ChecksPanel machineId={machineId} worktree={worktree} />;
+function ChangesTab({
+  machineId,
+  worktree,
+  openPath,
+  onOpenFile,
+}: {
+  machineId: string;
+  worktree: string;
+  openPath: string | null;
+  onOpenFile: (file: OpenFile) => void;
+}) {
+  const actions = useLiveGitDiffActions(machineId);
+  const panel = useGitPanel(actions, worktree);
+
+  if (panel.isStatusLoading) {
+    return <p className="p-4 text-sm text-muted-foreground">Loading changed files…</p>;
+  }
+
+  if (panel.statusError || !panel.status) {
+    return (
+      <p className="p-4 text-sm text-destructive">
+        Could not load git status{panel.statusError ? `: ${panel.statusError}` : "."}
+      </p>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-2 p-3">
-      <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs">
-        <CheckCircle2 className="size-4 text-emerald-500" />
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">build</p>
-          <p className="text-muted-foreground">Passed in 42s</p>
-        </div>
+    <div className="flex flex-col gap-3 p-3">
+      <GitToolbar panel={panel} />
+      <div className="flex items-center justify-end px-1">
+        <CompareAgainstSelect
+          compareRef={panel.compareRef}
+          onChange={panel.setCompareRef}
+          branches={panel.branches}
+        />
       </div>
-      <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs">
-        <CheckCircle2 className="size-4 text-emerald-500" />
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">typecheck</p>
-          <p className="text-muted-foreground">Passed in 18s</p>
-        </div>
-      </div>
-      <p className="px-1 text-[11px] text-muted-foreground">
-        Placeholder checks — CI wiring isn't connected to this panel yet.
-      </p>
+      <ChangedFilesList
+        status={panel.status}
+        selectedPath={openPath}
+        onSelect={(path) => onOpenFile({ kind: "diff", path, compareRef: panel.compareRef })}
+      />
     </div>
   );
 }
 
 /**
- * The session screen's right-side workspace panel (Changes / Repo Files /
- * Checks tabs + branch header + "Commit & Push"), à la the Cursor agent
- * layout. **Mostly still placeholder UI**: Changes/Repo Files render dummy
- * data and none of the header buttons perform work — the real changed-files
- * view remains the `/session/[id]/git` route. The Checks tab is the one
- * exception (docs/features/github-pr-ci.md): once both `machineId` and
- * `worktree` are threaded in (`SessionTimelineScreen.tsx`), it renders the
- * live `github.checks`-backed panel instead of its own placeholder cards —
- * see `ChecksTab`'s own doc comment. `defaultTab` lets the header chips
- * deep-link a tab (e.g. "Repo root" opens the file tree).
+ * All Files tab: just the repo file tree now — picking a file calls
+ * `onOpenFile` instead of rendering its content inline (see `ChangesTab`'s
+ * own doc comment for why).
+ */
+function AllFilesTab({
+  machineId,
+  worktree,
+  openPath,
+  onOpenFile,
+}: {
+  machineId: string;
+  worktree: string;
+  openPath: string | null;
+  onOpenFile: (file: OpenFile) => void;
+}) {
+  const actions = useLiveRepoFilesActions(machineId);
+  const { tree, filesError, isFilesLoading } = useRepoFiles(actions, worktree);
+
+  if (isFilesLoading) {
+    return <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>;
+  }
+
+  if (filesError) {
+    return <p className="p-4 text-sm text-destructive">Could not load repo files: {filesError}</p>;
+  }
+
+  return (
+    <div className="p-3">
+      <FileTree
+        tree={tree}
+        selectedPath={openPath}
+        onSelect={(path) => onOpenFile({ kind: "content", path, compareRef: null })}
+      />
+    </div>
+  );
+}
+
+/**
+ * The session screen's right-side workspace panel (known-issues.md #7):
+ * Changes / All Files / Checks tabs. Changes/All Files are now pickers only
+ * (`ChangesTab`/`AllFilesTab` above) — the actual diff/file content renders
+ * in the main column via `FileViewerColumn.tsx`, driven by `openFile` state
+ * `SessionTimelineScreen.tsx` owns (this panel just reports picks up via
+ * `onOpenFile`, mirroring `openFile` back down only to highlight the active
+ * row). Checks stays a normal inline tab — nothing to "open" there.
  */
 export function SessionSidePanel({
   defaultTab = "changes",
   machineId,
   worktree,
+  openFile,
+  onOpenFile,
 }: {
   defaultTab?: PanelTab;
-  /** The session's owning machine (`SessionRow.machineId`) — with `worktree`, gates the Checks tab's live `ChecksPanel` instead of its placeholder. */
+  /** The session's owning machine (`SessionRow.machineId`). */
   machineId?: string;
-  /** The session's workspace path (`SessionRow.workspaceId`) — same gating as `machineId` above. */
+  /** The session's workspace path (`SessionRow.workspaceId`). */
   worktree?: string;
+  /** The file/diff currently open in the main column, or `null` — used only to highlight the active row in whichever list produced it. */
+  openFile: OpenFile | null;
+  onOpenFile: (file: OpenFile) => void;
 }) {
   const [tab, setTab] = useState<PanelTab>(defaultTab);
+  const ready = machineId !== undefined && worktree !== undefined;
 
   return (
-    <aside className="hidden h-full w-[360px] shrink-0 flex-col border-l border-border lg:flex">
-      <header className="flex items-center justify-between gap-2 border-b border-border px-3 py-2.5">
-        <div className="flex min-w-0 items-center gap-1.5 text-sm">
-          <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
-          <span className="truncate font-medium">v2-pty-injection</span>
-          <Pencil className="size-3 shrink-0 text-muted-foreground" />
+    <aside className="hidden h-full w-[380px] shrink-0 flex-col border-l border-border lg:flex">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as PanelTab)}
+        className="flex h-full min-h-0 flex-col gap-0"
+      >
+        <div className="border-b border-border px-2 py-2">
+          <TabsList variant="line">
+            {TABS.map((t) => (
+              <TabsTrigger key={t.id} value={t.id}>
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
         </div>
-        <div className="flex shrink-0 items-center">
-          <Button size="sm" disabled title="Commit & Push isn't wired up yet">
-            Commit &amp; Push
-          </Button>
-          <Button size="icon-sm" variant="ghost" disabled aria-label="More commit actions">
-            <ChevronDown className="size-4" />
-          </Button>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {!ready ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              This session has no machine/workspace recorded yet.
+            </p>
+          ) : (
+            <>
+              <TabsContent value="changes" className="h-full">
+                <ChangesTab
+                  machineId={machineId}
+                  worktree={worktree}
+                  openPath={openFile?.kind === "diff" ? openFile.path : null}
+                  onOpenFile={onOpenFile}
+                />
+              </TabsContent>
+              <TabsContent value="files" className="h-full">
+                <AllFilesTab
+                  machineId={machineId}
+                  worktree={worktree}
+                  openPath={openFile?.kind === "content" ? openFile.path : null}
+                  onOpenFile={onOpenFile}
+                />
+              </TabsContent>
+              <TabsContent value="checks" className="h-full p-3">
+                <ChecksPanel machineId={machineId} worktree={worktree} />
+              </TabsContent>
+            </>
+          )}
         </div>
-      </header>
-      <div className="flex items-center gap-1 border-b border-border px-2">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={cn(
-              "border-b-2 px-2 py-2 text-xs font-medium transition-colors",
-              tab === t.id
-                ? "border-foreground text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-        <div className="ml-auto flex items-center gap-0.5">
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            disabled
-            aria-label="Refresh"
-            title="Refresh isn't wired up yet"
-          >
-            <RefreshCw className="size-3.5" />
-          </Button>
-          <Button
-            size="icon-sm"
-            variant="ghost"
-            disabled
-            aria-label="Search"
-            title="Search isn't wired up yet"
-          >
-            <Search className="size-3.5" />
-          </Button>
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === "changes" && <ChangesTab />}
-        {tab === "files" && <RepoFilesTab />}
-        {tab === "checks" && <ChecksTab machineId={machineId} worktree={worktree} />}
-      </div>
+      </Tabs>
     </aside>
   );
 }

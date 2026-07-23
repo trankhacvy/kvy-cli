@@ -24,6 +24,7 @@ import type {
   acquireSessionLock as acquireSessionLockType,
   SessionLockHandle,
 } from "../session/sessionLock.js";
+import type { registerWorkspace as registerWorkspaceType } from "../workspace/registry.js";
 import { type OutboxLike, runStartClaudeCommand, type StartClaudeCommandDeps } from "./start.js";
 
 /** Captures every envelope batch handed to `outbox.enqueue()` — stands in for
@@ -328,6 +329,64 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       { metadata: { model?: string } },
     ];
     expect(bootstrapParams.metadata.model).toBe("opus");
+  });
+
+  it("registers workingDirectory as a workspace and threads its id into bootstrapSession (known-issues.md #6)", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const registerWorkspace = vi.fn(
+      async () =>
+        ({
+          path: "/fake/workdir",
+          registeredAt: "2026-01-01T00:00:00.000Z",
+        }) as unknown as Awaited<ReturnType<typeof registerWorkspaceType>>,
+    );
+
+    await runStartClaudeCommand(
+      baseDeps({
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+        registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+      }),
+    );
+
+    expect(registerWorkspace).toHaveBeenCalledWith("/fake/workdir");
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { workspaceId?: string | null },
+    ];
+    expect(bootstrapParams.workspaceId).toBe("/fake/workdir");
+  });
+
+  it("still starts the session with a null workspaceId when registerWorkspace fails, instead of failing the whole start", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const registerWorkspace = vi.fn(async () => {
+      throw new Error("lock contended");
+    });
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+        registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { workspaceId?: string | null },
+    ];
+    expect(bootstrapParams.workspaceId).toBeNull();
   });
 
   it("passes an undefined model into the session metadata when claudeArgs carries no --model flag", async () => {

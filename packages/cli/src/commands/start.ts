@@ -169,6 +169,7 @@ import {
   acquireSessionLock as acquireSessionLockDefault,
   type SessionLockHandle,
 } from "../session/sessionLock.js";
+import { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
 
 const MASTER_SECRET_LENGTH_BYTES = 32;
 const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
@@ -260,6 +261,17 @@ export interface StartClaudeCommandDeps {
    * (plan-v2.md W4.5 — best-effort daemon self-report; never throws).
    */
   notifyDaemonSessionStarted?: typeof notifyDaemonSessionStartedDefault;
+  /**
+   * Injectable for tests; defaults to the real `registerWorkspace()`
+   * (`workspace/registry.ts`). A bare terminal `falcon claude` run — unlike
+   * the web "New Session" wizard's `spawn` RPC, which already registers a
+   * workspace before launching — never designated its `workingDirectory` as
+   * a registered workspace, so `bootstrapSession()` always recorded a `null`
+   * `workspaceId` (known-issues.md #6). Best-effort: a lock-acquisition
+   * failure here is logged and swallowed rather than failing the whole
+   * session start, matching `notifyDaemonSessionStarted`'s precedent above.
+   */
+  registerWorkspace?: typeof registerWorkspaceDefault;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   write?: (text: string) => void;
@@ -336,6 +348,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const fetchImpl = deps.fetchImpl ?? fetch;
   const locate = deps.locateClaudeCli ?? findGlobalClaudeCliPathDefault;
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
+  const doRegisterWorkspace = deps.registerWorkspace ?? registerWorkspaceDefault;
   const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
   const createOutbox = deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
@@ -442,6 +455,24 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     sessionLock = lockResult.handle;
   }
 
+  // 3.5. Register (or resolve) this directory as a workspace — the same
+  // register-or-resolve `workspace/registry.ts` logic the daemon's `spawn`
+  // RPC already runs before launching (`spawnEngine.ts`), just reached from
+  // this, the other session-creation entry point. Best-effort: a registry
+  // write failure (e.g. lock contention) shouldn't block starting the
+  // session at all — it just leaves `workspaceId` unset, the same as
+  // today's behavior (known-issues.md #6).
+  let workspaceId: string | null = null;
+  try {
+    const workspaceEntry = await doRegisterWorkspace(deps.workingDirectory);
+    workspaceId = workspaceEntry.path;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.warn("[start-claude] registerWorkspace failed, continuing without workspaceId", {
+      message,
+    });
+  }
+
   // 4. Bootstrap (create-or-get) the session row + its DEK.
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {
@@ -455,6 +486,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       {
         machineId,
         workspacePath: deps.workingDirectory,
+        workspaceId,
         nonce: createId(),
         provider: "claude-code",
         contentKeyPair,

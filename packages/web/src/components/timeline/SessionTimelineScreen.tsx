@@ -2,7 +2,6 @@
 
 import type { PermissionMode, SessionRow } from "@falcon/wire";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderGit2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -32,9 +31,10 @@ import { messagesQueryKey } from "@/sync";
 import type { RenderItem } from "@/sync/reducer";
 import { Composer } from "./Composer";
 import { ComposerControls } from "./ComposerControls";
+import { FileViewerColumn } from "./FileViewerColumn";
 import { MobileHandoffButton } from "./MobileHandoffDialog";
 import { SessionActionsMenu } from "./SessionActionsMenu";
-import { SessionSidePanel } from "./SessionSidePanel";
+import { type OpenFile, SessionSidePanel } from "./SessionSidePanel";
 import { Timeline } from "./Timeline";
 import { TimelineSkeleton } from "./TimelineSkeleton";
 import { WorkingDirectoryChip } from "./WorkingDirectoryChip";
@@ -230,7 +230,10 @@ function SessionTimelineBody({
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
   const { actions } = useSessionControl();
-  const [panelOpen, setPanelOpen] = useState(true);
+  // The file/diff currently open in place of Timeline+Composer (conductor.
+  // build-style picker-in-sidebar/viewer-in-main-column split,
+  // known-issues.md #7 follow-up) — `null` shows the normal chat view.
+  const [openFile, setOpenFile] = useState<OpenFile | null>(null);
 
   const isDisabled = isSessionControlDisabled(sessionStatus);
 
@@ -257,29 +260,10 @@ function SessionTimelineBody({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={`/session/${sessionId}/git/`}>Files changed</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/session/${sessionId}/checks/`}>Checks</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/session/${sessionId}/files/`}>Repo files</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/preview/`}>Preview</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
               <Link href={`/session/${sessionId}/run/`}>Setup / Run</Link>
-            </Button>
-            <Button
-              type="button"
-              variant={panelOpen ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setPanelOpen((open) => !open)}
-              aria-pressed={panelOpen}
-            >
-              <FolderGit2 className="size-3.5" />
-              Repo root
             </Button>
             <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu
@@ -292,59 +276,70 @@ function SessionTimelineBody({
             />
           </div>
         </header>
-        {decryptError && (
-          <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
-            <p className="text-sm text-destructive">{decryptError}</p>
-            <Button type="button" variant="outline" size="sm" onClick={onRetryDecrypt}>
-              Retry
-            </Button>
-          </div>
-        )}
-        <LifecycleBanner sessionStatus={sessionStatus} />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          {isInitialLoading && items.length === 0 ? (
-            <TimelineSkeleton />
-          ) : (
-            <Timeline
-              items={mergedItems}
-              working={working}
-              hasMore={hasMore}
-              isLoadingMore={isLoadingMore}
-              onLoadEarlier={onLoadEarlier}
-            />
-          )}
-        </div>
-        <div className="shrink-0 border-t border-border/70 bg-background">
-          <Composer
-            sessionId={sessionId}
-            onSend={send}
-            onAttach={sendAttachment}
-            isSending={isSending}
-            isQueued={isQueued}
-            cryptoReady={cryptoReady}
-            disabled={isDisabled}
-            error={error}
-            notice={notice}
-            working={working}
-            onStop={() => actions.interrupt()}
-            slashCommands={slashCommands}
-            footerControls={
-              <ComposerControls
-                mode={permissionMode}
-                controlMode={controlMode}
-                disabled={isDisabled}
-                modelChip={modelChip}
-              />
-            }
+        {openFile && machineId && workspacePath ? (
+          <FileViewerColumn
+            machineId={machineId}
+            worktree={workspacePath}
+            openFile={openFile}
+            onBack={() => setOpenFile(null)}
           />
-        </div>
+        ) : (
+          <>
+            {decryptError && (
+              <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
+                <p className="text-sm text-destructive">{decryptError}</p>
+                <Button type="button" variant="outline" size="sm" onClick={onRetryDecrypt}>
+                  Retry
+                </Button>
+              </div>
+            )}
+            <LifecycleBanner sessionStatus={sessionStatus} />
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {isInitialLoading && items.length === 0 ? (
+                <TimelineSkeleton />
+              ) : (
+                <Timeline
+                  items={mergedItems}
+                  working={working}
+                  hasMore={hasMore}
+                  isLoadingMore={isLoadingMore}
+                  onLoadEarlier={onLoadEarlier}
+                />
+              )}
+            </div>
+            <div className="shrink-0 border-t border-border/70 bg-background">
+              <Composer
+                sessionId={sessionId}
+                onSend={send}
+                onAttach={sendAttachment}
+                isSending={isSending}
+                isQueued={isQueued}
+                cryptoReady={cryptoReady}
+                disabled={isDisabled}
+                error={error}
+                notice={notice}
+                working={working}
+                onStop={() => actions.interrupt()}
+                slashCommands={slashCommands}
+                footerControls={
+                  <ComposerControls
+                    mode={permissionMode}
+                    controlMode={controlMode}
+                    disabled={isDisabled}
+                    modelChip={modelChip}
+                  />
+                }
+              />
+            </div>
+          </>
+        )}
       </div>
-      {panelOpen && (
-        <SessionSidePanel
-          machineId={machineId ?? undefined}
-          worktree={workspacePath ?? undefined}
-        />
-      )}
+      <SessionSidePanel
+        machineId={machineId ?? undefined}
+        worktree={workspacePath ?? undefined}
+        openFile={openFile}
+        onOpenFile={setOpenFile}
+      />
     </div>
   );
 }
