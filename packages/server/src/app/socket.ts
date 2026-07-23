@@ -1,7 +1,10 @@
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { Server, type Socket } from "socket.io";
 import { verifyToken } from "../auth/tokens.js";
 import { env } from "../config.js";
+import { machines } from "../db/schema.js";
+import type { Database } from "../db/types.js";
 import {
   buildMachinePresenceEphemeral,
   buildSessionActivityEphemeral,
@@ -22,7 +25,7 @@ type ClientType = "session-scoped" | "machine-scoped" | "user-scoped";
 // the Redis streams adapter wiring (falcon-system-design.md §6.4 defers multi-process to
 // behind an env flag; single process at MVP) and the non-read-path handlers
 // (sessionUpdateHandler/usageHandler/machineUpdateHandler/etc. — out of scope for this task).
-export function startSocket(app: FastifyInstance): Server {
+export function startSocket(app: FastifyInstance, db: Database): Server {
   const io = new Server(app.server, {
     // Explicit allowlist, not a wildcard (falcon-system-design.md §12, plan.md §16 "4.4
     // Hardening": "wildcard-CORS removal"). `origin: "*"` combined with
@@ -136,13 +139,13 @@ export function startSocket(app: FastifyInstance): Server {
     // Session-scoped keepalive (`packages/cli/src/session/sessionClient.ts`'s
     // `alive` volatile emit, design §4.3 `ClientEmit` `{ e: 'alive'; sessionId;
     // working }`). Relayed as an `activity` ephemeral to whoever's watching this
-    // session so far — the write-behind `lastSeenAt`/offline-sweep presence
-    // cache from design §6.3 is a separate, still-open task; without this
-    // handler the event was simply dropped (no listener at all), so this is
-    // the minimal relay that makes it observable rather than the full cache.
-    // `sessionId` is taken from the authenticated connection, never trusted
-    // from the payload, so a session-scoped client can't spoof activity for a
-    // session it isn't connected as.
+    // session — a pure live relay, deliberately with no durable cache behind it:
+    // "is this turn actively working" is already sourced from persisted
+    // turn-start/turn-end envelopes (`deriveSessionStatus`'s `isTurnOpen`), so
+    // there's no "was it recently active" state worth persisting here the way
+    // machine presence needs below. `sessionId` is taken from the authenticated
+    // connection, never trusted from the payload, so a session-scoped client
+    // can't spoof activity for a session it isn't connected as.
     if (connection.connectionType === "session-scoped") {
       const sessionConnection = connection;
       socket.on("alive", (data: { working?: boolean } | undefined) => {
@@ -158,6 +161,36 @@ export function startSocket(app: FastifyInstance): Server {
           },
           skipSenderConnection: connection,
         });
+      });
+    }
+
+    // Machine-scoped heartbeat (`packages/cli/src/daemon/machineClient.ts`'s
+    // `machine-alive` volatile emit, every `heartbeatIntervalMs` — 60s by
+    // default). Design §6.3's write-behind `lastSeenAt` presence cache: until
+    // this handler existed, the event had no listener at all (dropped
+    // silently), so `machines.lastSeenAt` only ever got set once at
+    // registration/`POST /v1/machines` and went stale for the rest of a long
+    // daemon session — the exact gap the web's `deriveMachineOnline` heuristic
+    // (`use-machine-presence.ts`) was already built to tolerate via a 3-minute
+    // (three-missed-beats) recency window, but which only works if this write
+    // actually happens. `machineId`/`accountId` come from the authenticated
+    // connection, never the payload, same non-spoofable pattern as the
+    // session-scoped `alive` handler above. Update failures are logged, not
+    // thrown — a missed heartbeat write should never take down the socket.
+    if (connection.connectionType === "machine-scoped") {
+      const machineConnection = connection;
+      socket.on("machine-alive", () => {
+        db.update(machines)
+          .set({ lastSeenAt: new Date() })
+          .where(
+            and(eq(machines.id, machineConnection.machineId), eq(machines.accountId, accountId)),
+          )
+          .catch((error: unknown) => {
+            app.log.warn(
+              { module: "websocket", error },
+              "failed to persist machine-alive heartbeat",
+            );
+          });
       });
     }
 

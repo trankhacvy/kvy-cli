@@ -1,10 +1,20 @@
 import type { AddressInfo } from "node:net";
+import type { PGlite } from "@electric-sql/pglite";
+import { encodeBase64, getRandomBytes } from "@falcon/crypto";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { mintToken } from "../auth/tokens.js";
+import { encodeBox } from "../db/box.js";
+import { machines } from "../db/schema.js";
 import { eventRouter } from "./events/eventRouter.js";
+import { createTestAccount, createTestDb } from "./routes/testHelpers.js";
 import { buildServer } from "./server.js";
+
+function fakeBox() {
+  return { t: "enc" as const, v: 1 as const, c: encodeBase64(getRandomBytes(16)) };
+}
 
 // Integration tests for the `/v1/stream` handshake + connection lifecycle (plan.md §4.1).
 // Runs a real listening server (Socket.IO needs a real HTTP server to attach to) rather
@@ -205,5 +215,121 @@ describe("startSocket (/v1/stream handshake)", () => {
     expect(afterDisconnect).toContain(
       `ws_connections_total{scope="user-scoped"} ${totalBefore + 1}`,
     );
+  });
+});
+
+// Design §6.3's write-behind `lastSeenAt` presence cache (socket.ts's `machine-alive`
+// handler) — a real DB round-trip, so this needs the pglite-backed `db` (unlike the
+// describe block above, whose tests never touch persisted state).
+describe("machine-alive heartbeat persists machines.lastSeenAt", () => {
+  let pglite: PGlite;
+  let db: Awaited<ReturnType<typeof createTestDb>>["db"];
+  let app: FastifyInstance;
+  let url: string;
+  const clients: ClientSocket[] = [];
+
+  beforeAll(async () => {
+    const created = await createTestDb();
+    db = created.db;
+    pglite = created.pglite;
+    app = await buildServer({ logger: false }, { db });
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const { port } = app.server.address() as AddressInfo;
+    url = `http://127.0.0.1:${port}`;
+  });
+
+  afterEach(() => {
+    for (const client of clients.splice(0)) client.close();
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await pglite.close();
+  });
+
+  it("bumps the machine row's lastSeenAt to the current time on a machine-alive emit", async () => {
+    const account = await createTestAccount(db);
+    const staleLastSeenAt = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
+    const [machine] = await db
+      .insert(machines)
+      .values({
+        accountId: account.account.id,
+        metadata: encodeBox(fakeBox()),
+        dek: getRandomBytes(32),
+        lastSeenAt: staleLastSeenAt,
+      })
+      .returning();
+    if (!machine) throw new Error("insert returned no row");
+
+    const client = ioClient(url, {
+      path: "/v1/stream",
+      transports: ["websocket"],
+      auth: { token: account.token, clientType: "machine-scoped", machineId: machine.id },
+    });
+    clients.push(client);
+    await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+    const beforeEmit = Date.now();
+    client.volatile.emit("machine-alive", { machineId: machine.id, time: Date.now() });
+
+    // The handler's DB write is async (fire-and-forget from the socket handler's
+    // perspective) — poll briefly rather than a fixed sleep, since the write should
+    // land almost immediately against an in-memory pglite instance.
+    let updated = await db.query.machines.findFirst({ where: eq(machines.id, machine.id) });
+    for (let i = 0; i < 20 && updated?.lastSeenAt?.getTime() === staleLastSeenAt.getTime(); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      updated = await db.query.machines.findFirst({ where: eq(machines.id, machine.id) });
+    }
+
+    expect(updated?.lastSeenAt).not.toBeNull();
+    // `lastSeenAt` must be a real `Date`, stored/round-tripped in genuine
+    // millisecond epoch time (not seconds, not a raw string) — the exact "correct
+    // time unit" this fix has to get right, since a unit mismatch here would silently
+    // make every machine look either always-online or always-offline.
+    expect(updated?.lastSeenAt?.getTime()).toBeGreaterThanOrEqual(beforeEmit);
+    expect(updated?.lastSeenAt?.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
+  it("does not update lastSeenAt for a different machine than the authenticated connection's", async () => {
+    const account = await createTestAccount(db);
+    const staleLastSeenAt = new Date(Date.now() - 60 * 60 * 1000);
+    const [ownMachine] = await db
+      .insert(machines)
+      .values({
+        accountId: account.account.id,
+        metadata: encodeBox(fakeBox()),
+        dek: getRandomBytes(32),
+        lastSeenAt: staleLastSeenAt,
+      })
+      .returning();
+    const [otherMachine] = await db
+      .insert(machines)
+      .values({
+        accountId: account.account.id,
+        metadata: encodeBox(fakeBox()),
+        dek: getRandomBytes(32),
+        lastSeenAt: staleLastSeenAt,
+      })
+      .returning();
+    if (!ownMachine || !otherMachine) throw new Error("insert returned no row");
+
+    const client = ioClient(url, {
+      path: "/v1/stream",
+      transports: ["websocket"],
+      auth: { token: account.token, clientType: "machine-scoped", machineId: ownMachine.id },
+    });
+    clients.push(client);
+    await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+    // Spoofing a different machineId in the payload must not move the other
+    // machine's lastSeenAt — only the authenticated connection's own machineId
+    // (`socket.data.machineId`, set at handshake) is ever trusted.
+    client.volatile.emit("machine-alive", { machineId: otherMachine.id, time: Date.now() });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const stillStale = await db.query.machines.findFirst({
+      where: eq(machines.id, otherMachine.id),
+    });
+    expect(stillStale?.lastSeenAt?.getTime()).toBe(staleLastSeenAt.getTime());
   });
 });

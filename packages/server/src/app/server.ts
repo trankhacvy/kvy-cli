@@ -212,7 +212,7 @@ export async function buildServer(
   // `eventRouter.init(io)` — the same singleton the HTTP write routes above fan
   // out through by default, so a write's post-commit `emitUpdate` reaches Socket.IO
   // rooms without either side knowing about the other's transport.
-  startSocket(app);
+  startSocket(app, db);
 
   return app;
 }

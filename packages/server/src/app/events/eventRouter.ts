@@ -295,9 +295,13 @@ export function buildMachinePresenceEphemeral(machineId: string, online: boolean
  * relayed to whoever's watching the session (its own session-scoped room
  * plus the account's user-scoped clients — design §4.3's `ClientEmit`
  * `{ e: 'alive'; sessionId; working }` becomes this `Update`-sibling
- * `Ephemeral` fan-out). This is just the relay; the write-behind
- * `lastSeenAt`/90s-offline-sweep presence cache described in design §6.3 is
- * a separate, still-open task — see `socket.ts`'s `alive` handler.
+ * `Ephemeral` fan-out). This is a pure live relay with no durable cache
+ * behind it, deliberately — unlike machine presence (design §6.3, now backed
+ * by a real `machines.lastSeenAt` write-behind cache, see `socket.ts`'s
+ * `machine-alive` handler), a session's "is it actively working" state is
+ * already sourced from persisted turn-start/turn-end envelopes
+ * (`deriveSessionStatus`'s `isTurnOpen`), so there's no separate durable
+ * cache worth building for this one.
  */
 export function buildSessionActivityEphemeral(sessionId: string, working: boolean): Ephemeral {
   return { t: "activity", sessionId, working };
