@@ -2,12 +2,18 @@ import type { AddressInfo } from "node:net";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mintAccessToken } from "../../auth/tokens.js";
-
-function mintToken(accountId: string): Promise<string> {
-  return mintAccessToken({ accountId, sessionId: `sess_${accountId}`, clientKind: "web" });
-}
+import { issueSession } from "../../auth/index.js";
+import { db } from "../../db/client.js";
+import { accounts } from "../../db/schema.js";
 import { buildServer } from "../server.js";
+
+// issue-4-plan.md §4.5a: see socket.test.ts's identical helper's own comment — the
+// connect handshake now requires a real `device_sessions` row, not just a well-formed JWT.
+async function mintToken(accountId: string): Promise<string> {
+  await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+  const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
+  return accessToken;
+}
 
 // RPC integration tests (plan.md §16 "4.4 Hardening & release gate": "RPC integration
 // tests: dead-daemon fast-fail <2s, reconnect storm, double-takeover race"; falcon-

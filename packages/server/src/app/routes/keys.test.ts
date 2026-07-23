@@ -8,8 +8,8 @@ import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
 import tweetnacl from "tweetnacl";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { accounts } from "../../db/schema.js";
 import * as schema from "../../db/schema.js";
+import { accounts } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 import { createTestAccount } from "./testHelpers.js";
 
@@ -18,7 +18,12 @@ const migrationsFolder = path.resolve(
   "../../../drizzle",
 );
 
-function signBindPayload(accountId: string, contentPubKey: string, nonce: string, secretKey: Uint8Array) {
+function signBindPayload(
+  accountId: string,
+  contentPubKey: string,
+  nonce: string,
+  secretKey: Uint8Array,
+) {
   const signed = new Uint8Array([
     ...new TextEncoder().encode(accountId),
     ...Buffer.from(contentPubKey, "base64"),
@@ -132,12 +137,22 @@ describe("keys/challenge + keys/bind", () => {
     async function bindFor(actor: typeof first) {
       const nonce = await challenge(actor.authHeader);
       const contentPubKey = encodeBase64(getRandomBytes(32));
-      const signature = signBindPayload(actor.account.id, contentPubKey, nonce, sharedKeypair.secretKey);
+      const signature = signBindPayload(
+        actor.account.id,
+        contentPubKey,
+        nonce,
+        sharedKeypair.secretKey,
+      );
       return app.inject({
         method: "POST",
         url: "/v1/auth/keys/bind",
         headers: { authorization: actor.authHeader },
-        payload: { signPubKey: encodeBase64(sharedKeypair.publicKey), contentPubKey, nonce, signature },
+        payload: {
+          signPubKey: encodeBase64(sharedKeypair.publicKey),
+          contentPubKey,
+          nonce,
+          signature,
+        },
       });
     }
 
@@ -159,7 +174,12 @@ describe("keys/challenge + keys/bind", () => {
       method: "POST",
       url: "/v1/auth/keys/bind",
       headers: { authorization: actor.authHeader },
-      payload: { signPubKey: encodeBase64(firstKeypair.publicKey), contentPubKey: contentPubKey1, nonce: nonce1, signature: sig1 },
+      payload: {
+        signPubKey: encodeBase64(firstKeypair.publicKey),
+        contentPubKey: contentPubKey1,
+        nonce: nonce1,
+        signature: sig1,
+      },
     });
     expect(firstBind.statusCode).toBe(200);
 
@@ -171,7 +191,12 @@ describe("keys/challenge + keys/bind", () => {
       method: "POST",
       url: "/v1/auth/keys/bind",
       headers: { authorization: actor.authHeader },
-      payload: { signPubKey: encodeBase64(secondKeypair.publicKey), contentPubKey: contentPubKey2, nonce: nonce2, signature: sig2 },
+      payload: {
+        signPubKey: encodeBase64(secondKeypair.publicKey),
+        contentPubKey: contentPubKey2,
+        nonce: nonce2,
+        signature: sig2,
+      },
     });
 
     expect(secondBind.statusCode).toBe(409);

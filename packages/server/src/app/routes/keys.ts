@@ -66,7 +66,11 @@ async function hasOtherHealthySessions(
  * checklist note). Until that lands, this always returns `false`, so a rotation attempt
  * fails closed (401) rather than silently skipping the check.
  */
-async function verifyStepUp(_db: Database, _accountId: string, _proof: string | undefined): Promise<boolean> {
+async function verifyStepUp(
+  _db: Database,
+  _accountId: string,
+  _proof: string | undefined,
+): Promise<boolean> {
   return false;
 }
 
@@ -163,9 +167,13 @@ export function buildKeysRoutes(db: Database): FastifyPluginAsyncZod {
         }
 
         const conflict = await db.query.accounts.findFirst({
-          where: and(eq(accounts.signPublicKey, signPublicKeyHex), ne(accounts.id, request.accountId)),
+          where: and(
+            eq(accounts.signPublicKey, signPublicKeyHex),
+            ne(accounts.id, request.accountId),
+          ),
         });
-        if (conflict) return reply.code(409).send({ error: "Key already bound to another account" });
+        if (conflict)
+          return reply.code(409).send({ error: "Key already bound to another account" });
 
         const newEpoch = isFirstBind ? 1 : sameKey ? account.keyEpoch : account.keyEpoch + 1;
 
@@ -186,7 +194,10 @@ export function buildKeysRoutes(db: Database): FastifyPluginAsyncZod {
               .update(deviceSessions)
               .set({ revokedAt: new Date() })
               .where(
-                and(eq(deviceSessions.accountId, request.accountId), ne(deviceSessions.id, request.sessionId)),
+                and(
+                  eq(deviceSessions.accountId, request.accountId),
+                  ne(deviceSessions.id, request.sessionId),
+                ),
               );
           }
         });

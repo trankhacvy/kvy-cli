@@ -11,10 +11,10 @@ import { env } from "../config.js";
 // tokens without the mint secret — that's the point RS256 would earn its complexity.
 const ALGORITHM = "HS256";
 
-// issue-4-plan.md §4.1/§8: stays 1h through Phase 1-5, flips to 15m in Phase 6 once web
-// and CLI can silently refresh — a short TTL flip before those consumers exist would
-// regress UX (forced re-login every 15 minutes).
-export const ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
+// issue-4-plan.md §4.1/§8 Phase 6: flipped from 1h to 15m now that web (silent refresh)
+// and CLI (tokenProvider) can both refresh without a user-visible logout — a short TTL
+// is only safe once every consumer can silently mint a fresh one.
+export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 
 /** The three surfaces that mint device sessions today (§3.2). Cloud sandboxes join later (§7). */
 export type ClientKind = "web" | "cli-daemon" | "cli-session" | "cloud-sandbox";
@@ -47,7 +47,10 @@ function signingKey(secret?: string): Uint8Array {
 
 function isClientKind(value: unknown): value is ClientKind {
   return (
-    value === "web" || value === "cli-daemon" || value === "cli-session" || value === "cloud-sandbox"
+    value === "web" ||
+    value === "cli-daemon" ||
+    value === "cli-session" ||
+    value === "cloud-sandbox"
   );
 }
 

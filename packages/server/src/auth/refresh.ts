@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type { Database } from "../db/types.js";
 import { deviceSessions } from "../db/schema.js";
+import type { Database } from "../db/types.js";
 import type { ClientKind } from "./tokens.js";
 import { mintAccessToken } from "./tokens.js";
 
@@ -35,7 +35,10 @@ export interface IssuedSession {
  * that carries its id as `sid` (§4.2). Every login/register/pairing-approval path funnels
  * through this one function so a device session is always created the same way.
  */
-export async function issueSession(db: Database, params: IssueSessionParams): Promise<IssuedSession> {
+export async function issueSession(
+  db: Database,
+  params: IssueSessionParams,
+): Promise<IssuedSession> {
   const refreshToken = newRefreshToken();
 
   const rows = await db

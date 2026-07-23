@@ -39,7 +39,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         const identifier = normalizeEmail(request.body.email);
 
         const existing = await db.query.authIdentities.findFirst({
-          where: and(eq(authIdentities.kind, "password"), eq(authIdentities.identifier, identifier)),
+          where: and(
+            eq(authIdentities.kind, "password"),
+            eq(authIdentities.identifier, identifier),
+          ),
         });
         if (existing) {
           // No-enumeration (§5.2): tell the *submitter* nothing distinguishing — send a
@@ -91,7 +94,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         const genericError = () => reply.code(401).send({ error: "Invalid email or password" });
 
         const identity = await db.query.authIdentities.findFirst({
-          where: and(eq(authIdentities.kind, "password"), eq(authIdentities.identifier, identifier)),
+          where: and(
+            eq(authIdentities.kind, "password"),
+            eq(authIdentities.identifier, identifier),
+          ),
         });
         // Same generic rejection whether the identity doesn't exist or the password is
         // wrong — a distinct "no such account" response would be an enumeration oracle.
@@ -120,7 +126,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       async (request, reply) => {
         const identifier = normalizeEmail(request.body.email);
         const identity = await db.query.authIdentities.findFirst({
-          where: and(eq(authIdentities.kind, "password"), eq(authIdentities.identifier, identifier)),
+          where: and(
+            eq(authIdentities.kind, "password"),
+            eq(authIdentities.identifier, identifier),
+          ),
         });
 
         // Always 200 regardless of whether the identity exists (§5.3: no enumeration).
@@ -172,7 +181,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
             .update(passwordResetTokens)
             .set({ consumedAt: now })
             .where(eq(passwordResetTokens.id, resetRow.id));
-          await tx.update(authIdentities).set({ passwordHash }).where(eq(authIdentities.id, identity.id));
+          await tx
+            .update(authIdentities)
+            .set({ passwordHash })
+            .where(eq(authIdentities.id, identity.id));
           // §5.3: a reset revokes every device session — losing the password is treated
           // as a possible credential compromise, not just an inconvenience.
           await tx

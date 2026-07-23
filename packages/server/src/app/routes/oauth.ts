@@ -9,13 +9,13 @@
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { issueSession } from "../../auth/refresh.js";
 import {
   defaultGithubCodeExchanger,
   defaultOAuthVerifier,
   type GithubCodeExchanger,
   type OAuthVerifier,
 } from "../../auth/oauth.js";
+import { issueSession } from "../../auth/refresh.js";
 import { accounts, authIdentities } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 

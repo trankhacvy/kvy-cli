@@ -5,13 +5,23 @@ import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { mintAccessToken } from "../auth/tokens.js";
-
-function mintToken(accountId: string): Promise<string> {
-  return mintAccessToken({ accountId, sessionId: `sess_${accountId}`, clientKind: "web" });
-}
+import { issueSession } from "../auth/index.js";
 import { encodeBox } from "../db/box.js";
-import { machines } from "../db/schema.js";
+import { db } from "../db/client.js";
+import { accounts, deviceSessions, machines } from "../db/schema.js";
+
+// issue-4-plan.md §4.5a: the connect handshake now looks up a real `device_sessions` row
+// to check `revokedAt`/`expiresAt`, so a token minted here needs a real account +
+// issued session behind it, not just a well-formed JWT — a bare `mintAccessToken` call
+// (no DB row) would be rejected as "Session revoked" the moment §4.5a landed. Explicit
+// `id` on the insert lets every existing call site's literal `"acct_1"`-style id keep
+// working unchanged.
+async function mintToken(accountId: string): Promise<string> {
+  await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+  const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
+  return accessToken;
+}
+
 import { eventRouter } from "./events/eventRouter.js";
 import { createTestAccount, createTestDb } from "./routes/testHelpers.js";
 import { buildServer } from "./server.js";
@@ -335,5 +345,82 @@ describe("machine-alive heartbeat persists machines.lastSeenAt", () => {
       where: eq(machines.id, otherMachine.id),
     });
     expect(stillStale?.lastSeenAt?.getTime()).toBe(staleLastSeenAt.getTime());
+  });
+
+  // issue-4-plan.md §4.5: revocation is immediate on a live WebSocket, not bounded only
+  // by the (now 15m) access token TTL.
+  describe("revocation (§4.5)", () => {
+    it("rejects connect for a revoked session, even with an otherwise-valid access token", async () => {
+      const accountId = "acct_revoke_connect";
+      await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+      const { accessToken, sessionId } = await issueSession(db, {
+        accountId,
+        clientKind: "web",
+      });
+      await db
+        .update(deviceSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(deviceSessions.id, sessionId));
+
+      const client = ioClient(url, {
+        path: "/v1/stream",
+        transports: ["websocket"],
+        auth: { token: accessToken },
+      });
+      clients.push(client);
+      const error = await new Promise<Error>((resolve) => client.once("connect_error", resolve));
+      expect(error.message).toBe("Session revoked");
+    });
+
+    it("renew-token keeps a live socket connected with a fresh, non-revoked session", async () => {
+      const accountId = "acct_renew_ok";
+      await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+      const first = await issueSession(db, { accountId, clientKind: "web" });
+      const client = ioClient(url, {
+        path: "/v1/stream",
+        transports: ["websocket"],
+        auth: { token: first.accessToken },
+      });
+      clients.push(client);
+      await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+      const second = await issueSession(db, { accountId, clientKind: "web" });
+      const ack = await new Promise<boolean>((resolve) => {
+        client.emit("renew-token", second.accessToken, (ok: boolean) => resolve(ok));
+      });
+
+      expect(ack).toBe(true);
+      // The socket is still the SAME live connection, not a reconnect.
+      expect(client.connected).toBe(true);
+    });
+
+    it("renew-token rejects (and disconnects) when the new token belongs to a revoked session", async () => {
+      const accountId = "acct_renew_revoked";
+      await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+      const first = await issueSession(db, { accountId, clientKind: "web" });
+      const client = ioClient(url, {
+        path: "/v1/stream",
+        transports: ["websocket"],
+        auth: { token: first.accessToken },
+      });
+      clients.push(client);
+      await new Promise<void>((resolve) => client.once("connect", () => resolve()));
+
+      const second = await issueSession(db, { accountId, clientKind: "web" });
+      await db
+        .update(deviceSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(deviceSessions.id, second.sessionId));
+
+      const disconnectPromise = new Promise<void>((resolve) =>
+        client.once("disconnect", () => resolve()),
+      );
+      const ack = await new Promise<boolean>((resolve) => {
+        client.emit("renew-token", second.accessToken, (ok: boolean) => resolve(ok));
+      });
+
+      expect(ack).toBe(false);
+      await disconnectPromise;
+    });
   });
 });

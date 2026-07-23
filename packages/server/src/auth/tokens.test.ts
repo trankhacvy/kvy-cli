@@ -27,8 +27,8 @@ describe("mintAccessToken / verifyToken", () => {
     expect(result?.expiresAt).toBeLessThanOrEqual(before + ACCESS_TOKEN_TTL_SECONDS + 5);
   });
 
-  it("defaults to a 1-hour TTL (issue-4-plan.md §4.1: stays 1h until Phase 6)", () => {
-    expect(ACCESS_TOKEN_TTL_SECONDS).toBe(3600);
+  it("defaults to a 15-minute TTL (issue-4-plan.md §4.1/§8 Phase 6 flip)", () => {
+    expect(ACCESS_TOKEN_TTL_SECONDS).toBe(900);
   });
 
   it("rejects an expired token", async () => {

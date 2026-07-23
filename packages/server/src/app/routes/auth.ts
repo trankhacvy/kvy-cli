@@ -149,7 +149,10 @@ export function buildAuthRoutes(db: Database): FastifyPluginAsyncZod {
         // migrates off it (§5.5, Phase 4), but until then it must keep minting sessions
         // the same way the new password/OAuth routes do so `verifyToken`'s stricter
         // sid/ct check (§4.1) doesn't reject its tokens.
-        const { accessToken } = await issueSession(db, { accountId: account.id, clientKind: "web" });
+        const { accessToken } = await issueSession(db, {
+          accountId: account.id,
+          clientKind: "web",
+        });
         return reply.send({
           success: true,
           token: accessToken,

@@ -5,8 +5,8 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import type { ClientKind } from "../../auth/tokens.js";
 import { hashRefreshToken, mintAccessToken, newRefreshToken } from "../../auth/index.js";
+import type { ClientKind } from "../../auth/tokens.js";
 import { deviceSessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 

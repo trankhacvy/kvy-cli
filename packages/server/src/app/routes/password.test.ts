@@ -8,8 +8,8 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EmailTransport } from "../../auth/email.js";
 import { verifyToken } from "../../auth/index.js";
-import { authIdentities, deviceSessions } from "../../db/schema.js";
 import * as schema from "../../db/schema.js";
+import { authIdentities, deviceSessions } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 
 const migrationsFolder = path.resolve(
@@ -100,7 +100,12 @@ describe("password auth routes", () => {
       const rows = await db
         .select()
         .from(authIdentities)
-        .where(and(eq(authIdentities.kind, "password"), eq(authIdentities.identifier, "bob@example.com")));
+        .where(
+          and(
+            eq(authIdentities.kind, "password"),
+            eq(authIdentities.identifier, "bob@example.com"),
+          ),
+        );
       expect(rows).toHaveLength(1);
     });
 

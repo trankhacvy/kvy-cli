@@ -27,7 +27,11 @@ import type { Database } from "../db/types.js";
 import { buildLoggerOptions } from "../logger.js";
 import { healthRoutes } from "./api/health.js";
 import { pairRoutes } from "./api/pair.js";
-import { eventRouter as defaultEventRouter, type EventRouterPort } from "./events/eventRouter.js";
+import {
+  eventRouter as defaultEventRouter,
+  disconnectSession,
+  type EventRouterPort,
+} from "./events/eventRouter.js";
 import { buildPushDispatcher } from "./push/dispatch.js";
 import type { PushDispatcherPort } from "./push/types.js";
 import { buildAuthRoutes } from "./routes/auth.js";
@@ -46,6 +50,7 @@ import { buildSessionCasRoutes } from "./routes/sessionCas.js";
 import { buildSessionNotifyRoutes } from "./routes/sessionNotify.js";
 import { buildSessionStatusRoutes } from "./routes/sessionStatus.js";
 import { buildSessionsRoutes } from "./routes/sessions.js";
+import { buildSessionsAdminRoutes } from "./routes/sessionsAdmin.js";
 import { buildSyncRoutes } from "./routes/sync.js";
 import { buildTelegramLinkRoutes } from "./routes/telegramLink.js";
 import { buildUnmanagedSessionsRoutes } from "./routes/unmanagedSessions.js";
@@ -195,6 +200,11 @@ export async function buildServer(
   await app.register(buildRefreshRoutes(db));
   await app.register(buildPasswordRoutes(db, emailTransport));
   await app.register(buildKeysRoutes(db));
+  await app.register(
+    buildSessionsAdminRoutes(db, (accountId, sessionId) =>
+      disconnectSession(defaultEventRouter, accountId, sessionId),
+    ),
+  );
   await app.register(pairRoutes);
   await app.register(buildSessionsRoutes(db, eventRouter));
   await app.register(buildMessagesRoutes(db, eventRouter));

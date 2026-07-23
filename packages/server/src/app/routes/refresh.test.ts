@@ -1,14 +1,14 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashRefreshToken, issueSession, verifyToken } from "../../auth/index.js";
-import { deviceSessions } from "../../db/schema.js";
 import * as schema from "../../db/schema.js";
-import { eq } from "drizzle-orm";
+import { deviceSessions } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 import { createTestAccount } from "./testHelpers.js";
 
@@ -143,7 +143,10 @@ describe("POST /v1/auth/refresh", () => {
 
   it("rejects refresh for a revoked session", async () => {
     const { refreshToken, sessionId } = await issueFor();
-    await db.update(deviceSessions).set({ revokedAt: new Date() }).where(eq(deviceSessions.id, sessionId));
+    await db
+      .update(deviceSessions)
+      .set({ revokedAt: new Date() })
+      .where(eq(deviceSessions.id, sessionId));
 
     const response = await app.inject({
       method: "POST",
