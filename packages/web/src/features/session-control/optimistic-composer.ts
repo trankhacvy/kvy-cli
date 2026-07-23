@@ -1,5 +1,5 @@
 import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
-import type { FileItem, RenderItem, TextItem } from "@/sync/reducer";
+import { stableSortByTime, type FileItem, type RenderItem, type TextItem } from "@/sync/reducer";
 import type { MessageRpcResult } from "@/sync/sessionRpc";
 
 /**
@@ -141,6 +141,24 @@ export function pendingToRenderItem(pending: PendingMessage): TextItem | FileIte
     return { ...base, kind: "file", ref: pending.localId, name: pending.name, size: pending.size };
   }
   return { ...base, kind: "text", md: pending.text, thinking: false };
+}
+
+/**
+ * Merges still-optimistic `pending` sends into the confirmed `items` in
+ * chronological order, instead of blindly appending them at the end. A
+ * naive concatenation puts every pending entry after every confirmed item
+ * regardless of `time` — harmless while nothing else is happening, but
+ * wrong the moment a pending send is `queued` behind a busy turn: the
+ * resulting tool-call envelopes (e.g. an `AskUserQuestion` card) can sync in
+ * and land in `items` before this composer's own pending-message echo
+ * reconciles, rendering the *result* of a message above the message that
+ * caused it. `stableSortByTime` (the reducer's own ordering rule) fixes the
+ * visual order without changing reconciliation timing — a pending entry
+ * still only disappears once `reconcilePending` drops it.
+ */
+export function mergeRenderItems(items: RenderItem[], pending: PendingMessage[]): RenderItem[] {
+  if (pending.length === 0) return items;
+  return stableSortByTime([...items, ...pending.map(pendingToRenderItem)]);
 }
 
 /**

@@ -394,6 +394,61 @@ describe("parseAskQuestions", () => {
 });
 
 describe("parseAskAnswers", () => {
+  // Real Claude Code 2.1.218 tool_result `content` strings, captured from a
+  // live `falcon claude` session (docs/known-issues.md issue #5 track B) —
+  // not hand-guessed. Both a single- and a two-question call use this exact
+  // `"question"="answer"` shape.
+  it("parses a real single-question tool_result string", () => {
+    expect(
+      parseAskAnswers(
+        'Your questions have been answered: "Which color do you prefer?"="Blue". You can now continue with these answers in mind.',
+      ),
+    ).toEqual([{ question: "Which color do you prefer?", answer: "Blue" }]);
+  });
+
+  it("parses a real multi-question tool_result string, in order", () => {
+    expect(
+      parseAskAnswers(
+        'Your questions have been answered: "Which color do you prefer?"="Red", "Which size?"="Small". You can now continue with these answers in mind.',
+      ),
+    ).toEqual([
+      { question: "Which color do you prefer?", answer: "Red" },
+      { question: "Which size?", answer: "Small" },
+    ]);
+  });
+
+  it("parses an answer containing a comma without mis-splitting on it", () => {
+    expect(
+      parseAskAnswers('Your questions have been answered: "Drink?"="Yes, please".'),
+    ).toEqual([{ question: "Drink?", answer: "Yes, please" }]);
+  });
+
+  // A free-text "Type something" answer (verified live, same session) uses a
+  // DIFFERENT surrounding template than a picked-option answer — "The user
+  // answered: ..." rather than "Your questions have been answered: ..." —
+  // but the same `"question"="answer"` pair shape. The regex scans for pairs
+  // anywhere in the string rather than anchoring to either exact sentence,
+  // so both variants parse identically without special-casing which one it is.
+  it("parses a real free-text ('Type something') answer, despite its different wrapper sentence", () => {
+    expect(
+      parseAskAnswers(
+        'The user answered: "What is your favorite drink?"="Hot chocolate". Read the answers carefully — they may request clarification, changes, or that you not proceed — and follow what they actually say.',
+      ),
+    ).toEqual([{ question: "What is your favorite drink?", answer: "Hot chocolate" }]);
+  });
+
+  it("does not mistake a real declined tool_result string for an answer", () => {
+    // Claude Code's own synthetic decline text (verified live) — no
+    // `"..."="..."` pair anywhere in it, so this must stay undefined and let
+    // the card's own `isDeclinedQuestion` heuristic (AskUserQuestionToolCard.tsx)
+    // handle it instead.
+    expect(
+      parseAskAnswers(
+        "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.",
+      ),
+    ).toBeUndefined();
+  });
+
   it("reads an {answers: {question: answer}} map", () => {
     expect(parseAskAnswers({ answers: { "Which color?": "Blue" } })).toEqual([
       { question: "Which color?", answer: "Blue" },

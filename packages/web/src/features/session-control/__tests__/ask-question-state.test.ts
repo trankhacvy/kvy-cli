@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { AskQuestionParsed } from "@/lib/tool-args";
 import {
+  type AskFreeTextAnswers,
   type AskSelections,
   allAskQuestionsAnswered,
   buildAskAnswerDecision,
   buildAskAnswers,
+  buildChatAboutThisDecision,
+  clearAskSelection,
   extractAskAnswers,
+  setAskFreeText,
   toggleAskSelection,
 } from "../ask-question-state";
 
@@ -140,5 +144,104 @@ describe("extractAskAnswers", () => {
 
   it("returns undefined for undefined input", () => {
     expect(extractAskAnswers(undefined)).toBeUndefined();
+  });
+});
+
+describe("setAskFreeText", () => {
+  it("sets a free-text answer for a question", () => {
+    let freeText: AskFreeTextAnswers = new Map();
+    freeText = setAskFreeText(freeText, 0, "Hot chocolate");
+    expect(freeText.get(0)).toBe("Hot chocolate");
+  });
+
+  it("clears the entry for an empty string, rather than storing it", () => {
+    let freeText: AskFreeTextAnswers = new Map();
+    freeText = setAskFreeText(freeText, 0, "Hot chocolate");
+    freeText = setAskFreeText(freeText, 0, "");
+    expect(freeText.has(0)).toBe(false);
+  });
+
+  it("does not mutate the input map (pure function)", () => {
+    const freeText: AskFreeTextAnswers = new Map();
+    const next = setAskFreeText(freeText, 0, "Tea");
+    expect(freeText.size).toBe(0);
+    expect(next.size).toBe(1);
+  });
+
+  it("keeps other questions' free text untouched", () => {
+    let freeText: AskFreeTextAnswers = new Map();
+    freeText = setAskFreeText(freeText, 0, "Tea");
+    freeText = setAskFreeText(freeText, 1, "Coffee");
+    expect(freeText.get(0)).toBe("Tea");
+    expect(freeText.get(1)).toBe("Coffee");
+  });
+});
+
+describe("clearAskSelection", () => {
+  it("removes one question's selection without touching others", () => {
+    let selections: AskSelections = new Map();
+    selections = toggleAskSelection(selections, 0, 0, false);
+    selections = toggleAskSelection(selections, 1, 1, true);
+    selections = clearAskSelection(selections, 0);
+    expect(selections.has(0)).toBe(false);
+    expect(selections.get(1)).toEqual(new Set([1]));
+  });
+
+  it("does not mutate the input map (pure function)", () => {
+    let selections: AskSelections = new Map();
+    selections = toggleAskSelection(selections, 0, 0, false);
+    const next = clearAskSelection(selections, 0);
+    expect(selections.has(0)).toBe(true);
+    expect(next.has(0)).toBe(false);
+  });
+});
+
+describe("allAskQuestionsAnswered with free text", () => {
+  it("counts a non-empty free-text answer as answered even with no selection", () => {
+    const questions = [singleSelectQuestion, multiSelectQuestion];
+    const selections: AskSelections = new Map();
+    let freeText: AskFreeTextAnswers = new Map();
+    expect(allAskQuestionsAnswered(questions, selections, freeText)).toBe(false);
+
+    freeText = setAskFreeText(freeText, 0, "Purple");
+    expect(allAskQuestionsAnswered(questions, selections, freeText)).toBe(false); // q2 still unanswered
+
+    freeText = setAskFreeText(freeText, 1, "Angular");
+    expect(allAskQuestionsAnswered(questions, selections, freeText)).toBe(true);
+  });
+});
+
+describe("buildAskAnswers with free text", () => {
+  it("prefers a question's free-text answer over its option selections", () => {
+    let selections: AskSelections = new Map();
+    selections = toggleAskSelection(selections, 0, 0, false); // "Red"
+    const freeText: AskFreeTextAnswers = new Map([[0, "Purple"]]);
+    expect(buildAskAnswers([singleSelectQuestion], selections, freeText)).toEqual({
+      "Which color?": "Purple",
+    });
+  });
+
+  it("falls back to the option selection when free text is empty/absent", () => {
+    let selections: AskSelections = new Map();
+    selections = toggleAskSelection(selections, 0, 1, false); // "Blue"
+    expect(buildAskAnswers([singleSelectQuestion], selections, new Map())).toEqual({
+      "Which color?": "Blue",
+    });
+  });
+
+  it("buildAskAnswerDecision wraps a free-text answer in the exact wire shape", () => {
+    const selections: AskSelections = new Map();
+    const freeText: AskFreeTextAnswers = new Map([[0, "Hot chocolate"]]);
+    expect(buildAskAnswerDecision([singleSelectQuestion], selections, freeText)).toEqual({
+      kind: "allow",
+      scope: "once",
+      updatedInput: { answers: { "Which color?": "Hot chocolate" } },
+    });
+  });
+});
+
+describe("buildChatAboutThisDecision", () => {
+  it("is a message-less deny (bridge falls back to ASK_FALLBACK_REASON)", () => {
+    expect(buildChatAboutThisDecision()).toEqual({ kind: "deny" });
   });
 });

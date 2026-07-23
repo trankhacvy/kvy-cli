@@ -26,6 +26,12 @@
  *    reaches it without this module reaching into the spawn.)
  *  - `resolvePermission` — the `perm.answer` session RPC's handler for the
  *    live TUI (the ACP remote handler is unrelated; this is the TUI path).
+ *  - `resolveLocalOutcome` — wired from the PTY tailer's `tool-start`/
+ *    `tool-end` envelopes (docs/known-issues.md issue #5): a locally-typed
+ *    turn's permission prompt is now visible on web too, but its hook already
+ *    hands off to the terminal immediately, so this is the only channel that
+ *    tells the bridge (and, via a `perm-resolve` envelope, web) what actually
+ *    happened once the terminal human answers.
  *  - `markWebTurnStart` / `markTurnEnd` — the turn-origin signal the bridge's
  *    local-vs-web policy reads. `markWebTurnStart()` on a web-injected
  *    `message`; `markTurnEnd()` when the turn finishes (also fired
@@ -129,6 +135,14 @@ export interface RemotePermissionHookHandle {
   port: number;
   /** Wire into the `perm.answer` session RPC (first-wins resolution). */
   resolvePermission: (params: { reqId: string; decision: PermDecision }) => PermAnswerResult;
+  /**
+   * Correlates a locally-resolved permission/question's outcome back to its
+   * pending request (docs/known-issues.md issue #5 — "web card must not hang
+   * forever"). Wire into the PTY tailer's own `tool-start`→`tool-end`
+   * tracking in `start.ts`'s `onEnvelopes`: forwards to {@link
+   * PreToolPermissionBridge.resolveLocalOutcome}.
+   */
+  resolveLocalOutcome: (toolName: string, outcome: "approved" | "denied") => void;
   /**
    * The last `permission_mode` seen on any hook input, or `null` before the
    * first one fires. The PTY `setMode` RPC's only source of truth for the
@@ -252,6 +266,7 @@ export async function installRemotePermissionHook(
     settingsEnv: { [HOOK_SETTINGS_ENV_VAR]: settings.path },
     port: server.port,
     resolvePermission: (params) => bridge.resolve(params),
+    resolveLocalOutcome: (toolName, outcome) => bridge.resolveLocalOutcome(toolName, outcome),
     getCurrentPermissionMode: () => bridge.currentPermissionMode,
     waitForModeEcho: (timeoutMs) => bridge.waitForModeEcho(timeoutMs),
     isWebTurnActive,

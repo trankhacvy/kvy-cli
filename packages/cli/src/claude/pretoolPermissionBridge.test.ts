@@ -164,16 +164,69 @@ describe("PreToolPermissionBridge — onPendingAttention (docs/user-flows.md fix
 });
 
 describe("PreToolPermissionBridge — handlePermissionRequest — local vs web policy", () => {
-  it("returns undefined immediately for a local turn and emits nothing", async () => {
+  it("returns undefined immediately for a local turn (docs/known-issues.md #5: but still emits a live perm-request for web)", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
     const output = await bridge.handlePermissionRequest({
       tool_name: "Bash",
       tool_input: { command: "ls" },
     });
 
+    // The local hand-off is immediate and unaffected — no added latency for
+    // the terminal's own TUI dialog.
     expect(output).toBeUndefined();
-    expect(emitted).toHaveLength(0);
+
+    // But web must now see a live, actionable card too (issue #5's core fix)
+    // instead of a bare "Running" card with no buttons.
+    const requests = permRequests(emitted);
+    expect(requests).toHaveLength(1);
+    const ev = requests[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    expect(ev.name).toBe("Bash");
+    expect(ev.args).toEqual({ command: "ls" });
+
+    // Tracked pending (for the local-resolution correlation), not blocking —
+    // there's nothing left to await.
+    expect(bridge.pendingCount).toBe(1);
+  });
+
+  it("a local turn's perm-request resolves via resolveLocalOutcome, not resolve() (no channel to drive the terminal from web)", async () => {
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
+    await bridge.handlePermissionRequest({ tool_name: "Bash", tool_input: { command: "ls" } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    // A web `perm.answer` racing in gets an honest "can't drive this" answer
+    // — not the misleading `already-answered` (nothing has been answered).
+    const raced = bridge.resolve({ reqId: ev.reqId, decision: { kind: "allow", scope: "once" } });
+    expect(raced).toEqual({ ok: false });
+    expect(permResolves(emitted)).toHaveLength(0);
+    expect(bridge.pendingCount).toBe(1);
+
+    // The terminal's own resolution (correlated via a matching tool-start/
+    // tool-end pair, wired from start.ts) is what actually completes it.
+    bridge.resolveLocalOutcome("Bash", "approved");
+    const resolves = permResolves(emitted);
+    expect(resolves).toHaveLength(1);
+    expect((resolves[0]?.ev as { decision: unknown }).decision).toEqual({
+      kind: "allow",
+      scope: "once",
+    });
     expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("resolveLocalOutcome('denied', ...) emits a perm-resolve deny", async () => {
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
+    await bridge.handlePermissionRequest({ tool_name: "Write" });
+
+    bridge.resolveLocalOutcome("Write", "denied");
+    const resolves = permResolves(emitted);
+    expect(resolves).toHaveLength(1);
+    expect((resolves[0]?.ev as { decision: { kind: string } }).decision.kind).toBe("deny");
+    expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("resolveLocalOutcome is a no-op for a tool name with nothing pending", () => {
+    const { bridge, emitted } = makeBridge();
+    bridge.resolveLocalOutcome("Bash", "approved");
+    expect(permResolves(emitted)).toHaveLength(0);
   });
 
   it("emits a perm-request for a web turn and blocks until resolved", async () => {
@@ -208,6 +261,63 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
       { t: "perm-request" }
     >;
     expect(ev.modes).toEqual(["default", "acceptEdits", "bypassPermissions"]);
+  });
+
+  it("a locally-typed ExitPlanMode (plan approve/reject) inherits the same live-visibility + local-resolution fix — nothing special-cased for it (docs/known-issues.md #5)", async () => {
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
+    const output = await bridge.handlePermissionRequest({
+      tool_name: "ExitPlanMode",
+      tool_input: { plan: "Do the thing" },
+    });
+
+    // Same immediate local hand-off as any other tool — the terminal's own
+    // plan approve/reject dialog renders untouched.
+    expect(output).toBeUndefined();
+
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
+    expect(ev.name).toBe("ExitPlanMode");
+    expect(ev.modes).toEqual(["default", "acceptEdits", "bypassPermissions"]);
+    expect(bridge.pendingCount).toBe(1);
+
+    bridge.resolveLocalOutcome("ExitPlanMode", "approved");
+    expect(permResolves(emitted)).toHaveLength(1);
+    expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("does NOT double-track AskUserQuestion — Claude Code fires PermissionRequest as a normal follow-up to PreToolUse's local `ask`, and this must be a no-op, not a second reqId (docs/known-issues.md #5 regression, found verifying track B live)", async () => {
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
+
+    // The real sequence for a locally-typed AskUserQuestion: PreToolUse fires
+    // first (handled by handleAskUserQuestion, not this method) and creates
+    // the one real pending entry; Claude Code's engine then fires
+    // PermissionRequest too, since PreToolUse deferred with `ask` rather than
+    // denying. Before this fix, that second call independently created its
+    // own reqId/pending entry for the exact same logical question.
+    const askPending = bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions: [{ question: "Which color?", options: ["Red", "Blue"] }] },
+    });
+    expect(bridge.pendingCount).toBe(1);
+
+    const permOutput = await bridge.handlePermissionRequest({ tool_name: "AskUserQuestion" });
+    expect(permOutput).toBeUndefined();
+    // Still exactly one pending entry — the PermissionRequest call must be a
+    // pure no-op for this tool, not a second registration.
+    expect(bridge.pendingCount).toBe(1);
+    // And no second `perm-request` envelope went out for it either.
+    expect(permRequests(emitted)).toHaveLength(1);
+
+    // The one real tool-end (the only one that will ever fire, since there's
+    // only one real tool call) must resolve the one real pending entry.
+    bridge.resolveLocalOutcome("AskUserQuestion", "approved");
+    expect(bridge.pendingCount).toBe(0);
+    expect(permResolves(emitted)).toHaveLength(1);
+
+    const out = (await askPending) as PreToolUseHookOutput;
+    expect(out.hookSpecificOutput.permissionDecision).toBe("ask");
   });
 });
 
@@ -351,6 +461,23 @@ describe("PreToolPermissionBridge — handlePermissionRequest — first-wins, ti
       "Do not attempt this action another way.",
     );
     expect(bridge.pendingCount).toBe(0);
+  });
+
+  it("reset() also drains a still-open local-turn request (never resolved locally), emitting a deny perm-resolve", async () => {
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
+    await bridge.handlePermissionRequest({ tool_name: "Bash" });
+    expect(bridge.pendingCount).toBe(1);
+
+    bridge.reset("session ended");
+
+    const resolves = permResolves(emitted);
+    expect(resolves).toHaveLength(1);
+    expect((resolves[0]?.ev as { decision: { kind: string } }).decision.kind).toBe("deny");
+    expect(bridge.pendingCount).toBe(0);
+
+    // A tool-end arriving after reset() no longer matches anything.
+    bridge.resolveLocalOutcome("Bash", "approved");
+    expect(permResolves(emitted)).toHaveLength(1);
   });
 
   it("reports agent state snapshots as requests move to completed", async () => {
@@ -505,7 +632,7 @@ describe("composeAskAnswerReason", () => {
 });
 
 describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion special case (W2.1)", () => {
-  it("local turn: defers with `ask` pointing at the terminal widget, emits nothing", async () => {
+  it("local turn: defers with `ask` pointing at the terminal widget (docs/known-issues.md #5: but still emits a live perm-request for web)", async () => {
     const onPromptLikely = vi.fn();
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, onPromptLikely });
 
@@ -514,10 +641,24 @@ describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion speci
       tool_input: { questions: [{ question: "Which color?", options: ["Red", "Blue"] }] },
     });
 
+    // The local hand-off is immediate and unaffected — the terminal's own
+    // question widget still renders with no added delay.
     expect(out.hookSpecificOutput.permissionDecision).toBe("ask");
     expect(out.hookSpecificOutput.permissionDecisionReason).toContain("terminal");
     expect(onPromptLikely).toHaveBeenCalledOnce();
-    expect(emitted).toHaveLength(0);
+
+    // But web must now see the pending question too (issue #5's core fix).
+    const requests = permRequests(emitted);
+    expect(requests).toHaveLength(1);
+    const ev = requests[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    expect(ev.name).toBe("AskUserQuestion");
+    expect(ev.modes).toEqual([]);
+    expect(bridge.pendingCount).toBe(1);
+
+    // Completed once the terminal's mirrored tool-end correlates it — not by
+    // a web `resolve()` call, which has no channel to drive the terminal.
+    bridge.resolveLocalOutcome("AskUserQuestion", "approved");
+    expect(permResolves(emitted)).toHaveLength(1);
     expect(bridge.pendingCount).toBe(0);
   });
 

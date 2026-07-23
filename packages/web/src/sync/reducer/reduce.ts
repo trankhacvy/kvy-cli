@@ -77,7 +77,11 @@ function isRoutineServiceText(text: string): boolean {
   return ROUTINE_SERVICE_TEXTS.has(text);
 }
 
-function stableSortByTime<T extends { time: number }>(items: T[]): T[] {
+/** Stable sort by `.time`, ties broken by original array position — exported
+ * so callers merging additional time-stamped items (e.g. the composer's
+ * still-optimistic pending sends) into an already-reduced `RenderItem[]`
+ * can reuse the exact same ordering rule rather than re-deriving it. */
+export function stableSortByTime<T extends { time: number }>(items: T[]): T[] {
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) => a.item.time - b.item.time || a.index - b.index)

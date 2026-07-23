@@ -5,14 +5,19 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
+  type AskFreeTextAnswers,
   type AskSelections,
   allAskQuestionsAnswered,
   applyAnswerResult,
   buildAskAnswerDecision,
+  buildChatAboutThisDecision,
+  clearAskSelection,
   extractAskAnswers,
   fromError,
   type PermCardPhase,
+  setAskFreeText,
   toggleAskSelection,
   useSessionControl,
 } from "@/features/session-control";
@@ -30,6 +35,15 @@ import { AskQuestionOptions } from "./AskQuestionOptions";
  * answers formatted as Claude Code's own native answer text (deny-with-
  * answer, W0.2-probe-verified) — so from the model's perspective this reads
  * exactly like the question having been answered at the terminal.
+ *
+ * Also mirrors the CLI's own two extra per-question-form options (the "N.
+ * Type something" / "N+1. Chat about this" rows Claude Code always appends
+ * to its own TUI list, docs/known-issues.md #5 follow-up): a free-text input
+ * under each question's option list, and a "Chat about this instead" escape
+ * hatch that declines the whole form. This only applies when the web card
+ * itself is the answering surface (a web-originated turn) — it does not, and
+ * cannot, drive a local terminal's own live TUI (that would need PTY
+ * keystroke injection, a separate, out-of-scope stretch goal).
  */
 export function AskUserQuestionCard({
   args,
@@ -41,6 +55,7 @@ export function AskUserQuestionCard({
   const { actions } = useSessionControl();
   const questions = parseAskQuestions(args);
   const [selections, setSelections] = useState<AskSelections>(new Map());
+  const [freeText, setFreeText] = useState<AskFreeTextAnswers>(new Map());
   const [phase, setPhase] = useState<PermCardPhase>({ kind: "idle" });
 
   const mutation = useMutation({
@@ -54,20 +69,29 @@ export function AskUserQuestionCard({
     return <AskAnsweredSummary questions={questions} permission={permission} phase={phase} />;
   }
 
-  const toggle = (qi: number, oi: number, multi: boolean) =>
+  const toggle = (qi: number, oi: number, multi: boolean) => {
     setSelections((prev) => toggleAskSelection(prev, qi, oi, multi));
+    setFreeText((prev) => setAskFreeText(prev, qi, ""));
+  };
 
-  const allAnswered = allAskQuestionsAnswered(questions, selections);
+  const onFreeTextChange = (qi: number, text: string) => {
+    setFreeText((prev) => setAskFreeText(prev, qi, text));
+    if (text.length > 0) setSelections((prev) => clearAskSelection(prev, qi));
+  };
+
+  const allAnswered = allAskQuestionsAnswered(questions, selections, freeText);
   const submitting = phase.kind === "submitting" || mutation.isPending;
 
-  const submit = () => {
-    const decision = buildAskAnswerDecision(questions, selections);
+  const runMutation = (decision: PermDecision) => {
     setPhase({ kind: "submitting", decision });
     mutation.mutate(decision, {
       onSuccess: (result) => setPhase(applyAnswerResult(decision, result)),
       onError: (error) => setPhase(fromError(error)),
     });
   };
+
+  const submit = () => runMutation(buildAskAnswerDecision(questions, selections, freeText));
+  const chatAboutThis = () => runMutation(buildChatAboutThisDecision());
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-sm">
@@ -100,14 +124,25 @@ export function AskUserQuestionCard({
               );
             })}
           </div>
+          <Input
+            value={freeText.get(qi) ?? ""}
+            onChange={(e) => onFreeTextChange(qi, e.target.value)}
+            placeholder="Or type your own answer…"
+            className="h-8 text-sm"
+          />
         </div>
       ))}
 
       {phase.kind === "error" && <p className="text-xs text-destructive">{phase.message}</p>}
 
-      <Button size="sm" disabled={!allAnswered || submitting} onClick={submit}>
-        Submit answer{questions.length > 1 ? "s" : ""}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button size="sm" disabled={!allAnswered || submitting} onClick={submit}>
+          Submit answer{questions.length > 1 ? "s" : ""}
+        </Button>
+        <Button size="sm" variant="outline" disabled={submitting} onClick={chatAboutThis}>
+          Chat about this instead
+        </Button>
+      </div>
     </div>
   );
 }

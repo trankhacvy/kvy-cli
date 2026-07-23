@@ -1,9 +1,13 @@
 export {
+  type AskFreeTextAnswers,
   type AskSelections,
   allAskQuestionsAnswered,
   buildAskAnswerDecision,
   buildAskAnswers,
+  buildChatAboutThisDecision,
+  clearAskSelection,
   extractAskAnswers,
+  setAskFreeText,
   toggleAskSelection,
 } from "./ask-question-state";
 export type { AttentionMeta, AttentionState, DeriveAttentionInput } from "./attention";
@@ -16,6 +20,7 @@ export { createMockSessionControl, useMockSessionControl } from "./mock-actions"
 export {
   buildFileEnvelope,
   buildMessageEnvelope,
+  mergeRenderItems,
   type PendingMessage,
   pendingToRenderItem,
   reconcilePending,

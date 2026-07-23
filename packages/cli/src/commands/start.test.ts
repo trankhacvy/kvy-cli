@@ -116,6 +116,7 @@ function fakeRemotePermissionHook(
     settingsEnv: {},
     port: 12345,
     resolvePermission: () => ({ ok: false }),
+    resolveLocalOutcome: () => {},
     getCurrentPermissionMode: () => null,
     waitForModeEcho: async () => null,
     isWebTurnActive: () => false,
@@ -952,6 +953,82 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
     onEnvelopes?.([toolEndEnvelope]);
     expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
+  it("correlates a tool-start/tool-end pair back through resolveLocalOutcome so a local turn's web card doesn't hang forever (docs/known-issues.md #5)", async () => {
+    const resolveLocalOutcome = vi.fn();
+    let onEnvelopes: ((envelopes: SessionEnvelope[]) => void) | undefined;
+    const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+      onEnvelopes = opts.onEnvelopes;
+      return fakePtyHandle();
+    });
+    const installRemotePermissionHook = (async () =>
+      fakeRemotePermissionHook({
+        resolveLocalOutcome,
+      })) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
+    );
+
+    // tool-start names the call; tool-end (ok:true) reports its outcome.
+    onEnvelopes?.([
+      createEnvelope("agent", {
+        t: "tool-start",
+        call: "call-1",
+        name: "Bash",
+        args: { command: "ls" },
+      }),
+    ]);
+    expect(resolveLocalOutcome).not.toHaveBeenCalled();
+
+    onEnvelopes?.([createEnvelope("agent", { t: "tool-end", call: "call-1", ok: true })]);
+    expect(resolveLocalOutcome).toHaveBeenCalledExactlyOnceWith("Bash", "approved");
+  });
+
+  it("correlates a denied tool-end (ok:false) as 'denied'", async () => {
+    const resolveLocalOutcome = vi.fn();
+    let onEnvelopes: ((envelopes: SessionEnvelope[]) => void) | undefined;
+    const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+      onEnvelopes = opts.onEnvelopes;
+      return fakePtyHandle();
+    });
+    const installRemotePermissionHook = (async () =>
+      fakeRemotePermissionHook({
+        resolveLocalOutcome,
+      })) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
+    );
+
+    onEnvelopes?.([
+      createEnvelope("agent", { t: "tool-start", call: "call-1", name: "Write", args: {} }),
+    ]);
+    onEnvelopes?.([
+      createEnvelope("agent", { t: "tool-end", call: "call-1", ok: false, output: "denied" }),
+    ]);
+    expect(resolveLocalOutcome).toHaveBeenCalledExactlyOnceWith("Write", "denied");
+  });
+
+  it("does not call resolveLocalOutcome for a tool-end with no matching tool-start seen", async () => {
+    const resolveLocalOutcome = vi.fn();
+    let onEnvelopes: ((envelopes: SessionEnvelope[]) => void) | undefined;
+    const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+      onEnvelopes = opts.onEnvelopes;
+      return fakePtyHandle();
+    });
+    const installRemotePermissionHook = (async () =>
+      fakeRemotePermissionHook({
+        resolveLocalOutcome,
+      })) as unknown as typeof installRemotePermissionHookType;
+
+    await runStartClaudeCommand(
+      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
+    );
+
+    onEnvelopes?.([createEnvelope("agent", { t: "tool-end", call: "orphan-call", ok: true })]);
+    expect(resolveLocalOutcome).not.toHaveBeenCalled();
   });
 
   it("answers takeControl as a no-op success, interrupt as a real ESC write, setMode as not-supported (flag off), and routes perm.answer into the hook bridge", async () => {
