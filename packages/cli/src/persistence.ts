@@ -106,16 +106,24 @@ export interface Settings {
    */
   adoptedSessions?: Record<string, string[]>;
   /**
-   * Per-workspace git settings written by `falcon workspace config
-   * [--base-ref/--remote/--directory]` (falcon-prd.md line 148, plan.md §16
-   * "4.1 Git panel") — keyed by the workspace's real (symlink-resolved)
-   * absolute directory path, same key shape `daemon/gitDiff.ts`'s
-   * `resolveConfiguredBaseRef` looks up when a `git.diff` RPC omits an
-   * explicit `baseRef`. `remote` is stored for a future `git push`/PR
-   * fast-follow (falcon-prd.md FR-7.7) — unused by the read-only MVP diff
-   * viewer.
+   * Per-workspace settings written by `falcon workspace config
+   * [--base-ref/--remote/--setup-script/--run-script/--directory]`
+   * (falcon-prd.md line 148, plan.md §16 "4.1 Git panel";
+   * docs/features/setup-run-scripts.md) — keyed by the workspace's real
+   * (symlink-resolved) absolute directory path, same key shape
+   * `daemon/gitDiff.ts`'s `resolveConfiguredBaseRef` looks up when a
+   * `git.diff` RPC omits an explicit `baseRef`. `remote` is stored for a
+   * future `git push`/PR fast-follow (falcon-prd.md FR-7.7) — unused by the
+   * read-only MVP diff viewer. `setupScript`/`runScript`
+   * (docs/features/setup-run-scripts.md) back the Setup/Run scripts
+   * subsystem — `daemon/setupScript.ts` reads `setupScript` after a fresh
+   * worktree creation; `daemon/runProcess.ts`'s `run.*` machine RPCs read
+   * `runScript`.
    */
-  workspaces?: Record<string, { baseRef?: string; remote?: string }>;
+  workspaces?: Record<
+    string,
+    { baseRef?: string; remote?: string; setupScript?: string; runScript?: string }
+  >;
   /**
    * Epoch-ms timestamp of the last auto-update-on-start background check
    * (`update/autoUpdateTrigger.ts`, plan.md §16 "4.3 Distribution &
@@ -168,12 +176,18 @@ function normalizeSettings(raw: Record<string, unknown>): Settings {
     settings.adoptedSessions = adoptedSessions;
   }
   if (isPlainObject(raw.workspaces)) {
-    const workspaces: Record<string, { baseRef?: string; remote?: string }> = {};
+    const workspaces: Record<
+      string,
+      { baseRef?: string; remote?: string; setupScript?: string; runScript?: string }
+    > = {};
     for (const [key, value] of Object.entries(raw.workspaces)) {
       if (!isPlainObject(value)) continue;
-      const entry: { baseRef?: string; remote?: string } = {};
+      const entry: { baseRef?: string; remote?: string; setupScript?: string; runScript?: string } =
+        {};
       if (typeof value.baseRef === "string") entry.baseRef = value.baseRef;
       if (typeof value.remote === "string") entry.remote = value.remote;
+      if (typeof value.setupScript === "string") entry.setupScript = value.setupScript;
+      if (typeof value.runScript === "string") entry.runScript = value.runScript;
       workspaces[key] = entry;
     }
     settings.workspaces = workspaces;

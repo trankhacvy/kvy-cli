@@ -706,3 +706,109 @@ export const SetModeResultSchema = z.object({
   // ACP call with no separate echo to report) — `ok` alone stays authoritative there.
   observedMode: PermissionModeSchema.optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Per-workspace Setup/Run scripts (docs/features/setup-run-scripts.md,
+// docs/competitive-notes-omnara.md #7): a persisted "Setup script" (runs
+// once per freshly-created worktree, e.g. `npm install`) and "Run script"
+// (a one-click, long-lived dev-server-style process, e.g. `npm run dev`),
+// both defined CLI-only (`falcon workspace config --setup-script/
+// --run-script`, design §12's local-consent boundary — no RPC params
+// schema below ever carries a script string, only a `worktree` path the
+// daemon resolves back to its own on-disk config). `workspace.getConfig` is
+// the one read-only addition that lets the web Workspace Settings UI *see*
+// the configured scripts; `run.*` is the new long-lived run-process
+// subsystem, deliberately decoupled from the reserved (and still unbuilt)
+// `preview:*` tunnel namespace (`reserved.ts`).
+// ---------------------------------------------------------------------------
+
+export const WorkspaceGetConfigParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type WorkspaceGetConfigParams = z.infer<typeof WorkspaceGetConfigParamsSchema>;
+
+export const WorkspaceGetConfigResultSchema = z.object({
+  baseRef: z.string().optional(),
+  remote: z.string().optional(),
+  setupScript: z.string().optional(),
+  runScript: z.string().optional(),
+});
+export type WorkspaceGetConfigResult = z.infer<typeof WorkspaceGetConfigResultSchema>;
+
+// `run.start`/`run.stop`/`run.status`/`run.setup` (docs/features/
+// setup-run-scripts.md Phase 3): the daemon's long-lived run-process
+// subsystem. `worktree` resolves (via the registered-workspace authorizer,
+// same as `git.commit`/`git.push`/`git.renameBranch`) to the containing
+// workspace whose `runScript`/`setupScript` config applies — a
+// `.worktrees/<branch>` directory is never itself a config key.
+export const RunStartParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunStartParams = z.infer<typeof RunStartParamsSchema>;
+
+export const RunStartResultSchema = z.object({
+  started: z.boolean(),
+  alreadyRunning: z.boolean().optional(),
+  method: z.enum(["tmux", "detached"]).optional(),
+  pid: z.number().optional(),
+  tmuxSessionName: z.string().optional(),
+});
+export type RunStartResult = z.infer<typeof RunStartResultSchema>;
+
+export const RunStopParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunStopParams = z.infer<typeof RunStopParamsSchema>;
+
+export const RunStopResultSchema = z.object({
+  stopped: z.boolean(),
+  wasRunning: z.boolean(),
+});
+export type RunStopResult = z.infer<typeof RunStopResultSchema>;
+
+export const RunStatusParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunStatusParams = z.infer<typeof RunStatusParamsSchema>;
+
+// `run`/`setup` are each reported independently — a run-script process can
+// be live while a setup re-run is in flight (e.g. "Re-run setup" while the
+// dev server is still up from before). `logTail` is the last few KB of the
+// respective log file (`run-<hash>.log`/`setup-<hash>.log`), read tolerant
+// of a missing file (nothing has ever run yet) — same "no blob subsystem
+// yet, inline only" contract as `git.diff`'s `inline`/`truncated` fields,
+// just without a `truncated` flag since a tail is deliberately partial by
+// design, not by a size cutoff being hit.
+export const RunStatusResultSchema = z.object({
+  run: z.object({
+    state: z.enum(["running", "stopped", "none"]),
+    pid: z.number().optional(),
+    method: z.enum(["tmux", "detached"]).optional(),
+    startedAt: z.number().optional(),
+    logTail: z.string().optional(),
+  }),
+  setup: z.object({
+    state: z.enum(["not-run", "running", "succeeded", "failed"]),
+    exitCode: z.number().optional(),
+    startedAt: z.number().optional(),
+    finishedAt: z.number().optional(),
+    logTail: z.string().optional(),
+  }),
+});
+export type RunStatusResult = z.infer<typeof RunStatusResultSchema>;
+
+export const RunSetupParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunSetupParams = z.infer<typeof RunSetupParamsSchema>;
+
+export const RunSetupResultSchema = z.object({
+  started: z.boolean(),
+  alreadyRunning: z.boolean().optional(),
+});
+export type RunSetupResult = z.infer<typeof RunSetupResultSchema>;

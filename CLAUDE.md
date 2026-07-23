@@ -336,6 +336,51 @@ packages/
 │                             self-update restart handoff. Persisted via a lenient,
 │                             optional `sleepInhibit` field on `persistence.ts`'s `Settings`
 │                             (exact `daemonAutoStart` precedent).
+│                             Per-workspace Setup/Run scripts (docs/features/
+│                             setup-run-scripts.md, docs/competitive-notes-omnara.md #7):
+│                             `workspaceConfig.ts`'s per-workspace store gains `setupScript`/
+│                             `runScript` fields (empty-string patch clears a field), surfaced via
+│                             `falcon workspace config --setup-script/--run-script <script>`
+│                             (`commands/workspaceConfig.ts`, `args.ts`) — script DEFINITION stays
+│                             CLI-only (design §12's local-consent boundary; no machine RPC params
+│                             schema ever carries a script string). `gitWorktree.ts`'s
+│                             `ensureBranchWorkspace` now also reports `createdWorktree: boolean`
+│                             (true only after a real `git worktree add`, false on reuse/in-place
+│                             checkout) — `spawnEngine.ts` uses it to fire-and-forget
+│                             `daemon/setupScript.ts`'s `runSetupScript` (cross-spawn under
+│                             `daemon/shellCommand.ts`'s `buildShellInvocation` — `/bin/sh -c`/
+│                             `cmd.exe /c` — with stdout/stderr appended to a fresh-truncated
+│                             `~/.falcon/logs/setup-<hash>.log`) exactly once, right after a
+│                             genuine fresh-worktree creation, never on a reused/idempotent spawn.
+│                             `daemon/runStateStore.ts` (`~/.falcon/run-state.json`, same
+│                             tmp-write+rename+per-homeDir-write-queue durability pattern as
+│                             `sessionsStore.ts`) persists both that setup outcome and the new
+│                             long-lived `run.*` process's state, keyed by the worktree's real
+│                             path. `daemon/runProcess.ts` is the subsystem's core: a shared
+│                             `resolveRunContext` (the design-§12 auth gate — `worktree` must
+│                             resolve inside a registered workspace — AND the config-key resolver,
+│                             since `.worktrees/<branch>` dirs are never config keys themselves)
+│                             backs `handleRunStart`/`handleRunStop`/`handleRunStatus`/
+│                             `handleRunSetup` — `run.start` reuses `processLauncher.ts`'s
+│                             `launchProviderProcess` (tmux-preferred) unchanged, wrapping the
+│                             script with a log-redirect (`>> <logFile> 2>&1`, so the tmux pane
+│                             itself shows nothing — the log file is the single source `run.status`'s
+│                             `logTail` and a `tmux attach`'d `tail -f` both read); liveness is
+│                             probed lazily via `tmux has-session`/`process.kill(pid,0)`, no
+│                             boot-time re-adoption needed. `daemon/workspaceConfigRpc.ts`'s
+│                             `handleWorkspaceGetConfig` is the read-only surface for the web
+│                             Workspace Settings UI. All five —
+│                             `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/
+│                             `run.setup` — are registered in `machineRpc.ts` alongside the rest
+│                             (`run.start`/`run.stop`/`run.setup` idempotency-cached like
+│                             `git.commit`; `run.start` additionally gets a
+│                             `withResourceGuard`-keyed-on-`worktree` join, generalized from
+│                             `adopt.take`'s own provider-session guard, so two devices pressing
+│                             play concurrently join one launch attempt) and wired in
+│                             `machineIntegration.ts` (bound to this boot's `homeDir`/`logger`,
+│                             same pattern as `getGitDiffHandler`'s `uploadBlob` binding;
+│                             `spawnSessionHandler`/`spawnSessionForAdoptTake` both gain the
+│                             `runSetupScript` dep too).
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -541,6 +586,29 @@ packages/
                               from the RPC result's `supported`/`active` fields, never from
                               any machine metadata field. Same not-yet-wired-to-a-live-socket-
                               by-default state as every other feature area in this list.
+                              The Setup/Run scripts
+                              panel (`src/features/run-panel/`, docs/features/
+                              setup-run-scripts.md, docs/competitive-notes-omnara.md #7) is
+                              another structural clone of the git-diff/github-checks seam
+                              layout: `RunPanel`/`RunPanelBody` (play/stop button, run-state
+                              badge, a setup section with its own state badge + exit code on
+                              failure + "Re-run setup" button, and a monospace scrollable log
+                              tail for each) driven by `use-run-panel.ts` (`workspace.getConfig`
+                              fetched once per worktree, `run.status` polled every 5s only while
+                              `run.state==='running'` or `setup.state==='running'`, and
+                              start/stop/setup `useMutation`s that invalidate `run-status` on
+                              settle). `sync/machineRpc.ts` gained the five new methods
+                              alongside the rest. `use-live-run-panel-actions.ts` is real and
+                              gated on the shared per-machine DEK unwrap, same
+                              not-yet-wired-to-a-live-socket-by-default state as every other
+                              feature area — defaults `RunPanel`'s injectable `useActions` prop
+                              regardless, mirroring `GitDiffPanel`/`ChecksPanel`'s own default.
+                              Mounted at the new `/session/[id]/run/` route (`SessionRunScreen`,
+                              linked from the timeline header's "Setup / Run" button, beside
+                              "Repo files") — script DEFINITION is never exposed here at all
+                              (design §12: CLI-only, `falcon workspace config --setup-script/
+                              --run-script`), only the configured scripts' names and live
+                              run/setup state.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
