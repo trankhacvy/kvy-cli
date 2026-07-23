@@ -14,15 +14,19 @@ export interface WorkspaceGroup {
  * takeover candidates. */
 export const UNGROUPED_WORKSPACE_ID = "__ungrouped__";
 
-function byUpdatedAtDesc(a: SessionListSession, b: SessionListSession): number {
+/** Pinned sessions first (Pin — docs/features/session-lifecycle-actions.md
+ * Phase 4), then most-recently-updated first within each of those two
+ * groups — applies uniformly to every bucket, including the ungrouped one. */
+function byPinnedThenUpdatedAtDesc(a: SessionListSession, b: SessionListSession): number {
+  if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
   return b.updatedAt - a.updatedAt;
 }
 
 /**
- * Groups sessions by workspace and sorts each group's sessions by most
- * recently updated first. Group order: workspaces with at least one session,
- * most-recently-active session first, then the ungrouped bucket last (if
- * non-empty).
+ * Groups sessions by workspace and sorts each group's sessions pinned-first,
+ * then by most recently updated. Group order: workspaces with at least one
+ * session, most-recently-active session first, then the ungrouped bucket
+ * last (if non-empty).
  */
 export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): WorkspaceGroup[] {
   const workspaceById = new Map(snapshot.workspaces.map((w) => [w.id, w]));
@@ -43,7 +47,7 @@ export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): Workspa
     if (id === UNGROUPED_WORKSPACE_ID) continue;
     const workspace = workspaceById.get(id);
     if (!workspace) continue; // unreachable given the bucketing above, but keeps this total
-    groups.push({ workspace, sessions: [...sessions].sort(byUpdatedAtDesc) });
+    groups.push({ workspace, sessions: [...sessions].sort(byPinnedThenUpdatedAtDesc) });
   }
   groups.sort((a, b) => (b.sessions[0]?.updatedAt ?? 0) - (a.sessions[0]?.updatedAt ?? 0));
 
@@ -51,7 +55,7 @@ export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): Workspa
   if (ungrouped && ungrouped.length > 0) {
     groups.push({
       workspace: { id: UNGROUPED_WORKSPACE_ID, name: "Other sessions" },
-      sessions: [...ungrouped].sort(byUpdatedAtDesc),
+      sessions: [...ungrouped].sort(byPinnedThenUpdatedAtDesc),
     });
   }
 

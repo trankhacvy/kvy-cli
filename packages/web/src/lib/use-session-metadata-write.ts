@@ -25,9 +25,7 @@ import { syncQueryKey } from "@/sync";
  * current value, and so every caller (even one racing a concurrent write)
  * always patches the freshest opened plaintext, never a stale snapshot.
  */
-export type SessionMetadataPatch = (
-  current: Record<string, unknown>,
-) => Record<string, unknown>;
+export type SessionMetadataPatch = (current: Record<string, unknown>) => Record<string, unknown>;
 
 export interface SessionMetadataWriteResult {
   value: EncryptedBox;

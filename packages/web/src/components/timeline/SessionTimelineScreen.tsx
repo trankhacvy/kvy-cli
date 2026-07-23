@@ -268,7 +268,11 @@ function SessionTimelineBody({
               Preview
             </Button>
             <MobileHandoffButton sessionId={sessionId} />
-            <SessionActionsMenu sessionId={sessionId} disabled={isDisabled} />
+            <SessionActionsMenu
+              sessionId={sessionId}
+              title={title ?? sessionId}
+              disabled={isDisabled}
+            />
           </div>
         </header>
         {decryptError && (

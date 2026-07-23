@@ -1,3 +1,4 @@
+import { Pin } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,9 +32,12 @@ export function SessionCard({
     // stopPropagation dance to keep a click from also navigating.
     <div className="group relative">
       <Link href={`/session/${session.id}/`} className="block">
-        <Card className="gap-2 py-3 pr-20 transition-colors hover:bg-accent/50">
+        <Card className="gap-2 py-3 pr-10 transition-colors hover:bg-accent/50">
           <CardHeader className="flex-row items-center gap-2 px-3">
             <SessionStatusDot status={status} />
+            {session.pinned && (
+              <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-label="Pinned" />
+            )}
             <CardTitle className="min-w-0 flex-1 truncate">
               {session.title === null ? <Skeleton className="h-4 w-32" /> : session.title}
             </CardTitle>
@@ -51,7 +55,12 @@ export function SessionCard({
         </Card>
       </Link>
       <div className="absolute right-3 top-3 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
-        <SessionCardActions sessionId={session.id} title={session.title ?? "this session"} />
+        <SessionCardActions
+          sessionId={session.id}
+          title={session.title ?? "this session"}
+          pinned={session.pinned}
+          status={session.status}
+        />
       </div>
     </div>
   );

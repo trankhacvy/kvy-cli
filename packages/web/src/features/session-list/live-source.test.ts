@@ -39,7 +39,10 @@ function makeMachine(overrides: Partial<MachineRow> = {}): MachineRow {
   };
 }
 
-const EMPTY_TITLES = { sessions: new Map<string, string>(), machines: new Map<string, string>() };
+const EMPTY_TITLES = {
+  sessions: new Map<string, { title: string; pinned: boolean }>(),
+  machines: new Map<string, string>(),
+};
 
 describe("newestSeq", () => {
   it("is undefined when the page hasn't fetched yet", () => {
@@ -175,7 +178,7 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     const session = makeSession({ id: "sess-1" });
     const machine = makeMachine({ id: "mach-1" });
     const titles = {
-      sessions: new Map([["sess-1", "(untitled session)"]]),
+      sessions: new Map([["sess-1", { title: "(untitled session)", pinned: false }]]),
       machines: new Map([["mach-1", "(unnamed machine)"]]),
     };
 
@@ -183,6 +186,27 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
 
     expect(snapshot.sessions[0]?.title).toBe("(untitled session)");
     expect(snapshot.machines[0]?.name).toBe("(unnamed machine)");
+  });
+
+  it("threads the decrypted pinned flag through, defaulting to false when not yet decrypted", () => {
+    const session = makeSession({ id: "sess-1" });
+    const titles = {
+      sessions: new Map([["sess-1", { title: "My session", pinned: true }]]),
+      machines: new Map<string, string>(),
+    };
+
+    const snapshot = buildSnapshot([session], [], titles, new Map(), new Map(), new Map());
+    expect(snapshot.sessions[0]?.pinned).toBe(true);
+
+    const notYetDecrypted = buildSnapshot(
+      [session],
+      [],
+      EMPTY_TITLES,
+      new Map(),
+      new Map(),
+      new Map(),
+    );
+    expect(notYetDecrypted.sessions[0]?.pinned).toBe(false);
   });
 
   it("derives a workspace's display name from the basename of its id/path", () => {

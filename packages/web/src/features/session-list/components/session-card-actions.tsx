@@ -1,7 +1,24 @@
 "use client";
 
-import { Archive, Trash2 } from "lucide-react";
+import type { SessionRow } from "@falcon/wire";
+import {
+  Archive,
+  CircleStop,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  RotateCw,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
+import {
+  initialStopSessionDialogState,
+  resetStopSessionDialogState,
+  type StopSessionDialogState,
+  toStopError,
+  toStopping,
+} from "@/components/timeline/stop-session-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -11,50 +28,119 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useSessionCrypto } from "@/features/session-control/use-session-crypto";
 import { useArchiveSessionMutation, useDeleteSessionMutation } from "@/lib/use-session-lifecycle";
+import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
+import { apiSocket, createSessionRpcClient } from "@/sync";
+import { RenameSessionDialog } from "./rename-session-dialog";
+import { buildPinTogglePatch, isSessionStoppable } from "./session-card-actions-logic";
 
 /**
- * Archive/delete actions for one Home-screen `SessionCard` (plan-v2.md W4.2).
- * Rendered as a sibling of the card's own `Link` (see `SessionCard`'s own
- * comment on why) — plain `<button>`s here never nest inside that anchor,
- * so no `preventDefault`/`stopPropagation` dance is needed to stop a click
- * from also navigating.
+ * Lifecycle actions for one Home-screen `SessionCard`
+ * (docs/features/session-lifecycle-actions.md) — Rename, Pin/Unpin, Stop,
+ * Restart (disabled here; wired in Phase 6), Mark done, and Delete,
+ * consolidated into one '···' `DropdownMenu`, structurally cloned from the
+ * timeline header's `SessionActionsMenu`. Replaces the previous
+ * always-visible two-icon-button row (Archive, Delete) plan-v2.md W4.2
+ * shipped first. Restore (for an already-archived row) lands in Phase 5
+ * alongside the Completed Chats screen that's the only place an archived
+ * row is ever rendered.
  *
- * Archive has no confirm step (a status flip, easily reversed by a future
- * "unarchive" — not destructive). Delete does: it's a hard row delete
- * (`sessionArchive.ts`'s `DELETE /v1/sessions/:id`), mirroring `ControlBar`'s
- * "End session" confirm-dialog precedent (plan-v2.md W2.3).
+ * Rendered as a sibling of the card's own `Link` (see `SessionCard`'s own
+ * comment on why) — nothing here nests inside that anchor.
  */
-export function SessionCardActions({ sessionId, title }: { sessionId: string; title: string }) {
+export function SessionCardActions({
+  sessionId,
+  title,
+  pinned,
+  status,
+}: {
+  sessionId: string;
+  title: string;
+  pinned: boolean;
+  status: SessionRow["status"];
+}) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [stopOpen, setStopOpen] = useState(false);
+  const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
+  const pinMutation = useSessionMetadataPatchMutation(sessionId);
+  const stoppable = isSessionStoppable(status);
+
+  function handleStopOpenChange(open: boolean) {
+    if (!open) setStopState(resetStopSessionDialogState());
+    setStopOpen(open);
+  }
 
   return (
     <>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="size-7"
-        title="Archive session"
-        aria-label="Archive session"
-        disabled={archiveMutation.isPending}
-        onClick={() => archiveMutation.mutate(sessionId)}
-      >
-        <Archive className="size-3.5" />
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="size-7 text-destructive hover:text-destructive"
-        title="Delete session"
-        aria-label="Delete session"
-        onClick={() => setDeleteOpen(true)}
-      >
-        <Trash2 className="size-3.5" />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-7"
+            aria-label="Session actions"
+          >
+            <MoreHorizontal className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+            <Pencil className="size-4" />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={pinMutation.isPending}
+            onSelect={() => pinMutation.mutate(buildPinTogglePatch(pinned))}
+          >
+            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            {pinned ? "Unpin" : "Pin"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={!stoppable}
+            title={stoppable ? undefined : "This session's process has already ended"}
+            onSelect={() => setStopOpen(true)}
+          >
+            <CircleStop className="size-4" />
+            Stop
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled title="Restart isn't wired up yet" onSelect={() => {}}>
+            <RotateCw className="size-4" />
+            Restart
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={archiveMutation.isPending}
+            onSelect={() => archiveMutation.mutate(sessionId)}
+          >
+            <Archive className="size-4" />
+            Mark done
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+            <Trash2 className="size-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <RenameSessionDialog
+        sessionId={sessionId}
+        currentTitle={title}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>
@@ -91,6 +177,79 @@ export function SessionCardActions({ sessionId, title }: { sessionId: string; ti
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={stopOpen} onOpenChange={handleStopOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Stop "{title}"?</DialogTitle>
+            <DialogDescription>
+              Ends the CLI process on its machine — the terminal user will see Claude exit.
+            </DialogDescription>
+          </DialogHeader>
+          {stopState.phase === "error" && (
+            <p className="text-sm text-destructive">{stopState.message}</p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={stopState.phase === "stopping"}
+              onClick={() => handleStopOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            {/* Lazily mounted: the crypto worker + session-RPC client only
+             * spin up while this dialog is actually open, so rendering a
+             * list of dozens of cards never spawns one worker per row
+             * (Phase 4's "Worker-per-card cost" risk). */}
+            {stopOpen && (
+              <CardStopConfirmButton
+                sessionId={sessionId}
+                stopping={stopState.phase === "stopping"}
+                onStopping={() => setStopState(toStopping())}
+                onSuccess={() => setStopOpen(false)}
+                onError={(err) => setStopState(toStopError(err))}
+              />
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
+  );
+}
+
+/** The "Stop" confirm button's own crypto/RPC wiring, split into a child so
+ * `useSessionCrypto`'s worker only exists while the dialog housing this
+ * component is mounted — reuses the exact `stop` session RPC the timeline's
+ * "End session" already calls (`sync/sessionRpc.ts`). */
+function CardStopConfirmButton({
+  sessionId,
+  stopping,
+  onStopping,
+  onSuccess,
+  onError,
+}: {
+  sessionId: string;
+  stopping: boolean;
+  onStopping: () => void;
+  onSuccess: () => void;
+  onError: (error: unknown) => void;
+}) {
+  const crypto = useSessionCrypto(sessionId);
+
+  function handleConfirm() {
+    if (!crypto) {
+      onError(new Error("Crypto bridge isn't ready yet — try again in a moment."));
+      return;
+    }
+    onStopping();
+    createSessionRpcClient({ socket: apiSocket, crypto, sessionId })
+      .call("stop", {})
+      .then(onSuccess, onError);
+  }
+
+  return (
+    <Button variant="destructive" disabled={stopping || !crypto} onClick={handleConfirm}>
+      {stopping ? "Stopping…" : "Stop"}
+    </Button>
   );
 }

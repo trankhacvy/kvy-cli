@@ -1,6 +1,6 @@
 "use client";
 
-import { Archive, CircleStop, MoreHorizontal, Trash2 } from "lucide-react";
+import { Archive, CircleStop, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionControl } from "@/features/session-control";
+import { RenameSessionDialog } from "@/features/session-list/components/rename-session-dialog";
 import { useArchiveSessionMutation, useDeleteSessionMutation } from "@/lib/use-session-lifecycle";
+import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import {
   initialStopSessionDialogState,
   resetStopSessionDialogState,
@@ -42,18 +44,24 @@ import {
  */
 export function SessionActionsMenu({
   sessionId,
+  title,
   disabled = false,
 }: {
   sessionId: string;
+  /** Decrypted session title (`useSessionTitle`), for the Rename dialog's
+   * prefill — this menu has no other source of it. */
+  title: string;
   disabled?: boolean;
 }) {
   const router = useRouter();
   const { actions } = useSessionControl();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
+  const pinMutation = useSessionMetadataPatchMutation(sessionId);
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -77,6 +85,19 @@ export function SessionActionsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+            <Pencil className="size-4" />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={pinMutation.isPending}
+            onSelect={() =>
+              pinMutation.mutate((current) => ({ ...current, pinned: !(current.pinned === true) }))
+            }
+          >
+            <Pin className="size-4" />
+            Pin / Unpin
+          </DropdownMenuItem>
           <DropdownMenuItem
             disabled={archiveMutation.isPending}
             onSelect={() =>
@@ -97,6 +118,13 @@ export function SessionActionsMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <RenameSessionDialog
+        sessionId={sessionId}
+        currentTitle={title}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

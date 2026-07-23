@@ -98,28 +98,38 @@ function workspaceNameFromId(workspaceId: string): string {
   return base && base.length > 0 ? base : workspaceId;
 }
 
+/** A session's decrypted title plus its Pin flag (docs/features/
+ * session-lifecycle-actions.md Phase 4) — both live in the same encrypted
+ * metadata blob, so one `open()` call resolves both at once. */
+interface DecryptedSessionMeta {
+  title: string;
+  pinned: boolean;
+}
+
 interface DecryptedTitles {
-  sessions: Map<string, string>;
+  sessions: Map<string, DecryptedSessionMeta>;
   machines: Map<string, string>;
 }
 
 const EMPTY_TITLES: DecryptedTitles = { sessions: new Map(), machines: new Map() };
 
-async function decryptSessionTitle(
+async function decryptSessionMeta(
   bridge: CryptoBridgeClient,
   session: SessionRow,
-): Promise<string> {
+): Promise<DecryptedSessionMeta> {
   try {
     const ok = await bridge.setSessionKey(decodeBase64(session.dek));
-    if (!ok) return UNTITLED_SESSION;
-    const opened = await bridge.open<{ title?: unknown }>(session.metadata.value);
-    if (opened && typeof opened.title === "string" && opened.title.length > 0) {
-      return opened.title;
-    }
-    return UNTITLED_SESSION;
+    if (!ok) return { title: UNTITLED_SESSION, pinned: false };
+    const opened = await bridge.open<{ title?: unknown; pinned?: unknown }>(session.metadata.value);
+    const title =
+      opened && typeof opened.title === "string" && opened.title.length > 0
+        ? opened.title
+        : UNTITLED_SESSION;
+    const pinned = opened?.pinned === true;
+    return { title, pinned };
   } catch (err) {
     console.error(`live-source: failed to decrypt session ${session.id}'s metadata`, err);
-    return UNTITLED_SESSION;
+    return { title: UNTITLED_SESSION, pinned: false };
   }
 }
 
@@ -169,10 +179,10 @@ function useDecryptedTitles(
 
     let cancelled = false;
     (async () => {
-      const nextSessionTitles = new Map<string, string>();
+      const nextSessionTitles = new Map<string, DecryptedSessionMeta>();
       for (const session of sessionsToDecrypt) {
         if (cancelled) return;
-        nextSessionTitles.set(session.id, await decryptSessionTitle(bridge, session));
+        nextSessionTitles.set(session.id, await decryptSessionMeta(bridge, session));
         versions.set(`s:${session.id}`, session.metadata.version);
       }
       const nextMachineNames = new Map<string, string>();
@@ -375,10 +385,11 @@ export function buildSnapshot(
     workspaceId: s.workspaceId,
     machineId: s.machineId,
     // `null` = not decrypted yet (see `SessionListSession.title`'s doc
-    // comment) — the map only ever has an entry once `decryptSessionTitle`
+    // comment) — the map only ever has an entry once `decryptSessionMeta`
     // has genuinely resolved (success or the honest `UNTITLED_SESSION`
     // fallback), never as a stand-in for "haven't gotten to it yet".
-    title: titles.sessions.get(s.id) ?? null,
+    title: titles.sessions.get(s.id)?.title ?? null,
+    pinned: titles.sessions.get(s.id)?.pinned ?? false,
     provider: s.provider,
     status: s.status,
     updatedAt: s.updatedAt,

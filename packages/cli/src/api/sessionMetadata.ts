@@ -78,9 +78,7 @@ function readMetadataFromBox(
   const opened = open(box, dek);
   const parsed = SessionMetadataValueSchema.safeParse(opened);
   if (!parsed.success) {
-    throw new Error(
-      "session metadata update conflict returned unreadable metadata",
-    );
+    throw new Error("session metadata update conflict returned unreadable metadata");
   }
   return normalizeMetadata(parsed.data);
 }
@@ -97,11 +95,7 @@ export function createSessionMetadataUpdater(
 
   async function persistModel(nextModel: string): Promise<void> {
     const normalizedModel = nextModel.trim();
-    if (
-      normalizedModel.length === 0 ||
-      currentMetadata.model === normalizedModel
-    )
-      return;
+    if (normalizedModel.length === 0 || currentMetadata.model === normalizedModel) return;
 
     for (;;) {
       const nextMetadata: NormalizedMetadata = {
@@ -134,10 +128,7 @@ export function createSessionMetadataUpdater(
         const parsed = CasConflictSchema.parse(await response.json());
         currentVersion = parsed.current.version;
         if (parsed.current.value) {
-          currentMetadata = readMetadataFromBox(
-            parsed.current.value,
-            options.dek,
-          );
+          currentMetadata = readMetadataFromBox(parsed.current.value, options.dek);
           if (currentMetadata.model === normalizedModel) return;
         }
         continue;
@@ -150,9 +141,7 @@ export function createSessionMetadataUpdater(
 
   return {
     async updateModel(model: string): Promise<void> {
-      const nextTask = queue
-        .catch(() => undefined)
-        .then(() => persistModel(model));
+      const nextTask = queue.catch(() => undefined).then(() => persistModel(model));
       queue = nextTask;
       return nextTask;
     },

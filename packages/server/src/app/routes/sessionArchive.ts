@@ -1,7 +1,7 @@
+import { type SessionStatus, SessionStatusSchema } from "@falcon/wire";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { type SessionStatus, SessionStatusSchema } from "@falcon/wire";
 import { sessions } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
 import type { Database } from "../../db/types.js";

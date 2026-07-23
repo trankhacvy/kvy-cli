@@ -57,10 +57,7 @@ describe("createSessionMetadataUpdater", () => {
     );
     const calls: RequestInit[] = [];
     const responses = [
-      new Response(
-        JSON.stringify({ current: { value: currentBox, version: 2 } }),
-        { status: 409 },
-      ),
+      new Response(JSON.stringify({ current: { value: currentBox, version: 2 } }), { status: 409 }),
       new Response(JSON.stringify({ version: 3 }), { status: 200 }),
     ];
     const fetchImpl: typeof fetch = async (_input, init) => {
@@ -145,10 +142,7 @@ describe("createSessionMetadataUpdater", () => {
     );
     const calls: RequestInit[] = [];
     const responses = [
-      new Response(
-        JSON.stringify({ current: { value: currentBox, version: 2 } }),
-        { status: 409 },
-      ),
+      new Response(JSON.stringify({ current: { value: currentBox, version: 2 } }), { status: 409 }),
       new Response(JSON.stringify({ version: 3 }), { status: 200 }),
     ];
     const fetchImpl: typeof fetch = async (_input, init) => {

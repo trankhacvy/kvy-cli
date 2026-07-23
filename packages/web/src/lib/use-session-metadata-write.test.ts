@@ -1,9 +1,4 @@
-import {
-  deriveKeyTree,
-  encodeBase64,
-  getRandomBytes,
-  wrapDek,
-} from "@falcon/crypto/web";
+import { deriveKeyTree, encodeBase64, getRandomBytes, wrapDek } from "@falcon/crypto/web";
 import type { EncryptedBox } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { CryptoBridgeClient } from "@/crypto";
@@ -94,9 +89,7 @@ describe("patchSessionMetadataCas", () => {
     const secondCallArgs = putCas.mock.calls[1] as [string, string, { expectedVersion: number }];
     expect(secondCallArgs[2].expectedVersion).toBe(2);
 
-    const opened = await bridge.open<{ title: string; path: string; model: string }>(
-      result.value,
-    );
+    const opened = await bridge.open<{ title: string; path: string; model: string }>(result.value);
     expect(opened).toEqual({ title: "New title", path: "/work/project", model: "opus" });
   });
 
