@@ -36,7 +36,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionCrypto } from "@/features/session-control/use-session-crypto";
-import { useArchiveSessionMutation, useDeleteSessionMutation } from "@/lib/use-session-lifecycle";
+import {
+  useArchiveSessionMutation,
+  useDeleteSessionMutation,
+  useRestoreSessionMutation,
+} from "@/lib/use-session-lifecycle";
 import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import { apiSocket, createSessionRpcClient } from "@/sync";
 import { RenameSessionDialog } from "./rename-session-dialog";
@@ -49,9 +53,12 @@ import { buildPinTogglePatch, isSessionStoppable } from "./session-card-actions-
  * consolidated into one '···' `DropdownMenu`, structurally cloned from the
  * timeline header's `SessionActionsMenu`. Replaces the previous
  * always-visible two-icon-button row (Archive, Delete) plan-v2.md W4.2
- * shipped first. Restore (for an already-archived row) lands in Phase 5
- * alongside the Completed Chats screen that's the only place an archived
- * row is ever rendered.
+ * shipped first.
+ *
+ * For an already-archived row (only ever rendered on the Completed Chats
+ * screen — Home filters archived sessions out, Phase 5) the menu instead
+ * shows Restore, Rename, Pin/Unpin, and Delete: Stop/Restart/Mark done make
+ * no sense against a session that's already been marked done.
  *
  * Rendered as a sibling of the card's own `Link` (see `SessionCard`'s own
  * comment on why) — nothing here nests inside that anchor.
@@ -72,8 +79,10 @@ export function SessionCardActions({
   const [stopOpen, setStopOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
+  const restoreMutation = useRestoreSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
   const pinMutation = useSessionMetadataPatchMutation(sessionId);
+  const archived = status === "archived";
   const stoppable = isSessionStoppable(status);
 
   function handleStopOpenChange(open: boolean) {
@@ -107,26 +116,40 @@ export function SessionCardActions({
             {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
             {pinned ? "Unpin" : "Pin"}
           </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={!stoppable}
-            title={stoppable ? undefined : "This session's process has already ended"}
-            onSelect={() => setStopOpen(true)}
-          >
-            <CircleStop className="size-4" />
-            Stop
-          </DropdownMenuItem>
-          <DropdownMenuItem disabled title="Restart isn't wired up yet" onSelect={() => {}}>
-            <RotateCw className="size-4" />
-            Restart
-          </DropdownMenuItem>
+          {!archived && (
+            <DropdownMenuItem
+              disabled={!stoppable}
+              title={stoppable ? undefined : "This session's process has already ended"}
+              onSelect={() => setStopOpen(true)}
+            >
+              <CircleStop className="size-4" />
+              Stop
+            </DropdownMenuItem>
+          )}
+          {!archived && (
+            <DropdownMenuItem disabled title="Restart isn't wired up yet" onSelect={() => {}}>
+              <RotateCw className="size-4" />
+              Restart
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={archiveMutation.isPending}
-            onSelect={() => archiveMutation.mutate(sessionId)}
-          >
-            <Archive className="size-4" />
-            Mark done
-          </DropdownMenuItem>
+          {archived ? (
+            <DropdownMenuItem
+              disabled={restoreMutation.isPending}
+              onSelect={() => restoreMutation.mutate(sessionId)}
+            >
+              <Archive className="size-4" />
+              Restore
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={archiveMutation.isPending}
+              onSelect={() => archiveMutation.mutate(sessionId)}
+            >
+              <Archive className="size-4" />
+              Mark done
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
             <Trash2 className="size-4" />

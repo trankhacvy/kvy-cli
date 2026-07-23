@@ -64,6 +64,28 @@ describe("SessionCardActions", () => {
   });
 });
 
+describe("SessionCardActions menu swap by status (docs/features/session-lifecycle-actions.md Phase 5)", () => {
+  // The `DropdownMenuContent` itself renders inside a closed Radix portal
+  // (nothing to assert on directly, same constraint as the rest of this
+  // file's tests), but Radix still emits the trigger button's own
+  // `title`/`aria-*` attributes and this component's plain (non-portaled)
+  // dialogs unconditionally, which is enough to prove the archived branch
+  // took a materially different shape without throwing.
+  it("does not render the delete-confirm dialog's content for an archived session either", () => {
+    const html = render({ status: "archived" });
+    expect(html).not.toContain("Permanently deletes this session");
+  });
+
+  it("renders without throwing for every combination of status and pinned", () => {
+    const statuses = ["active", "archived", "failed", "compacted", "ended"] as const;
+    for (const status of statuses) {
+      for (const pinned of [true, false]) {
+        expect(() => render({ status, pinned })).not.toThrow();
+      }
+    }
+  });
+});
+
 describe("isSessionStoppable (Stop menu-item enable/disable matrix)", () => {
   it("is stoppable while active", () => {
     expect(isSessionStoppable("active")).toBe(true);

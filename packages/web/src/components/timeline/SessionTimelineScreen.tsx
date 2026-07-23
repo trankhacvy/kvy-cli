@@ -271,6 +271,7 @@ function SessionTimelineBody({
             <SessionActionsMenu
               sessionId={sessionId}
               title={title ?? sessionId}
+              status={sessionStatus}
               disabled={isDisabled}
             />
           </div>

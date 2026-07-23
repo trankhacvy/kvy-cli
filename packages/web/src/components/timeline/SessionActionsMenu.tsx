@@ -1,5 +1,6 @@
 "use client";
 
+import type { SessionRow } from "@falcon/wire";
 import { Archive, CircleStop, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -21,7 +22,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSessionControl } from "@/features/session-control";
 import { RenameSessionDialog } from "@/features/session-list/components/rename-session-dialog";
-import { useArchiveSessionMutation, useDeleteSessionMutation } from "@/lib/use-session-lifecycle";
+import {
+  useArchiveSessionMutation,
+  useDeleteSessionMutation,
+  useRestoreSessionMutation,
+} from "@/lib/use-session-lifecycle";
 import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import {
   initialStopSessionDialogState,
@@ -45,12 +50,17 @@ import {
 export function SessionActionsMenu({
   sessionId,
   title,
+  status,
   disabled = false,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), for the Rename dialog's
    * prefill — this menu has no other source of it. */
   title: string;
+  /** The session row's own lifecycle status — swaps Archive for Restore
+   * once a row has already been marked done (docs/features/
+   * session-lifecycle-actions.md Phase 5). */
+  status: SessionRow["status"];
   disabled?: boolean;
 }) {
   const router = useRouter();
@@ -60,8 +70,10 @@ export function SessionActionsMenu({
   const [stopOpen, setStopOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
+  const restoreMutation = useRestoreSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
   const pinMutation = useSessionMetadataPatchMutation(sessionId);
+  const archived = status === "archived";
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -98,15 +110,25 @@ export function SessionActionsMenu({
             <Pin className="size-4" />
             Pin / Unpin
           </DropdownMenuItem>
-          <DropdownMenuItem
-            disabled={archiveMutation.isPending}
-            onSelect={() =>
-              archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
-            }
-          >
-            <Archive className="size-4" />
-            Archive
-          </DropdownMenuItem>
+          {archived ? (
+            <DropdownMenuItem
+              disabled={restoreMutation.isPending}
+              onSelect={() => restoreMutation.mutate(sessionId)}
+            >
+              <Archive className="size-4" />
+              Restore
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={archiveMutation.isPending}
+              onSelect={() =>
+                archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+              }
+            >
+              <Archive className="size-4" />
+              Archive
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem disabled={disabled} onSelect={() => setStopOpen(true)}>
             <CircleStop className="size-4" />
             End session
