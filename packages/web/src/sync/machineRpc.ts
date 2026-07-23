@@ -54,6 +54,22 @@
  * clone of `spawn`'s own listing above. Like `adopt.list`, `@falcon/wire`
  * exports no paired `ResumeSessionParams`/`ResumeSessionResult` type
  * aliases — derived locally via `z.infer` instead.
+ *
+ * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
+ * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") back
+ * Settings → Machines' per-machine Off/While-on-Power/Always card
+ * (`features/machine-settings/`) — both share the one `SleepInhibitState`
+ * result shape (`set` returns the post-apply state, no follow-up `get`
+ * needed).
+ *
+ * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
+ * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts")
+ * join the table for `features/run-panel/`: the read-only workspace config
+ * surface plus the long-lived, remotely start/stop-able `run.*` process.
+ * Same no-idempotency-cache reasoning as `git.status` for
+ * `workspace.getConfig`/`run.status` (read-only); `run.start`/`run.stop`/
+ * `run.setup` DO carry idempotency-key replay caching daemon-side, same as
+ * `git.commit`.
  */
 import {
   type AdoptListParamsSchema,
@@ -88,10 +104,23 @@ import {
   ProviderAccountResultSchema,
   type ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
+  type RunSetupParams,
+  RunSetupResultSchema,
+  type RunStartParams,
+  RunStartResultSchema,
+  type RunStatusParams,
+  RunStatusResultSchema,
+  type RunStopParams,
+  RunStopResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
+  type SleepInhibitGetParams,
+  type SleepInhibitSetParams,
+  SleepInhibitStateSchema,
   type SpawnParams,
   SpawnResultSchema,
+  type WorkspaceGetConfigParams,
+  WorkspaceGetConfigResultSchema,
   type WorkspaceRegisterParams,
   WorkspaceRegisterResultSchema,
 } from "@falcon/wire";
@@ -113,8 +142,15 @@ export type {
   GitRenameBranchParams,
   GitStatusParams,
   ProviderAccountParams,
+  RunSetupParams,
+  RunStartParams,
+  RunStatusParams,
+  RunStopParams,
   SlashCommandsListParams,
+  SleepInhibitGetParams,
+  SleepInhibitSetParams,
   SpawnParams,
+  WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
 };
 
@@ -144,6 +180,13 @@ export interface MachineRpcParams {
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
   resumeSession: ResumeSessionParams;
+  "sleepInhibit.get": SleepInhibitGetParams;
+  "sleepInhibit.set": SleepInhibitSetParams;
+  "workspace.getConfig": WorkspaceGetConfigParams;
+  "run.start": RunStartParams;
+  "run.stop": RunStopParams;
+  "run.status": RunStatusParams;
+  "run.setup": RunSetupParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -167,6 +210,13 @@ export interface MachineRpcResults {
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
   resumeSession: ResumeSessionResult;
+  "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
+  "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
+  "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
+  "run.start": import("@falcon/wire").RunStartResult;
+  "run.stop": import("@falcon/wire").RunStopResult;
+  "run.status": import("@falcon/wire").RunStatusResult;
+  "run.setup": import("@falcon/wire").RunSetupResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -191,6 +241,13 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
   resumeSession: ResumeSessionResultSchema,
+  "sleepInhibit.get": SleepInhibitStateSchema,
+  "sleepInhibit.set": SleepInhibitStateSchema,
+  "workspace.getConfig": WorkspaceGetConfigResultSchema,
+  "run.start": RunStartResultSchema,
+  "run.stop": RunStopResultSchema,
+  "run.status": RunStatusResultSchema,
+  "run.setup": RunSetupResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

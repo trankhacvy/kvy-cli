@@ -20,9 +20,11 @@ import { createTestAccount, createTestDb } from "../../../server/src/app/routes/
 import { buildServer } from "../../../server/src/app/server.js";
 import { writeCredentials } from "../auth/credentials.js";
 import type { Logger } from "../logger.js";
+import { readSettings } from "../persistence.js";
 import { createDaemonCommandDeps, type DaemonCommandDeps, runDaemonStartSync } from "./commands.js";
 import { createNotifyDaemonSessionStartedDeps, notifyDaemonSessionStarted } from "./notify.js";
 import type { LaunchedProcess, LaunchProcessOptions } from "./processLauncher.js";
+import { createSleepInhibitManager, type SleepInhibitChild } from "./sleepInhibit.js";
 import { readDaemonState } from "./state.js";
 
 const execFileAsync = promisify(execFile);
@@ -137,6 +139,15 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     };
   }
 
+  /** Fake sleep-inhibit child (docs/features/sleep-inhibit.md): never spawns a real `caffeinate` — forcing `platform: "darwin"` on the real `createSleepInhibitManager` exercises the real argv/state logic while this stands in for the OS process. */
+  function fakeSleepInhibitSpawnChild(): (argv: string[]) => SleepInhibitChild {
+    return (_argv: string[]) => ({
+      pid: 123_456,
+      kill: () => true,
+      onExit: () => {},
+    });
+  }
+
   async function waitFor<T>(fn: () => Promise<T | null | undefined>, timeoutMs = 8000): Promise<T> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
@@ -245,5 +256,100 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
       mode: "fork",
     });
     expect(adopted.sessionId).toBeTruthy();
+  });
+
+  it("sleepInhibit.set persists to settings.json and sleepInhibit.get reflects the applied state (docs/features/sleep-inhibit.md)", async () => {
+    // A fresh account/token — the shared `accountId`/`token` from `beforeAll`
+    // already owns a machine row from the prior test in this file (same
+    // db/pglite instance across every test here), and `db.query.machines
+    // .findFirst({ where: eq(accountId, ...) })` below would otherwise
+    // ambiguously match that OTHER test's row instead of this boot's own.
+    const account = await createTestAccount(db);
+    writeCredentials(
+      { token: account.token, masterSecretOrContentBundle: encodeBase64(masterSecret) },
+      homeDir,
+    );
+
+    const deps: DaemonCommandDeps = createDaemonCommandDeps({
+      homeDir,
+      logger: noopLogger(),
+      registerShutdownSignals: (onShutdown) => {
+        triggerShutdown = onShutdown;
+        return () => {};
+      },
+      isProcessAlive: () => true,
+      machineServerUrl: serverUrl,
+      resolveWorkspaceRoot: () => null,
+      resolveProviderSession: async () => null,
+      // Real `createSleepInhibitManager` logic (real argv table, real
+      // supported/active bookkeeping), but `platform` forced to "darwin" and
+      // `spawnChild` faked — never spawns a real `caffeinate` from this test
+      // process (this module's own header risk: "tests accidentally
+      // spawning real caffeinate").
+      createSleepInhibitManager: (managerDeps) =>
+        createSleepInhibitManager({
+          ...managerDeps,
+          platform: "darwin",
+          spawnChild: fakeSleepInhibitSpawnChild(),
+        }),
+    });
+
+    bootPromise = runDaemonStartSync(deps);
+    await waitFor(() => readDaemonState(homeDir));
+
+    const machineRow = await waitFor(() =>
+      db.query.machines.findFirst({
+        where: (m, { eq }) => eq(m.accountId, account.account.id),
+      }),
+    );
+    machineId = machineRow.id;
+    const contentSecretKey = deriveKeyTree(masterSecret).content.secretKey;
+    dek = unwrapDek(machineRow.dek, contentSecretKey);
+    expect(dek).not.toBeNull();
+
+    caller = ioClient(serverUrl, {
+      path: "/v1/stream",
+      transports: ["websocket"],
+      auth: { token: account.token },
+    });
+    await new Promise<void>((resolve) => caller.once("connect", () => resolve()));
+
+    // Boot re-apply defaults to "off" (no persisted mode yet) — this is the
+    // "not yet set" baseline, not a boot failure.
+    const initial = await callRpc<{
+      supported: boolean;
+      platform: string;
+      mode: string;
+      active: boolean;
+    }>("sleepInhibit.get", { idempotencyKey: "idem-sleep-get-1" });
+    expect(initial).toEqual({ supported: true, platform: "darwin", mode: "off", active: false });
+
+    const setResult = await callRpc<{
+      supported: boolean;
+      platform: string;
+      mode: string;
+      active: boolean;
+    }>("sleepInhibit.set", { idempotencyKey: "idem-sleep-set-1", mode: "always" });
+    expect(setResult).toEqual({
+      supported: true,
+      platform: "darwin",
+      mode: "always",
+      active: true,
+    });
+
+    // The set RPC's own handler persisted the mode to settings.json —
+    // proving the real `commands.ts` closure (not a test-local stand-in)
+    // actually wrote it, not just that the manager's in-memory state changed.
+    expect((await readSettings({ homeDir })).sleepInhibit).toBe("always");
+
+    // A follow-up get reflects the same post-apply state without needing
+    // another set.
+    const afterSet = await callRpc<{
+      supported: boolean;
+      platform: string;
+      mode: string;
+      active: boolean;
+    }>("sleepInhibit.get", { idempotencyKey: "idem-sleep-get-2" });
+    expect(afterSet).toEqual({ supported: true, platform: "darwin", mode: "always", active: true });
   });
 });

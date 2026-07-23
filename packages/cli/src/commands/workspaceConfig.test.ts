@@ -36,8 +36,10 @@ describe("runWorkspaceConfigCommand", () => {
     );
 
     expect(code).toBe(0);
-    expect(lines.join("")).toContain("base ref: develop");
-    expect(lines.join("")).toContain("remote:   (none)");
+    expect(lines.join("")).toContain("base ref:     develop");
+    expect(lines.join("")).toContain("remote:       (none)");
+    expect(lines.join("")).toContain("setup script: (none)");
+    expect(lines.join("")).toContain("run script:   (none)");
     expect(await readWorkspaceGitConfig(workspaceDir, { homeDir })).toEqual({
       baseRef: "develop",
     });
@@ -56,8 +58,8 @@ describe("runWorkspaceConfigCommand", () => {
       { workingDirectory: "/unused", persistenceOptions: { homeDir }, write: write2 },
     );
 
-    expect(lines.join("")).toContain("base ref: main");
-    expect(lines.join("")).toContain("remote:   upstream");
+    expect(lines.join("")).toContain("base ref:     main");
+    expect(lines.join("")).toContain("remote:       upstream");
   });
 
   it("defaults --directory to workingDirectory", async () => {
@@ -72,7 +74,7 @@ describe("runWorkspaceConfigCommand", () => {
     expect(await readWorkspaceGitConfig(workspaceDir, { homeDir })).toEqual({ baseRef: "main" });
   });
 
-  it("with no --base-ref/--remote, reads back the current config without writing", async () => {
+  it("with no --base-ref/--remote/--setup-script/--run-script, reads back the current config without writing", async () => {
     const { write: write1 } = collectWrites();
     await runWorkspaceConfigCommand(
       { baseRef: "main", remote: "origin", directory: workspaceDir },
@@ -86,11 +88,11 @@ describe("runWorkspaceConfigCommand", () => {
     );
 
     expect(code).toBe(0);
-    expect(lines.join("")).toContain("base ref: main");
-    expect(lines.join("")).toContain("remote:   origin");
+    expect(lines.join("")).toContain("base ref:     main");
+    expect(lines.join("")).toContain("remote:       origin");
   });
 
-  it("prints (none)/(none) for an unconfigured workspace", async () => {
+  it("prints (none) for every field on an unconfigured workspace", async () => {
     const { write, lines } = collectWrites();
 
     await runWorkspaceConfigCommand(
@@ -98,7 +100,46 @@ describe("runWorkspaceConfigCommand", () => {
       { workingDirectory: "/unused", persistenceOptions: { homeDir }, write },
     );
 
-    expect(lines.join("")).toContain("base ref: (none)");
-    expect(lines.join("")).toContain("remote:   (none)");
+    expect(lines.join("")).toContain("base ref:     (none)");
+    expect(lines.join("")).toContain("remote:       (none)");
+    expect(lines.join("")).toContain("setup script: (none)");
+    expect(lines.join("")).toContain("run script:   (none)");
+  });
+
+  it("sets setupScript/runScript and prints them", async () => {
+    const { write, lines } = collectWrites();
+
+    const code = await runWorkspaceConfigCommand(
+      { setupScript: "npm install", runScript: "npm run dev", directory: workspaceDir },
+      { workingDirectory: "/unused", persistenceOptions: { homeDir }, write },
+    );
+
+    expect(code).toBe(0);
+    expect(lines.join("")).toContain("setup script: npm install");
+    expect(lines.join("")).toContain("run script:   npm run dev");
+    expect(await readWorkspaceGitConfig(workspaceDir, { homeDir })).toEqual({
+      setupScript: "npm install",
+      runScript: "npm run dev",
+    });
+  });
+
+  it('clears a previously-set runScript via --run-script ""', async () => {
+    const { write: write1 } = collectWrites();
+    await runWorkspaceConfigCommand(
+      { setupScript: "npm install", runScript: "npm run dev", directory: workspaceDir },
+      { workingDirectory: "/unused", persistenceOptions: { homeDir }, write: write1 },
+    );
+
+    const { write: write2, lines } = collectWrites();
+    await runWorkspaceConfigCommand(
+      { runScript: "", directory: workspaceDir },
+      { workingDirectory: "/unused", persistenceOptions: { homeDir }, write: write2 },
+    );
+
+    expect(lines.join("")).toContain("setup script: npm install");
+    expect(lines.join("")).toContain("run script:   (none)");
+    expect(await readWorkspaceGitConfig(workspaceDir, { homeDir })).toEqual({
+      setupScript: "npm install",
+    });
   });
 });

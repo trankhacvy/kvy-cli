@@ -343,6 +343,114 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ inline: "const a = 1;\n", truncated: false });
   });
 
+  it("round-trips a workspace.getConfig call and result (docs/features/setup-run-scripts.md)", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({
+          baseRef: "main",
+          remote: "origin",
+          setupScript: "npm install",
+          runScript: "npm run dev",
+        }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("workspace.getConfig", {
+      idempotencyKey: "idem-10",
+      worktree: "/repo",
+    });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:workspace.getConfig",
+      "workspace.getConfig",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({
+      baseRef: "main",
+      remote: "origin",
+      setupScript: "npm install",
+      runScript: "npm run dev",
+    });
+  });
+
+  it("round-trips a run.start call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ started: true, method: "tmux", pid: 555, tmuxSessionName: "falcon-run-x" }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("run.start", {
+      idempotencyKey: "idem-11",
+      worktree: "/repo",
+    });
+
+    expect(result).toEqual({
+      started: true,
+      method: "tmux",
+      pid: 555,
+      tmuxSessionName: "falcon-run-x",
+    });
+  });
+
+  it("round-trips a run.status call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({
+          run: { state: "running", pid: 1, method: "tmux", startedAt: 1, logTail: "listening\n" },
+          setup: { state: "succeeded", exitCode: 0, startedAt: 1, finishedAt: 2 },
+        }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("run.status", {
+      idempotencyKey: "idem-12",
+      worktree: "/repo",
+    });
+
+    expect(result).toEqual({
+      run: { state: "running", pid: 1, method: "tmux", startedAt: 1, logTail: "listening\n" },
+      setup: { state: "succeeded", exitCode: 0, startedAt: 1, finishedAt: 2 },
+    });
+  });
+
+  it("round-trips a run.stop call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ stopped: true, wasRunning: true }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("run.stop", { idempotencyKey: "idem-13", worktree: "/repo" });
+    expect(result).toEqual({ stopped: true, wasRunning: true });
+  });
+
+  it("round-trips a run.setup call and result", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({ ok: true, result: box({ started: true }) })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("run.setup", { idempotencyKey: "idem-14", worktree: "/repo" });
+    expect(result).toEqual({ started: true });
+  });
+
   it("throws MachineRpcError when the transport reports failure", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({ ok: false, error: "target-offline" })),
@@ -378,6 +486,49 @@ describe("createMachineRpcClient", () => {
     await expect(
       client.call("git.push", { idempotencyKey: "idem-8", worktree: "/repo" }),
     ).rejects.toThrow("fatal: could not read Username for 'https://...'");
+  });
+
+  it("round-trips sleepInhibit.get and sleepInhibit.set calls and results (docs/features/sleep-inhibit.md)", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ supported: true, platform: "darwin", mode: "always", active: true }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const getResult = await client.call("sleepInhibit.get", { idempotencyKey: "idem-9" });
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:sleepInhibit.get",
+      "sleepInhibit.get",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(getResult).toEqual({
+      supported: true,
+      platform: "darwin",
+      mode: "always",
+      active: true,
+    });
+
+    const setResult = await client.call("sleepInhibit.set", {
+      idempotencyKey: "idem-10",
+      mode: "always",
+    });
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:sleepInhibit.set",
+      "sleepInhibit.set",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(setResult).toEqual({
+      supported: true,
+      platform: "darwin",
+      mode: "always",
+      active: true,
+    });
   });
 
   it("throws MachineRpcError when the sealed result fails to decrypt", async () => {

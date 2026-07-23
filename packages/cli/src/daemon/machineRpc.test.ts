@@ -172,11 +172,39 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:sleepInhibit.get" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:sleepInhibit.set" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
       payload: { target: "m:mach_1:adopt.mirror" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:workspace.getConfig" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:run.start" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:run.stop" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:run.status" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:run.setup" },
     });
   });
 
@@ -1082,6 +1110,96 @@ describe("registerMachineRpcHandlers", () => {
     });
   });
 
+  describe("sleepInhibit.get / sleepInhibit.set (docs/features/sleep-inhibit.md)", () => {
+    it("sleepInhibit.get decrypts params, calls getSleepInhibit, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getSleepInhibit = vi.fn(async () => ({
+        supported: true,
+        platform: "darwin",
+        mode: "always" as const,
+        active: true,
+      }));
+      register(socket, { getSleepInhibit });
+
+      const params = { idempotencyKey: "idem_sleep_get_1" };
+      const response = await callAndAwaitAck(socket, "sleepInhibit.get", seal(params, DEK));
+
+      expect(getSleepInhibit).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        supported: true,
+        platform: "darwin",
+        mode: "always",
+        active: true,
+      });
+    });
+
+    it("sleepInhibit.set decrypts params, calls setSleepInhibit, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const setSleepInhibit = vi.fn(async () => ({
+        supported: true,
+        platform: "darwin",
+        mode: "onPower" as const,
+        active: true,
+      }));
+      register(socket, { setSleepInhibit });
+
+      const params = { idempotencyKey: "idem_sleep_set_1", mode: "onPower" as const };
+      const response = await callAndAwaitAck(socket, "sleepInhibit.set", seal(params, DEK));
+
+      expect(setSleepInhibit).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        supported: true,
+        platform: "darwin",
+        mode: "onPower",
+        active: true,
+      });
+    });
+
+    it("rejects an invalid mode via schema validation before the handler ever runs", async () => {
+      const socket = new FakeSocket();
+      const setSleepInhibit = vi.fn();
+      register(socket, { setSleepInhibit });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "sleepInhibit.set",
+        seal({ idempotencyKey: "idem_sleep_set_2", mode: "forever" }, DEK),
+      );
+
+      expect(setSleepInhibit).not.toHaveBeenCalled();
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("defaults to an honest unsupported stub when no manager is wired", async () => {
+      const socket = new FakeSocket();
+      register(socket); // no getSleepInhibit/setSleepInhibit override
+
+      const getResponse = await callAndAwaitAck(
+        socket,
+        "sleepInhibit.get",
+        seal({ idempotencyKey: "idem_sleep_get_2" }, DEK),
+      );
+      expect(open(getResponse, DEK)).toEqual({
+        supported: false,
+        platform: process.platform,
+        mode: "off",
+        active: false,
+      });
+
+      const setResponse = await callAndAwaitAck(
+        socket,
+        "sleepInhibit.set",
+        seal({ idempotencyKey: "idem_sleep_set_3", mode: "always" }, DEK),
+      );
+      expect(open(setResponse, DEK)).toEqual({
+        supported: false,
+        platform: process.platform,
+        mode: "off",
+        active: false,
+      });
+    });
+  });
+
   describe("adopt.take", () => {
     function adoptTakeParams(overrides: Record<string, unknown> = {}) {
       return {
@@ -1247,6 +1365,309 @@ describe("registerMachineRpcHandlers", () => {
         seal({ providerSessionId: "p1" }, DEK), // missing idempotencyKey
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+  });
+
+  describe("workspace.getConfig (docs/features/setup-run-scripts.md)", () => {
+    it("decrypts params, calls getWorkspaceConfig, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getWorkspaceConfig = vi.fn(async () => ({
+        baseRef: "main",
+        remote: "origin",
+        setupScript: "npm install",
+        runScript: "npm run dev",
+      }));
+      register(socket, { getWorkspaceConfig });
+
+      const params = { idempotencyKey: "idem_ws_config_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "workspace.getConfig", seal(params, DEK));
+
+      expect(getWorkspaceConfig).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        baseRef: "main",
+        remote: "origin",
+        setupScript: "npm install",
+        runScript: "npm run dev",
+      });
+    });
+
+    it("has no idempotency-key replay — a second call always calls getWorkspaceConfig again (read-only)", async () => {
+      const socket = new FakeSocket();
+      const getWorkspaceConfig = vi.fn(async () => ({}));
+      register(socket, { getWorkspaceConfig });
+
+      const params = { idempotencyKey: "idem_ws_config_2", worktree: "/repo" };
+      await callAndAwaitAck(socket, "workspace.getConfig", seal(params, DEK));
+      await callAndAwaitAck(socket, "workspace.getConfig", seal(params, DEK));
+
+      expect(getWorkspaceConfig).toHaveBeenCalledTimes(2);
+    });
+
+    it("replies with a sealed error when getWorkspaceConfig throws (e.g. unregistered worktree)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getWorkspaceConfig: vi.fn(async () => {
+          throw new Error("worktree is not inside a registered workspace: /repo");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "workspace.getConfig",
+        seal({ idempotencyKey: "idem_ws_config_3", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "worktree is not inside a registered workspace: /repo",
+      });
+    });
+  });
+
+  describe("run.start", () => {
+    it("decrypts params, calls runStart, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const runStart = vi.fn(async () => ({ started: true, method: "tmux" as const, pid: 555 }));
+      register(socket, { runStart });
+
+      const params = { idempotencyKey: "idem_run_start_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "run.start", seal(params, DEK));
+
+      expect(runStart).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ started: true, method: "tmux", pid: 555 });
+    });
+
+    it("replies with a sealed error when runStart throws (e.g. no run script configured)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        runStart: vi.fn(async () => {
+          throw new Error("no run script configured for this workspace: /repo");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "run.start",
+        seal({ idempotencyKey: "idem_run_start_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "no run script configured for this workspace: /repo",
+      });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of starting again", async () => {
+      const socket = new FakeSocket();
+      const runStart = vi.fn(async () => ({ started: true, method: "detached" as const, pid: 1 }));
+      register(socket, { runStart });
+
+      const params = { idempotencyKey: "idem_run_start_3", worktree: "/repo" };
+      const first = await callAndAwaitAck(socket, "run.start", seal(params, DEK));
+      const second = await callAndAwaitAck(socket, "run.start", seal(params, DEK));
+
+      expect(runStart).toHaveBeenCalledOnce();
+      expect(open(first, DEK)).toEqual({ started: true, method: "detached", pid: 1 });
+      expect(open(second, DEK)).toEqual({ started: true, method: "detached", pid: 1 });
+    });
+
+    it("collapses two concurrent calls with DIFFERENT idempotencyKeys for the SAME worktree into a single launch attempt", async () => {
+      const socket = new FakeSocket();
+      let resolveRunStart!: (value: { started: true }) => void;
+      const runStart = vi.fn(
+        () =>
+          new Promise<{ started: true }>((resolve) => {
+            resolveRunStart = resolve;
+          }),
+      );
+      register(socket, { runStart });
+
+      const fromDeviceA = { idempotencyKey: "idem_device_a", worktree: "/repo" };
+      const fromDeviceB = { idempotencyKey: "idem_device_b", worktree: "/repo" };
+
+      const responseA = callAndAwaitAck(socket, "run.start", seal(fromDeviceA, DEK));
+      const responseB = callAndAwaitAck(socket, "run.start", seal(fromDeviceB, DEK));
+
+      // Only one real launch attempt is allowed to happen — the second device
+      // joins the first's in-flight attempt instead of racing its own
+      // independent `run.start`.
+      expect(runStart).toHaveBeenCalledTimes(1);
+      expect(runStart).toHaveBeenCalledWith(fromDeviceA);
+
+      resolveRunStart({ started: true });
+      const [resultA, resultB] = await Promise.all([responseA, responseB]);
+
+      expect(open(resultA, DEK)).toEqual({ started: true });
+      expect(open(resultB, DEK)).toEqual({ started: true });
+      expect(runStart).toHaveBeenCalledTimes(1);
+    });
+
+    it("does NOT collapse concurrent calls for DIFFERENT worktrees — unrelated run.start calls still run independently", async () => {
+      const socket = new FakeSocket();
+      const runStart = vi.fn(async (params: { worktree: string }) => ({
+        started: true,
+        pid: params.worktree === "/repo-a" ? 1 : 2,
+      }));
+      register(socket, { runStart });
+
+      const responseA = callAndAwaitAck(
+        socket,
+        "run.start",
+        seal({ idempotencyKey: "idem_a", worktree: "/repo-a" }, DEK),
+      );
+      const responseB = callAndAwaitAck(
+        socket,
+        "run.start",
+        seal({ idempotencyKey: "idem_b", worktree: "/repo-b" }, DEK),
+      );
+
+      const [resultA, resultB] = await Promise.all([responseA, responseB]);
+
+      expect(runStart).toHaveBeenCalledTimes(2);
+      expect(open(resultA, DEK)).toEqual({ started: true, pid: 1 });
+      expect(open(resultB, DEK)).toEqual({ started: true, pid: 2 });
+    });
+  });
+
+  describe("run.stop", () => {
+    it("decrypts params, calls runStop, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const runStop = vi.fn(async () => ({ stopped: true, wasRunning: true }));
+      register(socket, { runStop });
+
+      const params = { idempotencyKey: "idem_run_stop_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "run.stop", seal(params, DEK));
+
+      expect(runStop).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ stopped: true, wasRunning: true });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of stopping again", async () => {
+      const socket = new FakeSocket();
+      const runStop = vi.fn(async () => ({ stopped: true, wasRunning: true }));
+      register(socket, { runStop });
+
+      const params = { idempotencyKey: "idem_run_stop_2", worktree: "/repo" };
+      await callAndAwaitAck(socket, "run.stop", seal(params, DEK));
+      await callAndAwaitAck(socket, "run.stop", seal(params, DEK));
+
+      expect(runStop).toHaveBeenCalledOnce();
+    });
+
+    it("replies with a sealed error when runStop throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        runStop: vi.fn(async () => {
+          throw new Error("worktree is not inside a registered workspace: /repo");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "run.stop",
+        seal({ idempotencyKey: "idem_run_stop_3", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "worktree is not inside a registered workspace: /repo",
+      });
+    });
+  });
+
+  describe("run.status", () => {
+    it("decrypts params, calls runStatus, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const runStatus = vi.fn(async () => ({
+        run: { state: "running" as const, pid: 1, method: "tmux" as const, startedAt: 1 },
+        setup: { state: "succeeded" as const, exitCode: 0, startedAt: 1, finishedAt: 2 },
+      }));
+      register(socket, { runStatus });
+
+      const params = { idempotencyKey: "idem_run_status_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "run.status", seal(params, DEK));
+
+      expect(runStatus).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        run: { state: "running", pid: 1, method: "tmux", startedAt: 1 },
+        setup: { state: "succeeded", exitCode: 0, startedAt: 1, finishedAt: 2 },
+      });
+    });
+
+    it("has no idempotency-key replay — a second call always calls runStatus again (read-only)", async () => {
+      const socket = new FakeSocket();
+      const runStatus = vi.fn(async () => ({
+        run: { state: "none" as const },
+        setup: { state: "not-run" as const },
+      }));
+      register(socket, { runStatus });
+
+      const params = { idempotencyKey: "idem_run_status_2", worktree: "/repo" };
+      await callAndAwaitAck(socket, "run.status", seal(params, DEK));
+      await callAndAwaitAck(socket, "run.status", seal(params, DEK));
+
+      expect(runStatus).toHaveBeenCalledTimes(2);
+    });
+
+    it("replies with a sealed error when runStatus throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        runStatus: vi.fn(async () => {
+          throw new Error("worktree is not inside a registered workspace: /repo");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "run.status",
+        seal({ idempotencyKey: "idem_run_status_3", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "worktree is not inside a registered workspace: /repo",
+      });
+    });
+  });
+
+  describe("run.setup", () => {
+    it("decrypts params, calls runSetup, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const runSetup = vi.fn(async () => ({ started: true }));
+      register(socket, { runSetup });
+
+      const params = { idempotencyKey: "idem_run_setup_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "run.setup", seal(params, DEK));
+
+      expect(runSetup).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ started: true });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of re-running setup", async () => {
+      const socket = new FakeSocket();
+      const runSetup = vi.fn(async () => ({ started: true }));
+      register(socket, { runSetup });
+
+      const params = { idempotencyKey: "idem_run_setup_2", worktree: "/repo" };
+      await callAndAwaitAck(socket, "run.setup", seal(params, DEK));
+      await callAndAwaitAck(socket, "run.setup", seal(params, DEK));
+
+      expect(runSetup).toHaveBeenCalledOnce();
+    });
+
+    it("replies with a sealed error when runSetup throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        runSetup: vi.fn(async () => {
+          throw new Error("worktree is not inside a registered workspace: /repo");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "run.setup",
+        seal({ idempotencyKey: "idem_run_setup_3", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "worktree is not inside a registered workspace: /repo",
+      });
     });
   });
 

@@ -581,6 +581,51 @@ export const AdoptMirrorResultSchema = z.object({
 });
 export type AdoptMirrorResult = z.infer<typeof AdoptMirrorResultSchema>;
 
+// `sleepInhibit.get`/`sleepInhibit.set` machine RPCs (docs/features/
+// sleep-inhibit.md, docs/competitive-notes-omnara.md #12 "Sleep-inhibit
+// control"): a per-machine tri-state policy that makes the daemon hold an
+// OS "don't sleep" assertion via `caffeinate` (macOS only for MVP) so a Mac
+// won't sleep mid-session. `"off"` holds no assertion; `"onPower"` maps to
+// `caffeinate -s` (system-sleep prevention, but macOS itself only honors
+// `-s` while on AC power — no battery polling needed daemon-side);
+// `"always"` maps to `caffeinate -i` (idle-sleep prevention regardless of
+// power source). Both flags are always paired with `-w <daemon pid>`
+// (`daemon/sleepInhibit.ts`) so the OS itself releases the assertion the
+// instant the daemon process exits — the leak-safety guard, in place of any
+// `doctor`/`markers` reaping. `idempotencyKey` is carried for family
+// uniformity only (this module's header comment): `get` is a pure read,
+// `set` is naturally idempotent (applying the same mode twice converges to
+// the same single child), same rationale as `provider.account`/`git.status`.
+export const SleepInhibitModeSchema = z.enum(["off", "onPower", "always"]);
+export type SleepInhibitMode = z.infer<typeof SleepInhibitModeSchema>;
+
+// Shared result shape for BOTH RPCs — `set` returns the post-apply state so
+// the caller needs no follow-up `get`. `supported: false` is the honest
+// answer on any non-darwin `platform` (the RPC never spawns a real
+// assertion there, and `mode`/`active` are reported as `"off"`/`false`
+// regardless of the requested mode). `active` reports whether a caffeinate
+// child is currently live — `false` when `mode` is `"off"`, when
+// unsupported, or when the child failed to spawn (a Mac missing
+// `/usr/bin/caffeinate` is broken-but-survivable, never thrown).
+export const SleepInhibitStateSchema = z.object({
+  supported: z.boolean(),
+  platform: z.string(),
+  mode: SleepInhibitModeSchema,
+  active: z.boolean(),
+});
+export type SleepInhibitState = z.infer<typeof SleepInhibitStateSchema>;
+
+export const SleepInhibitGetParamsSchema = z.object({
+  idempotencyKey: z.string(),
+});
+export type SleepInhibitGetParams = z.infer<typeof SleepInhibitGetParamsSchema>;
+
+export const SleepInhibitSetParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  mode: SleepInhibitModeSchema,
+});
+export type SleepInhibitSetParams = z.infer<typeof SleepInhibitSetParamsSchema>;
+
 // ---------------------------------------------------------------------------
 // Session RPCs — registered by the session process (design §4.4)
 // ---------------------------------------------------------------------------
@@ -661,3 +706,109 @@ export const SetModeResultSchema = z.object({
   // ACP call with no separate echo to report) — `ok` alone stays authoritative there.
   observedMode: PermissionModeSchema.optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Per-workspace Setup/Run scripts (docs/features/setup-run-scripts.md,
+// docs/competitive-notes-omnara.md #7): a persisted "Setup script" (runs
+// once per freshly-created worktree, e.g. `npm install`) and "Run script"
+// (a one-click, long-lived dev-server-style process, e.g. `npm run dev`),
+// both defined CLI-only (`falcon workspace config --setup-script/
+// --run-script`, design §12's local-consent boundary — no RPC params
+// schema below ever carries a script string, only a `worktree` path the
+// daemon resolves back to its own on-disk config). `workspace.getConfig` is
+// the one read-only addition that lets the web Workspace Settings UI *see*
+// the configured scripts; `run.*` is the new long-lived run-process
+// subsystem, deliberately decoupled from the reserved (and still unbuilt)
+// `preview:*` tunnel namespace (`reserved.ts`).
+// ---------------------------------------------------------------------------
+
+export const WorkspaceGetConfigParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type WorkspaceGetConfigParams = z.infer<typeof WorkspaceGetConfigParamsSchema>;
+
+export const WorkspaceGetConfigResultSchema = z.object({
+  baseRef: z.string().optional(),
+  remote: z.string().optional(),
+  setupScript: z.string().optional(),
+  runScript: z.string().optional(),
+});
+export type WorkspaceGetConfigResult = z.infer<typeof WorkspaceGetConfigResultSchema>;
+
+// `run.start`/`run.stop`/`run.status`/`run.setup` (docs/features/
+// setup-run-scripts.md Phase 3): the daemon's long-lived run-process
+// subsystem. `worktree` resolves (via the registered-workspace authorizer,
+// same as `git.commit`/`git.push`/`git.renameBranch`) to the containing
+// workspace whose `runScript`/`setupScript` config applies — a
+// `.worktrees/<branch>` directory is never itself a config key.
+export const RunStartParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunStartParams = z.infer<typeof RunStartParamsSchema>;
+
+export const RunStartResultSchema = z.object({
+  started: z.boolean(),
+  alreadyRunning: z.boolean().optional(),
+  method: z.enum(["tmux", "detached"]).optional(),
+  pid: z.number().optional(),
+  tmuxSessionName: z.string().optional(),
+});
+export type RunStartResult = z.infer<typeof RunStartResultSchema>;
+
+export const RunStopParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunStopParams = z.infer<typeof RunStopParamsSchema>;
+
+export const RunStopResultSchema = z.object({
+  stopped: z.boolean(),
+  wasRunning: z.boolean(),
+});
+export type RunStopResult = z.infer<typeof RunStopResultSchema>;
+
+export const RunStatusParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunStatusParams = z.infer<typeof RunStatusParamsSchema>;
+
+// `run`/`setup` are each reported independently — a run-script process can
+// be live while a setup re-run is in flight (e.g. "Re-run setup" while the
+// dev server is still up from before). `logTail` is the last few KB of the
+// respective log file (`run-<hash>.log`/`setup-<hash>.log`), read tolerant
+// of a missing file (nothing has ever run yet) — same "no blob subsystem
+// yet, inline only" contract as `git.diff`'s `inline`/`truncated` fields,
+// just without a `truncated` flag since a tail is deliberately partial by
+// design, not by a size cutoff being hit.
+export const RunStatusResultSchema = z.object({
+  run: z.object({
+    state: z.enum(["running", "stopped", "none"]),
+    pid: z.number().optional(),
+    method: z.enum(["tmux", "detached"]).optional(),
+    startedAt: z.number().optional(),
+    logTail: z.string().optional(),
+  }),
+  setup: z.object({
+    state: z.enum(["not-run", "running", "succeeded", "failed"]),
+    exitCode: z.number().optional(),
+    startedAt: z.number().optional(),
+    finishedAt: z.number().optional(),
+    logTail: z.string().optional(),
+  }),
+});
+export type RunStatusResult = z.infer<typeof RunStatusResultSchema>;
+
+export const RunSetupParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type RunSetupParams = z.infer<typeof RunSetupParamsSchema>;
+
+export const RunSetupResultSchema = z.object({
+  started: z.boolean(),
+  alreadyRunning: z.boolean().optional(),
+});
+export type RunSetupResult = z.infer<typeof RunSetupResultSchema>;
