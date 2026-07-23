@@ -159,6 +159,44 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ items: [{ providerSessionId: "prov-1", lastActivityAt: 1_000 }] });
   });
 
+  it("round-trips a resumeSession call and result (docs/features/session-lifecycle-actions.md Phase 6 — Restart)", async () => {
+    const rpcCall = vi.fn(
+      async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
+        ok: true,
+        result: box({ ok: true }),
+      }),
+    );
+    const client = createMachineRpcClient({
+      socket: fakeSocket(rpcCall),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    const result = await client.call("resumeSession", { sessionId: "sess-1" });
+
+    expect(rpcCall).toHaveBeenCalledWith(
+      "m:mach-1:resumeSession",
+      "resumeSession",
+      expect.objectContaining({ t: "enc", v: 1 }),
+    );
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("surfaces resumeSession's handler-error verbatim (e.g. a session not in the daemon's durable registry)", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ ok: false, error: "session sess-1 is not tracked by this daemon" }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    await expect(client.call("resumeSession", { sessionId: "sess-1" })).rejects.toThrow(
+      "session sess-1 is not tracked by this daemon",
+    );
+  });
+
   it("round-trips an adopt.take call and result", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({

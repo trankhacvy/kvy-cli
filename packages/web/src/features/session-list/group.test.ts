@@ -11,6 +11,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
     provider: "claude",
     status: "active",
     updatedAt: 0,
+    pinned: false,
     items: [],
     attention: null,
     ...overrides,
@@ -68,6 +69,61 @@ describe("groupSessionsByWorkspace", () => {
 
   it("returns an empty array for an empty snapshot", () => {
     expect(groupSessionsByWorkspace({ workspaces: [], machines: [], sessions: [] })).toEqual([]);
+  });
+
+  it("sorts pinned sessions before unpinned ones, ahead of the updatedAt ordering", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [{ id: "w1", name: "falcon" }],
+      machines: [],
+      sessions: [
+        session({ id: "unpinned-new", workspaceId: "w1", updatedAt: 100, pinned: false }),
+        session({ id: "pinned-old", workspaceId: "w1", updatedAt: 1, pinned: true }),
+        session({ id: "unpinned-old", workspaceId: "w1", updatedAt: 2, pinned: false }),
+        session({ id: "pinned-new", workspaceId: "w1", updatedAt: 50, pinned: true }),
+      ],
+    };
+    const groups = groupSessionsByWorkspace(snapshot);
+    expect(groups[0]?.sessions.map((s) => s.id)).toEqual([
+      "pinned-new",
+      "pinned-old",
+      "unpinned-new",
+      "unpinned-old",
+    ]);
+  });
+
+  it("applies pinned-first ordering to the ungrouped bucket too", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [],
+      machines: [],
+      sessions: [
+        session({ id: "unpinned", workspaceId: null, updatedAt: 10, pinned: false }),
+        session({ id: "pinned", workspaceId: null, updatedAt: 1, pinned: true }),
+      ],
+    };
+    const groups = groupSessionsByWorkspace(snapshot);
+    expect(groups[0]?.sessions.map((s) => s.id)).toEqual(["pinned", "unpinned"]);
+  });
+
+  it("orders groups by their most recently active session even when pinning reorders that session out of slot 0", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [
+        { id: "a", name: "workspace-a" },
+        { id: "b", name: "workspace-b" },
+      ],
+      machines: [],
+      sessions: [
+        // workspace a: has a very recent unpinned session (5000), plus an old pinned one (100).
+        session({ id: "a-pinned-old", workspaceId: "a", updatedAt: 100, pinned: true }),
+        session({ id: "a-unpinned-new", workspaceId: "a", updatedAt: 5000, pinned: false }),
+        // workspace b: only a moderately recent unpinned session (3000).
+        session({ id: "b-unpinned", workspaceId: "b", updatedAt: 3000, pinned: false }),
+      ],
+    };
+    const groups = groupSessionsByWorkspace(snapshot);
+    // workspace a has the most recently active session overall (5000 > 3000)
+    // so it must still sort first at the GROUP level, even though its
+    // first SESSION (post pinned-first sort) is the old pinned one.
+    expect(groups.map((g) => g.workspace.id)).toEqual(["a", "b"]);
   });
 
   it("omits a workspace that has no sessions", () => {

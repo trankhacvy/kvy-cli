@@ -1,6 +1,7 @@
 "use client";
 
-import { Archive, CircleStop, MoreHorizontal, Trash2 } from "lucide-react";
+import type { SessionRow } from "@falcon/wire";
+import { Archive, CircleStop, MoreHorizontal, Pencil, Pin, RotateCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,7 +21,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionControl } from "@/features/session-control";
-import { useArchiveSessionMutation, useDeleteSessionMutation } from "@/lib/use-session-lifecycle";
+import { RenameSessionDialog } from "@/features/session-list/components/rename-session-dialog";
+import { RestartSessionDialog } from "@/features/session-list/components/restart-session-dialog";
+import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
+import {
+  useArchiveSessionMutation,
+  useDeleteSessionMutation,
+  useRestoreSessionMutation,
+} from "@/lib/use-session-lifecycle";
+import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import {
   initialStopSessionDialogState,
   resetStopSessionDialogState,
@@ -42,18 +51,41 @@ import {
  */
 export function SessionActionsMenu({
   sessionId,
+  title,
+  status,
+  machineId,
+  machineOnline,
   disabled = false,
 }: {
   sessionId: string;
+  /** Decrypted session title (`useSessionTitle`), for the Rename dialog's
+   * prefill — this menu has no other source of it. */
+  title: string;
+  /** The session row's own lifecycle status — swaps Archive for Restore
+   * once a row has already been marked done (docs/features/
+   * session-lifecycle-actions.md Phase 5). */
+  status: SessionRow["status"];
+  /** The session's owning machine id, and whether it's currently online —
+   * Restart's enable condition (Phase 6). `null`/`false` when not yet known
+   * or there's no owning machine. */
+  machineId: string | null;
+  machineOnline: boolean;
   disabled?: boolean;
 }) {
   const router = useRouter();
   const { actions } = useSessionControl();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
+  const [restartOpen, setRestartOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
+  const restoreMutation = useRestoreSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
+  const pinMutation = useSessionMetadataPatchMutation(sessionId);
+  const archived = status === "archived";
+  const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
+  const restartReason = restartDisabledReason({ machineId, machineOnline, status });
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -77,19 +109,52 @@ export function SessionActionsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+            <Pencil className="size-4" />
+            Rename
+          </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={archiveMutation.isPending}
+            disabled={pinMutation.isPending}
             onSelect={() =>
-              archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+              pinMutation.mutate((current) => ({ ...current, pinned: !(current.pinned === true) }))
             }
           >
-            <Archive className="size-4" />
-            Archive
+            <Pin className="size-4" />
+            Pin / Unpin
           </DropdownMenuItem>
+          {archived ? (
+            <DropdownMenuItem
+              disabled={restoreMutation.isPending}
+              onSelect={() => restoreMutation.mutate(sessionId)}
+            >
+              <Archive className="size-4" />
+              Restore
+            </DropdownMenuItem>
+          ) : (
+            <DropdownMenuItem
+              disabled={archiveMutation.isPending}
+              onSelect={() =>
+                archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+              }
+            >
+              <Archive className="size-4" />
+              Archive
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem disabled={disabled} onSelect={() => setStopOpen(true)}>
             <CircleStop className="size-4" />
             End session
           </DropdownMenuItem>
+          {!archived && (
+            <DropdownMenuItem
+              disabled={!restartEnabled}
+              title={restartReason ?? undefined}
+              onSelect={() => setRestartOpen(true)}
+            >
+              <RotateCw className="size-4" />
+              Restart
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
             <Trash2 className="size-4" />
@@ -97,6 +162,23 @@ export function SessionActionsMenu({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <RenameSessionDialog
+        sessionId={sessionId}
+        currentTitle={title}
+        open={renameOpen}
+        onOpenChange={setRenameOpen}
+      />
+
+      {machineId !== null && (
+        <RestartSessionDialog
+          machineId={machineId}
+          sessionId={sessionId}
+          machineName={null}
+          open={restartOpen}
+          onOpenChange={setRestartOpen}
+        />
+      )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

@@ -46,6 +46,15 @@
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
  *
+ * `resumeSession` (docs/features/session-lifecycle-actions.md Phase 6 —
+ * Restart) drives the daemon's `resumeSession` RPC (`daemon/resumeSession.ts`
+ * — kills any still-live process for the session, then re-spawns it with
+ * `FALCON_RECONNECT_*` env). The daemon side has been registered since the
+ * spawn-RPC task; this is only the caller-side registry entry, structural
+ * clone of `spawn`'s own listing above. Like `adopt.list`, `@falcon/wire`
+ * exports no paired `ResumeSessionParams`/`ResumeSessionResult` type
+ * aliases — derived locally via `z.infer` instead.
+ *
  * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
  * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") back
  * Settings → Machines' per-machine Off/While-on-Power/Always card
@@ -93,6 +102,8 @@ import {
   GitStatusResultSchema,
   type ProviderAccountParams,
   ProviderAccountResultSchema,
+  type ResumeSessionParamsSchema,
+  ResumeSessionResultSchema,
   type RunSetupParams,
   RunSetupResultSchema,
   type RunStartParams,
@@ -145,6 +156,8 @@ export type {
 
 export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
 export type AdoptListResult = z.infer<typeof AdoptListResultSchema>;
+export type ResumeSessionParams = z.infer<typeof ResumeSessionParamsSchema>;
+export type ResumeSessionResult = z.infer<typeof ResumeSessionResultSchema>;
 
 /** Params shape per method. */
 export interface MachineRpcParams {
@@ -166,6 +179,7 @@ export interface MachineRpcParams {
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
+  resumeSession: ResumeSessionParams;
   "sleepInhibit.get": SleepInhibitGetParams;
   "sleepInhibit.set": SleepInhibitSetParams;
   "workspace.getConfig": WorkspaceGetConfigParams;
@@ -195,6 +209,7 @@ export interface MachineRpcResults {
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
+  resumeSession: ResumeSessionResult;
   "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
   "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
   "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
@@ -225,6 +240,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
+  resumeSession: ResumeSessionResultSchema,
   "sleepInhibit.get": SleepInhibitStateSchema,
   "sleepInhibit.set": SleepInhibitStateSchema,
   "workspace.getConfig": WorkspaceGetConfigResultSchema,

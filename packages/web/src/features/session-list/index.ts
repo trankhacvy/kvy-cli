@@ -1,3 +1,4 @@
+export { CompletedSessionsScreen } from "./components/completed-sessions-screen";
 export { MachineBadge } from "./components/machine-badge";
 export { SessionCard } from "./components/session-card";
 export { SessionListSkeleton } from "./components/session-list-skeleton";

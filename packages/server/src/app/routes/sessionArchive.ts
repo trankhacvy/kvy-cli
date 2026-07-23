@@ -1,3 +1,4 @@
+import { type SessionStatus, SessionStatusSchema } from "@falcon/wire";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -8,6 +9,7 @@ import type { EventRouterPort } from "../events/eventRouter.js";
 import { NotFoundSchema, SessionIdParamsSchema } from "./shared.js";
 
 const ArchiveResponseSchema = z.object({ status: z.literal("archived") });
+const UnarchiveResponseSchema = z.object({ status: SessionStatusSchema });
 const DeleteResponseSchema = z.object({});
 
 /**
@@ -84,6 +86,73 @@ export function buildSessionArchiveRoutes(
         }
 
         return { status: "archived" as const };
+      },
+    );
+
+    // `POST /v1/sessions/:id/unarchive` — Restore, the inverse of Mark done
+    // (docs/features/session-lifecycle-actions.md Phase 1). Same idempotent,
+    // no-CAS shape as archive above: flipping `archived` -> `active` is only
+    // ever a single-user action, so there's no legitimate concurrent writer
+    // to race. Restore always lands on "active" rather than reconstructing
+    // whatever status preceded the archive (that prior status isn't
+    // persisted anywhere) — a documented simplification, not a bug; a
+    // non-archived row is left untouched and the route honestly reports its
+    // current status instead of fabricating "active".
+    app.post(
+      "/v1/sessions/:id/unarchive",
+      {
+        preHandler: app.authenticate,
+        config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+        schema: {
+          params: SessionIdParamsSchema,
+          response: { 200: UnarchiveResponseSchema, 404: NotFoundSchema },
+        },
+      },
+      async (req, reply) => {
+        const accountId = req.accountId;
+        const { id } = req.params;
+
+        const outcome = await db.transaction(async (tx) => {
+          const session = await tx.query.sessions.findFirst({
+            where: and(eq(sessions.id, id), eq(sessions.accountId, accountId)),
+          });
+          if (!session) return { outcome: "not-found" as const };
+
+          // Idempotent no-op — a retried POST must not bump headerSeq or fan
+          // out a second time, and unarchiving a non-archived row (e.g.
+          // "failed") must not touch it at all.
+          if (session.status !== "archived") {
+            return { outcome: "not-archived" as const, status: session.status as SessionStatus };
+          }
+
+          await tx
+            .update(sessions)
+            .set({ status: "active", updatedAt: new Date() })
+            .where(and(eq(sessions.id, id), eq(sessions.accountId, accountId)));
+
+          const headerSeq = await allocHeaderSeq(tx, accountId);
+          return { outcome: "updated" as const, headerSeq };
+        });
+
+        if (outcome.outcome === "not-found") return reply.code(404).send({});
+
+        if (outcome.outcome === "not-archived") {
+          return { status: outcome.status };
+        }
+
+        reply.raw.once("finish", () => {
+          eventRouter.emitUpdate({
+            accountId,
+            recipientFilter: { type: "all-interested-in-session", sessionId: id },
+            payload: {
+              seq: outcome.headerSeq,
+              ts: Date.now(),
+              body: { t: "session-update", id, status: "active" },
+            },
+          });
+        });
+
+        return { status: "active" as const };
       },
     );
 
