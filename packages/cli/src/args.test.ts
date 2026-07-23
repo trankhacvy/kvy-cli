@@ -226,6 +226,10 @@ describe("parseArgs — workspace", () => {
         "origin/main",
         "--remote",
         "origin",
+        "--setup-script",
+        "npm install",
+        "--run-script",
+        "npm run dev",
         "--directory",
         "/repo",
       ]),
@@ -233,7 +237,16 @@ describe("parseArgs — workspace", () => {
       type: "workspace-config",
       baseRef: "origin/main",
       remote: "origin",
+      setupScript: "npm install",
+      runScript: "npm run dev",
       directory: "/repo",
+    });
+  });
+
+  it("parses --setup-script/--run-script independently, including clearing with an empty string", () => {
+    expect(parseArgs(["workspace", "config", "--run-script", ""])).toEqual({
+      type: "workspace-config",
+      runScript: "",
     });
   });
 

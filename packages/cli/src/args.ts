@@ -28,7 +28,14 @@ export type FalconCommand =
   | { type: "doctor"; action: "report" | "clean" }
   | { type: "sessions"; action: "list" }
   | { type: "resume"; sessionId: string }
-  | { type: "workspace-config"; baseRef?: string; remote?: string; directory?: string }
+  | {
+      type: "workspace-config";
+      baseRef?: string;
+      remote?: string;
+      setupScript?: string;
+      runScript?: string;
+      directory?: string;
+    }
   | { type: "workspace-register"; directory?: string; name?: string }
   | { type: "workspace-list" }
   | { type: "workspace-unregister"; directory?: string }
@@ -246,10 +253,16 @@ function parseWorkspace(rest: string[]): FalconCommand {
 }
 
 const WORKSPACE_CONFIG_USAGE =
-  "falcon workspace config [--base-ref <ref>] [--remote <name>] [--directory <path>]";
+  "falcon workspace config [--base-ref <ref>] [--remote <name>] [--setup-script <script>] [--run-script <script>] [--directory <path>]";
 
 function parseWorkspaceConfig(opts: string[]): FalconCommand {
-  const result: { baseRef?: string; remote?: string; directory?: string } = {};
+  const result: {
+    baseRef?: string;
+    remote?: string;
+    setupScript?: string;
+    runScript?: string;
+    directory?: string;
+  } = {};
 
   for (let i = 0; i < opts.length; i++) {
     const flag = opts[i] as string;
@@ -257,6 +270,8 @@ function parseWorkspaceConfig(opts: string[]): FalconCommand {
     i++;
     if (flag === "--base-ref") result.baseRef = value;
     else if (flag === "--remote") result.remote = value;
+    else if (flag === "--setup-script") result.setupScript = value;
+    else if (flag === "--run-script") result.runScript = value;
     else if (flag === "--directory") result.directory = value;
     else
       throw new ArgParseError(

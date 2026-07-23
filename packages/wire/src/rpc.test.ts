@@ -28,12 +28,22 @@ import {
   PermAnswerParamsSchema,
   PermAnswerResultSchema,
   RpcCallSchema,
+  RunSetupParamsSchema,
+  RunSetupResultSchema,
+  RunStartParamsSchema,
+  RunStartResultSchema,
+  RunStatusParamsSchema,
+  RunStatusResultSchema,
+  RunStopParamsSchema,
+  RunStopResultSchema,
   SetModeResultSchema,
   SlashCommandInfoSchema,
   SlashCommandsListParamsSchema,
   SlashCommandsListResultSchema,
   SpawnParamsSchema,
   SpawnResultSchema,
+  WorkspaceGetConfigParamsSchema,
+  WorkspaceGetConfigResultSchema,
   WorkspaceRegisterParamsSchema,
   WorkspaceRegisterResultSchema,
 } from "./rpc";
@@ -335,6 +345,95 @@ describe("git.commit / git.push / git.renameBranch (write RPCs)", () => {
     ).toBe(true);
     expect(GitRenameBranchResultSchema.safeParse({ ok: true, branch: "renamed" }).success).toBe(
       false,
+    );
+  });
+});
+
+describe("workspace.getConfig / run.* schemas (docs/features/setup-run-scripts.md)", () => {
+  it("WorkspaceGetConfigParamsSchema requires idempotencyKey/worktree", () => {
+    expect(WorkspaceGetConfigParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      WorkspaceGetConfigParamsSchema.safeParse({ idempotencyKey: "idem-20", worktree: "/repo" })
+        .success,
+    ).toBe(true);
+  });
+
+  it("WorkspaceGetConfigResultSchema is empty-object-valid; every field is optional", () => {
+    expect(WorkspaceGetConfigResultSchema.safeParse({}).success).toBe(true);
+    expect(
+      WorkspaceGetConfigResultSchema.safeParse({
+        baseRef: "main",
+        remote: "origin",
+        setupScript: "npm install",
+        runScript: "npm run dev",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("RunStartParamsSchema requires idempotencyKey/worktree", () => {
+    expect(RunStartParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      RunStartParamsSchema.safeParse({ idempotencyKey: "idem-21", worktree: "/repo" }).success,
+    ).toBe(true);
+  });
+
+  it("RunStartResultSchema requires `started`; method is constrained to tmux/detached", () => {
+    expect(RunStartResultSchema.safeParse({}).success).toBe(false);
+    expect(RunStartResultSchema.safeParse({ started: true }).success).toBe(true);
+    expect(
+      RunStartResultSchema.safeParse({
+        started: true,
+        method: "tmux",
+        pid: 123,
+        tmuxSessionName: "falcon-run-abc",
+      }).success,
+    ).toBe(true);
+    expect(RunStartResultSchema.safeParse({ started: true, method: "ssh" }).success).toBe(false);
+  });
+
+  it("RunStopParamsSchema/RunStopResultSchema", () => {
+    expect(
+      RunStopParamsSchema.safeParse({ idempotencyKey: "idem-22", worktree: "/repo" }).success,
+    ).toBe(true);
+    expect(RunStopResultSchema.safeParse({ stopped: true, wasRunning: true }).success).toBe(true);
+    expect(RunStopResultSchema.safeParse({ stopped: true }).success).toBe(false);
+  });
+
+  it("RunStatusParamsSchema requires idempotencyKey/worktree", () => {
+    expect(RunStatusParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      RunStatusParamsSchema.safeParse({ idempotencyKey: "idem-24", worktree: "/repo" }).success,
+    ).toBe(true);
+  });
+
+  it("RunStatusResultSchema requires nested run/setup state enums", () => {
+    expect(
+      RunStatusResultSchema.safeParse({
+        run: { state: "running", pid: 1, method: "tmux", startedAt: 1, logTail: "hi" },
+        setup: { state: "succeeded", exitCode: 0, startedAt: 1, finishedAt: 2, logTail: "ok" },
+      }).success,
+    ).toBe(true);
+    expect(
+      RunStatusResultSchema.safeParse({
+        run: { state: "none" },
+        setup: { state: "not-run" },
+      }).success,
+    ).toBe(true);
+    expect(
+      RunStatusResultSchema.safeParse({
+        run: { state: "bogus" },
+        setup: { state: "not-run" },
+      }).success,
+    ).toBe(false);
+  });
+
+  it("RunSetupParamsSchema/RunSetupResultSchema", () => {
+    expect(
+      RunSetupParamsSchema.safeParse({ idempotencyKey: "idem-23", worktree: "/repo" }).success,
+    ).toBe(true);
+    expect(RunSetupResultSchema.safeParse({ started: true }).success).toBe(true);
+    expect(RunSetupResultSchema.safeParse({ started: true, alreadyRunning: true }).success).toBe(
+      true,
     );
   });
 });

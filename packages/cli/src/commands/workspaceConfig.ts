@@ -1,23 +1,38 @@
 /**
  * `falcon workspace config [--base-ref <ref>] [--remote <name>]
- * [--directory <path>]` (falcon-prd.md line 148: "Per-workspace settings
- * (base ref for diffs, git remote)"; plan.md §16 "4.1 Git panel"). Sets (or,
- * with no `--base-ref`/`--remote`, just prints) the configured git base ref
- * and remote for a workspace directory — `--directory` defaults to the
- * current working directory.
+ * [--setup-script <script>] [--run-script <script>] [--directory <path>]`
+ * (falcon-prd.md line 148: "Per-workspace settings (base ref for diffs, git
+ * remote)"; plan.md §16 "4.1 Git panel"; docs/features/
+ * setup-run-scripts.md "Per-workspace Setup/Run scripts"). Sets (or, with no
+ * flags at all, just prints) the configured git base ref/remote and
+ * setup/run scripts for a workspace directory — `--directory` defaults to
+ * the current working directory. Passing `--setup-script ""` (or
+ * `--run-script ""`) clears that field (see `workspaceConfig.ts`'s
+ * `setWorkspaceGitConfig` doc comment for the clear-on-empty-string
+ * contract).
  *
  * This is the terminal-side counterpart to `daemon/gitDiff.ts`'s
- * `resolveConfiguredBaseRef`: both read/write the same
+ * `resolveConfiguredBaseRef` and, as of setup-run-scripts,
+ * `daemon/setupScript.ts`/`daemon/runProcess.ts`: all read/write the same
  * `workspaceConfig.ts` store, keyed by the workspace's real (symlink-
  * resolved) directory path, so a `git.diff` RPC call that omits an explicit
- * `baseRef` picks up whatever was set here.
+ * `baseRef` — or a fresh worktree creation, or a `run.start` RPC — picks up
+ * whatever was set here. Script DEFINITION stays CLI-only by design
+ * (design §12's local-consent boundary) — no machine RPC ever carries a
+ * script string as a params field.
  */
 import type { PersistenceOptions } from "../persistence.js";
-import { readWorkspaceGitConfig, setWorkspaceGitConfig } from "../workspaceConfig.js";
+import {
+  readWorkspaceGitConfig,
+  setWorkspaceGitConfig,
+  type WorkspaceGitConfig,
+} from "../workspaceConfig.js";
 
 export interface WorkspaceConfigCommandOptions {
   baseRef?: string;
   remote?: string;
+  setupScript?: string;
+  runScript?: string;
   directory?: string;
 }
 
@@ -27,10 +42,18 @@ export interface WorkspaceConfigCommandDeps {
   write?: (text: string) => void;
 }
 
-function formatConfig(directory: string, config: { baseRef?: string; remote?: string }): string {
+function formatConfig(directory: string, config: WorkspaceGitConfig): string {
   const baseRef = config.baseRef ?? "(none)";
   const remote = config.remote ?? "(none)";
-  return `falcon workspace config: ${directory}\n  base ref: ${baseRef}\n  remote:   ${remote}\n`;
+  const setupScript = config.setupScript ?? "(none)";
+  const runScript = config.runScript ?? "(none)";
+  return (
+    `falcon workspace config: ${directory}\n` +
+    `  base ref:     ${baseRef}\n` +
+    `  remote:       ${remote}\n` +
+    `  setup script: ${setupScript}\n` +
+    `  run script:   ${runScript}\n`
+  );
 }
 
 /** Runs `falcon workspace config`. Returns the process exit code — always 0; a bad `--directory` just means the config lookup/write keys on the raw path (see `workspaceConfig.ts`'s `resolveWorkspaceKey`), it never fails the command. */
@@ -41,10 +64,16 @@ export async function runWorkspaceConfigCommand(
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const directory = options.directory ?? deps.workingDirectory;
 
-  const hasPatch = options.baseRef !== undefined || options.remote !== undefined;
-  const patch: { baseRef?: string; remote?: string } = {};
+  const hasPatch =
+    options.baseRef !== undefined ||
+    options.remote !== undefined ||
+    options.setupScript !== undefined ||
+    options.runScript !== undefined;
+  const patch: WorkspaceGitConfig = {};
   if (options.baseRef !== undefined) patch.baseRef = options.baseRef;
   if (options.remote !== undefined) patch.remote = options.remote;
+  if (options.setupScript !== undefined) patch.setupScript = options.setupScript;
+  if (options.runScript !== undefined) patch.runScript = options.runScript;
 
   const config = hasPatch
     ? await setWorkspaceGitConfig(directory, patch, deps.persistenceOptions)

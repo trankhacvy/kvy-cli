@@ -23,7 +23,12 @@
  * the Repo Files sidebar tab's file-tree listing and file-content fetch),
  * and `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
  * account inspection + usage metering" — Settings → Providers' per-machine
- * account card, `providerAccountInfo.ts`'s local-config read) — are in
+ * account card, `providerAccountInfo.ts`'s local-config read) — plus
+ * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
+ * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts" —
+ * the Setup/Run scripts subsystem's read-only config surface and
+ * long-lived, remotely start/stop-able `run.*` process, `runProcess.ts`/
+ * `workspaceConfigRpc.ts`) — are in
  * scope here —
  * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
  * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
@@ -165,6 +170,22 @@ import {
   ProviderAccountResultSchema,
   ResumeSessionParamsSchema,
   ResumeSessionResultSchema,
+  type RunSetupParams,
+  RunSetupParamsSchema,
+  type RunSetupResult,
+  RunSetupResultSchema,
+  type RunStartParams,
+  RunStartParamsSchema,
+  type RunStartResult,
+  RunStartResultSchema,
+  type RunStatusParams,
+  RunStatusParamsSchema,
+  type RunStatusResult,
+  RunStatusResultSchema,
+  type RunStopParams,
+  RunStopParamsSchema,
+  type RunStopResult,
+  RunStopResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListParamsSchema,
   type SlashCommandsListResult,
@@ -173,6 +194,10 @@ import {
   SpawnParamsSchema,
   type SpawnResult,
   SpawnResultSchema,
+  type WorkspaceGetConfigParams,
+  WorkspaceGetConfigParamsSchema,
+  type WorkspaceGetConfigResult,
+  WorkspaceGetConfigResultSchema,
   type WorkspaceRegisterParams,
   WorkspaceRegisterParamsSchema,
   type WorkspaceRegisterResult,
@@ -195,7 +220,14 @@ import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
 import { handleGitRenameBranch as handleGitRenameBranchDefault } from "./gitRenameBranch.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import { getProviderAccountInfo as getProviderAccountInfoDefault } from "./providerAccountInfo.js";
+import {
+  handleRunSetup as handleRunSetupDefault,
+  handleRunStart as handleRunStartDefault,
+  handleRunStatus as handleRunStatusDefault,
+  handleRunStop as handleRunStopDefault,
+} from "./runProcess.js";
 import { listSlashCommands as listSlashCommandsDefault } from "./slashCommands.js";
+import { handleWorkspaceGetConfig as handleWorkspaceGetConfigDefault } from "./workspaceConfigRpc.js";
 import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
 
 export const MACHINE_RPC_METHODS = [
@@ -217,6 +249,11 @@ export const MACHINE_RPC_METHODS = [
   "provider.account",
   "adopt.take",
   "adopt.mirror",
+  "workspace.getConfig",
+  "run.start",
+  "run.stop",
+  "run.status",
+  "run.setup",
 ] as const;
 export type MachineRpcMethod = (typeof MACHINE_RPC_METHODS)[number];
 
@@ -261,6 +298,16 @@ export interface MachineRpcDeps {
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
   adoptMirror: (params: AdoptMirrorParams) => Promise<AdoptMirrorResult>;
+  /** Backs the `workspace.getConfig` RPC (docs/features/setup-run-scripts.md). Injectable for tests; defaults to `workspaceConfigRpc.ts`'s real read, gated on the registered-workspace authorizer. Throws on an unauthorized worktree. */
+  getWorkspaceConfig?: (params: WorkspaceGetConfigParams) => Promise<WorkspaceGetConfigResult>;
+  /** Backs the `run.start` RPC (docs/features/setup-run-scripts.md). Injectable for tests; defaults to `runProcess.ts`'s real handler (tmux-preferred launch, gated on the registered-workspace authorizer). Throws on an unauthorized worktree or an unconfigured `runScript`. */
+  runStart?: (params: RunStartParams) => Promise<RunStartResult>;
+  /** Backs the `run.stop` RPC. Injectable for tests; defaults to `runProcess.ts`'s real handler. Throws on an unauthorized worktree. */
+  runStop?: (params: RunStopParams) => Promise<RunStopResult>;
+  /** Backs the `run.status` RPC — read-only. Injectable for tests; defaults to `runProcess.ts`'s real handler. Throws on an unauthorized worktree. */
+  runStatus?: (params: RunStatusParams) => Promise<RunStatusResult>;
+  /** Backs the `run.setup` RPC ("Re-run setup"). Injectable for tests; defaults to `runProcess.ts`'s real handler, which itself delegates to `setupScript.ts`. Throws on an unauthorized worktree. */
+  runSetup?: (params: RunSetupParams) => Promise<RunSetupResult>;
   logger?: Logger;
 }
 
@@ -339,30 +386,40 @@ function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
 }
 
 /**
- * Resource-keyed in-flight guard for `adopt.take` (design FR-9.4: "never two
- * live continuations of the same history"): unlike `withIdempotencyCache`
- * above (keyed on the *request* — `idempotencyKey`), this is keyed on the
- * *target* — `providerSessionId`. Two `adopt.take` calls for the same
- * provider session that arrive concurrently, even with two different
- * `idempotencyKey`s (the realistic "two devices both hit take-over"
- * shape — each mints its own key), join the same in-flight kill+spawn
- * attempt and both get its exact result rather than each running its own
- * independent takeover. Never caches a rejected attempt — the map entry is
- * always removed once the attempt settles, success or failure, so the next
- * genuinely-new takeover of that provider session runs fresh.
+ * Resource-keyed in-flight guard, generalized from what was originally
+ * `adopt.take`-only (design FR-9.4: "never two live continuations of the
+ * same history"). Unlike `withIdempotencyCache` above (keyed on the
+ * *request* — `idempotencyKey`), this is keyed on the *target* — whatever
+ * `keyOf` extracts from `params` (`providerSessionId` for `adopt.take`,
+ * `worktree` for `run.start` — docs/features/setup-run-scripts.md Phase 4:
+ * two devices pressing play concurrently with different `idempotencyKey`s
+ * must join one launch attempt rather than racing two independent
+ * `run.start` calls for the same directory). Two calls for the same key
+ * that arrive concurrently join the same in-flight attempt and both get its
+ * exact result. Never caches a rejected attempt — the map entry is always
+ * removed once the attempt settles, success or failure, so the next
+ * genuinely-new call for that key runs fresh.
  */
-function withProviderSessionGuard(
-  fn: (params: AdoptTakeParams) => Promise<AdoptTakeResult>,
-): (params: AdoptTakeParams) => Promise<AdoptTakeResult> {
-  const inFlight = new Map<string, Promise<AdoptTakeResult>>();
-  return (params: AdoptTakeParams) => {
-    const key = params.providerSessionId;
+function withResourceGuard<P, R>(
+  fn: (params: P) => Promise<R>,
+  keyOf: (params: P) => string,
+): (params: P) => Promise<R> {
+  const inFlight = new Map<string, Promise<R>>();
+  return (params: P) => {
+    const key = keyOf(params);
     const existing = inFlight.get(key);
     if (existing) return existing;
     const attempt = fn(params).finally(() => inFlight.delete(key));
     inFlight.set(key, attempt);
     return attempt;
   };
+}
+
+/** `adopt.take`'s own resource guard, keyed on `providerSessionId` — see `withResourceGuard`'s doc comment. */
+function withProviderSessionGuard(
+  fn: (params: AdoptTakeParams) => Promise<AdoptTakeResult>,
+): (params: AdoptTakeParams) => Promise<AdoptTakeResult> {
+  return withResourceGuard(fn, (params) => params.providerSessionId);
 }
 
 /**
@@ -400,6 +457,22 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const cachedGitRenameBranch = withIdempotencyCache(
     deps.gitRenameBranch ?? handleGitRenameBranchDefault,
   );
+  const getWorkspaceConfig = deps.getWorkspaceConfig ?? handleWorkspaceGetConfigDefault;
+  // `run.start`/`run.stop`/`run.setup` (docs/features/setup-run-scripts.md
+  // Phase 4) join `git.commit`/`git.push`/`git.renameBranch` as mutating
+  // RPCs that DO need idempotency-key replay caching. `run.start` ALSO gets
+  // the resource guard (keyed on `params.worktree`, generalized from
+  // `adopt.take`'s own `providerSessionId` guard above): two devices
+  // pressing play concurrently with two different `idempotencyKey`s must
+  // still join one launch attempt for the same directory, not race two
+  // independent `launchProviderProcess` calls. `run.status` stays uncached
+  // — read-only, same reasoning as `git.status`/`workspace.getConfig`.
+  const cachedRunStart = withIdempotencyCache(
+    withResourceGuard(deps.runStart ?? handleRunStartDefault, (params) => params.worktree),
+  );
+  const cachedRunStop = withIdempotencyCache(deps.runStop ?? handleRunStopDefault);
+  const cachedRunSetup = withIdempotencyCache(deps.runSetup ?? handleRunSetupDefault);
+  const runStatus = deps.runStatus ?? handleRunStatusDefault;
 
   function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
     const cached = spawnResults.get(params.idempotencyKey);
@@ -527,6 +600,31 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: AdoptMirrorParamsSchema,
       resultSchema: AdoptMirrorResultSchema,
       handle: cachedAdoptMirror as (params: unknown) => Promise<unknown>,
+    },
+    "workspace.getConfig": {
+      paramsSchema: WorkspaceGetConfigParamsSchema,
+      resultSchema: WorkspaceGetConfigResultSchema,
+      handle: getWorkspaceConfig as (params: unknown) => Promise<unknown>,
+    },
+    "run.start": {
+      paramsSchema: RunStartParamsSchema,
+      resultSchema: RunStartResultSchema,
+      handle: cachedRunStart as (params: unknown) => Promise<unknown>,
+    },
+    "run.stop": {
+      paramsSchema: RunStopParamsSchema,
+      resultSchema: RunStopResultSchema,
+      handle: cachedRunStop as (params: unknown) => Promise<unknown>,
+    },
+    "run.status": {
+      paramsSchema: RunStatusParamsSchema,
+      resultSchema: RunStatusResultSchema,
+      handle: runStatus as (params: unknown) => Promise<unknown>,
+    },
+    "run.setup": {
+      paramsSchema: RunSetupParamsSchema,
+      resultSchema: RunSetupResultSchema,
+      handle: cachedRunSetup as (params: unknown) => Promise<unknown>,
     },
   };
 

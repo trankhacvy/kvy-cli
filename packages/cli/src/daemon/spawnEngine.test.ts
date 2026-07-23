@@ -253,6 +253,104 @@ describe("spawnSession", () => {
     expect(deps.launchProcess).not.toHaveBeenCalled();
   });
 
+  describe("setup-script hook (docs/features/setup-run-scripts.md Phase 2)", () => {
+    it("fires runSetupScript exactly once, with the workspace root and the created worktree dir, on a genuine fresh-worktree creation", async () => {
+      const git = vi.fn(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+      const runSetupScript = vi.fn();
+      const deps = baseDeps({ gitWorktreeDeps: { git }, runSetupScript });
+
+      await spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+        deps,
+      );
+
+      const realRoot = await realpath(root);
+      expect(runSetupScript).toHaveBeenCalledExactlyOnceWith(
+        realRoot,
+        path.join(realRoot, ".worktrees", "task-1"),
+      );
+    });
+
+    it("does NOT fire runSetupScript when the worktree already existed (idempotent reuse)", async () => {
+      const worktreeDir = path.join(await realpath(root), ".worktrees", "task-1");
+      const { mkdir } = await import("node:fs/promises");
+      await mkdir(worktreeDir, { recursive: true });
+      const git = vi.fn(async () => "");
+      const runSetupScript = vi.fn();
+      const deps = baseDeps({ gitWorktreeDeps: { git }, runSetupScript });
+
+      await spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+        deps,
+      );
+
+      expect(runSetupScript).not.toHaveBeenCalled();
+    });
+
+    it("does NOT fire runSetupScript for an in-place checkout (createWorktree: false)", async () => {
+      const git = vi.fn(async () => "");
+      const runSetupScript = vi.fn();
+      const deps = baseDeps({ gitWorktreeDeps: { git }, runSetupScript });
+
+      await spawnSession(
+        baseParams({ directory: root, branch: { name: "main", createWorktree: false } }),
+        deps,
+      );
+
+      expect(runSetupScript).not.toHaveBeenCalled();
+    });
+
+    it("does NOT fire runSetupScript for a plain, branch-less spawn", async () => {
+      const runSetupScript = vi.fn();
+      const deps = baseDeps({ runSetupScript });
+
+      await spawnSession(baseParams({ directory: root }), deps);
+
+      expect(runSetupScript).not.toHaveBeenCalled();
+    });
+
+    it("does not await runSetupScript — spawn resolves even if it never settles", async () => {
+      const git = vi.fn(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+      // A `runSetupScript` that kicks off a promise that never resolves
+      // (fire-and-forget, its return value ignored — the real dep's type is
+      // `void`) would hang `spawnSession` forever if it were (incorrectly)
+      // awaited.
+      const runSetupScript = vi.fn(() => {
+        void new Promise<void>(() => {});
+      });
+      const deps = baseDeps({ gitWorktreeDeps: { git }, runSetupScript });
+
+      const result = await spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+        deps,
+      );
+
+      expect(result).toEqual({ sessionId: "sess_new" });
+    });
+
+    it("spawns normally when no runSetupScript dep is configured at all", async () => {
+      const git = vi.fn(async (args: string[]) => {
+        if (args[0] === "show-ref") throw new Error("not found");
+        return "";
+      });
+      const deps = baseDeps({ gitWorktreeDeps: { git } });
+      expect(deps.runSetupScript).toBeUndefined();
+
+      const result = await spawnSession(
+        baseParams({ directory: root, branch: { name: "task-1", createWorktree: true } }),
+        deps,
+      );
+
+      expect(result).toEqual({ sessionId: "sess_new" });
+    });
+  });
+
   describe("directory dedup (plan.md §16 'Flow 3 — spawn-directory-dedup')", () => {
     it("returns the already-live session's id and never invokes the process launcher when one is already tracked in this exact directory", async () => {
       const realRoot = await realpath(root);
