@@ -60,6 +60,9 @@ export function SessionCard({
           title={session.title ?? "this session"}
           pinned={session.pinned}
           status={session.status}
+          machineId={session.machineId}
+          machineOnline={machine?.online ?? false}
+          machineName={machine?.name ?? null}
         />
       </div>
     </div>

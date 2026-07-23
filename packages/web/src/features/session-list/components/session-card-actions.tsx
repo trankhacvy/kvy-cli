@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionCrypto } from "@/features/session-control/use-session-crypto";
+import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
 import {
   useArchiveSessionMutation,
   useDeleteSessionMutation,
@@ -44,6 +45,7 @@ import {
 import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import { apiSocket, createSessionRpcClient } from "@/sync";
 import { RenameSessionDialog } from "./rename-session-dialog";
+import { RestartSessionDialog } from "./restart-session-dialog";
 import { buildPinTogglePatch, isSessionStoppable } from "./session-card-actions-logic";
 
 /**
@@ -68,15 +70,24 @@ export function SessionCardActions({
   title,
   pinned,
   status,
+  machineId,
+  machineOnline,
+  machineName,
 }: {
   sessionId: string;
   title: string;
   pinned: boolean;
   status: SessionRow["status"];
+  /** `null` when this session has no owning machine at all (e.g. a
+   * terminal-only session that was never remote-spawned). */
+  machineId: string | null;
+  machineOnline: boolean;
+  machineName: string | null;
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
+  const [restartOpen, setRestartOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const restoreMutation = useRestoreSessionMutation();
@@ -84,6 +95,8 @@ export function SessionCardActions({
   const pinMutation = useSessionMetadataPatchMutation(sessionId);
   const archived = status === "archived";
   const stoppable = isSessionStoppable(status);
+  const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
+  const restartReason = restartDisabledReason({ machineId, machineOnline, status });
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -127,7 +140,11 @@ export function SessionCardActions({
             </DropdownMenuItem>
           )}
           {!archived && (
-            <DropdownMenuItem disabled title="Restart isn't wired up yet" onSelect={() => {}}>
+            <DropdownMenuItem
+              disabled={!restartEnabled}
+              title={restartReason ?? undefined}
+              onSelect={() => setRestartOpen(true)}
+            >
               <RotateCw className="size-4" />
               Restart
             </DropdownMenuItem>
@@ -164,6 +181,16 @@ export function SessionCardActions({
         open={renameOpen}
         onOpenChange={setRenameOpen}
       />
+
+      {machineId !== null && (
+        <RestartSessionDialog
+          machineId={machineId}
+          sessionId={sessionId}
+          machineName={machineName}
+          open={restartOpen}
+          onOpenChange={setRestartOpen}
+        />
+      )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

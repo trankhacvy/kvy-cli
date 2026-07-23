@@ -1,7 +1,7 @@
 "use client";
 
 import type { SessionRow } from "@falcon/wire";
-import { Archive, CircleStop, MoreHorizontal, Pencil, Pin, Trash2 } from "lucide-react";
+import { Archive, CircleStop, MoreHorizontal, Pencil, Pin, RotateCw, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useSessionControl } from "@/features/session-control";
 import { RenameSessionDialog } from "@/features/session-list/components/rename-session-dialog";
+import { RestartSessionDialog } from "@/features/session-list/components/restart-session-dialog";
+import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
 import {
   useArchiveSessionMutation,
   useDeleteSessionMutation,
@@ -51,6 +53,8 @@ export function SessionActionsMenu({
   sessionId,
   title,
   status,
+  machineId,
+  machineOnline,
   disabled = false,
 }: {
   sessionId: string;
@@ -61,6 +65,11 @@ export function SessionActionsMenu({
    * once a row has already been marked done (docs/features/
    * session-lifecycle-actions.md Phase 5). */
   status: SessionRow["status"];
+  /** The session's owning machine id, and whether it's currently online —
+   * Restart's enable condition (Phase 6). `null`/`false` when not yet known
+   * or there's no owning machine. */
+  machineId: string | null;
+  machineOnline: boolean;
   disabled?: boolean;
 }) {
   const router = useRouter();
@@ -68,12 +77,15 @@ export function SessionActionsMenu({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
+  const [restartOpen, setRestartOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const restoreMutation = useRestoreSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
   const pinMutation = useSessionMetadataPatchMutation(sessionId);
   const archived = status === "archived";
+  const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
+  const restartReason = restartDisabledReason({ machineId, machineOnline, status });
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -133,6 +145,16 @@ export function SessionActionsMenu({
             <CircleStop className="size-4" />
             End session
           </DropdownMenuItem>
+          {!archived && (
+            <DropdownMenuItem
+              disabled={!restartEnabled}
+              title={restartReason ?? undefined}
+              onSelect={() => setRestartOpen(true)}
+            >
+              <RotateCw className="size-4" />
+              Restart
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
             <Trash2 className="size-4" />
@@ -147,6 +169,16 @@ export function SessionActionsMenu({
         open={renameOpen}
         onOpenChange={setRenameOpen}
       />
+
+      {machineId !== null && (
+        <RestartSessionDialog
+          machineId={machineId}
+          sessionId={sessionId}
+          machineName={null}
+          open={restartOpen}
+          onOpenChange={setRestartOpen}
+        />
+      )}
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent>

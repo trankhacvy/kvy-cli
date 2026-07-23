@@ -45,6 +45,15 @@
  * Files sidebar tab: `git.files` lists every worktree-relative path
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
+ *
+ * `resumeSession` (docs/features/session-lifecycle-actions.md Phase 6 —
+ * Restart) drives the daemon's `resumeSession` RPC (`daemon/resumeSession.ts`
+ * — kills any still-live process for the session, then re-spawns it with
+ * `FALCON_RECONNECT_*` env). The daemon side has been registered since the
+ * spawn-RPC task; this is only the caller-side registry entry, structural
+ * clone of `spawn`'s own listing above. Like `adopt.list`, `@falcon/wire`
+ * exports no paired `ResumeSessionParams`/`ResumeSessionResult` type
+ * aliases — derived locally via `z.infer` instead.
  */
 import {
   type AdoptListParamsSchema,
@@ -77,6 +86,8 @@ import {
   GitStatusResultSchema,
   type ProviderAccountParams,
   ProviderAccountResultSchema,
+  type ResumeSessionParamsSchema,
+  ResumeSessionResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
   type SpawnParams,
@@ -109,6 +120,8 @@ export type {
 
 export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
 export type AdoptListResult = z.infer<typeof AdoptListResultSchema>;
+export type ResumeSessionParams = z.infer<typeof ResumeSessionParamsSchema>;
+export type ResumeSessionResult = z.infer<typeof ResumeSessionResultSchema>;
 
 /** Params shape per method. */
 export interface MachineRpcParams {
@@ -130,6 +143,7 @@ export interface MachineRpcParams {
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
+  resumeSession: ResumeSessionParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -152,6 +166,7 @@ export interface MachineRpcResults {
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
+  resumeSession: ResumeSessionResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -175,6 +190,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
+  resumeSession: ResumeSessionResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */
