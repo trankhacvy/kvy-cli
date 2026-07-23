@@ -40,3 +40,6 @@ live-test-report.md
 
 # Throwaway extraction dir used by packages/wire/scripts/check-additive-vs-base.ts
 packages/wire/.wire-lint-*/
+
+# Stale/superseded docs — kept on disk for reference, not tracked (2026-07-23 docs cleanup)
+docs/.archive/
