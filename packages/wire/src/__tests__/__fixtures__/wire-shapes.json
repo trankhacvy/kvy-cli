@@ -3293,6 +3293,65 @@
       }
     }
   },
+  "SleepInhibitModeSchema": {
+    "kind": "enum",
+    "options": [
+      "always",
+      "off",
+      "onPower"
+    ]
+  },
+  "SleepInhibitStateSchema": {
+    "kind": "object",
+    "fields": {
+      "active": {
+        "kind": "leaf",
+        "type": "boolean"
+      },
+      "mode": {
+        "kind": "enum",
+        "options": [
+          "always",
+          "off",
+          "onPower"
+        ]
+      },
+      "platform": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "supported": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
+  },
+  "SleepInhibitGetParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "SleepInhibitSetParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "mode": {
+        "kind": "enum",
+        "options": [
+          "always",
+          "off",
+          "onPower"
+        ]
+      }
+    }
+  },
   "MessageRpcParamsSchema": {
     "kind": "object",
     "fields": {

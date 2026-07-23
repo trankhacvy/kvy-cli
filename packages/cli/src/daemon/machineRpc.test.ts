@@ -172,6 +172,14 @@ describe("registerMachineRpcHandlers", () => {
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
+      payload: { target: "m:mach_1:sleepInhibit.get" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:sleepInhibit.set" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
       payload: { target: "m:mach_1:adopt.take" },
     });
     expect(socket.emitted).toContainEqual({
@@ -1078,6 +1086,96 @@ describe("registerMachineRpcHandlers", () => {
       expect(open(response, DEK)).toEqual({
         ok: false,
         error: "unexpected failure",
+      });
+    });
+  });
+
+  describe("sleepInhibit.get / sleepInhibit.set (docs/features/sleep-inhibit.md)", () => {
+    it("sleepInhibit.get decrypts params, calls getSleepInhibit, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getSleepInhibit = vi.fn(async () => ({
+        supported: true,
+        platform: "darwin",
+        mode: "always" as const,
+        active: true,
+      }));
+      register(socket, { getSleepInhibit });
+
+      const params = { idempotencyKey: "idem_sleep_get_1" };
+      const response = await callAndAwaitAck(socket, "sleepInhibit.get", seal(params, DEK));
+
+      expect(getSleepInhibit).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        supported: true,
+        platform: "darwin",
+        mode: "always",
+        active: true,
+      });
+    });
+
+    it("sleepInhibit.set decrypts params, calls setSleepInhibit, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const setSleepInhibit = vi.fn(async () => ({
+        supported: true,
+        platform: "darwin",
+        mode: "onPower" as const,
+        active: true,
+      }));
+      register(socket, { setSleepInhibit });
+
+      const params = { idempotencyKey: "idem_sleep_set_1", mode: "onPower" as const };
+      const response = await callAndAwaitAck(socket, "sleepInhibit.set", seal(params, DEK));
+
+      expect(setSleepInhibit).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        supported: true,
+        platform: "darwin",
+        mode: "onPower",
+        active: true,
+      });
+    });
+
+    it("rejects an invalid mode via schema validation before the handler ever runs", async () => {
+      const socket = new FakeSocket();
+      const setSleepInhibit = vi.fn();
+      register(socket, { setSleepInhibit });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "sleepInhibit.set",
+        seal({ idempotencyKey: "idem_sleep_set_2", mode: "forever" }, DEK),
+      );
+
+      expect(setSleepInhibit).not.toHaveBeenCalled();
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("defaults to an honest unsupported stub when no manager is wired", async () => {
+      const socket = new FakeSocket();
+      register(socket); // no getSleepInhibit/setSleepInhibit override
+
+      const getResponse = await callAndAwaitAck(
+        socket,
+        "sleepInhibit.get",
+        seal({ idempotencyKey: "idem_sleep_get_2" }, DEK),
+      );
+      expect(open(getResponse, DEK)).toEqual({
+        supported: false,
+        platform: process.platform,
+        mode: "off",
+        active: false,
+      });
+
+      const setResponse = await callAndAwaitAck(
+        socket,
+        "sleepInhibit.set",
+        seal({ idempotencyKey: "idem_sleep_set_3", mode: "always" }, DEK),
+      );
+      expect(open(setResponse, DEK)).toEqual({
+        supported: false,
+        platform: process.platform,
+        mode: "off",
+        active: false,
       });
     });
   });

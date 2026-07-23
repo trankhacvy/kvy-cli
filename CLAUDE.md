@@ -313,6 +313,29 @@ packages/
 │                             daemon is already running takes effect immediately) and never
 │                             logged. Zero server involvement — the token and all CI data stay
 │                             machine-local, same E2E invariant as every other machine RPC.
+│                             Sleep-inhibit control (docs/features/sleep-inhibit.md,
+│                             docs/competitive-notes-omnara.md #12): a per-machine tri-state
+│                             policy (Off / While on Power / Always) so a Mac won't sleep
+│                             mid-session, joining the same machine-RPC family as
+│                             `provider.account`/`github.checks` — zero server/DB changes.
+│                             `daemon/sleepInhibit.ts`'s `createSleepInhibitManager` owns a
+│                             `caffeinate` child (macOS only; `-s` = AC-only system-sleep
+│                             assertion for `onPower`, `-i` = idle assertion for `always`,
+│                             both always paired with `-w <daemon pid>` so the OS itself
+│                             releases the assertion the instant the daemon process exits —
+│                             the leak-safety guard, replacing any `doctor`/`markers`
+│                             reaping) and a single-respawn-then-give-up guard against an
+│                             unexpected child exit. Registered as `sleepInhibit.get`/
+│                             `sleepInhibit.set` in `machineRpc.ts` (no idempotency cache
+│                             needed — `get` is a pure read, `set` converges to the same
+│                             single child on a repeat). The manager is created and
+│                             boot-re-applied in `commands.ts`'s `runDaemonStartSync`
+│                             (unconditionally, before `startMachineIntegration`, so a
+│                             previously persisted "always" is enforced even in
+│                             logged-out/local-only mode) and released before any
+│                             self-update restart handoff. Persisted via a lenient,
+│                             optional `sleepInhibit` field on `persistence.ts`'s `Settings`
+│                             (exact `daemonAutoStart` precedent).
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -497,7 +520,27 @@ packages/
                               feature area in this list — `useLiveGithubChecksActions` is
                               real and gated on the shared per-machine DEK unwrap
                               (`use-machine-crypto.ts`), it's just that no screen threads a
-                              live `apiSocket` connection through yet.
+                              live `apiSocket` connection through yet. Settings → Machines
+                              (`src/features/machine-settings/`, docs/features/
+                              sleep-inhibit.md, docs/competitive-notes-omnara.md #12
+                              "Sleep-inhibit control") is a structural clone of
+                              `features/provider-accounts/`: one `SleepInhibitCard` per
+                              machine (Off / While on Power / Always, a shadcn `Select`)
+                              driven by `use-machine-settings.ts` (`useQuery` for
+                              `sleepInhibit.get` + a `useMutation` for `sleepInhibit.set`
+                              that writes the returned state straight into the query cache
+                              via `setQueryData` — the set result IS the fresh state, no
+                              invalidate round-trip), composed by `MachinesSettingsScreen`
+                              and reusing `features/session-list`'s machine-list snapshot,
+                              same "one place owns this" precedent as `ProvidersSettingsScreen`.
+                              `sync/machineRpc.ts` gained `sleepInhibit.get`/
+                              `sleepInhibit.set` alongside `provider.account`. Mounted at the
+                              new `/settings/machines/` route (linked from `app-shell.tsx`'s
+                              settings nav, alongside Providers) — gating (macOS-only
+                              support, "not currently holding the assertion") comes entirely
+                              from the RPC result's `supported`/`active` fields, never from
+                              any machine metadata field. Same not-yet-wired-to-a-live-socket-
+                              by-default state as every other feature area in this list.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

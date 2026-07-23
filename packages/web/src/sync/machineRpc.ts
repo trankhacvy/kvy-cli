@@ -45,6 +45,13 @@
  * Files sidebar tab: `git.files` lists every worktree-relative path
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
+ *
+ * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
+ * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") back
+ * Settings → Machines' per-machine Off/While-on-Power/Always card
+ * (`features/machine-settings/`) — both share the one `SleepInhibitState`
+ * result shape (`set` returns the post-apply state, no follow-up `get`
+ * needed).
  */
 import {
   type AdoptListParamsSchema,
@@ -79,6 +86,9 @@ import {
   ProviderAccountResultSchema,
   type SlashCommandsListParams,
   SlashCommandsListResultSchema,
+  type SleepInhibitGetParams,
+  type SleepInhibitSetParams,
+  SleepInhibitStateSchema,
   type SpawnParams,
   SpawnResultSchema,
   type WorkspaceRegisterParams,
@@ -103,6 +113,8 @@ export type {
   GitStatusParams,
   ProviderAccountParams,
   SlashCommandsListParams,
+  SleepInhibitGetParams,
+  SleepInhibitSetParams,
   SpawnParams,
   WorkspaceRegisterParams,
 };
@@ -130,6 +142,8 @@ export interface MachineRpcParams {
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
+  "sleepInhibit.get": SleepInhibitGetParams;
+  "sleepInhibit.set": SleepInhibitSetParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -152,6 +166,8 @@ export interface MachineRpcResults {
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
+  "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
+  "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -175,6 +191,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
+  "sleepInhibit.get": SleepInhibitStateSchema,
+  "sleepInhibit.set": SleepInhibitStateSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

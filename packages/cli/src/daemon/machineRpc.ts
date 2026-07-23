@@ -21,10 +21,14 @@
  * autocomplete, docs/competitive-notes-omnara.md #18), `git.files`/
  * `fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file browser" —
  * the Repo Files sidebar tab's file-tree listing and file-content fetch),
- * and `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
+ * `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
  * account inspection + usage metering" — Settings → Providers' per-machine
- * account card, `providerAccountInfo.ts`'s local-config read) — are in
- * scope here —
+ * account card, `providerAccountInfo.ts`'s local-config read), and
+ * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
+ * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control" — Settings →
+ * Machines' per-machine Off/While-on-Power/Always policy, enforced by
+ * `daemon/sleepInhibit.ts`'s `caffeinate`-owning manager) — are in scope
+ * here —
  * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
  * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
  * same way without touching this module's dispatch shape.
@@ -55,7 +59,15 @@
  * the same reason again — it only reads the current `.claude/commands/`
  * tree. `provider.account` joins this same no-cache group for the same
  * reason again — it only reads whatever's currently on disk in the local
- * CLI's own config files, so a retry is just another read. `fs.read` is the
+ * CLI's own config files, so a retry is just another read. `sleepInhibit.get`
+ * joins it too — it's a pure read of the manager's current state.
+ * `sleepInhibit.set` also needs no cache, but for the idempotent-effect
+ * reason rather than the pure-read one: applying the same mode twice
+ * converges to the exact same single caffeinate child (`sleepInhibit.ts`'s
+ * `applyMode` is itself a no-op on an unchanged, healthy mode), so a lost-ack
+ * retry re-running the handler is harmless — unlike `git.commit`/`git.push`/
+ * `git.renameBranch` below, there's no "mint a second one" side effect to
+ * guard against. `fs.read` is the
  * one exception in this read-only cluster that *does* carry the same
  * mid-write hazard `@falcon/wire`'s own `rpc.ts` doc comment calls out for
  * `adopt.mirror` ("or re-reading a file mid-write twice") — but a re-read
@@ -169,6 +181,12 @@ import {
   SlashCommandsListParamsSchema,
   type SlashCommandsListResult,
   SlashCommandsListResultSchema,
+  type SleepInhibitGetParams,
+  SleepInhibitGetParamsSchema,
+  type SleepInhibitSetParams,
+  SleepInhibitSetParamsSchema,
+  type SleepInhibitState,
+  SleepInhibitStateSchema,
   type SpawnParams,
   SpawnParamsSchema,
   type SpawnResult,
@@ -215,6 +233,8 @@ export const MACHINE_RPC_METHODS = [
   "git.files",
   "fs.read",
   "provider.account",
+  "sleepInhibit.get",
+  "sleepInhibit.set",
   "adopt.take",
   "adopt.mirror",
 ] as const;
@@ -257,6 +277,10 @@ export interface MachineRpcDeps {
   readFile?: (params: FsReadParams) => Promise<FsReadResult>;
   /** Backs the `provider.account` RPC (Settings → Providers, docs/competitive-notes-omnara.md #9). Injectable for tests; defaults to `providerAccountInfo.ts`'s real local-config read. Never throws (see that module's own doc comment). */
   getProviderAccountInfo?: (params: ProviderAccountParams) => Promise<ProviderAccountResult>;
+  /** Backs the `sleepInhibit.get` RPC (docs/features/sleep-inhibit.md, docs/competitive-notes-omnara.md #12). Injectable for tests; defaults to an honest "no manager wired" stub reporting `{supported:false, platform: process.platform, mode:"off", active:false}` — indistinguishable from "unsupported platform" until `machineIntegration.ts`/`commands.ts` thread through the real `sleepInhibit.ts` manager. Never throws. */
+  getSleepInhibit?: (params: SleepInhibitGetParams) => Promise<SleepInhibitState>;
+  /** Backs the `sleepInhibit.set` RPC. Same honest default as `getSleepInhibit` above (a `set` against no wired manager reports the same unsupported stub rather than throwing or silently no-opping). Never throws. */
+  setSleepInhibit?: (params: SleepInhibitSetParams) => Promise<SleepInhibitState>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
@@ -299,6 +323,11 @@ interface MethodSpec<TParams, TResult> {
 
 function isMachineRpcMethod(method: unknown): method is MachineRpcMethod {
   return typeof method === "string" && (MACHINE_RPC_METHODS as readonly string[]).includes(method);
+}
+
+/** Honest "no manager wired" stub for `sleepInhibit.get`/`sleepInhibit.set` — see `MachineRpcDeps`'s own doc comment on why this is indistinguishable from a genuinely unsupported (non-darwin) platform until the real manager is threaded through. */
+function unwiredSleepInhibitState(): SleepInhibitState {
+  return { supported: false, platform: process.platform, mode: "off", active: false };
 }
 
 /**
@@ -388,6 +417,8 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitFiles = deps.getGitFiles ?? getGitFilesDefault;
   const readFile = deps.readFile ?? readFileDefault;
   const getProviderAccountInfo = deps.getProviderAccountInfo ?? getProviderAccountInfoDefault;
+  const getSleepInhibit = deps.getSleepInhibit ?? (async () => unwiredSleepInhibitState());
+  const setSleepInhibit = deps.setSleepInhibit ?? (async () => unwiredSleepInhibitState());
   const cachedAdoptTake = withIdempotencyCache(withProviderSessionGuard(deps.adoptTake));
   const cachedAdoptMirror = withIdempotencyCache(deps.adoptMirror);
   // `git.commit`/`git.push`/`git.renameBranch` are the first git RPCs that DO
@@ -517,6 +548,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: ProviderAccountParamsSchema,
       resultSchema: ProviderAccountResultSchema,
       handle: getProviderAccountInfo as (params: unknown) => Promise<unknown>,
+    },
+    "sleepInhibit.get": {
+      paramsSchema: SleepInhibitGetParamsSchema,
+      resultSchema: SleepInhibitStateSchema,
+      handle: getSleepInhibit as (params: unknown) => Promise<unknown>,
+    },
+    "sleepInhibit.set": {
+      paramsSchema: SleepInhibitSetParamsSchema,
+      resultSchema: SleepInhibitStateSchema,
+      handle: setSleepInhibit as (params: unknown) => Promise<unknown>,
     },
     "adopt.take": {
       paramsSchema: AdoptTakeParamsSchema,

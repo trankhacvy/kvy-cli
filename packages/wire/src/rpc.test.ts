@@ -32,6 +32,10 @@ import {
   SlashCommandInfoSchema,
   SlashCommandsListParamsSchema,
   SlashCommandsListResultSchema,
+  SleepInhibitGetParamsSchema,
+  SleepInhibitModeSchema,
+  SleepInhibitSetParamsSchema,
+  SleepInhibitStateSchema,
   SpawnParamsSchema,
   SpawnResultSchema,
   WorkspaceRegisterParamsSchema,
@@ -336,6 +340,53 @@ describe("git.commit / git.push / git.renameBranch (write RPCs)", () => {
     expect(GitRenameBranchResultSchema.safeParse({ ok: true, branch: "renamed" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("sleepInhibit.get / sleepInhibit.set schemas (docs/competitive-notes-omnara.md #12)", () => {
+  it("SleepInhibitModeSchema accepts the tri-state values and rejects anything else", () => {
+    expect(SleepInhibitModeSchema.safeParse("off").success).toBe(true);
+    expect(SleepInhibitModeSchema.safeParse("onPower").success).toBe(true);
+    expect(SleepInhibitModeSchema.safeParse("always").success).toBe(true);
+    expect(SleepInhibitModeSchema.safeParse("forever").success).toBe(false);
+  });
+
+  it("SleepInhibitGetParamsSchema requires idempotencyKey", () => {
+    expect(SleepInhibitGetParamsSchema.safeParse({}).success).toBe(false);
+    expect(SleepInhibitGetParamsSchema.safeParse({ idempotencyKey: "idem-20" }).success).toBe(true);
+  });
+
+  it("SleepInhibitSetParamsSchema requires idempotencyKey and a valid mode", () => {
+    expect(SleepInhibitSetParamsSchema.safeParse({ idempotencyKey: "k" }).success).toBe(false);
+    expect(
+      SleepInhibitSetParamsSchema.safeParse({ idempotencyKey: "k", mode: "onPower" }).success,
+    ).toBe(true);
+    expect(
+      SleepInhibitSetParamsSchema.safeParse({ idempotencyKey: "k", mode: "forever" }).success,
+    ).toBe(false);
+  });
+
+  it("SleepInhibitStateSchema round-trips supported/platform/mode/active", () => {
+    expect(
+      SleepInhibitStateSchema.safeParse({
+        supported: true,
+        platform: "darwin",
+        mode: "always",
+        active: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      SleepInhibitStateSchema.safeParse({
+        supported: false,
+        platform: "linux",
+        mode: "off",
+        active: false,
+      }).success,
+    ).toBe(true);
+    expect(
+      SleepInhibitStateSchema.safeParse({ supported: true, platform: "darwin", mode: "always" })
+        .success,
+    ).toBe(false);
   });
 });
 
