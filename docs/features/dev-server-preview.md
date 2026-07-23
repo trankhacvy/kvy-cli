@@ -125,6 +125,8 @@ Implementation done for Phases 1–6. The full non-live gate (`pnpm build && pnp
 - Manual run of the web Preview tab in a real browser against a live daemon (Phase 5's acceptance criteria) — real port/tunnel counts, the consent-dialog → new-tab flow, and the 5s tunnels poll.
 - A live `docker compose up` run of the self-host stack confirming the CSP response header in a real browser, and the embedded `TunnelFrame` actually rendering (or correctly falling back) against real permissive/anti-framing dev servers (Phase 6's acceptance criteria) — the Docker CLI's daemon wasn't reachable in this build environment either; the CSP template change was verified via `envsubst` against representative values (see Phase 6's checklist above and the "Test & Review notes" section for a second, independent confirmation of the same).
 
+Merged into v2-pty-injection at 10246b4a17bdd3b9a2f9b74a3cfd8c388a2a2593.
+
 ## Test & Review notes
 
 Independent review pass (separate from the implementing agent), `.worktrees/feature-dev-server-preview`. Goal was to genuinely try to break this, not confirm it works.
