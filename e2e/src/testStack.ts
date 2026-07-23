@@ -28,7 +28,6 @@ import { promisify } from "node:util";
 import {
   type BoxKeyPair,
   deriveKeyTree,
-  encodeBase64,
   getRandomBytes,
   open,
   seal,
@@ -40,6 +39,7 @@ import { type Socket as ClientSocket, io as ioClientDefault } from "socket.io-cl
 // for why (`falcon`/`@falcon/server` are private, unpublished packages with
 // no subpath `exports` for their internals).
 import { writeCredentials } from "../../packages/cli/src/auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../../packages/cli/src/auth/keyMaterial.js";
 import {
   createDaemonCommandDeps,
   type DaemonCommandDeps,
@@ -202,7 +202,7 @@ export async function buildTestStack(): Promise<TestStack> {
 
   const masterSecret = getRandomBytes(32);
   writeCredentials(
-    { refreshToken: account.refreshToken, masterSecretOrContentBundle: encodeBase64(masterSecret) },
+    { refreshToken: account.refreshToken, keyMaterial: plaintextFallbackKeyMaterial(masterSecret) },
     homeDir,
   );
   const keyTree = deriveKeyTree(masterSecret);

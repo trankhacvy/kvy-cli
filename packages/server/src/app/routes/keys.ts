@@ -11,7 +11,9 @@ import { and, eq, gt, isNull, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import tweetnacl from "tweetnacl";
 import { z } from "zod";
-import { accounts, deviceSessions, keyBindNonces } from "../../db/schema.js";
+import { defaultOAuthVerifier, type OAuthVerifier } from "../../auth/oauth.js";
+import { verifyPassword } from "../../auth/password.js";
+import { accounts, authIdentities, deviceSessions, keyBindNonces } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 import { toHex } from "./hex.js";
 
@@ -58,23 +60,57 @@ async function hasOtherHealthySessions(
   return Boolean(row);
 }
 
+const StepUpProofSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("password"), password: z.string().min(1) }),
+  z.object({
+    kind: z.literal("oauth"),
+    provider: z.enum(["google", "github", "dev"]),
+    oauthProof: z.string().min(1),
+  }),
+]);
+type StepUpProof = z.infer<typeof StepUpProofSchema>;
+
 /**
- * Step-up verification for a destructive rotation. issue-4-plan.md's illustrative
- * snippet leaves this as a `stepUpProof` opaque string; a real implementation needs a
- * concrete proof shape (re-entered password, or a fresh OAuth proof) wired to
- * `auth/password.ts`/`auth/oauth.ts` — deferred here (see docs/issue-4-plan.md's Phase 2
- * checklist note). Until that lands, this always returns `false`, so a rotation attempt
- * fails closed (401) rather than silently skipping the check.
+ * Step-up verification for a destructive rotation (issue-4-plan.md §6.2): re-proves
+ * account ownership through whichever login identity the account actually has, right
+ * before a key rotation fences out every other session. A password account re-enters
+ * its password (`auth/password.ts`'s own hash, not a fresh one); an OAuth-only account
+ * re-does the OAuth round trip and the resulting identity must match one of the
+ * account's own `auth_identities` rows — a valid Google/GitHub proof for a DIFFERENT
+ * account must not step this one up.
  */
 async function verifyStepUp(
-  _db: Database,
-  _accountId: string,
-  _proof: string | undefined,
+  db: Database,
+  verifier: OAuthVerifier,
+  accountId: string,
+  proof: StepUpProof | undefined,
 ): Promise<boolean> {
-  return false;
+  if (!proof) return false;
+
+  if (proof.kind === "password") {
+    const identity = await db.query.authIdentities.findFirst({
+      where: and(eq(authIdentities.accountId, accountId), eq(authIdentities.kind, "password")),
+    });
+    if (!identity?.passwordHash) return false;
+    return verifyPassword(identity.passwordHash, proof.password);
+  }
+
+  const verified = await verifier.verify(proof.provider, proof.oauthProof);
+  if (!verified) return false;
+  const identity = await db.query.authIdentities.findFirst({
+    where: and(
+      eq(authIdentities.accountId, accountId),
+      eq(authIdentities.kind, verified.provider),
+      eq(authIdentities.identifier, verified.subject),
+    ),
+  });
+  return Boolean(identity);
 }
 
-export function buildKeysRoutes(db: Database): FastifyPluginAsyncZod {
+export function buildKeysRoutes(
+  db: Database,
+  oauthVerifier: OAuthVerifier = defaultOAuthVerifier,
+): FastifyPluginAsyncZod {
   return async (app) => {
     app.post(
       "/v1/auth/keys/challenge",
@@ -106,7 +142,7 @@ export function buildKeysRoutes(db: Database): FastifyPluginAsyncZod {
             nonce: z.string().min(1),
             signature: z.string().min(1),
             rotate: z.boolean().optional(),
-            stepUpProof: z.string().optional(),
+            stepUpProof: StepUpProofSchema.optional(),
           }),
           response: {
             200: z.object({ success: z.literal(true), keyEpoch: z.number() }),
@@ -156,7 +192,9 @@ export function buildKeysRoutes(db: Database): FastifyPluginAsyncZod {
           if (!request.body.rotate) {
             return reply.code(409).send({ error: "Key mismatch; rotation must be explicit" });
           }
-          if (!(await verifyStepUp(db, request.accountId, request.body.stepUpProof))) {
+          if (
+            !(await verifyStepUp(db, oauthVerifier, request.accountId, request.body.stepUpProof))
+          ) {
             return reply.code(401).send({ error: "Step-up required to rotate keys" });
           }
           if (await hasOtherHealthySessions(db, request.accountId, request.sessionId)) {

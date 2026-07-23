@@ -68,9 +68,7 @@
         "accounts_sign_public_key_unique": {
           "name": "accounts_sign_public_key_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "sign_public_key"
-          ]
+          "columns": ["sign_public_key"]
         }
       },
       "policies": {},
@@ -175,12 +173,8 @@
           "name": "auth_identities_account_id_accounts_id_fk",
           "tableFrom": "auth_identities",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -255,12 +249,8 @@
           "name": "blobs_account_id_accounts_id_fk",
           "tableFrom": "blobs",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -407,12 +397,8 @@
           "name": "device_sessions_account_id_accounts_id_fk",
           "tableFrom": "device_sessions",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -422,9 +408,7 @@
         "device_sessions_refresh_token_hash_unique": {
           "name": "device_sessions_refresh_token_hash_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "refresh_token_hash"
-          ]
+          "columns": ["refresh_token_hash"]
         }
       },
       "policies": {},
@@ -472,12 +456,8 @@
           "name": "key_bind_nonces_account_id_accounts_id_fk",
           "tableFrom": "key_bind_nonces",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -487,9 +467,7 @@
         "key_bind_nonces_nonce_unique": {
           "name": "key_bind_nonces_nonce_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "nonce"
-          ]
+          "columns": ["nonce"]
         }
       },
       "policies": {},
@@ -580,12 +558,8 @@
           "name": "machines_account_id_accounts_id_fk",
           "tableFrom": "machines",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -658,9 +632,7 @@
         "pair_requests_eph_pub_unique": {
           "name": "pair_requests_eph_pub_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "eph_pub"
-          ]
+          "columns": ["eph_pub"]
         }
       },
       "policies": {},
@@ -708,12 +680,8 @@
           "name": "password_reset_tokens_auth_identity_id_auth_identities_id_fk",
           "tableFrom": "password_reset_tokens",
           "tableTo": "auth_identities",
-          "columnsFrom": [
-            "auth_identity_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["auth_identity_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -723,9 +691,7 @@
         "password_reset_tokens_token_unique": {
           "name": "password_reset_tokens_token_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "token"
-          ]
+          "columns": ["token"]
         }
       },
       "policies": {},
@@ -796,12 +762,8 @@
           "name": "push_subscriptions_account_id_accounts_id_fk",
           "tableFrom": "push_subscriptions",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -811,9 +773,7 @@
         "push_subscriptions_endpoint_unique": {
           "name": "push_subscriptions_endpoint_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "endpoint"
-          ]
+          "columns": ["endpoint"]
         }
       },
       "policies": {},
@@ -911,12 +871,8 @@
           "name": "session_messages_session_id_sessions_id_fk",
           "tableFrom": "session_messages",
           "tableTo": "sessions",
-          "columnsFrom": [
-            "session_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1098,12 +1054,8 @@
           "name": "sessions_account_id_accounts_id_fk",
           "tableFrom": "sessions",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1156,12 +1108,8 @@
           "name": "telegram_link_requests_account_id_accounts_id_fk",
           "tableFrom": "telegram_link_requests",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1171,9 +1119,7 @@
         "telegram_link_requests_code_unique": {
           "name": "telegram_link_requests_code_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
+          "columns": ["code"]
         }
       },
       "policies": {},
@@ -1326,12 +1272,8 @@
           "name": "workspaces_account_id_accounts_id_fk",
           "tableFrom": "workspaces",
           "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

@@ -7,15 +7,15 @@ import {
   type LucideIcon,
   MonitorIcon,
   PaletteIcon,
-  ShieldCheckIcon,
+  ShieldIcon,
 } from "lucide-react";
 import { MachinesSettingsScreen } from "@/features/machine-settings";
 import { ProvidersSettingsScreen } from "@/features/provider-accounts";
 import { AgentSection } from "./components/AgentSection";
 import { AppearanceSection } from "./components/AppearanceSection";
+import { DevicesSection } from "./components/DevicesSection";
 import { GitSection } from "./components/GitSection";
 import { NotificationsSection } from "./components/NotificationsSection";
-import { RecoverySection } from "./components/RecoverySection";
 import { SupportSection } from "./components/SupportSection";
 
 export type SettingsSectionId =
@@ -25,7 +25,7 @@ export type SettingsSectionId =
   | "providers"
   | "machines"
   | "notifications"
-  | "recovery"
+  | "devices"
   | "support";
 
 export interface SettingsSectionMeta {
@@ -56,6 +56,6 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: BellIcon,
     Content: NotificationsSection,
   },
-  { id: "recovery", label: "Recovery", icon: ShieldCheckIcon, Content: RecoverySection },
+  { id: "devices", label: "Devices", icon: ShieldIcon, Content: DevicesSection },
   { id: "support", label: "Support", icon: LifeBuoyIcon, Content: SupportSection },
 ];

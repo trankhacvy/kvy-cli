@@ -1,6 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { clearToken, getToken, isSignedIn, isTokenExpired, setToken } from "../session.js";
-import { createMemoryStorage } from "./test-storage.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { getSharedCryptoBridgeMock } = vi.hoisted(() => ({
+  getSharedCryptoBridgeMock: vi.fn(),
+}));
+
+vi.mock("../use-crypto-bridge.js", () => ({
+  getSharedCryptoBridge: getSharedCryptoBridgeMock,
+}));
+
+const { clearToken, getAccountId, getToken, isSignedIn, isTokenExpired, setToken, silentRefresh } =
+  await import("../session.js");
 
 /** Base64url-encodes a JSON payload the same way a real JWT would, so tests
  * can build a fake-but-shaped token without pulling in a real JWT library
@@ -22,33 +31,16 @@ const FAR_FUTURE_EXP = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365; // ~1
 const PAST_EXP = Math.floor(Date.now() / 1000) - 60; // 1 minute ago
 
 /**
- * `session.ts` guards every call on `typeof window !== "undefined"` —
- * exercised here in both configurations this vitest run (environment:
- * "node", no jsdom) can actually hit: no `window` at all (SSR/build time,
- * `typeof window` on an unbound identifier is safe and resolves to
- * "undefined"), and a `window` with a `localStorage` stand-in (the
- * post-hydration browser case these pages actually run in).
+ * Security review finding F1: the access token now lives in a plain in-memory
+ * module variable (`session.ts`) — never `localStorage` — so these tests just
+ * drive `setToken`/`getToken`/`clearToken` directly, no `window`/storage
+ * stand-in needed (an earlier revision of this suite stubbed
+ * `window.localStorage`, back when that's where the token actually lived).
  */
-describe("session (no window)", () => {
-  it("getToken/isSignedIn/clearToken/setToken are all safe no-ops without crashing", () => {
-    expect(getToken()).toBeNull();
-    expect(isSignedIn()).toBe(false);
-    expect(() => setToken("abc")).not.toThrow();
-    expect(() => clearToken()).not.toThrow();
-  });
-
-  it("isTokenExpired() is true with no window at all (nothing valid to trust)", () => {
-    expect(isTokenExpired()).toBe(true);
-  });
-});
-
-describe("session (window.localStorage present)", () => {
-  beforeEach(() => {
-    (globalThis as { window?: unknown }).window = { localStorage: createMemoryStorage() };
-  });
-
+describe("session", () => {
   afterEach(() => {
-    delete (globalThis as { window?: unknown }).window;
+    clearToken();
+    getSharedCryptoBridgeMock.mockReset();
   });
 
   it("getToken returns null before any token is set", () => {
@@ -56,27 +48,46 @@ describe("session (window.localStorage present)", () => {
     expect(isSignedIn()).toBe(false);
   });
 
-  it("setToken persists a token that getToken/isSignedIn then observe", () => {
+  it("setToken makes a token that getToken/isSignedIn then observe", () => {
     setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
     expect(getToken()).not.toBeNull();
     expect(isSignedIn()).toBe(true);
   });
 
-  it("setToken overwrites a previously stored token", () => {
+  it("setToken overwrites a previously set token", () => {
     setToken(fakeJwt({ exp: FAR_FUTURE_EXP, sub: "first" }));
     setToken(fakeJwt({ exp: FAR_FUTURE_EXP, sub: "second" }));
-    const stored = getToken();
-    if (!stored) throw new Error("expected a stored token");
-    const payloadPart = stored.split(".")[1];
-    if (!payloadPart) throw new Error("expected a JWT-shaped token");
-    expect(JSON.parse(Buffer.from(payloadPart, "base64").toString("utf8")).sub).toBe("second");
+    expect(getAccountId()).toBe("second");
   });
 
-  it("clearToken removes the stored token", () => {
+  it("clearToken removes the set token", () => {
     setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
     clearToken();
     expect(getToken()).toBeNull();
     expect(isSignedIn()).toBe(false);
+  });
+
+  describe("getAccountId", () => {
+    it("returns null when no token is set", () => {
+      expect(getAccountId()).toBeNull();
+    });
+
+    it("returns the token's sub claim", () => {
+      setToken(fakeJwt({ sub: "acct-123", exp: FAR_FUTURE_EXP }));
+      expect(getAccountId()).toBe("acct-123");
+    });
+
+    it("returns null for a malformed token", () => {
+      setToken("not-a-jwt");
+      expect(getAccountId()).toBeNull();
+    });
+
+    it("returns null when sub is missing or empty", () => {
+      setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
+      expect(getAccountId()).toBeNull();
+      setToken(fakeJwt({ sub: "", exp: FAR_FUTURE_EXP }));
+      expect(getAccountId()).toBeNull();
+    });
   });
 
   describe("isTokenExpired / isSignedIn", () => {
@@ -136,6 +147,42 @@ describe("session (window.localStorage present)", () => {
       setToken("a..b");
       expect(() => isTokenExpired()).not.toThrow();
       expect(isTokenExpired()).toBe(true);
+    });
+  });
+
+  describe("silentRefresh (security review finding F1)", () => {
+    it("resolves false without touching the token when no unlocked bridge is available", async () => {
+      getSharedCryptoBridgeMock.mockReturnValue(null);
+      setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
+
+      const result = await silentRefresh();
+
+      expect(result).toBe(false);
+      // No bridge to ask -> the existing (possibly still-valid) token is left alone,
+      // not wiped out from under an otherwise-fine session.
+      expect(getToken()).not.toBeNull();
+    });
+
+    it("mints a fresh access token from the bridge and never touches the refresh token itself", async () => {
+      const refreshSessionMock = vi.fn().mockResolvedValue("fresh-access-token");
+      getSharedCryptoBridgeMock.mockReturnValue({ refreshSession: refreshSessionMock });
+
+      const result = await silentRefresh();
+
+      expect(result).toBe(true);
+      expect(getToken()).toBe("fresh-access-token");
+      expect(refreshSessionMock).toHaveBeenCalledWith();
+    });
+
+    it("clears the token and resolves false when the bridge has nothing to refresh with", async () => {
+      const refreshSessionMock = vi.fn().mockResolvedValue(null);
+      getSharedCryptoBridgeMock.mockReturnValue({ refreshSession: refreshSessionMock });
+      setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
+
+      const result = await silentRefresh();
+
+      expect(result).toBe(false);
+      expect(getToken()).toBeNull();
     });
   });
 });

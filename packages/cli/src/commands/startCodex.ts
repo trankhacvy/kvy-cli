@@ -17,7 +17,7 @@
  * (design §7.6), so nothing Codex-specific is needed on the permission path.
  */
 import path from "node:path";
-import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
+import { deriveKeyTree } from "@falcon/crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
 import { createHttpClient } from "../api/httpClient.js";
@@ -27,7 +27,8 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
-import { resolveAccessToken } from "../auth/resolveAccessToken.js";
+import { resolveKeyMaterial } from "../auth/keyMaterial.js";
+import { createTokenProviderForCredentials } from "../auth/resolveAccessToken.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import {
   CODEX_NO_LOCAL_MODE_NOTE,
@@ -150,10 +151,16 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     return 1;
   }
 
-  const masterSecret = decodeBase64(credentials.masterSecretOrContentBundle);
-  if (masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
+  // issue-4-plan.md §6.1: same interactive-unlock treatment as `commands/start.ts` —
+  // see that module's comment for the full rationale.
+  const masterSecret = await resolveKeyMaterial(
+    credentials.keyMaterial,
+    deps.homeDir,
+    process.stdin.isTTY === true ? {} : undefined,
+  );
+  if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
     writeError(
-      "falcon codex: stored credentials can't derive a content key for local sessions (reduced-custody pairing?) — run `falcon auth login` on this machine\n",
+      "falcon codex: stored credentials can't derive a content key for local sessions (reduced-custody pairing, or a PIN unlock that didn't succeed) — run `falcon auth login` on this machine\n",
     );
     return 1;
   }
@@ -173,15 +180,17 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
 
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
 
-  // issue-4-plan.md §6.6: same single-resolve-per-invocation approach as
-  // `commands/start.ts` — see that module's own comment for the known scope cut
-  // (no live refresh across a long-running session, only at process start).
-  const accessToken = await resolveAccessToken(credentials, {
+  // issue-4-plan.md §6.6: one `TokenProvider` for this invocation — see
+  // `commands/start.ts`'s own comment for the full rationale; the session-scoped WS
+  // client below holds onto this same provider for live in-band renewal across a
+  // long-running session, same as `falcon claude`.
+  const tokenProvider = createTokenProviderForCredentials(credentials, {
     backendUrl,
     homeDir: deps.homeDir,
     fetchImpl,
     logger,
   });
+  const accessToken = await tokenProvider.getAccessToken();
   if (!accessToken) {
     writeError("falcon codex: could not obtain an access token — run `falcon auth login` again\n");
     return 1;
@@ -232,7 +241,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
 
   const sessionClient = startSessionClient(
     createSessionClientDeps(
-      { serverUrl: backendUrl, token: accessToken, sessionId: bootstrap.sessionId },
+      { serverUrl: backendUrl, tokenProvider, sessionId: bootstrap.sessionId },
       { logger },
     ),
   );

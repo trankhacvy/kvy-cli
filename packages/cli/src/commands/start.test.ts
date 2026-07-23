@@ -1,10 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeBase64, getRandomBytes, open } from "@falcon/crypto";
+import { getRandomBytes, open } from "@falcon/crypto";
 import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon/wire";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { LoopOptions } from "../claude/loop.js";
 import type {
   PtyClaudeSessionHandle,
@@ -45,7 +46,7 @@ function fakeOutbox(): { outbox: OutboxLike; enqueued: SessionEnvelope[][] } {
 function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
     refreshToken: "test-refresh-token",
-    masterSecretOrContentBundle: encodeBase64(getRandomBytes(32)),
+    keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
     ...overrides,
   };
 }
@@ -240,7 +241,7 @@ describe("runStartClaudeCommand — preflight", () => {
       baseDeps({
         readCredentials: () =>
           fakeCredentials({
-            masterSecretOrContentBundle: encodeBase64(getRandomBytes(16)),
+            keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(16)),
           }),
         writeError: (text) => stderr.push(text),
       }),

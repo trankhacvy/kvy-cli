@@ -32,6 +32,10 @@ const RegisterRequestSchema = z.object({
 const RegisterResponseSchema = z.object({
   success: z.literal(true),
   token: z.string(),
+  // issue-4-plan.md §6.1/§6.4: OAuth is a real device session now, same as password —
+  // a bare access token with no way to refresh it would go stale in 15m with no way
+  // back, exactly the gap the password routes' `refreshToken` closes.
+  refreshToken: z.string(),
 });
 
 const RegisterErrorSchema = z.object({
@@ -146,8 +150,11 @@ export function buildOAuthRoutes(
               return account.id;
             });
 
-        const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
-        return reply.send({ success: true, token: accessToken });
+        const { accessToken, refreshToken } = await issueSession(db, {
+          accountId,
+          clientKind: "web",
+        });
+        return reply.send({ success: true, token: accessToken, refreshToken });
       },
     );
   };

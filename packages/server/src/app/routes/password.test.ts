@@ -168,6 +168,94 @@ describe("password auth routes", () => {
     });
   });
 
+  // Security review finding F3: per-identity login lockout. Its own isolated
+  // `app`/`db` (rather than reusing the describe block above's shared instance) so this
+  // test's several back-to-back login attempts against ONE identity don't accumulate
+  // against — or get skewed by — the shared instance's own per-IP rate-limit counter
+  // and its other tests' already-issued login calls.
+  describe("POST /v1/auth/password/login — lockout (security review finding F3)", () => {
+    let lockoutPglite: PGlite;
+    let lockoutDb: ReturnType<typeof drizzle<typeof schema>>;
+    let lockoutApp: FastifyInstance;
+
+    beforeAll(async () => {
+      lockoutPglite = new PGlite();
+      lockoutDb = drizzle(lockoutPglite, { schema });
+      await migrate(lockoutDb, { migrationsFolder });
+      lockoutApp = await buildServer(
+        { logger: false },
+        { db: lockoutDb, emailTransport: recordingEmailTransport() },
+      );
+      await lockoutApp.inject({
+        method: "POST",
+        url: "/v1/auth/password/register",
+        payload: { email: "gina@example.com", password: "ginas-real-password" },
+      });
+    });
+
+    afterAll(async () => {
+      await lockoutApp.close();
+      await lockoutPglite.close();
+    });
+
+    it("locks the identity out after repeated wrong passwords, rejecting even the correct password with the same generic error", async () => {
+      let last: Awaited<ReturnType<typeof lockoutApp.inject>> | undefined;
+      for (let i = 0; i < 5; i++) {
+        last = await lockoutApp.inject({
+          method: "POST",
+          url: "/v1/auth/password/login",
+          payload: { email: "gina@example.com", password: "wrong-guess" },
+        });
+        expect(last.statusCode).toBe(401);
+      }
+      // 5th consecutive failure crossed LOCKOUT_THRESHOLD — the identity is now locked.
+      const identity = await lockoutDb.query.authIdentities.findFirst({
+        where: eq(authIdentities.identifier, "gina@example.com"),
+      });
+      expect(identity?.failedLoginCount).toBe(5);
+      const lockedUntil = identity?.lockedUntil ?? null;
+      expect(lockedUntil).not.toBeNull();
+      expect((lockedUntil as Date).getTime()).toBeGreaterThan(Date.now());
+
+      // The CORRECT password is rejected too, with the exact same generic error — no
+      // oracle distinguishing "locked out" from "wrong password".
+      const correctWhileLocked = await lockoutApp.inject({
+        method: "POST",
+        url: "/v1/auth/password/login",
+        payload: { email: "gina@example.com", password: "ginas-real-password" },
+      });
+      expect(correctWhileLocked.statusCode).toBe(401);
+      expect(correctWhileLocked.json()).toEqual(last?.json());
+    });
+
+    it("a correct login resets the failure counter and lock for a DIFFERENT, never-failed identity", async () => {
+      await lockoutApp.inject({
+        method: "POST",
+        url: "/v1/auth/password/register",
+        payload: { email: "henry@example.com", password: "henrys-real-password" },
+      });
+
+      // One wrong guess — nowhere near the threshold — then the correct password.
+      await lockoutApp.inject({
+        method: "POST",
+        url: "/v1/auth/password/login",
+        payload: { email: "henry@example.com", password: "wrong-once" },
+      });
+      const success = await lockoutApp.inject({
+        method: "POST",
+        url: "/v1/auth/password/login",
+        payload: { email: "henry@example.com", password: "henrys-real-password" },
+      });
+      expect(success.statusCode).toBe(200);
+
+      const identity = await lockoutDb.query.authIdentities.findFirst({
+        where: eq(authIdentities.identifier, "henry@example.com"),
+      });
+      expect(identity?.failedLoginCount).toBe(0);
+      expect(identity?.lockedUntil).toBeNull();
+    });
+  });
+
   describe("password reset", () => {
     it("reset/request always 200s and reset/confirm changes the password + revokes sessions", async () => {
       const register = await app.inject({

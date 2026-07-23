@@ -10,11 +10,12 @@
  * environments (matches Happy's "I changed this to always show the URL"
  * fix for devcontainers).
  */
-import { encodeBase64 } from "@falcon/crypto";
+import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";
 import { openBrowser } from "./browser.js";
 import { resolveBackendUrl, resolveFrontendUrl } from "./config.js";
 import { writeCredentials } from "./credentials.js";
+import { wrapNewKeyMaterial } from "./keyMaterial.js";
 import { type PairFailureReason, pairDevice } from "./pair.js";
 import { displayPairingQrCode } from "./qrcode.js";
 
@@ -68,10 +69,14 @@ export async function runAuthLogin(logger: Logger): Promise<number> {
       return 1;
     }
 
-    writeCredentials({
-      refreshToken: outcome.result.refreshToken,
-      masterSecretOrContentBundle: encodeBase64(outcome.result.masterSecret),
+    // issue-4-plan.md §6.1/§6.5: an interactive terminal (a real human present to type a
+    // PIN) PIN-wraps the master secret; a non-interactive login (CI, a headless
+    // provisioning script — no TTY, no one to prompt) falls back to the device-key
+    // wrap instead, same as the daemon's own default custody mode.
+    const keyMaterial = await wrapNewKeyMaterial(outcome.result.masterSecret, resolveHomeDir(), {
+      interactive: process.stdin.isTTY === true,
     });
+    writeCredentials({ refreshToken: outcome.result.refreshToken, keyMaterial });
 
     logger.info("auth login: succeeded");
     process.stdout.write("\nLogged in to Falcon.\n");

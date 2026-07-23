@@ -1,11 +1,9 @@
 import {
   decodeBase64,
-  decodeRecoveryCode,
   deriveKeyTree,
   encodeBase64,
   getRandomBytes,
   libsodiumDecryptWithSecretKey,
-  verifyDetached,
   wrapDek,
 } from "@falcon/crypto/web";
 import { describe, expect, it } from "vitest";
@@ -14,6 +12,8 @@ import { createMemoryKeyStorage } from "../key-storage.js";
 import { createCryptoWorkerHandler } from "../worker-handler.js";
 import { containsSecretBytes } from "./bytes-scan.js";
 import { createLoopbackWorker } from "./loopback.js";
+
+const PIN = "123456";
 
 describe("crypto-bridge client <-> worker RPC", () => {
   it("seal/open round-trips through the postMessage boundary", async () => {
@@ -25,7 +25,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
 
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
     expect(await client.setSessionKey(wrappedDek)).toBe(true);
 
     const payload = { kind: "text", body: "hi", nested: [1, 2, { ok: true }] };
@@ -44,7 +44,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
 
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
     await client.setSessionKey(wrappedDek);
 
     const opened = await client.open({ t: "enc", v: 1, c: "not-real-ciphertext" });
@@ -60,7 +60,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
 
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
     expect(await client.setSessionKey(wrappedDek)).toBe(true);
 
     const attachment = new Uint8Array([1, 2, 3, 4, 5, 250, 251, 252]);
@@ -80,7 +80,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
 
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
     await client.setSessionKey(wrappedDek);
 
     const opened = await client.openBlob(new Uint8Array([1, 2, 3]));
@@ -104,7 +104,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
 
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
     await client.setSessionKey(wrappedDek);
     await client.seal({ some: "plaintext", more: [1, 2, 3] });
     await client.open(await client.seal("round-trip-me"));
@@ -128,7 +128,7 @@ describe("crypto-bridge client <-> worker RPC", () => {
 
     const masterSecret = getRandomBytes(32);
     const tree = deriveKeyTree(masterSecret);
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
 
     expect(await client.getIdentity()).toEqual({
       signPubKey: expect.any(String),
@@ -139,54 +139,53 @@ describe("crypto-bridge client <-> worker RPC", () => {
     expect(decodeBase64(identity!.contentPubKey)).toEqual(tree.content.publicKey);
   });
 
-  it("signInChallenge produces a challenge/signature that verifies against the provisioned identity", async () => {
+  it("a fresh worker (e.g. after a page reload) requires unlock — getIdentity still answers, but key ops don't", async () => {
+    const storage = createMemoryKeyStorage();
+    const provisioningWorker = createLoopbackWorker(createCryptoWorkerHandler(storage));
+    const provisioningClient = createCryptoBridgeClient(provisioningWorker);
+    const masterSecret = getRandomBytes(32);
+    await provisioningClient.init(masterSecret, PIN, "test-refresh-token");
+
+    const freshWorker = createLoopbackWorker(createCryptoWorkerHandler(storage));
+    const freshClient = createCryptoBridgeClient(freshWorker);
+
+    // No unlock required for this.
+    expect(await freshClient.getIdentity()).not.toBeNull();
+
+    // But an unwrap-requiring op fails until unlock() succeeds.
+    await expect(
+      freshClient.bindKeysProof("acct", encodeBase64(getRandomBytes(32))),
+    ).rejects.toThrow("locked");
+
+    expect(await freshClient.unlock("wrong-pin")).toBe(false);
+    expect(await freshClient.unlock(PIN)).toBe(true);
+
+    const proof = await freshClient.bindKeysProof("acct", encodeBase64(getRandomBytes(32)));
+    expect(proof.signPubKey).toEqual(await freshClient.getIdentity().then((i) => i?.signPubKey));
+  });
+
+  it("unlock rejects with not-initialized when nothing has ever been provisioned on this device", async () => {
+    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+    const client = createCryptoBridgeClient(worker);
+
+    await expect(client.unlock(PIN)).rejects.toThrow("not-initialized");
+  });
+
+  it("sealForPeer seals the master secret + refresh token so only the peer's matching secret key can open it", async () => {
     const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
     const client = createCryptoBridgeClient(worker);
 
     const masterSecret = getRandomBytes(32);
-    const tree = deriveKeyTree(masterSecret);
-    await client.init(masterSecret);
-
-    const result = await client.signInChallenge();
-    expect(
-      verifyDetached(
-        decodeBase64(result.challenge),
-        decodeBase64(result.signature),
-        tree.signing.publicKey,
-      ),
-    ).toBe(true);
-  });
-
-  it("signInChallenge rejects when no identity has been provisioned", async () => {
-    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
-    const client = createCryptoBridgeClient(worker);
-
-    await expect(client.signInChallenge()).rejects.toThrow("not-initialized");
-  });
-
-  it("exportRecoveryCode round-trips to the provisioned master secret", async () => {
-    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
-    const client = createCryptoBridgeClient(worker);
-
-    const masterSecret = getRandomBytes(32);
-    await client.init(masterSecret);
-
-    const code = await client.exportRecoveryCode();
-    expect(decodeRecoveryCode(code)).toEqual(masterSecret);
-  });
-
-  it("sealForPeer seals the master secret so only the peer's matching secret key can open it", async () => {
-    const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
-    const client = createCryptoBridgeClient(worker);
-
-    const masterSecret = getRandomBytes(32);
-    await client.init(masterSecret);
+    await client.init(masterSecret, PIN, "test-refresh-token");
 
     const peer = deriveKeyTree(getRandomBytes(32)).content;
-    const sealed = await client.sealForPeer(encodeBase64(peer.publicKey));
+    const sealed = await client.sealForPeer(encodeBase64(peer.publicKey), "the-refresh-token");
 
     const opened = libsodiumDecryptWithSecretKey(decodeBase64(sealed), peer.secretKey);
     expect(opened).not.toBeNull();
-    expect(opened?.slice(1)).toEqual(masterSecret);
+    expect(opened?.slice(1, 1 + masterSecret.length)).toEqual(masterSecret);
+    expect(new TextDecoder().decode(opened?.slice(1 + masterSecret.length))).toBe(
+      "the-refresh-token",
+    );
   });
 });

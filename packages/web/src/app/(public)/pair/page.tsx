@@ -3,11 +3,12 @@
 import { decodeBase64, encodeBase64 } from "@falcon/crypto/web";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { PinUnlockForm } from "@/components/auth/pin-unlock-form";
 import { Button } from "@/components/ui/button";
-import { ApiError, approvePairing } from "@/lib/api";
+import { ApiError, approvePairing, mintPairSession } from "@/lib/api";
 import { stashPendingPair } from "@/lib/pending-pair";
 import { getToken, isSignedIn } from "@/lib/session";
-import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { useUnlockedCryptoBridge } from "@/lib/use-unlocked-crypto-bridge";
 
 const X25519_PUBLIC_KEY_BYTES = 32;
 
@@ -22,13 +23,24 @@ type Status =
 // CLI pairing approval (design §5.2 "CLI pairing"): the CLI prints
 // `app.falcon.dev/pair#<ephPub>` and polls `/v1/auth/pair/status` while this
 // already-authenticated browser visits the link and approves it.
+//
+// issue-4-plan.md §6.1/§6.3: approving now needs the crypto worker UNLOCKED
+// (`bridge.sealForPeer` seals the verbatim master secret + a fresh refresh
+// token, both of which only exist in an unlocked worker's memory) — a fresh
+// page load (this link is very plausibly the FIRST thing opened in a new
+// tab/browser session) starts locked, so this page gates on
+// `useUnlockedCryptoBridge()` the same way `RequireAuth`/`password/page.tsx` do,
+// rather than assuming whatever `useCryptoBridge()` hands back is already usable.
 export default function PairPage() {
   const router = useRouter();
-  const bridge = useCryptoBridge();
+  const { status: bridgeStatus, unlock } = useUnlockedCryptoBridge();
   const [status, setStatus] = useState<Status>({ kind: "checking" });
+  const [unlockError, setUnlockError] = useState<string | undefined>(undefined);
+  const [unlocking, setUnlocking] = useState(false);
 
   useEffect(() => {
-    if (!bridge) return;
+    if (bridgeStatus.kind !== "ready") return;
+    const bridge = bridgeStatus.bridge;
     const ephPubUrlSafe = window.location.hash.slice(1);
 
     // The CLI mints this fragment with `encodeBase64Url` (falcon-plan.md §2.2
@@ -64,10 +76,19 @@ export default function PairPage() {
     return () => {
       cancelled = true;
     };
-  }, [bridge, router]);
+  }, [bridgeStatus, router]);
+
+  async function handleUnlock(pin: string) {
+    setUnlocking(true);
+    setUnlockError(undefined);
+    const ok = await unlock(pin);
+    setUnlocking(false);
+    if (!ok) setUnlockError("Wrong PIN. Try again.");
+  }
 
   async function approve(ephPub: string) {
-    if (!bridge) return;
+    if (bridgeStatus.kind !== "ready") return;
+    const bridge = bridgeStatus.bridge;
     setStatus({ kind: "approving", ephPub });
     const token = getToken();
     if (!token) {
@@ -79,13 +100,38 @@ export default function PairPage() {
       return;
     }
     try {
-      const sealed = await bridge.sealForPeer(ephPub);
+      // issue-4-plan.md §6.3: mint the new device's session server-side FIRST — the
+      // resulting refresh token has to reach the crypto worker so it can be sealed
+      // alongside the master secret, not relayed to the server in plaintext.
+      const { refreshToken } = await mintPairSession(token, ephPub);
+      const sealed = await bridge.sealForPeer(ephPub, refreshToken);
       await approvePairing(token, { ephPub, response: sealed });
       setStatus({ kind: "approved" });
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Approval failed. Please retry.";
       setStatus({ kind: "error", message, ephPub });
     }
+  }
+
+  if (bridgeStatus.kind === "needs-unlock") {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-8">
+        <div className="w-full max-w-sm">
+          <PinUnlockForm pending={unlocking} error={unlockError} onSubmit={handleUnlock} />
+        </div>
+      </main>
+    );
+  }
+
+  if (bridgeStatus.kind === "no-identity") {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="max-w-sm text-sm text-muted-foreground">
+          This browser has no Falcon key material for your account yet — sign in with email/password
+          or OAuth first, then reopen this pairing link.
+        </p>
+      </main>
+    );
   }
 
   return (

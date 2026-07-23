@@ -1,7 +1,7 @@
 /**
  * `~/.falcon/access.key` persistence (falcon-plan.md §2.1: "`access.key`:
- * `{token, masterSecretOrContentBundle}` base64 JSON, chmod 600"). Port of
- * Happy's `persistence.ts` credential read/write, adapted to Falcon's single
+ * `{token, masterSecretOrContentBundle}` base64 JSON, chmod 600"). Port of Happy's
+ * `persistence.ts` credential read/write, adapted to Falcon's single
  * always-present masterSecret shape — Falcon has no legacy/dataKey split to
  * carry forward, so unlike Happy's `Credentials` union this is one flat shape.
  *
@@ -11,33 +11,62 @@
  * `auth/tokenProvider.ts` mint fresh access tokens indefinitely (up to its own 60-day
  * absolute lifetime, §4.6) without another `falcon auth login`.
  *
- * **Deviation from the plan's illustrative `keyMaterial` discriminated union** (PIN /
- * device-keychain / plaintext-fallback wrapping, §6.5): not implemented here. This file
- * still stores `masterSecretOrContentBundle` as a bare base64 string, same at-rest
- * custody as before (0600 file permissions only) — the PIN-wrap and OS-keychain
- * device-key wrapping described in §6.5 would layer a `PinWrapped`/`DeviceWrapped`
- * encoding on top of this field, but that's a real scope cut for this pass, recorded in
- * docs/issue-4-plan.md's Phase 5 checklist. The plan itself is candid that this
- * particular improvement "delivers little at-rest benefit on daemon boxes" anyway
- * (§6.5) — the refresh-token fix above is the part that actually closes known-issues.md
- * #4's "daemon never re-authenticates" gap.
+ * §6.1/§6.5: the master secret (or reduced-custody content bundle) is never stored
+ * raw anymore — `keyMaterial` is a discriminated union over HOW it's wrapped at rest:
+ *
+ *   - `"pin"` — `@falcon/crypto`'s `wrapWithPin` (argon2id + AES-256-GCM), for an
+ *     interactive foreground login (`falcon auth login` run at a real terminal,
+ *     `auth/pin.ts`'s prompt). Unwrapping needs the user to type their PIN — never
+ *     usable by an unattended daemon process.
+ *   - `"device"` — `auth/deviceKey.ts`'s OS-Keychain-backed AES-256-GCM wrap. The
+ *     daemon's default: unwrapping needs no human present, at the cost of the
+ *     documented "delivers little at-rest benefit on daemon boxes" caveat (§6.5) — a
+ *     compromise of this same machine/user account can usually reach the Keychain
+ *     too. Also the fallback for a non-interactive `falcon auth login` (no TTY).
+ *   - `"plaintext-fallback"` — no wrapping at all; same at-rest custody this file had
+ *     before this pass. Kept as an explicit, named mode (never silently substituted
+ *     for a failed wrap) so a caller that hits it can log/report exactly what
+ *     happened, rather than this module quietly downgrading security.
  */
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import type { PinWrapped } from "@falcon/crypto";
 import { z } from "zod";
 import { resolveHomeDir } from "../home.js";
 
+const PinWrappedSchema = z.object({
+  v: z.literal(1),
+  kdf: z.literal("argon2id"),
+  salt: z.string(),
+  nonce: z.string(),
+  ct: z.string(),
+});
+
+const DeviceWrappedSchema = z.object({
+  v: z.literal(1),
+  nonce: z.string(),
+  ct: z.string(),
+});
+
+const KeyMaterialSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("pin"), wrapped: PinWrappedSchema }),
+  z.object({ mode: z.literal("device"), wrapped: DeviceWrappedSchema }),
+  // base64-encoded masterSecret (or a content-key bundle for machines paired with
+  // reduced custody — plan.md §2.1's "masterSecretOrContentBundle"), stored as-is.
+  z.object({ mode: z.literal("plaintext-fallback"), bundle: z.string().min(1) }),
+]);
+
+export type KeyMaterial = z.infer<typeof KeyMaterialSchema>;
+
 const CredentialsSchema = z.object({
   refreshToken: z.string().min(1),
-  // base64-encoded masterSecret (or a content-key bundle for machines paired
-  // with reduced custody — plan.md §2.1's "masterSecretOrContentBundle").
-  // Opaque to this module either way; only the auth flows care what's inside.
-  masterSecretOrContentBundle: z.string().min(1),
+  keyMaterial: KeyMaterialSchema,
 });
 
 export type FalconCredentials = z.infer<typeof CredentialsSchema>;
 
-// Owner read/write only — this file holds the account's master secret.
+// Owner read/write only — this file holds (at minimum, wrapped) the account's master
+// secret.
 const CREDENTIALS_FILE_MODE = 0o600;
 
 export function credentialsPath(homeDir: string = resolveHomeDir()): string {
@@ -45,9 +74,9 @@ export function credentialsPath(homeDir: string = resolveHomeDir()): string {
 }
 
 /**
- * Reads and validates `~/.falcon/access.key`. Never throws (design principle
- * #1) — a missing, unreadable, or malformed file is just "not logged in",
- * not an exceptional condition callers need to catch.
+ * Reads and validates `~/.falcon/access.key`. Never throws (design principle #1) — a
+ * missing, unreadable, or malformed file is just "not logged in", not an exceptional
+ * condition callers need to catch.
  */
 export function readCredentials(homeDir: string = resolveHomeDir()): FalconCredentials | null {
   const file = credentialsPath(homeDir);
@@ -79,3 +108,6 @@ export function clearCredentials(homeDir: string = resolveHomeDir()): void {
   const file = credentialsPath(homeDir);
   if (existsSync(file)) unlinkSync(file);
 }
+
+/** `PinWrapped`'s shape, re-exported for callers that only import from here. */
+export type { PinWrapped };

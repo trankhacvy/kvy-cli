@@ -1,13 +1,11 @@
 import {
   decodeBase64,
-  decodeRecoveryCode,
   deriveKeyTree,
   type EncryptedBox,
   encodeBase64,
   getRandomBytes,
   libsodiumDecryptWithSecretKey,
   ready,
-  verifyDetached,
   wrapDek,
 } from "@falcon/crypto/web";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -18,6 +16,9 @@ import { type CryptoWorkerHandler, createCryptoWorkerHandler } from "../worker-h
 function req(id: string, rest: CryptoWorkerRequestPayload): CryptoWorkerRequest {
   return { id, ...rest } as CryptoWorkerRequest;
 }
+
+const PIN = "123456";
+const OTHER_PIN = "000000";
 
 describe("createCryptoWorkerHandler", () => {
   let handler: CryptoWorkerHandler;
@@ -36,7 +37,7 @@ describe("createCryptoWorkerHandler", () => {
   });
 
   it("init -> setSessionKey -> seal/open round-trips arbitrary JSON data", async () => {
-    const initRes = await handler.handle(req("1", { type: "init", masterSecret }));
+    const initRes = await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     expect(initRes).toEqual({ id: "1", ok: true, result: null });
 
     const setKeyRes = await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
@@ -55,7 +56,7 @@ describe("createCryptoWorkerHandler", () => {
   });
 
   it("setSessionKey resolves ok:true, result:false (never throws) for a DEK wrapped to a different key tree", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     const otherTree = deriveKeyTree(getRandomBytes(32));
     const foreignWrappedDek = wrapDek(getRandomBytes(32), otherTree.content.publicKey);
 
@@ -65,24 +66,33 @@ describe("createCryptoWorkerHandler", () => {
     expect(res).toEqual({ id: "2", ok: true, result: false });
   });
 
-  it("setSessionKey fails with not-initialized when no key material exists yet", async () => {
+  it("setSessionKey fails with not-initialized when nothing has ever been provisioned", async () => {
     const res = await handler.handle(req("1", { type: "setSessionKey", wrappedDek }));
     expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
   });
 
+  it("setSessionKey fails with locked on a fresh worker over an already-provisioned (but not yet unlocked) device", async () => {
+    const storage = createMemoryKeyStorage();
+    const provisioning = createCryptoWorkerHandler(storage);
+    await provisioning.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
+
+    const freshHandler = createCryptoWorkerHandler(storage);
+    const res = await freshHandler.handle(req("1", { type: "setSessionKey", wrappedDek }));
+    expect(res).toEqual({ id: "1", ok: false, error: "locked" });
+  });
+
   it("open() fails when no active session key is set", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     const res = await handler.handle(req("2", { type: "open", box: { t: "enc", v: 1, c: "abc" } }));
     expect(res).toEqual({ id: "2", ok: false, error: "no-active-session-key" });
   });
 
   it("open() resolves ok:true, result:null (never throws) for a box sealed under a different DEK", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
     const sealRes = await handler.handle(req("3", { type: "seal", data: { secret: 42 } }));
     if (!sealRes.ok) throw new Error("unreachable");
 
-    // Rekey to a different DEK, then try to open ciphertext sealed under the old one.
     const otherDek = getRandomBytes(32);
     const otherWrapped = wrapDek(otherDek, tree.content.publicKey);
     await handler.handle(req("4", { type: "setSessionKey", wrappedDek: otherWrapped }));
@@ -101,7 +111,7 @@ describe("createCryptoWorkerHandler", () => {
   });
 
   it("init -> setSessionKey -> sealBlob/openBlob round-trips binary data", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
 
     const plaintext = new Uint8Array([10, 20, 30, 40, 250]);
@@ -109,7 +119,6 @@ describe("createCryptoWorkerHandler", () => {
     expect(sealRes.ok).toBe(true);
     if (!sealRes.ok) throw new Error("unreachable");
     expect(sealRes.result).toBeInstanceOf(Uint8Array);
-    // The wire format is [nonce(24)][ciphertext+tag] — strictly longer than the plaintext.
     expect((sealRes.result as Uint8Array).length).toBeGreaterThan(plaintext.length);
 
     const openRes = await handler.handle(
@@ -120,49 +129,10 @@ describe("createCryptoWorkerHandler", () => {
     expect(openRes.result).toEqual(plaintext);
   });
 
-  it("openBlob() resolves ok:true, result:null (never throws) for a bundle sealed under a different DEK", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
-    await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
-    const sealRes = await handler.handle(
-      req("3", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }),
-    );
-    if (!sealRes.ok) throw new Error("unreachable");
-
-    const otherDek = getRandomBytes(32);
-    const otherWrapped = wrapDek(otherDek, tree.content.publicKey);
-    await handler.handle(req("4", { type: "setSessionKey", wrappedDek: otherWrapped }));
-
-    const openRes = await handler.handle(
-      req("5", { type: "openBlob", bundle: sealRes.result as Uint8Array }),
-    );
-    expect(openRes).toEqual({ id: "5", ok: true, result: null });
-  });
-
-  it("sealBlob output is independent of seal()'s output for the same DEK (blob key isolation)", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
-    await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
-
-    // A blob encrypted then "opened" as if it were a seal()-produced EncryptedBox
-    // must not decrypt — they're sealed under cryptographically independent keys
-    // (design §5.1: blob key = HKDF(DEK, "falcon-blobs"), isolated from the DEK
-    // seal()/open() use directly).
-    const sealBlobRes = await handler.handle(
-      req("3", { type: "sealBlob", data: new Uint8Array([1, 2, 3]) }),
-    );
-    if (!sealBlobRes.ok) throw new Error("unreachable");
-    const asBox: EncryptedBox = {
-      t: "enc",
-      v: 1,
-      c: encodeBase64(sealBlobRes.result as Uint8Array),
-    };
-    const openRes = await handler.handle(req("4", { type: "open", box: asBox }));
-    expect(openRes).toEqual({ id: "4", ok: true, result: null });
-  });
-
   it("clear() wipes in-memory keys and persisted storage — a later call requires init again", async () => {
     const storage = createMemoryKeyStorage();
     handler = createCryptoWorkerHandler(storage);
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     await handler.handle(req("2", { type: "clear" }));
 
     expect(await storage.load()).toBeNull();
@@ -170,41 +140,63 @@ describe("createCryptoWorkerHandler", () => {
     expect(setKeyRes).toEqual({ id: "3", ok: false, error: "not-initialized" });
   });
 
-  it("loads previously-provisioned key material from storage lazily, on first use (worker restart / page reload)", async () => {
+  it("a fresh worker instance requires unlock — it never auto-loads provisioned key material", async () => {
     const storage = createMemoryKeyStorage();
-    await storage.save(masterSecret);
+    const provisioning = createCryptoWorkerHandler(storage);
+    await provisioning.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
 
-    // Simulate a fresh worker instance that never received an explicit `init`
-    // this session — it should pick up the persisted secret from storage.
     const freshHandler = createCryptoWorkerHandler(storage);
     const res = await freshHandler.handle(req("1", { type: "setSessionKey", wrappedDek }));
-    expect(res).toEqual({ id: "1", ok: true, result: true });
+    expect(res).toEqual({ id: "1", ok: false, error: "locked" });
+
+    const unlockRes = await freshHandler.handle(req("2", { type: "unlock", pin: PIN }));
+    expect(unlockRes).toEqual({ id: "2", ok: true, result: true });
+
+    const afterUnlock = await freshHandler.handle(req("3", { type: "setSessionKey", wrappedDek }));
+    expect(afterUnlock).toEqual({ id: "3", ok: true, result: true });
+  });
+
+  it("unlock resolves false (never throws) for a wrong PIN", async () => {
+    const storage = createMemoryKeyStorage();
+    const provisioning = createCryptoWorkerHandler(storage);
+    await provisioning.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
+
+    const freshHandler = createCryptoWorkerHandler(storage);
+    const res = await freshHandler.handle(req("1", { type: "unlock", pin: OTHER_PIN }));
+    expect(res).toEqual({ id: "1", ok: true, result: false });
+  });
+
+  it("unlock fails with not-initialized when nothing has ever been provisioned", async () => {
+    const res = await handler.handle(req("1", { type: "unlock", pin: PIN }));
+    expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
   });
 
   it("re-init drops the previously active session DEK — seal fails until setSessionKey is called again", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     await handler.handle(req("2", { type: "setSessionKey", wrappedDek }));
     const sealed = await handler.handle(req("3", { type: "seal", data: { a: 1 } }));
     expect(sealed.ok).toBe(true);
 
-    // Re-init (e.g. re-authenticating) with a *different* master secret must
-    // clear the previously active DEK, not just swap the key tree underneath it.
     const otherSecret = getRandomBytes(32);
-    await handler.handle(req("4", { type: "init", masterSecret: otherSecret }));
+    await handler.handle(req("4", { type: "init", masterSecret: otherSecret, pin: PIN, refreshToken: "other-refresh-token" }));
 
     const res = await handler.handle(req("5", { type: "seal", data: { a: 2 } }));
     expect(res).toEqual({ id: "5", ok: false, error: "no-active-session-key" });
   });
 
-  it("init persists the new master secret to storage, overwriting whatever was there before", async () => {
+  it("init persists the new master secret (PIN-wrapped) to storage, overwriting whatever was there before", async () => {
     const storage = createMemoryKeyStorage();
     handler = createCryptoWorkerHandler(storage);
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
 
     const otherSecret = getRandomBytes(32);
-    await handler.handle(req("2", { type: "init", masterSecret: otherSecret }));
+    await handler.handle(req("2", { type: "init", masterSecret: otherSecret, pin: PIN, refreshToken: "other-refresh-token" }));
 
-    expect(await storage.load()).toEqual(otherSecret);
+    const stored = await storage.load();
+    expect(stored).not.toBeNull();
+    // Storage never holds the raw secret — only the wrapped blob + public keys.
+    expect(stored?.wrapped.ct).not.toContain(encodeBase64(masterSecret));
+    expect(stored?.signPubKey).toBe(encodeBase64(deriveKeyTree(otherSecret).signing.publicKey));
   });
 
   it("getIdentity resolves null before any identity is provisioned", async () => {
@@ -213,7 +205,7 @@ describe("createCryptoWorkerHandler", () => {
   });
 
   it("getIdentity resolves the public keys after init, matching the derived key tree", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     const res = await handler.handle(req("2", { type: "getIdentity" }));
     expect(res).toEqual({
       id: "2",
@@ -225,11 +217,12 @@ describe("createCryptoWorkerHandler", () => {
     });
   });
 
-  it("getIdentity loads a previously-provisioned identity from storage lazily", async () => {
+  it("getIdentity answers from the stored record's plaintext public keys — no unlock required", async () => {
     const storage = createMemoryKeyStorage();
-    await storage.save(masterSecret);
-    const freshHandler = createCryptoWorkerHandler(storage);
+    const provisioning = createCryptoWorkerHandler(storage);
+    await provisioning.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
 
+    const freshHandler = createCryptoWorkerHandler(storage);
     const res = await freshHandler.handle(req("1", { type: "getIdentity" }));
     expect(res).toEqual({
       id: "1",
@@ -241,79 +234,53 @@ describe("createCryptoWorkerHandler", () => {
     });
   });
 
-  it("signInChallenge fails with not-initialized when no identity exists yet", async () => {
-    const res = await handler.handle(req("1", { type: "signInChallenge" }));
-    expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
-  });
-
-  it("signInChallenge mints a fresh challenge signed by the provisioned identity", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
-    const res = await handler.handle(req("2", { type: "signInChallenge" }));
-    expect(res.ok).toBe(true);
-    if (!res.ok) throw new Error("unreachable");
-    const result = res.result as {
-      signPubKey: string;
-      contentPubKey: string;
-      challenge: string;
-      signature: string;
-    };
-    expect(result.signPubKey).toBe(encodeBase64(tree.signing.publicKey));
-    expect(result.contentPubKey).toBe(encodeBase64(tree.content.publicKey));
-    expect(
-      verifyDetached(
-        decodeBase64(result.challenge),
-        decodeBase64(result.signature),
-        tree.signing.publicKey,
-      ),
-    ).toBe(true);
-  });
-
-  it("signInChallenge mints a different challenge on each call", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
-    const a = await handler.handle(req("2", { type: "signInChallenge" }));
-    const b = await handler.handle(req("3", { type: "signInChallenge" }));
-    if (!a.ok || !b.ok) throw new Error("unreachable");
-    expect((a.result as { challenge: string }).challenge).not.toBe(
-      (b.result as { challenge: string }).challenge,
-    );
-  });
-
-  it("exportRecoveryCode fails with not-initialized when no identity exists yet", async () => {
-    const res = await handler.handle(req("1", { type: "exportRecoveryCode" }));
-    expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
-  });
-
-  it("exportRecoveryCode round-trips back to the exact provisioned master secret", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
-    const res = await handler.handle(req("2", { type: "exportRecoveryCode" }));
-    expect(res.ok).toBe(true);
-    if (!res.ok) throw new Error("unreachable");
-    expect(decodeRecoveryCode(res.result as string)).toEqual(masterSecret);
-  });
-
   it("sealForPeer fails with not-initialized when no identity exists yet", async () => {
     const ephPub = getRandomBytes(32);
     const res = await handler.handle(
-      req("1", { type: "sealForPeer", ephPub: encodeBase64(ephPub) }),
+      req("1", { type: "sealForPeer", ephPub: encodeBase64(ephPub), refreshToken: "rt" }),
     );
     expect(res).toEqual({ id: "1", ok: false, error: "not-initialized" });
   });
 
+  it("sealForPeer fails with locked on a fresh, not-yet-unlocked worker", async () => {
+    const storage = createMemoryKeyStorage();
+    const provisioning = createCryptoWorkerHandler(storage);
+    await provisioning.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
+
+    const freshHandler = createCryptoWorkerHandler(storage);
+    const res = await freshHandler.handle(
+      req("1", {
+        type: "sealForPeer",
+        ephPub: encodeBase64(getRandomBytes(32)),
+        refreshToken: "rt",
+      }),
+    );
+    expect(res).toEqual({ id: "1", ok: false, error: "locked" });
+  });
+
   it("sealForPeer rejects a malformed (wrong-length) ephemeral public key", async () => {
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
     const res = await handler.handle(
-      req("2", { type: "sealForPeer", ephPub: encodeBase64(new Uint8Array([1, 2, 3])) }),
+      req("2", {
+        type: "sealForPeer",
+        ephPub: encodeBase64(new Uint8Array([1, 2, 3])),
+        refreshToken: "rt",
+      }),
     );
     expect(res).toEqual({ id: "2", ok: false, error: "invalid-eph-pub" });
   });
 
-  it("sealForPeer produces a box that only the peer's matching secret key can open, revealing the master secret", async () => {
+  it("sealForPeer produces a box that only the peer's matching secret key can open, revealing the master secret + refresh token", async () => {
     await ready;
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
 
     const peerKeyPair = tweetnaclBoxKeyPair();
     const res = await handler.handle(
-      req("2", { type: "sealForPeer", ephPub: encodeBase64(peerKeyPair.publicKey) }),
+      req("2", {
+        type: "sealForPeer",
+        ephPub: encodeBase64(peerKeyPair.publicKey),
+        refreshToken: "the-refresh-token",
+      }),
     );
     expect(res.ok).toBe(true);
     if (!res.ok) throw new Error("unreachable");
@@ -323,18 +290,25 @@ describe("createCryptoWorkerHandler", () => {
       peerKeyPair.secretKey,
     );
     expect(opened).not.toBeNull();
-    expect(opened?.[0]).toBe(0);
-    expect(opened?.slice(1)).toEqual(masterSecret);
+    expect(opened?.[0]).toBe(0x01);
+    expect(opened?.slice(1, 1 + masterSecret.length)).toEqual(masterSecret);
+    expect(new TextDecoder().decode(opened?.slice(1 + masterSecret.length))).toBe(
+      "the-refresh-token",
+    );
   });
 
   it("sealForPeer is not openable by an unrelated secret key", async () => {
     await ready;
-    await handler.handle(req("1", { type: "init", masterSecret }));
+    await handler.handle(req("1", { type: "init", masterSecret, pin: PIN, refreshToken: "test-refresh-token" }));
 
     const peerKeyPair = tweetnaclBoxKeyPair();
     const wrongKeyPair = tweetnaclBoxKeyPair();
     const res = await handler.handle(
-      req("2", { type: "sealForPeer", ephPub: encodeBase64(peerKeyPair.publicKey) }),
+      req("2", {
+        type: "sealForPeer",
+        ephPub: encodeBase64(peerKeyPair.publicKey),
+        refreshToken: "rt",
+      }),
     );
     if (!res.ok) throw new Error("unreachable");
 

@@ -127,6 +127,7 @@ import type {
 import type { Socket } from "socket.io-client";
 import type { FalconCredentials } from "../auth/credentials.js";
 import { writeCredentials } from "../auth/credentials.js";
+import { resolveKeyMaterial } from "../auth/keyMaterial.js";
 import { createTokenProvider, type TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { createAdoptTakeDeps, handleAdoptTake } from "./adoptTake.js";
@@ -300,10 +301,15 @@ export async function startMachineIntegration(
     logger: deps.logger,
   });
 
-  const masterSecret = decodeBase64(credentials.masterSecretOrContentBundle);
-  if (masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
+  // issue-4-plan.md §6.1/§6.5: the daemon never runs interactively (no TTY, nobody to
+  // type a PIN), so it can only ever unwrap `"device"` (its own default, OS-Keychain
+  // custody) or `"plaintext-fallback"` key material — `resolveKeyMaterial` returns
+  // `null` for `"pin"` mode without `pinDeps`, exactly the "skip, don't hang" behavior
+  // this needs.
+  const masterSecret = await resolveKeyMaterial(credentials.keyMaterial, deps.homeDir);
+  if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
     deps.logger.warn(
-      "[machine-integration] stored credentials are not a full masterSecret (reduced-custody pairing?), skipping machine client",
+      "[machine-integration] stored credentials are not an unwrappable full masterSecret (PIN-protected with no one to prompt, or a reduced-custody pairing bundle) — skipping machine client",
     );
     return null;
   }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeCredentials } from "./credentials.js";
+import { plaintextFallbackKeyMaterial } from "./keyMaterial.js";
 import { runAuthLogout } from "./logout.js";
 
 let homeDir: string;
@@ -35,7 +36,13 @@ describe("runAuthLogout", () => {
   });
 
   it("clears stored credentials, logs, and exits 0 when logged in", () => {
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials(
+      {
+        refreshToken: "t",
+        keyMaterial: plaintextFallbackKeyMaterial(new TextEncoder().encode("s")),
+      },
+      homeDir,
+    );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const logger = fakeLogger();
 
@@ -47,7 +54,13 @@ describe("runAuthLogout", () => {
   });
 
   it("is idempotent — running logout twice never throws", () => {
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials(
+      {
+        refreshToken: "t",
+        keyMaterial: plaintextFallbackKeyMaterial(new TextEncoder().encode("s")),
+      },
+      homeDir,
+    );
     vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const logger = fakeLogger();
 

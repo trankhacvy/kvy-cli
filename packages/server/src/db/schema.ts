@@ -60,6 +60,13 @@ export const authIdentities = pgTable(
     email: text("email"),
     emailVerified: boolean("email_verified").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Security review finding F3: per-identity login lockout (issue-4-plan.md §5.2) — an
+    // IP-rotating attacker defeats `password.ts`'s route-level Fastify rate limit alone,
+    // so a wrong password against THIS identifier also counts here regardless of source
+    // IP. `password.ts` resets `failedLoginCount` to 0 / clears `lockedUntil` on any
+    // successful login. Both are irrelevant (stay null/0) for oauth-only identities.
+    failedLoginCount: integer("failed_login_count").notNull().default(0),
+    lockedUntil: timestamp("locked_until"),
   },
   (t) => [uniqueIndex().on(t.kind, t.identifier), index().on(t.accountId)],
 );
@@ -213,20 +220,25 @@ export const unmanagedSessions = pgTable(
 // CLI device pairing (design §5.2): the server relays an opaque box, it can
 // never read the key material inside `response`. `expiresAt` is a required
 // TTL — an unbounded pairing window was one of the reported Happy vulns.
+// issue-4-plan.md §6.3: the approver seals `[version|masterSecret|refreshToken]`
+// end-to-end to the requester's ephemeral public key — `response` is that opaque box,
+// the ONLY secret material this table (or the unauthenticated poll route that serves
+// it) ever holds. There is deliberately no plaintext `token`/`refreshToken` column
+// anymore: the CLI's device-session refresh token used to be relayed here in the
+// clear (see git history), which meant a compromised database — or anyone who could
+// read this table — held a live, usable credential. `app/api/pair.ts`'s approve
+// route mints that refresh token server-side and hands it back to the (already
+// authenticated) approving browser directly, out-of-band from this table, so the
+// browser's crypto worker can seal it alongside the master secret before anything
+// ever touches Postgres. The row is deleted, single-use, the moment a poller
+// successfully reads back an authorized `response` — replaying the same `ephPub`
+// after that starts a brand-new pairing attempt from `pending`, not a resend of the
+// same secret.
 export const pairRequests = pgTable("pair_requests", {
   id: text("id").primaryKey().$defaultFn(createId),
   ephPub: text("eph_pub").notNull().unique(), // requester's ephemeral X25519 pubkey, base64
   state: text("state").notNull().default("pending"), // 'pending' | 'authorized' | 'expired'
-  response: bytea("response"), // sealed box to ephPub: master secret / content key bundle
-  token: text("token"), // account access token, set once authorized
-  // issue-4-plan.md §6.3 KNOWN GAP: this should be E2E-sealed inside `response` (the
-  // approver's box), not a second plaintext column — see app/api/pair.ts's docblock.
-  // Relaying it in plaintext, same trust level as the pre-existing `token` column
-  // above, is what lets a paired CLI device refresh its session past the access
-  // token's TTL instead of going stale in 1h with no way back; the real fix (sealing
-  // it into the E2E box so the server never sees the raw refresh token either) is
-  // deferred, not silently dropped.
-  refreshToken: text("refresh_token"),
+  response: bytea("response"), // sealed box to ephPub: [version|masterSecret|refreshToken]
   createdAt: timestamp("created_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
 });

@@ -1,17 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  decodeBase64,
-  deriveKeyTree,
-  encodeBase64,
-  getRandomBytes,
-  unwrapDek,
-} from "@falcon/crypto";
+import { decodeBase64, deriveKeyTree, getRandomBytes, unwrapDek } from "@falcon/crypto";
 import type { EncryptedBox, MachineRow } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { Logger } from "../logger.js";
 import { createMachineIntegrationDeps, startMachineIntegration } from "./machineIntegration.js";
 import { createSpawnAwaiter } from "./spawnAwaiter.js";
@@ -129,7 +124,7 @@ describe("startMachineIntegration — DEK survives a crash-restart", () => {
     masterSecret = getRandomBytes(32);
     credentials = {
       refreshToken: "test-refresh-token",
-      masterSecretOrContentBundle: encodeBase64(masterSecret),
+      keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
     };
   });
 
@@ -228,7 +223,7 @@ describe("startMachineIntegration — preview-tunnel wiring", () => {
     masterSecret = getRandomBytes(32);
     credentials = {
       refreshToken: "test-refresh-token",
-      masterSecretOrContentBundle: encodeBase64(masterSecret),
+      keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
     };
     vi.clearAllMocks();
   });

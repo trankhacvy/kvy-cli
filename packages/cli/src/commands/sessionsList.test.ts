@@ -119,7 +119,7 @@ describe("runSessionsListCommand", () => {
         backendUrl: "http://backend.example",
         readCredentials: () => ({
           refreshToken: "test-refresh-token",
-          masterSecretOrContentBundle: "x",
+          keyMaterial: { mode: "plaintext-fallback", bundle: "x" },
         }),
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
@@ -143,7 +143,7 @@ describe("runSessionsListCommand", () => {
       baseDeps({
         readCredentials: () => ({
           refreshToken: "test-refresh-token",
-          masterSecretOrContentBundle: "x",
+          keyMaterial: { mode: "plaintext-fallback", bundle: "x" },
         }),
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),

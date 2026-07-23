@@ -112,6 +112,29 @@ describe("createTokenProvider", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("resolves null (never throws) when the refresh response fails schema validation", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      // Missing `refreshToken` entirely — a bare `as RefreshResponse` cast would have
+      // silently accepted this; the reviewer nit is that Zod should reject it instead.
+      json: async () => ({ accessToken: fakeAccessToken(3600) }),
+    })) as unknown as typeof fetch;
+
+    const provider = createTokenProvider({
+      backendUrl: "http://localhost:3005",
+      refreshToken: "refresh-1",
+      fetchImpl,
+      now: () => Date.now(),
+      onRotate: () => {},
+      logger: silentLogger(),
+    });
+
+    const result = await provider.getAccessToken();
+    expect(result).toBeNull();
+    expect(provider.isDead).toBe(false); // a malformed body isn't the same as a definitive 401 rejection
+  });
+
   it("forceRefresh bypasses the cache", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

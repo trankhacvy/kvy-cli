@@ -34,7 +34,6 @@ import {
 } from "./events/eventRouter.js";
 import { buildPushDispatcher } from "./push/dispatch.js";
 import type { PushDispatcherPort } from "./push/types.js";
-import { buildAuthRoutes } from "./routes/auth.js";
 import { buildBlobsRoutes } from "./routes/blobs.js";
 import { buildKeysRoutes } from "./routes/keys.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
@@ -189,7 +188,6 @@ export async function buildServer(
 
   await app.register(healthRoutes);
   await app.register(metricsRoutes);
-  await app.register(buildAuthRoutes(db));
   await app.register(
     buildOAuthRoutes(
       db,
@@ -199,7 +197,7 @@ export async function buildServer(
   );
   await app.register(buildRefreshRoutes(db));
   await app.register(buildPasswordRoutes(db, emailTransport));
-  await app.register(buildKeysRoutes(db));
+  await app.register(buildKeysRoutes(db, deps.oauthVerifier ?? defaultOAuthVerifier));
   await app.register(
     buildSessionsAdminRoutes(db, (accountId, sessionId) =>
       disconnectSession(defaultEventRouter, accountId, sessionId),

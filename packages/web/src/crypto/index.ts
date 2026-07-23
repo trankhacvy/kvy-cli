@@ -10,9 +10,4 @@
 export type { CryptoBridgeClient } from "./client.js";
 export { createCryptoBridgeClient, type WorkerLike } from "./client.js";
 export { createCryptoBridge } from "./factory.js";
-export type {
-  CryptoWorkerRequest,
-  CryptoWorkerResponse,
-  DeviceIdentity,
-  SignInChallengeResult,
-} from "./protocol.js";
+export type { CryptoWorkerRequest, CryptoWorkerResponse, DeviceIdentity } from "./protocol.js";

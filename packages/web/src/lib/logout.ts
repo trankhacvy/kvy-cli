@@ -5,8 +5,10 @@
  *
  * 1. Wipe key material — a throwaway crypto bridge whose worker `clear()`
  *    purges the shared IndexedDB store (`crypto/key-storage.ts`) and its own
- *    in-memory keys. There's deliberately no cross-page bridge singleton
- *    (`lib/use-crypto-bridge.ts`), so logout spins one up just to clear.
+ *    in-memory keys. `lib/use-crypto-bridge.ts`'s shared bridge singleton is
+ *    for already-mounted feature components, not logout: this always spins
+ *    up its own worker so it works the same whether or not anything else
+ *    happens to be mounted right now.
  * 2. Disconnect `apiSocket` — stops the infinite-reconnect loop before the
  *    token disappears, so it never fires a reconnect rejected with `null`
  *    auth.
@@ -19,6 +21,7 @@
  */
 import { createCryptoBridge } from "@/crypto";
 import { clearToken } from "@/lib/session";
+import { markCryptoBridgeLocked } from "@/lib/use-crypto-bridge";
 import { apiSocket } from "@/sync";
 
 export interface LogoutDeps {
@@ -33,6 +36,10 @@ async function wipeKeyMaterialWithThrowawayBridge(): Promise<void> {
     await bridge.clear();
   } finally {
     bridge.terminate();
+    // The shared bridge (if any other component still has it mounted through
+    // the sign-out redirect) must not keep reporting "unlocked" once this
+    // account's key material has just been wiped.
+    markCryptoBridgeLocked();
   }
 }
 

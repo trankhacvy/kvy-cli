@@ -3,7 +3,6 @@ import { decodeBase64, encodeBase64 } from "../base64.js";
 import { open, seal } from "../box.js";
 import { decryptWithDataKey, encryptWithDataKey, getRandomBytes } from "../encryption.js";
 import { deriveKeyTree } from "../keys.js";
-import { decodeRecoveryCode, encodeRecoveryCode } from "../recovery.js";
 
 describe("edge cases: encryptWithDataKey / decryptWithDataKey", () => {
   it("decryptWithDataKey never throws on a dataKey of the wrong length", () => {
@@ -30,36 +29,6 @@ describe("edge cases: encryptWithDataKey / decryptWithDataKey", () => {
     const big = { blob: "x".repeat(100_000) };
     const bundle = encryptWithDataKey(big, dek);
     expect(decryptWithDataKey(bundle, dek)).toEqual(big);
-  });
-});
-
-describe("edge cases: recovery code", () => {
-  it("returns null for a base32 payload that decodes to the wrong byte length", () => {
-    // 64 chars of valid base32 alphabet decodes to 40 bytes, not 32.
-    const tooLong = "A".repeat(64);
-    expect(decodeRecoveryCode(tooLong)).toBeNull();
-  });
-
-  it("encodeRecoveryCode -> decodeRecoveryCode is stable across many random secrets (fuzz)", () => {
-    for (let i = 0; i < 100; i++) {
-      const secret = getRandomBytes(32);
-      expect(decodeRecoveryCode(encodeRecoveryCode(secret))).toEqual(secret);
-    }
-  });
-
-  it("single bit flip in the recovery code either fails closed (null) or decodes to a different secret, never the original", () => {
-    const secret = getRandomBytes(32);
-    const code = encodeRecoveryCode(secret);
-    // Flip one alphanumeric character in the middle of the code to a different valid base32 char.
-    const chars = code.split("");
-    const idx = chars.findIndex((c) => c !== "-");
-    const original = chars[idx]!;
-    chars[idx] = original === "A" ? "B" : "A";
-    const mutated = chars.join("");
-    const decoded = decodeRecoveryCode(mutated);
-    if (decoded !== null) {
-      expect(decoded).not.toEqual(secret);
-    }
   });
 });
 

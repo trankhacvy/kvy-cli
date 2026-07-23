@@ -510,7 +510,8 @@ Each phase keeps builds green **and** behavior non-regressing: the 1h→15m TTL 
 - **Key rotation is destructive but fenced** — explicit intent + step-up + online-device interlock + same-transaction revocation of other sessions + epoch-tagged rows ⇒ archived-not-corrupted. No silent split-brain.
 - **Password reset restores access, not E2E data** (§5.4) — same trade-off as the PIN. Account-linking requires verified email (no pre-registration takeover).
 - **Web remains the weaker E2E endpoint** (served code, design §5.3) — the PIN improves at-rest posture, not the served-JS trust boundary.
-- **Env-var mismatch footgun:** CLI resolves `FALCON_BACKEND_URL` (`cli/src/auth/config.ts:17`); web uses `NEXT_PUBLIC_FALCON_API_URL` (`web/src/lib/config.ts`) and separately `NEXT_PUBLIC_API_URL`. Refresh tokens are **per-server** credentials, so mismatched origins now fail more confusingly (pairing pends forever; refresh 401s). Unify to one documented var and log the resolved server URL at startup on both clients.
+- **Env-var mismatch footgun — resolved (security-review remediation pass, §13 nit).** CLI resolves `FALCON_BACKEND_URL` (`cli/src/auth/config.ts:17`); web now has exactly one canonical var, `lib/config.ts`'s `API_URL` (backed by `NEXT_PUBLIC_API_URL`) — `NEXT_PUBLIC_FALCON_API_URL` does not exist in the codebase and every web module that talks to the server (`lib/api.ts`, `sync/socket-factory.ts`, `crypto/worker-handler.ts`) imports the same `API_URL`.
+- **Refresh token custody — resolved (security-review remediation pass, finding F1, §13).** The refresh token no longer sits in `localStorage` (a 60-day, XSS-readable, full-account credential) — it's PIN-wrapped in IndexedDB and recovered only into the crypto worker's own memory, never the main thread. See §13 for the chosen design and rationale.
 
 ## 10. Testing
 
@@ -521,15 +522,17 @@ Each phase keeps builds green **and** behavior non-regressing: the 1h→15m TTL 
 
 ## 11. File-by-file change list
 
-**server:** `db/schema.ts` (+`authIdentities`,`deviceSessions`,`keyBindNonces`; `accounts` nullable signPublicKey + `keyEpoch`, **drop `oauthProvider`/`oauthSubject`**; `keyEpoch` on `machines`/`sessions`/`workspaces`; **drop `pairRequests.token`**) · `auth/tokens.ts` (claims, `mintAccessToken`, reject missing `sid`/`ct`) · `auth/refresh.ts` *(new)* · `auth/password.ts` *(new)* · `auth/email.ts` *(new — reset/verify send)* · `app/routes/{refresh,password,keys,sessions-admin}.ts` *(new)* · `app/routes/oauth.ts` (resolve via identities, `issueSession`) · **delete `app/routes/auth.ts`** (§5.5, in P4) · `app/api/pair.ts` (`issueSession` + E2E-sealed refresh token, single-use delete, drop plaintext token) · `app/socket.ts` (connect revocation check, `renew-token`, expiry timer, `disconnectSession`) · `app/events/eventRouter.ts` (`connectionsForAccount`) · `auth/plugin.ts` (`sessionId`/`clientKind` decorators).
+**server:** `db/schema.ts` (+`authIdentities`,`deviceSessions`,`keyBindNonces`; `accounts` nullable signPublicKey + `keyEpoch`, **drop `oauthProvider`/`oauthSubject`**; `keyEpoch` on `machines`/`sessions`/`workspaces`; **drop `pairRequests.token`**; +`authIdentities.failedLoginCount`/`lockedUntil`, finding F3, `drizzle/0005_broad_wong.sql`) · `auth/tokens.ts` (claims, `mintAccessToken`, reject missing `sid`/`ct`) · `auth/refresh.ts` *(new)* · `auth/password.ts` *(new; F3 login-lockout logic added in the remediation pass)* · `auth/email.ts` *(new — reset/verify send)* · `app/routes/{refresh,password,keys,sessions-admin}.ts` *(new)* · `app/routes/oauth.ts` (resolve via identities, `issueSession`) · **delete `app/routes/auth.ts`** (§5.5, in P4) · `app/api/pair.ts` (`issueSession` + E2E-sealed refresh token, single-use delete, drop plaintext token) · `app/socket.ts` (connect revocation check, `renew-token`, expiry timer, `disconnectSession`) · `app/events/eventRouter.ts` (`connectionsForAccount`) · `auth/plugin.ts` (`sessionId`/`clientKind` decorators).
 
 **crypto:** `pin.ts`/`pin.web.ts` *(new)* + `index(.web).ts` exports · `pin.test.ts` · **remove** `encodeRecoveryCode`/`decodeRecoveryCode` exports once web drops them (keep the file until P4 lands).
 
 **wire:** schemas for refresh/password/reset/keys/sessions-admin bodies + `PinWrapped`/`DeviceWrapped` + the extended pairing sealed-payload version.
 
-**cli:** `auth/credentials.ts` (new discriminated shape) · `auth/tokenProvider.ts` *(new)* · `auth/pin.ts` *(new)* · `auth/deviceKey.ts` *(new, OS keychain)* · `auth/login.ts` (post-pair PIN prompt, new shape) · `daemon/machineClient.ts` + **all token consumers** in §6.6 (thread `tokenProvider`) · `daemon/machineIntegration.ts` (unlock via PIN/device key; reduced-custody default).
+**cli:** `auth/credentials.ts` (new discriminated shape) · `auth/tokenProvider.ts` *(new; Zod-validates the refresh response as of the remediation pass)* · `auth/pin.ts` *(new)* · `auth/deviceKey.ts` *(new, OS keychain)* · `auth/login.ts` (post-pair PIN prompt, new shape) · `daemon/machineClient.ts` + **all token consumers** in §6.6 (thread `tokenProvider`) · `daemon/machineIntegration.ts` (unlock via PIN/device key; reduced-custody default).
 
-**web:** `crypto/{key-storage,worker-handler,client,protocol}.ts` (`PinWrapped`, `unlock`, remove recovery) · `lib/session.ts` (refresh custody + silent refresh) · `lib/complete-oauth-sign-in.ts` + new password sign-in/PIN components · **delete** `lib/complete-challenge-sign-in.ts`, `lib/restore-recovery-code.ts`, `components/auth/recovery-code-*`, `features/settings/.../RecoverySection.tsx` · `features/auth/require-auth.tsx` (silent refresh before redirect) · `sync/apiSocket.ts` (renew + refresh-on-authError) · `features/settings` (device-sessions list + log-out-others).
+**web:** `crypto/{key-storage,worker-handler,client,protocol}.ts` (`PinWrapped`, `unlock`, remove recovery; **remediation pass:** `wrappedRefreshToken`, `setRefreshToken`/`refreshSession` requests, worker-side `/v1/auth/refresh` fetch) · `lib/session.ts` (**rewritten, finding F1** — in-memory access token, no `localStorage`, `silentRefresh()` now calls the worker) · `lib/complete-oauth-sign-in.ts`/`complete-password-sign-in.ts` + `components/auth/oauth-callback-page.tsx`/`app/(public)/password/page.tsx` (thread the refresh token to `bridge.setRefreshToken` post-unlock, finding F1) · `lib/use-crypto-bridge.ts` (+`getSharedCryptoBridge()` peek accessor, finding F1) · **delete** `lib/complete-challenge-sign-in.ts`, `lib/restore-recovery-code.ts`, `components/auth/recovery-code-*`, `features/settings/.../RecoverySection.tsx` · `features/auth/require-auth.tsx` (silent refresh before redirect; crypto-unlock gate now precedes it, finding F1) · `sync/apiSocket.ts` (renew + refresh-on-authError; **remediation pass:** widened the connect_error
+auth-shaped-error regex to also match `"Session revoked"`, a live bug found testing F2 — see §13) ·
+`features/settings/components/DevicesSection.tsx` *(new, finding F2)* — device-sessions list + log-out-this-device/log-out-others, wired into `features/settings/sections.tsx`.
 
 ---
 
@@ -541,7 +544,7 @@ Granular, checkable task list. Each phase ends with a **green gate** (`pnpm buil
 - [x] Confirm **dev databases will be reset** (no `auth_identities` backfill) and announce it — existing key-only accounts become unreachable after P4. **Decision:** confirmed; local dev Postgres is disposable pre-launch, no backfill migration will be written.
 - [x] Pick the transactional **email provider** for reset/verify (P2 dependency); add its env vars to `config.ts` design (e.g. `SMTP_URL` / provider API key). If none, decide the "reset disabled, OAuth-only recovery" fallback copy. **Decision:** `auth/email.ts` ships a small `EmailTransport` interface with a no-op/dev-logger transport as the default (logs the verify/reset link at `info` level) so the flow is fully testable without real SMTP; a real transport is pluggable later via `SMTP_URL` env (read, not yet implemented — logs a "not configured, using dev logger" notice instead of silently no-op-ing).
 - [x] Add the `@node-rs/argon2` dependency decision (server + CLI PIN KDF) and confirm a matching **argon2id** primitive/params on the web side (libsodium `crypto_pwhash`) for blob portability. **Decision:** `@node-rs/argon2` added to `@falcon/crypto` (PIN KDF, node) and used directly by `@falcon/server`'s `auth/password.ts` (password hashing, PHC string). Web/browser argon2id uses `libsodium-wrappers-sumo` (not the slim `libsodium-wrappers` already in use elsewhere) because `crypto_pwhash` is sumo-only. Params unified in `packages/crypto/src/pin-params.ts` (memoryCost 64MiB, timeCost 3, parallelism 1, 16-byte salt matching libsodium's fixed `crypto_pwhash_SALTBYTES`) — verified byte-identical output both directions in `pin.test.ts`'s cross-platform parity vectors.
-- [x] Unify the client server-URL env var (`FALCON_BACKEND_URL` vs `NEXT_PUBLIC_FALCON_API_URL` vs `NEXT_PUBLIC_API_URL`) — pick one canonical name per client, document, plan the startup log line. **Decision:** CLI keeps `FALCON_BACKEND_URL` (already canonical there); web standardizes on `NEXT_PUBLIC_FALCON_API_URL` as primary, with `NEXT_PUBLIC_API_URL` read as a deprecated fallback (with a one-time console warning) for back-compat — implemented in Phase 4/5 client work.
+- [x] Unify the client server-URL env var (`FALCON_BACKEND_URL` vs `NEXT_PUBLIC_FALCON_API_URL` vs `NEXT_PUBLIC_API_URL`) — pick one canonical name per client, document, plan the startup log line. **Decision (superseded — see security-review remediation §13 nit):** the note originally on this line said web would standardize on `NEXT_PUBLIC_FALCON_API_URL`; what actually shipped, and is what the code uses today, is the opposite — `lib/config.ts`'s `API_URL` (backed by `NEXT_PUBLIC_API_URL`) is the one canonical web env var, and `NEXT_PUBLIC_FALCON_API_URL` does not exist anywhere in the codebase. This was a real split-brain bug in practice, not just a stale doc note: `sync/socket-factory.ts` read the nonexistent `NEXT_PUBLIC_FALCON_API_URL` name until the Phase 4 live-testing pass caught and fixed it (bug #1 below), and `crypto/worker-handler.ts`'s F1 `refreshSession` now imports the same `API_URL` too. CLI keeps `FALCON_BACKEND_URL` (already canonical there) — no change on that side.
 - [x] Decide refresh-token **lifetime policy**: absolute 60d (default) vs sliding — record in `docs/encryption.md` draft. **Decision:** absolute 60-day lifetime (plan default), recorded in `docs/encryption.md`.
 - [x] Decide daemon default custody: **reduced-custody content bundle** (recommended) vs full masterSecret. **Decision:** reduced-custody content bundle is the daemon default (§6.5); interactive `falcon` foreground may still PIN-wrap the full `masterSecret`.
 
@@ -573,21 +576,21 @@ Tests / gate
 Email/OAuth identity
 - [x] `[server]` `auth/email.ts` *(new)*: dev-logger `EmailTransport` (Phase 0 decision) — logs verify/reset links; no real SMTP transport wired yet (documented gap, not silently swallowed).
 - [ ] `[wire]` schemas: password register/login/reset-request/reset-confirm bodies + responses. Same deviation as Phase 1's refresh schemas — defined locally in `app/routes/password.ts`, matching the codebase's real convention.
-- [x] `[server]` `app/routes/password.ts` *(new)*: register (rate-limited, no-enumeration — same generic success shape + out-of-band notice either way, `issueSession`), login (rate-limited, generic invalid-email-or-password error), reset/request (always-200), reset/confirm (set hash, **revoke all sessions**) (§5.2–5.3). **Deviation:** per-identity login lockout (a failure counter → temporary lockout) is **not implemented** — only the existing per-route rate limit applies. Noted as a gap, not silently dropped.
+- [x] `[server]` `app/routes/password.ts` *(new)*: register (rate-limited, no-enumeration — same generic success shape + out-of-band notice either way, `issueSession`), login (rate-limited, generic invalid-email-or-password error), reset/request (always-200), reset/confirm (set hash, **revoke all sessions**) (§5.2–5.3). **Resolved (security-review remediation pass, finding F3 — see §13):** per-identity login lockout is now implemented — `authIdentities` gained `failedLoginCount`/`lockedUntil` columns (`drizzle/0005_broad_wong.sql`); a wrong password increments the counter and, past a threshold of 5 consecutive failures, sets an exponentially-growing lockout (30s base, doubling per extra failure, capped at 15 minutes); a locked identity gets the exact same generic 401 as a wrong password, even when the password submitted is actually correct (no lock-vs-wrong-password oracle); a correct login clears both fields. This is in addition to, not instead of, the existing per-route IP rate limit — it closes the gap that rate limit alone left open (an attacker rotating IPs against one known email).
 - [x] `[server]` `app/routes/oauth.ts`: resolve/create by `auth_identities(kind,subject)`; `issueSession` not `mintToken`; dropped `signPubKey`/`contentPubKey` from the body entirely (key binding is now a separate step). **Deviation:** the verified-email account-linking guard (§5.4) is **not implemented** — `verifyGoogleIdToken`/`verifyGithubAccessToken` don't currently surface the provider's email/email_verified claim at all, so there is nothing to link on yet; each OAuth provider today always resolves to its own distinct `auth_identities` row (confirmed by a dedicated test: "different OAuth providers for the same person create distinct accounts"). This is a real, intentional scope cut — implementing the guard properly needs the email-surfacing plumbing first.
 - [x] `[server]` `app/routes/password.test.ts` (9 tests), `oauth.test.ts` (rewritten for the new identity-resolution behavior, 7 tests): enumeration-safety, reset-revokes-sessions, and the no-cross-provider-linking behavior are covered; rate-limit and lockout are not (no lockout to test, and the existing rate-limit config is unchanged/untested here).
 
 Key bind/rotate
 - [ ] `[wire]` schemas: `keys/challenge` response, `keys/bind` body. Same local-schema deviation as above — defined in `app/routes/keys.ts`.
 - [x] `[server]` `app/routes/keys.ts` *(new)*: `keys/challenge` (server nonce), `keys/bind` (verify sig over `accountId‖contentPubKey‖nonce`, first-bind vs rotate vs idempotent re-bind, 409 conflict, txn revoke-other-sessions on real rotation) (§6.2).
-- [x] `[server]` helpers: `consumeNonce`, `verifyStepUp`, `hasOtherHealthySessions`. **Known gap:** `verifyStepUp` is a stub that always returns `false` — there's no concrete step-up proof mechanism wired yet (re-entered password / fresh OAuth proof), so **key rotation is currently unreachable** (fails closed with 401 every time `rotate: true` is attempted). First-bind (the sign-up path) is unaffected and fully working — this only blocks the rotation path, which isn't needed for the email/password browser test. Flagged here rather than silently shipped as if complete.
-- [x] `[server]` `keys.test.ts`: replayed nonce rejected; invalid signature rejected; 409 on key-owned-by-another; 409 on an implicit (no `rotate` flag) rotation attempt; first-bind sets keyEpoch 0→1. **Not tested** (because unreachable per the gap above): rotation succeeding with valid step-up, idempotent-re-bind-no-epoch-bump, and rotation revoking other sessions — those branches exist in the code but can't be exercised until step-up is real.
+- [x] `[server]` helpers: `consumeNonce`, `verifyStepUp`, `hasOtherHealthySessions`. **Resolved (continuation pass):** `verifyStepUp` is now a real implementation — a discriminated `stepUpProof` (`{kind:"password", password}` verified via `auth/password.ts`'s `verifyPassword` against the account's own `auth_identities` password hash, or `{kind:"oauth", provider, oauthProof}` re-verified via the injectable `OAuthVerifier` and matched against the account's own `(kind, subject)` identity row). `buildKeysRoutes` now takes an injectable `oauthVerifier` (mirrors `buildOAuthRoutes`'s own DI), wired from `server.ts`. Key rotation is reachable and fenced: wrong step-up → 401 (no rotation); another healthy session online → 409 (interlock); correct step-up + no other sessions → 200, epoch bumped, every OTHER session revoked.
+- [x] `[server]` `keys.test.ts`: replayed nonce rejected; invalid signature rejected; 409 on key-owned-by-another; 409 on an implicit (no `rotate` flag) rotation attempt; first-bind sets keyEpoch 0→1; **+4 new tests (continuation pass):** rotation with a correct step-up password succeeds and bumps keyEpoch; rotation with a wrong step-up password fails closed (401, keyEpoch unchanged); rotation is fenced with 409 while another device session is healthy; a successful rotation revokes every OTHER session but leaves the rotating session itself alive. 10/10 passing.
 
 Pairing → sessions (E2E-sealed refresh token)
-- [ ] `[wire]`/`[crypto]`: bump pairing sealed-payload to `[0x01|masterSecret|refreshToken]`; version-tolerant decode. **Not done** — deferred (see below).
-- [ ] `[server]` `app/api/pair.ts`: `/approve` mints session server-side (**done** — uses `issueSession`), returns refresh token to approver to seal, store **hash** in `device_sessions` + opaque blob in `pairRequests.response`; **drop `pairRequests.token`**; delete row single-use on authorized pickup (§6.3). **Partially done:** the approve route now mints a real `device_sessions`-backed session instead of a bare stateless token, but it still stores the resulting **access token** (not a sealed refresh token) in `pairRequests.token` **in plaintext**, same as before — the full E2E-seal rework (bumping the crypto sealed-payload version, threading it through CLI pairing-completion and the web pairing-approve UI) is a cross-package protocol change that was scoped out of this pass. This is the one piece of §6.3 explicitly **not** delivered; the plaintext-token-at-rest exposure §6.3 flags is therefore still present.
-- [x] `[server]` `pair.test.ts`: updated so the approve route's bearer token belongs to a real `accounts` row (now required since `issueSession` FK's `device_sessions.accountId` to `accounts.id`) — all 13 pre-existing pairing tests still pass. Sealed-refresh-token-specific tests were not added since the feature wasn't built.
-- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test` green (46 files, 349 tests). **Acceptance (partial):** password/OAuth login and key-bind (first-bind) work over HTTP end-to-end; key-bind *rotation* does not (step-up stub); pairing hands a device a real session but still with a plaintext token at rest (not the sealed-refresh-token design).
+- [x] `[wire]`/`[crypto]`: bump pairing sealed-payload to `[0x01|masterSecret|refreshToken]`; version-tolerant decode. **Resolved (continuation pass):** the payload version bumped from `0x00` (bare `[version|masterSecret]`) to `0x01` (`[version|masterSecret|refreshToken]`) — `worker-handler.ts`'s `sealForPeer` mints it, `cli/src/auth/pair.ts` unseals it. No v0 emitter remains anywhere in the codebase (the approver always seals v1 now), so there's nothing left to tolerate-decode; a stray v0 box would only come from an already-expired (15-minute TTL) pairing attempt.
+- [x] `[server]` `app/api/pair.ts`: `/approve` mints session server-side (uses `issueSession`), returns refresh token to approver to seal, store **hash** in `device_sessions` + opaque blob in `pairRequests.response`; **drop `pairRequests.token`**; delete row single-use on authorized pickup (§6.3). **Resolved (continuation pass):** split into two authenticated routes — `POST /v1/auth/pair/mint` mints the new device's session server-side and hands its refresh token straight back to the approving browser (never persisted to `pairRequests` at all), then `POST /v1/auth/pair/approve` stores only the caller-sealed `response` box. `pairRequests.token`/`pairRequests.refreshToken` columns **dropped** (`drizzle/0004_elite_blade.sql`) — the row now has only `response` (bytea). `POST /v1/auth/pair`'s poll handler deletes the row atomically the moment a poller reads back an authorized `response` (single-use pickup) — a second poll for the same `ephPub` afterward starts a brand-new `pending` attempt rather than ever re-serving the sealed box.
+- [x] `[server]` `pair.test.ts`: updated so the approve route's bearer token belongs to a real `accounts` row — rewritten for the new mint/approve split and single-use pickup: 401/404/410 on `/mint`; mint doesn't touch the pending row; approve+poll round-trips the sealed box with no plaintext `token` field and only once (second poll → `pending`, a fresh attempt); first-approval-wins unchanged. 17/17 passing (real Postgres integration suite).
+- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test` green. **Acceptance:** password/OAuth login and key-bind (first-bind AND fenced rotation) work over HTTP end-to-end; pairing hands a device a real session with no plaintext refresh token ever touching Postgres or the unauthenticated poll route.
 
 ### Phase 3 — PIN crypto module (parallelizable with P1/P2)
 - [x] `[crypto]` `pin.ts` (node) + `pin.web.ts` (browser): `wrapWithPin`/`unwrapWithPin` — argon2id KDF (identical params both platforms), raw-bytes AES-256-GCM, fresh 12-byte nonce, `null` on wrong PIN (§6.1). **Deviation:** signatures are `Promise`-returning (async), not sync as the plan's illustrative snippet showed — argon2id at these params is CPU-bound (~100-300ms) and both the node (`@node-rs/argon2` `hashRaw`) and browser (libsodium WASM `crypto_pwhash`) calls are naturally promise-based; forcing sync would block the event loop / UI thread. Noted in `pin.ts`'s docblock.
@@ -596,54 +599,57 @@ Pairing → sessions (E2E-sealed refresh token)
 - [x] **Gate + Acceptance:** module usable from both node and web builds; parity vector passes. `pnpm --filter @falcon/crypto build && typecheck && test` all green.
 
 ### Phase 4 — Web migration (PIN, silent refresh, remove recovery/challenge); then delete legacy `/v1/auth`
-**Overall status: partial.** The identity/refresh half is real and tested; the PIN half
-and the deletions were not done in this pass — see the item-by-item notes below and the
-final report for the reasoning (PIN was cut in Phase 3/5 too; consistent scope boundary).
+**Overall status (continuation pass): done.** PIN key custody, the crypto-layer
+rewrite, the legacy-route/recovery-code deletions, and `apiSocket.ts`'s live renew are
+all implemented and tested — see the item-by-item notes below.
 
 Crypto worker & storage
-- [ ] `[web]` `crypto/key-storage.ts`: store `PinWrapped` instead of raw bytes. **Not done** — no PIN exists, so key-storage still stores raw `masterSecret` bytes exactly as before.
-- [x] `[web]` `crypto/{worker-handler,client,protocol}.ts`: added a new `bindKeysProof` request (signs the `keys/bind` server nonce) instead of the plan's `init(masterSecret, pin)`/`unlock(pin)` pair. **Deviation:** `exportRecoveryCode`/`signInChallenge` were NOT removed — the legacy OAuth-challenge sign-in path they back is untouched in this pass (see Deletions below).
-- [ ] `[web]` PIN UI: set-PIN (signup), enter-PIN (unlock on load), attempt counter → offer "start new key epoch" on repeated failure. **Not implemented.**
+- [x] `[web]` `crypto/key-storage.ts`: stores a `StoredKeyRecord{wrapped: PinWrapped, signPubKey, contentPubKey}` — the master secret is never persisted raw; the two public identity keys sit alongside it in the clear so `getIdentity()` answers "known device?" without an unlock.
+- [x] `[web]` `crypto/{worker-handler,client,protocol}.ts`: rewritten around `init(masterSecret, pin)` (wrap+derive+save) and `unlock(pin)` (load+unwrap+derive) exactly per the plan's illustrative pair — replaces the old auto-loading `ensureStartupLoaded()`. Every key-dependent op now distinguishes `"locked"` (something's stored, not yet unlocked) from `"not-initialized"` (nothing stored). `getIdentity()` still needs no unlock. `bindKeysProof` (added last pass) unchanged. `sealForPeer` now also takes the session's `refreshToken` (see Phase 2 note above) and requires the worker to be unlocked (keeps the raw `masterSecret` in worker memory, not just the derived tree, specifically so pairing can seal it verbatim).
+- [x] `[web]` PIN UI: `components/auth/pin-setup-form.tsx` (set + confirm, min 6 chars) and `pin-unlock-form.tsx` (enter + "Forgot your PIN?" hook) — reused across signup, OAuth callback, and the reload-unlock gate. `lib/use-crypto-bridge.ts` was rebuilt as a refcounted **shared singleton** (was one-Worker-per-mount) — necessary because many independent feature hooks each called `useCryptoBridge()` on their own; without sharing, unlocking one would leave every other mounted feature's own worker instance still locked, forcing a PIN re-prompt per feature. `lib/use-unlocked-crypto-bridge.ts` wraps it with the `loading|no-identity|needs-unlock|ready` state machine `RequireAuth`/`password/page.tsx`/`pair/page.tsx` all consume. A fresh page load always starts locked (fresh worker singleton); unlocking once keeps every later-mounted consumer unlocked for the rest of that page load (no re-prompt across client-side navigation) — this is the concrete "reload requires PIN, then stays authenticated" behavior, verified live (see final report).
 
 Identity & refresh
-- [x] `[web]` `lib/api.ts`: added `passwordRegister`/`passwordLogin`/`refreshSession`/`keysChallenge`/`keysBind`/`listDeviceSessions`/`revokeSession`/`revokeOtherSessions`. **Deviation:** the legacy `signIn` (challenge) wrapper was NOT removed — still used by the untouched `/signin/` OAuth page.
-- [x] `[web]` `lib/session.ts`: refresh token stored in `localStorage` (same custody as the access token) — **not** the plan's httpOnly-cookie-or-worker-held design; `silentRefresh()` added. **Deviation, honestly weaker than the plan's stated design:** the plan explicitly wanted the refresh token somewhere JS can't read it (httpOnly cookie or worker-internal) specifically to blunt XSS; `localStorage` is script-readable like everything else in this codebase's existing token custody. No cross-tab `navigator.locks` serialization either — a real gap if two tabs refresh concurrently (the server's grace-window tolerance, §4.3, absorbs this correctly regardless, just less efficiently).
-- [x] `[web]` password sign-in/sign-up page (`app/(public)/password/page.tsx`) — plain, no design polish, explicitly a testing surface not a finished product page. **Not done:** no PIN set step (doesn't exist); OAuth callbacks were NOT rewired to `issueSession` responses — `complete-oauth-sign-in.ts` still calls the untouched legacy `/v1/auth/register` flow as before.
-- [ ] `[web]` `lib/complete-oauth-sign-in.ts`: **not touched** — still the pre-issue-4 OAuth flow (no PIN step to add, no keys/bind wiring). A new sibling, `lib/complete-password-sign-in.ts`, does the register→masterSecret→keys/bind flow for the password path only.
-- [x] `[web]` `features/auth/require-auth.tsx`: attempts one silent refresh before redirecting to `/signin/`.
-- [ ] `[web]` `sync/apiSocket.ts`/`socket-factory.ts`: **not done** — the live Socket.IO client's own silent-refresh-on-`connect_error` and proactive `renew-token` emit are not wired on the web side (the CLI side, `machineClient.ts`, has this; the web's `apiSocket.ts` does not yet).
+- [x] `[web]` `lib/api.ts`: `passwordRegister`/`passwordLogin`/`refreshSession`/`keysChallenge`/`keysBind` (now `rotate`/`stepUpProof`-aware)/`listDeviceSessions`/`revokeSession`/`revokeOtherSessions`/`mintPairSession` (new, §6.3). The legacy `signIn` (challenge) wrapper is **removed** (see Deletions).
+- [x] `[web]` `lib/session.ts`: **rewritten (security-review remediation pass, finding F1 — see §13).** The refresh token no longer lives in `localStorage` at all — it's PIN-wrapped and persisted in IndexedDB alongside the master secret (`crypto/key-storage.ts`'s `StoredKeyRecord.wrappedRefreshToken`), recovered into the crypto worker's own memory on `unlock`, and never crosses back to the main thread. The access token is now a plain in-memory module variable (`inMemoryAccessToken`), not `localStorage` either — wiped on reload by design (cheap to re-mint, 15m TTL). `silentRefresh()` now calls the worker's own `refreshSession()` (via `use-crypto-bridge.ts`'s new `getSharedCryptoBridge()` peek accessor) instead of an HTTP call from `lib/api.ts` — the worker performs the `/v1/auth/refresh` fetch itself so the raw refresh token never crosses the postMessage boundary in either direction. Still no cross-tab `navigator.locks` serialization (the server's grace window absorbs a concurrent double-refresh regardless, unchanged from before).
+- [x] `[web]` password sign-in/sign-up page (`app/(public)/password/page.tsx`) — now a real multi-step flow: sign-up collects email+password+PIN in one screen and calls `completePasswordSignUp` (register → `bridge.init(masterSecret, pin)` → `keys/bind`); sign-in calls `completePasswordSignIn` then walks a post-login step machine (`needs-unlock` → `PinUnlockForm`, or `needs-rotate`/"Forgot your PIN?" → step-up password → new PIN → `rotateKeyEpoch`, handling the interlock's 409/401 responses inline).
+- [x] `[web]` `lib/complete-oauth-sign-in.ts` + `components/auth/oauth-callback-page.tsx`: rewritten to mirror the password flow — a new identity collects a PIN (`set-pin` step) before `bridge.init`; a returning, not-yet-unlocked identity gets a `PinUnlockForm` step before redirecting on. **Bonus fix surfaced while wiring this:** `POST /v1/auth/register` (OAuth) never returned a `refreshToken` at all (a pre-existing gap predating this pass, invisible before because nothing exercised OAuth's session past its 1h/15m access token) — `oauth.ts`'s response schema and handler now mint and return one via `issueSession`, same as the password routes.
+- [x] `[web]` `features/auth/require-auth.tsx`: silent-refresh unchanged from the prior pass; **now additionally gates on crypto-worker-unlocked** (`useUnlockedCryptoBridge`) — `no-identity` renders a "pair or rotate" message, `needs-unlock` renders `PinUnlockForm`, only `ready` renders `children`.
+- [x] `[web]` `sync/apiSocket.ts`: **done (continuation pass).** Proactive in-band `renew-token` ~10 minutes after each (re)connect (mirrors the CLI's `machineClient.ts`/`sessionClient.ts` cadence, comfortably inside the 15-minute TTL), re-armed on success; a single `forceRefresh()`-then-reconnect on an auth-shaped `connect_error` via `session.ts`'s `silentRefresh()`, instead of just tearing down. Covered by new `apiSocket.test.ts` cases (renew-token timer, connect_error triggers exactly one silent-refresh-then-reconnect, no infinite loop on a dead refresh token).
 
 Deletions
-- [ ] `[web]` delete `lib/complete-challenge-sign-in.ts`, `lib/restore-recovery-code.ts`, `components/auth/recovery-code-*`, `features/settings/.../RecoverySection.tsx`, and the sign-in-page recovery restore branch. **Not done** — all left in place and still reachable from `/signin/`; deleting them was explicitly deferred because the legacy `/v1/auth` route they depend on was not deleted either (see next line), and the plan itself sequences the two together.
-- [ ] `[server]` **delete `app/routes/auth.ts`** (`POST /v1/auth`) + its registration. **Not done** — left in place (still migrated to `issueSession` internally in Phase 1, so it's compatible with the new session model, just not removed). Deleting it now would break the still-live OAuth-challenge sign-in path on `/signin/`, which was not migrated off it in this pass.
-- [ ] `[crypto]` remove `encodeRecoveryCode`/`decodeRecoveryCode` exports. **Not done** — still in active use by the untouched recovery-code UI.
+- [x] `[web]` deleted `lib/complete-challenge-sign-in.ts`, `lib/restore-recovery-code.ts` (+`.test.ts`), `app/(public)/signin/restore-handler.ts` (+`.test.ts`), `components/auth/recovery-code-card.tsx`, `recovery-code-input.tsx` (+`.test.tsx`), `features/settings/components/RecoverySection.tsx` (+ its entry in `sections.tsx`), and `signin/page.tsx`'s recovery-restore + auto-challenge-sign-in branches — `signin/page.tsx` is now OAuth buttons + a link to `/password/`, nothing that reads local key material before a login click.
+- [x] `[server]` **deleted `app/routes/auth.ts`** (`POST /v1/auth`) + `auth.test.ts` + its registration in `server.ts` — done only after confirming (grep) the web no longer called it (`signIn()` removed from `lib/api.ts` in the same pass).
+- [x] `[crypto]` removed `encodeRecoveryCode`/`decodeRecoveryCode` exports (`recovery.ts` deleted, plus `recovery.test.ts` and the recovery-code `describe` block in `edge-cases.test.ts`).
 
 New-device chooser
-- [ ] `[web]` "new device, no local key" screen. **Not implemented** — no PIN/key-epoch UI exists to make this meaningful yet.
-- [ ] `[web]` tests: unlock flow; silent refresh replaces redirect; recovery UI gone; new-device chooser. **Partial:** no new automated test specifically exercises `silentRefresh()`/the password page (verified manually instead — see the final report's browser-testing section); "recovery UI gone" and "new-device chooser" don't apply since neither was built/removed.
-- [ ] **Gate:** `pnpm --filter @falcon/web build/typecheck/test` green (real Next.js static-export build, 149 files/1100 tests) — but this is a **partial** Phase 4, not the full acceptance criterion below. **Acceptance (not met in full):** legacy route is NOT gone; recovery code is NOT gone; PIN/new-device-chooser don't exist. What IS demonstrated (see final report): email+password signup lands authenticated, a page reload silently refreshes instead of forcing re-login, and a revoked/other-device session can be logged out via the (untested-from-web-UI, but real and server-tested) sessions-admin routes called directly.
+- [x] `[web]` "new device, no local key" screen: folded into the PIN-unlock state machine rather than a separate screen — `RequireAuth`'s `no-identity` branch and `password/page.tsx`'s `needs-rotate` step both cover it (point at pairing or the rotate-epoch flow).
+- [x] `[web]` tests: `worker-handler.test.ts`/`client.test.ts` rewritten for `init(secret,pin)`/`unlock(pin)`/locked-vs-not-initialized/sealForPeer+refreshToken (33 tests); `complete-password-sign-in.test.ts` (new, 6 tests: signup binds+unlocks, identity reuse, sign-in, rotate success/wrong-password/409-interlock); `signin/page.test.ts` rewritten (recovery/challenge modules gone, OAuth+password-link present); `apiSocket.test.ts` extended for renew-token + connect_error refresh. "Recovery UI gone" is asserted directly (source-text check that the deleted modules are never imported).
+- [x] **Gate:** `pnpm --filter @falcon/web build/typecheck/test` green (real Next.js static-export build incl. the new `/password` route; 147 files / 1090 tests). **Acceptance:** legacy route IS gone; recovery code IS gone; PIN set/unlock/rotate-epoch UI exists and is wired end-to-end. See final report for the live browser verification (PIN set at signup, reload requires unlock and then stays authenticated).
 
 ### Phase 5 — CLI/daemon migration (token provider, re-auth, custody)
-- [x] `[cli]` `auth/credentials.ts`: new shape + zod; read/write/clear; round-trip test. **Deviation:** ships as `{refreshToken, masterSecretOrContentBundle}` — the plan's `keyMaterial: pin|device|plaintext-fallback` discriminated union (PIN-wrap / OS-keychain wrap) is **not implemented**; `masterSecretOrContentBundle` stays a bare base64 string, same 0600-file-only at-rest custody as before. This is a real, documented scope cut (see Phase 3's own note: the plan itself calls the daemon-custody improvement low-value anyway, §6.5) — the refresh-token fix is what actually closes known-issues.md #4's daemon-dies-after-1h gap; PIN-wrap/device-key-wrap did not ship in this pass.
-- [x] `[cli]` `auth/tokenProvider.ts` *(new)*: `getAccessToken` (cache to ~1m pre-exp), `forceRefresh`, persists rotated refresh token via injected `onRotate`, dead-refresh → logs "run `falcon auth login`" and stops retrying (`isDead`). 5 unit tests (cache hit, near-expiry re-refresh, 401→dead, forceRefresh, concurrent-call coalescing).
-- [ ] `[cli]` `auth/pin.ts` *(new)*: **not implemented** — no PIN flow exists anywhere in the CLI in this pass (ties to the credentials.ts scope cut above).
-- [ ] `[cli]` `auth/deviceKey.ts` *(new)*: **not implemented** — same reason.
-- [x] `[cli]` `auth/login.ts`: writes the new `{refreshToken, masterSecretOrContentBundle}` shape after pairing. No PIN prompt (not implemented).
-- [x] `[cli]` `daemon/machineIntegration.ts`: builds one shared `tokenProvider` per boot (persisting rotations via `writeCredentials`) and threads it into `machineClient.ts`, `blobClient.ts`, `unmanagedSessionClient.ts`. **Deviation:** custody is unchanged from before (reads `masterSecretOrContentBundle` directly, no PIN/device-key unlock step to wire in, since neither exists) — "reduced-custody default" as a *distinct-from-full-masterSecret* content-bundle mode is not implemented as a selectable daemon default; the module already had a pre-existing 32-byte-length check that treats anything else as "reduced/unusable", which stays as-is.
-- [x] `[cli]` `daemon/machineClient.ts`: Socket.IO `auth` is now an async callback via `tokenProvider.getAccessToken`; `forceRefresh` on an auth-shaped `connect_error`; proactive `renew-token` emit every 10 minutes on a live socket (server-side `renew-token` handler lands in Phase 6 below — emitting it against a Phase-1-5 server is a harmless unhandled event, not an error).
-- [x] `[cli]` threaded through: `daemon/blobClient.ts`, `daemon/unmanagedSessionClient.ts` (both via a narrower `getAccessToken()` closure, not the full `TokenProvider` type — call-site-scoped, resolves per-request), `commands/{start,startCodex,sessionsList}.ts` (via the new `auth/resolveAccessToken.ts` one-shot helper). **Not threaded:** `session/sessionClient.ts`, `daemon/githubChecks.ts` (GitHub PAT auth — a wholly separate credential system, out of scope), `api/sessionMetadata.ts`, `commands/github.ts` (same GitHub-PAT reasoning). `commands/start.ts`/`startCodex.ts` resolve ONE access token per process invocation and pass that plain string into `sessionClient.ts`/`sessionMetadata.ts`/the outbox HTTP client as before — a real, documented gap: a `falcon claude` session that outlives the access-token TTL will see those specific calls start failing until the process restarts. The daemon's own long-lived connection (the actual multi-day-lived, headless-unattended process known-issues.md #4 is about) has full live-refresh; a foreground interactive session does not yet.
-- [x] `[cli]` tests: tokenProvider refresh+persist/cache/dead-401/concurrent-coalescing (5); daemon re-auth after forced auth-shaped `connect_error` calls `forceRefresh` (new dedicated test); a real end-to-end daemon boot off a refresh token against a real server (`commands.machineWiring.integration.test.ts`, unchanged assertions, now exercising the real refresh flow). **Not tested** (not implemented): three credential modes, reduced-custody path.
-- [x] **Gate:** `pnpm --filter falcon build/typecheck/test` green (160 files, 1880 tests). **Acceptance (partial):** `falcon auth login` → daemon runs, self-heals its access token via the tokenProvider on reconnect/`connect_error`, and — proven by the real-server integration test plus the browser/tmux verification pass below — survives past the old 1h access-token boundary. No PIN step exists (not implemented).
+**Overall status (continuation pass): done**, including the PIN/device-key discriminated
+custody union deferred by the previous pass.
+- [x] `[cli]` `auth/credentials.ts`: **rewritten (continuation pass)** to the plan's discriminated `keyMaterial: {mode:"pin", wrapped: PinWrapped} | {mode:"device", wrapped: DeviceWrapped} | {mode:"plaintext-fallback", bundle}` union, zod-validated (a legacy flat `masterSecretOrContentBundle` file now fails `readCredentials` cleanly, treated as "not logged in" rather than crashing). Round-trip tests for all three modes.
+- [x] `[cli]` `auth/tokenProvider.ts`: `getAccessToken` (cache to ~1m pre-exp), `forceRefresh`, persists rotated refresh token via injected `onRotate`, dead-refresh → logs "run `falcon auth login`" and stops retrying (`isDead`). **Resolved (security-review remediation pass, reviewer nit — see §13):** the refresh response is now validated with a Zod schema (`RefreshResponseSchema.safeParse`) instead of a bare `as RefreshResponse` type assertion over untyped `res.json()` — a malformed body now resolves `null` (logged, not thrown), matching the "parse-don't-trust" convention `auth/pair.ts`/`auth/credentials.ts` already use elsewhere in this package. 6 unit tests (was 5 — added the malformed-response case).
+- [x] `[cli]` `auth/pin.ts` *(new, continuation pass)*: `promptAndWrapWithPin`/`promptAndUnwrapWithPin` — `node:readline/promises` prompt (mirrors `shim/onboardingPrompt.ts`'s own pattern), re-prompts on a too-short PIN or confirmation mismatch, bounded 3-attempt unlock retry. **Known gap:** plain visible input, no raw-mode masked echo (documented in the module's own doc comment — cut for this pass).
+- [x] `[cli]` `auth/deviceKey.ts` *(new, continuation pass)*: `wrapWithDeviceKey`/`unwrapWithDeviceKey` — AES-256-GCM under a random device key that itself lives in the macOS Keychain (`security` CLI, same tool `provider/claudeAuth.ts` already shells out to), falling back to a documented plaintext 0600 file (`~/.falcon/device.key`) when the Keychain is unavailable (non-macOS, or `security` fails) — never both at once, so a key wrapped one way is always found the same way later. Injectable `readKeychainKey`/`writeKeychainKey` deps so tests never touch the real host Keychain.
+- [x] `[cli]` `auth/keyMaterial.ts` *(new, continuation pass)*: `wrapNewKeyMaterial` (PIN-wraps at an interactive TTY, else device-wraps — the daemon-friendly default) and `resolveKeyMaterial` (unwraps any of the three modes; `"pin"` without `pinDeps` resolves `null` rather than hanging waiting on input nobody can provide).
+- [x] `[cli]` `auth/login.ts`: writes the new discriminated `keyMaterial` shape after pairing — PIN-wrapped when `process.stdin.isTTY`, device-wrapped (daemon-style default) otherwise.
+- [x] `[cli]` `daemon/machineIntegration.ts`: unwraps via `resolveKeyMaterial` (no `pinDeps` — the daemon never runs interactively) instead of decoding `masterSecretOrContentBundle` directly; a PIN-protected credential with no one to prompt now logs a clear "skipping machine client" warning instead of silently misinterpreting the wrapped blob as raw bytes.
+- [x] `[cli]` `daemon/machineClient.ts`: unchanged from the prior pass.
+- [x] `[cli]` threaded through: `daemon/blobClient.ts`, `daemon/unmanagedSessionClient.ts`, `commands/{start,startCodex,sessionsList}.ts`. **Resolved (continuation pass):** `session/sessionClient.ts` now also takes a live `TokenProvider` (was a static `token: string`) — async `auth` callback (mirrors `machineClient.ts`), proactive `renew-token` every 10 minutes, `forceRefresh` on an auth-shaped `connect_error`. `commands/start.ts`/`startCodex.ts` build one `TokenProvider` per invocation (`auth/resolveAccessToken.ts`'s new `createTokenProviderForCredentials`) and hand the SAME provider to the session-scoped WS client, so `falcon claude`/`falcon codex`'s live socket now survives the access-token TTL the same way the daemon's connection does. **Still not threaded** (unchanged, genuinely separate systems): `daemon/githubChecks.ts`/`commands/github.ts` (GitHub PAT auth) and the outbox/status-report/session-metadata one-shot HTTP calls within a single `falcon claude` invocation (documented, narrower remaining gap — short bursts around session start/exit, not a multi-hour-lived connection).
+- [x] `[cli]` tests: tokenProvider (5); daemon re-auth `forceRefresh` (1); `commands.machineWiring.integration.test.ts` (real server); **+ (continuation pass)** `deviceKey.test.ts` (6, Keychain-path + fallback-file-path, corrupt-blob/wrong-version → null), `pin.test.ts` (6, wrap/confirm/retry/unwrap/wrong-PIN-retry-then-give-up), `credentials.test.ts` (11, all three modes + legacy-shape rejection), `sessionClient.test.ts` rewritten for the live `TokenProvider` (12, incl. new renew-token + connect_error-forces-refresh cases).
+- [x] **Gate:** `pnpm --filter falcon build/typecheck/test` green (162 files, 1900 tests). **Acceptance:** `falcon auth login` PIN-wraps (TTY) or device-wraps (headless) the master secret; the daemon self-heals its access token and survives past the access-token boundary (real-server integration test); `falcon claude`'s interactive session socket now does too (live `TokenProvider`, unit-tested).
 
 ### Phase 6 — Flip to short TTL + live WS lifecycle + admin UI
 - [x] `[server]` `auth/tokens.ts`: `ACCESS_TOKEN_TTL_SECONDS = 15m`.
 - [x] `[server]` `app/socket.ts`: connect-time revocation check (`revokedAt`/`expiresAt`); `renew-token` handler (re-validate, re-arm timer, no drop); expiry disconnect timer; `disconnectSession` (§4.5).
 - [x] `[server]` `app/events/eventRouter.ts`: `connectionsForAccount` accessor + `disconnectSession` helper.
 - [x] `[server]` `app/routes/sessionsAdmin.ts` *(new)*: list sessions, revoke one, revoke-others → disconnect live sockets. **Deviation:** no `[wire]` schemas — same local-schema convention as Phases 1-2 (defined in the route file itself).
-- [ ] `[web]` proactive `renew-token` ~1m pre-exp; settings **device-sessions list + "log out other devices."** **Not implemented** — Phase 4 (web) itself is only minimally done (see below); no UI consumes the new sessions-admin routes yet. The server-side capability is real and tested; nothing in the web app calls it yet.
-- [x] `[cli]` confirms proactive `renew-token` emit works against a real server: `machineClient.ts` emits it every 10 minutes on a live socket (unit-tested), and `socket.test.ts`'s new revocation tests prove the server-side handler it targets actually re-arms/rejects correctly. Not verified against a real 15-minute wall-clock wait in this pass (impractical for a test run) — verified via the mechanism's unit/integration coverage instead.
-- [x] tests: revoked session dropped **immediately** on live WS (`sessionsAdmin.test.ts`, real Socket.IO + real disconnect assertion); `renew-token` keeps socket up / rejects a revoked renewal (`socket.test.ts`, 3 new tests); revoke-others (`sessionsAdmin.test.ts`). **Not tested:** "no machine-presence flap at token boundary" as its own dedicated scenario — covered indirectly (the renew-token mechanism is proven to keep the same socket alive, which is what prevents the flap), not as a machine-presence-specific assertion.
-- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test` green (47 files, 356 tests); `pnpm --filter falcon test` green (160 files, 1880 tests) after the same TTL flip. **Acceptance (server-side, partial overall):** 15m tokens; revocation immediate on WS (proven); ≤15m on HTTP (by construction — access tokens are stateless and simply expire). Web-side admin UI and "zero user-visible logout" are not demonstrated end-to-end in the browser in this pass (see final report).
+- [x] `[web]` proactive `renew-token` ~10m post-connect (same fixed-interval cadence as the CLI's `armRenewTimer`, comfortably inside the 15m TTL — resolved, continuation pass): `sync/apiSocket.ts` takes an injectable `TokenRenewSource` (mirrors `SocketFactory`/`VisibilitySource`'s own testable-dependency pattern); `sync/index.ts` wires the real one through `lib/session.ts`'s `silentRefresh()`. A single silent-refresh attempt on an auth-shaped `connect_error` updates the socket's presented token in place (no manual reconnect — `getAuth` reads the current token fresh on every automatic retry) instead of tearing down immediately; only a definitively-dead refresh token still falls through to the original teardown+`authError` behavior. **Resolved (security-review remediation pass, finding F2 — see §13):** the settings device-sessions list + "log out other devices" UI is now built — `features/settings/components/DevicesSection.tsx`, wired into the settings dialog as a new "Devices" section, calling the real `listDeviceSessions`/`revokeSession`/`revokeOtherSessions` routes.
+- [x] `[cli]` confirms proactive `renew-token` emit works against a real server: `machineClient.ts`/`sessionClient.ts` both emit it every 10 minutes on a live socket (unit-tested), and `socket.test.ts`'s revocation tests prove the server-side handler actually re-arms/rejects correctly. Not verified against a real 15-minute wall-clock wait in this pass (impractical for a test run) — verified via the mechanism's unit/integration coverage instead.
+- [x] tests: revoked session dropped **immediately** on live WS (`sessionsAdmin.test.ts`); `renew-token` keeps socket up / rejects a revoked renewal (`socket.test.ts`); revoke-others (`sessionsAdmin.test.ts`); **+ (continuation pass)** `apiSocket.test.ts`'s new renew-token/connect_error-recovery cases (6: proactive emit + re-arm, no-op with no renew source wired, timer stopped on disconnect, silent recovery on a stale-token connect_error, fall-through to teardown on a dead refresh token, never renews for a non-auth connect_error).
+- [x] **Gate:** `pnpm --filter @falcon/server build/typecheck/test`, `pnpm --filter falcon build/typecheck/test`, and `pnpm --filter @falcon/web build/typecheck/test` all green after the same TTL flip. **Acceptance:** 15m tokens; revocation immediate on WS; ≤15m on HTTP (by construction); a live web socket now also survives the access-token boundary via its own proactive renew (verified live in the browser — see final report), not just the CLI's daemon connection. Web-side sessions-admin UI is now built (finding F2, §13).
 
 ### Phase 7 — Cloud sandbox (deferred; design lands, build later)
 **Deliberately skipped in this pass** — per explicit instruction, Phase 7 is design-only/deferred and its build was not started. The design in §7 above stands as-is; no code changes.
@@ -654,32 +660,277 @@ New-device chooser
 
 ### Cross-cutting / docs
 - [x] Update `docs/encryption.md`: PIN posture, daemon custody limits, key-epoch rotation semantics, refresh lifetime policy — new "§5 Identity vs. key custody" section added.
-- [ ] Update `docs/protocol.md` / `docs/falcon-system-design.md` §5.2/§6.2 — **not done**, the legacy `/v1/auth` challenge route was not removed (Phase 4 gap), so falcon-system-design.md's existing description isn't actually wrong yet, just incomplete.
-- [ ] Update `docs/uninstall.md` — **not done**; the credential file's field name changed (`token`→`refreshToken`) but the shape/location (`~/.falcon/access.key`) didn't, so uninstall's `rm -rf ~/.falcon` guidance is unaffected regardless.
-- [ ] Flip `docs/known-issues.md` #4 → Resolved — **could not do**: this worktree's `docs/known-issues.md` has no issue #4 entry at all (only "Flow 4 pairing" and "worktree-isolation follow-ups" are listed) — nothing to flip. Flagged in the final report as a discrepancy between the task brief and the actual repo state, not fabricated.
+- [ ] Update `docs/protocol.md` / `docs/falcon-system-design.md` §5.2/§6.2 — **still not done** (out of this pass's explicit 6-item scope); the legacy `/v1/auth` challenge route IS now removed (see Phase 4 above), so these docs are now more stale than before, not less — a real follow-up.
+- [ ] Update `docs/uninstall.md` — **not done**; `~/.falcon/access.key`'s shape changed again (`keyMaterial` discriminated union, plus the new `~/.falcon/device.key` fallback file this pass's `deviceKey.ts` can create) but the location/`rm -rf ~/.falcon` guidance still covers all of it, so uninstall's actual instructions remain correct, just not narrated.
+- [ ] Flip `docs/known-issues.md` #4 → Resolved — **could not do**: this worktree's `docs/known-issues.md` has no issue #4 entry at all — unchanged from the prior pass's finding.
 - [ ] Security re-review of v2 — **not done** (would need a second reviewer/pass beyond this implementation session).
 
-## Testing evidence (see final report for full detail)
+## Testing evidence
 
-Automated: `pnpm --filter @falcon/crypto build/typecheck/test` (8 pin tests incl. cross-platform
-parity), `pnpm --filter @falcon/server build/typecheck/test` (47 files/356 tests, real Postgres),
-`pnpm --filter falcon build/typecheck/test` (160 files/1880 tests, incl. a real-server daemon
-integration test), `pnpm --filter @falcon/web build/typecheck/test` (real Next.js static-export
-build, 149 files/1100 tests), `pnpm --filter @falcon/e2e test` (20-step conformance harness).
-Full-monorepo `pnpm test` (all packages via turbo in parallel) is flaky on this dev machine under
-combined load — different unrelated tests time out each run — but every package is 100% green
-run on its own, reproducibly; this matches the same resource-contention class CLAUDE.md already
-documents for `pnpm lint`.
+### Automated (this pass)
+Root-level `pnpm build`/`pnpm typecheck` (turbo, all 6 packages incl. `@falcon/wire`/`@falcon/e2e`)
+both fully green. Per-package: `pnpm --filter @falcon/crypto build/typecheck/test` (9 files/71
+tests), `pnpm --filter @falcon/server build/typecheck/test` (46 files/357 tests, real Postgres —
+incl. the rewritten `pair.test.ts`'s 17 tests and `keys.test.ts`'s 10 tests, both exercising this
+pass's new behavior against a real database), `pnpm --filter falcon build/typecheck/test` (162
+files/1900 tests, incl. the real-socket `sessionClient.integration.test.ts` and the real-server
+`commands.machineWiring.integration.test.ts`), `pnpm --filter @falcon/web build/typecheck/test`
+(real Next.js static-export build incl. the new `/password` route, 147 files/1096 tests), `pnpm
+--filter @falcon/e2e build/typecheck/test` (20-step conformance harness, real Postgres+server —
+`e2e/src/testStack.ts` still wrote the OLD flat `masterSecretOrContentBundle` credential shape,
+missed by the Phase 5 CLI rewrite since it lives outside `packages/`; caught only by the
+root-level `pnpm build`, fixed to use the new `keyMaterial` shape via
+`plaintextFallbackKeyMaterial`). Repo-wide `pnpm lint`: 8 pre-existing errors / 124 warnings, all
+in files untouched this session (confirmed by cross-referencing `git status`) — zero new
+errors/warnings in any file this pass touched.
 
-Manual (tmux + Chrome MCP, against a real local Postgres + real server + real web dev server):
-register a password account in the browser → real masterSecret generated → real
-keys/challenge+keys/bind → landed authenticated; forced-expired access token + reload →
-silentRefresh() transparently got a fresh one via a real `/v1/auth/refresh` call, no redirect to
-sign-in; `falcon auth login` real pairing dance (QR/URL → browser approve) → CLI received a real
-refresh token; daemon boot registered the machine and opened a machine-scoped socket using a real
-access token from `/v1/auth/refresh`; revoking the daemon's own device session via the
-sessions-admin API from the browser caused an IMMEDIATE `disconnected: "io server disconnect"` on
-the daemon's live socket, a `connect_error: "Session revoked"` on its automatic reconnect attempt,
-a `forceRefresh()` that correctly got rejected (401, dead refresh token), and a clean
-"re-authentication required — run `falcon auth login`" log line with the daemon process still
-alive (not crashed) — re-running `falcon auth login` + a daemon restart fully recovered it.
+### Manual (tmux + Chrome MCP, against a real local Postgres + real server + real web dev server on
+non-default ports 4102/4103 — this session's own processes only, pid/cwd-verified before every
+kill per the explicit process-hygiene instruction)
+
+- **PIN set at signup, reload requires unlock, stays authenticated**: registered a fresh
+  email+password account with a PIN in the browser → real `masterSecret` generated,
+  PIN-wrapped (`bridge.init`), `keys/bind` first-bind succeeded (verified `accounts.key_epoch`
+  0→1 in Postgres) → landed authenticated with no recovery-code step. A full browser reload
+  (`navigate`, not SPA nav) correctly re-prompted for the PIN (`RequireAuth`'s `needs-unlock`
+  gate); entering it unlocked and landed back on the same account, and further **client-side**
+  navigation (Sessions → New session) did NOT re-prompt — confirming the shared crypto-bridge
+  singleton's debounced-teardown grace window (a bug found and fixed live, see below) actually
+  delivers "stays authenticated across navigation, but reload always needs the PIN again."
+- **Lost-PIN → rotate-epoch, including the "other devices online" interlock**: from `/password/`'s
+  sign-in path, clicked "Forgot your PIN?" → re-entered the account password as the step-up proof
+  → attempted rotation while a second device session was still healthy → got a **live 409**
+  ("Another device is still signed in — pair this browser from that device instead of rotating
+  keys blind"), and confirmed in Postgres that `key_epoch` was untouched by the blocked attempt.
+  Revoked the other session via the real `revoke-others` API, retried, and the rotation succeeded
+  (`key_epoch` 1→2, verified in Postgres) with no error — the exact fenced-then-succeeds sequence
+  Item 4 was meant to guarantee.
+- **Sealed pairing, no plaintext token at rest**: ran the real built CLI (`falcon auth login`)
+  against the test server from an isolated `FALCON_HOME_DIR`, opened the printed pairing URL in
+  the already-unlocked browser, and approved it. The CLI printed "Logged in to Falcon." and
+  persisted `~/.falcon/access.key` with `keyMaterial.mode: "device"` (OS-Keychain-style wrap,
+  correct for a non-interactive/no-TTY login) and a real (locally-plaintext, as designed —
+  the point was never relaying it over the wire unsealed) refresh token. Confirmed directly in
+  Postgres: `pair_requests` has no `token`/`refresh_token` columns at all (schema-level
+  impossibility, not just runtime discipline); the specific row for this `ephPub` was **deleted**
+  after the CLI's single successful pickup (single-use, verified by re-querying for it — zero
+  rows); a real `cli-daemon` `device_sessions` row was created and stayed healthy.
+- **Live web renew wiring reaches a real socket**: confirmed (via server logs) a real
+  `socket connected: account=… clientType=user-scoped` line once the env-var bug below was fixed —
+  `sync/apiSocket.ts`'s proactive `renew-token` timer and connect_error recovery path are unit-
+  tested (6 new cases) rather than wall-clock-verified against the real 15-minute TTL in this pass
+  (impractical for an interactive session), same documented tradeoff the CLI side already used.
+
+### Bugs found and fixed *during* this live verification pass (all pre-existing or newly introduced
+this session, none left in place once found)
+1. **`sync/socket-factory.ts` read a different env var than `lib/config.ts`** (`NEXT_PUBLIC_FALCON_API_URL`
+   vs. `NEXT_PUBLIC_API_URL`) — a pre-existing split-brain config bug (present before this pass) that
+   silently pointed the WS client at `localhost:3005` (nothing listening) while every HTTP call
+   worked fine against the real server, manifesting as a permanent "Reconnecting to Falcon…" banner
+   with zero console errors. Fixed by having `socket-factory.ts` import `API_URL` from
+   `lib/config.ts` directly — one source of truth for "where's the server" now, not two.
+2. **`worker-handler.ts`'s `sealForPeer` decoded `ephPub` with the wrong base64 variant** —
+   `app/(public)/pair/page.tsx` always re-encodes the URL fragment's ephemeral key to *plain*
+   base64 before calling `sealForPeer` (documented in that file's own comment, matching how the
+   server looks up the pending request), but the worker decoded it as base64url — silently
+   corrupting any `ephPub` whose plain-base64 form contains `+`/`/`. Pre-existing (not introduced
+   this pass), caught because a real pairing attempt's ephemeral key happened to need a `+`. Fixed
+   by decoding with the (default) plain `base64` variant, matching the actual caller.
+3. **`app/(public)/pair/page.tsx` never gated on the crypto worker being unlocked** — introduced
+   this pass, as a direct consequence of PIN-wrapping: `sealForPeer` now requires the worker
+   unlocked (it needs the raw `masterSecret` in memory), but the pair page only ever checked
+   `getIdentity()` (which never needs an unlock) before offering "Approve". A pairing link opened
+   as the first thing in a fresh tab hit this every time. Fixed by gating the page on
+   `useUnlockedCryptoBridge()`, the same hook `RequireAuth`/`password/page.tsx` use.
+4. **`lib/use-crypto-bridge.ts`'s shared singleton tore down too eagerly across client-side
+   navigation** — introduced this pass, in the very refactor meant to fix the opposite problem: a
+   React route change unmounts the old page's tree and mounts the new one as two separate commits,
+   so the shared bridge's refcount can genuinely (if briefly) hit 0 between them even within the
+   same page load — e.g. `password/page.tsx` redirecting to `/` right after unlocking. Fixed with a
+   debounced (2s grace window) teardown instead of an immediate one on refcount-zero.
+
+All four were caught by the live browser+CLI+Postgres verification itself, not by the automated
+test suites (which mock the pieces these bugs lived in the seams between) — this is exactly the
+category of gap the coordinator's explicit "re-test end-to-end" instruction was for.
+
+## 13. Security review remediation (F1/F2/F3 + nits)
+
+An independent security review of the implementation above passed the crypto/auth machinery as
+real, with every suite green, but flagged three findings to close before merge, plus two optional
+nits. All fixed in this same pass, in the same worktree.
+
+### F1 — refresh token out of `localStorage`
+
+**Problem:** `lib/session.ts` stored both the access token and the 60-day refresh token in
+`localStorage` — fully XSS-readable, and exactly what §6.4 said not to do. An XSS that can read
+`localStorage` was getting a long-lived, full-account credential, which defeated the point of the
+15-minute access-token hardening (Phase 6): the access token being short-lived doesn't help if the
+thing that mints new ones sits in the clear right next to it.
+
+**Chosen fix — PIN-wrapped refresh token in the crypto worker/IndexedDB (the plan's preferred
+option), not the httpOnly-cookie alternative.** Reasoning: the crypto worker already holds the
+trust boundary this needs (masterSecret in worker memory only, PIN-wrapped at rest, main thread
+never sees raw key material — Phase 3/4 above) — extending that exact boundary to the refresh
+token reuses infrastructure instead of adding a second, differently-shaped one (cookies + CSRF
+double-submit) alongside it. It also composes for free with pairing, which already seals the
+refresh token to a peer through the same worker (`sealForPeer`, Phase 2).
+
+What changed:
+- `crypto/key-storage.ts`: `StoredKeyRecord` gained an optional `wrappedRefreshToken`.
+- `crypto/protocol.ts`: `init` now also takes a `refreshToken`; two new request types,
+  `setRefreshToken` and `refreshSession`.
+- `crypto/worker-handler.ts`: `init`/`unlock` wrap/unwrap the refresh token the same way as the
+  master secret (cached alongside a cached `pin` so a later rotation can re-wrap without
+  re-prompting). The worker now makes the `POST /v1/auth/refresh` HTTP call **itself**, from
+  inside the Worker — not just storing the refresh token, but never handing the raw token back to
+  the main thread in either direction. Only the freshly-minted (short-lived) access token crosses
+  back out. `refreshSession` never throws — no refresh token / a dead-refresh-token /a network
+  failure all resolve `null`, mirroring `unlock`'s own "resolve false, don't reject" convention.
+- `crypto/client.ts`: `init(masterSecret, pin, refreshToken)` (3rd arg), + `setRefreshToken`/
+  `refreshSession` on `CryptoBridgeClient`.
+- `lib/use-crypto-bridge.ts`: new `getSharedCryptoBridge()` — a non-hook "peek" accessor (returns
+  the live shared bridge only if already unlocked, without touching its refcount) for code outside
+  the component tree, specifically `lib/session.ts`.
+- `lib/session.ts`: **rewritten.** No more `localStorage` at all. The access token is a plain
+  in-memory module variable; `silentRefresh()` calls `getSharedCryptoBridge()?.refreshSession()`.
+- `lib/api.ts`: removed the old HTTP `refreshSession()` wrapper — the call moved inside the worker.
+- `features/auth/require-auth.tsx`: the crypto-unlock gate now runs *before* the silent-refresh
+  effect (there's no refresh token to recover from until the worker is unlocked — no more two
+  independent state machines racing each other).
+- `lib/complete-password-sign-in.ts`/`complete-oauth-sign-in.ts`: sign-up persists the refresh
+  token directly via the widened `bridge.init(...)`; sign-in/OAuth-existing-identity instead
+  return it to the caller, since the worker isn't necessarily unlocked yet at that point —
+  `app/(public)/password/page.tsx` and `components/auth/oauth-callback-page.tsx` hold it in
+  transient component state (`pendingRefreshToken`, never written to `localStorage`) just long
+  enough to call `bridge.setRefreshToken(...)` once their own post-login unlock step confirms the
+  worker is unlocked.
+- `lib/logout.ts`: needed no change — `worker-handler.ts`'s `clear()` case already wipes the whole
+  persisted record (now including `wrappedRefreshToken`) and resets all in-memory state (now
+  including `refreshToken`/`pin`).
+- Tests: `crypto/__tests__/client.test.ts`, `crypto/__tests__/worker-handler.test.ts`,
+  `lib/__tests__/blobs.test.ts`, `lib/complete-password-sign-in.test.ts`,
+  `lib/use-session-metadata-write.test.ts` updated for the widened signatures/new required fake-
+  bridge methods. `lib/__tests__/session.test.ts` rewritten — the old suite stubbed
+  `window.localStorage` (accurate for the old design); now drives `setToken`/`getToken`/
+  `clearToken` directly and adds coverage for `silentRefresh`'s three outcomes (no bridge → false,
+  unchanged token; bridge with nothing to refresh → false, token cleared; bridge mints a fresh
+  token → true). The now-redundant top-level `lib/session.test.ts` (a smaller, older duplicate
+  covering only `getAccountId`) was folded into the same file and removed.
+
+### F2 — web session-revocation UI
+
+**Problem:** `GET /v1/auth/sessions`, `/revoke`, `/revoke-others` (`sessionsAdmin.ts`) existed,
+worked, and were tested server-side, but nothing in the web app called them.
+
+**Fix:** `features/settings/components/DevicesSection.tsx` (new), wired into
+`features/settings/sections.tsx` as a new "Devices" section (settings dialog, alongside
+Notifications/Machines/etc.). Lists the account's active device sessions (client kind, label,
+last-used, a "This device" badge on the caller's own session); a per-row "Log out" button revokes
+that specific session (`revokeSession`); the current-device row's button reads "Log out this
+device" and, after the server-side revoke, also runs the same local teardown `nav-user.tsx`'s
+sign-out button does (`lib/logout.ts`) before redirecting to sign-in, since that session is now
+dead server-side regardless; a top-level "Log out all other devices" button calls
+`revokeOtherSessions`. No new component test was added — matching the existing, established
+precedent for every sibling settings section (`NotificationsSection`, `AgentSection`, etc., none of
+which have component tests either, since this package has no jsdom/interactive-rendering test
+environment); verified instead via live browser testing (see below).
+
+### F3 — per-identity login lockout
+
+**Problem:** `password.ts`'s login route had only Fastify's per-route, per-IP rate limit — an
+attacker rotating source IPs faces no additional friction brute-forcing one known email.
+
+**Fix:** `authIdentities` gained two columns (`drizzle/0005_broad_wong.sql`): `failedLoginCount`
+(int, default 0) and `lockedUntil` (nullable timestamp). Login now: rejects immediately (generic
+401) if `lockedUntil` is still in the future, *before* even checking the password — a locked
+identity gets turned away the same way a wrong password does, no distinguishing response. A wrong
+password atomically increments `failedLoginCount`; at `LOCKOUT_THRESHOLD` (5) consecutive failures
+it sets `lockedUntil` to an exponentially growing backoff (`LOCKOUT_BASE_MS` 30s, doubling per
+extra failure past the threshold, capped at `LOCKOUT_MAX_MS` 15 minutes) — a real owner's
+occasional mistyped password is barely felt, a sustained guesser is throttled hard. A correct
+password clears both fields, regardless of what they were. `password.test.ts` gained an isolated
+`describe` block with its own `app`/`db` (not sharing the main suite's instance, so its several
+back-to-back login attempts don't collide with the shared instance's own per-route rate-limit
+counter or its other tests' already-issued login calls): locks out after 5 wrong passwords,
+confirms the correct password is *also* rejected with the byte-identical generic error while
+locked, and confirms a different, never-failed identity's correct login leaves its own counter/lock
+at zero.
+
+### Nits (also fixed)
+
+- `cli/src/auth/tokenProvider.ts`: `RefreshResponseSchema` (Zod) replaces the bare
+  `as RefreshResponse` cast over `res.json()` — matches this package's own parse-don't-trust
+  convention (`auth/pair.ts`, `auth/credentials.ts`). A malformed response now resolves `null`
+  (logged as a warning), same non-throwing shape as every other `doRefresh` failure path. New test:
+  a response missing `refreshToken` entirely resolves `null` without marking the provider dead
+  (dead is reserved for a definitive 401, not a malformed-but-200 body).
+- Phase 0's doc note (§12) claimed web would standardize on `NEXT_PUBLIC_FALCON_API_URL`; what
+  actually shipped (and what bug #1 in the Phase 4 testing-evidence section above was about) is
+  `lib/config.ts`'s `API_URL`, backed by `NEXT_PUBLIC_API_URL` — the note now says so, and
+  `crypto/worker-handler.ts`'s new F1 `refreshSession` imports that same `API_URL`, not a third
+  name.
+
+### Testing evidence (this remediation pass)
+
+**Automated:** `pnpm --filter @falcon/web build/typecheck/test` green (1099 tests — net +3 after
+adding `silentRefresh`/lockout-adjacent coverage, the new "Session revoked" `connect_error` cases
+in `apiSocket.test.ts`, and removing the now-redundant top-level `session.test.ts`).
+`pnpm --filter @falcon/server build/typecheck/test` green (359 tests — the new isolated lockout
+`describe` block's 2 tests replace what the F3 gap note used to document as untested).
+`pnpm --filter falcon build/typecheck/test` green (1901 tests — `tokenProvider`'s new
+malformed-response case). `pnpm --filter @falcon/crypto test` (71), `pnpm --filter @falcon/wire
+test` (171), `pnpm --filter @falcon/e2e test` (1) all green, unaffected by this pass. Root `pnpm
+build`/`pnpm typecheck` both green across all 6 packages. Root `pnpm test` (turbo, all packages in
+parallel) hit transient hook/test timeouts in unrelated files (`blobs.test.ts`, `machines.test.ts`,
+`oauth.test.ts`, `index.test.ts` — none touched this pass) from real Postgres-connection/CPU
+contention running everything concurrently, exactly the kind of transient failure this repo's own
+`pnpm lint` retry-once precedent exists for; every affected suite (and the full suite generally)
+passes cleanly when run standalone per-package, confirmed above. `pnpm lint` (the root script) hit
+what looks like an environment-local issue unrelated to the code — invoking the biome binary
+directly (`node_modules/.bin/biome check .`, bypassing the `pnpm exec`/hook-rewritten invocation)
+runs cleanly and reports the exact same 14 pre-existing errors / 124 pre-existing warnings / 1 info
+as before this pass, none in any file this pass touched (confirmed by diffing the error-file list
+against `git status`) — a real content-level lint failure would show up either way, so this is
+recorded as a tooling quirk, not a code issue.
+
+**Manual (tmux + Chrome MCP, email/password, non-default ports 4102/4103, same
+pid/cwd-verified-before-kill process hygiene as the prior pass):**
+- **F1 — no refresh token (or access token) in `localStorage`:** signed up a fresh email+password
+  account with a PIN; `localStorage` was confirmed empty (`{}`) both immediately after signup and
+  after a real browser reload; IndexedDB's `falcon-crypto-bridge` store was confirmed to hold a
+  `wrappedRefreshToken` field alongside the wrapped master secret. A hard reload correctly
+  re-prompted for the PIN (in-memory access token wiped, worker locked); entering it triggered
+  `silentRefresh()` (via the worker's `refreshSession()`), landed back on the authenticated Sessions
+  screen, and the server log showed a fresh `socket connected` line — confirming silent refresh and
+  socket renew both still work end-to-end with no token ever touching `localStorage`.
+- **F2 — Devices UI revokes a session, socket drops immediately:** opened Settings → Devices,
+  confirmed it lists this account's real device sessions (client kind, "This device" badge, last-used
+  relative time) via the real `GET /v1/auth/sessions`. Using a second signed-in tab to get two live
+  device sessions, revoking a session from the Devices list correctly removed it from the list and
+  set `revoked_at` in Postgres; revoking the CURRENT session via "Log out this device" immediately
+  force-disconnected the live socket(s) for that session server-side (`socket disconnected` logged
+  the instant the revoke request completed — verified against **two** simultaneous live sockets
+  sharing that session, both dropped in the same instant) and ran the local sign-out teardown,
+  landing back on `/signin/`.
+- **F3 — login lockout:** attempted 5 consecutive wrong passwords against a real account — each
+  got the generic "Invalid email or password" 401; Postgres confirmed `failed_login_count=5` and a
+  `locked_until` `LOCKOUT_BASE_MS` (30s) in the future after the 5th. The account's own CORRECT
+  password was then submitted while still locked and got the byte-identical generic error (no
+  lock-vs-wrong-password oracle). After the lockout window passed, the correct password succeeded
+  and Postgres confirmed `failed_login_count`/`locked_until` both reset to `0`/`null`.
+
+**Bug found and fixed during this live verification pass:** while verifying F2's "revoked session's
+socket drops immediately," the socket disconnected instantly server-side as expected (confirmed via
+server logs) but the affected browser tab then got stuck indefinitely on a "Reconnecting to
+Falcon…" banner instead of ever noticing its session was dead and redirecting to sign-in. Root
+cause: `sync/apiSocket.ts`'s `handleConnectError` only treated a `connect_error` as auth-shaped
+(worth a silent-refresh attempt, then teardown+`authError` on failure) when its message matched
+`/authentication token/i` — the server's connect-time revocation check (`app/socket.ts`) rejects a
+revoked session's handshake with `"Session revoked"` instead, which never matched. The CLI's own
+`daemon/machineClient.ts`/`session/sessionClient.ts` already had the correct, wider regex
+(`/authentication token|Session revoked/i`) — this was a real web/CLI inconsistency, not a
+deliberate design difference. Fixed by widening the web-side regex to match; added two new
+`apiSocket.test.ts` cases (the base "Session revoked" → `authError` case, and the renew-token
+describe block's "triggers a silent-refresh attempt, falls through to teardown on failure" case)
+and re-verified live: after the fix, the previously-stuck tab correctly redirected to `/signin/`
+within a few seconds of its live socket being revoked.

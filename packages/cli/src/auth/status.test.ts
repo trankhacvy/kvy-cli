@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
+import { getRandomBytes } from "@falcon/crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeCredentials } from "./credentials.js";
+import { plaintextFallbackKeyMaterial } from "./keyMaterial.js";
 import { runAuthStatus } from "./status.js";
 
 let homeDir: string;
@@ -34,10 +35,10 @@ describe("runAuthStatus", () => {
     expect(joinedOutput(stdout)).toContain("falcon auth login");
   });
 
-  it("reports logged in, the credentials path, derived account key, and a present refresh token", () => {
+  it("reports logged in, the credentials path, derived account key, key material mode, and a present refresh token", () => {
     const masterSecret = getRandomBytes(32);
     writeCredentials(
-      { refreshToken: "r1", masterSecretOrContentBundle: encodeBase64(masterSecret) },
+      { refreshToken: "r1", keyMaterial: plaintextFallbackKeyMaterial(masterSecret) },
       homeDir,
     );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -48,13 +49,17 @@ describe("runAuthStatus", () => {
     const output = joinedOutput(stdout);
     expect(output).toContain("Logged in.");
     expect(output).toContain("Credentials file:");
+    expect(output).toContain("Key material: unwrapped (plaintext-fallback)");
     expect(output).toContain("Account key:");
     expect(output).toContain("Refresh token: present");
   });
 
   it("skips the derived account key when the secret isn't 32 raw bytes", () => {
     writeCredentials(
-      { refreshToken: "r1", masterSecretOrContentBundle: encodeBase64(new Uint8Array([1, 2, 3])) },
+      {
+        refreshToken: "r1",
+        keyMaterial: plaintextFallbackKeyMaterial(new Uint8Array([1, 2, 3])),
+      },
       homeDir,
     );
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -62,5 +67,26 @@ describe("runAuthStatus", () => {
     runAuthStatus();
 
     expect(joinedOutput(stdout)).not.toContain("Account key:");
+  });
+
+  it("skips the derived account key (without prompting) for PIN-protected key material", () => {
+    writeCredentials(
+      {
+        refreshToken: "r1",
+        keyMaterial: {
+          mode: "pin",
+          wrapped: { v: 1, kdf: "argon2id", salt: "c2FsdA==", nonce: "bm9uY2U=", ct: "Y3Q=" },
+        },
+      },
+      homeDir,
+    );
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    const code = runAuthStatus();
+
+    expect(code).toBe(0);
+    const output = joinedOutput(stdout);
+    expect(output).toContain("Key material: PIN-protected");
+    expect(output).not.toContain("Account key:");
   });
 });

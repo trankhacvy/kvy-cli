@@ -19,6 +19,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
   };
   return {
     init: notImplemented,
+    unlock: notImplemented,
     setSessionKey: notImplemented,
     seal: notImplemented,
     open: notImplemented,
@@ -26,10 +27,10 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
     openBlob: async (bundle) => (bundle[0] === 0xff ? bundle.subarray(1) : null),
     clear: notImplemented,
     getIdentity: notImplemented,
-    signInChallenge: notImplemented,
-    exportRecoveryCode: notImplemented,
     sealForPeer: notImplemented,
     bindKeysProof: notImplemented,
+    setRefreshToken: notImplemented,
+    refreshSession: notImplemented,
     terminate: () => {},
     ...overrides,
   };

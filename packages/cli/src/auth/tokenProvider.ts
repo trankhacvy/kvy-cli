@@ -11,6 +11,7 @@
  * should stop retrying and tell the user to run `falcon auth login` again, not loop
  * forever on a corpse the way the old fixed-token path did.
  */
+import { z } from "zod";
 import type { Logger } from "../logger.js";
 import { decodeTokenClaimsUnverified } from "./jwt.js";
 
@@ -39,10 +40,13 @@ export interface TokenProvider {
   readonly isDead: boolean;
 }
 
-interface RefreshResponse {
-  accessToken: string;
-  refreshToken: string;
-}
+// Reviewer nit (security review, closing before merge): parse-don't-trust, matching
+// this codebase's own convention (`auth/pair.ts`, `auth/credentials.ts`) instead of a
+// bare `as RefreshResponse` type assertion over an untyped `res.json()`.
+const RefreshResponseSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+});
 
 export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
   let refreshToken = deps.refreshToken;
@@ -73,7 +77,14 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
         return null;
       }
 
-      const body = (await res.json()) as RefreshResponse;
+      const parsed = RefreshResponseSchema.safeParse(await res.json());
+      if (!parsed.success) {
+        deps.logger.warn("[token-provider] refresh response failed schema validation", {
+          error: parsed.error.message,
+        });
+        return null;
+      }
+      const body = parsed.data;
       refreshToken = body.refreshToken;
       cachedAccessToken = body.accessToken;
       const claims = decodeTokenClaimsUnverified(body.accessToken);

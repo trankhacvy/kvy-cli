@@ -1,11 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
+import { getRandomBytes } from "@falcon/crypto";
 import { createEnvelope } from "@falcon/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { AcpRemoteHandle } from "../acp/acpRemote.js";
 import type { FalconCredentials } from "../auth/credentials.js";
+import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { ProviderDetectionResult } from "../codex/index.js";
 import type { DaemonState } from "../daemon/state.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
@@ -16,7 +17,7 @@ import { runStartCodexCommand, type StartCodexCommandDeps } from "./startCodex.j
 function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
   return {
     refreshToken: "test-refresh-token",
-    masterSecretOrContentBundle: encodeBase64(getRandomBytes(32)),
+    keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
     ...overrides,
   };
 }

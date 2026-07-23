@@ -28,8 +28,8 @@ function freshEphPub(): string {
   return encodeBase64(new Uint8Array(randomBytes(32)));
 }
 
-// The approve route now internally calls `issueSession`, which inserts a real
-// `device_sessions` row FK'd to `accounts.id` — so the bearer token exercising it must
+// The approve/mint routes now internally call `issueSession`, which inserts a real
+// `device_sessions` row FK'd to `accounts.id` — so the bearer token exercising them must
 // belong to a real account row, not just an arbitrary well-formed JWT subject.
 async function createAccountAndToken(): Promise<string> {
   const [account] = await db
@@ -59,6 +59,15 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
     return app.inject({
       method: "GET",
       url: `/v1/auth/pair/status?ephPub=${encodeURIComponent(ephPub)}`,
+    });
+  }
+
+  function mint(ephPub: string, token: string) {
+    return app.inject({
+      method: "POST",
+      url: "/v1/auth/pair/mint",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { ephPub },
     });
   }
 
@@ -134,6 +143,48 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
     });
   });
 
+  describe("POST /v1/auth/pair/mint", () => {
+    it("401s without an Authorization header", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/auth/pair/mint",
+        payload: { ephPub: freshEphPub() },
+      });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it("404s when no matching pair request exists", async () => {
+      const token = await createAccountAndToken();
+      const response = await mint(freshEphPub(), token);
+      expect(response.statusCode).toBe(404);
+    });
+
+    it("410s when the pair request has expired", async () => {
+      const ephPub = freshEphPub();
+      await db.insert(pairRequests).values({ ephPub, expiresAt: new Date(Date.now() - 1000) });
+      const token = await createAccountAndToken();
+
+      const response = await mint(ephPub, token);
+      expect(response.statusCode).toBe(410);
+    });
+
+    it("mints a fresh refresh token for a pending request, without touching the row", async () => {
+      const ephPub = freshEphPub();
+      await pair(ephPub);
+      const token = await createAccountAndToken();
+
+      const response = await mint(ephPub, token);
+      expect(response.statusCode).toBe(200);
+      expect(typeof response.json().refreshToken).toBe("string");
+
+      // Nothing was persisted onto the pair request itself — the refresh token only
+      // ever exists in the approving browser's memory until it's sealed.
+      const [row] = await db.select().from(pairRequests).where(eq(pairRequests.ephPub, ephPub));
+      expect(row?.response).toBeNull();
+      expect(row?.state).toBe("pending");
+    });
+  });
+
   describe("POST /v1/auth/pair/approve", () => {
     it("401s without an Authorization header", async () => {
       const response = await app.inject({
@@ -159,7 +210,7 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       expect(response.statusCode).toBe(410);
     });
 
-    it("approves a request, and the sealed box + a fresh token become pollable", async () => {
+    it("approves a request, and the sealed box becomes pollable exactly once", async () => {
       const ephPub = freshEphPub();
       await pair(ephPub);
 
@@ -169,14 +220,22 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       expect(approveResponse.statusCode).toBe(200);
       expect(approveResponse.json()).toEqual({ success: true });
 
-      const poll = await pair(ephPub);
-      const body = poll.json() as { state: string; token?: string; response?: string };
-      expect(body.state).toBe("authorized");
-      expect(decodeBase64(body.response ?? "")).toEqual(sealedBox);
-      expect(typeof body.token).toBe("string");
-
       const statusResponse = await status(ephPub);
       expect(statusResponse.json()).toEqual({ status: "authorized" });
+
+      const poll = await pair(ephPub);
+      const body = poll.json() as { state: string; response?: string; token?: string };
+      expect(body.state).toBe("authorized");
+      expect(decodeBase64(body.response ?? "")).toEqual(sealedBox);
+      // No plaintext token/refreshToken field exists on this response at all anymore
+      // (issue-4-plan.md §6.3) — everything secret travels only inside `response`.
+      expect(body.token).toBeUndefined();
+
+      // Single-use: the row is deleted the moment it's picked up — polling again
+      // starts a brand-new (unauthorized) pairing attempt for the same ephPub rather
+      // than ever re-serving the same sealed box.
+      const secondPoll = await pair(ephPub);
+      expect(secondPoll.json()).toEqual({ state: "pending" });
     });
 
     it("first-approval-wins: a second approve does not overwrite the sealed box", async () => {

@@ -1,6 +1,6 @@
 {
-  "id": "775f7152-ef5f-47eb-8765-02c49957f132",
-  "prevId": "2f7a756a-a8e5-4a68-8052-d9b7ed88411c",
+  "id": "b776f51a-6ea2-4e96-b4ef-48a9bd817d53",
+  "prevId": "73a3a349-7361-40f2-879e-b4f3fe97a2c4",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -596,12 +596,6 @@
         "response": {
           "name": "response",
           "type": "bytea",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "token": {
-          "name": "token",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

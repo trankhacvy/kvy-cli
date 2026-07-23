@@ -5,11 +5,17 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearCredentials,
   credentialsPath,
+  type FalconCredentials,
   readCredentials,
   writeCredentials,
 } from "./credentials.js";
 
 let homeDir: string;
+
+const plaintext: FalconCredentials = {
+  refreshToken: "t",
+  keyMaterial: { mode: "plaintext-fallback", bundle: "s" },
+};
 
 beforeEach(() => {
   homeDir = mkdtempSync(path.join(tmpdir(), "falcon-credentials-test-"));
@@ -25,42 +31,72 @@ describe("readCredentials", () => {
   });
 
   it("returns null for a malformed credentials file", () => {
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials(plaintext, homeDir);
     // Overwrite with garbage after a valid write ensures the directory already exists.
     const file = credentialsPath(homeDir);
     writeFileSync(file, "not json");
     expect(readCredentials(homeDir)).toBeNull();
   });
+
+  it("returns null for a legacy (pre-§6.1) flat masterSecretOrContentBundle shape", () => {
+    const file = credentialsPath(homeDir);
+    writeFileSync(file, JSON.stringify({ refreshToken: "t", masterSecretOrContentBundle: "s" }));
+    expect(readCredentials(homeDir)).toBeNull();
+  });
 });
 
 describe("writeCredentials / readCredentials round-trip", () => {
-  it("persists and reads back the same credentials", () => {
+  it("persists and reads back plaintext-fallback key material", () => {
     writeCredentials(
-      { refreshToken: "abc.def.ghi", masterSecretOrContentBundle: "c2VjcmV0" },
+      {
+        refreshToken: "abc.def.ghi",
+        keyMaterial: { mode: "plaintext-fallback", bundle: "c2VjcmV0" },
+      },
       homeDir,
     );
     expect(readCredentials(homeDir)).toEqual({
       refreshToken: "abc.def.ghi",
-      masterSecretOrContentBundle: "c2VjcmV0",
+      keyMaterial: { mode: "plaintext-fallback", bundle: "c2VjcmV0" },
     });
+  });
+
+  it("persists and reads back device-wrapped key material", () => {
+    const credentials: FalconCredentials = {
+      refreshToken: "r",
+      keyMaterial: { mode: "device", wrapped: { v: 1, nonce: "bm9uY2U=", ct: "Y3Q=" } },
+    };
+    writeCredentials(credentials, homeDir);
+    expect(readCredentials(homeDir)).toEqual(credentials);
+  });
+
+  it("persists and reads back PIN-wrapped key material", () => {
+    const credentials: FalconCredentials = {
+      refreshToken: "r",
+      keyMaterial: {
+        mode: "pin",
+        wrapped: { v: 1, kdf: "argon2id", salt: "c2FsdA==", nonce: "bm9uY2U=", ct: "Y3Q=" },
+      },
+    };
+    writeCredentials(credentials, homeDir);
+    expect(readCredentials(homeDir)).toEqual(credentials);
   });
 
   it("creates the home directory if missing", () => {
     const nested = path.join(homeDir, "nested", "falcon-home");
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, nested);
+    writeCredentials(plaintext, nested);
     expect(existsSync(credentialsPath(nested))).toBe(true);
   });
 
   it("writes the file chmod 0600", () => {
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials(plaintext, homeDir);
     const mode = statSync(credentialsPath(homeDir)).mode & 0o777;
     expect(mode).toBe(0o600);
   });
 
   it("re-chmods to 0600 even if the file previously had looser permissions", () => {
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials(plaintext, homeDir);
     chmodSync(credentialsPath(homeDir), 0o644);
-    writeCredentials({ refreshToken: "t2", masterSecretOrContentBundle: "s2" }, homeDir);
+    writeCredentials(plaintext, homeDir);
     const mode = statSync(credentialsPath(homeDir)).mode & 0o777;
     expect(mode).toBe(0o600);
   });
@@ -68,7 +104,7 @@ describe("writeCredentials / readCredentials round-trip", () => {
 
 describe("clearCredentials", () => {
   it("removes an existing credentials file", () => {
-    writeCredentials({ refreshToken: "t", masterSecretOrContentBundle: "s" }, homeDir);
+    writeCredentials(plaintext, homeDir);
     clearCredentials(homeDir);
     expect(existsSync(credentialsPath(homeDir))).toBe(false);
   });
