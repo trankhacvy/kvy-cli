@@ -17,6 +17,21 @@ import { createMachineIntegrationDeps, startMachineIntegration } from "./machine
 import { createSpawnAwaiter } from "./spawnAwaiter.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
+// Preview-tunnel wiring (docs/features/dev-server-preview.md): spied on
+// rather than exercised end-to-end here — `previewTunnel.test.ts`/
+// `tunnelRegistry.test.ts` already cover `reapOrphanedTunnels`'s and
+// `closeAllTunnels`'s real kill/journal behavior in depth. This file only
+// needs to prove `startMachineIntegration` actually WIRES them in: reaping
+// once at boot, closing everything on `stop()`.
+vi.mock("./tunnelRegistry.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./tunnelRegistry.js")>();
+  return { ...actual, reapOrphanedTunnels: vi.fn().mockResolvedValue(undefined) };
+});
+vi.mock("./previewTunnel.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./previewTunnel.js")>();
+  return { ...actual, closeAllTunnels: vi.fn().mockResolvedValue(undefined) };
+});
+
 /** Minimal fake standing in for a socket.io-client `Socket` (mirrors `machineRpc.test.ts`'s `FakeSocket`). */
 class FakeSocket {
   handlers = new Map<string, ((...args: unknown[]) => void)[]>();
@@ -185,6 +200,60 @@ describe("startMachineIntegration — DEK survives a crash-restart", () => {
     expect(raw1).not.toBeNull();
     expect(raw2).toEqual(raw1);
 
-    handle2?.stop();
+    await handle2?.stop();
+  });
+});
+
+describe("startMachineIntegration — preview-tunnel wiring", () => {
+  let homeDir: string;
+  let masterSecret: Uint8Array;
+  let credentials: FalconCredentials;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-preview-"));
+    masterSecret = getRandomBytes(32);
+    credentials = { token: "test-token", masterSecretOrContentBundle: encodeBase64(masterSecret) };
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
+  function deps(server: ReturnType<typeof fakeServer>) {
+    return createMachineIntegrationDeps(
+      { homeDir, registry: {} as never, awaiter: createSpawnAwaiter() },
+      {
+        logger: silentLogger(),
+        serverUrl: "http://localhost:4000",
+        fetchImpl: server.fetchImpl,
+        ioFactory: () => new FakeSocket() as unknown as Socket,
+        readCredentials: () => credentials,
+      },
+    );
+  }
+
+  it("reaps orphaned tunnels once at boot", async () => {
+    const { reapOrphanedTunnels } = await import("./tunnelRegistry.js");
+    const server = fakeServer();
+
+    const handle = await startMachineIntegration(deps(server));
+
+    expect(handle).not.toBeNull();
+    expect(reapOrphanedTunnels).toHaveBeenCalledExactlyOnceWith(homeDir);
+
+    await handle?.stop();
+  });
+
+  it("stop() closes every tracked tunnel", async () => {
+    const { closeAllTunnels } = await import("./previewTunnel.js");
+    const server = fakeServer();
+
+    const handle = await startMachineIntegration(deps(server));
+    expect(closeAllTunnels).not.toHaveBeenCalled();
+
+    await handle?.stop();
+
+    expect(closeAllTunnels).toHaveBeenCalledTimes(1);
   });
 });

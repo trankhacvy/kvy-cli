@@ -313,6 +313,50 @@ packages/
 │                             daemon is already running takes effect immediately) and never
 │                             logged. Zero server involvement — the token and all CI data stay
 │                             machine-local, same E2E invariant as every other machine RPC.
+│                             Live dev-server preview via secure tunnel (docs/features/
+│                             dev-server-preview.md, docs/competitive-notes-omnara.md #6) is
+│                             landed: `daemon/portScan.ts` (`lsof -nP -iTCP -sTCP:LISTEN`
+│                             parsed into a machine-wide listening-port list, deduped by
+│                             port+pid) and `daemon/cloudflaredResolve.ts` (`cloudflared
+│                             --version` detection, never installed by Falcon — it's a Go
+│                             binary, not an npm package) back the new `preview.ports` RPC.
+│                             `daemon/tunnelRegistry.ts` is the one genuinely new long-lived-
+│                             child-process subsystem: an in-memory `TunnelRegistry`
+│                             (deliberately NOT persisted — a restart drops tunnels rather
+│                             than resurrecting stale `trycloudflare.com` URLs) plus a
+│                             durable `~/.falcon/tunnels.json` pid journal and
+│                             `reapOrphanedTunnels` (verify-command-before-kill, since
+│                             `cloudflared` children carry no Falcon argv marker
+│                             `kill.ts`/`markers.ts` could otherwise classify).
+│                             `daemon/previewTunnel.ts`'s `handlePreviewOpen` spawns
+│                             `cloudflared tunnel --url http://localhost:<port>
+│                             --no-autoupdate`, scans its stderr for the first
+│                             `*.trycloudflare.com` URL (stderr ring-buffer on timeout/exit,
+│                             same idea as `acpConnection.ts`'s own), and is per-port
+│                             idempotent; `handlePreviewClose` SIGTERM→SIGKILLs the tracked
+│                             child directly. All four `preview.*` RPCs
+│                             (`ports`/`tunnels`/`open`/`close`) are registered in
+│                             `machineRpc.ts` — `open` wrapped in `withIdempotencyCache` PLUS
+│                             a new port-keyed `withPortGuard` (structural clone of
+│                             `withProviderSessionGuard`) so two devices opening the same
+│                             port collapse into one spawn — and wired into
+│                             `machineIntegration.ts` (constructs the shared tunnel registry,
+│                             calls `reapOrphanedTunnels` once at boot, and the now-async
+│                             `stop()` closes every tracked tunnel via `closeAllTunnels`
+│                             before the daemon exits). `daemon/doctor.ts` gained a `preview`
+│                             section (cloudflared detection + journal-derived tunnel
+│                             entries marked live/dead by a fresh pid check — doctor is a
+│                             separate process with no view of the daemon's in-memory
+│                             registry) and `falcon doctor clean` now also reaps live
+│                             journaled `cloudflared` pids. Security posture (recorded, not
+│                             silently absorbed): `preview.open` is the first machine RPC
+│                             whose whole point is exposing a local, loopback-bound service
+│                             to the public internet — the RPC call itself stays E2E-sealed
+│                             like every other machine RPC, but the resulting tunnel's actual
+│                             traffic is plain, unauthenticated HTTP(S) to whoever holds the
+│                             link; docs/features/dev-server-preview.md's Decisions log is
+│                             the accepted-exception record for this against design §12's
+│                             loopback-only posture.
 ├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
 │                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
 │                             migrations (`drizzle/`), migration-on-boot runner + auth
@@ -497,7 +541,41 @@ packages/
                               feature area in this list — `useLiveGithubChecksActions` is
                               real and gated on the shared per-machine DEK unwrap
                               (`use-machine-crypto.ts`), it's just that no screen threads a
-                              live `apiSocket` connection through yet.
+                              live `apiSocket` connection through yet. Live dev-server preview
+                              via secure tunnel (`src/features/preview/`, docs/features/
+                              dev-server-preview.md, docs/competitive-notes-omnara.md #6) is
+                              a further structural clone of `features/git-diff/`/
+                              `features/github-checks/`: `PreviewPanel` (header exactly "N
+                              ports detected · M tunnels active", a cloudflared-missing
+                              banner) + `PortsList` (per-port Open button, or the tunnel's
+                              URL + Copy/Preview/Open-in-new-tab/Close once one exists) +
+                              `OpenTunnelConfirmDialog` (the mandatory per-open consent gate —
+                              explicit "publicly reachable, not E2E-encrypted" copy — every
+                              `openTunnel` call goes through it) + the droppable-Phase-6
+                              `TunnelFrame` (an embedded `<iframe sandbox="allow-scripts
+                              allow-same-origin allow-forms">`, keyed per tunnel, with an 8s
+                              load-timeout "refused to embed" fallback — open-in-new-tab stays
+                              the guaranteed path regardless), composed by
+                              `SessionPreviewScreen` and driven by `use-preview-panel.ts` (two
+                              `@tanstack/react-query` queries — `preview.ports` 15s,
+                              `preview.tunnels` 5s, both scoped by `machineId` — plus
+                              open/close mutations invalidating both). `sync/machineRpc.ts`
+                              gained `preview.ports`/`preview.tunnels`/`preview.open`/
+                              `preview.close` alongside the rest. Mounted at the new
+                              `/session/[id]/preview/` route (linked from the timeline
+                              header's "Preview" button) — only needs a session's
+                              `machineId` (ports/tunnels are machine-scoped, not tied to any
+                              one worktree, same `git.*`/`provider.account` precedent), no
+                              `workspaceId` check like the Git/Checks panels need. Same
+                              not-yet-wired-to-a-live-socket-by-default state as every other
+                              feature area in this list — `useLivePreviewActions` is real and
+                              gated on the shared per-machine DEK unwrap, it's just that no
+                              screen threads a live `apiSocket` connection through yet. The
+                              self-host deploy's CSP (`deploy/web/default.conf.template`)
+                              gained one narrowly-scoped `frame-src
+                              https://*.trycloudflare.com` allowance for `TunnelFrame`'s embed
+                              — `frame-ancestors 'none'`/`X-Frame-Options: DENY` (protecting
+                              Falcon itself) and every other directive are untouched.
 ```
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes

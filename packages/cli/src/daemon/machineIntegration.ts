@@ -100,6 +100,14 @@ import type {
   AdoptTakeResult,
   GitDiffParams,
   GitDiffResult,
+  PreviewCloseParams,
+  PreviewCloseResult,
+  PreviewOpenParams,
+  PreviewOpenResult,
+  PreviewPortsParams,
+  PreviewPortsResult,
+  PreviewTunnelsParams,
+  PreviewTunnelsResult,
   SpawnParams,
   SpawnResult,
 } from "@falcon/wire";
@@ -111,6 +119,14 @@ import { createBlobClientDeps, uploadBlob as uploadBlobToServer } from "./blobCl
 import { getGitDiff } from "./gitDiff.js";
 import { createMachineClientDeps, startMachineClient } from "./machineClient.js";
 import { registerMachineRpcHandlers } from "./machineRpc.js";
+import {
+  closeAllTunnels,
+  createPreviewTunnelDeps,
+  handlePreviewClose,
+  handlePreviewOpen,
+  handlePreviewPorts,
+  handlePreviewTunnels,
+} from "./previewTunnel.js";
 import type { ProviderSessionResolver } from "./providerSessionResolver.js";
 import {
   type ResumeSessionDeps,
@@ -133,6 +149,7 @@ import {
   type TranscriptIndexerHandle,
 } from "./transcriptIndexer.js";
 import { handleAdoptMirror } from "./transcriptMirror.js";
+import { createTunnelRegistry, reapOrphanedTunnels } from "./tunnelRegistry.js";
 import type { TrackedSession } from "./types.js";
 import {
   createUnmanagedSessionClientDeps,
@@ -183,7 +200,15 @@ export interface MachineIntegrationDeps {
 
 export interface MachineIntegrationHandle {
   readonly machineId: string;
-  stop: () => void;
+  /**
+   * Async because it now also closes every tracked preview tunnel
+   * (`previewTunnel.ts`'s `closeAllTunnels` — docs/features/
+   * dev-server-preview.md) before tearing down the socket; `commands.ts`'s
+   * shutdown path awaits it. Still allowed to return plain `void` for the
+   * "socket connected but no RPC handlers ever got wired" defensive branch
+   * below, which has no tunnel registry to close.
+   */
+  stop: () => void | Promise<void>;
 }
 
 function defaultLogger(): Logger {
@@ -406,6 +431,32 @@ export async function startMachineIntegration(
     });
   }
 
+  // Live dev-server preview via secure tunnel (docs/features/
+  // dev-server-preview.md, docs/competitive-notes-omnara.md #6): one
+  // in-memory tunnel registry per daemon process, constructed here (the
+  // composition root) since `preview.open`/`preview.close`/`preview.tunnels`
+  // all need to share it — `machineRpc.ts` has no registry of its own to
+  // default to, same reasoning as `adopt.take`'s shared state above.
+  const previewTunnelDeps = createPreviewTunnelDeps({
+    homeDir: deps.homeDir,
+    registry: createTunnelRegistry(),
+  });
+
+  async function previewPortsHandler(params: PreviewPortsParams): Promise<PreviewPortsResult> {
+    return handlePreviewPorts(params, previewTunnelDeps);
+  }
+  async function previewTunnelsHandler(
+    params: PreviewTunnelsParams,
+  ): Promise<PreviewTunnelsResult> {
+    return handlePreviewTunnels(params, previewTunnelDeps);
+  }
+  async function previewOpenHandler(params: PreviewOpenParams): Promise<PreviewOpenResult> {
+    return handlePreviewOpen(params, previewTunnelDeps);
+  }
+  async function previewCloseHandler(params: PreviewCloseParams): Promise<PreviewCloseResult> {
+    return handlePreviewClose(params, previewTunnelDeps);
+  }
+
   const rpcHandle = registerMachineRpcHandlers({
     machineId,
     dek,
@@ -415,10 +466,26 @@ export async function startMachineIntegration(
     adoptTake: adoptTakeHandler,
     adoptMirror: adoptMirrorHandler,
     getGitDiff: getGitDiffHandler,
+    previewPorts: previewPortsHandler,
+    previewTunnels: previewTunnelsHandler,
+    previewOpen: previewOpenHandler,
+    previewClose: previewCloseHandler,
     logger: deps.logger,
   });
 
   deps.logger.info("[machine-integration] machine client + RPC handlers ready", { machineId });
+
+  // Boot-time orphan reaping (docs/features/dev-server-preview.md): a prior
+  // daemon process that crashed/was SIGKILLed may have left `cloudflared`
+  // children running with no falcon argv marker `kill.ts`/`markers.ts` could
+  // ever find — `tunnels.json`'s pid journal is the only trail back to
+  // them. Runs once per boot, before this daemon can itself start tracking
+  // new tunnels.
+  await reapOrphanedTunnels(deps.homeDir).catch((error: unknown) => {
+    deps.logger.warn("[machine-integration] reapOrphanedTunnels failed", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   // Adoption Tier 1 (design §8/§11 UC9): fs-watch every registered
   // workspace's transcript dir for plain (non-Falcon) provider sessions.
@@ -442,9 +509,13 @@ export async function startMachineIntegration(
 
   return {
     machineId,
-    stop: () => {
+    stop: async () => {
       transcriptIndexerHandle.stop();
       rpcHandle.stop();
+      // Close every tracked tunnel (SIGTERM->SIGKILL escalation per tunnel,
+      // `previewTunnel.ts`'s `handlePreviewClose`) so a daemon stop/restart
+      // never leaves a public `cloudflared` quick tunnel dangling.
+      await closeAllTunnels(previewTunnelDeps);
       started.handle.stop();
     },
   };

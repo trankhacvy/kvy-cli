@@ -8,7 +8,13 @@
  * - `checkpoint:*` — workspace sync / checkpoint restore
  *   (`falcon workspace sync|load`; `Workspace.syncEnabled`/`sandboxConfig`
  *   columns already exist, unused).
- * - `preview:*`    — live preview streaming for spawned dev servers.
+ * - `preview:*`    — live preview STREAMING (push updates) for spawned dev
+ *   servers/tunnels — still reserved and unused. The request/response
+ *   `preview.*` RPC schemas (ports/tunnels/open/close) now live in
+ *   `preview.ts` (docs/features/dev-server-preview.md) — that's a separate,
+ *   already-shipped namespace (machine RPC method names, not this
+ *   ephemeral-channel `t` prefix); this reservation is only for the
+ *   still-deferred live-status push channel a future Phase 2 would add.
  * - `voice:*`      — voice input/output session events.
  *
  * When one of these ships: add its schema in its own file, export it from

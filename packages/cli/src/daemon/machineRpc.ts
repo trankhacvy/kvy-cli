@@ -23,7 +23,12 @@
  * the Repo Files sidebar tab's file-tree listing and file-content fetch),
  * and `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
  * account inspection + usage metering" — Settings → Providers' per-machine
- * account card, `providerAccountInfo.ts`'s local-config read) — are in
+ * account card, `providerAccountInfo.ts`'s local-config read), plus
+ * `preview.ports`/`preview.tunnels`/`preview.open`/`preview.close`
+ * (docs/features/dev-server-preview.md — "Live dev-server preview via
+ * secure tunnel", docs/competitive-notes-omnara.md #6: machine-wide
+ * listening-port enumeration + a daemon-managed `cloudflared` quick-tunnel
+ * registry) — are in
  * scope here —
  * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
  * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
@@ -64,7 +69,19 @@
  * idempotency cache is needed for it either. All of these still carry
  * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
  * carries a caller-minted key") for uniformity with the rest of this RPC
- * family, it's just unused by these handlers.
+ * family, it's just unused by these handlers. `preview.ports`/
+ * `preview.tunnels` join this same no-cache group — pure reads (listening
+ * ports, the current tunnel registry) with nothing to replay. `preview.close`
+ * needs none either, for the same reason as `fs.mkdir`: closing an
+ * already-closed (or never-existent) `tunnelId` is a no-op `{ok:true}` by
+ * construction (`previewTunnel.ts`'s own doc comment). `preview.open` is the
+ * opposite — like `spawn`/`adopt.take`, its whole point is a side effect (a
+ * `cloudflared` child spawn), so it DOES need `withIdempotencyCache` PLUS
+ * its own resource-keyed guard (`withPortGuard` below, a structural clone of
+ * `withProviderSessionGuard`, keyed on `params.port` instead of
+ * `providerSessionId`) — two devices opening a tunnel for the same port
+ * with two different `idempotencyKey`s must still collapse into one
+ * in-flight spawn, not race two `cloudflared` children for the same port.
  * `git.commit`/`git.push`/`git.renameBranch` (docs/features/
  * git-write-actions.md) are the opposite of their read-only siblings just
  * above — they're the first git RPCs whose whole point IS a side effect, so
@@ -159,6 +176,22 @@ import {
   GitStatusParamsSchema,
   type GitStatusResult,
   GitStatusResultSchema,
+  type PreviewCloseParams,
+  PreviewCloseParamsSchema,
+  type PreviewCloseResult,
+  PreviewCloseResultSchema,
+  type PreviewOpenParams,
+  PreviewOpenParamsSchema,
+  type PreviewOpenResult,
+  PreviewOpenResultSchema,
+  type PreviewPortsParams,
+  PreviewPortsParamsSchema,
+  type PreviewPortsResult,
+  PreviewPortsResultSchema,
+  type PreviewTunnelsParams,
+  PreviewTunnelsParamsSchema,
+  type PreviewTunnelsResult,
+  PreviewTunnelsResultSchema,
   type ProviderAccountParams,
   ProviderAccountParamsSchema,
   type ProviderAccountResult,
@@ -217,6 +250,10 @@ export const MACHINE_RPC_METHODS = [
   "provider.account",
   "adopt.take",
   "adopt.mirror",
+  "preview.ports",
+  "preview.tunnels",
+  "preview.open",
+  "preview.close",
 ] as const;
 export type MachineRpcMethod = (typeof MACHINE_RPC_METHODS)[number];
 
@@ -261,6 +298,20 @@ export interface MachineRpcDeps {
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
   adoptMirror: (params: AdoptMirrorParams) => Promise<AdoptMirrorResult>;
+  /**
+   * Backs `preview.ports`/`preview.tunnels`/`preview.open`/`preview.close`
+   * (docs/features/dev-server-preview.md — `daemon/previewTunnel.ts`'s
+   * `handlePreviewPorts`/`handlePreviewTunnels`/`handlePreviewOpen`/
+   * `handlePreviewClose`, typically). Required (no context-free default
+   * here), same reasoning as `adoptTake`/`adoptMirror` above: these close
+   * over a shared, per-daemon `tunnelRegistry.ts` instance that only the
+   * caller (`machineIntegration.ts`) can construct — `machineRpc.ts` has no
+   * registry of its own to default to. Throws on failure.
+   */
+  previewPorts: (params: PreviewPortsParams) => Promise<PreviewPortsResult>;
+  previewTunnels: (params: PreviewTunnelsParams) => Promise<PreviewTunnelsResult>;
+  previewOpen: (params: PreviewOpenParams) => Promise<PreviewOpenResult>;
+  previewClose: (params: PreviewCloseParams) => Promise<PreviewCloseResult>;
   logger?: Logger;
 }
 
@@ -366,6 +417,30 @@ function withProviderSessionGuard(
 }
 
 /**
+ * Resource-keyed in-flight guard for `preview.open` (docs/features/
+ * dev-server-preview.md) — a structural clone of `withProviderSessionGuard`
+ * above, keyed on `params.port` instead of `providerSessionId`: two
+ * `preview.open` calls for the same port that arrive concurrently, even
+ * with two different `idempotencyKey`s (two devices both clicking "Open" on
+ * the same port), join the same in-flight `cloudflared` spawn attempt and
+ * both get its exact result rather than each racing its own independent
+ * spawn for that port. Never caches a rejected attempt.
+ */
+function withPortGuard(
+  fn: (params: PreviewOpenParams) => Promise<PreviewOpenResult>,
+): (params: PreviewOpenParams) => Promise<PreviewOpenResult> {
+  const inFlight = new Map<number, Promise<PreviewOpenResult>>();
+  return (params: PreviewOpenParams) => {
+    const key = params.port;
+    const existing = inFlight.get(key);
+    if (existing) return existing;
+    const attempt = fn(params).finally(() => inFlight.delete(key));
+    inFlight.set(key, attempt);
+    return attempt;
+  };
+}
+
+/**
  * Registers the daemon's machine-scoped `spawn`/`resumeSession`/`fs.list`/
  * `fs.mkdir`/`workspace.register`/`adopt.take`/`adopt.mirror` RPCs: joins
  * `m:<machineId>:<method>`
@@ -400,6 +475,10 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const cachedGitRenameBranch = withIdempotencyCache(
     deps.gitRenameBranch ?? handleGitRenameBranchDefault,
   );
+  // `preview.open`'s whole point is a side effect (spawning a `cloudflared`
+  // child) — idempotency-key replay PLUS the port-keyed concurrency guard,
+  // same two-layer shape as `adopt.take`'s `cachedAdoptTake` above.
+  const cachedPreviewOpen = withIdempotencyCache(withPortGuard(deps.previewOpen));
 
   function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
     const cached = spawnResults.get(params.idempotencyKey);
@@ -527,6 +606,26 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: AdoptMirrorParamsSchema,
       resultSchema: AdoptMirrorResultSchema,
       handle: cachedAdoptMirror as (params: unknown) => Promise<unknown>,
+    },
+    "preview.ports": {
+      paramsSchema: PreviewPortsParamsSchema,
+      resultSchema: PreviewPortsResultSchema,
+      handle: deps.previewPorts as (params: unknown) => Promise<unknown>,
+    },
+    "preview.tunnels": {
+      paramsSchema: PreviewTunnelsParamsSchema,
+      resultSchema: PreviewTunnelsResultSchema,
+      handle: deps.previewTunnels as (params: unknown) => Promise<unknown>,
+    },
+    "preview.open": {
+      paramsSchema: PreviewOpenParamsSchema,
+      resultSchema: PreviewOpenResultSchema,
+      handle: cachedPreviewOpen as (params: unknown) => Promise<unknown>,
+    },
+    "preview.close": {
+      paramsSchema: PreviewCloseParamsSchema,
+      resultSchema: PreviewCloseResultSchema,
+      handle: deps.previewClose as (params: unknown) => Promise<unknown>,
     },
   };
 

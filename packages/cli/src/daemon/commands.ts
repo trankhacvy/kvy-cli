@@ -479,7 +479,7 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   // Stop taking new machine RPCs / heartbeats before tearing down the
   // control server and releasing the lock, mirroring the boot order above
   // (machine client started last, stopped first).
-  machineIntegration?.stop();
+  await machineIntegration?.stop();
   await controlServer.stop();
   await lockResult.handle.release();
   await clearDaemonState(homeDir);

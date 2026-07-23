@@ -45,6 +45,17 @@
  * Files sidebar tab: `git.files` lists every worktree-relative path
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
+ *
+ * `preview.ports`/`preview.tunnels`/`preview.open`/`preview.close`
+ * (docs/features/dev-server-preview.md — "Live dev-server preview via
+ * secure tunnel", docs/competitive-notes-omnara.md #6) back the Preview
+ * tab's data source (`features/preview/`): `preview.ports` lists the
+ * machine's listening TCP ports plus whether `cloudflared` is installed;
+ * `preview.tunnels` lists currently-tracked tunnels; `preview.open`/
+ * `preview.close` spawn/kill a Cloudflare quick tunnel for a given port. The
+ * resulting tunnel URL is a PUBLIC, unauthenticated link whose traffic is
+ * NOT E2E-encrypted (unlike this RPC call itself) — see that feature
+ * folder's consent-dialog copy.
  */
 import {
   type AdoptListParamsSchema,
@@ -75,6 +86,14 @@ import {
   GitRenameBranchResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
+  type PreviewCloseParams,
+  PreviewCloseResultSchema,
+  type PreviewOpenParams,
+  PreviewOpenResultSchema,
+  type PreviewPortsParams,
+  PreviewPortsResultSchema,
+  type PreviewTunnelsParams,
+  PreviewTunnelsResultSchema,
   type ProviderAccountParams,
   ProviderAccountResultSchema,
   type SlashCommandsListParams,
@@ -101,6 +120,10 @@ export type {
   GitPushParams,
   GitRenameBranchParams,
   GitStatusParams,
+  PreviewCloseParams,
+  PreviewOpenParams,
+  PreviewPortsParams,
+  PreviewTunnelsParams,
   ProviderAccountParams,
   SlashCommandsListParams,
   SpawnParams,
@@ -130,6 +153,10 @@ export interface MachineRpcParams {
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
   "provider.account": ProviderAccountParams;
+  "preview.ports": PreviewPortsParams;
+  "preview.tunnels": PreviewTunnelsParams;
+  "preview.open": PreviewOpenParams;
+  "preview.close": PreviewCloseParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -152,6 +179,10 @@ export interface MachineRpcResults {
   "git.files": import("@falcon/wire").GitFilesResult;
   "fs.read": import("@falcon/wire").FsReadResult;
   "provider.account": import("@falcon/wire").ProviderAccountResult;
+  "preview.ports": import("@falcon/wire").PreviewPortsResult;
+  "preview.tunnels": import("@falcon/wire").PreviewTunnelsResult;
+  "preview.open": import("@falcon/wire").PreviewOpenResult;
+  "preview.close": import("@falcon/wire").PreviewCloseResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -175,6 +206,10 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,
   "provider.account": ProviderAccountResultSchema,
+  "preview.ports": PreviewPortsResultSchema,
+  "preview.tunnels": PreviewTunnelsResultSchema,
+  "preview.open": PreviewOpenResultSchema,
+  "preview.close": PreviewCloseResultSchema,
 };
 
 /** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */

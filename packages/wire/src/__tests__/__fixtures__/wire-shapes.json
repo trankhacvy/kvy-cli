@@ -4169,5 +4169,217 @@
         ]
       }
     }
+  },
+  "PreviewPortsParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "PreviewPortInfoSchema": {
+    "kind": "object",
+    "fields": {
+      "address": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "pid": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
+      },
+      "port": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "processName": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "PreviewPortsResultSchema": {
+    "kind": "object",
+    "fields": {
+      "cloudflared": {
+        "kind": "object",
+        "fields": {
+          "installed": {
+            "kind": "leaf",
+            "type": "boolean"
+          },
+          "version": {
+            "kind": "optional",
+            "inner": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ports": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "address": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "pid": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "number"
+              }
+            },
+            "port": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "processName": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "PreviewTunnelsParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "TunnelInfoSchema": {
+    "kind": "object",
+    "fields": {
+      "port": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "startedAt": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "status": {
+        "kind": "literal",
+        "values": [
+          "starting",
+          "active"
+        ]
+      },
+      "tunnelId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "url": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "PreviewTunnelsResultSchema": {
+    "kind": "object",
+    "fields": {
+      "tunnels": {
+        "kind": "array",
+        "element": {
+          "kind": "object",
+          "fields": {
+            "port": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "startedAt": {
+              "kind": "leaf",
+              "type": "number"
+            },
+            "status": {
+              "kind": "literal",
+              "values": [
+                "starting",
+                "active"
+              ]
+            },
+            "tunnelId": {
+              "kind": "leaf",
+              "type": "string"
+            },
+            "url": {
+              "kind": "leaf",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "PreviewOpenParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "port": {
+        "kind": "leaf",
+        "type": "number"
+      }
+    }
+  },
+  "PreviewOpenResultSchema": {
+    "kind": "object",
+    "fields": {
+      "port": {
+        "kind": "leaf",
+        "type": "number"
+      },
+      "tunnelId": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "url": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "PreviewCloseParamsSchema": {
+    "kind": "object",
+    "fields": {
+      "idempotencyKey": {
+        "kind": "leaf",
+        "type": "string"
+      },
+      "tunnelId": {
+        "kind": "leaf",
+        "type": "string"
+      }
+    }
+  },
+  "PreviewCloseResultSchema": {
+    "kind": "object",
+    "fields": {
+      "ok": {
+        "kind": "leaf",
+        "type": "boolean"
+      }
+    }
   }
 }
