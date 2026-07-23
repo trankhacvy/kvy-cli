@@ -196,6 +196,18 @@ export function archiveSession(token: string, sessionId: string): Promise<{ stat
   return postJson(`/v1/sessions/${sessionId}/archive`, undefined, token);
 }
 
+/** `POST /v1/sessions/:id/unarchive` — Restore, the inverse of Mark done
+ * (docs/features/session-lifecycle-actions.md Phase 1). Idempotent
+ * server-side; a non-archived row is left untouched and the response
+ * reports the row's honest current status rather than fabricating
+ * `"active"`. */
+export function unarchiveSession(
+  token: string,
+  sessionId: string,
+): Promise<{ status: SessionRow["status"] }> {
+  return postJson(`/v1/sessions/${sessionId}/unarchive`, undefined, token);
+}
+
 /** `DELETE /v1/sessions/:id` — permanently deletes a session row (and, via
  * `schema.ts`'s `onDelete: "cascade"`, its messages). */
 export function deleteSession(token: string, sessionId: string): Promise<Record<string, never>> {
