@@ -66,7 +66,11 @@ export function beginGithubSignIn(): void {
   const url = new URL("https://github.com/login/oauth/authorize");
   url.searchParams.set("client_id", GITHUB_OAUTH_CLIENT_ID);
   url.searchParams.set("redirect_uri", callbackUrl("github"));
-  url.searchParams.set("scope", "read:user");
+  // `user:email` (in addition to `read:user`) lets the server's `/user/emails` call
+  // (auth/oauth.ts's `verifyGithubAccessToken`) see the primary verified address even
+  // for accounts that keep their email private — `/user` alone only returns it when
+  // the user made it public.
+  url.searchParams.set("scope", "read:user user:email");
   url.searchParams.set("state", state);
   window.location.href = url.toString();
 }

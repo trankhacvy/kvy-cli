@@ -22,16 +22,22 @@ const migrationsFolder = path.resolve(
   "../../../drizzle",
 );
 
-// Fake verifier: proofs are just `"<provider>:<subject>"` strings, or the literal
-// string `"invalid"` to simulate a rejected proof — keeps these tests off the network
-// entirely (mirrors the `db` injection pattern in auth.test.ts).
+// Fake verifier: proofs are `"<provider>:<subject>"`, optionally extended with
+// `:<email>:verified` or `:<email>:unverified` to exercise email capture, or the
+// literal string `"invalid"` to simulate a rejected proof — keeps these tests off
+// the network entirely (mirrors the `db` injection pattern in auth.test.ts).
 function fakeVerifier(): OAuthVerifier {
   return {
     async verify(provider: OAuthProvider, proof: string): Promise<OAuthIdentity | null> {
       if (proof === "invalid") return null;
-      const [proofProvider, subject] = proof.split(":");
+      const [proofProvider, subject, email, verifiedFlag] = proof.split(":");
       if (proofProvider !== provider || !subject) return null;
-      return { provider, subject };
+      return {
+        provider,
+        subject,
+        email: email ?? null,
+        emailVerified: verifiedFlag === "verified",
+      };
     },
   };
 }
@@ -137,6 +143,93 @@ describe("POST /v1/auth/register", () => {
     const googleVerified = await verifyToken(google.json().token);
     const githubVerified = await verifyToken(github.json().token);
     expect(googleVerified?.accountId).not.toBe(githubVerified?.accountId);
+  });
+
+  it("persists the identity's email and emailVerified onto the auth_identities insert", async () => {
+    const { body } = registerBody({
+      oauthProvider: "google",
+      oauthProof: "google:dave-sub:dave@example.com:verified",
+    });
+
+    const response = await app.inject({ method: "POST", url: "/v1/auth/register", payload: body });
+    expect(response.statusCode).toBe(200);
+    const verified = await verifyToken(response.json().token);
+
+    const db = drizzle(pglite, { schema });
+    const [row] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, verified?.accountId ?? ""));
+    expect(row?.email).toBe("dave@example.com");
+    expect(row?.emailVerified).toBe(true);
+  });
+
+  it("stores an unverified email but flags it — never treated as authoritative", async () => {
+    const { body } = registerBody({
+      oauthProvider: "google",
+      oauthProof: "google:frank-sub:frank@example.com:unverified",
+    });
+
+    const response = await app.inject({ method: "POST", url: "/v1/auth/register", payload: body });
+    const verified = await verifyToken(response.json().token);
+
+    const db = drizzle(pglite, { schema });
+    const [row] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, verified?.accountId ?? ""));
+    expect(row?.email).toBe("frank@example.com");
+    expect(row?.emailVerified).toBe(false);
+  });
+
+  it("backfills email on a returning identity that had none, without touching an already-set one", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: { oauthProvider: "google", oauthProof: "google:erin-sub" },
+    });
+    const firstVerified = await verifyToken(first.json().token);
+
+    const db = drizzle(pglite, { schema });
+    const [beforeBackfill] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
+    expect(beforeBackfill?.email).toBeNull();
+
+    const second = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        oauthProvider: "google",
+        oauthProof: "google:erin-sub:erin@example.com:verified",
+      },
+    });
+    const secondVerified = await verifyToken(second.json().token);
+    expect(secondVerified?.accountId).toBe(firstVerified?.accountId);
+
+    const [afterBackfill] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
+    expect(afterBackfill?.email).toBe("erin@example.com");
+    expect(afterBackfill?.emailVerified).toBe(true);
+
+    // A third login reporting a *different* email never overwrites the one on file —
+    // the backfill only fills an empty column (issue-6 §6g).
+    await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        oauthProvider: "google",
+        oauthProof: "google:erin-sub:changed@example.com:verified",
+      },
+    });
+    const [afterThirdLogin] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
+    expect(afterThirdLogin?.email).toBe("erin@example.com");
   });
 });
 

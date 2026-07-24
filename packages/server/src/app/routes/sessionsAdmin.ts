@@ -8,7 +8,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { deviceSessions } from "../../db/schema.js";
+import { authIdentities, deviceSessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 
 const DeviceSessionRowSchema = z.object({
@@ -37,14 +37,34 @@ export function buildSessionsAdminRoutes(
       "/v1/auth/sessions",
       {
         preHandler: app.authenticate,
-        schema: { response: { 200: z.object({ sessions: z.array(DeviceSessionRowSchema) }) } },
+        schema: {
+          response: {
+            200: z.object({
+              // issue-6 ("capture & store email from Google/GitHub sign-in") §6f:
+              // this is the read path for the email `routes/oauth.ts` (and
+              // `routes/password.ts`) capture onto `auth_identities` — there being
+              // no other account-summary endpoint to hang it off. Best-effort
+              // display only, never authoritative: unverified emails are included
+              // the same as verified ones (there's no auth decision riding on it
+              // here), so this is a UI label, not a claim of ownership.
+              email: z.string().nullable(),
+              sessions: z.array(DeviceSessionRowSchema),
+            }),
+          },
+        },
       },
       async (request, reply) => {
-        const rows = await db.query.deviceSessions.findMany({
-          where: eq(deviceSessions.accountId, request.accountId),
-        });
+        const [rows, identity] = await Promise.all([
+          db.query.deviceSessions.findMany({
+            where: eq(deviceSessions.accountId, request.accountId),
+          }),
+          db.query.authIdentities.findFirst({
+            where: eq(authIdentities.accountId, request.accountId),
+          }),
+        ]);
         const active = rows.filter((row) => !row.revokedAt);
         return reply.send({
+          email: identity?.email ?? null,
           sessions: active.map((row) => ({
             id: row.id,
             clientKind: row.clientKind,

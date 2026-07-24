@@ -146,9 +146,23 @@ export function buildOAuthRoutes(
                 accountId: account.id,
                 kind: identity.provider,
                 identifier: identity.subject,
+                email: identity.email,
+                emailVerified: identity.emailVerified,
               });
               return account.id;
             });
+
+        // A returning identity created before email capture existed (or whose
+        // provider didn't report one at the time) gets backfilled on its next
+        // login — never overwrites an email already on file (issue-6 §6g: that
+        // "only fill when empty" rule is deliberately conservative, not a general
+        // sync — a linking feature built on top of this later must revisit it).
+        if (existing && !existing.email && identity.email) {
+          await db
+            .update(authIdentities)
+            .set({ email: identity.email, emailVerified: identity.emailVerified })
+            .where(eq(authIdentities.id, existing.id));
+        }
 
         const { accessToken, refreshToken } = await issueSession(db, {
           accountId,

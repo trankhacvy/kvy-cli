@@ -9,7 +9,7 @@ import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { issueSession as issueSessionRaw } from "../../auth/index.js";
 import * as schema from "../../db/schema.js";
-import { accounts } from "../../db/schema.js";
+import { accounts, authIdentities } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 
 const migrationsFolder = path.resolve(
@@ -83,6 +83,41 @@ describe("sessions-admin routes (§4.4/§4.5c)", () => {
     const current = body.sessions.find((s) => s.id === first.sessionId);
     expect(current?.isCurrent).toBe(true);
     expect(body.sessions.filter((s) => s.isCurrent)).toHaveLength(1);
+  });
+
+  it("GET /v1/auth/sessions returns null email for an account with no auth_identities row", async () => {
+    const accountId = "acct_sessions_no_identity";
+    const session = await issueSession({ accountId, clientKind: "web" });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/sessions",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().email).toBeNull();
+  });
+
+  it("GET /v1/auth/sessions surfaces the account's captured email (issue-6 read path)", async () => {
+    const accountId = "acct_sessions_with_email";
+    const session = await issueSession({ accountId, clientKind: "web" });
+    await db.insert(authIdentities).values({
+      accountId,
+      kind: "google",
+      identifier: "google-sub-1",
+      email: "user@example.com",
+      emailVerified: true,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/sessions",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().email).toBe("user@example.com");
   });
 
   it("POST /v1/auth/sessions/:id/revoke revokes the row AND disconnects its live socket immediately", async () => {

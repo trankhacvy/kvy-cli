@@ -154,8 +154,11 @@ export function keysBind(
   return postJson("/v1/auth/keys/bind", body, token);
 }
 
-/** `GET /v1/auth/sessions` — issue-4-plan.md §4.4: this account's active device sessions. */
+/** `GET /v1/auth/sessions` — issue-4-plan.md §4.4: this account's active device sessions.
+ * `email` (issue-6) is the account's best-effort captured email — from password
+ * sign-up or a Google/GitHub identity — for display only, `null` if none is on file. */
 export function listDeviceSessions(token: string): Promise<{
+  email: string | null;
   sessions: Array<{
     id: string;
     clientKind: string;

@@ -49,6 +49,7 @@ function formatRelative(iso: string | null): string {
 export function DevicesSection() {
   const router = useRouter();
   const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | "others" | null>(null);
 
@@ -58,7 +59,10 @@ export function DevicesSection() {
     if (!token) return;
     listDeviceSessions(token)
       .then((result) => {
-        if (!cancelled) setSessions(result.sessions);
+        if (!cancelled) {
+          setSessions(result.sessions);
+          setEmail(result.email);
+        }
       })
       .catch((err) => {
         if (!cancelled) {
@@ -116,7 +120,9 @@ export function DevicesSection() {
         <div>
           <h3 className="text-sm font-medium">Devices</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every device currently signed in to your account.
+            {email
+              ? `Signed in as ${email}. Every device currently signed in to your account.`
+              : "Every device currently signed in to your account."}
           </p>
         </div>
         <Button
@@ -131,9 +137,7 @@ export function DevicesSection() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {sessions === null && !error && (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      )}
+      {sessions === null && !error && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {sessions && sessions.length === 0 && (
         <p className="text-sm text-muted-foreground">No active devices.</p>
