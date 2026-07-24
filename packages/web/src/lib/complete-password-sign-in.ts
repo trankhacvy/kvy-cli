@@ -33,6 +33,17 @@ export interface PasswordSignInOutcome {
   nextUrl: string;
 }
 
+/** `completePasswordSignUp`'s outcome — distinct from `PasswordSignInOutcome` above because
+ * register (unlike login) has a second, non-error terminal state: `password.ts`'s §5.2
+ * no-enumeration branch for an already-registered email returns the exact same
+ * `{success:true}` shape as a real sign-up, but with `token`/`refreshToken` both `""` — there
+ * is no session and no account id to bind key material to, so there is nothing left for THIS
+ * browser to do but hand the caller back to the sign-in flow. That is a distinct outcome from
+ * both "created a new identity" and "network/validation error" (`ApiError`), so it gets its
+ * own `kind` rather than being coerced into either.
+ */
+export type PasswordSignUpOutcome = { kind: "ok"; nextUrl: string } | { kind: "existing-account" };
+
 /** Sign-in's own outcome additionally carries the refresh token — this device's crypto
  * worker isn't necessarily unlocked yet at this point, so it can't be persisted
  * (PIN-wrapped) until the caller's own post-login unlock step completes. */
@@ -71,8 +82,16 @@ export async function completePasswordSignUp(
   email: string,
   password: string,
   pin: string,
-): Promise<PasswordSignInOutcome> {
+): Promise<PasswordSignUpOutcome> {
   const { token, refreshToken } = await passwordRegister({ email, password });
+  if (!token || !refreshToken) {
+    // §5.2 no-enumeration: the server returns this exact `{success:true}` shape (with both
+    // fields blanked) when `identifier` is already registered, instead of a 409 that would let
+    // a caller distinguish "new" from "existing" from the response alone. There's no session
+    // here to `setToken` and no account id to bind key material to — the caller's job is just
+    // to route this browser back to sign-in, not to treat it as a failure.
+    return { kind: "existing-account" };
+  }
   setToken(token);
 
   let identity = await bridge.getIdentity();
@@ -110,7 +129,7 @@ export async function completePasswordSignUp(
     signature: proof.signature,
   });
 
-  return { nextUrl: "/" };
+  return { kind: "ok", nextUrl: "/" };
 }
 
 /**

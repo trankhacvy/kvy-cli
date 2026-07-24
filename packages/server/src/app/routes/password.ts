@@ -6,11 +6,13 @@
  */
 import { randomBytes } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import type { EmailTransport } from "../../auth/email.js";
 import { hashPassword, verifyPassword } from "../../auth/password.js";
 import { issueSession } from "../../auth/refresh.js";
+import { env } from "../../config.js";
 import { accounts, authIdentities, deviceSessions, passwordResetTokens } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 
@@ -51,15 +53,40 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+// docs/auth-ux-hardening-plan.md item 3: email+password is dev/local-testing only — reuse
+// the same `FALCON_DEV_AUTH` flag the dev-OAuth-bypass already gates on (auth/oauth.ts's
+// "dev" provider), fail-closed with a 404 (route effectively does not exist) rather than a
+// 403, so a production deployment doesn't even advertise that this endpoint exists.
+// `config.ts`'s `.refine()` already makes `FALCON_DEV_AUTH=1` structurally impossible under
+// `NODE_ENV=production`, so this is unreachable in prod transitively — no separate
+// production check needed here.
+//
+// Wired as `preValidation` (review fix), NOT as the handler's first statement: Fastify runs
+// its own request-lifecycle hooks — onRequest → preParsing → preValidation → **body-schema
+// validation** → preHandler → handler — so a check placed as the handler's first line only
+// runs *after* the zod body schema has already validated the request. With the flag off, a
+// well-formed body correctly 404s, but a malformed one (e.g. a missing field) still gets
+// rejected by schema validation first and answers 400 "Bad Request" before ever reaching the
+// handler — which both confirms the route exists AND leaks its expected shape, defeating the
+// "doesn't even advertise this endpoint exists" goal for exactly the kind of request a route-
+// enumerating prober would send. `preValidation` runs before schema validation, so every
+// request — well-formed or not — gets the same 404 when the flag is off.
+async function requireDevAuth(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (!env.FALCON_DEV_AUTH) {
+    await reply.code(404).send({ error: "Not found" });
+  }
+}
+
 export function buildPasswordRoutes(db: Database, email: EmailTransport): FastifyPluginAsyncZod {
   return async (app) => {
     app.post(
       "/v1/auth/password/register",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+        preValidation: requireDevAuth,
         schema: {
           body: z.object({ email: z.string().email(), password: z.string().min(8) }),
-          response: { 200: SessionResponseSchema, 400: ErrorSchema },
+          response: { 200: SessionResponseSchema, 400: ErrorSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
@@ -114,9 +141,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/login",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+        preValidation: requireDevAuth,
         schema: {
           body: z.object({ email: z.string().email(), password: z.string().min(1) }),
-          response: { 200: SessionResponseSchema, 401: ErrorSchema },
+          response: { 200: SessionResponseSchema, 401: ErrorSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
@@ -179,9 +207,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/reset/request",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+        preValidation: requireDevAuth,
         schema: {
           body: z.object({ email: z.string().email() }),
-          response: { 200: OkResponseSchema },
+          response: { 200: OkResponseSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
@@ -215,9 +244,10 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/reset/confirm",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+        preValidation: requireDevAuth,
         schema: {
           body: z.object({ token: z.string().min(1), password: z.string().min(8) }),
-          response: { 200: OkResponseSchema, 401: ErrorSchema },
+          response: { 200: OkResponseSchema, 401: ErrorSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {

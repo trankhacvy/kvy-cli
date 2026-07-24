@@ -93,7 +93,7 @@ describe("completePasswordSignUp", () => {
 
     const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
 
-    expect(outcome).toEqual({ nextUrl: "/" });
+    expect(outcome).toEqual({ kind: "ok", nextUrl: "/" });
     expect(keysBindMock).toHaveBeenCalledWith(
       token,
       expect.objectContaining({ signPubKey: "sign-pub", contentPubKey: "content-pub" }),
@@ -113,6 +113,17 @@ describe("completePasswordSignUp", () => {
     await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
 
     expect(initSpy).not.toHaveBeenCalled();
+  });
+
+  it("reports existing-account (not a crash) on password.ts's §5.2 no-enumeration blank-token response", async () => {
+    passwordRegisterMock.mockResolvedValue({ success: true, token: "", refreshToken: "" });
+    const bridge = fakeBridge();
+
+    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
+
+    expect(outcome).toEqual({ kind: "existing-account" });
+    expect(keysBindMock).not.toHaveBeenCalled();
+    expect(markCryptoBridgeUnlockedMock).not.toHaveBeenCalled();
   });
 });
 

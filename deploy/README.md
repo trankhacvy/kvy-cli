@@ -93,6 +93,36 @@ boot" story; `deploy/server-entrypoint.sh` is a thin, documented wrapper
 around `node dist/main.js` for operators who want a hook point (pre-flight
 checks, secrets fetch, ...) without duplicating the migration call itself.
 
+## Upgrading to the email+password production gate (docs/auth-ux-hardening-plan.md item 3)
+
+Email+password (`POST /v1/auth/password/{register,login,reset/request,reset/confirm}`) is
+dev/local-testing only — every self-host deployment that leaves `FALCON_DEV_AUTH` unset
+(the default) gets a fail-closed `404` on all four routes instead of a live password
+identity, matching the "no OAuth app configured yet" dev-bypass this flag already gates
+(`config.ts`).
+
+**Before upgrading a deployment that predates this gate**, confirm no existing account
+depends on email+password as its *only* identity — once the gate is on, `password/login`
+404s, and (per `docs/issue-4-plan.md`'s step-up design) the OAuth-only "reset keys" recovery
+path can't help an account that never linked a Google/GitHub identity either. Run this
+against the deployment's own Postgres before rolling the upgrade out:
+
+```sql
+SELECT count(*) FROM auth_identities WHERE kind = 'password';
+```
+
+- **`0`** — gating is safe as-is; nothing to migrate.
+- **`> 0`** — there is currently no self-serve "link a Google/GitHub identity to an
+  existing password account" flow, so flipping the gate on immediately locks those
+  accounts out of login (and, per `docs/issue-4-plan.md`'s step-up design, out of the
+  OAuth-only "reset keys" recovery path too, since they never linked a second identity).
+  Do **not** enable this gate for a deployment with `count > 0` until either an
+  account-linking flow ships, or every affected account has been migrated out-of-band
+  (e.g. an operator-run script that inserts a matching `auth_identities` row of
+  `kind = 'oauth'` for the same `account_id`, or direct support contact with the account
+  holder). Keep `FALCON_DEV_AUTH=1` on that deployment in the meantime — it's the only
+  thing keeping password login reachable there.
+
 ## Blob storage: local disk vs. MinIO/S3
 
 `packages/server/src/blobStorage/index.ts` selects the driver purely from

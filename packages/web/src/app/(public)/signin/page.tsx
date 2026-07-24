@@ -44,7 +44,9 @@ export default function SignInPage() {
               <CardHeader className="space-y-2">
                 <CardTitle>Continue to Falcon</CardTitle>
                 <CardDescription>
-                  Sign in with a provider, or use email + password instead.
+                  {DEV_AUTH_ENABLED
+                    ? "Sign in with a provider, or use email + password instead."
+                    : "Sign in with a provider."}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -76,50 +78,53 @@ export default function SignInPage() {
                     </span>
                     <KeyRound className="size-4 opacity-70" aria-hidden="true" />
                   </Button>
-                </div>
-
-                <div className="relative">
-                  <Separator />
-                  <span className="absolute inset-x-0 -top-2 mx-auto w-fit bg-card px-3 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-                    Or
-                  </span>
-                </div>
-
-                <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Prefer email + password? That flow also sets up (or unlocks) this browser's
-                    encrypted key material with a PIN.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => router.push("/password/")}
-                  >
-                    Continue with email + password
-                  </Button>
                   {!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && !DEV_AUTH_ENABLED && (
                     <p className="text-xs text-muted-foreground">
                       No OAuth provider is configured for this deployment.
                     </p>
                   )}
-                  {DEV_AUTH_ENABLED && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => router.push("/auth/callback/dev/")}
-                    >
-                      Continue without OAuth (dev only)
-                    </Button>
-                  )}
                 </div>
+
+                {DEV_AUTH_ENABLED && (
+                  <>
+                    <div className="relative">
+                      <Separator />
+                      <span className="absolute inset-x-0 -top-2 mx-auto w-fit bg-card px-3 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+                        Or
+                      </span>
+                    </div>
+
+                    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
+                      <p className="text-sm leading-6 text-muted-foreground">
+                        Prefer email + password? That flow also sets up (or unlocks) this browser's
+                        encrypted key material with a PIN. (Local testing only.)
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => router.push("/password/")}
+                      >
+                        Continue with email + password
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => router.push("/auth/callback/dev/")}
+                      >
+                        Continue without OAuth (dev only)
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
             <p className="text-center text-sm leading-6 text-muted-foreground">
-              OAuth and email+password are both first-class login identities — either one provisions
-              this browser's key material the first time it's used here.
+              {DEV_AUTH_ENABLED
+                ? "OAuth and email+password are both first-class login identities — either one provisions this browser's key material the first time it's used here."
+                : "Signing in provisions this browser's key material the first time it's used here."}
             </p>
           </div>
         </section>
