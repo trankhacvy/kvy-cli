@@ -1486,6 +1486,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     vi.restoreAllMocks();
     process.removeAllListeners("SIGTERM");
     process.removeAllListeners("SIGHUP");
+    process.removeAllListeners("SIGINT");
   });
 
   it("gracefully requests loop() exit on SIGTERM (via onExitRequested) instead of calling process.exit directly", async () => {
@@ -1578,6 +1579,66 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
 
     // SIGHUP's wrapper exit code (1) wins over the loop's own resolved 0 —
     // same "signal exit code always wins" rule as the PTY flow's own test.
+    expect(code).toBe(1);
+    expect(rpcStop).toHaveBeenCalledTimes(1);
+    expect(exitSpy).not.toHaveBeenCalled();
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({
+      sessionId: "sess_1",
+      status: "ended",
+      error: undefined,
+    });
+  });
+
+  it("gracefully requests loop() exit on SIGINT too, instead of Node's default (uncaught-signal) termination", async () => {
+    // Regression test: `commands/start.ts` used to register handlers for
+    // SIGTERM/SIGHUP only, leaving SIGINT to Node's default disposition —
+    // immediate process termination with no `finally` block (including the
+    // per-directory session lock's `release()`) ever running. This is the
+    // documented root cause of a session lock going stale (a dead pid still
+    // "held" in the lock file) after an interactive `falcon claude` was
+    // interrupted with Ctrl-C before the PTY (and its raw-mode byte
+    // forwarding) was up.
+    const rpcStop = vi.fn();
+    const registerSessionRpcHandlers = vi.fn(() => ({ stop: rpcStop }));
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    const loop = vi.fn(
+      async (options: LoopOptions) =>
+        await new Promise<number>((resolve) => {
+          options.onExitRequested(() => resolve(0));
+        }),
+    );
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({
+        claudeArgs: ["--starting-mode", "remote"],
+        loop,
+        registerSessionRpcHandlers,
+        reportSessionStatus,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGINT")).toBe(true);
+    });
+    const sigintCall = onSpy.mock.calls.find(([event]) => event === "SIGINT");
+    const handler = sigintCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+
+    handler?.("SIGINT");
+
+    const code = await resultPromise;
+
+    // Same "signal exit code always wins" rule as SIGHUP — SIGINT is treated
+    // as an abnormal-but-honest stop (1), not a crash, and never a direct
+    // `process.exit()` short-circuit.
     expect(code).toBe(1);
     expect(rpcStop).toHaveBeenCalledTimes(1);
     expect(exitSpy).not.toHaveBeenCalled();
@@ -1808,7 +1869,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 });
 
-describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W1.4)", () => {
+describe("runStartClaudeCommand — SIGTERM/SIGHUP/SIGINT lifecycle-status reporting (W1.4)", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     // Belt-and-suspenders: a test that throws before its own cleanup runs
@@ -1816,6 +1877,7 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     // test-runner process itself.
     process.removeAllListeners("SIGTERM");
     process.removeAllListeners("SIGHUP");
+    process.removeAllListeners("SIGINT");
   });
 
   /**
@@ -1949,6 +2011,67 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     });
   });
 
+  it("gracefully stops the PTY child, releases the directory session lock, and resolves exit code 1 on SIGINT", async () => {
+    // Regression test (root cause of a stale per-directory session lock,
+    // `session/sessionLock.ts`): before this fix, SIGINT had no registered
+    // handler at all, so Node applied its default disposition — instant
+    // process termination, skipping every `finally` block, including the
+    // one that calls `sessionLock.release()`. A subsequent `falcon claude`
+    // in the same directory would then see a lock file naming a pid that no
+    // longer existed and refuse to start ("a Falcon session is already
+    // running..."), even though nothing was actually still running.
+    const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
+    const { handle, stop } = fakeStoppablePtyHandle();
+    const startPtyClaudeSession = vi.fn(() => handle);
+    const release = vi.fn(async () => {});
+    const acquireSessionLock = vi.fn(async () => ({
+      ok: true as const,
+      handle: fakeSessionLockHandle({ release }),
+    }));
+    const onSpy = vi.spyOn(process, "on");
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+
+    const resultPromise = runStartClaudeCommand(
+      baseDeps({
+        startPtyClaudeSession,
+        reportSessionStatus,
+        acquireSessionLock: acquireSessionLock as unknown as typeof acquireSessionLockType,
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(onSpy.mock.calls.some(([event]) => event === "SIGINT")).toBe(true);
+    });
+    const sigintCall = onSpy.mock.calls.find(([event]) => event === "SIGINT");
+    const handler = sigintCall?.[1] as ((signal: NodeJS.Signals) => void) | undefined;
+    expect(handler).toBeDefined();
+
+    handler?.("SIGINT");
+
+    const code = await resultPromise;
+
+    // Same idempotency note as the SIGTERM/SIGHUP tests above: `stop()` may
+    // be invoked more than once, but the child is genuinely asked to stop.
+    expect(stop).toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(code).toBe(1);
+    // The actual fix under test: the lock this invocation acquired was
+    // released — no stale, dead-pid lock left behind for the next
+    // `falcon claude` in this directory to trip over.
+    expect(release).toHaveBeenCalledTimes(1);
+
+    expect(reportSessionStatus).toHaveBeenCalledTimes(1);
+    const [, reportParams] = reportSessionStatus.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; status: string; error?: Error },
+    ];
+    expect(reportParams).toEqual({
+      sessionId: "sess_1",
+      status: "ended",
+      error: undefined,
+    });
+  });
+
   it("awaits the SIGTERM-triggered status report before resolving, even when it settles after the PTY child has already stopped", async () => {
     // Regression test for a race: the signal handler fires `reportStatusOnce`
     // without awaiting it (it's a plain sync callback), and its first-wins
@@ -2009,24 +2132,34 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP lifecycle-status reporting (W
     expect(exitSpy).not.toHaveBeenCalled();
   });
 
-  it("removes the SIGTERM/SIGHUP listeners once the session ends normally, so they never leak across runs", async () => {
+  it("removes the SIGTERM/SIGHUP/SIGINT listeners once the session ends normally, so they never leak across runs", async () => {
     const beforeTerm = process.listenerCount("SIGTERM");
     const beforeHup = process.listenerCount("SIGHUP");
+    const beforeInt = process.listenerCount("SIGINT");
 
     const code = await runStartClaudeCommand(baseDeps());
 
     expect(code).toBe(0);
     expect(process.listenerCount("SIGTERM")).toBe(beforeTerm);
     expect(process.listenerCount("SIGHUP")).toBe(beforeHup);
+    expect(process.listenerCount("SIGINT")).toBe(beforeInt);
   });
 
-  it("never registers a SIGINT handler — Ctrl-C reaches the PTY child directly, not this wrapper", async () => {
+  it("registers a SIGINT handler too — an unhandled SIGINT would otherwise hit Node's default disposition (instant termination, no `finally` block, no session-lock release) instead of Ctrl-C's usual PTY-forwarded path", async () => {
+    // Regression test: this used to assert the OPPOSITE (no SIGINT handler),
+    // on the theory that Ctrl-C always reaches the PTY child directly via
+    // raw-mode byte forwarding. That's only true once the PTY is actually up
+    // — every network round trip before it (login/machine-id wait/bootstrap/
+    // daemon self-report/hook install) and any non-TTY invocation still gets
+    // a real SIGINT delivered to *this* process, and leaving it unhandled
+    // meant Node killed the process immediately, skipping the per-directory
+    // session lock's `release()` (see the dedicated SIGINT test above).
     const onSpy = vi.spyOn(process, "on");
 
     const code = await runStartClaudeCommand(baseDeps());
 
     expect(code).toBe(0);
-    expect(onSpy.mock.calls.some(([event]) => event === "SIGINT")).toBe(false);
+    expect(onSpy.mock.calls.some(([event]) => event === "SIGINT")).toBe(true);
   });
 
   it("only reports status once even if a signal fires after the PTY child already exited normally", async () => {
