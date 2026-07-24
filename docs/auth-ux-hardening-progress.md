@@ -1,5 +1,32 @@
 # Auth UX Hardening — Progress
 
+## Cycle 3
+
+**Merged units (ancestry-proven on `v2-pty-injection`):** none this cycle.
+
+**Parked units this cycle:** none.
+
+No units landed this cycle — nothing to verify with `git merge-base --is-ancestor`,
+no worktrees/branches to remove, and no checkboxes flipped in
+`docs/auth-ux-hardening-plan.md`.
+
+Note: stale in-progress worktrees/branches exist from prior attempts and were left
+untouched (not this cycle's MERGED/FAILED lists, so out of scope for cleanup here):
+`.worktrees/AH3` (`wf/AH3`), `.worktrees/AH8` (`wf/AH8`), `.worktrees/AH9` (`wf/AH9`).
+
+**`pnpm typecheck` on `v2-pty-injection`:** see result below.
+
+**Next recommended units (respecting sequencing gates):**
+1. AH8 `[bundle]` "machine-status-reauth" — independent of AH1-AH7 (a worktree/branch
+   already exists from a prior attempt at `.worktrees/AH8` / `wf/AH8`; inspect before
+   restarting).
+2. AH9 — independent (a worktree/branch already exists at `.worktrees/AH9` / `wf/AH9`;
+   inspect before restarting).
+
+AH3 remains eligible (gated on AH2, already merged) but has a stale in-progress
+worktree/branch (`.worktrees/AH3` / `wf/AH3`) that should be inspected/resolved before
+restarting.
+
 ## Cycle 2
 
 **Merged units (ancestry-proven on `v2-pty-injection`):**
