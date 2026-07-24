@@ -14,6 +14,15 @@ import { useUnlockedCryptoBridge } from "@/lib/use-unlocked-crypto-bridge";
  */
 export const SIGNIN_PATH = "/signin/";
 
+/**
+ * Where a *silently-failed-refresh* redirect lands (docs/auth-ux-hardening-plan.md
+ * item 7) — same route, `?reason=expired` appended so `/signin/` can render a banner
+ * explaining why the visitor is here instead of looking like a bare cold visit.
+ * Deliberate logouts (`DevicesSection`, `nav-user.tsx`) keep using plain `SIGNIN_PATH`
+ * — that redirect isn't a surprise to the person who just clicked "log out".
+ */
+export const SIGNIN_EXPIRED_PATH = "/signin/?reason=expired";
+
 /** How often `RequireAuth` re-checks the session while a protected route stays mounted
  * — the proactive half of bug-fix-plan.md issue #9: a token that expires *while the
  * user is already on the page* should be silently refreshed within one tick of this
@@ -74,7 +83,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       if (refreshed) {
         setSessionReady(true);
       } else {
-        router.replace(SIGNIN_PATH);
+        router.replace(SIGNIN_EXPIRED_PATH);
       }
     }
 

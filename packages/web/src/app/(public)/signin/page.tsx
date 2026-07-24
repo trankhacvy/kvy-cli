@@ -2,11 +2,13 @@
 
 import { Fingerprint, KeyRound, ShieldCheck, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { DEV_AUTH_ENABLED, GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
 import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
+import { isExpiredReason } from "./signin-gate";
 
 // Sign-in / sign-up page (design §5.2, §9.2 "Home" is gated behind this).
 // issue-4-plan.md §5.5/Phase 4: the legacy "trusted-device silently signs in via a
@@ -18,6 +20,18 @@ import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
 // email+password at `/password/`.
 export default function SignInPage() {
   const router = useRouter();
+  // docs/auth-ux-hardening-plan.md item 7: `RequireAuth` redirects a failed silent
+  // refresh here with `?reason=expired` (`SIGNIN_EXPIRED_PATH`, require-auth.tsx) so
+  // this page can explain why the visitor landed on sign-in instead of looking like a
+  // bare cold visit. Static export — no server-rendered query string to read on the
+  // first paint — so this reads `window.location.search` in an effect rather than
+  // `useSearchParams()`, matching the OAuth callback pages' convention
+  // (`github/page.tsx`'s `consumeGithubCallback(window.location.search)`).
+  const [expired, setExpired] = useState(false);
+
+  useEffect(() => {
+    setExpired(isExpiredReason(window.location.search));
+  }, []);
 
   return (
     <main className="min-h-screen bg-background">
@@ -39,6 +53,12 @@ export default function SignInPage() {
                 </p>
               </div>
             </div>
+
+            {expired && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
+                Your session expired — sign in again to continue.
+              </div>
+            )}
 
             <Card className="border border-border/60 bg-card/95 shadow-sm backdrop-blur">
               <CardHeader className="space-y-2">
