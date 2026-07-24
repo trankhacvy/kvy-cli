@@ -1839,14 +1839,14 @@ gated on AH1 (it closes `known-issues.md` issue #14, which AH1 fixes).
         not silently diverted; a normal sign-in started after an abandoned step-up is NOT hijacked
   - [ ] `[human]` live: real Google + real GitHub step-up round trip against a local dev stack
 
-- [ ] **AH3 `[solo]` "gate-password-prod"** (item 3 — depends on AH2 merged+verified)
-  - [ ] Extend the `DEV_AUTH_ENABLED`/`FALCON_DEV_AUTH` pattern to email+password: hide the
+- [x] **AH3 `[solo]` "gate-password-prod"** (item 3 — depends on AH2 merged+verified)
+  - [x] Extend the `DEV_AUTH_ENABLED`/`FALCON_DEV_AUTH` pattern to email+password: hide the
         `/signin/` link behind the same flag; reject all four `password.ts` handlers
         server-side when the flag is off; boot-time error if enabled under `NODE_ENV=production`
-  - [ ] Add `404: ErrorSchema` to the gated routes' Zod response schemas
-  - [ ] Confirm (or add a migration note for) the precondition: no production account currently
+  - [x] Add `404: ErrorSchema` to the gated routes' Zod response schemas
+  - [x] Confirm (or add a migration note for) the precondition: no production account currently
         depends on email+password as its only identity
-  - [ ] Tests: gated routes return 404 when the flag is off; boot fails loudly if misconfigured
+  - [x] Tests: gated routes return 404 when the flag is off; boot fails loudly if misconfigured
         in production
 
 - [x] **AH5 `[inline]` "devices-revoke-confirm"** (item 5 —

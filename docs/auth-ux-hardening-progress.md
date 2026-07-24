@@ -1,5 +1,31 @@
 # Auth UX Hardening — Progress
 
+## Cycle 4
+
+**Merged units (ancestry-proven on `v2-pty-injection`):**
+- AH3 "gate-password-prod" — `9f7ebb0be120b2de31c13c01dfa4ef4973a07ccb`
+
+Verified via `git merge-base --is-ancestor 9f7ebb0be120b2de31c13c01dfa4ef4973a07ccb
+v2-pty-injection`. Non-`[human]` sub-boxes flipped to `[x]` for AH3 in
+`docs/auth-ux-hardening-plan.md` (AH3 has no `[human]` sub-box). Sequencing gate
+re-confirmed: AH2 was already checked before AH3 was ticked. Worktree
+`.worktrees/AH3` and branch `wf/AH3` removed post-merge-verification.
+
+**Parked units this cycle:** none.
+
+**`pnpm typecheck` on `v2-pty-injection`:** passed (11/11 tasks successful, full turbo).
+
+**Next recommended units (respecting sequencing gates):**
+1. AH8 `[bundle]` "machine-status-reauth" — independent of AH1-AH7 (a worktree/branch
+   already exists from a prior attempt at `.worktrees/AH8` / `wf/AH8`; inspect before
+   restarting).
+2. AH11 `[inline]` "known-issues-cleanup" — now unblocked (AH1 is merged+verified);
+   note branch `wf/AH11` already exists locally (no `.worktrees/AH11` dir seen) —
+   inspect before restarting.
+
+AH9 also remains independently eligible; a stale worktree/branch already exists at
+`.worktrees/AH9` / `wf/AH9` — inspect before restarting.
+
 ## Cycle 3
 
 **Merged units (ancestry-proven on `v2-pty-injection`):** none this cycle.
