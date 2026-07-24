@@ -90,20 +90,38 @@
  * best-effort reports the session's terminal status to the server exactly
  * once, whichever exit path reaches it first — a clean process exit (either
  * flow's own exit code, mapped 0 ⇒ `ended` / non-zero ⇒ `failed`), or a
- * `SIGTERM`/`SIGHUP` on this wrapper process (always `ended` — a signal is a
- * normal, resumable way for a terminal session to stop). `SIGINT`
- * (Ctrl-C) isn't handled here: it reaches the PTY child directly (raw mode
- * forwards the byte to the foreground process group) and that child's own
- * exit is what settles `ptySession.done`, so it still flows through the
- * same normal-exit mapping above. A `SIGTERM`/`SIGHUP` does NOT exit the
- * wrapper process directly — that would skip both the active flow's own
- * cleanup (`ptySession.stop()`/`rpcHandle.stop()`/`permHook.stop()`, or
- * `runRemoteLoop`'s managed launcher teardown via `loop()`'s own
- * `onExitRequested`) and the outer `sessionClient.stop()`/`outbox.dispose()`.
- * Instead it requests a graceful stop of whichever flow is live and lets
- * that flow's own `await` (and `finally` blocks) settle normally, fixing the
- * wrapper's own final exit code to 0 (SIGTERM) / 1 (SIGHUP) regardless of the
- * child's own exit code.
+ * `SIGTERM`/`SIGHUP`/`SIGINT` on this wrapper process (always `ended` — a
+ * signal is a normal, resumable way for a terminal session to stop). None of
+ * `SIGTERM`/`SIGHUP`/`SIGINT` exit the wrapper process directly — that would
+ * skip both the active flow's own cleanup (`ptySession.stop()`/
+ * `rpcHandle.stop()`/`permHook.stop()`, or `runRemoteLoop`'s managed launcher
+ * teardown via `loop()`'s own `onExitRequested`) and the outer
+ * `sessionClient.stop()`/`outbox.dispose()` — **and, critically, the
+ * per-directory session lock's `release()` (`session/sessionLock.ts`)**:
+ * Node applies a signal's *default* disposition (immediate process
+ * termination, no JS-level `finally` blocks run at all) to any signal with no
+ * registered listener, so an unhandled `SIGINT` reaching this process at any
+ * point ends it instantly and leaves the lock file behind naming a pid that's
+ * now dead — exactly the stale "a Falcon session is already running" report
+ * a later `falcon claude` in the same directory would otherwise have to wait
+ * out (docs/known-issues.md). `SIGINT` (Ctrl-C) reaching the PTY child
+ * directly — raw mode forwards the byte to the foreground process group,
+ * `stdin.setRawMode(true)` in `ptyClaudeSession.ts` — only starts applying
+ * once the PTY is actually up; a real, interactive-shell SIGINT still hits
+ * *this* process normally during every network round trip before that (login/
+ * machine-id wait/bootstrap/daemon self-report/hook install), and always
+ * hits it in a non-TTY invocation (`stdin.isTTY` false — piped input,
+ * headless test harnesses) where raw mode is never engaged in the first
+ * place. Registering a `SIGINT` listener here doesn't fight the raw-mode
+ * byte-forwarding design at all: once raw mode is active the tty driver
+ * stops translating Ctrl-C into a signal in the first place (that's the
+ * whole reason the byte has to be forwarded manually), so this handler
+ * simply never fires during that phase — it only ever catches the gaps raw
+ * mode doesn't cover. Instead of dying, each of the three signals requests a
+ * graceful stop of whichever flow is live and lets that flow's own `await`
+ * (and `finally` blocks) settle normally, fixing the wrapper's own final exit
+ * code to 0 (SIGTERM) / 1 (SIGHUP/SIGINT) regardless of the child's own exit
+ * code.
  */
 import path from "node:path";
 import { deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
@@ -611,8 +629,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // Session lifecycle status (plan-v2.md W1.4+B15; PRD FR-3.7, design §7.5):
   // best-effort report the session's terminal status to the server exactly
   // once, from whichever exit path reaches it first (normal child exit,
-  // SIGTERM/SIGHUP, or — in `runRemoteLoop` — the mode loop's own exit code)
-  // so the web can show "Ended"/"Failed" instead of inferring nothing.
+  // SIGTERM/SIGHUP/SIGINT, or — in `runRemoteLoop` — the mode loop's own exit
+  // code) so the web can show "Ended"/"Failed" instead of inferring nothing.
   const statusDeps = {
     backendUrl,
     accessToken: accessToken,
@@ -647,24 +665,35 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
   };
 
-  // SIGINT reaches the child via the PTY (raw mode forwards Ctrl-C bytes to
-  // the foreground process group, same reasoning as `sessionExit.ts`'s own
-  // doc comment on why local mode doesn't fight the child's native
-  // Ctrl-C handling) — but SIGTERM/SIGHUP land on this wrapper process
-  // itself (a terminal closing, `kill -TERM`) and must still end the
-  // session honestly rather than leaving it looking perpetually active.
+  // SIGTERM/SIGHUP/SIGINT can all land on this wrapper process itself (a
+  // terminal closing, `kill -TERM`, or Ctrl-C) and must still end the
+  // session honestly rather than leaving it looking perpetually active — and,
+  // for SIGINT specifically, must be *handled at all*: once the PTY is up,
+  // raw mode forwards Ctrl-C bytes to the child's foreground process group
+  // instead of the tty driver generating a signal, so this handler simply
+  // never fires during that phase — but before the PTY exists (every network
+  // round trip above: login/machine-id wait/bootstrap/daemon self-report/
+  // hook install) and in any non-TTY invocation (`stdin.isTTY` false, raw
+  // mode never engaged), an unhandled SIGINT gets Node's default
+  // termination — instantly, with no JS `finally` block given a chance to
+  // run — which is exactly how the per-directory session lock (`session/
+  // sessionLock.ts`, acquired above) was observed going stale: the wrapper
+  // process is gone, but its lock file still names that now-dead pid, and
+  // the next `falcon claude` in the same directory has to wait out (or
+  // manually reclaim) a lock its true owner never got to release.
   //
   // Critically, this must NOT call `process.exit()` directly — that would
   // skip both the active flow's own cleanup (`runLocalPty`'s
   // `ptySession.stop()` — the actual SIGTERM to the `claude` pty child —
   // plus `rpcHandle.stop()`/`permHook.stop()`; `runRemoteLoop`'s managed
   // local/remote launcher teardown) and the outer `sessionClient.stop()`/
-  // `outbox.dispose()` below. Instead, request a graceful stop of whichever
+  // `outbox.dispose()` below (and, in turn, the outer `finally`'s
+  // `sessionLock.release()`). Instead, request a graceful stop of whichever
   // flow is currently running (`requestGracefulStop`, wired by each flow)
   // and let its own `await`ed promise — and both flows' `finally` blocks —
   // settle normally; the wrapper's own exit code is fixed here (0 for
-  // SIGTERM, 1 for SIGHUP) regardless of the child's exit code, since a
-  // signal is a normal, resumable way for a terminal session to stop
+  // SIGTERM, 1 for SIGHUP/SIGINT) regardless of the child's exit code, since
+  // a signal is a normal, resumable way for a terminal session to stop
   // (never "failed").
   let signalExitCode: number | null = null;
   let requestGracefulStop: (() => void) | null = null;
@@ -677,7 +706,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // in the awaited chain actually waits for this network call to land — and
   // `index.ts` calls `process.exit()` the instant this function resolves,
   // which can cut the request off mid-flight (silently dropping the very
-  // "ended" report SIGTERM/SIGHUP handling exists to guarantee).
+  // "ended" report SIGTERM/SIGHUP/SIGINT handling exists to guarantee).
   let pendingStatusReport: Promise<void> | null = null;
   const onSignal = (signal: NodeJS.Signals) => {
     logger.info("[start-claude] signal — ending session", { signal });
@@ -687,6 +716,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   };
   process.on("SIGTERM", onSignal);
   process.on("SIGHUP", onSignal);
+  process.on("SIGINT", onSignal);
 
   // 5. Outbox mirrors every transcript envelope to the server; disposed
   // (buffered-but-unsealed envelopes flushed to the on-disk queue, not
@@ -998,10 +1028,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       { logger },
     );
     ptyHandle = ptySession;
-    // A SIGTERM/SIGHUP on the wrapper stops this PTY child the same way any
-    // other stop does — SIGTERM to the child, `ptySession.done` resolving
-    // once it actually exits — so this flow's normal completion path (below)
-    // runs, rather than the wrapper exiting out from under it.
+    // A SIGTERM/SIGHUP/SIGINT on the wrapper stops this PTY child the same
+    // way any other stop does — SIGTERM to the child, `ptySession.done`
+    // resolving once it actually exits — so this flow's normal completion
+    // path (below) runs, rather than the wrapper exiting out from under it.
     requestGracefulStop = () => ptySession.stop();
 
     // A lifecycle moment the web timeline should see even though nothing in
@@ -1179,9 +1209,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     const messageSignal = createSignal<QueuedMessage>();
     const takeControlSignal = createSignal<void>();
     // `loop()`'s own double-Ctrl-C "exit the whole client" trigger — reused
-    // here as the SIGTERM/SIGHUP graceful-stop path so a signal on this
-    // wrapper causes `activeRemote.requestExit()` (loop.ts) rather than the
-    // wrapper exiting out from under the managed launcher process.
+    // here as the SIGTERM/SIGHUP/SIGINT graceful-stop path so a signal on
+    // this wrapper causes `activeRemote.requestExit()` (loop.ts) rather than
+    // the wrapper exiting out from under the managed launcher process.
     const exitSignal = createSignal<void>();
     requestGracefulStop = () => exitSignal.emit();
     let currentMode: ClaudeMode = "remote";
@@ -1286,13 +1316,14 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     const code = await (detectStartingMode(claudeArgs) === "remote"
       ? runRemoteLoop()
       : runLocalPty());
-    // A signal's exit code (0 for SIGTERM, 1 for SIGHUP) always wins over
-    // whatever exit code the underlying child/loop happened to settle with —
-    // being asked to stop is a normal, resumable end, not a crash.
+    // A signal's exit code (0 for SIGTERM, 1 for SIGHUP/SIGINT) always wins
+    // over whatever exit code the underlying child/loop happened to settle
+    // with — being asked to stop is a normal, resumable end, not a crash.
     return signalExitCode ?? code;
   } finally {
     process.off("SIGTERM", onSignal);
     process.off("SIGHUP", onSignal);
+    process.off("SIGINT", onSignal);
     // Let a still-in-flight signal-triggered status report actually land
     // (or hit its own timeout) before this function resolves — see
     // `pendingStatusReport`'s doc comment above for why this can't just

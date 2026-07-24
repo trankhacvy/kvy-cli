@@ -20,7 +20,12 @@ import type {
   SessionListWorkspace,
   UseSessionListSnapshot,
 } from "./types";
-import { deriveMachineOnline, useMachinePresence } from "./use-machine-presence";
+import {
+  deriveMachineOnline,
+  deriveMachineStatus,
+  type MachinePresence,
+  useMachinePresence,
+} from "./use-machine-presence";
 
 /**
  * The Home screen's real `UseSessionListSnapshot` (falcon-system-design.md
@@ -355,7 +360,7 @@ export function buildSnapshot(
   sessionRows: SessionRow[],
   machineRows: MachineRow[],
   titles: DecryptedTitles,
-  presence: Map<string, boolean>,
+  presence: Map<string, MachinePresence>,
   items: Map<string, RenderItem[]>,
   attention: Map<string, AttentionKind>,
 ): SessionListSnapshot {
@@ -369,6 +374,10 @@ export function buildSnapshot(
     // fallback), never as a stand-in for "haven't gotten to it yet".
     name: titles.machines.get(m.id) ?? null,
     online: deriveMachineOnline(m, presence, now),
+    // AH8 "machine-status-reauth": the richer 3-way status the badge
+    // renders — see `SessionListMachine.status`'s own doc comment for why
+    // this lives alongside `online` rather than replacing it.
+    status: deriveMachineStatus(m, presence, now),
   }));
 
   const workspaceIds = new Set<string>();

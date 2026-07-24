@@ -4,10 +4,11 @@ import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { decodeBox, encodeBox } from "../../db/box.js";
-import { machines } from "../../db/schema.js";
+import { deviceSessions, machines } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
 import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
+import { computeMachineNeedsReauth } from "../machineReauth.js";
 import { toMachineRow } from "./mappers.js";
 import { NotFoundSchema } from "./shared.js";
 
@@ -87,9 +88,31 @@ export function buildMachinesRoutes(
               })
               .returning();
             if (!inserted) throw new Error("POST /v1/machines: insert returned no row");
+            // AH8 "machine-status-reauth": tie THIS request's own device
+            // session to the machine it just registered — `issueSession`'s
+            // pairing/login call sites can't set `device_sessions.machineId`
+            // themselves (no machine exists yet at pair time), so this is
+            // the first point a `cli-daemon` session and "its" machine are
+            // ever linked. Only meaningful for the daemon's own auth
+            // context; a web-scoped caller (shouldn't happen in practice —
+            // only the daemon registers machines) leaves device sessions
+            // alone.
+            if (req.clientKind === "cli-daemon") {
+              await tx
+                .update(deviceSessions)
+                .set({ machineId: inserted.id })
+                .where(
+                  and(
+                    eq(deviceSessions.id, req.sessionId),
+                    eq(deviceSessions.accountId, accountId),
+                  ),
+                );
+            }
             const headerSeq = await allocHeaderSeq(tx, accountId);
             return { row: inserted, headerSeq };
           });
+
+          const needsReauth = await computeMachineNeedsReauth(db, accountId, outcome.row.id);
 
           reply.raw.once("finish", () => {
             eventRouter.emitUpdate({
@@ -97,12 +120,12 @@ export function buildMachinesRoutes(
               payload: {
                 seq: outcome.headerSeq,
                 ts: Date.now(),
-                body: { t: "machine-new", machine: toMachineRow(outcome.row) },
+                body: { t: "machine-new", machine: toMachineRow(outcome.row, needsReauth) },
               },
             });
           });
           reply.code(201);
-          return toMachineRow(outcome.row);
+          return toMachineRow(outcome.row, needsReauth);
         }
 
         const outcome = await db.transaction(async (tx) => {
@@ -182,6 +205,20 @@ export function buildMachinesRoutes(
             };
           }
 
+          // AH8 "machine-status-reauth": same backfill as the register
+          // branch above — an update is just as good a signal that THIS
+          // device session is the one currently running as this machine
+          // (e.g. re-registering after `falcon auth login` minted a new
+          // session for an already-known machine).
+          if (req.clientKind === "cli-daemon") {
+            await tx
+              .update(deviceSessions)
+              .set({ machineId: updated.id })
+              .where(
+                and(eq(deviceSessions.id, req.sessionId), eq(deviceSessions.accountId, accountId)),
+              );
+          }
+
           const headerSeq = await allocHeaderSeq(tx, accountId);
           return { status: "ok" as const, row: updated, headerSeq };
         });
@@ -190,17 +227,19 @@ export function buildMachinesRoutes(
         if (outcome.status === "conflict")
           return reply.code(409).send({ current: outcome.current });
 
+        const needsReauth = await computeMachineNeedsReauth(db, accountId, outcome.row.id);
+
         reply.raw.once("finish", () => {
           eventRouter.emitUpdate({
             accountId,
             payload: {
               seq: outcome.headerSeq,
               ts: Date.now(),
-              body: { t: "machine-update", machine: toMachineRow(outcome.row) },
+              body: { t: "machine-update", machine: toMachineRow(outcome.row, needsReauth) },
             },
           });
         });
-        return toMachineRow(outcome.row);
+        return toMachineRow(outcome.row, needsReauth);
       },
     );
   };

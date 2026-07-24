@@ -65,10 +65,27 @@ const PROVIDERS = new Set<Provider>(["claude", "codex"]);
 const KILL_TARGETS = new Set(["daemon", "sessions", "all", "all-force"]);
 
 export function parseArgs(argv: string[]): FalconCommand {
-  if (argv.length === 0) return { type: "start", provider: "claude", providerArgs: [] };
+  // `pnpm --filter <pkg> dev -- <args...>` (CLAUDE.md's documented dev
+  // invocation style) forwards a literal leading "--" token into the
+  // script's own argv — unlike `npm run <script> -- <args...>`, which strips
+  // it. Left unhandled, that stray "--" isn't a recognized provider name or
+  // Falcon subcommand, so it fell through to `parseDefaultStart`, which
+  // forwards the *entire* original argv (including "auth"/"status"/etc. as
+  // literal words) to `claude` as passthrough args — silently misrouting
+  // `pnpm --filter falcon dev -- auth login` into starting a claude session
+  // instead of running the intended `auth login` subcommand. Stripping a
+  // single leading "--" here (once, not repeatedly — a real provider
+  // passthrough could legitimately want its own "--") makes `pnpm --filter
+  // falcon dev -- <args...>` behave identically to invoking the CLI
+  // directly, for every subcommand, not just `claude`/`codex`.
+  const withoutPnpmSeparator = argv[0] === "--" ? argv.slice(1) : argv;
 
-  const first = argv[0] as string;
-  const rest = argv.slice(1);
+  if (withoutPnpmSeparator.length === 0) {
+    return { type: "start", provider: "claude", providerArgs: [] };
+  }
+
+  const first = withoutPnpmSeparator[0] as string;
+  const rest = withoutPnpmSeparator.slice(1);
 
   // Top-level --help/--version always win, same as most CLIs. This only
   // applies to `falcon --help`, not `falcon claude --help` — the provider
@@ -121,8 +138,11 @@ export function parseArgs(argv: string[]): FalconCommand {
       // Not a known Falcon subcommand: the whole argv is passthrough to the
       // default provider (claude), same as `falcon claude [args...]` minus
       // the explicit provider name. This is what makes `falcon --resume <id>`
-      // and `falcon -b feature/x` both work directly off `falcon`.
-      return parseDefaultStart(argv);
+      // and `falcon -b feature/x` both work directly off `falcon`. Uses
+      // `withoutPnpmSeparator`, not the original `argv` — the stray leading
+      // "--" (see above) must stay stripped here too, or it would leak into
+      // `providerArgs` and get forwarded to claude/codex as a literal word.
+      return parseDefaultStart(withoutPnpmSeparator);
   }
 }
 

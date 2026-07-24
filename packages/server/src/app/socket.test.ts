@@ -129,6 +129,85 @@ describe("startSocket (/v1/stream handshake)", () => {
     expect(gotEcho).toBe(false);
   });
 
+  // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): a daemon whose
+  // `cli-daemon` device session was revoked (e.g. Settings → Devices "log out other
+  // devices") can't tell the server anything over its own dead socket — the server infers
+  // "needs re-auth" itself, at disconnect, from the revocation it already performed.
+  it("a revoked cli-daemon device session's disconnect reports needsReauth:true, distinct from a plain offline", async () => {
+    const accountId = "acct_reauth_revoked";
+    await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+    const daemon = await issueSession(db, {
+      accountId,
+      clientKind: "cli-daemon",
+      machineId: "mach_reauth_revoked",
+    });
+
+    const userToken = await mintToken(accountId);
+    const userClient = connect({ token: userToken });
+    await new Promise<void>((resolve) => userClient.once("connect", () => resolve()));
+
+    // Consume the connect-time "online" ephemeral first (same as the plain
+    // online/offline test above) — otherwise it's a race whether the `once`
+    // below catches this still-undelivered event instead of the real
+    // disconnect one.
+    const onlineEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    const machineClient = connect({
+      token: daemon.accessToken,
+      clientType: "machine-scoped",
+      machineId: "mach_reauth_revoked",
+    });
+    await new Promise<void>((resolve) => machineClient.once("connect", () => resolve()));
+    await onlineEvent;
+
+    // Revoke while the machine is otherwise up — mirrors Settings → Devices revoke.
+    await db
+      .update(deviceSessions)
+      .set({ revokedAt: new Date() })
+      .where(eq(deviceSessions.id, daemon.sessionId));
+
+    const offlineEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    machineClient.close();
+    expect(await offlineEvent).toEqual({
+      t: "machine-presence",
+      machineId: "mach_reauth_revoked",
+      online: false,
+      needsReauth: true,
+    });
+  });
+
+  it("a merely-asleep machine (clean disconnect, no revocation) still shows plain Offline, not needs-reauth", async () => {
+    const accountId = "acct_reauth_asleep";
+    await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+    const daemon = await issueSession(db, {
+      accountId,
+      clientKind: "cli-daemon",
+      machineId: "mach_reauth_asleep",
+    });
+
+    const userToken = await mintToken(accountId);
+    const userClient = connect({ token: userToken });
+    await new Promise<void>((resolve) => userClient.once("connect", () => resolve()));
+
+    // Consume the connect-time "online" ephemeral first — see the sibling
+    // "revoked" test above for why this matters.
+    const onlineEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    const machineClient = connect({
+      token: daemon.accessToken,
+      clientType: "machine-scoped",
+      machineId: "mach_reauth_asleep",
+    });
+    await new Promise<void>((resolve) => machineClient.once("connect", () => resolve()));
+    await onlineEvent;
+
+    const offlineEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    machineClient.close(); // no revocation — just a dropped connection, e.g. sleep/power-off
+    expect(await offlineEvent).toEqual({
+      t: "machine-presence",
+      machineId: "mach_reauth_asleep",
+      online: false,
+    });
+  });
+
   it("relays a session-scoped client's 'alive' emit as an 'activity' ephemeral to session watchers", async () => {
     const token = await mintToken("acct_alive");
     const userClient = connect({ token });

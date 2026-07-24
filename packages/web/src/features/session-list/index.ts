@@ -11,6 +11,7 @@ export { SessionListScreen } from "./session-list-screen";
 export {
   type DeriveSessionStatusInput,
   deriveSessionStatus,
+  MACHINE_STATUS_META,
   SESSION_STATUS_META,
   type SessionListStatus,
   type SessionStatusMeta,
@@ -25,6 +26,9 @@ export type {
 } from "./types";
 export {
   deriveMachineOnline,
+  deriveMachineStatus,
   MACHINE_ONLINE_WINDOW_MS,
+  type MachinePresence,
+  type MachineStatus,
   useMachinePresence,
 } from "./use-machine-presence";

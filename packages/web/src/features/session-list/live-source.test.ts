@@ -77,7 +77,7 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     const now = Date.now();
     const machine = makeMachine({ id: "mach-1", lastSeenAt: now });
     const session = makeSession({ id: "sess-1", machineId: "mach-1" });
-    const presence = new Map([["mach-1", false]]); // live signal says offline despite a fresh heartbeat
+    const presence = new Map([["mach-1", { online: false }]]); // live signal says offline despite a fresh heartbeat
 
     const snapshot = buildSnapshot(
       [session],
@@ -89,6 +89,41 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     );
 
     expect(snapshot.machines[0]?.online).toBe(false);
+  });
+
+  // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8) — sub-task 4's
+  // scenario pair, exercised through the real `buildSnapshot` assembly.
+  it("surfaces needs-reauth from the bootstrap MachineRow field, distinct from a merely-asleep machine's plain offline", () => {
+    const now = Date.now();
+    const revokedMachine = makeMachine({ id: "mach-revoked", lastSeenAt: now, needsReauth: true });
+    const asleepMachine = makeMachine({
+      id: "mach-asleep",
+      lastSeenAt: now - 60 * 60_000, // long past the online heuristic window
+    });
+
+    const snapshot = buildSnapshot(
+      [],
+      [revokedMachine, asleepMachine],
+      EMPTY_TITLES,
+      new Map(),
+      new Map(),
+      new Map(),
+    );
+
+    const revoked = snapshot.machines.find((m) => m.id === "mach-revoked");
+    const asleep = snapshot.machines.find((m) => m.id === "mach-asleep");
+    expect(revoked?.status).toBe("needs-reauth");
+    expect(asleep?.status).toBe("offline");
+  });
+
+  it("a live needsReauth:true presence event wins over the bootstrap field being absent", () => {
+    const now = Date.now();
+    const machine = makeMachine({ id: "mach-1", lastSeenAt: now });
+    const presence = new Map([["mach-1", { online: false, needsReauth: true }]]);
+
+    const snapshot = buildSnapshot([], [machine], EMPTY_TITLES, presence, new Map(), new Map());
+
+    expect(snapshot.machines[0]?.status).toBe("needs-reauth");
   });
 
   it("feeds a decrypted open-turn message page through to a 'working' status dot", () => {

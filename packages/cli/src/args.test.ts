@@ -400,6 +400,43 @@ describe("parseArgs — notify", () => {
   });
 });
 
+describe("parseArgs — stray leading `--` (pnpm script-arg passthrough)", () => {
+  // `pnpm --filter falcon dev -- <args...>` (CLAUDE.md's documented dev
+  // invocation) forwards a literal leading "--" into the script's argv,
+  // unlike `npm run <script> -- <args...>`, which strips it. Falcon must
+  // tolerate that stray token for every subcommand, not just claude/codex
+  // passthrough — otherwise it silently misroutes into starting a claude
+  // session instead of running the intended subcommand.
+  it("still routes `auth login` correctly with a stray leading --", () => {
+    expect(parseArgs(["--", "auth", "login"])).toEqual({ type: "auth", action: "login" });
+  });
+
+  it("still routes `auth status` correctly with a stray leading --", () => {
+    expect(parseArgs(["--", "auth", "status"])).toEqual({ type: "auth", action: "status" });
+  });
+
+  it("still routes an explicit provider correctly with a stray leading --", () => {
+    expect(parseArgs(["--", "claude", "--model", "haiku"])).toEqual({
+      type: "start",
+      provider: "claude",
+      providerArgs: ["--model", "haiku"],
+    });
+  });
+
+  it("still extracts -b <branch> for the default-start form with a stray leading --", () => {
+    expect(parseArgs(["--", "-b", "feature/x"])).toEqual({
+      type: "start",
+      provider: "claude",
+      providerArgs: [],
+      branch: "feature/x",
+    });
+  });
+
+  it("treats a bare stray -- as an empty argv", () => {
+    expect(parseArgs(["--"])).toEqual({ type: "start", provider: "claude", providerArgs: [] });
+  });
+});
+
 describe("ArgParseError", () => {
   it("carries a usage string alongside the message", () => {
     try {
