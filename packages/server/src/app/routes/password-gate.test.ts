@@ -116,4 +116,43 @@ describe("password auth routes — FALCON_DEV_AUTH off (production gate, item 3)
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: "Not found" });
   });
+
+  // The malformed-body regression above only covers /register — `requireDevAuth` is wired
+  // as the exact same `preValidation` hook on all four routes (password.ts), so the fix
+  // must hold uniformly, not just for the one route that happened to get a test first.
+  // Each of these payloads is deliberately shaped wrong for its OWN route's body schema
+  // (e.g. reset/confirm's `password` must be min(8), reset/request has no `token` field at
+  // all) to confirm schema validation never gets a chance to run on any of them.
+  it("login also 404s (not 400) for a malformed body", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/login",
+      payload: { email: "not-an-email", password: 12345 },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("reset/request also 404s (not 400) for a malformed body", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset/request",
+      payload: { notEmail: "wrong shape entirely" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("reset/confirm also 404s (not 400) for a malformed body", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset/confirm",
+      payload: { token: "", password: "short" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
 });
