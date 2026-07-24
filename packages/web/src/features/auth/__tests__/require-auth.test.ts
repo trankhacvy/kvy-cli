@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { SIGNIN_PATH, shouldRedirectToSignin } from "../require-auth";
+import { SIGNIN_EXPIRED_PATH, SIGNIN_PATH, shouldRedirectToSignin } from "../require-auth";
 
 // `next/navigation`'s `useRouter` throws ("invariant expected app router to
 // be mounted") outside a real Next.js app-router tree, and this package has
@@ -30,6 +30,42 @@ describe("shouldRedirectToSignin", () => {
 describe("SIGNIN_PATH", () => {
   it("matches the sign-in route every other hand-rolled gate (app/page.tsx et al.) redirects to", () => {
     expect(SIGNIN_PATH).toBe("/signin/");
+  });
+});
+
+// docs/auth-ux-hardening-plan.md item 7 ("session-expiry-reason"): a failed silent
+// refresh must carry a reason so `/signin/` can explain why the visitor landed there,
+// instead of looking indistinguishable from a bare cold visit.
+describe("SIGNIN_EXPIRED_PATH", () => {
+  it("is the sign-in route with an explicit expired-session reason", () => {
+    expect(SIGNIN_EXPIRED_PATH).toBe("/signin/?reason=expired");
+  });
+
+  it("is a distinct constant from the plain SIGNIN_PATH used for deliberate logouts", () => {
+    expect(SIGNIN_EXPIRED_PATH).not.toBe(SIGNIN_PATH);
+    expect(SIGNIN_EXPIRED_PATH.startsWith(SIGNIN_PATH)).toBe(true);
+  });
+});
+
+describe("require-auth.tsx — failed-refresh redirect wiring", () => {
+  // No DOM environment in this package (see file header) means the effect that
+  // actually calls `silentRefresh()` and `router.replace(...)` can't be exercised
+  // by mounting the component — asserted against the shipped source text instead,
+  // same technique the `/reset-keys/` wiring tests below use.
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../require-auth.tsx"),
+    "utf-8",
+  );
+
+  it("a failed silentRefresh() redirects to SIGNIN_EXPIRED_PATH, not plain SIGNIN_PATH", () => {
+    const refreshedIndex = source.indexOf("const refreshed = await silentRefresh();");
+    expect(refreshedIndex).toBeGreaterThan(-1);
+    const afterRefresh = source.slice(refreshedIndex);
+    const elseIndex = afterRefresh.indexOf("} else {");
+    expect(elseIndex).toBeGreaterThan(-1);
+    const redirectBlock = afterRefresh.slice(elseIndex, afterRefresh.indexOf("}", elseIndex + 8));
+    expect(redirectBlock).toContain("router.replace(SIGNIN_EXPIRED_PATH);");
+    expect(redirectBlock).not.toContain("router.replace(SIGNIN_PATH);");
   });
 });
 

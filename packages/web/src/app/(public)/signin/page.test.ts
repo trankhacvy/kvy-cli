@@ -66,4 +66,15 @@ describe("signin/page.tsx", () => {
     );
     expect(pageSource).toContain("No OAuth provider is configured for this deployment.");
   });
+
+  // docs/auth-ux-hardening-plan.md item 7 ("session-expiry-reason"): the "expired"
+  // banner is gated on the `expired` state, itself only ever set true by
+  // `isExpiredReason(window.location.search)` (`./signin-gate`) in the mount
+  // effect — source-text check that the wiring is what it looks like (the actual
+  // parsing is covered behaviorally, without a DOM, by `signin-gate.test.ts`).
+  it("renders the expiry banner gated on isExpiredReason(window.location.search)", () => {
+    expect(pageSource).toContain("setExpired(isExpiredReason(window.location.search))");
+    expect(pageSource).toContain("{expired && (");
+    expect(pageSource).toContain("Your session expired — sign in again to continue.");
+  });
 });
