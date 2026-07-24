@@ -39,6 +39,7 @@ type Status =
   | { kind: "idle" }
   | { kind: "pending" }
   | { kind: "error"; message: string }
+  | { kind: "info"; message: string }
   | { kind: "post-login"; step: PostLoginStep };
 
 /**
@@ -86,8 +87,20 @@ export default function PasswordAuthPage() {
     if (!bridge) return;
     setStatus({ kind: "pending" });
     try {
-      const { nextUrl } = await completePasswordSignUp(bridge, email, password, pin);
-      router.replace(nextUrl);
+      const outcome = await completePasswordSignUp(bridge, email, password, pin);
+      if (outcome.kind === "existing-account") {
+        // password.ts's §5.2 no-enumeration branch: this returns the same generic
+        // `{success:true}` shape for an already-registered email, so there's no session or
+        // key material to set up on this browser. Route back to sign-in rather than showing
+        // a generic failure — the email/password already typed carry over.
+        setMode("signin");
+        setStatus({
+          kind: "info",
+          message: "Check your inbox for next steps, or sign in below if you already have an account.",
+        });
+        return;
+      }
+      router.replace(outcome.nextUrl);
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "Something went wrong. Please retry.";
       setStatus({ kind: "error", message });
@@ -273,6 +286,12 @@ export default function PasswordAuthPage() {
               </p>
             )}
 
+            {status.kind === "info" && (
+              <p className="text-sm text-muted-foreground" aria-live="polite">
+                {status.message}
+              </p>
+            )}
+
             {mode === "signin" && (
               <Button
                 type="submit"
@@ -294,7 +313,10 @@ export default function PasswordAuthPage() {
             type="button"
             variant="link"
             className="mt-2 w-full"
-            onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
+            onClick={() => {
+              setMode(mode === "signup" ? "signin" : "signup");
+              setStatus({ kind: "idle" });
+            }}
           >
             {mode === "signup" ? "Already have an account? Sign in" : "Need an account? Sign up"}
           </Button>
