@@ -107,6 +107,33 @@ enabled", `config.test.ts`) already covers "boot fails loudly if misconfigured i
 production" — no new test needed there since no new boot guard was added (reusing
 `FALCON_DEV_AUTH`, per the plan's explicit "no new boot-time guard is needed").
 
+### 3e — bug fix: `completePasswordSignUp` must distinguish "existing account" from a real new session
+
+`password.ts`'s §5.2 no-enumeration branch for `/password/register` returns the exact same
+`{success: true, token: "", refreshToken: ""}` shape for an email that's already registered
+as it does for a real signup — deliberately, so the response alone can't be used to probe
+which emails exist. `completePasswordSignUp` (`packages/web/src/lib/complete-password-sign-in.ts`)
+previously didn't account for this: it always treated the response as a real session and fed
+the (here, empty) `token` into `decodeAccountId`, which threw a generic "malformed access
+token" error — so re-submitting signup for an already-registered email surfaced as
+"Something went wrong. Please retry." instead of routing the user to sign in.
+
+Fixed by giving `completePasswordSignUp` its own `PasswordSignUpOutcome` return type —
+`{ kind: "ok"; nextUrl: string } | { kind: "existing-account" }` — distinct from
+`PasswordSignInOutcome`, since register (unlike login) has this second non-error terminal
+state. `packages/web/src/app/(public)/password/page.tsx` handles the new `"existing-account"`
+kind by switching to sign-in mode and showing a neutral inline message instead of routing
+through the generic error path. Verified live via Chrome MCP against a `FALCON_DEV_AUTH=1`
+local stack: fresh-email signup completes to Home normally, and re-submitting signup with an
+already-registered email now lands on sign-in instead of erroring.
+
+**Note on documentation drift:** this fix landed in the `fix: AH3 — resolve test issues`
+commit alongside the test-suite fixes that commit's message describes, but the three files
+below were omitted from this summary's original "Files touched" list (and were not called
+out in the orchestrator's "Files changed" list for this unit either) until this note was
+added during a later verification pass. The fix itself is correct and was live-verified at
+the time; only the documentation of it was incomplete.
+
 ## Drift from the plan
 
 - The plan's 3a snippet only shows the dev-bypass button behind `DEV_AUTH_ENABLED`
@@ -133,7 +160,8 @@ production" — no new test needed there since no new boot guard was added (reus
   untouched base commit through the same full-suite command, which also intermittently
   varies — matches `vitest.config.ts`'s own documented "occasional resource contention"
   caveat).
-- `pnpm --filter @falcon/web test` — 152/152 files, 1170/1170 tests pass.
+- `pnpm --filter @falcon/web test` — 152/152 files, 1173/1173 tests pass (1170 at the time
+  of the original summary + 3 signin-gating tests added in the later `test: AH3` pass).
 - `pnpm --filter falcon test` (CLI, untouched by this unit) — 162/162 files, 1943/1943
   tests pass in isolation (root `pnpm test`'s single parallel run hit 2 unrelated
   transient failures in CLI tests under load; both pass cleanly run alone, confirming
@@ -156,3 +184,16 @@ production" — no new test needed there since no new boot guard was added (reus
 - `packages/web/src/app/(public)/signin/page.tsx` — email+password link gated.
 - `deploy/README.md` — new "Upgrading to the email+password production gate" section
   (3c migration note).
+- `packages/web/src/lib/complete-password-sign-in.ts` — added `PasswordSignUpOutcome`,
+  `completePasswordSignUp` now returns `{ kind: "existing-account" }` for password.ts's
+  §5.2 no-enumeration blank-token response instead of throwing (3e, bug fix; see above).
+- `packages/web/src/app/(public)/password/page.tsx` — handles the `"existing-account"`
+  outcome by switching to sign-in mode with a neutral message (3e, bug fix; see above).
+- `packages/web/src/lib/complete-password-sign-in.test.ts` — new test covering the
+  §5.2 blank-token no-enumeration response (3e).
+- `packages/web/src/app/(public)/signin/page.test.ts` — new tests (added in a later
+  verification pass, `test: AH3` commit) covering that the email+password link and
+  dev-only OAuth bypass sit inside `{DEV_AUTH_ENABLED && (...)}`, that the Google/GitHub
+  buttons do not, and the "no OAuth provider configured" note's exact tri-state condition
+  — closing a coverage gap in the original 3d test list above, which only asserted the
+  page still links to `/password/` and offers OAuth, not the new gating behavior itself.
