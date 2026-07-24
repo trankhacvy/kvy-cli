@@ -194,7 +194,7 @@ export default function PasswordAuthPage() {
                 ? "Set up this device"
                 : "Unlock this device"}
             </CardTitle>
-            <CardDescription>issue-4-plan.md §6.1/§6.4 PIN key custody.</CardDescription>
+            <CardDescription>Set up or unlock this browser's encrypted key material.</CardDescription>
           </CardHeader>
           <CardContent>
             {status.step.kind === "checking" && (
@@ -255,7 +255,7 @@ export default function PasswordAuthPage() {
       <Card className="w-full max-w-sm border border-border/60 bg-card/95 shadow-sm">
         <CardHeader>
           <CardTitle>{mode === "signup" ? "Create your account" : "Sign in"}</CardTitle>
-          <CardDescription>Email + password (issue-4-plan.md §5.2).</CardDescription>
+          <CardDescription>Email + password sign-in for local testing.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
