@@ -25,11 +25,16 @@ type Executor = Database | Parameters<Parameters<Database["transaction"]>[0]>[0]
  * concurrent allocations against *different* session rows never block each
  * other — only concurrent allocations against the *same* session row
  * serialize (which is the point: message order within a session is total).
+ *
+ * Also bumps `sessions.updatedAt` (known-issues.md #10): this is the one
+ * write path every real chat message goes through, so it's where
+ * "last touched" needs to become true instead of only reflecting the four
+ * incidental triggers (mute, archive/restore, agentState CAS, status change).
  */
 export async function allocMsgSeq(tx: Executor, sessionId: string): Promise<number> {
   const [row] = await tx
     .update(sessions)
-    .set({ msgSeq: sql`${sessions.msgSeq} + 1` })
+    .set({ msgSeq: sql`${sessions.msgSeq} + 1`, updatedAt: new Date() })
     .where(eq(sessions.id, sessionId))
     .returning({ seq: sessions.msgSeq });
 
