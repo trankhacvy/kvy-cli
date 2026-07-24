@@ -1,5 +1,31 @@
 # Auth UX Hardening — Progress
 
+## Cycle 5
+
+**Merged units (ancestry-proven on `v2-pty-injection`):**
+- AH7 "session-expiry-reason" — `60898bc4ac8cecf76c276739fd8b70a1d994df24`
+- AH8 "machine-status-reauth" — `85c6681515ebb567adf69b03935c68826f3848a6`
+- AH9 "remove-leaked-doc-strings" — `efb76ce5a60f5078efe82889f5bc9ea130b9cf5a`
+
+All three verified via `git merge-base --is-ancestor <sha> v2-pty-injection`. Non-`[human]`
+sub-boxes (none of these units have any) and the unit boxes flipped to `[x]` for AH7, AH8,
+AH9 in `docs/auth-ux-hardening-plan.md`. Worktrees `.worktrees/AH7`, `.worktrees/AH8`,
+`.worktrees/AH9` and branches `wf/AH7`, `wf/AH8`, `wf/AH9` removed post-merge-verification.
+
+**Parked units this cycle:** none.
+
+**`pnpm typecheck` on `v2-pty-injection`:** passed (11/11 tasks successful, full turbo).
+
+**Cumulative status:** AH1, AH2, AH3, AH6, AH7, AH8, AH9 verified-merged. AH10, AH11 open.
+
+**Next recommended units (respecting sequencing gates):**
+1. AH10 `[inline]` "pin-copy-this-browser-only" — independent, no gate; small copy-only change.
+2. AH11 `[inline]` "known-issues-cleanup" — unblocked (AH1 merged+verified); note a stale
+   `wf/AH11` branch may already exist locally from a prior attempt — inspect before restarting.
+
+No unit remains blocked on the AH2-before-AH3 gate (both merged) or the AH1-before-AH11 gate
+(AH1 merged) — those sequencing constraints are already satisfied.
+
 ## Cycle 4
 
 **Merged units (ancestry-proven on `v2-pty-injection`):**

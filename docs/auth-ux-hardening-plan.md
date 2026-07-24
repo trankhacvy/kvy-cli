@@ -1865,28 +1865,28 @@ gated on AH1 (it closes `known-issues.md` issue #14, which AH1 fixes).
   - [x] Tests: injectable-fetcher unit tests for both providers (unverified email is stored but
         flagged, never treated as authoritative)
 
-- [ ] **AH7 `[inline]` "session-expiry-reason"** (item 7 —
+- [x] **AH7 `[inline]` "session-expiry-reason"** (item 7 —
       `web/src/features/auth/require-auth.tsx`, `web/src/app/(public)/signin/page.tsx`)
-  - [ ] Carry a reason through the redirect (query param read via `window.location.search` in an
+  - [x] Carry a reason through the redirect (query param read via `window.location.search` in an
         effect, matching the existing callback-page convention — no `useSearchParams`)
-  - [ ] Sign-in page renders "Your session expired — sign in again" banner when present
-  - [ ] Test: a failed `silentRefresh()` redirect shows the banner; a plain unauthenticated visit
+  - [x] Sign-in page renders "Your session expired — sign in again" banner when present
+  - [x] Test: a failed `silentRefresh()` redirect shows the banner; a plain unauthenticated visit
         does not
 
-- [ ] **AH8 `[bundle]` "machine-status-reauth"** (item 8 — independent of AH1-AH7)
-  - [ ] Server: minimum-viable query — most recent `cli-daemon` `device_sessions` row for a
+- [x] **AH8 `[bundle]` "machine-status-reauth"** (item 8 — independent of AH1-AH7)
+  - [x] Server: minimum-viable query — most recent `cli-daemon` `device_sessions` row for a
         machine is revoked ⇒ machine needs re-auth (no schema change; `clientKind`/`machineId`
         already exist)
-  - [ ] Thread the signal through machine presence (`use-machine-presence.ts`) as a distinct
+  - [x] Thread the signal through machine presence (`use-machine-presence.ts`) as a distinct
         status, separate from "Offline"
-  - [ ] Web: render "Needs re-authentication" chip distinctly from "Offline"
-  - [ ] Tests: a revoked daemon session surfaces the new status; a merely-asleep machine still
+  - [x] Web: render "Needs re-authentication" chip distinctly from "Offline"
+  - [x] Tests: a revoked daemon session surfaces the new status; a merely-asleep machine still
         shows "Offline"
 
-- [ ] **AH9 `[inline]` "remove-leaked-doc-strings"** (item 9 —
+- [x] **AH9 `[inline]` "remove-leaked-doc-strings"** (item 9 —
       `web/src/app/(public)/password/page.tsx:177,238`)
-  - [ ] Replace both `CardDescription` strings with real user-facing copy
-  - [ ] Test/verify: grep confirms no `issue-4-plan.md` string remains in any `.tsx`
+  - [x] Replace both `CardDescription` strings with real user-facing copy
+  - [x] Test/verify: grep confirms no `issue-4-plan.md` string remains in any `.tsx`
 
 - [ ] **AH10 `[inline]` "pin-copy-this-browser-only"** (item 10 — `pin-setup-form.tsx`,
       `pin-unlock-form.tsx`, `password/page.tsx`)
