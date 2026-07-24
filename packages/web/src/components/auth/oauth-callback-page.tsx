@@ -5,8 +5,10 @@ import { useEffect, useState } from "react";
 import { PinSetupForm } from "@/components/auth/pin-setup-form";
 import { PinUnlockForm } from "@/components/auth/pin-unlock-form";
 import { Button } from "@/components/ui/button";
-import { ApiError } from "@/lib/api";
+import { ApiError, register } from "@/lib/api";
 import { completeOAuthSignIn } from "@/lib/complete-oauth-sign-in";
+import { consumePendingStepUp, setStepUpReturn } from "@/lib/pending-stepup";
+import { setToken } from "@/lib/session";
 import {
   isCryptoBridgeUnlocked,
   markCryptoBridgeUnlocked,
@@ -17,6 +19,11 @@ type Status =
   | { kind: "working" }
   | { kind: "error"; message: string }
   | { kind: "set-pin"; oauthProof: string }
+  // docs/auth-ux-hardening-plan.md item 2c: this account's keys are already bound on
+  // another device (`keys/bind`'s 409 without `rotate`) — the PIN this browser just set
+  // is orphaned, but both offered recoveries (pair / reset) overwrite it cleanly, so
+  // nothing is stranded.
+  | { kind: "already-bound" }
   // Security review finding F1: the "unlock" step is only ever reached via the
   // existing-identity branch below (a brand-new identity is provisioned — and its
   // refresh token PIN-wrapped — directly inside `completeOAuthSignIn`'s `init` call, so
@@ -59,6 +66,32 @@ export function OAuthCallbackPage({
       if (!proof.ok) {
         setStatus({ kind: "error", message: proof.error });
         return;
+      }
+
+      // docs/auth-ux-hardening-plan.md item 2c: `/reset-keys/` stashed a step-up flag
+      // before sending the browser out to this provider. `dev` never stashes one (only
+      // `beginGoogle/GithubSignIn` do), so this is provider ∈ {google, github}. `consume`
+      // (one-shot) + provider match closes the confused-deputy hole: an abandoned Google
+      // step-up can't divert a later GitHub — or a plain — sign-in in the same tab.
+      if (provider === "google" || provider === "github") {
+        const stepUpProvider = consumePendingStepUp(provider);
+        if (stepUpProvider) {
+          // Complete sign-in for THIS proof to obtain a fresh access + refresh token,
+          // then carry the refresh token + proof to /reset-keys/ in memory. `register`
+          // upserts by (provider, subject), so re-using the proof to sign in AND to step
+          // up is safe — Google ID tokens / GitHub access tokens re-verify until `exp`.
+          // `setToken` puts the access token in memory; the refresh token never touches
+          // sessionStorage (security review finding F1).
+          const { token, refreshToken } = await register({
+            oauthProvider: provider,
+            oauthProof: proof.value,
+          });
+          if (cancelled) return;
+          setToken(token);
+          setStepUpReturn({ provider, oauthProof: proof.value, refreshToken });
+          router.replace("/reset-keys/");
+          return;
+        }
       }
 
       const identity = await bridge.getIdentity();
@@ -105,6 +138,13 @@ export function OAuthCallbackPage({
       const outcome = await completeOAuthSignIn(bridge, provider, status.oauthProof, pin);
       router.replace(outcome.nextUrl);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Account already has keys bound on another device — this browser can't
+        // first-bind. Offer the non-destructive path (pair) primary, and the
+        // destructive reset secondary, instead of a dead-end "Sign-in failed."
+        setStatus({ kind: "already-bound" });
+        return;
+      }
       const message = err instanceof ApiError ? err.message : "Sign-in failed. Please try again.";
       setStatus({ kind: "error", message });
     }
@@ -141,6 +181,23 @@ export function OAuthCallbackPage({
       {status.kind === "set-pin" && (
         <div className="w-full max-w-sm">
           <PinSetupForm onSubmit={handlePinSetup} />
+        </div>
+      )}
+
+      {status.kind === "already-bound" && (
+        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
+          <p className="text-sm text-muted-foreground">
+            This account already has keys on another device. Pairing keeps all your encrypted
+            sessions; resetting keys signs every other device out.
+          </p>
+          <div className="flex w-full flex-col gap-2">
+            <Button type="button" size="lg" onClick={() => router.push("/pair/")}>
+              Pair from another device
+            </Button>
+            <Button type="button" variant="outline" onClick={() => router.push("/reset-keys/")}>
+              Reset keys for this browser
+            </Button>
+          </div>
         </div>
       )}
 

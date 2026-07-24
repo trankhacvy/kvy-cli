@@ -25,6 +25,7 @@
 import { getRandomBytes, ready } from "@falcon/crypto/web";
 import type { CryptoBridgeClient } from "@/crypto";
 import { ApiError, keysBind, keysChallenge, passwordLogin, passwordRegister } from "./api.js";
+import { consumePendingPair } from "./pending-pair.js";
 import { setToken } from "./session.js";
 import { markCryptoBridgeUnlocked } from "./use-crypto-bridge.js";
 
@@ -172,6 +173,75 @@ export async function rotateKeyEpoch(
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       return { kind: "wrong-password", message: "That password is incorrect." };
+    }
+    if (err instanceof ApiError && err.status === 409) {
+      return {
+        kind: "other-devices-online",
+        message:
+          "Another device is still signed in — pair this browser from that device instead of rotating keys blind.",
+      };
+    }
+    const message = err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.";
+    return { kind: "error", message };
+  }
+}
+
+export type RotateKeyEpochOAuthOutcome =
+  | { kind: "ok"; nextUrl: string }
+  | { kind: "identity-mismatch"; message: string }
+  | { kind: "other-devices-online"; message: string }
+  | { kind: "error"; message: string };
+
+/**
+ * The OAuth-step-up twin of `rotateKeyEpoch` above — reachable once email+password auth is
+ * dev-only (docs/auth-ux-hardening-plan.md item 3), an OAuth-only account still needs a way to
+ * rotate a forgotten-PIN browser's key material. Fenced by the same `keys/bind` explicit-
+ * rotation checks, just with an `oauth` `stepUpProof` instead of a re-entered password.
+ *
+ * Takes the refresh token as a PARAMETER, exactly like `rotateKeyEpoch` does — there is no
+ * `bridge.getRefreshToken()` and there must never be one (security review finding F1: the raw
+ * refresh token never crosses out of the crypto worker to the main thread). The caller
+ * (`/reset-keys/`) carries it in from the OAuth callback's in-memory return channel
+ * (`lib/pending-stepup.ts`'s `takeStepUpReturn()`), which is exactly how it got a fresh refresh
+ * token to hand over in the first place — this function never fetches or refreshes one itself.
+ *
+ * `bridge.init` MUST run before `bridge.bindKeysProof` — the worker rejects the signing call
+ * when it isn't initialized (`crypto/client.ts`). This means a proof the server later rejects
+ * (401 wrong-account / 409 other-devices-online) has already overwritten this browser's
+ * previous wrapped record, same as `rotateKeyEpoch`'s password path already accepts; only the
+ * "abandoned before submitting" case (never reaching this function at all) genuinely avoids
+ * orphaning key material.
+ */
+export async function rotateKeyEpochOAuth(
+  bridge: CryptoBridgeClient,
+  accessToken: string,
+  refreshToken: string,
+  newPin: string,
+  step: { provider: "google" | "github"; oauthProof: string },
+): Promise<RotateKeyEpochOAuthOutcome> {
+  await ready;
+  const masterSecret = getRandomBytes(32);
+  await bridge.init(masterSecret, newPin, refreshToken);
+  markCryptoBridgeUnlocked();
+
+  const accountId = decodeAccountId(accessToken);
+  const { nonce } = await keysChallenge(accessToken);
+  const proof = await bridge.bindKeysProof(accountId, nonce);
+
+  try {
+    await keysBind(accessToken, {
+      signPubKey: proof.signPubKey,
+      contentPubKey: proof.contentPubKey,
+      nonce,
+      signature: proof.signature,
+      rotate: true,
+      stepUpProof: { kind: "oauth", provider: step.provider, oauthProof: step.oauthProof },
+    });
+    const pendingEphPub = consumePendingPair();
+    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 401) {
+      return { kind: "identity-mismatch", message: "That account doesn't match this one." };
     }
     if (err instanceof ApiError && err.status === 409) {
       return {
