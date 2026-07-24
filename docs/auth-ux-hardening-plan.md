@@ -1849,20 +1849,20 @@ gated on AH1 (it closes `known-issues.md` issue #14, which AH1 fixes).
   - [ ] Tests: gated routes return 404 when the flag is off; boot fails loudly if misconfigured
         in production
 
-- [ ] **AH5 `[inline]` "devices-revoke-confirm"** (item 5 —
+- [x] **AH5 `[inline]` "devices-revoke-confirm"** (item 5 —
       `web/src/features/settings/components/DevicesSection.tsx`)
-  - [ ] Add an inline confirm step to `handleRevoke` before calling `revokeSession`
-  - [ ] Test: revoke requires a second confirmation click; cancel leaves the session intact
+  - [x] Add an inline confirm step to `handleRevoke` before calling `revokeSession`
+  - [x] Test: revoke requires a second confirmation click; cancel leaves the session intact
 
-- [ ] **AH6 `[bundle]` "capture-oauth-email"** (item 6 — independent of AH1-AH5)
-  - [ ] `verifyGoogleIdToken`: read `email`/`email_verified` claims into `OAuthIdentity`
-  - [ ] `verifyGithubAccessToken`: add `user:email` scope in `web/src/lib/oauth.ts`'s
+- [x] **AH6 `[bundle]` "capture-oauth-email"** (item 6 — independent of AH1-AH5)
+  - [x] `verifyGoogleIdToken`: read `email`/`email_verified` claims into `OAuthIdentity`
+  - [x] `verifyGithubAccessToken`: add `user:email` scope in `web/src/lib/oauth.ts`'s
         `beginGithubSignIn`, call `/user/emails`, use the primary+verified address
-  - [ ] `routes/oauth.ts`'s register handler: persist `email`/`emailVerified` onto the
+  - [x] `routes/oauth.ts`'s register handler: persist `email`/`emailVerified` onto the
         `auth_identities` insert (columns already exist, no migration)
-  - [ ] Add the missing read path (e.g. a field on the existing session/account-info response)
+  - [x] Add the missing read path (e.g. a field on the existing session/account-info response)
         so the captured email is actually surfaced somewhere, per item 6's own "display" goal
-  - [ ] Tests: injectable-fetcher unit tests for both providers (unverified email is stored but
+  - [x] Tests: injectable-fetcher unit tests for both providers (unverified email is stored but
         flagged, never treated as authoritative)
 
 - [ ] **AH7 `[inline]` "session-expiry-reason"** (item 7 —
