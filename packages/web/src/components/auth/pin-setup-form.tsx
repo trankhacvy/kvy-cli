@@ -41,9 +41,10 @@ export function PinSetupForm({
       <div className="space-y-1">
         <p className="text-sm font-medium">Create a PIN</p>
         <p className="text-sm leading-6 text-muted-foreground">
-          Protects your encrypted key material on this device. You'll need it again after a reload —
-          Falcon never stores it, so there's no way to recover a lost PIN except rotating your keys
-          from another signed-in device.
+          This PIN protects your keys on <strong>this browser only</strong> — not your whole
+          account. You'll re-enter it after a reload. Falcon never stores it, so if you forget it
+          you recover this browser by pairing from another device (or resetting keys), without
+          affecting your account or your other devices.
         </p>
       </div>
       <div className="space-y-2">

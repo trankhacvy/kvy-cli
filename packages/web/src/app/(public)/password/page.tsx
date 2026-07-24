@@ -191,8 +191,8 @@ export default function PasswordAuthPage() {
           <CardHeader>
             <CardTitle>
               {status.step.kind === "needs-rotate" || status.step.kind.startsWith("rotate")
-                ? "Set up this device"
-                : "Unlock this device"}
+                ? "Set up this browser"
+                : "Unlock this browser"}
             </CardTitle>
             <CardDescription>Set up or unlock this browser's encrypted key material.</CardDescription>
           </CardHeader>
