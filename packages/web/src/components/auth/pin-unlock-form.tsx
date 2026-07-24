@@ -35,7 +35,8 @@ export function PinUnlockForm({
       <div className="space-y-1">
         <p className="text-sm font-medium">Enter your PIN</p>
         <p className="text-sm leading-6 text-muted-foreground">
-          Unlocks this browser's encrypted key material for this session.
+          Enter the PIN for <strong>this browser</strong> to unlock its encrypted keys for this
+          session.
         </p>
       </div>
       <div className="space-y-2">
