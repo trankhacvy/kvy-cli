@@ -1,7 +1,9 @@
 # Issue #4 — Auth token lifecycle re-architecture (v2)
 
 **Status:** proposed (design + implementation plan) — **revised after independent review**
-**Fixes:** [known-issues.md #4](./known-issues.md#issue-4) — no refresh, no revocation, daemon never re-authenticates, WS validated once.
+**Fixes:** known-issues.md #4 (row + section removed once resolved and verified, per that
+file's own convention — see git history) — no refresh, no revocation, daemon never
+re-authenticates, WS validated once.
 **Scope:** `@falcon/crypto`, `@falcon/wire`, `@falcon/server`, `falcon` (CLI/daemon), `@falcon/web`.
 
 > **v2 changelog (what the review changed):** the refresh-token scheme now actually detects theft (lineage + grace window, §4.3); key-epoch rotation is now a fenced, non-destructive-by-accident operation that can't create split-brain accounts (§6.2); the legacy `POST /v1/auth` challenge route and the recovery-code flows are **explicitly removed** (§5.5, §11); pairing seals the refresh token E2E instead of storing it in plaintext (§6.3); `keys/bind` uses a server-issued nonce (§6.2); WS revocation is genuinely immediate and the 15-min disconnect storm is gone via in-band renewal (§4.5); password **reset + email verification** are designed, not punted (§5.3–5.4); the PIN crypto snippets are corrected (raw-bytes AES-GCM, one portable KDF, no `scryptSync` footgun — §6.1); phasing is reordered so nothing regresses or ships out of dependency order (§8).

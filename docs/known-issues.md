@@ -11,7 +11,6 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 |---|-------|--------|
 | 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked |
 | 2 | [Automatic per-session git worktree isolation — deliberately deferred follow-ups](#issue-2) | Deferred |
-| 4 | [Auth token lifecycle needs a re-architecture](#issue-4) | Open |
 | 5 | [Interactive prompts (permission / AskUserQuestion / plan approval) invisible to web when typed locally](#issue-5) | Open |
 | 6 | [`falcon claude`/`falcon codex` never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open |
 | 7 | ["Repo root" header button opens a mostly-fake duplicate side panel](#issue-7) | Open |
@@ -21,7 +20,6 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is read-only by default](#issue-11) | Open |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
 | 13 | [ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang](#issue-13) | Open |
-| 14 | [`/pair` approval page can never actually complete — real users always get bounced to sign-in](#issue-14) | Open |
 | 15 | [`falcon claude` self-recurses and dies silently when the shell shim is installed](#issue-15) | Open |
 
 When an issue is resolved and verified, remove its row from this table and its section below
@@ -96,47 +94,6 @@ this pass, not bugs:
 **Status:** all four are scope decisions the feature's plan doc made explicitly, not defects
 in what landed — parking them here so the next planner finds them instead of rediscovering
 them from scratch.
-
-<a id="issue-4"></a>
-
-## 4. Auth token lifecycle needs a re-architecture — no refresh, no revocation, daemon never re-authenticates
-
-**Where:** `packages/server/src/auth/tokens.ts`, `packages/server/src/app/socket.ts`,
-`packages/cli/src/daemon/machineClient.ts`, `packages/web/src/features/auth/require-auth.tsx`,
-`packages/web/src/sync/apiSocket.ts`.
-
-**What's open:** the whole system is public-key/challenge-response based (accounts are keyed
-by `signPublicKey`, no password) and issues a single HS256 JWT with a flat **1-hour TTL**
-(`tokens.ts` `ACCESS_TOKEN_TTL_SECONDS`) and no other claims. Several real gaps stack on top
-of that one short-lived token:
-
-- **No refresh-token mechanism at all.** A code comment on `tokens.ts` calls refresh "a
-  client concern," but no client actually does it — every re-auth is a full re-sign-the-
-  challenge-from-scratch, not a silent refresh.
-- **The web app** only polls its own token every 60s and redirects to `/signin/` once expired
-  (`require-auth.tsx`) — acceptable, but blunt (no silent refresh, full logout experience).
-- **WebSocket connections only validate the JWT once, at handshake** (`socket.ts`'s `io.use`
-  middleware) — a socket opened before expiry keeps working past the 1-hour mark until it
-  happens to disconnect for an unrelated reason.
-- **The daemon never refreshes its token, ever** (`machineClient.ts`) — its machine-scoped
-  socket holds one fixed token for its whole lifetime. If it disconnects and reconnects after
-  the JWT has expired, it reconnects with the same now-stale token and never re-authenticates
-  — a real risk of a long-running daemon silently losing its cloud connection ~1 hour after
-  the last clean (re)connect, with no self-healing path.
-- **No server-side session/device-session concept exists at all** — no stored login-record
-  table, no "log out other devices," and critically **no revocation list**: a token cannot be
-  invalidated early once issued. A leaked/stolen token stays valid until its own `exp`, full
-  stop, regardless of any client-side "logout."
-
-**What a real fix needs:** this is flagged as needing an actual re-architecture, not a patch —
-likely a real refresh-token flow (short-lived access token + longer-lived refresh token,
-rotated), a server-side revocation/session-record mechanism (so "log out other devices" and
-early invalidation become possible), a daemon-side re-authentication path on reconnect, and a
-decision on whether WebSocket connections should re-validate periodically rather than only at
-handshake.
-
-**Status:** open, not started — noted here as a deliberate flag for a future auth
-re-architecture rather than a quick fix.
 
 <a id="issue-5"></a>
 
@@ -499,46 +456,6 @@ web-visible error instead of a silent `spawnAwaiter` timeout; (3) an end-to-end 
 covering daemon-spawn → adapter-missing → web-visible outcome, which doesn't exist today
 (the gap sits between `spawnEngine.test.ts`'s mocks and `acpConnection.test.ts`, which
 never goes through the daemon).
-
-**Status:** open, not started — newly found, not previously documented anywhere.
-
-<a id="issue-14"></a>
-
-## 14. `/pair` approval page can never actually complete — real users always get bounced to sign-in
-
-**Where:** `packages/web/src/app/(public)/pair/page.tsx:68-72,89-101`,
-`packages/web/src/features/auth/require-auth.tsx:67-71` (the working comparison),
-`packages/web/src/lib/session.ts:25-28,88-89` (`isSignedIn`/`getToken`,
-in-memory-only access token).
-
-**What's open:** found while E2E-testing the CLI auth changes (issue-4-plan.md), not part
-of that diff — this page has been broken since it landed. `isSignedIn()` is purely
-`getToken() !== null && !isTokenExpired()`, and `getToken()` reads a plain in-memory
-module variable that's wiped by any full page navigation (`session.ts:25-28`) — by
-design, so a reload always re-asks for the PIN. The pairing link
-(`app.falcon.dev/pair#<ephPub>`) is *always* opened via a full navigation: a new tab, a
-scanned QR code, or a pasted URL — there is no other way to reach it. So on page load,
-`getIdentity()` may resolve fine (the crypto worker is a separate, persistent thing), but
-`isSignedIn()` is unconditionally `false` at that point, and the effect
-(`page.tsx:68-72`) immediately does `stashPendingPair(ephPub); router.replace("/signin/")`
-— every single time, for every user, with no way through via normal navigation.
-
-Contrast with `require-auth.tsx:67-71`, which checks `isSignedIn()` and, if false, tries
-`await silentRefresh()` before giving up — this page never calls `silentRefresh()` at
-all, either in the initial gate or in `approve()` (`page.tsx:89-101`, which calls
-`getToken()` directly and shows "You've been signed out. Please sign in again." if it's
-null).
-
-Confirmed via direct reproduction: the only way to get an approval to actually happen
-was scripting a same-page SPA navigation (`window.next.router.push()` from the browser
-console) instead of a real one, bypassing the redirect. A real user has no equivalent
-workaround — this currently blocks the entire CLI pairing flow end-to-end (`falcon auth
-login` / a brand-new `falcon claude`'s auto-login).
-
-**What a real fix needs:** call `silentRefresh()` before the `isSignedIn()` check in the
-gating effect (mirroring `require-auth.tsx`), and likely also as a just-in-case
-re-attempt inside `approve()` if `getToken()` comes back null there — the crypto worker
-already holds an unlocked/persisted key, `silentRefresh()` just needs the chance to run.
 
 **Status:** open, not started — newly found, not previously documented anywhere.
 
