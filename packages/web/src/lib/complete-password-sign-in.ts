@@ -129,7 +129,8 @@ export async function completePasswordSignUp(
     signature: proof.signature,
   });
 
-  return { kind: "ok", nextUrl: "/" };
+  const pendingEphPub = consumePendingPair();
+  return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
 }
 
 /**
@@ -146,7 +147,9 @@ export async function completePasswordSignIn(
 ): Promise<PasswordSignInResult> {
   const { token, refreshToken } = await passwordLogin({ email, password });
   setToken(token);
-  return { nextUrl: "/", refreshToken };
+  const pendingEphPub = consumePendingPair();
+  const nextUrl = pendingEphPub ? `/pair/#${pendingEphPub}` : "/";
+  return { nextUrl, refreshToken };
 }
 
 /**
@@ -188,7 +191,8 @@ export async function rotateKeyEpoch(
       rotate: true,
       stepUpProof: { kind: "password", password: stepUpPassword },
     });
-    return { kind: "ok", nextUrl: "/" };
+    const pendingEphPub = consumePendingPair();
+    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       return { kind: "wrong-password", message: "That password is incorrect." };

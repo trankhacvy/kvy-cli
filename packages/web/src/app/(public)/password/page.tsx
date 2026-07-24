@@ -27,8 +27,8 @@ type Mode = "signup" | "signin";
  * depends on this BROWSER's local key material, not the account itself. */
 type PostLoginStep =
   | { kind: "checking" }
-  | { kind: "needs-unlock" }
-  | { kind: "unlocking"; error?: string }
+  | { kind: "needs-unlock"; nextUrl: string }
+  | { kind: "unlocking"; nextUrl: string; error?: string }
   | { kind: "needs-rotate" } // no local identity at all — new browser
   | { kind: "rotate-password"; forgotPin?: boolean }
   | { kind: "rotate-pin"; password: string }
@@ -123,23 +123,25 @@ export default function PasswordAuthPage() {
     const identity = await bridge.getIdentity();
     setStatus({
       kind: "post-login",
-      step: identity ? { kind: "needs-unlock" } : { kind: "needs-rotate" },
+      step: identity ? { kind: "needs-unlock", nextUrl } : { kind: "needs-rotate" },
     });
   }
 
   async function handleUnlockSubmit(pin: string) {
-    if (!bridge) return;
-    setStatus({ kind: "post-login", step: { kind: "unlocking" } });
+    if (!bridge || status.kind !== "post-login") return;
+    if (status.step.kind !== "needs-unlock" && status.step.kind !== "unlocking") return;
+    const { nextUrl } = status.step;
+    setStatus({ kind: "post-login", step: { kind: "unlocking", nextUrl } });
     const ok = await bridge.unlock(pin);
     if (ok) {
       markCryptoBridgeUnlocked();
       if (pendingRefreshToken) await bridge.setRefreshToken(pendingRefreshToken);
-      router.replace("/");
+      router.replace(nextUrl);
       return;
     }
     setStatus({
       kind: "post-login",
-      step: { kind: "unlocking", error: "Wrong PIN. Try again." },
+      step: { kind: "unlocking", nextUrl, error: "Wrong PIN. Try again." },
     });
   }
 
