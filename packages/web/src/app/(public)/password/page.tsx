@@ -96,7 +96,8 @@ export default function PasswordAuthPage() {
         setMode("signin");
         setStatus({
           kind: "info",
-          message: "Check your inbox for next steps, or sign in below if you already have an account.",
+          message:
+            "Check your inbox for next steps, or sign in below if you already have an account.",
         });
         return;
       }
@@ -158,7 +159,13 @@ export default function PasswordAuthPage() {
       return;
     }
     setStatus({ kind: "post-login", step: { kind: "rotating" } });
-    const outcome = await rotateKeyEpoch(bridge, token, pendingRefreshToken, stepUpPassword, newPin);
+    const outcome = await rotateKeyEpoch(
+      bridge,
+      token,
+      pendingRefreshToken,
+      stepUpPassword,
+      newPin,
+    );
     if (outcome.kind === "ok") {
       router.replace(outcome.nextUrl);
       return;

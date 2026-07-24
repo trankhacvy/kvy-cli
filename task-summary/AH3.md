@@ -134,6 +134,25 @@ out in the orchestrator's "Files changed" list for this unit either) until this 
 added during a later verification pass. The fix itself is correct and was live-verified at
 the time; only the documentation of it was incomplete.
 
+### 3f — review fix: gate wired as `preValidation`, not the handler's first statement
+
+Follow-up review caught a gap in 3b as originally landed: the `!env.FALCON_DEV_AUTH` check
+was the first statement inside each handler body, which runs *after* Fastify's own
+request lifecycle already ran zod body-schema validation (`onRequest` → `preParsing` →
+`preValidation` → **body schema validation** → `preHandler` → handler). With the flag off,
+a well-formed request correctly 404'd, but a malformed body (missing/wrong-shaped fields)
+was rejected by schema validation first and answered `400 Bad Request` *before* the gate
+ever ran — which both confirms the route exists and leaks its expected request shape to
+exactly the kind of route-enumerating prober the plan's "doesn't even advertise this
+endpoint exists" goal is meant to defeat.
+
+Fixed by extracting the check into a standalone `requireDevAuth(request, reply)` function
+wired as each route's `preValidation` hook (runs before schema validation) instead of the
+handler's first line — same 404 body, same fail-closed semantics, just moved earlier in
+the lifecycle so every request, well-formed or not, gets an identical 404 when the flag is
+off. Added a regression test in `password-gate.test.ts` asserting a malformed
+`/password/register` body still 404s (not 400) with the flag off.
+
 ## Drift from the plan
 
 - The plan's 3a snippet only shows the dev-bypass button behind `DEV_AUTH_ENABLED`
@@ -197,3 +216,29 @@ the time; only the documentation of it was incomplete.
   buttons do not, and the "no OAuth provider configured" note's exact tri-state condition
   — closing a coverage gap in the original 3d test list above, which only asserted the
   page still links to `/password/` and offers OAuth, not the new gating behavior itself.
+- `packages/server/src/app/routes/password.ts` — 3f: gate moved from each handler's
+  first statement to a `requireDevAuth` `preValidation` hook (see 3f above).
+- `packages/server/src/app/routes/password-gate.test.ts` — 3f: new regression test,
+  malformed body still 404s (not 400) with the flag off.
+
+## Verification (3f, latest pass)
+
+- `pnpm --filter @falcon/server test` — clean after the `preValidation` refactor
+  (password.test.ts's `FALCON_DEV_AUTH=1` suite unaffected — `preValidation` hooks run
+  regardless of flag value, they just no-op when the flag is on; password-gate.test.ts's
+  5 tests, including the new malformed-body regression case, all pass): 47/47 files,
+  365/365 tests.
+- `pnpm --filter @falcon/web test` — 152/152 files, 1173/1173 tests, re-confirmed clean.
+- `pnpm build` / `pnpm typecheck` — both clean (turbo full-graph run).
+- `node_modules/.bin/biome check` run directly against the touched-file set (root
+  `pnpm lint`'s `npx biome`/`biome` invocation is unconditionally intercepted by this
+  session's RTK shell hook, which always prints "Linter process terminated abnormally
+  (possibly out of memory)" and a non-zero exit regardless of the real biome result —
+  confirmed by running the local `node_modules/.bin/biome` binary directly instead,
+  which is not intercepted): found and fixed one real formatting issue introduced in
+  `password/page.tsx` (two long lines biome's printer wraps differently) via
+  `biome check --write` on that file; the only remaining diagnostic on the touched-file
+  set is the pre-existing `lint/performance/noImgElement` warning on `signin/page.tsx`'s
+  already-existing hero `<img>`, unrelated to this unit. Full-repo `biome check .`
+  otherwise reports pre-existing errors/warnings across `packages/cli`, outside this
+  unit's file set.
