@@ -38,10 +38,20 @@ describe("verifyGoogleIdToken", () => {
   });
 
   async function signIdToken(
-    overrides: { issuer?: string; audience?: string; subject?: string; ttlSeconds?: number } = {},
+    overrides: {
+      issuer?: string;
+      audience?: string;
+      subject?: string;
+      ttlSeconds?: number;
+      email?: string;
+      emailVerified?: boolean;
+    } = {},
   ) {
     const now = Math.floor(Date.now() / 1000);
-    return new SignJWT({})
+    const claims: Record<string, unknown> = {};
+    if (overrides.email !== undefined) claims.email = overrides.email;
+    if (overrides.emailVerified !== undefined) claims.email_verified = overrides.emailVerified;
+    return new SignJWT(claims)
       .setProtectedHeader({ alg: "RS256", kid: "test-kid" })
       .setIssuer(overrides.issuer ?? ISSUER)
       .setAudience(overrides.audience ?? CLIENT_ID)
@@ -57,7 +67,36 @@ describe("verifyGoogleIdToken", () => {
 
     const identity = await verifyGoogleIdToken(token, jwks);
 
-    expect(identity).toEqual({ provider: "google", subject: "google-user-123" });
+    expect(identity).toEqual({
+      provider: "google",
+      subject: "google-user-123",
+      email: null,
+      emailVerified: false,
+    });
+  });
+
+  it("captures a verified email from the token's email/email_verified claims", async () => {
+    const jwks = createLocalJWKSet({ keys: [publicJwk] } as never);
+    const token = await signIdToken({ email: "alice@example.com", emailVerified: true });
+
+    const identity = await verifyGoogleIdToken(token, jwks);
+
+    expect(identity).toEqual({
+      provider: "google",
+      subject: "google-user-123",
+      email: "alice@example.com",
+      emailVerified: true,
+    });
+  });
+
+  it("stores an unverified email but flags it — never treats it as authoritative", async () => {
+    const jwks = createLocalJWKSet({ keys: [publicJwk] } as never);
+    const token = await signIdToken({ email: "alice@example.com", emailVerified: false });
+
+    const identity = await verifyGoogleIdToken(token, jwks);
+
+    expect(identity?.email).toBe("alice@example.com");
+    expect(identity?.emailVerified).toBe(false);
   });
 
   it("returns null when the token's audience doesn't match GOOGLE_OAUTH_CLIENT_ID", async () => {
@@ -110,20 +149,27 @@ describe("verifyGoogleIdToken", () => {
 });
 
 describe("verifyGithubAccessToken", () => {
+  const noEmails = async () => new Response(JSON.stringify([]), { status: 200 });
+
   it("returns the identity for a 200 response with a numeric id", async () => {
     const fetchUser = async () =>
       new Response(JSON.stringify({ id: 42, login: "octocat" }), { status: 200 });
 
-    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser);
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, noEmails);
 
-    expect(identity).toEqual({ provider: "github", subject: "42" });
+    expect(identity).toEqual({
+      provider: "github",
+      subject: "42",
+      email: null,
+      emailVerified: false,
+    });
   });
 
   it("returns null for a non-2xx response (invalid/expired token)", async () => {
     const fetchUser = async () =>
       new Response(JSON.stringify({ message: "Bad credentials" }), { status: 401 });
 
-    const identity = await verifyGithubAccessToken("gho_badtoken", fetchUser);
+    const identity = await verifyGithubAccessToken("gho_badtoken", fetchUser, noEmails);
 
     expect(identity).toBeNull();
   });
@@ -132,7 +178,7 @@ describe("verifyGithubAccessToken", () => {
     const fetchUser = async () =>
       new Response(JSON.stringify({ login: "octocat" }), { status: 200 });
 
-    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser);
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, noEmails);
 
     expect(identity).toBeNull();
   });
@@ -142,9 +188,79 @@ describe("verifyGithubAccessToken", () => {
       throw new Error("network down");
     };
 
-    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser);
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, noEmails);
 
     expect(identity).toBeNull();
+  });
+
+  it("uses the primary verified address from /user/emails when /user's own email is private (null)", async () => {
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ id: 42, login: "octocat", email: null }), { status: 200 });
+    const fetchEmails = async () =>
+      new Response(
+        JSON.stringify([
+          { email: "secondary@example.com", primary: false, verified: true },
+          { email: "primary@example.com", primary: true, verified: true },
+        ]),
+        { status: 200 },
+      );
+
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, fetchEmails);
+
+    expect(identity).toEqual({
+      provider: "github",
+      subject: "42",
+      email: "primary@example.com",
+      emailVerified: true,
+    });
+  });
+
+  it("stores an unverified primary email but flags it — never treats it as authoritative", async () => {
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ id: 42, login: "octocat", email: null }), { status: 200 });
+    const fetchEmails = async () =>
+      new Response(
+        JSON.stringify([{ email: "unverified@example.com", primary: true, verified: false }]),
+        { status: 200 },
+      );
+
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, fetchEmails);
+
+    expect(identity?.email).toBe("unverified@example.com");
+    expect(identity?.emailVerified).toBe(false);
+  });
+
+  it("degrades to email:null rather than failing the whole sign-in when /user/emails is unreachable", async () => {
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ id: 42, login: "octocat", email: null }), { status: 200 });
+    const fetchEmails = async () => {
+      throw new Error("network down");
+    };
+
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, fetchEmails);
+
+    expect(identity).toEqual({
+      provider: "github",
+      subject: "42",
+      email: null,
+      emailVerified: false,
+    });
+  });
+
+  it("degrades to email:null when /user/emails returns a non-2xx (e.g. missing user:email scope on an old grant)", async () => {
+    const fetchUser = async () =>
+      new Response(JSON.stringify({ id: 42, login: "octocat", email: null }), { status: 200 });
+    const fetchEmails = async () =>
+      new Response(JSON.stringify({ message: "Forbidden" }), { status: 403 });
+
+    const identity = await verifyGithubAccessToken("gho_validtoken", fetchUser, fetchEmails);
+
+    expect(identity).toEqual({
+      provider: "github",
+      subject: "42",
+      email: null,
+      emailVerified: false,
+    });
   });
 });
 
@@ -277,6 +393,8 @@ describe("defaultOAuthVerifier — dev provider (FALCON_DEV_AUTH bypass)", () =>
     expect(await defaultOAuthVerifier.verify("dev", "some-proof")).toEqual({
       provider: "dev",
       subject: "some-proof",
+      email: null,
+      emailVerified: false,
     });
   });
 });

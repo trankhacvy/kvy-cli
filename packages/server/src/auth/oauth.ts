@@ -19,6 +19,15 @@ export interface OAuthIdentity {
   provider: OAuthProvider;
   /** The provider's stable user id — becomes `auth_identities.identifier`. */
   subject: string;
+  /**
+   * Best-effort email captured from the provider — for display + analytics
+   * (routes/oauth.ts persists it onto `auth_identities.email`/`emailVerified`),
+   * never an auth gate: a login is authorized by `(kind, subject)` alone, and a
+   * missing/unverified email never blocks or alters that. See the docblocks on
+   * `verifyGoogleIdToken`/`verifyGithubAccessToken` for how each provider fills this.
+   */
+  email: string | null;
+  emailVerified: boolean;
 }
 
 const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
@@ -47,6 +56,10 @@ function remoteGoogleJwks(): JWTVerifyGetKey {
  *
  * `jwks` is injectable so tests can verify against a local test keypair instead of
  * Google's live JWKS endpoint (see oauth.test.ts).
+ *
+ * `email`/`email_verified` are standard OIDC claims already present in this same
+ * signed token — no extra network call needed to capture them (issue-6: "capture &
+ * store email from Google/GitHub sign-in").
  */
 export async function verifyGoogleIdToken(
   idToken: string,
@@ -60,7 +73,9 @@ export async function verifyGoogleIdToken(
       audience: env.GOOGLE_OAUTH_CLIENT_ID,
     });
     if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
-    return { provider: "google", subject: payload.sub };
+    const email = typeof payload.email === "string" ? payload.email : null;
+    const emailVerified = payload.email_verified === true;
+    return { provider: "google", subject: payload.sub, email, emailVerified };
   } catch {
     // Collapses every failure mode (bad signature, expired, wrong issuer/audience,
     // malformed JWT) to null — mirrors tokens.ts's "unwrap never throws" rule.
@@ -68,33 +83,79 @@ export async function verifyGoogleIdToken(
   }
 }
 
+const defaultFetchUser = (token: string): Promise<Response> =>
+  fetch("https://api.github.com/user", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "falcon-server",
+      Accept: "application/vnd.github+json",
+    },
+  });
+
+/**
+ * GitHub's `/user` endpoint only returns `email` when the user made it public;
+ * private-by-default accounts need this second call (needs the `user:email` scope
+ * — see `beginGithubSignIn` in web/src/lib/oauth.ts) to find the primary verified
+ * address instead.
+ */
+const defaultFetchEmails = (token: string): Promise<Response> =>
+  fetch("https://api.github.com/user/emails", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "falcon-server",
+      Accept: "application/vnd.github+json",
+    },
+  });
+
 /**
  * Verify a GitHub OAuth access token — the `oauthProof` from GitHub's sign-in flow
  * — by calling GitHub's `/user` endpoint. GitHub access tokens are opaque (no local
  * signature to check), so live confirmation via the API *is* the proof: a forged or
  * expired token gets a 401 straight from GitHub.
  *
- * `fetchUser` is injectable so tests can stub the HTTP call instead of hitting
- * GitHub's live API (see oauth.test.ts).
+ * Email capture (issue-6) is best-effort metadata layered on top of that same proof,
+ * never a second auth gate: `/user/emails` failing (missing `user:email` scope on an
+ * older grant, a network blip) degrades to `email: null, emailVerified: false` rather
+ * than failing the whole sign-in.
+ *
+ * `fetchUser`/`fetchEmails` are injectable so tests can stub both HTTP calls instead
+ * of hitting GitHub's live API (see oauth.test.ts).
  */
 export async function verifyGithubAccessToken(
   accessToken: string,
-  fetchUser: (token: string) => Promise<Response> = (token) =>
-    fetch("https://api.github.com/user", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "User-Agent": "falcon-server",
-        Accept: "application/vnd.github+json",
-      },
-    }),
+  fetchUser: (token: string) => Promise<Response> = defaultFetchUser,
+  fetchEmails: (token: string) => Promise<Response> = defaultFetchEmails,
 ): Promise<OAuthIdentity | null> {
   try {
     const response = await fetchUser(accessToken);
     if (!response.ok) return null;
 
-    const body = (await response.json()) as { id?: number | string };
+    const body = (await response.json()) as { id?: number | string; email?: string | null };
     if (body.id === undefined || body.id === null) return null;
-    return { provider: "github", subject: String(body.id) };
+
+    let email = typeof body.email === "string" ? body.email : null;
+    let emailVerified = false;
+    try {
+      const emailsRes = await fetchEmails(accessToken);
+      if (emailsRes.ok) {
+        const emails = (await emailsRes.json()) as Array<{
+          email: string;
+          primary: boolean;
+          verified: boolean;
+        }>;
+        const primary = emails.find((e) => e.primary) ?? emails.find((e) => e.verified);
+        if (primary) {
+          email = primary.email;
+          emailVerified = primary.verified;
+        }
+      }
+    } catch {
+      // `/user/emails` is best-effort metadata, not part of the auth proof — a
+      // failure here degrades to whatever `/user` already gave us (often nothing)
+      // rather than failing the whole sign-in.
+    }
+
+    return { provider: "github", subject: String(body.id), email, emailVerified };
   } catch {
     // Network failure or non-JSON body — same "expected, routine, collapse to null"
     // treatment as the Google path above.
@@ -167,7 +228,7 @@ export const defaultGithubCodeExchanger: GithubCodeExchanger = {
  */
 function verifyDevProof(proof: string): OAuthIdentity | null {
   if (!env.FALCON_DEV_AUTH) return null;
-  return { provider: "dev", subject: proof || "dev" };
+  return { provider: "dev", subject: proof || "dev", email: null, emailVerified: false };
 }
 
 /**
