@@ -241,4 +241,21 @@ describe("rotateKeyEpochOAuth", () => {
 
     expect(outcome.kind).toBe("other-devices-online");
   });
+
+  it("resolves to a graceful error (not a thrown/unhandled rejection) when keysChallenge itself fails", async () => {
+    // A network blip or an already-expired access token can make keysChallenge — not just
+    // keysBind — throw. It must be caught by the same try/catch, or the caller
+    // (reset-keys/page.tsx's handleNewPin, which has no try/catch of its own) is left with
+    // an unhandled rejection and no way to surface an error to the user.
+    keysChallengeMock.mockRejectedValue(new ApiError("Could not reach the Falcon server", 0));
+    const bridge = fakeBridge();
+    const token = fakeAccessToken("acct_1");
+
+    const outcome = await rotateKeyEpochOAuth(bridge, token, "rt1", "654321", {
+      provider: "google",
+      oauthProof: "id-token-1",
+    });
+
+    expect(outcome.kind).toBe("error");
+  });
 });

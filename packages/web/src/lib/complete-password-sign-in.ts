@@ -224,11 +224,15 @@ export async function rotateKeyEpochOAuth(
   await bridge.init(masterSecret, newPin, refreshToken);
   markCryptoBridgeUnlocked();
 
-  const accountId = decodeAccountId(accessToken);
-  const { nonce } = await keysChallenge(accessToken);
-  const proof = await bridge.bindKeysProof(accountId, nonce);
-
+  // `decodeAccountId`/`keysChallenge`/`bindKeysProof` are inside this same try (matching
+  // `rotateKeyEpoch`'s scope above) — `keysChallenge` is a network call and can throw an
+  // `ApiError` (e.g. a 401 from an already-expired access token) just like `keysBind` does;
+  // leaving it unguarded would silently strand the caller on the "rotating" phase forever
+  // with no error surfaced ("no silent failures").
   try {
+    const accountId = decodeAccountId(accessToken);
+    const { nonce } = await keysChallenge(accessToken);
+    const proof = await bridge.bindKeysProof(accountId, nonce);
     await keysBind(accessToken, {
       signPubKey: proof.signPubKey,
       contentPubKey: proof.contentPubKey,

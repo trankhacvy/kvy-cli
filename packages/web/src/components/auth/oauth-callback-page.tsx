@@ -82,14 +82,26 @@ export function OAuthCallbackPage({
           // up is safe — Google ID tokens / GitHub access tokens re-verify until `exp`.
           // `setToken` puts the access token in memory; the refresh token never touches
           // sessionStorage (security review finding F1).
-          const { token, refreshToken } = await register({
-            oauthProvider: provider,
-            oauthProof: proof.value,
-          });
-          if (cancelled) return;
-          setToken(token);
-          setStepUpReturn({ provider, oauthProof: proof.value, refreshToken });
-          router.replace("/reset-keys/");
+          //
+          // `register` is a network call and can throw (e.g. a transient failure, or the
+          // proof having just expired) — wrapped so a failure surfaces an error instead of
+          // silently stranding the page on "Finishing sign-in…" forever ("no silent
+          // failures").
+          try {
+            const { token, refreshToken } = await register({
+              oauthProvider: provider,
+              oauthProof: proof.value,
+            });
+            if (cancelled) return;
+            setToken(token);
+            setStepUpReturn({ provider, oauthProof: proof.value, refreshToken });
+            router.replace("/reset-keys/");
+          } catch (err) {
+            if (cancelled) return;
+            const message =
+              err instanceof ApiError ? err.message : "Sign-in failed. Please try again.";
+            setStatus({ kind: "error", message });
+          }
           return;
         }
       }

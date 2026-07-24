@@ -60,6 +60,21 @@ describe("oauth-callback-page.tsx — step-up branch (docs/auth-ux-hardening-pla
   it("never routes a raw refresh token or oauth proof through sessionStorage", () => {
     expect(codeOnlySource).not.toContain("sessionStorage");
   });
+
+  it("wraps the step-up register() call so a network/API failure surfaces an error instead of hanging silently", () => {
+    const stepUpBranch = source.slice(
+      source.indexOf("consumePendingStepUp(provider)"),
+      source.indexOf("const identity = await bridge.getIdentity();"),
+    );
+    const tryIndex = stepUpBranch.indexOf("try {");
+    const registerIndex = stepUpBranch.indexOf("await register(");
+    const catchIndex = stepUpBranch.indexOf("} catch (err) {");
+    const statusIndex = stepUpBranch.indexOf('setStatus({ kind: "error"');
+    expect(tryIndex).toBeGreaterThan(-1);
+    expect(registerIndex).toBeGreaterThan(tryIndex);
+    expect(catchIndex).toBeGreaterThan(registerIndex);
+    expect(statusIndex).toBeGreaterThan(catchIndex);
+  });
 });
 
 describe("oauth-callback-page.tsx — returning-user 409 (docs/auth-ux-hardening-plan.md item 2c/6)", () => {
