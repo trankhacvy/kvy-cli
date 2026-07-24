@@ -34,4 +34,36 @@ describe("signin/page.tsx", () => {
     expect(pageSource).toContain("Continue with GitHub");
     expect(pageSource).toContain('router.push("/password/")');
   });
+
+  // docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): the email+password
+  // link (and the dev-only "Continue without OAuth" bypass beside it) must be gated
+  // behind the same `DEV_AUTH_ENABLED` flag the server's `FALCON_DEV_AUTH` mirrors —
+  // a production build (`DEV_AUTH_ENABLED=false`) must not render a clickable path to
+  // an endpoint that 404s. Still source-text-based (see file header): asserts the
+  // email+password link and the dev-bypass button both sit textually inside the
+  // `{DEV_AUTH_ENABLED && (...)}` block, not just gated individually.
+  it("gates both the email+password link and the dev-only OAuth bypass behind DEV_AUTH_ENABLED", () => {
+    const gateStart = pageSource.indexOf("{DEV_AUTH_ENABLED && (");
+    expect(gateStart).toBeGreaterThan(-1);
+
+    const passwordLinkIndex = pageSource.indexOf('router.push("/password/")');
+    const devBypassIndex = pageSource.indexOf('router.push("/auth/callback/dev/")');
+    expect(passwordLinkIndex).toBeGreaterThan(gateStart);
+    expect(devBypassIndex).toBeGreaterThan(gateStart);
+
+    // The Google/GitHub OAuth buttons themselves must NOT be inside that gate — they
+    // render unconditionally, before the flag check even appears in the source.
+    const googleIndex = pageSource.indexOf("Continue with Google");
+    const githubIndex = pageSource.indexOf("Continue with GitHub");
+    expect(googleIndex).toBeGreaterThan(-1);
+    expect(googleIndex).toBeLessThan(gateStart);
+    expect(githubIndex).toBeLessThan(gateStart);
+  });
+
+  it("only shows the 'no OAuth provider configured' note when neither OAuth nor dev auth is available", () => {
+    expect(pageSource).toContain(
+      "!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && !DEV_AUTH_ENABLED",
+    );
+    expect(pageSource).toContain("No OAuth provider is configured for this deployment.");
+  });
 });
