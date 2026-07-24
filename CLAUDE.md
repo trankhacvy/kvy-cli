@@ -32,673 +32,14 @@ build `@falcon/wire` → typecheck → test.
 
 ```
 packages/
-├─ wire/      @falcon/wire    zod schemas — the shared wire protocol contract.
-│                             Built first (everything else depends on it).
-├─ crypto/    @falcon/crypto  E2E encryption primitives, isomorphic (node + browser builds).
-├─ cli/       falcon          CLI skeleton: hand-rolled arg parsing (`falcon` / `falcon claude
-│                             [args...]` / `falcon codex [args...]` with full flag passthrough),
-│                             file-only logger (`~/.falcon/logs/`, never stdout/stderr).
-│                             `src/daemon/`: singleton lock (atomic hard-link + stale-PID
-│                             detection), `daemon.state.json` read/write helpers, a Fastify
-│                             control server (`/session-started`, `/list`, `/stop-session`,
-│                             `/spawn-session`, `/stop`), process-scan-based `falcon kill
-│                             daemon/sessions/all/all-force` and `falcon doctor [clean]`
-│                             (process discovery/categorization, runaway-kill), `falcon daemon
-│                             start/start-sync/stop/status`, `ensureDaemonRunning()`
-│                             (auto-start wiring called from `start`/`auth`/`sessions`/`resume`,
-│                             respects `FALCON_NO_SERVICE=1`), and the machine-scoped WS client
-│                             (`daemon/machineClient.ts`: `registerOrResumeMachine`/CAS-retry
-│                             sync against `POST /v1/machines`, `startMachineClient` opening
-│                             `/v1/stream` as `clientType: "machine-scoped"` with a 60s
-│                             heartbeat), and the adoption Tier-1 transcript indexer
-│                             (`daemon/transcriptIndexer.ts`: fs-watches every registered
-│                             workspace's Claude Code project transcript dir — reusing
-│                             `claude/scanner.ts`'s `getProjectPath` — debounced 2s per
-│                             session file, parses title/last-activity, derives a
-│                             best-effort "running?" liveness signal from
-│                             `processScan.ts`'s new `resolveProcessCwd` + `markers.ts`'s
-│                             Falcon-process classifier, and upserts via
-│                             `daemon/unmanagedSessionClient.ts` against the server's new
-│                             `POST /v1/unmanaged-sessions`, design §8/§11 UC9 Tier 1;
-│                             `listWorkspaces`/`isManaged` are injectable seams with no
-│                             real default yet — workspace registration and managed-session
-│                             lineage are separate, later tasks). Durability (design §7.4/§8,
-│                             plan.md §16 "3.2 Durability"): `daemon/sessionsStore.ts`
-│                             (`~/.falcon/sessions.json` — wrapped DEK + seq + versions,
-│                             tmp-write + rename, in-process write-queue serialized per
-│                             homeDir, 14-day expiry) and `daemon/sessionRegistry.ts` (the
-│                             `pid → TrackedSession` + durable-by-sessionId bookkeeping,
-│                             restored from `sessions.json` on `daemon start-sync` boot and
-│                             wired straight into `controlServer.ts`'s `getSessions`/
-│                             `stopSession`/`onSessionStarted`) are both landed and wired.
-│                             `daemon/resumeSession.ts` re-spawns a persisted/tracked session
-│                             with `FALCON_RECONNECT_*` env (reusing `processLauncher.ts`/
-│                             `spawnAwaiter.ts` exactly like the `spawn` RPC), and
-│                             `machineRpc.ts` now also registers `resumeSession` alongside
-│                             `spawn` — both real and unit-tested, but (matching `spawn`'s own
-│                             precedent from the prior spawn-RPC task) not yet wired to a live
-│                             machine WS connection, since `machineClient.ts`'s socket is
-│                             itself not yet started from `commands.ts`. `daemon/selfUpdate.ts`
-│                             (installed-bundle mtime capture/diff) and `start-sync`'s own
-│                             heartbeat (dead-session pruning + "replaced and idle → hand off
-│                             to a fresh daemon" restart, mirroring Happy's #1107
-│                             mtime-not-version lesson) are wired end-to-end. `daemon/doctor.ts`
-│                             backs the new
-│                             `falcon doctor` (process discovery/categorization report) and
-│                             `falcon doctor clean` (SIGTERM→SIGKILL of runaway daemon +
-│                             daemon-spawned processes only, reusing `kill.ts`'s escalation
-│                             logic) subcommands. A chaos test suite
-│                             (`daemon/durability.chaos.test.ts`) exercises the design's
-│                             failure matrix (daemon crash mid-turn, session-process kill,
-│                             sleep/wake heartbeat gaps, and — since none of this touches a
-│                             server at all — "server restart") against the real registry/
-│                             store/resume modules with injected process fakes. Tier 2/3 of
-│                             adoption (design §7.8/§8/§10.4, plan.md §16 "3.3 Session adoption
-│                             (UC9)") are also landed: `daemon/adoptTake.ts` (`handleAdoptTake`
-│                             — the `adopt.take` machine RPC's core: `mode:'takeover'` finds
-│                             the live owning `claude` pid via `adopt/liveness.ts`,
-│                             SIGTERM≤5s→SIGKILL it, then spawns a continuation via an injected
-│                             `spawnSession`; `mode:'fork'` skips the kill; a mid-turn
-│                             `warning` is returned when takeover interrupted a still-running
-│                             process) and `daemon/transcriptMirror.ts` (`handleAdoptMirror` —
-│                             the `adopt.mirror` machine RPC's core: reads an unmanaged
-│                             session's transcript in ≤64KB, line-boundary-safe chunks via a
-│                             byte cursor; a `blobRef` field is reserved on the wire schema for
-│                             a future blob-storage fallback, unset until that subsystem
-│                             lands). Both RPCs are registered in `daemon/machineRpc.ts`
-│                             alongside `spawn`/`resumeSession`/`fs.list`/`fs.mkdir` (each
-│                             wrapped in its own idempotency-key replay cache where one
-│                             applies).
-│                             `daemon/providerSessionResolver.ts` defines the shared
-│                             `resolveProviderSession` seam both handlers depend on (provider
-│                             session id → registered workspace; no real default yet, same
-│                             "workspace registration is separate work" caveat as above). The
-│                             terminal-side half —
-│                             `falcon adopt [--remote] [--list]` + `falcon --continue` alias
-│                             (`commands/adopt.ts`, wired into `args.ts`/`index.ts`) — lists
-│                             plain sessions for cwd's workspace (`adopt/listSessions.ts`,
-│                             reusing `transcriptIndexer.ts`'s `parseTranscript`), preselects
-│                             the most recent, and continues it: locally via `claude --resume
-│                             <id>` (inherited stdio, blocking) with a before/after directory
-│                             snapshot to detect the new provider session id `--resume` mints
-│                             and record the old→new lineage (`adopt/lineage.ts`, persisted in
-│                             `settings.json`'s new `adoptedSessions` map); or, with `--remote`,
-│                             a detached tmux-preferred launch of `falcon claude
-│                             --starting-mode remote --continue-from <id>` (lineage recording
-│                             for that path is deferred — no hook wired to an ad hoc detached
-│                             start yet — and prints an explicit note rather than silently
-│                             skipping it). `src/persistence.ts`:
-│                             `~/.falcon/` local state — schema-versioned `settings.json`
-│                             (atomic lock-file-guarded read-modify-write) and
-│                             0600-permissioned `access.key` credentials, both tmp-write +
-│                             rename so readers never observe a partial write.
-│                             **v2 — ACP (Agent Client Protocol) remote layer (plan.md §17,
-│                             design v0.3 §7.3/7.4/7.6/7.9/7.10):** remote mode for BOTH
-│                             providers runs through one shared stack in `src/acp/`.
-│                             `acpConnection.ts` spawns a managed ACP adapter child (via the
-│                             adapter manager's verify-before-spawn) and drives it over
-│                             NDJSON stdio with `@agentclientprotocol/sdk` (initialize →
-│                             session/new|load|resume → session/prompt → session/cancel →
-│                             session/set_mode, pre-ready session-update buffering, stderr
-│                             ring-buffer on connect/exit errors). `acpToEnvelope.ts` is the
-│                             single provider-agnostic `session/update` → `SessionEnvelope`
-│                             mapper (text-chunk coalescing + deferred tool-start, both found
-│                             via real recorded fixtures in `acp/__fixtures__/`).
-│                             `acpPermissionHandler.ts` is the single first-wins permission
-│                             pipeline behind `session/request_permission` (auto-rules now
-│                             live agent-side). `acpRemote.ts` (`startAcpRemote`) ties them
-│                             into the `RemoteHandle`-shaped transport — `adapterId` selects
-│                             `claude-code` (Claude meta payload) vs `codex` (codex-acp, no
-│                             Claude preset). This replaced the deleted v1 SDK path
-│                             (`remote/claudeRemote.ts`, `sdkToEnvelope.ts`,
-│                             `pushableAsyncIterable.ts`, `claude/permissionHandler.ts`,
-│                             `claude/getToolDescriptor.ts`, and the
-│                             `@anthropic-ai/claude-agent-sdk` dep) AND the hand-rolled Codex
-│                             app-server client (`codex/codexAppServerClient.ts`,
-│                             `codexAppServerTypes.ts`, `codexRemote.ts`, `envelopeMapper.ts`,
-│                             `permissionHandler.ts`). `src/codex/` now holds only
-│                             `codexProviderAdapter.ts` — `detect()` + `startLocal()` (always
-│                             `null`; Codex has no local TUI) + the honest no-local-mode note.
-│                             `src/adapters/` is the managed adapter manager (pinned-version
-│                             manifest + integrity verify + `~/.falcon/adapters/` npm-prefix
-│                             install, `falcon adapters install|upgrade`, `falcon doctor`
-│                             health). `src/claims/claimStore.ts` is the send-idempotency
-│                             claim store (`~/.falcon/claims/<sessionId>.json`, claim →
-│                             tri-state (`queued`/`duplicate`/`outcome-unknown`) → complete).
-│                             `commands/start.ts` (`falcon claude`) drives the local↔remote
-│                             `loop.ts` with the ACP remote transport; `commands/startCodex.ts`
-│                             (`falcon codex`) is a remote-only session process (no loop; Codex
-│                             has no local mode). Git panel (design §4.4, plan.md §16 "4.1 Git
-│                             panel", falcon-prd.md FR-7.7) is also landed: the `git.status`/
-│                             `git.diff` machine RPCs (`daemon/gitStatus.ts` parses `git
-│                             status --porcelain=v2 --branch`; `daemon/gitDiff.ts` runs `git
-│                             diff <baseRef>` — two-dot, so uncommitted changes are included —
-│                             truncating inline at a safe line boundary with `truncated: true`
-│                             past a 60KB budget rather than a real blob upload, since that
-│                             subsystem doesn't exist yet; `daemon/gitExec.ts` is the shared
-│                             `execFile` wrapper both use), registered in `machineRpc.ts`
-│                             alongside the rest. `git.branches` (docs/features/
-│                             worktree-isolation.md — automatic per-session git worktree
-│                             isolation, docs/competitive-notes-omnara.md #2) joins that
-│                             same RPC family: `daemon/gitBranches.ts`'s `getGitBranches`
-│                             is a structural clone of `gitStatus.ts` — parses `git
-│                             for-each-ref refs/heads` (current branch, checked-out-in-
-│                             another-worktree path via `%(worktreepath)`, upstream,
-│                             last-commit time) into a `GitBranchInfo[]`, registered in
-│                             `machineRpc.ts` alongside `git.status`/`git.diff`. It backs
-│                             the New Session wizard's existing-branch worktree picker, on
-│                             top of the pre-existing `gitWorktree.ts`'s `ensureBranchWorkspace`
-│                             (already wired into `spawnEngine.ts` via `SpawnParams.branch`)
-│                             — that module gained two hardening pieces of its own: a typed
-│                             `GitWorktreeError` when a branch is already checked out in a
-│                             different worktree (pre-flighted via the same
-│                             `%(worktreepath)` atom, instead of letting git's raw stderr
-│                             surface), and an idempotent `.worktrees/` line appended to the
-│                             parent repo's `.git/info/exclude` after each worktree
-│                             creation (best-effort — a write failure never fails the
-│                             spawn). `spawnEngine.ts`'s directory-dedup guard (Flow 3) now
-│                             also keys on the *final*, post-worktree `spawnDirectory`
-│                             rather than the pre-worktree `realDirectory` — the worktree
-│                             directory a session actually launches in is what dedup must
-│                             protect, and `ensureBranchWorkspace` being idempotent makes
-│                             checking after it safe. Real git write actions (design §4.4,
-│                             plan.md §16 "4.1 Git panel", docs/features/git-write-actions.md,
-│                             docs/competitive-notes-omnara.md #3) round out the Git panel:
-│                             `git.commit`/`git.push`/`git.renameBranch` are the first git
-│                             machine RPCs whose whole point is a side effect — unlike their
-│                             read-only siblings, they're gated in `machineRpc.ts` on a new
-│                             registered-workspace authorizer (`daemon/gitWriteGuard.ts`'s
-│                             `createRegistryWorktreeAuthorizer`, backed by
-│                             `workspace/registry.ts`'s `isWithinRegisteredWorkspace` — design
-│                             §12 "no arbitrary-directory execution from remote"; the read
-│                             RPCs stay ungated, a documented follow-up) and wrapped in the
-│                             existing `withIdempotencyCache` (a lost-ack retry replays the
-│                             prior commit's SHA rather than minting a second commit).
-│                             `daemon/gitCommit.ts` defaults one-click commit to `git add -A`
-│                             (`stageAll`); `daemon/gitPush.ts` maps `force` to
-│                             `--force-with-lease` only — the raw `--force` flag is
-│                             deliberately unreachable over the wire; `daemon/
-│                             gitRenameBranch.ts` (`git branch -m`, local-only) reuses
-│                             `gitWorktree.ts`'s now-exported `assertSafeBranchName`. All
-│                             three are registered in `machineRpc.ts` alongside
-│                             `git.status`/`git.diff`/`git.branches`. `src/workspaceConfig.ts`
-│                             (`~/.falcon/
-│                             settings.json`'s new `workspaces` map, keyed by real/symlink-
-│                             resolved directory path) backs both `git.diff`'s base-ref
-│                             fallback and the new `falcon workspace config [--base-ref
-│                             --remote --directory]` command (`commands/workspaceConfig.ts`,
-│                             wired into `index.ts`, no daemon interaction — reads/writes
-│                             `settings.json` directly). `src/workspace/registry.ts` is the
-│                             real "which workspace directories does this machine know about"
-│                             store several earlier tasks left as an injected seam with no
-│                             default (`workspacePath.ts`'s `WorkspaceRootLookup`,
-│                             `transcriptIndexer.ts`'s `listWorkspaces`,
-│                             `providerSessionResolver.ts`'s `ProviderSessionResolver`) —
-│                             persisted at its own `~/.falcon/workspaces.json` (register/list/
-│                             unregister/`isWithinRegisteredWorkspace`, same atomic
-│                             lock-file + tmp-write-then-rename pattern as `persistence.ts`,
-│                             kept as a separate file/lock on purpose so this task stays
-│                             disjoint from sibling `settings.json` writers). `src/workspace/
-│                             adapters.ts` wires it into two of those three seams
-│                             (`createWorkspaceRootLookup`, `createTranscriptIndexerWorkspaceLister`
-│                             — a `workspaceId` *is* a workspace's registered real path);
-│                             `ProviderSessionResolver` still has no real default (resolving a
-│                             provider session id needs transcript-content scanning, not just
-│                             "which directories are registered" — a different, later
-│                             composition). `commands/workspaceRegister.ts` backs the new
-│                             `falcon workspace register [--directory --name]` / `list` /
-│                             `unregister` commands (wired into `index.ts`, no daemon
-│                             interaction, matching `workspace config`'s precedent).
-│                             `daemon/commands.ts`'s `createDaemonCommandDeps` now defaults
-│                             `resolveWorkspaceRoot`/`listWorkspaces` to those two adapters
-│                             (homeDir-scoped, so a test's overridden `homeDir` is honored
-│                             rather than reading the real `~/.falcon`), flowing through
-│                             `daemon/machineIntegration.ts` into the `spawn` machine RPC's
-│                             workspace-path validation and into a new
-│                             `startTranscriptIndexer` call made once the machine client is
-│                             up — the transcript indexer module existed and was fully
-│                             tested but had no live boot-time caller until now. Both were
-│                             previously honest-but-always-empty stubs; `resolveProviderSession`
-│                             (`adopt.take`/`adopt.mirror`) still has no real default, same
-│                             reasoning as above. `src/adapters/` (design §7.9, plan.md §16
-│                             "17. v2 — ACP migration / Phase 2.0 — foundation": adapter
-│                             manager) is landed: `manifest.ts`'s `ADAPTER_MANIFEST` pins each
-│                             official ACP adapter's exact npm-scoped package name, version,
-│                             and npm-registry `dist.integrity` hash (`claude-code` →
-│                             `@agentclientprotocol/claude-agent-acp`, `codex` →
-│                             `@agentclientprotocol/codex-acp` — both scoped; the design doc's
-│                             unscoped shorthand doesn't exist on the registry); `install.ts`
-│                             runs a real `npm install <pkg>@<exact version>` into
-│                             `~/.falcon/adapters/` (its own npm prefix, injectable `NpmExec`
-│                             seam) and re-verifies before reporting success;
-│                             `verify.ts` is the actual check — reads npm's own
-│                             `node_modules/.package-lock.json` and compares version +
-│                             integrity against the manifest, never throws; `health.ts` wraps
-│                             it for `falcon doctor`/`falcon adapters`; `spawn.ts`'s
-│                             `resolveAdapterSpawn` is the verify-before-spawn seam Phase
-│                             2.1's `acpConnection.ts` will call instead of touching
-│                             `paths.ts` directly — no `npx` at session start, ever. Wired up
-│                             as `falcon adapters install|upgrade` (`commands/adapters.ts`,
-│                             `args.ts`, `index.ts`, no daemon interaction — a local npm-prefix
-│                             operation) and into `falcon doctor`'s report (`daemon/doctor.ts`
-│                             gained `adapters`/`providers` sections, reusing the existing
-│                             `detectClaudeCode`/`detectCodex` `ProviderAdapter.detect()`
-│                             implementations rather than duplicating CLI detection).
-│                             Standalone module — no dependency on the claim store or
-│                             `@falcon/wire` changes from the same phase.
-│                             GitHub PR/CI integration (docs/features/github-pr-ci.md,
-│                             docs/competitive-notes-omnara.md #4) joins the Git panel's RPC
-│                             family: `daemon/githubChecks.ts`'s `getGithubChecks` resolves the
-│                             workspace's remote → owner/repo (`parseGithubRemote` — scp-like
-│                             `git@github.com:...`, `ssh://`, and `https://` forms; any non-
-│                             github.com host, including GitHub Enterprise, is out of scope for
-│                             MVP), the current branch, the open PR for that branch head, and
-│                             the PR head commit's check-runs via the GitHub REST API,
-│                             registered as the `github.checks` machine RPC in `machineRpc.ts`
-│                             alongside `git.status`/`git.diff`/`git.branches` (same no-
-│                             idempotency-cache reasoning — read-only). Authenticated with a
-│                             machine-local GitHub token (`github/githubAuth.ts`'s
-│                             `~/.falcon/github.key`, 0600, same sync-fs port-of-
-│                             `auth/credentials.ts` pattern) obtained via the new `falcon github
-│                             login [--token] [--client-id <id>] | logout | status` command
-│                             (`commands/github.ts`): `--token` prompts for a PAT on stdin
-│                             (never accepted as a bare argv value); otherwise the GitHub OAuth
-│                             device authorization flow (`github/deviceFlow.ts`'s
-│                             `requestDeviceCode`/`pollForToken`) — client id resolved
-│                             `--client-id` → `FALCON_GITHUB_CLIENT_ID` → an empty
-│                             `DEFAULT_GITHUB_CLIENT_ID` (no Falcon GitHub OAuth app with Device
-│                             Flow enabled exists yet, so a bare `falcon github login` fails
-│                             fast with an explicit "use --token instead" message rather than
-│                             hanging). The token is read fresh per RPC call (a login while the
-│                             daemon is already running takes effect immediately) and never
-│                             logged. Zero server involvement — the token and all CI data stay
-│                             machine-local, same E2E invariant as every other machine RPC.
-│                             Live dev-server preview via secure tunnel (docs/features/
-│                             dev-server-preview.md, docs/competitive-notes-omnara.md #6) is
-│                             landed: `daemon/portScan.ts` (`lsof -nP -iTCP -sTCP:LISTEN`
-│                             parsed into a machine-wide listening-port list, deduped by
-│                             port+pid) and `daemon/cloudflaredResolve.ts` (`cloudflared
-│                             --version` detection, never installed by Falcon — it's a Go
-│                             binary, not an npm package) back the new `preview.ports` RPC.
-│                             `daemon/tunnelRegistry.ts` is the one genuinely new long-lived-
-│                             child-process subsystem: an in-memory `TunnelRegistry`
-│                             (deliberately NOT persisted — a restart drops tunnels rather
-│                             than resurrecting stale `trycloudflare.com` URLs) plus a
-│                             durable `~/.falcon/tunnels.json` pid journal and
-│                             `reapOrphanedTunnels` (verify-command-before-kill, since
-│                             `cloudflared` children carry no Falcon argv marker
-│                             `kill.ts`/`markers.ts` could otherwise classify).
-│                             `daemon/previewTunnel.ts`'s `handlePreviewOpen` spawns
-│                             `cloudflared tunnel --url http://localhost:<port>
-│                             --no-autoupdate`, scans its stderr for the first
-│                             `*.trycloudflare.com` URL (stderr ring-buffer on timeout/exit,
-│                             same idea as `acpConnection.ts`'s own), and is per-port
-│                             idempotent; `handlePreviewClose` SIGTERM→SIGKILLs the tracked
-│                             child directly. All four `preview.*` RPCs
-│                             (`ports`/`tunnels`/`open`/`close`) are registered in
-│                             `machineRpc.ts` — `open` wrapped in `withIdempotencyCache` PLUS
-│                             a new port-keyed `withPortGuard` (structural clone of
-│                             `withProviderSessionGuard`) so two devices opening the same
-│                             port collapse into one spawn — and wired into
-│                             `machineIntegration.ts` (constructs the shared tunnel registry,
-│                             calls `reapOrphanedTunnels` once at boot, and the now-async
-│                             `stop()` closes every tracked tunnel via `closeAllTunnels`
-│                             before the daemon exits). `daemon/doctor.ts` gained a `preview`
-│                             section (cloudflared detection + journal-derived tunnel
-│                             entries marked live/dead by a fresh pid check — doctor is a
-│                             separate process with no view of the daemon's in-memory
-│                             registry) and `falcon doctor clean` now also reaps live
-│                             journaled `cloudflared` pids. Security posture (recorded, not
-│                             silently absorbed): `preview.open` is the first machine RPC
-│                             whose whole point is exposing a local, loopback-bound service
-│                             to the public internet — the RPC call itself stays E2E-sealed
-│                             like every other machine RPC, but the resulting tunnel's actual
-│                             traffic is plain, unauthenticated HTTP(S) to whoever holds the
-│                             link; docs/features/dev-server-preview.md's Decisions log is
-│                             the accepted-exception record for this against design §12's
-│                             loopback-only posture.
-│                             Sleep-inhibit control (docs/features/sleep-inhibit.md,
-│                             docs/competitive-notes-omnara.md #12): a per-machine tri-state
-│                             policy (Off / While on Power / Always) so a Mac won't sleep
-│                             mid-session, joining the same machine-RPC family as
-│                             `provider.account`/`github.checks` — zero server/DB changes.
-│                             `daemon/sleepInhibit.ts`'s `createSleepInhibitManager` owns a
-│                             `caffeinate` child (macOS only; `-s` = AC-only system-sleep
-│                             assertion for `onPower`, `-i` = idle assertion for `always`,
-│                             both always paired with `-w <daemon pid>` so the OS itself
-│                             releases the assertion the instant the daemon process exits —
-│                             the leak-safety guard, replacing any `doctor`/`markers`
-│                             reaping) and a single-respawn-then-give-up guard against an
-│                             unexpected child exit. Registered as `sleepInhibit.get`/
-│                             `sleepInhibit.set` in `machineRpc.ts` (no idempotency cache
-│                             needed — `get` is a pure read, `set` converges to the same
-│                             single child on a repeat). The manager is created and
-│                             boot-re-applied in `commands.ts`'s `runDaemonStartSync`
-│                             (unconditionally, before `startMachineIntegration`, so a
-│                             previously persisted "always" is enforced even in
-│                             logged-out/local-only mode) and released before any
-│                             self-update restart handoff. Persisted via a lenient,
-│                             optional `sleepInhibit` field on `persistence.ts`'s `Settings`
-│                             (exact `daemonAutoStart` precedent).
-│                             Per-workspace Setup/Run scripts (docs/features/
-│                             setup-run-scripts.md, docs/competitive-notes-omnara.md #7):
-│                             `workspaceConfig.ts`'s per-workspace store gains `setupScript`/
-│                             `runScript` fields (empty-string patch clears a field), surfaced via
-│                             `falcon workspace config --setup-script/--run-script <script>`
-│                             (`commands/workspaceConfig.ts`, `args.ts`) — script DEFINITION stays
-│                             CLI-only (design §12's local-consent boundary; no machine RPC params
-│                             schema ever carries a script string). `gitWorktree.ts`'s
-│                             `ensureBranchWorkspace` now also reports `createdWorktree: boolean`
-│                             (true only after a real `git worktree add`, false on reuse/in-place
-│                             checkout) — `spawnEngine.ts` uses it to fire-and-forget
-│                             `daemon/setupScript.ts`'s `runSetupScript` (cross-spawn under
-│                             `daemon/shellCommand.ts`'s `buildShellInvocation` — `/bin/sh -c`/
-│                             `cmd.exe /c` — with stdout/stderr appended to a fresh-truncated
-│                             `~/.falcon/logs/setup-<hash>.log`) exactly once, right after a
-│                             genuine fresh-worktree creation, never on a reused/idempotent spawn.
-│                             `daemon/runStateStore.ts` (`~/.falcon/run-state.json`, same
-│                             tmp-write+rename+per-homeDir-write-queue durability pattern as
-│                             `sessionsStore.ts`) persists both that setup outcome and the new
-│                             long-lived `run.*` process's state, keyed by the worktree's real
-│                             path. `daemon/runProcess.ts` is the subsystem's core: a shared
-│                             `resolveRunContext` (the design-§12 auth gate — `worktree` must
-│                             resolve inside a registered workspace — AND the config-key resolver,
-│                             since `.worktrees/<branch>` dirs are never config keys themselves)
-│                             backs `handleRunStart`/`handleRunStop`/`handleRunStatus`/
-│                             `handleRunSetup` — `run.start` reuses `processLauncher.ts`'s
-│                             `launchProviderProcess` (tmux-preferred) unchanged, wrapping the
-│                             script with a log-redirect (`>> <logFile> 2>&1`, so the tmux pane
-│                             itself shows nothing — the log file is the single source `run.status`'s
-│                             `logTail` and a `tmux attach`'d `tail -f` both read); liveness is
-│                             probed lazily via `tmux has-session`/`process.kill(pid,0)`, no
-│                             boot-time re-adoption needed. `daemon/workspaceConfigRpc.ts`'s
-│                             `handleWorkspaceGetConfig` is the read-only surface for the web
-│                             Workspace Settings UI. All five —
-│                             `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/
-│                             `run.setup` — are registered in `machineRpc.ts` alongside the rest
-│                             (`run.start`/`run.stop`/`run.setup` idempotency-cached like
-│                             `git.commit`; `run.start` additionally gets a
-│                             `withResourceGuard`-keyed-on-`worktree` join, generalized from
-│                             `adopt.take`'s own provider-session guard, so two devices pressing
-│                             play concurrently join one launch attempt) and wired in
-│                             `machineIntegration.ts` (bound to this boot's `homeDir`/`logger`,
-│                             same pattern as `getGitDiffHandler`'s `uploadBlob` binding;
-│                             `spawnSessionHandler`/`spawnSessionForAdoptTake` both gain the
-│                             `runSetupScript` dep too).
-├─ server/    @falcon/server  Fastify 5 app skeleton (zod type-provider, /health, pino
-│                             logging) + Drizzle ORM schema (`src/db/schema.ts`) and
-│                             migrations (`drizzle/`), migration-on-boot runner + auth
-│                             module (src/auth/: JWT HS256 mint/verify, in-memory token
-│                             cache, app.authenticate preHandler) + `POST /v1/auth`
-│                             challenge/response route, `POST /v1/auth/register` OAuth
-│                             (Google/GitHub) sign-in, and `/v1/auth/pair*` device-pairing
-│                             routes + Socket.IO on `/v1/stream` (src/app/socket.ts,
-│                             src/app/socket/rpcHandler.ts) fanning out through
-│                             `src/app/events/eventRouter.ts` (room-scoped emitUpdate/
-│                             emitEphemeral, presence ephemerals, backpressure coalescing)
-│                             + the HTTP write path (src/app/routes/: POST /v1/sessions,
-│                             POST/GET .../messages, PUT .../metadata|state CAS, GET
-│                             /v1/sync, GET /v1/sessions, POST /v1/machines — all
-│                             idempotent/rate-limited, design §4.3 DELTA D1) fanning out
-│                             through that same `eventRouter` post-commit, and lifecycle
-│                             push dispatch (src/app/push/: `dispatch.ts`'s
-│                             `buildPushDispatcher` — presence-suppressed via
-│                             `eventRouter.hasActiveVisibleClient`, fans out to a
-│                             pluggable `channels/` registry — `webpush` fully wired via
-│                             `web-push` + VAPID config, `telegram`/`ntfy` stubbed for a
-│                             later task; wired into `POST /v1/sessions/:id/status`'s
-│                             `failed` transition and the new `POST
-│                             /v1/sessions/:id/notify {kind: perm|question|done}`) +
-│                             `POST`/`DELETE /v1/push/subscribe` (src/app/routes/push.ts) +
-│                             `POST /v1/unmanaged-sessions` (src/app/routes/
-│                             unmanagedSessions.ts — adoption Tier 1, design §8/§11 UC9):
-│                             upsert-by-`(machineId, providerRef)` for the daemon transcript
-│                             indexer, fanning out `unmanaged-new`/`unmanaged-update`
-│                             through the same `eventRouter`.
-└─ web/       @falcon/web     Next.js PWA (App Router, static export). Tailwind + shadcn/ui
-                              wired up, dark default theme. Auth pages (OAuth sign-in, key
-                              generation, recovery-code export, pairing-approve —
-                              src/app/signin, src/app/auth, src/app/pair) are landed. Crypto worker bridge
-                              (src/crypto/), the transcript reducer (src/sync/reducer/) —
-                              folds `SessionEnvelope[]` into ordered `RenderItem[]` (design
-                              §9.1) — apiSocket, the user-scoped Socket.IO client with
-                              infinite reconnect + app-state reporting, and
-                              `src/sync/engine.ts`, the sync engine (design §8.1/§9.1, DELTA
-                              D2: headerSeq structural fast-path + per-session msgSeq
-                              message fast-path against a TanStack Query cache, gap ⇒
-                              `invalidateQueries`, WS reconnect ⇒ invalidate everything), are
-                              all wired up (src/sync/). The engine takes an injectable
-                              `SyncSocketSource` (`on('update'|'reconnect', ...)`), which the
-                              real `apiSocket` satisfies structurally — no adapter needed.
-                              `src/features/session-list/`: the Home screen (design §9.2
-                              "Home" row, FR-7.1) — sessions grouped by workspace, a derived
-                              status dot per session (`status.ts`'s `deriveSessionStatus`,
-                              computed from each session's `RenderItem[]` plus live
-                              presence/attention signals, never stored — design principle
-                              #3) and machine online/offline badges. Takes an injectable
-                              `UseSessionListSnapshot` hook (defaults to a static mock
-                              snapshot, `mock-source.ts`) so it composes with the real
-                              sync-engine-backed hook once the two are wired together, same
-                              seam as the sync engine's `SyncSocketSource`. A read-only
-                              session timeline screen (`/session/[id]`,
-                              `src/components/timeline/`) is also landed: a virtualized
-                              `Timeline` that renders the reducer's `RenderItem[]` as a
-                              structured chat transcript — markdown via a
-                              unified/remark/shiki pipeline compiled straight to React
-                              elements (`rehype-react`, `src/lib/markdown.ts` — no
-                              `dangerouslySetInnerHTML` anywhere), collapsible thinking
-                              blocks, a `ToolCard` registry (Bash, Edit/Write/MultiEdit+diff,
-                              Read, Grep/Glob, TodoWrite checklist, Task/subagent nesting,
-                              MCP generic fallback), and read-only permission/service/file
-                              markers. It runs off a hand-built demo fixture
-                              (`src/components/timeline/demo-items.ts`) pending the sync
-                              engine wiring. Web Push (src/push/: `subscribe.ts`'s
-                              `subscribeToPush`/`unsubscribeFromPush` against an injectable
-                              `PushEnvironment`/`PushApiPort`, same testable-seam pattern
-                              as `apiSocket.ts`; `public/sw.js`, a plain static service
-                              worker — `push` shows a generic kind-keyed notification,
-                              `notificationclick` deep-links to `/session/<id>/`) is wired
-                              up behind Settings → Notifications in the settings dialog
-                              (see below), a minimal enable/disable toggle. The settings
-                              catalog is a single dialog, not routes: the `/settings/*`
-                              pages were removed and their content moved verbatim into
-                              `src/features/settings/` (`sections.tsx`'s
-                              `SETTINGS_SECTIONS` registry — Agent/Appearance/Git/Providers/
-                              Machines/Notifications/Recovery/Support, reusing
-                              `ProvidersSettingsScreen`/`MachinesSettingsScreen` as
-                              content-only components). `src/components/settings-dialog.tsx`
-                              renders it — a wide left-nav dialog on desktop, a drill-in
-                              bottom sheet on mobile — opened from the sidebar footer's
-                              account menu (`src/components/nav-user.tsx`, which also owns
-                              sign-out via `src/lib/logout.ts`). The Phase 2 web control surface
-                              (`src/features/session-control/`) is also landed: `Composer`
-                              (TanStack `useMutation` → the `message` session RPC, optimistic
-                              insert reconciled by echo), `PermCard` (Allow/Deny/
-                              Allow-for-session/mode-switch + edit-preview diff,
-                              "answered on another device" first-wins-loser state),
-                              `ControlBar` (interrupt, permission-mode selector, take-control),
-                              derived attention (perm∨question∨done-unseen vs per-device
-                              last-seen) driving tab-title/favicon badges, and
-                              `sync/sessionRpc.ts`, the typed caller-side client for the five
-                              session RPC methods over `apiSocket`'s new `rpcCall()`. All of it
-                              still runs off the timeline's existing demo fixture via an
-                              injectable `SessionControlActions`/`UseSessionControl` seam
-                              (mirrors `features/session-list`'s own mock-source pattern) —
-                              wiring the sync engine into the Home screen and timeline (gap
-                              detection, TanStack Query invalidation, FR-7.2 live session
-                              timeline) plus the real per-session crypto client, and
-                              auth-gating the Home route, are still [planned]. The Git panel
-                              (`src/features/git-diff/`, plan.md §16 "4.1 Git panel",
-                              falcon-prd.md FR-7.7, docs/features/git-write-actions.md) is
-                              landed as its own feature area — no longer read-only:
-                              `ChangedFilesList` + `UnifiedDiffViewer` (parses `git diff`
-                              unified-diff text via the new `lib/unifiedDiff.ts`,
-                              shiki-highlights each line via the new `lib/diffHighlight.ts` —
-                              `codeToTokens` rendered to plain `<span>`s, same
-                              no-`dangerouslySetInnerHTML` rule as `markdown.ts`), plus a
-                              `GitToolbar` (inline branch rename, one-click commit — defaults
-                              to `git add -A` so untracked files are included — Push, and
-                              Force Push behind a confirm dialog; its pure inline-rename/
-                              commit-submit logic lives in `git-toolbar-state.ts`) and a
-                              `CompareAgainstSelect` ("Compare against": workspace default /
-                              `HEAD` (uncommitted) / any local branch / a free-text ref,
-                              client-side rejecting a `-`-prefixed custom ref the same way the
-                              daemon's `isSafeRevision` does — pure logic in
-                              `compare-against-select-state.ts`), all composed by
-                              `GitDiffPanel` and driven by `use-git-panel.ts` (three
-                              `@tanstack/react-query` queries — `git.status` once per
-                              worktree, `git.diff` re-fetched on file selection or
-                              `compareRef` change — via the pure `git-diff-query.ts`'s
-                              `buildDiffFetchOptions` — and `git.branches` for the compare
-                              selector; three `useMutation`s — commit/push/renameBranch —
-                              invalidating the status/diff/branches queries on success).
-                              `sync/machineRpc.ts` gained `git.status`/`git.diff`/
-                              `git.branches`/`git.commit`/`git.push`/`git.renameBranch`
-                              alongside `spawn`/`fs.*`. Mounted at the new `/session/[id]/git/`
-                              route (linked from the timeline header's "Files changed"
-                              button) and, like every other feature here, takes an injectable
-                              `UseGitDiffActions` seam (`live-actions.ts`'s
-                              `machineRpcToGitDiffActions` vs. the default `mock-source.ts`)
-                              — unlike most of the rest of this list, this one IS wired to a
-                              live `apiSocket`/per-machine crypto client already
-                              (`use-live-git-diff-actions.ts`, gated on
-                              `use-machine-crypto.ts`'s DEK unwrap) — a stale claim to the
-                              contrary in an earlier revision of this file has been corrected.
-                              The New Session wizard
-                              (`src/features/new-session/`, `/session/new/`, falcon-system-design.md
-                              §9.2 "New session" row, falcon-prd.md FR-7.5/UC5) is a five-step
-                              flow — machine → directory picker → optional session-import →
-                              options (provider/mode/model/branch) → review — driven by
-                              `wizard-state.ts`'s pure step/form logic and an injectable
-                              `NewSessionActions` seam (`live-actions.ts`'s
-                              `machineRpcToActions` vs. the default `mock-source.ts`, same
-                              not-yet-wired-to-a-live-socket state as the rest of this list).
-                              Automatic per-session git worktree isolation (docs/features/
-                              worktree-isolation.md, docs/competitive-notes-omnara.md #2)
-                              surfaces the daemon's `gitWorktree.ts`/`SpawnParams.branch` as
-                              a first-class 3-way `branchMode` on the options step — "Repo
-                              root" / "New branch" (recommended, auto-generated
-                              `wf/<yyyyMMdd>-<4 chars>` name via the new `auto-branch.ts`,
-                              worktree-isolated by default) / "Existing branch" (always
-                              isolated in a fresh worktree, never switches the main
-                              checkout) — backed by the new `git.branches` machine RPC
-                              (`sync/machineRpc.ts`, a structural clone of `git.status`) for
-                              the existing-branch picker's branch list + disabled
-                              already-checked-out-elsewhere rows. `git-defaults.ts` (a
-                              strict copy of `favorites.ts`'s per-device `localStorage`
-                              pattern) backs the Settings → Git section
-                              (in the settings dialog, see below) that seeds the wizard's
-                              starting `branchMode`
-                              ("repo-root" or "new-branch" — "existing-branch" is inherently
-                              per-session, never a global default). GitHub PR/CI integration
-                              (`src/features/github-checks/`, docs/features/github-pr-ci.md,
-                              docs/competitive-notes-omnara.md #4) is a structural clone of
-                              `features/git-diff/`: `ChecksPanel` (delegating its by-state
-                              render to an extracted, directly-testable `ChecksBody`) +
-                              `CheckRunRow` (status/conclusion icon, relative duration,
-                              external `detailsUrl` link) composed by `SessionChecksScreen`,
-                              driven by `use-checks-panel.ts`'s `useQuery` (60s
-                              `refetchInterval`, foreground-only — GitHub's 5000/hr rate
-                              budget). `sync/machineRpc.ts` gained `github.checks` alongside
-                              `git.status`/`git.diff`/`git.branches`; `live-actions.ts` maps an
-                              older daemon's sealed `"unknown-method"` rejection to a typed
-                              `DaemonUnsupportedError` so the panel can show "update falcon and
-                              restart the daemon" instead of a generic failure. Mounted at the
-                              new `/session/[id]/checks/` route (linked from the timeline
-                              header's "Checks" button, beside "Files changed") and — the one
-                              place this feature reaches outside its own directory —
-                              `SessionSidePanel`'s previously-always-placeholder Checks tab now
-                              renders the live panel once `SessionTimelineScreen.tsx` threads
-                              the session's `machineId`/`workspaceId` into it (falls back to
-                              the original placeholder cards otherwise). Settings → Git gained
-                              a GitHub informational card (`falcon github login` instructions)
-                              rather than a connect/disconnect toggle — the token is
-                              per-machine, not per-account, so a single toggle here would need
-                              the server to broker it (design §5.3 violation). Same
-                              not-yet-wired-to-a-live-socket-by-default state as every other
-                              feature area in this list — `useLiveGithubChecksActions` is
-                              real and gated on the shared per-machine DEK unwrap
-                              (`use-machine-crypto.ts`), it's just that no screen threads a
-                              live `apiSocket` connection through yet. Live dev-server preview
-                              via secure tunnel (`src/features/preview/`, docs/features/
-                              dev-server-preview.md, docs/competitive-notes-omnara.md #6) is
-                              a further structural clone of `features/git-diff/`/
-                              `features/github-checks/`: `PreviewPanel` (header exactly "N
-                              ports detected · M tunnels active", a cloudflared-missing
-                              banner) + `PortsList` (per-port Open button, or the tunnel's
-                              URL + Copy/Preview/Open-in-new-tab/Close once one exists) +
-                              `OpenTunnelConfirmDialog` (the mandatory per-open consent gate —
-                              explicit "publicly reachable, not E2E-encrypted" copy — every
-                              `openTunnel` call goes through it) + the droppable-Phase-6
-                              `TunnelFrame` (an embedded `<iframe sandbox="allow-scripts
-                              allow-same-origin allow-forms">`, keyed per tunnel, with an 8s
-                              load-timeout "refused to embed" fallback — open-in-new-tab stays
-                              the guaranteed path regardless), composed by
-                              `SessionPreviewScreen` and driven by `use-preview-panel.ts` (two
-                              `@tanstack/react-query` queries — `preview.ports` 15s,
-                              `preview.tunnels` 5s, both scoped by `machineId` — plus
-                              open/close mutations invalidating both). `sync/machineRpc.ts`
-                              gained `preview.ports`/`preview.tunnels`/`preview.open`/
-                              `preview.close` alongside the rest. Mounted at the new
-                              `/session/[id]/preview/` route (linked from the timeline
-                              header's "Preview" button) — only needs a session's
-                              `machineId` (ports/tunnels are machine-scoped, not tied to any
-                              one worktree, same `git.*`/`provider.account` precedent), no
-                              `workspaceId` check like the Git/Checks panels need. Same
-                              not-yet-wired-to-a-live-socket-by-default state as every other
-                              feature area in this list — `useLivePreviewActions` is real and
-                              gated on the shared per-machine DEK unwrap, it's just that no
-                              screen threads a live `apiSocket` connection through yet. The
-                              self-host deploy's CSP (`deploy/web/default.conf.template`)
-                              gained one narrowly-scoped `frame-src
-                              https://*.trycloudflare.com` allowance for `TunnelFrame`'s embed
-                              — `frame-ancestors 'none'`/`X-Frame-Options: DENY` (protecting
-                              Falcon itself) and every other directive are untouched.
-                              Settings → Machines
-                              (`src/features/machine-settings/`, docs/features/
-                              sleep-inhibit.md, docs/competitive-notes-omnara.md #12
-                              "Sleep-inhibit control") is a structural clone of
-                              `features/provider-accounts/`: one `SleepInhibitCard` per
-                              machine (Off / While on Power / Always, a shadcn `Select`)
-                              driven by `use-machine-settings.ts` (`useQuery` for
-                              `sleepInhibit.get` + a `useMutation` for `sleepInhibit.set`
-                              that writes the returned state straight into the query cache
-                              via `setQueryData` — the set result IS the fresh state, no
-                              invalidate round-trip), composed by `MachinesSettingsScreen`
-                              and reusing `features/session-list`'s machine-list snapshot,
-                              same "one place owns this" precedent as `ProvidersSettingsScreen`.
-                              `sync/machineRpc.ts` gained `sleepInhibit.get`/
-                              `sleepInhibit.set` alongside `provider.account`. Lives in the
-                              settings dialog's Machines section (alongside Providers) —
-                              gating (macOS-only
-                              support, "not currently holding the assertion") comes entirely
-                              from the RPC result's `supported`/`active` fields, never from
-                              any machine metadata field. Same not-yet-wired-to-a-live-socket-
-                              by-default state as every other feature area in this list.
-                              The Setup/Run scripts
-                              panel (`src/features/run-panel/`, docs/features/
-                              setup-run-scripts.md, docs/competitive-notes-omnara.md #7) is
-                              another structural clone of the git-diff/github-checks seam
-                              layout: `RunPanel`/`RunPanelBody` (play/stop button, run-state
-                              badge, a setup section with its own state badge + exit code on
-                              failure + "Re-run setup" button, and a monospace scrollable log
-                              tail for each) driven by `use-run-panel.ts` (`workspace.getConfig`
-                              fetched once per worktree, `run.status` polled every 5s only while
-                              `run.state==='running'` or `setup.state==='running'`, and
-                              start/stop/setup `useMutation`s that invalidate `run-status` on
-                              settle). `sync/machineRpc.ts` gained the five new methods
-                              alongside the rest. `use-live-run-panel-actions.ts` is real and
-                              gated on the shared per-machine DEK unwrap, same
-                              not-yet-wired-to-a-live-socket-by-default state as every other
-                              feature area — defaults `RunPanel`'s injectable `useActions` prop
-                              regardless, mirroring `GitDiffPanel`/`ChecksPanel`'s own default.
-                              Mounted at the new `/session/[id]/run/` route (`SessionRunScreen`,
-                              linked from the timeline header's "Setup / Run" button, beside
-                              "Repo files") — script DEFINITION is never exposed here at all
-                              (design §12: CLI-only, `falcon workspace config --setup-script/
-                              --run-script`), only the configured scripts' names and live
-                              run/setup state.
+├─ wire/      @falcon/wire    Zod schemas — shared wire protocol contract.
+├─ crypto/    @falcon/crypto  E2E encryption primitives (node + browser).
+├─ cli/       falcon          CLI + daemon + ACP adapter + git/workspace/github/preview subsystems.
+├─ server/    @falcon/server  Fastify server, Postgres, Socket.IO, auth, push dispatch.
+└─ web/       @falcon/web     Next.js PWA — home, session timeline, git, checks, preview, settings.
 ```
+
+**For detailed internals of each package, see `docs/packages-guide.md`.**
 
 Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
 `build` / `typecheck` / `test` scripts consumed by the root turbo pipeline.
@@ -718,6 +59,73 @@ pnpm --filter @falcon/server db:migrate    # apply pending migrations once, stan
 Migrations also run automatically on server boot (`src/db/migrate.ts`, called from
 `main.ts` before `app.listen` — design §6.5: "migrate runs on boot"). Idempotent: safe
 to run against an already-current database.
+
+## Local dev stack
+
+Run the three processes locally (each in its own long-lived shell / tmux pane):
+
+```bash
+# 0. Postgres must be up at postgres://falcon:falcon@localhost:5432/falcon (see Database above).
+pnpm --filter @falcon/server dev   # Fastify API on :3005 (tsx watch; migrates on boot)
+pnpm --filter @falcon/web dev      # Next.js web on :3000 (defaults its API to http://localhost:3005)
+```
+
+The **CLI** defaults to the production deployment (`api.falcon.dev` / `app.falcon.dev`),
+so point it at your local stack with two env vars (`packages/cli/src/auth/config.ts`):
+
+```bash
+export FALCON_BACKEND_URL=http://localhost:3005
+export FALCON_FRONTEND_URL=http://localhost:3000
+# optional: isolate CLI state (token, daemon, sessions) from your real ~/.falcon
+export FALCON_HOME_DIR=/tmp/falcon-e2e
+pnpm --filter falcon dev -- claude --model haiku   # runs `falcon claude …` via tsx (no build needed)
+```
+
+`falcon` == `falcon claude [args…]`; flags pass straight through to Claude Code, so
+`--model haiku` selects the model (`extractModelFlag`, `commands/start.ts`).
+
+## Auth model (post issue-4) — what a test account needs
+
+Identity and the encryption key are **separate** now (see `docs/issue-4-plan.md`):
+
+- **Identity** = email+password (or Google/GitHub). Sessions are long-lived: a short access
+  token (15 min) auto-refreshed by a rotating refresh token; revocable per device.
+- **Key custody** = a client-held `masterSecret`, **PIN-wrapped at rest** (web: in the crypto
+  worker + IndexedDB; CLI: `~/.falcon/access.key`). The PIN unlocks it; a browser **reload
+  clears the worker, so the PIN is prompted again** — that's expected, test it.
+- **Losing the PIN loses encrypted sessions, not the account** — the user can start a fresh
+  key epoch (old E2E data becomes "archived", account/identity survive).
+- New devices get the key via **pairing** (`falcon auth login` → approve in an already-signed-in
+  browser), never by copying a secret. There is no recovery code anymore.
+
+Dev DBs are disposable — a reset DB has no accounts, so **re-register** each time.
+For email/password tests you do **not** need any OAuth app configured.
+
+## Testing the app end-to-end (runbook for an agent)
+
+Use **tmux** to drive the CLI (a real Claude Code TUI — keep it on **haiku** to stay cheap)
+and the **Chrome MCP tools** to drive the web. Load the Chrome tools first with one
+ToolSearch (`select:mcp__claude-in-chrome__tabs_context_mcp,…navigate,…computer,…read_page,…tabs_create_mcp,…form_input,…read_console_messages`).
+
+1. **Stack up:** Postgres running; `@falcon/server` dev on :3005 and `@falcon/web` dev on :3000
+   in tmux panes (or background). If ports clash with another worktree, pick free ones and set
+   `PORT`/`NEXT_PUBLIC_API_URL`/`FALCON_BACKEND_URL` to match — never blanket-kill by process name.
+2. **Prepare the account (Chrome MCP):** open `http://localhost:3000` → it redirects to `/signin/`
+   → go to `/password/` → **Sign up** with a throwaway email + password, then **set a PIN**
+   (use a fixed test PIN, e.g. `123456`, and remember it). This registers the account, generates
+   the `masterSecret`, PIN-wraps it, and binds the key epoch — you land authenticated.
+3. **Pair the CLI (tmux):** with the env vars above, run `falcon auth login`. It prints a pairing
+   URL/QR — open that URL in the already-signed-in Chrome tab and **approve**. The CLI now holds a
+   real refresh token + the sealed `masterSecret`; check with `falcon auth status`.
+4. **Start a session (tmux):** in a project dir, `falcon claude --model haiku`. The daemon
+   auto-starts, registers the machine, and mirrors the (encrypted) transcript.
+5. **Verify (Chrome MCP):** the session appears on Home; open its timeline. Exercise the auth
+   surface specifically: **reload → PIN unlock keeps you in** (silent refresh, no `/signin/`
+   bounce); Settings → **Devices** lists sessions and "log out other devices" drops the revoked
+   session's socket immediately; wrong-password lockout after repeated attempts.
+
+Process hygiene: only manage processes you started, verify a PID's cwd before killing it, and
+prefer non-default ports when another worktree may be running its own stack.
 
 ## Conventions
 

@@ -954,3 +954,187 @@ A forked workflow run against this checklist should keep its own cycle log in
 units) — mirroring `docs/bug-fix-progress.md`'s role for `docs/bug-fix-plan.md`, and kept as a
 separate file so a `FL` cycle's bookkeeping never collides with a `BF`/`U` cycle run against
 the same `v2-pty-injection` branch.
+
+---
+
+## Test plan — verifying every landed fix (flows 3 & 5) and the design gate (flow 4)
+
+Written after `FL5.1`, `FL5.2`, `FL3.1`, `FL3.2`, and `FL4.2` landed on `v2-pty-injection`
+(ancestry-proven) and were independently re-verified (fresh `pnpm build`/`typecheck`/`test`
+run outside the implementing agents, plus a manual read of the two riskiest diffs — the
+`SpawnResultSchema` wire change and the ACP attention wiring). This section is the concrete
+test-case list to close out the remaining `[human]` work; check a box only after you've
+actually run that case, not because its automated sibling passed.
+
+Boxes already checked below were verified in that independent pass; everything else is live
+work still to do.
+
+### Automated coverage (already landed — re-run to confirm, don't just trust this list)
+
+- [x] **TC-A1** `pnpm build && pnpm typecheck` clean on `v2-pty-injection` tip.
+- [x] **TC-A2** `pnpm test` clean except the two pre-existing flaky files
+      (`packages/cli/src/claude/scanner.test.ts`, `packages/cli/src/daemon/transcriptIndexer.test.ts`
+      — confirmed these same failures reproduce identically on the pre-`FL` base commit in an
+      isolated worktree, i.e. unrelated to anything landed here).
+- [x] **TC-A3** `packages/wire/src/__tests__/additiveOnly.test.ts` passes with
+      `SpawnResultSchema.requiresApproval.action` as the multi-value literal — proves FL3.1's
+      wire change is genuinely backward-compatible, not just asserted so.
+- [x] **TC-A4** `packages/cli/src/claude/pretoolPermissionBridge.test.ts` — FL5.1's new
+      regression-guard case(s) covering `onPendingAttention("perm")`/`("question")`.
+- [x] **TC-A5** `packages/cli/src/acp/acpPermissionHandler.test.ts` and
+      `packages/cli/src/acp/acpRemote.test.ts` — FL5.2's attention-call-site tests
+      (`handleRequest` reports before blocking; `reportTurnEnd()` fires on turn completion).
+- [x] **TC-A6** `packages/crypto/src/__tests__/sessionSharing.test.ts` — FL4.2's `wrapDek`/
+      `unwrapDek` round-trip (teammate unwraps successfully; owner's own key does not).
+- [x] **TC-A7** `packages/cli/src/daemon/spawnEngine.test.ts`,
+      `packages/cli/src/daemon/machineRpc.test.ts`, `packages/wire/src/rpc.test.ts`,
+      `packages/web/src/features/new-session/__tests__/{live-actions,spawn-flow,mock-source}.test.ts`,
+      `packages/web/src/sync/__tests__/machineRpc.test.ts` — FL3.1's register-workspace path
+      (unregistered → approval, not throw; approve → register → retry → launch; decline →
+      `declined`). Re-run independently in isolation — all pass (78 + 24 + 43 across the three
+      packages' test runs).
+- [x] **TC-A8** `packages/cli/src/daemon/spawnEngine.test.ts` (dedup cases),
+      `packages/cli/src/daemon/sessionRegistry.test.ts`,
+      `packages/web/src/features/new-session/__tests__/directory-step-logic.test.ts` — FL3.2's
+      dedup-by-directory behavior (existing live session in the same directory returns its
+      `sessionId` and never calls the launcher). Re-run independently in isolation — all pass.
+
+### Flow 5 — `[human]` live verification (`FL5.3`)
+
+- [x] **TC-F5-1 (terminal, deny-before-execution).** With `falcon claude` running locally in
+      tmux, open the session in a browser. Send a follow-up **from web** that will trigger a
+      permission (e.g. ask it to write a file). Switch away from the tab (or close it).
+      **Expect:** a push notification arrives; tapping it deep-links to the session; the
+      PermCard is answerable; choosing Deny leaves the file unwritten (confirm via the
+      terminal transcript / `ls`, not just the UI).
+  - Result: Ran against a real terminal `falcon claude` session in a scratch dir. Web Push
+    (VAPID) isn't configured on this dev server, so verification used the real `ntfy` fallback
+    channel (subscribed to a throwaway topic) as the "push" signal instead of an OS banner —
+    genuine outbound HTTP push to ntfy.sh, cross-checked against the server's
+    `POST /v1/sessions/:id/notify` request log. Sent "create hello.txt" from web -> ntfy
+    received "Falcon needs your permission" -> web PermCard appeared (Allow/Deny + diff
+    preview) -> clicked Deny -> terminal showed "Error: Denied from the Falcon web UI." ->
+    `ls` confirmed `hello.txt` was never created. Full pass, double-verified (terminal
+    transcript + filesystem), not just the UI's word for it.
+- [x] **TC-F5-2 (terminal, suppression).** Repeat TC-F5-1 but keep the tab focused/foregrounded
+      throughout. **Expect:** no push fires for the same event (presence-suppressed).
+  - Result: Chrome MCP's automated tab reports `document.visibilityState: "hidden"` even while
+    being actively screenshotted/clicked (it isn't the OS-focused tab), so genuine focus
+    couldn't be produced by normal interaction. Verified the real code path anyway by
+    overriding `document.visibilityState`/`hidden` via `defineProperty` and dispatching a real
+    `visibilitychange` event — this exercises the actual production listener
+    (`packages/web/src/sync/visibility.ts` -> `apiSocket.ts`'s `socket.emit('app-state', ...)`),
+    not a fake shortcut. With `app-state: active` genuinely reported, a fresh permission
+    request still hit `POST /notify` (the ephemeral still fires) but produced no new ntfy
+    message — confirms server-side `hasActiveVisibleClient` suppression. Pass.
+- [x] **TC-F5-3 (terminal, local-turn boundary).** Type a prompt directly into the terminal
+      (not from web) that triggers a permission, then check your phone. **Expect:** a push
+      *does* arrive (attention fires regardless of local/web), but opening the session on web
+      shows no answerable PermCard for it — the terminal's own TUI dialog owns that decision.
+      This is the documented boundary, not a bug; the test is confirming it's still exactly
+      this, not worse (e.g. not silently no-push at all).
+  - Result: With app-state forced back to background, typed a prompt directly into the tmux
+    pane (not via the web composer). A fresh ntfy push ("Falcon needs your permission")
+    arrived. Reloaded the web session page fresh (no stale JS state) — it showed only the
+    earlier, already-resolved web-turn permission card, and no new card at all for the
+    local-turn request. Boundary confirmed exactly as documented. Pass.
+- [x] **TC-F5-4 (headless/ACP, the actual FL5.2 payoff).** From web, use the New Session
+      wizard to spawn a session on a remote machine (`falcon claude --starting-mode remote`).
+      From web, send a message that triggers a permission. Walk away. **Expect:** a push now
+      arrives (this is the gap FL5.2 closed — confirm it did NOT fire this way before FL5.2 by
+      checking `docs/plan-flows-progress.md`'s cycle notes, or by temporarily reverting the
+      FL5.2 commit in a scratch worktree if you want to see the "before" state directly).
+  - Result: Spawned a real `falcon claude --starting-mode remote --started-by daemon` session
+    via the New Session wizard (confirmed via `ps aux`'s full command line and the tmux pane's
+    own `RemoteModeDisplay` UI — "📡 Remote Mode — controlled from web" — distinct from the
+    terminal path's real interactive Claude Code TUI seen in TC-F5-1/2/3). Sent a Write-tool
+    message from web while backgrounded; an ntfy push ("Falcon needs your permission") arrived
+    (a few minutes delayed vs. the near-instant terminal-path pushes — worth watching, not
+    re-tested further here) and the web PermCard was genuinely answerable. Clicked Deny -> pane
+    showed "🔓 Permission deny" / "❌ failed" -> confirmed via `ls` the file was never created.
+    This is the FL5.2 gap, closed and verified live. Pass.
+- [ ] **TC-F5-5 (product decision, not a test).** Decide: should a purely-local-turn
+      permission (TC-F5-3) become web-answerable via some "take control" affordance? Record
+      the decision here or in a linked note. If "no," update `docs/user-flows.md`'s Flow 5
+      status line to ✅ with the terminal-vs-headless and local-turn nuances stated honestly.
+  - Result: Not decided in this pass — this is a genuine product/design call, not something a
+    QA pass should unilaterally settle. Recommendation for whoever does decide: "no" for now
+    (a "take control of this pending permission" affordance is real, separate scope per the
+    doc's own framing) is the smaller change; leaving this open rather than checking it off.
+
+### Flow 3 — `[human]` live verification (`FL3.3`)
+
+- [x] **TC-F3-1 (fresh-folder register, happy path).** From a second machine's browser (or a
+      second profile), open the New Session wizard, browse to and pick a folder that has
+      **never** been through `falcon workspace register` from any terminal. Submit. **Expect:**
+      a "register this folder as a workspace?" prompt (not a hard `unknown-workspace` error);
+      approving it results in a live `falcon claude --starting-mode remote` process starting in
+      that exact folder, visible/mirrored in the web timeline.
+  - Result: Adapted per the brief — no second physical machine available, so "from the web UI,
+    not the terminal" stood in for "second machine." Picked a genuinely fresh scratch
+    directory, never registered. Submit showed "isn't a Falcon workspace yet. Add it as one?"
+    (not a hard error). Approving it produced, in order: daemon log "requesting registration
+    approval" -> "launched provider process (tmux)" -> "session-client connected" -> web
+    showed "Session started" -> opened into a live, controllable session. Cross-checked
+    `falcon workspace list` from a terminal to confirm the directory was genuinely registered
+    server-side, not just a UI illusion. Pass.
+- [x] **TC-F3-2 (decline path).** Repeat TC-F3-1 but decline the register prompt. **Expect:**
+      no process spawned, no partial/orphaned workspace registration
+      (`falcon workspace list` from a terminal should not show the folder).
+  - Result: Clicked "Cancel" on the register prompt for a fresh directory. `falcon workspace
+    list` showed no registered workspaces; `ps aux` showed no spawned process for that
+    directory; the daemon log had the "requesting registration approval" line with no
+    follow-up launch line. Pass.
+- [x] **TC-F3-3 (dedup).** Immediately submit the wizard a second time for the *same* folder
+      used in TC-F3-1 (now already registered and already running). **Expect:** no second
+      `falcon claude` process spawned — the wizard should land you on the existing session
+      (or clearly indicate one is already running there, depending on how FL3.2's UX shipped).
+  - Result: Submitted the wizard twice in a row for the same already-registered, already-live
+    directory, no daemon restart in between. Daemon log on the second submit: "a live session
+    already exists in this directory, returning it instead of spawning a duplicate" with the
+    *same* `sessionId` as the first spawn; confirmed only one tmux session/process existed for
+    that directory throughout. Pass, as literally specified.
+  - Separate finding (not a regression of this test, but adjacent and worth flagging loudly):
+    the dedup guard does **not** survive a daemon restart. `TrackedSession.directory`
+    (`packages/cli/src/daemon/types.ts`, added by FL3.2) is never written to
+    `sessions.json` (`daemon/sessionsStore.ts` has no `directory` field at all) — it's a
+    pure in-memory annotation set by `trackSpawned`. After any daemon restart, sessions
+    restored from `sessions.json` come back with `directory: undefined`, so
+    `scanForLiveSessionInDirectory`'s `session.directory === realDirectory` check can never
+    match a pre-restart session again. Reproduced concretely: spawned a session in a fresh
+    directory, restarted the daemon (a normal, expected lifecycle event per this project's own
+    self-update/heartbeat docs, not an exotic scenario), then resubmitted the wizard for the
+    *same* directory — the daemon spawned a genuine second `falcon claude --starting-mode
+    remote` process (confirmed via two distinct live pids, in two separate tmux sessions,
+    both rooted in the identical directory, via `ps` and `tmux ls`). This is a real gap: any
+    daemon restart — including ordinary ones, not just my repeated manual ones — silently
+    disables the dedup guard for every session that predates it.
+- [x] **TC-F3-4 (no regression on the already-working path).** Pick a folder that *was*
+      already registered before this work (the original, pre-`FL` happy path). **Expect:**
+      spawn still works exactly as before — no new prompt, no behavior change. This guards
+      against FL3.1 accidentally making the already-working case worse.
+  - Result: Pre-registered a fresh scratch directory via `falcon workspace register` from a
+    terminal, then spawned it through the wizard. No register-workspace prompt appeared;
+    daemon log went straight to "launched provider process" / "session-client connected",
+    identical shape to the pre-FL3.1 happy path. Pass.
+
+### Flow 4 — design-gate checklist (not code, `FL4.1`)
+
+Use this as the review checklist once a design doc draft exists (see `known-issues.md`'s
+`FL4.1` entry for the full list) — treat each line as a yes/no the doc must answer, not a
+box to check off casually:
+
+- [ ] Threat/trust model for a second identity accessing someone else's session is written
+      down.
+- [ ] The sharing schema (roles, per-session vs. per-workspace scope) is a settled decision,
+      not an open question left in the doc.
+- [ ] The authorization-helper mechanism (replacing the `eq(sessions.accountId, ...)` checks)
+      is specified concretely enough to implement without further guessing.
+- [ ] The `rpcHandler.ts` account-keyed-room fix is explicitly designed (this is the one prior
+      review flagged as easy to miss — confirm it's actually addressed, not skipped).
+- [ ] The invite/handshake flow (how the owner learns a teammate's `contentPubKey`) is
+      specified end-to-end, including what the teammate sees/does.
+- [ ] Revocation semantics are stated, including the honest "a delivered key can't be
+      un-taught" limitation.
+- [ ] The doc has been reviewed and approved by a human (not just drafted) before `FL4.1` is
+      checked off in the Master TODO checklist above.
