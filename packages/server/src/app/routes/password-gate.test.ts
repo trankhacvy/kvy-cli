@@ -1,0 +1,102 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
+import type { FastifyInstance } from "fastify";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import * as schema from "../../db/schema.js";
+
+const migrationsFolder = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../../drizzle",
+);
+
+// docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): with `FALCON_DEV_AUTH`
+// off — the production default, and the only state `config.ts`'s `.refine()` allows under
+// `NODE_ENV=production` — all four `password.ts` handlers must 404 rather than expose any
+// email+password behavior (no enumeration oracle, no way to register/login/reset). See
+// password.test.ts's own header comment for why this lives in a SEPARATE file: each
+// vitest test file gets its own isolated module registry/worker, so this file's one
+// `vi.resetModules()` + fresh `buildServer` import doesn't collide with that file's
+// (`routes/metrics.ts`, pulled in by `server.ts`, registers process-level `prom-client`
+// default metrics on import — a second fresh import of `server.ts` in the *same* worker
+// throws "metric already registered", since `prom-client` itself lives in `node_modules`
+// and isn't reset by `vi.resetModules()`).
+const ORIGINAL_ENV = { ...process.env };
+
+describe("password auth routes — FALCON_DEV_AUTH off (production gate, item 3)", () => {
+  let pglite: PGlite;
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    process.env = { ...ORIGINAL_ENV };
+    delete process.env.FALCON_DEV_AUTH;
+    vi.resetModules();
+    const { buildServer } = await import("../server.js");
+
+    pglite = new PGlite();
+    const db = drizzle(pglite, { schema });
+    await migrate(db, { migrationsFolder });
+    app = await buildServer(
+      { logger: false },
+      {
+        db,
+        emailTransport: {
+          async sendVerificationEmail() {},
+          async sendResetEmail() {},
+        },
+      },
+    );
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await pglite.close();
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("register 404s instead of creating an account", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/register",
+      payload: { email: "gated@example.com", password: "whatever-password" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("login 404s (not 401) — a gated deployment shouldn't even confirm the identity concept exists", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/login",
+      payload: { email: "gated@example.com", password: "whatever-password" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("reset/request 404s", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset/request",
+      payload: { email: "gated@example.com" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
+
+  it("reset/confirm 404s", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/reset/confirm",
+      payload: { token: "some-token", password: "whatever-password" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
+});

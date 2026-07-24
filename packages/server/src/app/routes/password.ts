@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { EmailTransport } from "../../auth/email.js";
 import { hashPassword, verifyPassword } from "../../auth/password.js";
 import { issueSession } from "../../auth/refresh.js";
+import { env } from "../../config.js";
 import { accounts, authIdentities, deviceSessions, passwordResetTokens } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 
@@ -59,10 +60,21 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         schema: {
           body: z.object({ email: z.string().email(), password: z.string().min(8) }),
-          response: { 200: SessionResponseSchema, 400: ErrorSchema },
+          response: { 200: SessionResponseSchema, 400: ErrorSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
+        // docs/auth-ux-hardening-plan.md item 3: email+password is dev/local-testing only —
+        // reuse the same `FALCON_DEV_AUTH` flag the dev-OAuth-bypass already gates on
+        // (auth/oauth.ts's "dev" provider), fail-closed with a 404 (route effectively does
+        // not exist) rather than a 403, so a production deployment doesn't even advertise
+        // that this endpoint exists. `config.ts`'s `.refine()` already makes
+        // `FALCON_DEV_AUTH=1` structurally impossible under `NODE_ENV=production`, so this
+        // is unreachable in prod transitively — no separate production check needed here.
+        if (!env.FALCON_DEV_AUTH) {
+          return reply.code(404).send({ error: "Not found" });
+        }
+
         const identifier = normalizeEmail(request.body.email);
 
         const existing = await db.query.authIdentities.findFirst({
@@ -116,10 +128,15 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         schema: {
           body: z.object({ email: z.string().email(), password: z.string().min(1) }),
-          response: { 200: SessionResponseSchema, 401: ErrorSchema },
+          response: { 200: SessionResponseSchema, 401: ErrorSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
+        // See the register handler above — same production gate (item 3).
+        if (!env.FALCON_DEV_AUTH) {
+          return reply.code(404).send({ error: "Not found" });
+        }
+
         const identifier = normalizeEmail(request.body.email);
         // Security review finding F3: identical generic rejection whether the identity
         // doesn't exist, the password is wrong, or the identity is currently locked out —
@@ -181,10 +198,16 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         schema: {
           body: z.object({ email: z.string().email() }),
-          response: { 200: OkResponseSchema },
+          response: { 200: OkResponseSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
+        // Same production gate (item 3) — reset is part of the same dev-only surface, so a
+        // production deployment exposes no email+password endpoints at all.
+        if (!env.FALCON_DEV_AUTH) {
+          return reply.code(404).send({ error: "Not found" });
+        }
+
         const identifier = normalizeEmail(request.body.email);
         const identity = await db.query.authIdentities.findFirst({
           where: and(
@@ -217,10 +240,15 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         schema: {
           body: z.object({ token: z.string().min(1), password: z.string().min(8) }),
-          response: { 200: OkResponseSchema, 401: ErrorSchema },
+          response: { 200: OkResponseSchema, 401: ErrorSchema, 404: ErrorSchema },
         },
       },
       async (request, reply) => {
+        // Same production gate (item 3).
+        if (!env.FALCON_DEV_AUTH) {
+          return reply.code(404).send({ error: "Not found" });
+        }
+
         const now = new Date();
         const resetRow = await db.query.passwordResetTokens.findFirst({
           where: and(

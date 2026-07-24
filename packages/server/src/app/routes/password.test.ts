@@ -5,17 +5,33 @@ import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { EmailTransport } from "../../auth/email.js";
-import { verifyToken } from "../../auth/index.js";
 import * as schema from "../../db/schema.js";
 import { authIdentities, deviceSessions } from "../../db/schema.js";
-import { buildServer } from "../server.js";
 
 const migrationsFolder = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../drizzle",
 );
+
+// docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): the four password.ts
+// handlers now 404 unless `FALCON_DEV_AUTH` is on (see password-gate.test.ts for the
+// flag-off behavior, in its own file/worker — see that file's header comment for why).
+// `config.ts`'s `env` singleton is parsed once from `process.env` at import time (same
+// caveat as config.test.ts/oauth.test.ts), so exercising these routes with the flag on
+// requires setting `process.env` *before* a fresh dynamic import of `buildServer`, not
+// just before the `app.inject()` call. `vi.resetModules()` clears vitest's module
+// registry so that fresh import re-runs `config.ts`'s top-level `EnvSchema.parse(...)`.
+// Done exactly ONCE for this whole file (not per describe block) — `server.ts` pulls in
+// `routes/metrics.ts`, which registers process-level `prom-client` default metrics on
+// import; `prom-client` itself lives in `node_modules` and isn't reset by
+// `vi.resetModules()`, so a second fresh import of `server.ts` in the *same* worker would
+// throw "metric already registered". One import per file/worker avoids that.
+const ORIGINAL_ENV = { ...process.env };
+
+let buildServer: typeof import("../server.js").buildServer;
+let verifyToken: typeof import("../../auth/index.js").verifyToken;
 
 function recordingEmailTransport(): EmailTransport & {
   verifications: Array<{ to: string; verifyUrl: string }>;
@@ -35,23 +51,34 @@ function recordingEmailTransport(): EmailTransport & {
   };
 }
 
-describe("password auth routes", () => {
+async function buildApp() {
+  const pglite = new PGlite();
+  const db = drizzle(pglite, { schema });
+  await migrate(db, { migrationsFolder });
+  const email = recordingEmailTransport();
+  const app = await buildServer({ logger: false }, { db, emailTransport: email });
+  return { app, db, email, pglite };
+}
+
+describe("password auth routes — FALCON_DEV_AUTH=1 (local-testing surface, item 3)", () => {
   let pglite: PGlite;
   let db: ReturnType<typeof drizzle<typeof schema>>;
   let app: FastifyInstance;
   let email: ReturnType<typeof recordingEmailTransport>;
 
   beforeAll(async () => {
-    pglite = new PGlite();
-    db = drizzle(pglite, { schema });
-    await migrate(db, { migrationsFolder });
-    email = recordingEmailTransport();
-    app = await buildServer({ logger: false }, { db, emailTransport: email });
+    process.env = { ...ORIGINAL_ENV, FALCON_DEV_AUTH: "1" };
+    vi.resetModules();
+    ({ buildServer } = await import("../server.js"));
+    ({ verifyToken } = await import("../../auth/index.js"));
+
+    ({ app, db, email, pglite } = await buildApp());
   });
 
   afterAll(async () => {
     await app.close();
     await pglite.close();
+    process.env = { ...ORIGINAL_ENV };
   });
 
   describe("POST /v1/auth/password/register", () => {
@@ -172,20 +199,16 @@ describe("password auth routes", () => {
   // `app`/`db` (rather than reusing the describe block above's shared instance) so this
   // test's several back-to-back login attempts against ONE identity don't accumulate
   // against — or get skewed by — the shared instance's own per-IP rate-limit counter
-  // and its other tests' already-issued login calls.
+  // and its other tests' already-issued login calls. Reuses the `buildServer` function
+  // captured in the outer `beforeAll` above (no further `vi.resetModules()` here — see
+  // this file's header comment on why that must happen at most once per file).
   describe("POST /v1/auth/password/login — lockout (security review finding F3)", () => {
     let lockoutPglite: PGlite;
     let lockoutDb: ReturnType<typeof drizzle<typeof schema>>;
     let lockoutApp: FastifyInstance;
 
     beforeAll(async () => {
-      lockoutPglite = new PGlite();
-      lockoutDb = drizzle(lockoutPglite, { schema });
-      await migrate(lockoutDb, { migrationsFolder });
-      lockoutApp = await buildServer(
-        { logger: false },
-        { db: lockoutDb, emailTransport: recordingEmailTransport() },
-      );
+      ({ app: lockoutApp, db: lockoutDb, pglite: lockoutPglite } = await buildApp());
       await lockoutApp.inject({
         method: "POST",
         url: "/v1/auth/password/register",
