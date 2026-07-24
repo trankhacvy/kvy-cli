@@ -1888,24 +1888,24 @@ gated on AH1 (it closes `known-issues.md` issue #14, which AH1 fixes).
   - [x] Replace both `CardDescription` strings with real user-facing copy
   - [x] Test/verify: grep confirms no `issue-4-plan.md` string remains in any `.tsx`
 
-- [ ] **AH10 `[inline]` "pin-copy-this-browser-only"** (item 10 — `pin-setup-form.tsx`,
+- [x] **AH10 `[inline]` "pin-copy-this-browser-only"** (item 10 — `pin-setup-form.tsx`,
       `pin-unlock-form.tsx`, `password/page.tsx`)
-  - [ ] Reword copy to say "protects this browser only," not the whole account
+  - [x] Reword copy to say "protects this browser only," not the whole account
 
-- [ ] **AH11 `[inline]` "known-issues-cleanup"** (item 11 — depends on AH1 merged+verified)
-  - [ ] Delete `known-issues.md` issue #4's row + section (its own convention: remove once
+- [x] **AH11 `[inline]` "known-issues-cleanup"** (item 11 — depends on AH1 merged+verified)
+  - [x] Delete `known-issues.md` issue #4's row + section (its own convention: remove once
         resolved and verified, don't leave a permanent "Fixed" entry) — refresh-token mechanism
         it describes as missing already shipped (`tokenProvider.ts`, `machineClient.ts`)
-  - [ ] Delete issue #14's row + section once AH1 is verified-merged (same bug, independently
+  - [x] Delete issue #14's row + section once AH1 is verified-merged (same bug, independently
         discovered)
-  - [ ] Note the still-open item — periodic WS re-validation — is actually already landed
+  - [x] Note the still-open item — periodic WS re-validation — is actually already landed
         (`server/src/app/socket.ts:164-194`); nothing left to carry forward from #4
 
-- [ ] **AH12 `[inline]` "password-signin-pending-pair"** (item 12 —
+- [x] **AH12 `[inline]` "password-signin-pending-pair"** (item 12 —
       `web/src/lib/complete-password-sign-in.ts`)
-  - [ ] `completePasswordSignIn` and `completePasswordSignUp` resume a pending pair
+  - [x] `completePasswordSignIn` and `completePasswordSignUp` resume a pending pair
         (`consumePendingPair()`) instead of hardcoding `nextUrl: "/"`, mirroring
         `completeOAuthSignIn`
-  - [ ] `rotateKeyEpoch`'s own hardcoded `nextUrl: "/"` gets the same one-line fix
-  - [ ] Test: `/pair#eph` → forced sign-in via email+password → lands back on `/pair/#eph`, not
+  - [x] `rotateKeyEpoch`'s own hardcoded `nextUrl: "/"` gets the same one-line fix
+  - [x] Test: `/pair#eph` → forced sign-in via email+password → lands back on `/pair/#eph`, not
         Home

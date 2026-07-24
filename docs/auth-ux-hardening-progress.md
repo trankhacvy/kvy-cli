@@ -1,5 +1,36 @@
 # Auth UX Hardening — Progress
 
+## Cycle 6
+
+**Merged units (ancestry-proven on `v2-pty-injection`):**
+- AH10 "pin-copy-this-browser-only" — `9b13e34366f653e5e2ceed6c9e8beac644156d64`
+- AH11 "known-issues-cleanup" — `628240e538aa0ed54e1a0388127a4c7d9407096a`
+- AH12 "password-signin-pending-pair" — `6fa8b11a4c98a805eff9462d26fb503162594112`
+
+All three verified via `git merge-base --is-ancestor <sha> v2-pty-injection`. Non-`[human]`
+sub-boxes (none of these units have any) and the unit boxes flipped to `[x]` for AH10, AH11,
+AH12 in `docs/auth-ux-hardening-plan.md`. Worktrees `.worktrees/AH10`, `.worktrees/AH11`,
+`.worktrees/AH12` and branches `wf/AH10`, `wf/AH11`, `wf/AH12` removed post-merge-verification.
+
+**Parked units this cycle:** none.
+
+**`pnpm typecheck` on `v2-pty-injection`:** passed (11/11 tasks successful, full turbo;
+`@falcon/web:build` ran clean, `@falcon/web:typecheck` was a cache hit).
+
+**Sequencing gates re-confirmed:** AH11 required AH1 merged+verified — AH1 was already
+`[x]` before ticking AH11. AH2-before-AH3 gate not implicated this cycle (both already
+checked in an earlier cycle).
+
+**Cumulative status:** every `AH*` unit box in the Master TODO checklist is now `[x]`
+(non-`[human]` sub-boxes). Only `[human]` live-verification sub-boxes remain unticked
+across AH1–AH12.
+
+**Next recommended units:** none remain unchecked/available in the Master TODO checklist —
+all AH units are merged and ticked. Remaining work is limited to the `[human]` live-check
+sub-boxes (e.g. AH2's live Google/GitHub OAuth round-trip), which require a human to
+execute and are out of scope for automated ticking. If new AH units are added to the plan,
+resume from there.
+
 ## Cycle 5
 
 **Merged units (ancestry-proven on `v2-pty-injection`):**
