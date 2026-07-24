@@ -86,6 +86,18 @@ afterEach(() => {
 });
 
 describe("completePasswordSignUp", () => {
+  // `consumePendingPair()` (used to resolve `nextUrl`) reads `window.sessionStorage`
+  // directly — this package's vitest config runs under `environment: "node"` (no
+  // `window` by default), so these tests need the same stand-in `lib/__tests__/
+  // pending-pair.test.ts` uses.
+  beforeEach(() => {
+    (globalThis as { window?: unknown }).window = { sessionStorage: createMemoryStorage() };
+  });
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
   it("registers, PIN-wraps a fresh identity, and binds it (first bind)", async () => {
     const token = fakeAccessToken("acct_1");
     passwordRegisterMock.mockResolvedValue({ success: true, token, refreshToken: "rt1" });
@@ -99,6 +111,18 @@ describe("completePasswordSignUp", () => {
       expect.objectContaining({ signPubKey: "sign-pub", contentPubKey: "content-pub" }),
     );
     expect(markCryptoBridgeUnlockedMock).toHaveBeenCalled();
+  });
+
+  it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
+    const { stashPendingPair } = await import("./pending-pair.js");
+    stashPendingPair("eph-pub-base64==");
+    const token = fakeAccessToken("acct_1");
+    passwordRegisterMock.mockResolvedValue({ success: true, token, refreshToken: "rt1" });
+    const bridge = fakeBridge();
+
+    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
+
+    expect(outcome).toEqual({ kind: "ok", nextUrl: "/pair/#eph-pub-base64==" });
   });
 
   it("reuses an existing identity instead of generating a second one", async () => {
@@ -128,6 +152,18 @@ describe("completePasswordSignUp", () => {
 });
 
 describe("completePasswordSignIn", () => {
+  // `consumePendingPair()` (used to resolve `nextUrl`) reads `window.sessionStorage`
+  // directly — this package's vitest config runs under `environment: "node"` (no
+  // `window` by default), so these tests need the same stand-in `lib/__tests__/
+  // pending-pair.test.ts` uses.
+  beforeEach(() => {
+    (globalThis as { window?: unknown }).window = { sessionStorage: createMemoryStorage() };
+  });
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
   it("logs in and stores the session, without touching key material", async () => {
     passwordLoginMock.mockResolvedValue({ success: true, token: "t1", refreshToken: "rt1" });
 
@@ -135,9 +171,31 @@ describe("completePasswordSignIn", () => {
 
     expect(outcome).toEqual({ nextUrl: "/", refreshToken: "rt1" });
   });
+
+  it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
+    const { stashPendingPair } = await import("./pending-pair.js");
+    stashPendingPair("eph-pub-base64==");
+    passwordLoginMock.mockResolvedValue({ success: true, token: "t1", refreshToken: "rt1" });
+
+    const outcome = await completePasswordSignIn("a@b.com", "password123");
+
+    expect(outcome).toEqual({ nextUrl: "/pair/#eph-pub-base64==", refreshToken: "rt1" });
+  });
 });
 
 describe("rotateKeyEpoch", () => {
+  // `consumePendingPair()` (used to resolve `nextUrl`) reads `window.sessionStorage`
+  // directly — this package's vitest config runs under `environment: "node"` (no
+  // `window` by default), so these tests need the same stand-in `lib/__tests__/
+  // pending-pair.test.ts` uses.
+  beforeEach(() => {
+    (globalThis as { window?: unknown }).window = { sessionStorage: createMemoryStorage() };
+  });
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
   it("generates fresh key material and force-rotates on a correct step-up password", async () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
@@ -153,6 +211,17 @@ describe("rotateKeyEpoch", () => {
       }),
     );
     expect(markCryptoBridgeUnlockedMock).toHaveBeenCalled();
+  });
+
+  it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
+    const { stashPendingPair } = await import("./pending-pair.js");
+    stashPendingPair("eph-pub-base64==");
+    const bridge = fakeBridge();
+    const token = fakeAccessToken("acct_1");
+
+    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", "654321");
+
+    expect(outcome).toEqual({ kind: "ok", nextUrl: "/pair/#eph-pub-base64==" });
   });
 
   it("reports wrong-password on a 401 from keys/bind, without crashing", async () => {
