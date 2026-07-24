@@ -52,7 +52,9 @@ describe("oauth-callback-page.tsx — step-up branch (docs/auth-ux-hardening-pla
   });
 
   it("carries {provider, oauthProof, refreshToken} to /reset-keys/ via setStepUpReturn, not sessionStorage", () => {
-    expect(source).toContain("setStepUpReturn({ provider, oauthProof: proof.value, refreshToken })");
+    expect(source).toContain(
+      "setStepUpReturn({ provider, oauthProof: proof.value, refreshToken })",
+    );
   });
 
   it("never routes a raw refresh token or oauth proof through sessionStorage", () => {
@@ -67,7 +69,7 @@ describe("oauth-callback-page.tsx — returning-user 409 (docs/auth-ux-hardening
     expect(handlePinSetupIndex).toBeGreaterThan(-1);
     expect(handleUnlockIndex).toBeGreaterThan(handlePinSetupIndex);
     const handlePinSetupBody = source.slice(handlePinSetupIndex, handleUnlockIndex);
-    expect(handlePinSetupBody).toContain('err.status === 409');
+    expect(handlePinSetupBody).toContain("err.status === 409");
     expect(handlePinSetupBody).toContain('kind: "already-bound"');
   });
 

@@ -22,9 +22,7 @@ const pageSource = readFileSync(
  * would otherwise false-positive the "the code never does X" assertions below. Strip
  * comments so those assertions check the actual code, not its documentation.
  */
-const codeOnlySource = pageSource
-  .replace(/\/\*[\s\S]*?\*\//g, "")
-  .replace(/\/\/.*$/gm, "");
+const codeOnlySource = pageSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
 describe("reset-keys/page.tsx", () => {
   it("uses the raw useCryptoBridge(), not useUnlockedCryptoBridge() (review Problem 3)", () => {

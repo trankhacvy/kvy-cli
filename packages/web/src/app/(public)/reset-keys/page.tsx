@@ -78,8 +78,8 @@ export default function ResetKeysPage() {
           <div className="space-y-3">
             <h1 className="text-2xl font-semibold tracking-tight">Recover this browser</h1>
             <p className="text-sm text-muted-foreground">
-              The safest option keeps all your encrypted sessions. Resetting keys signs every
-              other device out and archives data encrypted under the old keys.
+              The safest option keeps all your encrypted sessions. Resetting keys signs every other
+              device out and archives data encrypted under the old keys.
             </p>
           </div>
 
@@ -101,8 +101,8 @@ export default function ResetKeysPage() {
           ) : (
             <div className="space-y-3 rounded-lg border border-destructive/40 p-4">
               <p className="text-sm text-destructive">
-                This permanently archives everything encrypted under your current keys and logs
-                out every other device. Confirm it's you to continue.
+                This permanently archives everything encrypted under your current keys and logs out
+                every other device. Confirm it's you to continue.
               </p>
               <div className="flex flex-col gap-2">
                 <Button
