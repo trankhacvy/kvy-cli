@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
 import {
   deriveMachineOnline,
+  deriveMachineStatus,
+  type MachinePresence,
   type SessionListMachine,
   useMachinePresence,
 } from "@/features/session-list";
@@ -166,7 +168,7 @@ export function buildSnapshot(
   rows: UnmanagedSessionRow[],
   machineRows: MachineRow[],
   decrypted: DecryptedUnmanaged,
-  presence: Map<string, boolean>,
+  presence: Map<string, MachinePresence>,
 ): UnmanagedSessionsSnapshot {
   const now = Date.now();
 
@@ -177,6 +179,11 @@ export function buildSnapshot(
       id: m.id,
       name: decrypted.machineNames.get(m.id) ?? UNNAMED_MACHINE,
       online: deriveMachineOnline(m, presence, now),
+      // AH8 "machine-status-reauth": the same shared badge status
+      // `features/session-list/live-source.ts` computes — this section
+      // reuses `MachineBadge` (`@/features/session-list`) for the very same
+      // machine, so both must agree on it.
+      status: deriveMachineStatus(m, presence, now),
     }));
 
   const sessions: UnmanagedSessionItem[] = rows.map((r) => {

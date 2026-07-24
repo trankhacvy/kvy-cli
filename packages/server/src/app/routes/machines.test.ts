@@ -1,8 +1,11 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { encodeBase64, getRandomBytes } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { issueSession } from "../../auth/index.js";
+import { deviceSessions } from "../../db/schema.js";
 import type { EmitUpdateParams } from "../events/eventRouter.js";
 import { buildServer } from "../server.js";
 import { createTestAccount, createTestDb, RecordingEventRouter } from "./testHelpers.js";
@@ -190,5 +193,67 @@ describe("POST /v1/machines", () => {
       payload: { machineId, metadata: { value: fakeBox(), expectedVersion: 0 } },
     });
     expect(response.statusCode).toBe(404);
+  });
+
+  // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8).
+  describe("needsReauth (AH8)", () => {
+    it("registers false for a fresh machine, and backfills device_sessions.machineId onto the registering cli-daemon session", async () => {
+      const { account } = await createTestAccount(db);
+      const daemon = await issueSession(db, { accountId: account.id, clientKind: "cli-daemon" });
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/machines",
+        headers: { authorization: `Bearer ${daemon.accessToken}` },
+        payload: {
+          dek: encodeBase64(getRandomBytes(32)),
+          metadata: { value: fakeBox(), expectedVersion: 0 },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.needsReauth).toBe(false);
+
+      const [session] = await db
+        .select()
+        .from(deviceSessions)
+        .where(eq(deviceSessions.id, daemon.sessionId));
+      expect(session?.machineId).toBe(body.id);
+    });
+
+    it("reports needsReauth:true once the registering cli-daemon session is revoked", async () => {
+      const { account } = await createTestAccount(db);
+      const daemon = await issueSession(db, { accountId: account.id, clientKind: "cli-daemon" });
+
+      const registerResponse = await app.inject({
+        method: "POST",
+        url: "/v1/machines",
+        headers: { authorization: `Bearer ${daemon.accessToken}` },
+        payload: {
+          dek: encodeBase64(getRandomBytes(32)),
+          metadata: { value: fakeBox(), expectedVersion: 0 },
+        },
+      });
+      const machineId = registerResponse.json().id;
+
+      await db
+        .update(deviceSessions)
+        .set({ revokedAt: new Date() })
+        .where(eq(deviceSessions.id, daemon.sessionId));
+
+      // A subsequent update (still authenticated — the access token itself is
+      // short-lived and not re-checked against the DB per-request, §4.5a)
+      // now reports the machine as needing re-auth.
+      const updateResponse = await app.inject({
+        method: "POST",
+        url: "/v1/machines",
+        headers: { authorization: `Bearer ${daemon.accessToken}` },
+        payload: { machineId, metadata: { value: fakeBox(), expectedVersion: 0 } },
+      });
+
+      expect(updateResponse.statusCode).toBe(200);
+      expect(updateResponse.json().needsReauth).toBe(true);
+    });
   });
 });

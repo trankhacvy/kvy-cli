@@ -4,6 +4,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { accounts, machines, sessions, unmanagedSessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
+import { computeMachinesNeedReauth } from "../machineReauth.js";
 import { toMachineRow, toSessionRow, toUnmanagedSessionRow } from "./mappers.js";
 
 const SyncQuerySchema = z.object({ since: z.coerce.number().int().nonnegative() });
@@ -52,10 +53,19 @@ export function buildSyncRoutes(db: Database): FastifyPluginAsyncZod {
           throw new Error(`GET /v1/sync: authenticated accountId ${accountId} has no account row`);
         }
 
+        // AH8 "machine-status-reauth": the bootstrap/no-live-event path's
+        // source for `MachineRow.needsReauth` — one batched query for every
+        // machine in this snapshot rather than one query per row.
+        const needsReauthByMachine = await computeMachinesNeedReauth(
+          db,
+          accountId,
+          machineRows.map((m) => m.id),
+        );
+
         return {
           headerSeq: account.headerSeq,
           sessions: sessionRows.map(toSessionRow),
-          machines: machineRows.map(toMachineRow),
+          machines: machineRows.map((m) => toMachineRow(m, needsReauthByMachine.get(m.id))),
           unmanagedSessions: unmanagedRows.map(toUnmanagedSessionRow),
         };
       },

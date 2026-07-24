@@ -26,8 +26,16 @@ export function toSessionRow(row: typeof sessions.$inferSelect): SessionRow {
   };
 }
 
-/** DB row → wire row for `MachineRowSchema`. */
-export function toMachineRow(row: typeof machines.$inferSelect): MachineRow {
+/**
+ * DB row → wire row for `MachineRowSchema`. `needsReauth` (AH8
+ * "machine-status-reauth") is computed by the caller — `machineReauth.ts`'s
+ * `computeMachinesNeedReauth`/`computeMachineNeedsReauth` — since it needs a
+ * separate `device_sessions` query this pure mapper has no business owning;
+ * defaults to `false` so a caller that hasn't computed it yet (there are
+ * none left, but this keeps the function honest on its own) never reports a
+ * false "needs re-auth".
+ */
+export function toMachineRow(row: typeof machines.$inferSelect, needsReauth = false): MachineRow {
   return {
     id: row.id,
     accountId: row.accountId,
@@ -37,6 +45,7 @@ export function toMachineRow(row: typeof machines.$inferSelect): MachineRow {
       : null,
     dek: encodeBase64(row.dek),
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.getTime() : null,
+    needsReauth,
   };
 }
 

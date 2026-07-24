@@ -1,5 +1,6 @@
 import type { RenderItem } from "@/sync/reducer";
 import type { AttentionKind, SessionListSession } from "./types";
+import type { MachineStatus } from "./use-machine-presence";
 
 /**
  * The Home screen's per-session status dot (falcon-prd.md FR-7.1,
@@ -133,4 +134,20 @@ export const SESSION_STATUS_META: Record<SessionListStatus, SessionStatusMeta> =
   ended: { label: "Ended", dotClassName: "bg-slate-500", pulse: false },
   failed: { label: "Failed", dotClassName: "bg-destructive", pulse: false },
   offline: { label: "Offline", dotClassName: "bg-muted-foreground/30", pulse: false },
+};
+
+/**
+ * The Home screen's machine badge status (AH8 "machine-status-reauth",
+ * docs/auth-ux-hardening-plan.md item 8) — a distinct third state alongside
+ * `online`/`offline` (`MachineBadge`'s own component, not `SessionCard`'s
+ * per-session dot above): a daemon that's running but can't authenticate
+ * (refresh token revoked) needs `falcon auth login`, not "wake the machine",
+ * so it gets its own amber "Needs re-authentication" chip rather than
+ * collapsing into the same grey "Offline" a genuinely powered-off machine
+ * shows.
+ */
+export const MACHINE_STATUS_META: Record<MachineStatus, SessionStatusMeta> = {
+  online: { label: "Online", dotClassName: "bg-emerald-500", pulse: false },
+  offline: { label: "Offline", dotClassName: "bg-muted-foreground/40", pulse: false },
+  "needs-reauth": { label: "Needs re-authentication", dotClassName: "bg-amber-500", pulse: false },
 };

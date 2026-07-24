@@ -19,7 +19,9 @@ import type {
 const NOW = Date.now();
 const MIN = 60_000;
 
-const machines: SessionListMachine[] = [{ id: "m-laptop", name: "vy-macbook-pro", online: true }];
+const machines: SessionListMachine[] = [
+  { id: "m-laptop", name: "vy-macbook-pro", online: true, status: "online" },
+];
 
 const sessions: UnmanagedSessionItem[] = [
   {

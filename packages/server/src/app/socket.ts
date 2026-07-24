@@ -11,6 +11,7 @@ import {
   type ClientConnection,
   eventRouter,
 } from "./events/eventRouter.js";
+import { computeMachineNeedsReauth } from "./machineReauth.js";
 import { recordWsConnectionClosed, recordWsConnectionOpened } from "./routes/metrics.js";
 import { buildCorsOriginValidator } from "./security/cors.js";
 import { rpcHandler } from "./socket/rpcHandler.js";
@@ -260,11 +261,29 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
       app.log.info({ module: "websocket" }, `socket disconnected: account=${accountId}`);
 
       if (connection.connectionType === "machine-scoped") {
-        eventRouter.emitEphemeral({
-          accountId,
-          payload: buildMachinePresenceEphemeral(connection.machineId, false),
-          recipientFilter: { type: "user-scoped-only" },
-        });
+        const disconnectedMachineId = connection.machineId;
+        // AH8 "machine-status-reauth": a dead-refresh-token daemon can't
+        // tell the server anything over its own (now-dead) socket, so the
+        // server infers "needs re-auth" itself, right here at disconnect —
+        // the one place a machine-scoped socket going away and the server
+        // already knowing whether its `cli-daemon` device session is
+        // revoked naturally meet. Never blocks emitting the plain
+        // offline signal a genuinely-asleep/powered-off machine still needs.
+        computeMachineNeedsReauth(db, accountId, disconnectedMachineId)
+          .catch((error: unknown) => {
+            app.log.warn(
+              { module: "websocket", error },
+              "failed to compute machine reauth status on disconnect",
+            );
+            return false;
+          })
+          .then((needsReauth) => {
+            eventRouter.emitEphemeral({
+              accountId,
+              payload: buildMachinePresenceEphemeral(disconnectedMachineId, false, needsReauth),
+              recipientFilter: { type: "user-scoped-only" },
+            });
+          });
       }
     });
 

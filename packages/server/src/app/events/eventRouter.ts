@@ -314,8 +314,23 @@ export function disconnectSession(router: EventRouter, accountId: string, sessio
 
 // === EVENT BUILDER FUNCTIONS ===
 
-export function buildMachinePresenceEphemeral(machineId: string, online: boolean): Ephemeral {
-  return { t: "machine-presence", machineId, online };
+/**
+ * AH8 "machine-status-reauth": `needsReauth` is only ever set `true` on the
+ * disconnect path, when `socket.ts` has inferred (`machineReauth.ts`'s
+ * `computeMachineNeedsReauth`) that this machine's `cli-daemon` device
+ * session is revoked — omitted (not just `false`) otherwise, so the emitted
+ * payload is byte-identical to the pre-AH8 shape for the overwhelmingly
+ * common "just a normal connect/disconnect" case (existing socket.test.ts
+ * assertions rely on this exact shape).
+ */
+export function buildMachinePresenceEphemeral(
+  machineId: string,
+  online: boolean,
+  needsReauth?: boolean,
+): Ephemeral {
+  return needsReauth
+    ? { t: "machine-presence", machineId, online, needsReauth: true }
+    : { t: "machine-presence", machineId, online };
 }
 
 /**

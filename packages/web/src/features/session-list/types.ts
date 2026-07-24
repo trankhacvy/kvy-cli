@@ -1,5 +1,6 @@
 import type { Ephemeral, SessionRow } from "@falcon/wire";
 import type { RenderItem } from "@/sync/reducer";
+import type { MachineStatus } from "./use-machine-presence";
 
 /**
  * View-model types for the Home / session-list screen (design §9.2 "Home"
@@ -34,8 +35,18 @@ export interface SessionListMachine {
    * decryption is still in flight). */
   name: string | null;
   /** Live presence (design §4.3 `machine-presence` ephemeral / `lastSeenAt`
-   * heartbeat) — never persisted as a flag, always a snapshot of "right now". */
+   * heartbeat) — never persisted as a flag, always a snapshot of "right now".
+   * Kept alongside `status` (AH8 "machine-status-reauth") rather than
+   * replaced by it — every existing consumer (restart-eligibility checks,
+   * the per-session "offline" status dot) only ever needed "is the machine
+   * reachable", a strictly boolean question `status`'s extra "why" doesn't
+   * change the answer to. */
   online: boolean;
+  /** The Home screen's machine badge status (`use-machine-presence.ts`'s
+   * `deriveMachineStatus`) — distinguishes "needs re-authentication" (a
+   * daemon that's running but whose refresh token was revoked) from plain
+   * `offline` (powered off/asleep), which `online: boolean` alone can't. */
+  status: MachineStatus;
 }
 
 export interface SessionListSession {

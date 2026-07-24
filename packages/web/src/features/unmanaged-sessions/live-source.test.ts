@@ -84,7 +84,7 @@ describe("buildSnapshot (unmanaged sessions)", () => {
     const now = Date.now();
     const row = makeRow({ machineId: "mach-1" });
     const machine = makeMachine({ id: "mach-1", lastSeenAt: now });
-    const presence = new Map([["mach-1", false]]);
+    const presence = new Map([["mach-1", { online: false }]]);
 
     const snapshot = buildSnapshot([row], [machine], EMPTY_DECRYPTED, presence);
 

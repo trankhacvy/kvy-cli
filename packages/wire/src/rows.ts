@@ -40,6 +40,12 @@ export const MachineRowSchema = z.object({
   daemonState: VersionedSchema(EncryptedBoxSchema).nullable(),
   dek: z.string(),
   lastSeenAt: z.number().nullable(),
+  // AH8 "machine-status-reauth": server-inferred from "most recent `cli-daemon`
+  // `device_sessions` row for this machine is revoked" (auth-ux-hardening-plan.md
+  // item 8) — the bootstrap/no-live-event path's source for "Needs
+  // re-authentication" vs. plain "Offline". Additive/optional so an old client
+  // that doesn't know this field yet just ignores it (design §5.3 additive-only).
+  needsReauth: z.boolean().optional(),
 });
 export type MachineRow = z.infer<typeof MachineRowSchema>;
 
