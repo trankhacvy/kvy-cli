@@ -15,6 +15,7 @@ import type {
   SpawnParams,
   SpawnResult,
   WorkspaceRegisterResult,
+  WorkspaceUnregisterResult,
 } from "@falcon/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -22,6 +23,7 @@ import {
   type MachineRpcDeps,
   registerMachineRpcHandlers,
 } from "./machineRpc.js";
+import { WorkspaceValidationError } from "./workspacePath.js";
 
 /** Minimal fake standing in for a socket.io-client `Socket` (mirrors rpc/sessionRpc.test.ts's FakeSocket). */
 class FakeSocket {
@@ -140,6 +142,10 @@ describe("registerMachineRpcHandlers", () => {
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
       payload: { target: "m:mach_1:workspace.register" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:workspace.unregister" },
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
@@ -612,6 +618,73 @@ describe("registerMachineRpcHandlers", () => {
     });
   });
 
+  describe("workspace.unregister", () => {
+    it("decrypts params, calls unregisterWorkspace, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const unregisterWorkspace = vi.fn(
+        async (): Promise<WorkspaceUnregisterResult> => ({ ok: true }),
+      );
+      register(socket, { unregisterWorkspace });
+
+      const params = { idempotencyKey: "idem_ws_un_1", directory: "/tmp/stale-project" };
+      const response = await callAndAwaitAck(socket, "workspace.unregister", seal(params, DEK));
+
+      expect(unregisterWorkspace).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ ok: true });
+    });
+
+    it("replies with a sealed error when params fail schema validation (missing directory)", async () => {
+      const socket = new FakeSocket();
+      register(socket, { unregisterWorkspace: vi.fn() });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "workspace.unregister",
+        seal({ idempotencyKey: "idem_ws_un_2" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    describe("with the real default (no mocked-away side effect)", () => {
+      let homeDir: string;
+      let previousFalconHomeDir: string | undefined;
+
+      beforeEach(async () => {
+        homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-unregister-rpc-"));
+        previousFalconHomeDir = process.env.FALCON_HOME_DIR;
+        process.env.FALCON_HOME_DIR = homeDir;
+      });
+
+      afterEach(async () => {
+        if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
+        else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+        await rm(homeDir, { recursive: true, force: true });
+      });
+
+      it("actually removes a real workspaces.json entry via the real unregisterWorkspace", async () => {
+        const socket = new FakeSocket();
+        register(socket); // no registerWorkspace/unregisterWorkspace override — exercises the real defaults
+
+        const target = path.join(homeDir, "project");
+        await callAndAwaitAck(
+          socket,
+          "workspace.register",
+          seal({ idempotencyKey: "idem_ws_un_live_1", directory: target }, DEK),
+        );
+
+        const response = await callAndAwaitAck(
+          socket,
+          "workspace.unregister",
+          seal({ idempotencyKey: "idem_ws_un_live_2", directory: target }, DEK),
+        );
+        expect(open(response, DEK)).toEqual({ ok: true });
+
+        const written = JSON.parse(await readFile(path.join(homeDir, "workspaces.json"), "utf8"));
+        expect(written.workspaces).not.toContainEqual(expect.objectContaining({ path: target }));
+      });
+    });
+  });
+
   describe("git.status", () => {
     it("decrypts params, calls getGitStatus, and seals the result", async () => {
       const socket = new FakeSocket();
@@ -649,6 +722,29 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_git_status_2", worktree: "/repo" }, DEK),
       );
       expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
+    });
+
+    it("attaches the typed .code when getGitStatus throws a WorkspaceValidationError (known-issues.md #3)", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        getGitStatus: vi.fn(async () => {
+          throw new WorkspaceValidationError(
+            "workspace directory not found: /gone",
+            "workspace-missing",
+          );
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.status",
+        seal({ idempotencyKey: "idem_git_status_3", worktree: "/gone" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "workspace directory not found: /gone",
+        code: "workspace-missing",
+      });
     });
   });
 

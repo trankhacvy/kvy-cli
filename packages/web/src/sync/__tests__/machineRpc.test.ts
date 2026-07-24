@@ -197,6 +197,48 @@ describe("createMachineRpcClient", () => {
     );
   });
 
+  it("surfaces the daemon's typed .code as handlerErrorCode on MachineRpcError (known-issues.md #3)", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({
+          ok: false,
+          error: "workspace directory not found: /gone",
+          code: "workspace-missing",
+        }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    await expect(
+      client.call("git.status", { idempotencyKey: "idem-ws-1", worktree: "/gone" }),
+    ).rejects.toMatchObject({
+      name: "MachineRpcError",
+      message: "workspace directory not found: /gone",
+      code: "handler-error",
+      handlerErrorCode: "workspace-missing",
+    });
+  });
+
+  it("leaves handlerErrorCode undefined for a plain handler error with no .code (e.g. an ordinary git failure)", async () => {
+    const client = createMachineRpcClient({
+      socket: fakeSocket(async () => ({
+        ok: true,
+        result: box({ ok: false, error: "fatal: not a git repository" }),
+      })),
+      crypto: fakeCrypto(),
+      machineId: "mach-1",
+    });
+
+    await expect(
+      client.call("git.status", { idempotencyKey: "idem-ws-2", worktree: "/repo" }),
+    ).rejects.toMatchObject({
+      name: "MachineRpcError",
+      handlerErrorCode: undefined,
+    });
+  });
+
   it("round-trips an adopt.take call and result", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({

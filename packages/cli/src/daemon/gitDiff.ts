@@ -39,6 +39,7 @@
 import type { GitDiffParams, GitDiffResult } from "@falcon/wire";
 import { readWorkspaceGitConfig } from "../workspaceConfig.js";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
+import { assertWorkspaceStillValid } from "./workspacePath.js";
 
 /** Stays well under the 64KB RPC control-plane cap (design §4.4) after JSON envelope + encryption overhead. */
 const MAX_INLINE_BYTES = 60_000;
@@ -51,6 +52,8 @@ export interface GitDiffDeps {
   maxInlineBytes?: number;
   /** Encrypts+uploads the full diff and resolves its `blobId`, or `null` on any failure — see `blobClient.ts`'s `uploadBlob`. No default: unset (the state every caller had before this subsystem existed) means `blobRef` simply stays unset, never a thrown error. Only ever called when the diff was actually truncated — a diff that already fits inline has no need for a blob. */
   uploadBlob?: (plaintext: Uint8Array) => Promise<string | null>;
+  /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (known-issues.md #3 — a real filesystem check, so tests exercising diff-building logic against a fake `worktree` path must override this). */
+  assertWorkspaceValid?: (directory: string) => Promise<void>;
 }
 
 async function defaultResolveConfiguredBaseRef(worktree: string): Promise<string | undefined> {
@@ -87,11 +90,13 @@ function isSafeRevision(ref: string): boolean {
   return ref.trim() !== "" && !ref.startsWith("-");
 }
 
-/** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws `GitExecError` on any `git` failure (not a repo, unknown ref, etc.) or an unsafe `baseRef` — no silent empty-diff fallback. */
+/** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws a `WorkspaceValidationError` (known-issues.md #3) if `worktree` no longer exists or isn't a git repository — checked before `git` ever runs. Throws `GitExecError` for any other `git` failure (unknown ref, etc.) or an unsafe `baseRef` — no silent empty-diff fallback. */
 export async function getGitDiff(
   params: GitDiffParams,
   deps: GitDiffDeps = {},
 ): Promise<GitDiffResult> {
+  const assertWorkspaceValid = deps.assertWorkspaceValid ?? assertWorkspaceStillValid;
+  await assertWorkspaceValid(params.worktree);
   const git = deps.git ?? runGit;
   const resolveConfiguredBaseRef = deps.resolveConfiguredBaseRef ?? defaultResolveConfiguredBaseRef;
   const maxInlineBytes = deps.maxInlineBytes ?? MAX_INLINE_BYTES;

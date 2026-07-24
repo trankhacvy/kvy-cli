@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { getGitDiff } from "./gitDiff.js";
+import { WorkspaceValidationError } from "./workspacePath.js";
+
+/** Every test here exercises diff-building logic against a fake `worktree` path that doesn't exist on disk — bypasses the real filesystem check so those tests don't depend on it. */
+const skipWorkspaceValidation = async () => {};
 
 describe("getGitDiff", () => {
   it("uses an explicit baseRef when given, without consulting the configured resolver", async () => {
@@ -8,7 +12,7 @@ describe("getGitDiff", () => {
 
     const result = await getGitDiff(
       { idempotencyKey: "idem-1", worktree: "/repo", baseRef: "explicit-base" },
-      { git, resolveConfiguredBaseRef },
+      { git, resolveConfiguredBaseRef, assertWorkspaceValid: skipWorkspaceValidation },
     );
 
     expect(git).toHaveBeenCalledWith(["diff", "explicit-base"], "/repo");
@@ -22,7 +26,7 @@ describe("getGitDiff", () => {
 
     await getGitDiff(
       { idempotencyKey: "idem-2", worktree: "/repo" },
-      { git, resolveConfiguredBaseRef },
+      { git, resolveConfiguredBaseRef, assertWorkspaceValid: skipWorkspaceValidation },
     );
 
     expect(git).toHaveBeenCalledWith(["diff", "develop"], "/repo");
@@ -34,7 +38,7 @@ describe("getGitDiff", () => {
 
     await getGitDiff(
       { idempotencyKey: "idem-3", worktree: "/repo" },
-      { git, resolveConfiguredBaseRef },
+      { git, resolveConfiguredBaseRef, assertWorkspaceValid: skipWorkspaceValidation },
     );
 
     expect(git).toHaveBeenCalledWith(["diff", "HEAD"], "/repo");
@@ -45,7 +49,11 @@ describe("getGitDiff", () => {
 
     await getGitDiff(
       { idempotencyKey: "idem-4", worktree: "/repo", baseRef: "main", path: "src/a.ts" },
-      { git, resolveConfiguredBaseRef: async () => undefined },
+      {
+        git,
+        resolveConfiguredBaseRef: async () => undefined,
+        assertWorkspaceValid: skipWorkspaceValidation,
+      },
     );
 
     expect(git).toHaveBeenCalledWith(["diff", "main", "--", "src/a.ts"], "/repo");
@@ -57,7 +65,12 @@ describe("getGitDiff", () => {
 
     const result = await getGitDiff(
       { idempotencyKey: "idem-5", worktree: "/repo", baseRef: "main" },
-      { git, resolveConfiguredBaseRef: async () => undefined, maxInlineBytes: 50 },
+      {
+        git,
+        resolveConfiguredBaseRef: async () => undefined,
+        maxInlineBytes: 50,
+        assertWorkspaceValid: skipWorkspaceValidation,
+      },
     );
 
     expect(result.truncated).toBe(true);
@@ -77,7 +90,13 @@ describe("getGitDiff", () => {
 
     const result = await getGitDiff(
       { idempotencyKey: "idem-10", worktree: "/repo", baseRef: "main" },
-      { git, resolveConfiguredBaseRef: async () => undefined, maxInlineBytes: 50, uploadBlob },
+      {
+        git,
+        resolveConfiguredBaseRef: async () => undefined,
+        maxInlineBytes: 50,
+        uploadBlob,
+        assertWorkspaceValid: skipWorkspaceValidation,
+      },
     );
 
     expect(uploadBlob).toHaveBeenCalledTimes(1);
@@ -93,7 +112,12 @@ describe("getGitDiff", () => {
 
     const result = await getGitDiff(
       { idempotencyKey: "idem-11", worktree: "/repo", baseRef: "main" },
-      { git, resolveConfiguredBaseRef: async () => undefined, uploadBlob },
+      {
+        git,
+        resolveConfiguredBaseRef: async () => undefined,
+        uploadBlob,
+        assertWorkspaceValid: skipWorkspaceValidation,
+      },
     );
 
     expect(uploadBlob).not.toHaveBeenCalled();
@@ -107,7 +131,13 @@ describe("getGitDiff", () => {
 
     const result = await getGitDiff(
       { idempotencyKey: "idem-12", worktree: "/repo", baseRef: "main" },
-      { git, resolveConfiguredBaseRef: async () => undefined, maxInlineBytes: 50, uploadBlob },
+      {
+        git,
+        resolveConfiguredBaseRef: async () => undefined,
+        maxInlineBytes: 50,
+        uploadBlob,
+        assertWorkspaceValid: skipWorkspaceValidation,
+      },
     );
 
     expect(result.truncated).toBe(true);
@@ -119,7 +149,11 @@ describe("getGitDiff", () => {
 
     const result = await getGitDiff(
       { idempotencyKey: "idem-6", worktree: "/repo", baseRef: "main" },
-      { git, resolveConfiguredBaseRef: async () => undefined },
+      {
+        git,
+        resolveConfiguredBaseRef: async () => undefined,
+        assertWorkspaceValid: skipWorkspaceValidation,
+      },
     );
 
     expect(result).toEqual({ inline: "small diff", truncated: false });
@@ -131,7 +165,11 @@ describe("getGitDiff", () => {
     await expect(
       getGitDiff(
         { idempotencyKey: "idem-8", worktree: "/repo", baseRef: "--output=/tmp/pwned" },
-        { git, resolveConfiguredBaseRef: async () => undefined },
+        {
+          git,
+          resolveConfiguredBaseRef: async () => undefined,
+          assertWorkspaceValid: skipWorkspaceValidation,
+        },
       ),
     ).rejects.toThrow("unsafe base ref");
     expect(git).not.toHaveBeenCalled();
@@ -143,7 +181,11 @@ describe("getGitDiff", () => {
     await expect(
       getGitDiff(
         { idempotencyKey: "idem-9", worktree: "/repo" },
-        { git, resolveConfiguredBaseRef: async () => "-x" },
+        {
+          git,
+          resolveConfiguredBaseRef: async () => "-x",
+          assertWorkspaceValid: skipWorkspaceValidation,
+        },
       ),
     ).rejects.toThrow("unsafe base ref");
     expect(git).not.toHaveBeenCalled();
@@ -157,8 +199,44 @@ describe("getGitDiff", () => {
     await expect(
       getGitDiff(
         { idempotencyKey: "idem-7", worktree: "/repo", baseRef: "nonexistent-ref" },
-        { git, resolveConfiguredBaseRef: async () => undefined },
+        {
+          git,
+          resolveConfiguredBaseRef: async () => undefined,
+          assertWorkspaceValid: skipWorkspaceValidation,
+        },
       ),
     ).rejects.toThrow("bad revision");
+  });
+
+  it("propagates a WorkspaceValidationError from assertWorkspaceValid without ever calling git (known-issues.md #3)", async () => {
+    const git = vi.fn(async () => "diff");
+
+    await expect(
+      getGitDiff(
+        { idempotencyKey: "idem-13", worktree: "/gone" },
+        {
+          git,
+          resolveConfiguredBaseRef: async () => undefined,
+          assertWorkspaceValid: async () => {
+            throw new WorkspaceValidationError(
+              "workspace is no longer a git repository: /gone",
+              "workspace-not-a-repo",
+            );
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ name: "WorkspaceValidationError", code: "workspace-not-a-repo" });
+    expect(git).not.toHaveBeenCalled();
+  });
+
+  it("checks the workspace's real filesystem state by default when no override is given", async () => {
+    const git = vi.fn(async () => "diff");
+
+    await expect(
+      getGitDiff(
+        { idempotencyKey: "idem-14", worktree: "/definitely/does/not/exist/anywhere" },
+        { git, resolveConfiguredBaseRef: async () => undefined },
+      ),
+    ).rejects.toMatchObject({ name: "WorkspaceValidationError", code: "workspace-missing" });
   });
 });

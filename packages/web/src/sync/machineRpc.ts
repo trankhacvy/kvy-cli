@@ -142,6 +142,8 @@ import {
   WorkspaceGetConfigResultSchema,
   type WorkspaceRegisterParams,
   WorkspaceRegisterResultSchema,
+  type WorkspaceUnregisterParams,
+  WorkspaceUnregisterResultSchema,
 } from "@falcon/wire";
 import type { ZodType, z } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
@@ -175,6 +177,7 @@ export type {
   SpawnParams,
   WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
+  WorkspaceUnregisterParams,
 };
 
 export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
@@ -188,6 +191,7 @@ export interface MachineRpcParams {
   "fs.list": FsListParams;
   "fs.mkdir": FsMkdirParams;
   "workspace.register": WorkspaceRegisterParams;
+  "workspace.unregister": WorkspaceUnregisterParams;
   "adopt.list": AdoptListParams;
   "adopt.take": AdoptTakeParams;
   "adopt.mirror": AdoptMirrorParams;
@@ -222,6 +226,7 @@ export interface MachineRpcResults {
   "fs.list": import("@falcon/wire").FsListResult;
   "fs.mkdir": import("@falcon/wire").FsMkdirResult;
   "workspace.register": import("@falcon/wire").WorkspaceRegisterResult;
+  "workspace.unregister": import("@falcon/wire").WorkspaceUnregisterResult;
   "adopt.list": AdoptListResult;
   "adopt.take": import("@falcon/wire").AdoptTakeResult;
   "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
@@ -257,6 +262,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "fs.list": FsListResultSchema,
   "fs.mkdir": FsMkdirResultSchema,
   "workspace.register": WorkspaceRegisterResultSchema,
+  "workspace.unregister": WorkspaceUnregisterResultSchema,
   "adopt.list": AdoptListResultSchema,
   "adopt.take": AdoptTakeResultSchema,
   "adopt.mirror": AdoptMirrorResultSchema,
@@ -285,11 +291,22 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "run.setup": RunSetupResultSchema,
 };
 
-/** Thrown only for a *transport*-level failure — target unreachable, ack timeout, or the sealed result didn't decrypt/validate. */
+/**
+ * Thrown only for a *transport*-level failure — target unreachable, ack
+ * timeout, or the sealed result didn't decrypt/validate. `code` here is this
+ * client's own transport-stage label (`"rpc-failed"`/`"handler-error"`/etc),
+ * NOT the daemon's typed reason. `handlerErrorCode` (known-issues.md #3) is
+ * the separate, optional pass-through of the daemon's own error box `code`
+ * (e.g. `"workspace-missing"`) — only ever set when `code === "handler-error"`
+ * AND the daemon attached one; a plain `GitExecError` or any other thrown
+ * handler error leaves it `undefined`, so callers must not assume it's
+ * present just because `code === "handler-error"`.
+ */
 export class MachineRpcError extends Error {
   constructor(
     message: string,
     public readonly code: string,
+    public readonly handlerErrorCode?: string,
   ) {
     super(message);
     this.name = "MachineRpcError";
@@ -319,15 +336,16 @@ function rpcTarget(machineId: string, method: MachineRpcMethod): string {
   return `m:${machineId}:${method}`;
 }
 
-/** Structural check for the daemon's sealed error-box shape — see the call site's doc comment. */
-function isHandlerErrorBox(value: unknown): value is { ok: false; error: string } {
+/** Structural check for the daemon's sealed error-box shape — see the call site's doc comment. `code` is optional (known-issues.md #3's additive extension to `daemon/machineRpc.ts`'s `errorBox`) — most handler errors still carry none. */
+function isHandlerErrorBox(value: unknown): value is { ok: false; error: string; code?: string } {
   return (
     typeof value === "object" &&
     value !== null &&
     "ok" in value &&
     (value as { ok: unknown }).ok === false &&
     "error" in value &&
-    typeof (value as { error: unknown }).error === "string"
+    typeof (value as { error: unknown }).error === "string" &&
+    (!("code" in value) || typeof (value as { code: unknown }).code === "string")
   );
 }
 
@@ -358,7 +376,7 @@ export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
       // git-write-actions.md's "not a Falcon abstraction" credential-failure
       // UX — with a useless generic "failed schema validation" string.
       if (isHandlerErrorBox(opened)) {
-        throw new MachineRpcError(opened.error, "handler-error");
+        throw new MachineRpcError(opened.error, "handler-error", opened.code);
       }
 
       const parsed = RESULT_SCHEMAS[method].safeParse(opened);

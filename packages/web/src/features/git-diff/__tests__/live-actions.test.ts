@@ -170,4 +170,19 @@ describe("machineRpcToGitDiffActions", () => {
       expect.objectContaining({ worktree: "/repo" }),
     );
   });
+
+  it("unregisterWorkspace calls workspace.unregister with the worktree as directory", async () => {
+    const call = vi.fn(async () => ({ ok: true }));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
+
+    const result = await actions.unregisterWorkspace("/repo");
+
+    expect(result).toEqual({ ok: true });
+    expect(call).toHaveBeenCalledWith(
+      "workspace.unregister",
+      expect.objectContaining({ directory: "/repo" }),
+    );
+  });
 });

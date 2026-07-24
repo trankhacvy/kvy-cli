@@ -20,6 +20,7 @@ function pendingGitDiffActions(): GitDiffActions {
     push: notReady,
     renameBranch: notReady,
     listBranches: notReady,
+    unregisterWorkspace: notReady,
   };
 }
 
