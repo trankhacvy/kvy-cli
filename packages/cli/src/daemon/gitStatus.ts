@@ -14,10 +14,13 @@
  */
 import type { FileStatus, GitStatusParams, GitStatusResult } from "@falcon/wire";
 import { type GitExec, runGit } from "./gitExec.js";
+import { assertWorkspaceStillValid } from "./workspacePath.js";
 
 export interface GitStatusDeps {
   /** Injectable for tests; defaults to the real `git` binary. */
   git?: GitExec;
+  /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (known-issues.md #3 — a real filesystem check, so tests exercising the porcelain-parsing logic against a fake `worktree` path must override this). */
+  assertWorkspaceValid?: (directory: string) => Promise<void>;
 }
 
 const ORDINARY_RE = /^1 (\S\S) \S+ \S+ \S+ \S+ \S+ \S+ (.+)$/;
@@ -64,11 +67,13 @@ function parseFileLine(line: string): FileStatus | null {
   return null;
 }
 
-/** Runs `git status --porcelain=v2 --branch` in `params.worktree` and parses it into a `GitStatusResult`. Throws `GitExecError` if `worktree` isn't a git repository (or any other `git` failure) — no silent "empty status" fallback. */
+/** Runs `git status --porcelain=v2 --branch` in `params.worktree` and parses it into a `GitStatusResult`. Throws a `WorkspaceValidationError` (known-issues.md #3) if `worktree` no longer exists or isn't a git repository — checked before `git` ever runs, so the caller gets a typed reason instead of `git`'s raw stderr. Throws `GitExecError` for any other `git` failure — no silent "empty status" fallback. */
 export async function getGitStatus(
   params: GitStatusParams,
   deps: GitStatusDeps = {},
 ): Promise<GitStatusResult> {
+  const assertWorkspaceValid = deps.assertWorkspaceValid ?? assertWorkspaceStillValid;
+  await assertWorkspaceValid(params.worktree);
   const git = deps.git ?? runGit;
   const output = await git(["status", "--porcelain=v2", "--branch"], params.worktree);
 

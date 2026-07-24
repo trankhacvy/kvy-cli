@@ -253,6 +253,10 @@ import {
   WorkspaceRegisterParamsSchema,
   type WorkspaceRegisterResult,
   WorkspaceRegisterResultSchema,
+  type WorkspaceUnregisterParams,
+  WorkspaceUnregisterParamsSchema,
+  type WorkspaceUnregisterResult,
+  WorkspaceUnregisterResultSchema,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import type { ZodType } from "zod";
@@ -279,7 +283,11 @@ import {
 } from "./runProcess.js";
 import { listSlashCommands as listSlashCommandsDefault } from "./slashCommands.js";
 import { handleWorkspaceGetConfig as handleWorkspaceGetConfigDefault } from "./workspaceConfigRpc.js";
-import { registerWorkspace as registerWorkspaceDefault } from "./workspaceRegisterRpc.js";
+import { WorkspaceValidationError } from "./workspacePath.js";
+import {
+  registerWorkspace as registerWorkspaceDefault,
+  unregisterWorkspace as unregisterWorkspaceDefault,
+} from "./workspaceRegisterRpc.js";
 
 export const MACHINE_RPC_METHODS = [
   "spawn",
@@ -287,6 +295,7 @@ export const MACHINE_RPC_METHODS = [
   "fs.list",
   "fs.mkdir",
   "workspace.register",
+  "workspace.unregister",
   "git.status",
   "git.diff",
   "git.branches",
@@ -329,6 +338,8 @@ export interface MachineRpcDeps {
   createDirectory?: (params: FsMkdirParams) => Promise<FsMkdirResult>;
   /** Backs the `workspace.register` register-workspace-approval RPC (plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)"). Injectable for tests; defaults to `workspaceRegisterRpc.ts`'s real, already-idempotent `registerWorkspace`. Throws on failure. */
   registerWorkspace?: (params: WorkspaceRegisterParams) => Promise<WorkspaceRegisterResult>;
+  /** Backs the `workspace.unregister` RPC (known-issues.md #3 — the Git panel's "Remove this workspace" action once a folder is confirmed gone/no-longer-a-repo). Injectable for tests; defaults to `workspaceRegisterRpc.ts`'s real, already-idempotent `unregisterWorkspace`. Throws on failure. */
+  unregisterWorkspace?: (params: WorkspaceUnregisterParams) => Promise<WorkspaceUnregisterResult>;
   /** Backs the `git.status` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitStatus.ts`'s real `git status --porcelain=v2` parse. Throws on failure (e.g. `worktree` isn't a git repo). */
   getGitStatus?: (params: GitStatusParams) => Promise<GitStatusResult>;
   /** Backs the `git.diff` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitDiff.ts`'s real `git diff` against the resolved base ref. Throws on failure. */
@@ -402,9 +413,17 @@ function rpcTarget(machineId: string, method: MachineRpcMethod): string {
   return `m:${machineId}:${method}`;
 }
 
-/** Sealed `{ok:false, error}` — the uniform error shape for unknown methods, bad params, or a throwing handler. */
-function errorBox(dek: Uint8Array, error: string): EncryptedBox {
-  return seal({ ok: false, error }, dek);
+/**
+ * Sealed `{ok:false, error}` — the uniform error shape for unknown methods,
+ * bad params, or a throwing handler. `code` is an optional, additive
+ * extension (known-issues.md #3): most handler errors carry none and the
+ * shape is unchanged from before; a `WorkspaceValidationError` (thrown by
+ * `workspacePath.ts`'s `assertWorkspaceStillValid`) is the first caller to
+ * set it, letting the web client render plain-language copy instead of
+ * string-matching `error`.
+ */
+function errorBox(dek: Uint8Array, error: string, code?: string): EncryptedBox {
+  return seal(code !== undefined ? { ok: false, error, code } : { ok: false, error }, dek);
 }
 
 interface RpcRequestData {
@@ -541,6 +560,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const listDirectory = deps.listDirectory ?? listDirectoryDefault;
   const createDirectory = deps.createDirectory ?? createDirectoryDefault;
   const registerWorkspace = deps.registerWorkspace ?? registerWorkspaceDefault;
+  const unregisterWorkspace = deps.unregisterWorkspace ?? unregisterWorkspaceDefault;
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
@@ -645,6 +665,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: WorkspaceRegisterParamsSchema,
       resultSchema: WorkspaceRegisterResultSchema,
       handle: registerWorkspace as (params: unknown) => Promise<unknown>,
+    },
+    "workspace.unregister": {
+      paramsSchema: WorkspaceUnregisterParamsSchema,
+      resultSchema: WorkspaceUnregisterResultSchema,
+      handle: unregisterWorkspace as (params: unknown) => Promise<unknown>,
     },
     "git.status": {
       paramsSchema: GitStatusParamsSchema,
@@ -831,8 +856,9 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       // abstraction"), and every other handler benefits the same way (e.g.
       // "fatal: not a git repository" instead of an opaque placeholder).
       const message = error instanceof Error ? error.message : String(error);
-      logger.error("[machine-rpc] handler threw", { method, error: message });
-      callback?.(errorBox(deps.dek, message));
+      const code = error instanceof WorkspaceValidationError ? error.code : undefined;
+      logger.error("[machine-rpc] handler threw", { method, error: message, code });
+      callback?.(errorBox(deps.dek, message, code));
     }
   }
 

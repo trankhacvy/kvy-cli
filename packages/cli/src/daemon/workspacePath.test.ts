@@ -2,7 +2,11 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { validateSpawnWorkspace } from "./workspacePath.js";
+import {
+  assertWorkspaceStillValid,
+  validateSpawnWorkspace,
+  WorkspaceValidationError,
+} from "./workspacePath.js";
 
 describe("validateSpawnWorkspace", () => {
   let root: string;
@@ -114,5 +118,44 @@ describe("validateSpawnWorkspace", () => {
       async () => root,
     );
     expect(result.ok).toBe(true);
+  });
+});
+
+describe("assertWorkspaceStillValid (known-issues.md #3)", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "falcon-workspace-valid-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("resolves without throwing for an existing directory that is a git repo", async () => {
+    await mkdir(path.join(root, ".git"), { recursive: true });
+    await expect(assertWorkspaceStillValid(root)).resolves.toBeUndefined();
+  });
+
+  it("throws workspace-missing for a directory that no longer exists (renamed/moved/deleted)", async () => {
+    const gone = path.join(root, "gone");
+    await expect(assertWorkspaceStillValid(gone)).rejects.toBeInstanceOf(WorkspaceValidationError);
+    await expect(assertWorkspaceStillValid(gone)).rejects.toMatchObject({
+      code: "workspace-missing",
+    });
+  });
+
+  it("throws workspace-missing when the path is a file, not a directory", async () => {
+    const filePath = path.join(root, "afile.txt");
+    await writeFile(filePath, "hi");
+    await expect(assertWorkspaceStillValid(filePath)).rejects.toMatchObject({
+      code: "workspace-missing",
+    });
+  });
+
+  it("throws workspace-not-a-repo when the directory exists but has no .git", async () => {
+    await expect(assertWorkspaceStillValid(root)).rejects.toMatchObject({
+      code: "workspace-not-a-repo",
+    });
   });
 });

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { registerWorkspace } from "./workspaceRegisterRpc.js";
+import { registerWorkspace, unregisterWorkspace } from "./workspaceRegisterRpc.js";
 
 /**
  * Unit-level coverage for the `workspace.register` RPC's backing module,
@@ -56,5 +56,40 @@ describe("registerWorkspace (workspace.register RPC backing module)", () => {
     const written = JSON.parse(await readFile(path.join(homeDir, "workspaces.json"), "utf8"));
     const matches = written.workspaces.filter((entry: { path: string }) => entry.path === target);
     expect(matches).toHaveLength(1);
+  });
+});
+
+describe("unregisterWorkspace (workspace.unregister RPC backing module, known-issues.md #3)", () => {
+  let homeDir: string;
+  let previousFalconHomeDir: string | undefined;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-unregister-rpc-unit-"));
+    previousFalconHomeDir = process.env.FALCON_HOME_DIR;
+    process.env.FALCON_HOME_DIR = homeDir;
+  });
+
+  afterEach(async () => {
+    if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
+    else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
+  it("removes a previously-registered directory's entry and returns {ok: true}", async () => {
+    const target = path.join(homeDir, "stale-project");
+    await registerWorkspace({ idempotencyKey: "idem-1", directory: target });
+
+    const result = await unregisterWorkspace({ idempotencyKey: "idem-2", directory: target });
+
+    expect(result).toEqual({ ok: true });
+    const written = JSON.parse(await readFile(path.join(homeDir, "workspaces.json"), "utf8"));
+    expect(written.workspaces).not.toContainEqual(expect.objectContaining({ path: target }));
+  });
+
+  it("is idempotent: unregistering a directory that was never registered is a safe no-op", async () => {
+    const target = path.join(homeDir, "never-registered");
+    await expect(
+      unregisterWorkspace({ idempotencyKey: "idem-3", directory: target }),
+    ).resolves.toEqual({ ok: true });
   });
 });

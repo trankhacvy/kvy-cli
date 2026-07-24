@@ -28,6 +28,7 @@ function fakeActions(overrides: Partial<GitDiffActions> = {}): GitDiffActions {
     push: vi.fn(async () => ({ remote: "origin", branch: "main", forced: false })),
     renameBranch: vi.fn(async () => ({ branch: "renamed", hadUpstream: false })),
     listBranches: vi.fn(async () => []),
+    unregisterWorkspace: vi.fn(async () => ({ ok: true })),
     ...overrides,
   };
 }

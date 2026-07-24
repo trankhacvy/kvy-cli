@@ -56,6 +56,8 @@ export interface GitDiffActions {
   renameBranch(worktree: string, to: string): Promise<{ branch: string; hadUpstream: boolean }>;
   /** Lists `worktree`'s local branches — backs the "Compare against" selector's branch options. Throws on failure. */
   listBranches(worktree: string): Promise<GitBranchInfo[]>;
+  /** Removes `worktree`'s workspace registration (known-issues.md #3 — the "Remove this workspace" action offered once `fetchStatus`/`fetchDiff` report the folder is gone/no longer a git repo). Idempotent: safe to call even if the entry is already gone. Throws only on a transport/registry-write failure. */
+  unregisterWorkspace(worktree: string): Promise<{ ok: boolean }>;
 }
 
 /** One Git-panel actions client per chosen machine — mirrors `UseNewSessionActions = (machineId) => NewSessionActions`. */

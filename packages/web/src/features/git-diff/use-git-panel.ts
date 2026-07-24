@@ -31,6 +31,21 @@ import type { GitDiffActions } from "./types";
  * invalidates `["git-branches", worktree]` since the current-branch flag
  * moves.
  */
+/**
+ * Duck-types out a thrown error's optional `handlerErrorCode` (known-issues.md
+ * #3) without this hook depending on the concrete `MachineRpcError` class —
+ * `GitDiffActions` is the seam that keeps this hook transport-agnostic
+ * (mock vs. live), and a mock action's plain `Error` simply has no such
+ * property, so this safely resolves to `undefined` for it.
+ */
+function handlerErrorCode(error: unknown): string | undefined {
+  if (error && typeof error === "object" && "handlerErrorCode" in error) {
+    const value = (error as { handlerErrorCode?: unknown }).handlerErrorCode;
+    return typeof value === "string" ? value : undefined;
+  }
+  return undefined;
+}
+
 export function useGitPanel(actions: GitDiffActions, worktree: string) {
   const queryClient = useQueryClient();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -80,15 +95,28 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
     },
   });
 
+  // known-issues.md #3: offered once `statusErrorCode`/`diffErrorCode` is
+  // "workspace-missing"/"workspace-not-a-repo" — removes the stale registry
+  // entry so it stops showing up as a broken workspace everywhere else too.
+  const removeWorkspaceMutation = useMutation({
+    mutationFn: () => actions.unregisterWorkspace(worktree),
+  });
+
   return {
     status: statusQuery.data,
     statusError: statusQuery.error instanceof Error ? statusQuery.error.message : null,
+    statusErrorCode: handlerErrorCode(statusQuery.error),
     isStatusLoading: statusQuery.isLoading,
     selectedPath,
     selectFile: setSelectedPath,
     diff: diffQuery.data,
     diffError: diffQuery.error instanceof Error ? diffQuery.error.message : null,
+    diffErrorCode: handlerErrorCode(diffQuery.error),
     isDiffLoading: diffQuery.isLoading || diffQuery.isFetching,
+
+    removeWorkspace: removeWorkspaceMutation.mutate,
+    isRemoveWorkspacePending: removeWorkspaceMutation.isPending,
+    removeWorkspaceDone: removeWorkspaceMutation.isSuccess,
 
     compareRef,
     setCompareRef,

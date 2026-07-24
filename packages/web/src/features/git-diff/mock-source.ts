@@ -124,6 +124,11 @@ export function createMockGitDiffActions(_machineId: string): GitDiffActions {
       await delay(LATENCY_MS);
       return MOCK_BRANCHES;
     },
+
+    async unregisterWorkspace(_worktree) {
+      await delay(LATENCY_MS);
+      return { ok: true };
+    },
   };
 }
 

@@ -16,13 +16,37 @@
  * `machineRpc.ts` — same "no extra wiring needed" precedent as `fs.list`/
  * `fs.mkdir`'s own defaults there.
  */
-import type { WorkspaceRegisterParams, WorkspaceRegisterResult } from "@falcon/wire";
-import { registerWorkspace as registerWorkspaceCore } from "../workspace/registry.js";
+import type {
+  WorkspaceRegisterParams,
+  WorkspaceRegisterResult,
+  WorkspaceUnregisterParams,
+  WorkspaceUnregisterResult,
+} from "@falcon/wire";
+import {
+  registerWorkspace as registerWorkspaceCore,
+  unregisterWorkspace as unregisterWorkspaceCore,
+} from "../workspace/registry.js";
 
 /** Registers `params.directory` as a workspace. Idempotent — registering an already-registered directory is a safe no-op (`registry.ts`'s own contract). Throws only if the underlying registry write fails (e.g. lock-acquisition timeout). */
 export async function registerWorkspace(
   params: WorkspaceRegisterParams,
 ): Promise<WorkspaceRegisterResult> {
   await registerWorkspaceCore(params.directory);
+  return { ok: true };
+}
+
+/**
+ * Removes `params.directory`'s registration (known-issues.md #3 — backs the
+ * Git panel's "Remove this workspace" action once a folder is confirmed
+ * gone or no longer a git repo). Idempotent — unregistering an
+ * already-gone/never-registered directory is a safe no-op
+ * (`registry.ts`'s `unregisterWorkspace` returns `false` rather than
+ * throwing when nothing matched). Throws only if the underlying registry
+ * write fails.
+ */
+export async function unregisterWorkspace(
+  params: WorkspaceUnregisterParams,
+): Promise<WorkspaceUnregisterResult> {
+  await unregisterWorkspaceCore(params.directory);
   return { ok: true };
 }

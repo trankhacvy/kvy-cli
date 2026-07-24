@@ -522,6 +522,26 @@ export type WorkspaceRegisterParams = z.infer<typeof WorkspaceRegisterParamsSche
 export const WorkspaceRegisterResultSchema = z.object({ ok: z.boolean() });
 export type WorkspaceRegisterResult = z.infer<typeof WorkspaceRegisterResultSchema>;
 
+// `workspace.unregister` (known-issues.md #3 "Registered workspaces never
+// re-validate their path"): the counterpart to `workspace.register` above —
+// removes a stale registry entry once a git RPC (or a future boot-time scan)
+// has confirmed the underlying folder is gone/no longer a git repo, so the
+// Git panel's "Remove this workspace" action has a real RPC to call instead
+// of only ever adding entries. Idempotent like `workspace.register`:
+// unregistering an already-gone/never-registered directory is a no-op
+// (`workspace/registry.ts`'s `unregisterWorkspace` already returns `false`
+// rather than throwing), so this needs no `idempotencyKey` replay cache
+// either — the field is still carried for uniformity with the rest of this
+// RPC family.
+export const WorkspaceUnregisterParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  directory: z.string(),
+});
+export type WorkspaceUnregisterParams = z.infer<typeof WorkspaceUnregisterParamsSchema>;
+
+export const WorkspaceUnregisterResultSchema = z.object({ ok: z.boolean() });
+export type WorkspaceUnregisterResult = z.infer<typeof WorkspaceUnregisterResultSchema>;
+
 export const AdoptListParamsSchema = z.object({
   idempotencyKey: z.string(),
   workspaceId: z.string(),

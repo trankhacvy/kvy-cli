@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { getGitStatus } from "./gitStatus.js";
+import { WorkspaceValidationError } from "./workspacePath.js";
 
 function fakeGit(output: string) {
   return async (_args: string[], _cwd: string) => output;
 }
+
+/** Every test here exercises the porcelain-parsing logic against a fake `worktree` path that doesn't exist on disk — bypasses the real filesystem check so those tests don't depend on it. */
+const skipWorkspaceValidation = async () => {};
 
 describe("getGitStatus", () => {
   it("parses branch, ahead/behind, and file statuses from porcelain v2", async () => {
@@ -22,7 +26,7 @@ describe("getGitStatus", () => {
 
     const result = await getGitStatus(
       { idempotencyKey: "idem-1", worktree: "/repo" },
-      { git: fakeGit(output) },
+      { git: fakeGit(output), assertWorkspaceValid: skipWorkspaceValidation },
     );
 
     expect(result.branch).toBe("main");
@@ -42,7 +46,7 @@ describe("getGitStatus", () => {
 
     const result = await getGitStatus(
       { idempotencyKey: "idem-2", worktree: "/repo" },
-      { git: fakeGit(output) },
+      { git: fakeGit(output), assertWorkspaceValid: skipWorkspaceValidation },
     );
 
     expect(result.branch).toBe("feature");
@@ -61,7 +65,7 @@ describe("getGitStatus", () => {
 
     const result = await getGitStatus(
       { idempotencyKey: "idem-3", worktree: "/repo" },
-      { git: fakeGit(output) },
+      { git: fakeGit(output), assertWorkspaceValid: skipWorkspaceValidation },
     );
 
     expect(result.branch).toBe("(detached)");
@@ -74,7 +78,43 @@ describe("getGitStatus", () => {
     };
 
     await expect(
-      getGitStatus({ idempotencyKey: "idem-4", worktree: "/not-a-repo" }, { git }),
+      getGitStatus(
+        { idempotencyKey: "idem-4", worktree: "/not-a-repo" },
+        { git, assertWorkspaceValid: skipWorkspaceValidation },
+      ),
     ).rejects.toThrow("not a git repository");
+  });
+
+  it("propagates a WorkspaceValidationError from assertWorkspaceValid without ever calling git (known-issues.md #3)", async () => {
+    let gitCalled = false;
+    const git = async () => {
+      gitCalled = true;
+      return "";
+    };
+
+    await expect(
+      getGitStatus(
+        { idempotencyKey: "idem-5", worktree: "/gone" },
+        {
+          git,
+          assertWorkspaceValid: async () => {
+            throw new WorkspaceValidationError(
+              "workspace directory not found: /gone",
+              "workspace-missing",
+            );
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ name: "WorkspaceValidationError", code: "workspace-missing" });
+    expect(gitCalled).toBe(false);
+  });
+
+  it("checks the workspace's real filesystem state by default when no override is given", async () => {
+    await expect(
+      getGitStatus(
+        { idempotencyKey: "idem-6", worktree: "/definitely/does/not/exist/anywhere" },
+        { git: fakeGit("") },
+      ),
+    ).rejects.toMatchObject({ name: "WorkspaceValidationError", code: "workspace-missing" });
   });
 });

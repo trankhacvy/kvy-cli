@@ -68,5 +68,12 @@ export function machineRpcToGitDiffActions(rpc: MachineRpcClient): GitDiffAction
       });
       return result.branches;
     },
+
+    async unregisterWorkspace(worktree) {
+      return rpc.call("workspace.unregister", {
+        idempotencyKey: crypto.randomUUID(),
+        directory: worktree,
+      });
+    },
   };
 }
