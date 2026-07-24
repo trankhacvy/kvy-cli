@@ -99,4 +99,21 @@ describe("password auth routes — FALCON_DEV_AUTH off (production gate, item 3)
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: "Not found" });
   });
+
+  // Review fix: the gate is wired as a `preValidation` hook specifically so it runs
+  // BEFORE Fastify's zod body-schema validation — a check placed as the handler's first
+  // statement only runs after validation already passed, so a malformed body would still
+  // 400 "Bad Request" (revealing the route exists and its expected shape) instead of
+  // getting the same 404 as a well-formed one. This must 404 identically to the
+  // well-formed case above, not fall through to schema validation.
+  it("still 404s (not 400) for a malformed body — the gate runs before schema validation", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/password/register",
+      payload: { notEmail: "this does not match the body schema at all" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Not found" });
+  });
 });
