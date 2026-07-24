@@ -7,6 +7,12 @@ import { SIGNIN_PATH } from "@/features/auth";
 import { listDeviceSessions, revokeOtherSessions, revokeSession } from "@/lib/api";
 import { logout } from "@/lib/logout";
 import { getToken } from "@/lib/session";
+import {
+  canConfirmRevoke,
+  clearRevokeConfirm,
+  type RevokeConfirmId,
+  requestRevoke,
+} from "../devices-revoke-state";
 
 type DeviceSession = Awaited<ReturnType<typeof listDeviceSessions>>["sessions"][number];
 
@@ -51,6 +57,7 @@ export function DevicesSection() {
   const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | "others" | null>(null);
+  const [confirmId, setConfirmId] = useState<RevokeConfirmId>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +76,22 @@ export function DevicesSection() {
       cancelled = true;
     };
   }, []);
+
+  /** First click on a row's "Log out" trigger — shows the inline
+   * confirm/cancel affordance instead of revoking immediately (a misclick
+   * here is destructive and, for the current-device row, a full sign-out). */
+  function requestRevokeClick(session: DeviceSession): void {
+    setError(null);
+    setConfirmId(requestRevoke(session.id));
+  }
+
+  /** Second click ("Confirm") — the only path that's allowed to reach the
+   * real `revokeSession` call. */
+  async function confirmRevoke(session: DeviceSession): Promise<void> {
+    if (!canConfirmRevoke(confirmId, session.id)) return;
+    setConfirmId(clearRevokeConfirm());
+    await handleRevoke(session);
+  }
 
   async function handleRevoke(session: DeviceSession) {
     const token = getToken();
@@ -131,9 +154,7 @@ export function DevicesSection() {
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      {sessions === null && !error && (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      )}
+      {sessions === null && !error && <p className="text-sm text-muted-foreground">Loading…</p>}
 
       {sessions && sessions.length === 0 && (
         <p className="text-sm text-muted-foreground">No active devices.</p>
@@ -160,19 +181,40 @@ export function DevicesSection() {
                   {formatRelative(session.lastRefreshedAt ?? session.createdAt)}
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pendingId !== null}
-                onClick={() => handleRevoke(session)}
-              >
-                {pendingId === session.id
-                  ? "Working…"
-                  : session.isCurrent
-                    ? "Log out this device"
-                    : "Log out"}
-              </Button>
+              {confirmId === session.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {session.isCurrent ? "Log out this browser?" : "Log out this device?"}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={pendingId !== null}
+                    onClick={() => confirmRevoke(session)}
+                  >
+                    {pendingId === session.id ? "Working…" : "Confirm"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setConfirmId(clearRevokeConfirm())}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pendingId !== null}
+                  onClick={() => requestRevokeClick(session)}
+                >
+                  {session.isCurrent ? "Log out this device" : "Log out"}
+                </Button>
+              )}
             </li>
           ))}
         </ul>
