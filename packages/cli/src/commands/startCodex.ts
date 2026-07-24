@@ -324,6 +324,14 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
       await remote.setMode(mode);
       return { ok: true };
     },
+    // docs/known-issues.md issue #12's web model selector is PTY-only
+    // (`start.ts`'s `runLocalPty`) — Codex has no live terminal to type
+    // `/model` into (design §7.7, same reasoning as `takeControl` below) and
+    // ACP has no analogous model-change call. Honest not-supported.
+    setModel: () => {
+      logger.debug("[start-codex] setModel RPC — Codex has no PTY to inject a model switch into");
+      return { ok: false };
+    },
     // Codex has no local terminal to hand control back to (design §7.7) —
     // honest not-supported rather than a fake success.
     takeControl: () => {

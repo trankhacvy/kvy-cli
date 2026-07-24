@@ -241,6 +241,9 @@ describe("runStartCodexCommand", () => {
       // takeControl is not supported for Codex (no local terminal).
       expect(await h.takeControl()).toEqual({ ok: false });
 
+      // setModel is not supported for Codex either (issue #12 is PTY-only).
+      expect(await h.setModel({ model: "sonnet" })).toEqual({ ok: false });
+
       // interrupt / perm.answer route to the handle.
       expect(await h.interrupt()).toEqual({ ok: true });
       expect(fakeRemote.handle.interrupt).toHaveBeenCalledOnce();

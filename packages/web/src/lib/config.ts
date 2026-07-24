@@ -73,3 +73,18 @@ export const SUPPORT_EMAIL: string = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "s
  * matching CLI flag on too.
  */
 export const PTY_SET_MODE_ENABLED: boolean = process.env.NEXT_PUBLIC_FALCON_PTY_SETMODE === "1";
+
+/**
+ * Mirrors the CLI's own `FALCON_PTY_SETMODEL` flag (`commands/start.ts`'s
+ * `PTY_SET_MODEL_ENV_VAR`) — docs/known-issues.md issue #12's real web
+ * model selector (a `/model <alias>` keystroke injection, version-coupled
+ * TUI behavior like `setMode`) stays behind a flag on both sides until it's
+ * been live-soaked. Purely cosmetic here (it only un-hides the composer
+ * footer's model-selector mutating affordance for a `controlMode ===
+ * "local"` session — `ComposerControls`' `canMutateModel`); the CLI
+ * independently fails safe (`{ok: false}`) if this is on but the session's
+ * own process doesn't also have `FALCON_PTY_SETMODEL=1` set. Set
+ * `NEXT_PUBLIC_FALCON_PTY_SETMODEL=1` only against a stack you know has the
+ * matching CLI flag on too.
+ */
+export const PTY_SET_MODEL_ENABLED: boolean = process.env.NEXT_PUBLIC_FALCON_PTY_SETMODEL === "1";

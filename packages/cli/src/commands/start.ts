@@ -192,6 +192,24 @@ const PTY_SET_MODE_ENV_VAR = "FALCON_PTY_SETMODE";
 /** Max wait for the next hook input's `permission_mode` echo before treating a mode switch as unverified. */
 const PTY_SET_MODE_VERIFY_TIMEOUT_MS = 5000;
 
+/**
+ * `setModel` on the PTY path (docs/known-issues.md issue #12, "web model
+ * selector") — types Claude Code's own `/model <alias>` slash command into
+ * the live PTY. Same "version-coupled, keystroke-driven TUI behavior, kept
+ * behind a flag until live-soaked" rationale as `PTY_SET_MODE_ENV_VAR`
+ * above; unset/anything else keeps the honest `{ok:false}` behavior.
+ */
+const PTY_SET_MODEL_ENV_VAR = "FALCON_PTY_SETMODEL";
+/**
+ * Max wait for the next "Set model to ..." transcript echo
+ * (`claude/modelChange.ts`) before treating a model switch as unverified.
+ * Longer than `PTY_SET_MODE_VERIFY_TIMEOUT_MS` — a mode switch is confirmed
+ * by the very next hook call (near-instant), but a model switch is only
+ * observable once the transcript scanner's tailer picks up the new line, a
+ * genuinely slower, poll/fs-driven path (`ptyClaudeSession.ts`'s tailer).
+ */
+const PTY_SET_MODEL_VERIFY_TIMEOUT_MS = 8000;
+
 /** The minimal `Outbox` surface this module depends on — the real `Outbox` satisfies it structurally; a test fake can capture `enqueue` calls without a disk queue/HTTP client. */
 export interface OutboxLike {
   enqueue(events: readonly SessionEnvelope[]): void;
@@ -280,6 +298,16 @@ export interface StartClaudeCommandDeps {
   registerWorkspace?: typeof registerWorkspaceDefault;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  /**
+   * Injectable for tests; defaults to the global `setTimeout`. Backs the
+   * `setModel` RPC's transcript-echo verification wait
+   * (`waitForModelEcho`, issue #12) — the one timer in this module a test
+   * needs to control precisely (assert the timeout branch without actually
+   * waiting `PTY_SET_MODEL_VERIFY_TIMEOUT_MS`).
+   */
+  setTimeoutImpl?: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  /** Injectable for tests; defaults to the global `clearTimeout`. Pairs with `setTimeoutImpl`. */
+  clearTimeoutImpl?: (handle: ReturnType<typeof setTimeout>) => void;
   write?: (text: string) => void;
   writeError?: (text: string) => void;
   logger?: Logger;
@@ -363,6 +391,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const doAcquireSessionLock = deps.acquireSessionLock ?? acquireSessionLockDefault;
   const doNotifyDaemonSessionStarted =
     deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
+  const setTimeoutImpl = deps.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
+  const clearTimeoutImpl = deps.clearTimeoutImpl ?? ((handle) => clearTimeout(handle));
 
   // W4.4: `--force-new-session` is Falcon's own flag, never Claude Code's —
   // strip it out of the passthrough args before they ever reach the real
@@ -681,6 +711,39 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     metadataVersion: 0,
     fetchImpl,
   });
+  // Model-change echo watchers (issue #12, "web model selector") — mirrors
+  // `PreToolPermissionBridge`'s `modeWatchers`/`waitForModeEcho`, but
+  // sourced from the transcript tailer's own envelopes rather than a hook
+  // field: no Claude Code hook payload carries a `permission_mode`-style
+  // "current model" field, so the only signal a `/model` switch actually
+  // landed is the SAME "Set model to ..." transcript line
+  // `handlePossibleModelChange` already parses to persist session metadata.
+  // `setModel`'s RPC handler (`runLocalPty`, below) subscribes here to
+  // verify its own keystrokes actually took effect before reporting
+  // success — an inherently looser signal than mode's hook-echo (free text
+  // parsed from a transcript line, not a closed enum from an authoritative
+  // source).
+  const modelWatchers = new Set<(model: string) => void>();
+  function waitForModelEcho(timeoutMs: number): Promise<string | null> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const watcher = (model: string): void => {
+        if (settled) return;
+        settled = true;
+        modelWatchers.delete(watcher);
+        clearTimeoutImpl(timer);
+        resolve(model);
+      };
+      const timer = setTimeoutImpl(() => {
+        if (settled) return;
+        settled = true;
+        modelWatchers.delete(watcher);
+        resolve(null);
+      }, timeoutMs);
+      modelWatchers.add(watcher);
+    });
+  }
+
   const handlePossibleModelChange = (envelopes: readonly SessionEnvelope[]): void => {
     const nextModel = findClaudeModelChangeInEnvelopes(envelopes);
     if (!nextModel) return;
@@ -690,6 +753,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         error: error instanceof Error ? error.message : String(error),
       });
     });
+    for (const watcher of [...modelWatchers]) watcher(nextModel);
   };
 
   // The session-scoped `/v1/stream` connection `message`/`interrupt`/
@@ -1004,6 +1068,33 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         });
         return { ok: false, observedMode: observed ?? current };
       },
+      // Real PTY setModel (docs/known-issues.md issue #12), flag-gated
+      // behind `FALCON_PTY_SETMODEL=1` — see `PTY_SET_MODEL_ENV_VAR`'s doc
+      // comment. Types `/model <alias>` into the live PTY via
+      // `ptySession.sendModelChange` (same idle/no-prompt gate message
+      // injection uses), then verifies via the transcript's own "Set model
+      // to ..." echo (`waitForModelEcho`) before reporting success — there
+      // is no hook field to ask instead, unlike `setMode`'s
+      // `permission_mode` echo. Every early-out is an honest `{ok:false}`,
+      // never a faked success, same "never fake it" rule `setMode` follows.
+      setModel: async ({ model }) => {
+        if (env[PTY_SET_MODEL_ENV_VAR] !== "1") return { ok: false };
+
+        if (!ptySession.sendModelChange(model)) {
+          logger.debug("[start-claude] setModel: injection gate closed — not sending /model", {
+            requested: model,
+          });
+          return { ok: false };
+        }
+
+        const observed = await waitForModelEcho(PTY_SET_MODEL_VERIFY_TIMEOUT_MS);
+        if (observed) return { ok: true, observedModel: observed };
+
+        logger.warn("[start-claude] setModel: transcript echo did not confirm the switch", {
+          requested: model,
+        });
+        return { ok: false };
+      },
       // Remote answering of the live TUI's tool-permission prompt (design
       // §7.6): route into the `PreToolUse` hook bridge (first-wins). Only when
       // the hook server failed to install is this honestly not-supported.
@@ -1118,6 +1209,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         await activeRemote.setMode(mode);
         return { ok: true };
       },
+      // Not supported on the headless ACP remote-loop flow (issue #12 scopes
+      // the web model selector to the terminal-attached PTY path only — no
+      // live TUI to type `/model` into here, and ACP has no analogous
+      // model-change call). Honest `{ok:false}`, same as this flow's own
+      // `setMode` when `activeRemote` isn't up yet.
+      setModel: async () => ({ ok: false }),
       permAnswer: async ({ reqId, decision }) => {
         if (!activeRemote) return { ok: false };
         return activeRemote.resolvePermission({ reqId, decision });

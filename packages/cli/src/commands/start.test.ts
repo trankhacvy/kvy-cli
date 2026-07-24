@@ -96,6 +96,7 @@ function fakePtyHandle(overrides: Partial<PtyClaudeSessionHandle> = {}): PtyClau
     setPromptOpen: vi.fn(),
     sendInterrupt: vi.fn(() => true),
     sendModeCycle: vi.fn(() => true),
+    sendModelChange: vi.fn(() => true),
     closeTurn: vi.fn(),
     stop: vi.fn(),
     ...overrides,
@@ -986,9 +987,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         resolveLocalOutcome,
       })) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     // tool-start names the call; tool-end (ok:true) reports its outcome.
     onEnvelopes?.([
@@ -1017,9 +1016,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         resolveLocalOutcome,
       })) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     onEnvelopes?.([
       createEnvelope("agent", { t: "tool-start", call: "call-1", name: "Write", args: {} }),
@@ -1042,15 +1039,13 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         resolveLocalOutcome,
       })) as unknown as typeof installRemotePermissionHookType;
 
-    await runStartClaudeCommand(
-      baseDeps({ startPtyClaudeSession, installRemotePermissionHook }),
-    );
+    await runStartClaudeCommand(baseDeps({ startPtyClaudeSession, installRemotePermissionHook }));
 
     onEnvelopes?.([createEnvelope("agent", { t: "tool-end", call: "orphan-call", ok: true })]);
     expect(resolveLocalOutcome).not.toHaveBeenCalled();
   });
 
-  it("answers takeControl as a no-op success, interrupt as a real ESC write, setMode as not-supported (flag off), and routes perm.answer into the hook bridge", async () => {
+  it("answers takeControl as a no-op success, interrupt as a real ESC write, setMode/setModel as not-supported (flag off), and routes perm.answer into the hook bridge", async () => {
     const resolvePermission = vi.fn(() => ({ ok: true as const }));
     const installRemotePermissionHook = (async () =>
       fakeRemotePermissionHook({
@@ -1082,6 +1077,11 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     await expect(handlers.interrupt()).resolves.toEqual({ ok: true });
     expect(sendInterrupt).toHaveBeenCalledOnce();
     await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+      ok: false,
+    });
+    // `FALCON_PTY_SETMODEL` also deliberately absent — same default-off
+    // discipline as setMode (issue #12).
+    await expect(handlers.setModel({ model: "sonnet" })).resolves.toEqual({
       ok: false,
     });
 
@@ -1215,6 +1215,91 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         ok: false,
         observedMode: "default",
       });
+    });
+  });
+
+  describe("setModel (issue #12 — real PTY setModel, flag-gated behind FALCON_PTY_SETMODEL=1)", () => {
+    async function setup(
+      overrides: {
+        sendModelChange?: ReturnType<typeof vi.fn>;
+        env?: Record<string, string>;
+        setTimeoutImpl?: StartClaudeCommandDeps["setTimeoutImpl"];
+        clearTimeoutImpl?: StartClaudeCommandDeps["clearTimeoutImpl"];
+      } = {},
+    ) {
+      const sendModelChange = overrides.sendModelChange ?? vi.fn(() => true);
+      let onEnvelopes: ((envelopes: SessionEnvelope[]) => void) | undefined;
+      const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
+        onEnvelopes = opts.onEnvelopes;
+        return fakePtyHandle({ sendModelChange });
+      });
+
+      let capturedHandlers: SessionRpcHandlers | null = null;
+      const registerSessionRpcHandlers = vi.fn((rpcDeps: { handlers: SessionRpcHandlers }) => {
+        capturedHandlers = rpcDeps.handlers;
+        return { stop: vi.fn() };
+      });
+
+      await runStartClaudeCommand(
+        baseDeps({
+          env: { FALCON_PTY_SETMODEL: "1", ...overrides.env },
+          startPtyClaudeSession,
+          registerSessionRpcHandlers,
+          setTimeoutImpl: overrides.setTimeoutImpl,
+          clearTimeoutImpl: overrides.clearTimeoutImpl,
+        }),
+      );
+
+      return {
+        handlers: capturedHandlers as unknown as SessionRpcHandlers,
+        sendModelChange,
+        emitEnvelopes: (envelopes: SessionEnvelope[]) => onEnvelopes?.(envelopes),
+      };
+    }
+
+    it("stays {ok:false} when the flag is off, even though sendModelChange would succeed", async () => {
+      const { handlers, sendModelChange } = await setup({ env: { FALCON_PTY_SETMODEL: "0" } });
+      await expect(handlers.setModel({ model: "sonnet" })).resolves.toEqual({ ok: false });
+      expect(sendModelChange).not.toHaveBeenCalled();
+    });
+
+    it("is {ok:false} when the injection gate is closed (sendModelChange returns false)", async () => {
+      const sendModelChange = vi.fn(() => false);
+      const { handlers } = await setup({ sendModelChange });
+      await expect(handlers.setModel({ model: "opus" })).resolves.toEqual({ ok: false });
+    });
+
+    it("reports success with the parsed observedModel once the transcript echoes the switch", async () => {
+      const { handlers, emitEnvelopes } = await setup();
+      const resultPromise = handlers.setModel({ model: "sonnet" });
+      emitEnvelopes([
+        createEnvelope("agent", {
+          t: "service",
+          text: "Set model to Sonnet 5 and saved as your default for new sessions.",
+        }),
+      ]);
+      await expect(resultPromise).resolves.toEqual({ ok: true, observedModel: "Sonnet 5" });
+    });
+
+    it("ignores unrelated envelopes and only resolves once a real model-change echo arrives", async () => {
+      const { handlers, emitEnvelopes } = await setup();
+      const resultPromise = handlers.setModel({ model: "opus" });
+      emitEnvelopes([createEnvelope("agent", { t: "text", md: "sure, one moment" })]);
+      emitEnvelopes([createEnvelope("agent", { t: "service", text: "Set model to Opus." })]);
+      await expect(resultPromise).resolves.toEqual({ ok: true, observedModel: "Opus" });
+    });
+
+    it("is {ok:false} when the transcript echo never arrives (verification timeout)", async () => {
+      const { handlers } = await setup({
+        // Collapse the verify-timeout wait synchronously instead of waiting
+        // out the real PTY_SET_MODEL_VERIFY_TIMEOUT_MS in a unit test.
+        setTimeoutImpl: (fn) => {
+          fn();
+          return 0 as unknown as ReturnType<typeof setTimeout>;
+        },
+        clearTimeoutImpl: () => {},
+      });
+      await expect(handlers.setModel({ model: "sonnet" })).resolves.toEqual({ ok: false });
     });
   });
 

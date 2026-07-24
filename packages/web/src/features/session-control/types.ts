@@ -1,8 +1,14 @@
-import type { PermDecision, PermissionMode, SessionEnvelope } from "@falcon/wire";
+import type {
+  PermDecision,
+  PermissionMode,
+  RunningSessionModelAlias,
+  SessionEnvelope,
+} from "@falcon/wire";
 import type {
   InterruptResult,
   MessageRpcResult,
   PermAnswerResult,
+  SetModelResult,
   SetModeResult,
   StopRpcResult,
   TakeControlResult,
@@ -24,6 +30,7 @@ export interface SessionControlActions {
   interrupt(): Promise<InterruptResult>;
   takeControl(): Promise<TakeControlResult>;
   setMode(mode: PermissionMode): Promise<SetModeResult>;
+  setModel(model: RunningSessionModelAlias): Promise<SetModelResult>;
   stopSession(force?: boolean): Promise<StopRpcResult>;
 }
 

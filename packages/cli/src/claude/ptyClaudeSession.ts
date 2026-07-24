@@ -54,6 +54,7 @@
  */
 
 import type { SessionEnvelope } from "@falcon/wire";
+import { createId } from "@paralleldrive/cuid2";
 import { spawn as spawnPtyDefault } from "node-pty";
 import type { Logger } from "../logger.js";
 import { FALCON_SYSTEM_PROMPT, findLastLocalSession, resolveSessionFlags } from "./claudeLocal.js";
@@ -122,6 +123,25 @@ const CLOSE_TURN_QUIET_FLUSHES_REQUIRED = 2;
 const SUBMIT_KEY = "\r";
 /** Shift+Tab — Claude Code's own permission-mode cycle keystroke (plan-v2.md W4.3). */
 const SHIFT_TAB_KEY = "[Z";
+
+/**
+ * Claude Code's own confirmation dialog when `/model <alias>` is run mid-
+ * conversation (issue #12 — a session with existing history costs a
+ * cache-invalidating re-read, so it asks "Switch model? ... 1. Yes ... 2.
+ * No" before actually switching; a fresh, history-free session applies
+ * instantly with no dialog at all). Confirmed live against real Claude Code
+ * v2.1.218: the dialog is rendered PURELY in the live terminal, never
+ * written to the JSONL transcript, so it's invisible to every other
+ * detection mechanism in this codebase (all transcript-file-based) — this
+ * is the one place Falcon pattern-matches raw PTY output instead. Matched
+ * against a small rolling buffer, not each individual `onData` chunk, since
+ * a PTY can split the string across writes.
+ */
+const MODEL_SWITCH_CONFIRM_PATTERN = /Switch model\?/;
+/** How long after typing `/model` to keep watching for the confirmation dialog before giving up. */
+const MODEL_SWITCH_CONFIRM_ARM_MS = 5000;
+/** Bounds the rolling raw-output buffer `MODEL_SWITCH_CONFIRM_PATTERN` is tested against. */
+const MODEL_SWITCH_CONFIRM_BUFFER_MAX = 500;
 
 /** The minimal `IPty` surface this module drives — node-pty's `IPty` satisfies it structurally. */
 export interface PtyLike {
@@ -263,6 +283,36 @@ export interface PtyClaudeSessionHandle {
    */
   sendModeCycle(presses: number): boolean;
   /**
+   * Types `/model <alias>` + submit into the live PTY — Claude Code's own
+   * model-switch slash command (docs/known-issues.md issue #12, "web model
+   * selector"). Unlike {@link sendModeCycle}'s raw Shift+Tab escape bytes,
+   * this goes through the SAME `InjectionController` queue/gate a web chat
+   * message uses (`injectMessage`'s underlying `controller.enqueue`) rather
+   * than a direct `ptyProcess.write` — a slash command is ordinary typed
+   * text + Enter, not a synthetic terminal escape sequence, and the
+   * controller's `submitDelayMs`/cooldown timing exists specifically to let
+   * the TUI ingest pasted text before Enter (`injectionController.ts`'s
+   * module doc). Still requires `canInjectNow` to already be true at call
+   * time (checked here, synchronously, before enqueueing) so the caller
+   * gets an honest `false` instead of the command silently queuing behind
+   * whatever's next — same gate discipline as `sendModeCycle`. Returns
+   * `false` (and injects nothing) when the gate is closed or the child
+   * hasn't spawned yet; the caller (`start.ts`'s `setModel` RPC handler)
+   * reports that as an honest `{ok:false}` rather than pretending the
+   * switch happened.
+   *
+   * Also arms a short-lived watcher (`MODEL_SWITCH_CONFIRM_PATTERN`) for
+   * Claude Code's own "Switch model?" dialog — real Claude Code shows this
+   * whenever the session already has conversation history (switching costs
+   * a cache-invalidating re-read), and auto-confirms it on the caller's
+   * behalf: the web user already decided to switch by calling this, so a
+   * second confirmation would just be `/model` silently hanging the RPC out
+   * to an honest-but-misleading timeout. A brand-new, history-free session
+   * applies instantly with no dialog at all — that's why this wasn't caught
+   * until live end-to-end testing against a real session with prior turns.
+   */
+  sendModelChange(model: string): boolean;
+  /**
    * Force-closes the currently open turn on the wire, the instant Claude
    * Code's own `Stop` hook fires (docs/user-flows.md fix-plan task 1) —
    * reuses the SAME tailer mapper state `onEnvelopes` is driven from
@@ -322,6 +372,33 @@ export function startPtyClaudeSession(
   let settled = false;
   let stopped = false;
   const cleanups: Array<() => void | Promise<void>> = [];
+
+  // `sendModelChange`'s confirmation-dialog watcher (see
+  // `MODEL_SWITCH_CONFIRM_PATTERN`'s doc comment) — armed for a short window
+  // right after typing `/model`, disarmed on either a match (confirmed) or
+  // the arm timer expiring (no dialog appeared, e.g. a fresh history-free
+  // session). `modelSwitchConfirmBuffer` only accumulates while armed, so a
+  // long-lived session sitting idle for hours doesn't pay for it.
+  let awaitingModelSwitchConfirm = false;
+  let modelSwitchConfirmBuffer = "";
+  let modelSwitchConfirmTimer: ReturnType<typeof setTimeout> | null = null;
+  const disarmModelSwitchConfirmWatcher = (): void => {
+    awaitingModelSwitchConfirm = false;
+    modelSwitchConfirmBuffer = "";
+    if (modelSwitchConfirmTimer) {
+      clearTimeoutImpl(modelSwitchConfirmTimer);
+      modelSwitchConfirmTimer = null;
+    }
+  };
+  const armModelSwitchConfirmWatcher = (): void => {
+    disarmModelSwitchConfirmWatcher();
+    awaitingModelSwitchConfirm = true;
+    modelSwitchConfirmTimer = setTimeoutImpl(
+      disarmModelSwitchConfirmWatcher,
+      MODEL_SWITCH_CONFIRM_ARM_MS,
+    );
+  };
+  cleanups.push(disarmModelSwitchConfirmWatcher);
 
   // The transcript tailer, created asynchronously in `run()`. The provider
   // session id arrives from the caller's shared hook server via
@@ -514,6 +591,22 @@ export function startPtyClaudeSession(
       // PTY output → the real terminal.
       const dataSub = child.onData((data) => {
         stdout.write(data);
+        if (awaitingModelSwitchConfirm) {
+          modelSwitchConfirmBuffer = (modelSwitchConfirmBuffer + data).slice(
+            -MODEL_SWITCH_CONFIRM_BUFFER_MAX,
+          );
+          if (MODEL_SWITCH_CONFIRM_PATTERN.test(modelSwitchConfirmBuffer)) {
+            disarmModelSwitchConfirmWatcher();
+            // "1" selects the dialog's first (and only affirmative) option
+            // explicitly rather than relying on it staying the highlighted
+            // default; the trailing Enter both submits that selection and,
+            // on a menu style that auto-confirms on the digit alone, lands
+            // harmlessly on the resulting idle empty prompt (confirmed live:
+            // Enter on an empty prompt is a no-op, not a blank chat send).
+            ptyProcess?.write("1");
+            ptyProcess?.write(SUBMIT_KEY);
+          }
+        }
       });
       cleanups.push(() => dataSub.dispose());
 
@@ -611,6 +704,21 @@ export function startPtyClaudeSession(
       // typing a message would be (plan-v2.md W4.3).
       if (!controller.canInjectNow) return false;
       for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
+      return true;
+    },
+    sendModelChange: (model) => {
+      if (!ptyProcess) return false;
+      // Same idle/no-prompt gate message injection uses — checked BEFORE
+      // enqueueing (not just relying on `enqueue`'s own internal gate) so
+      // this call is synchronously honest about whether the command will
+      // actually go in now, rather than silently queuing for later.
+      if (!controller.canInjectNow) return false;
+      // Enqueue first so the (synchronous) text write always precedes the
+      // confirm watcher's own arm-expiry timer in scheduling order — the
+      // watcher only ever needs to observe PTY output that arrives strictly
+      // after this call returns, never before.
+      controller.enqueue({ id: createId(), text: `/model ${model}` });
+      armModelSwitchConfirmWatcher();
       return true;
     },
     closeTurn: async (status) => {

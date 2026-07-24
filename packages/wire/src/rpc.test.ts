@@ -28,6 +28,7 @@ import {
   PermAnswerParamsSchema,
   PermAnswerResultSchema,
   RpcCallSchema,
+  RUNNING_SESSION_MODEL_ALIASES,
   RunSetupParamsSchema,
   RunSetupResultSchema,
   RunStartParamsSchema,
@@ -36,6 +37,8 @@ import {
   RunStatusResultSchema,
   RunStopParamsSchema,
   RunStopResultSchema,
+  SetModelParamsSchema,
+  SetModelResultSchema,
   SetModeResultSchema,
   SlashCommandInfoSchema,
   SlashCommandsListParamsSchema,
@@ -626,5 +629,44 @@ describe("SetModeResultSchema (W4.3 — additive `observedMode` for the PTY veri
 
   it("still requires `ok` (unchanged, additive-only)", () => {
     expect(SetModeResultSchema.safeParse({ observedMode: "plan" }).success).toBe(false);
+  });
+});
+
+describe("SetModelParamsSchema (issue #12 — web model selector)", () => {
+  it("accepts every curated running-session model alias", () => {
+    for (const model of RUNNING_SESSION_MODEL_ALIASES) {
+      expect(SetModelParamsSchema.safeParse({ model }).success).toBe(true);
+    }
+  });
+
+  it("rejects a non-curated model string — the enum is a keystroke-injection allowlist, not free text", () => {
+    expect(SetModelParamsSchema.safeParse({ model: "claude-sonnet-4-5-20250929" }).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects an embedded control character even if it happens to prefix a valid alias", () => {
+    expect(SetModelParamsSchema.safeParse({ model: "sonnet\r/bash rm -rf ~" }).success).toBe(false);
+  });
+
+  it("requires `model`", () => {
+    expect(SetModelParamsSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("SetModelResultSchema (issue #12 — free-text observedModel echo)", () => {
+  it("accepts the minimal shape with `ok` alone", () => {
+    expect(SetModelResultSchema.safeParse({ ok: false }).success).toBe(true);
+    expect(SetModelResultSchema.safeParse({ ok: true }).success).toBe(true);
+  });
+
+  it("accepts any non-empty observedModel string — Claude Code's own free-text display name", () => {
+    expect(SetModelResultSchema.safeParse({ ok: true, observedModel: "Sonnet 5" }).success).toBe(
+      true,
+    );
+  });
+
+  it("still requires `ok`", () => {
+    expect(SetModelResultSchema.safeParse({ observedModel: "Sonnet 5" }).success).toBe(false);
   });
 });

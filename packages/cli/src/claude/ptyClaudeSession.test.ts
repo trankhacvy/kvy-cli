@@ -39,7 +39,14 @@ function makeManualTimers() {
       first[1]();
     }
   };
-  return { setTimeoutImpl, clearTimeoutImpl, runAll };
+  /** Fires and removes only the earliest-still-pending timer; no-op if none. Lets a test advance one scheduled callback (e.g. an injection's submit delay) without also firing a later-scheduled one (e.g. a longer confirm-watcher arm-expiry) that `runAll` would otherwise sweep up too. */
+  const runNext = (): void => {
+    const first = timers.entries().next().value as [number, () => void] | undefined;
+    if (!first) return;
+    timers.delete(first[0]);
+    first[1]();
+  };
+  return { setTimeoutImpl, clearTimeoutImpl, runAll, runNext };
 }
 
 function makeFakePty() {
@@ -713,6 +720,163 @@ describe("startPtyClaudeSession", () => {
       await tick();
 
       expect(handle.sendModeCycle(2)).toBe(false);
+    });
+  });
+
+  describe("sendModelChange (issue #12 — real setModel's /model slash command)", () => {
+    it("types /model <alias> then Enter, and reports success when the gate is open", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendModelChange("sonnet")).toBe(true);
+      expect(h.fakePty.writes).toEqual(["/model sonnet", "\r"]);
+
+      handle.stop();
+    });
+
+    it("is gated closed while a TUI dialog is open — same rule as message injection", async () => {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      handle.setPromptOpen(true);
+      expect(handle.sendModelChange("opus")).toBe(false);
+      expect(h.fakePty.writes).toEqual([]);
+
+      handle.setPromptOpen(false);
+      expect(handle.sendModelChange("opus")).toBe(true);
+      // Unlike `sendModeCycle`'s direct synchronous `ptyProcess.write`,
+      // `sendModelChange` goes through `InjectionController.enqueue` — the
+      // submit ("\r") is scheduled `submitDelayMs` after the text write, so
+      // the manual timer queue needs another drain to observe it.
+      timers.runAll();
+      expect(h.fakePty.writes).toEqual(["/model opus", "\r"]);
+
+      handle.stop();
+    });
+
+    it("reports failure when the pty never spawned", async () => {
+      const h = makeHarness();
+      h.spawnPty.mockImplementation(() => {
+        throw new Error("spawn failed");
+      });
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.sendModelChange("haiku")).toBe(false);
+    });
+
+    describe("Switch model? confirmation dialog auto-confirm (issue #12 — mid-conversation switches)", () => {
+      /**
+       * Manual timers throughout this block: the confirm watcher's
+       * arm-expiry timer and the injection's submit-delay timer are BOTH
+       * scheduled by a single `sendModelChange` call, and `makeHarness()`'s
+       * default synchronous `setTimeoutImpl` would fire the arm-expiry timer
+       * immediately — disarming the watcher before any PTY data could ever
+       * arrive. `timers.runNext()` fires only the earliest-scheduled timer
+       * (the submit, enqueued before the watcher arms — see
+       * `sendModelChange`'s own comment on that ordering), leaving the
+       * arm-expiry timer pending so the watcher stays armed for the
+       * assertions below.
+       */
+      function setup() {
+        const h = makeHarness();
+        const timers = makeManualTimers();
+        h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+        h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+        return { h, timers };
+      }
+
+      it("auto-confirms with '1' + Enter once Claude Code's confirmation dialog appears in raw PTY output", async () => {
+        const { h, timers } = setup();
+        const handle = startPtyClaudeSession(baseOptions(), h.deps);
+        await tick();
+        timers.runAll(); // drain the readyDelay timer
+
+        expect(handle.sendModelChange("sonnet")).toBe(true);
+        timers.runNext(); // fire only the submit-delay timer (the "\r")
+        expect(h.fakePty.writes).toEqual(["/model sonnet", "\r"]);
+
+        h.fakePty.emitData(
+          "Switch model?\nYour next response will be slower and use more tokens\n❯ 1. Yes, switch to Sonnet 5\n  2. No, go back",
+        );
+        expect(h.fakePty.writes).toEqual(["/model sonnet", "\r", "1", "\r"]);
+
+        handle.stop();
+      });
+
+      it("recognizes the dialog text even split across multiple PTY data chunks", async () => {
+        const { h, timers } = setup();
+        const handle = startPtyClaudeSession(baseOptions(), h.deps);
+        await tick();
+        timers.runAll();
+
+        expect(handle.sendModelChange("opus")).toBe(true);
+        timers.runNext();
+        h.fakePty.emitData("Switch mod");
+        expect(h.fakePty.writes).toEqual(["/model opus", "\r"]); // not yet — pattern incomplete
+        h.fakePty.emitData("el?\n❯ 1. Yes, switch to Opus\n  2. No, go back");
+        expect(h.fakePty.writes).toEqual(["/model opus", "\r", "1", "\r"]);
+
+        handle.stop();
+      });
+
+      it("sends nothing extra when no confirmation dialog appears — a fresh, history-free session", async () => {
+        const { h, timers } = setup();
+        const handle = startPtyClaudeSession(baseOptions(), h.deps);
+        await tick();
+        timers.runAll();
+
+        expect(handle.sendModelChange("haiku")).toBe(true);
+        timers.runNext();
+        h.fakePty.emitData(
+          "  ⎿  Set model to Haiku 4.5 and saved as your default for new sessions\n",
+        );
+        expect(h.fakePty.writes).toEqual(["/model haiku", "\r"]);
+
+        handle.stop();
+      });
+
+      it("stops watching once the arm window expires, ignoring a late-arriving dialog", async () => {
+        const { h, timers } = setup();
+        const handle = startPtyClaudeSession(baseOptions(), h.deps);
+        await tick();
+        timers.runAll(); // drain the readyDelay timer only
+
+        expect(handle.sendModelChange("sonnet")).toBe(true);
+        timers.runNext(); // fire the submit-delay timer (the "\r")
+        timers.runNext(); // fire the confirm-watcher's own arm-expiry timer
+
+        h.fakePty.emitData("Switch model?\n❯ 1. Yes, switch to Sonnet 5\n  2. No, go back");
+        expect(h.fakePty.writes).toEqual(["/model sonnet", "\r"]);
+
+        handle.stop();
+      });
+
+      it("only arms once per sendModelChange call — a second unrelated dialog-shaped chunk later doesn't double-confirm", async () => {
+        const { h, timers } = setup();
+        const handle = startPtyClaudeSession(baseOptions(), h.deps);
+        await tick();
+        timers.runAll();
+
+        expect(handle.sendModelChange("opus")).toBe(true);
+        timers.runNext();
+        h.fakePty.emitData("Switch model?\n❯ 1. Yes, switch to Opus\n  2. No, go back");
+        expect(h.fakePty.writes).toEqual(["/model opus", "\r", "1", "\r"]);
+
+        // The watcher disarmed itself after confirming — an unrelated later
+        // chunk that happens to contain the same phrase (however unlikely)
+        // must not trigger a second, unsolicited confirm keystroke.
+        h.fakePty.emitData("Switch model?\n❯ 1. Yes, switch to Opus\n  2. No, go back");
+        expect(h.fakePty.writes).toEqual(["/model opus", "\r", "1", "\r"]);
+
+        handle.stop();
+      });
     });
   });
 
