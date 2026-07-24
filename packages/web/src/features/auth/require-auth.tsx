@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PinUnlockForm } from "@/components/auth/pin-unlock-form";
+import { Button } from "@/components/ui/button";
 import { isSignedIn, silentRefresh } from "@/lib/session";
 import { useUnlockedCryptoBridge } from "@/lib/use-unlocked-crypto-bridge";
 
@@ -103,8 +104,11 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
       <main className="flex min-h-screen flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="max-w-sm text-sm text-muted-foreground">
           This browser has no Falcon key material for your account. Pair it from a device that
-          already has your keys, or use "Forgot your PIN?" on the sign-in page to generate new ones.
+          already has your keys, or reset keys to generate new ones.
         </p>
+        <Button type="button" onClick={() => router.push("/reset-keys/")}>
+          Reset keys for this browser
+        </Button>
       </main>
     );
   }
@@ -117,11 +121,10 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
             pending={unlocking}
             error={unlockError}
             onSubmit={handleUnlock}
-            // issue-4-plan.md §6.2/§6.4: the actual rotate-epoch flow lives on
-            // `/password/`'s post-login step machine (it needs the account's
-            // password re-entered as the step-up proof) — this gate just routes a
-            // forgotten-PIN visitor there instead of duplicating that flow here.
-            onForgotPin={() => router.push("/password/")}
+            // docs/auth-ux-hardening-plan.md item 2: the provider-agnostic reset-keys
+            // route (email+password auth is dev-only in production, so `/password/`'s
+            // rotate-epoch flow isn't reachable there anymore).
+            onForgotPin={() => router.push("/reset-keys/")}
           />
         </div>
       </main>

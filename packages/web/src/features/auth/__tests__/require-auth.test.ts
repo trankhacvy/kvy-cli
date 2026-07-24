@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -44,5 +47,31 @@ describe("RequireAuth", () => {
     );
     expect(html).toBe("");
     expect(html).not.toContain("secret session content");
+  });
+});
+
+// docs/auth-ux-hardening-plan.md item 2d: the `no-identity` dead-end and the
+// `needs-unlock` "Forgot your PIN?" link both now route to the provider-agnostic
+// `/reset-keys/` route instead of `/password/` (dev-only in production, per item 3).
+// Asserted against the shipped source text, same technique `signin/page.test.ts` and
+// `(protected)/layout.test.ts` use for hook-heavy JSX this vitest config can't render.
+describe("require-auth.tsx — /reset-keys/ wiring", () => {
+  const source = readFileSync(
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../require-auth.tsx"),
+    "utf-8",
+  );
+
+  it("the no-identity dead-end offers a button to /reset-keys/", () => {
+    const noIdentityIndex = source.indexOf('status.kind === "no-identity"');
+    const needsUnlockIndex = source.indexOf('status.kind === "needs-unlock"');
+    expect(noIdentityIndex).toBeGreaterThan(-1);
+    expect(needsUnlockIndex).toBeGreaterThan(noIdentityIndex);
+    const noIdentityBlock = source.slice(noIdentityIndex, needsUnlockIndex);
+    expect(noIdentityBlock).toContain('router.push("/reset-keys/")');
+  });
+
+  it('"Forgot your PIN?" (onForgotPin) repoints to /reset-keys/, not /password/', () => {
+    expect(source).toContain('onForgotPin={() => router.push("/reset-keys/")}');
+    expect(source).not.toContain('onForgotPin={() => router.push("/password/")}');
   });
 });

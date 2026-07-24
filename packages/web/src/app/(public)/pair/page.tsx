@@ -140,6 +140,9 @@ export default function PairPage() {
           This browser has no Falcon key material for your account yet — sign in with email/password
           or OAuth first, then reopen this pairing link.
         </p>
+        <Button type="button" variant="outline" onClick={() => router.push("/reset-keys/")}>
+          Reset keys for this browser
+        </Button>
       </main>
     );
   }
