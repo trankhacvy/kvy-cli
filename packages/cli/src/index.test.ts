@@ -512,7 +512,69 @@ describe("main()", () => {
       stderr.mockRestore();
     });
 
+    it("runs `auth login` before ensureDaemonRunning, so the daemon sees fresh credentials at its one-shot startup", async () => {
+      // The daemon only attempts machine registration once, at its own startup, and only
+      // if credentials already exist then — so `auth login` must complete (writing
+      // credentials) before the daemon is ever started, not after.
+      delete process.env.FALCON_NO_SERVICE;
+      const runAuthCommand = vi.fn(async () => 0);
+      vi.doMock("./auth/index.js", () => ({ runAuthCommand }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({ maybePromptShimOptIn: vi.fn(async () => {}) }));
+      const callOrder: string[] = [];
+      runAuthCommand.mockImplementation(async () => {
+        callOrder.push("login");
+        return 0;
+      });
+      const ensureDaemonRunning = vi.fn(async () => {
+        callOrder.push("daemon");
+        return { ok: true, state: { pid: 123, port: 4242, version: "0.1.0-test", startedAt: 1 } };
+      });
+      vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
+        createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
+        ensureDaemonRunning,
+      }));
+      const main = await importMain();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      const code = await main(["auth", "login"]);
+
+      expect(code).toBe(0);
+      expect(callOrder).toEqual(["login", "daemon"]);
+      vi.doUnmock("./auth/index.js");
+      vi.doUnmock("./shim/onboardingPrompt.js");
+    });
+
+    it("still reports exit 1 if the daemon fails to start after a successful `auth login`", async () => {
+      delete process.env.FALCON_NO_SERVICE;
+      vi.doMock("./auth/index.js", () => ({ runAuthCommand: vi.fn(async () => 0) }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({ maybePromptShimOptIn: vi.fn(async () => {}) }));
+      vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
+        createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
+        ensureDaemonRunning: vi.fn(async () => ({
+          ok: false,
+          reason: "start-failed",
+          message: "falcon daemon: timed out waiting for the daemon to become ready\n",
+        })),
+      }));
+      const main = await importMain();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      const code = await main(["auth", "login"]);
+
+      expect(code).toBe(1);
+      expect(stderr.mock.calls[0]?.[0]).toContain("timed out");
+      vi.doUnmock("./auth/index.js");
+      vi.doUnmock("./shim/onboardingPrompt.js");
+    });
+
     it("exits 1 and never describes the start when ensureDaemonRunning fails to bring up the daemon", async () => {
+      // `codex` here (not `claude`) for the same reason as the sibling test above:
+      // `claude` now checks auth *before* the daemon (first-run UX,
+      // `ensureLoggedIn()`), so an unauthenticated `claude` invocation would fail on
+      // that check first and never exercise the daemon-failure path this test is
+      // actually about.
       delete process.env.FALCON_NO_SERVICE;
       vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
         createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
@@ -526,7 +588,7 @@ describe("main()", () => {
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
       const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
-      const code = await main(["claude"]);
+      const code = await main(["codex"]);
 
       expect(code).toBe(1);
       expect(stderr.mock.calls[0]?.[0]).toContain("timed out");
@@ -584,6 +646,10 @@ describe("main()", () => {
     });
 
     it("never throws main() even if maybeTriggerAutoUpdate rejects unexpectedly", async () => {
+      // `codex`, not `claude` — see the sibling test above's comment: `claude` now
+      // checks auth before the daemon (and thus before `maybeTriggerAutoUpdate`, which
+      // lives inside `ensureDaemon()`), so an unauthenticated `claude` run would never
+      // reach this rejection at all.
       delete process.env.FALCON_NO_UPDATE;
       vi.doMock("./update/autoUpdateTrigger.js", () => ({
         maybeTriggerAutoUpdate: vi.fn(async () => {
@@ -594,7 +660,7 @@ describe("main()", () => {
       const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
       const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
-      const code = await main(["claude"]);
+      const code = await main(["codex"]);
 
       expect(code).toBe(1);
       expect(stderr.mock.calls[0]?.[0]).toContain("unexpected error");

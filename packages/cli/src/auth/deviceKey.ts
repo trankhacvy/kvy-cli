@@ -1,28 +1,27 @@
 /**
- * OS-keychain device-key wrapping for the CLI's reduced-custody / daemon default
- * (issue-4-plan.md §6.1/§6.5): wraps a secret (a reduced-custody content bundle for the
- * daemon, or a full masterSecret for `falcon auth login` on a box with no interactive
- * PIN entry) under a random AES-256 key that itself lives in the macOS Keychain rather
- * than inside `~/.falcon/access.key` alongside the wrapped blob.
+ * Cross-platform OS-vault device-key wrapping for the CLI's default at-rest custody
+ * (issue-4-plan.md §6.1/§6.5, revised): wraps a secret (the masterSecret for
+ * `falcon auth login`, or a reduced-custody content bundle for the daemon) under a
+ * random AES-256 key that itself lives in the OS's own credential vault — macOS
+ * Keychain, Windows Credential Manager, or the Linux Secret Service — rather than
+ * inside `~/.falcon/access.key` alongside the wrapped blob.
  *
  * The plan is candid that this "delivers little at-rest benefit on daemon boxes
  * anyway" (§6.5) — a root/owner compromise that can read `access.key` can usually also
- * read the Keychain or this fallback file — but it does raise the bar against the
+ * read the vault or this fallback file — but it does raise the bar against the
  * narrower threat of "another process/user on this machine reads `access.key` off
  * disk" (e.g. a backup, a misconfigured shared box), and keeps the wrapping key out of
  * the file that a `git`/dotfiles-sync tool might otherwise scoop up.
  *
- * Only macOS Keychain is implemented (via the `security` CLI, same tool
- * `provider/claudeAuth.ts` already shells out to for presence-checking Claude Code's
- * own credentials). Every other platform (Linux, Windows, or macOS with `security`
- * unavailable) falls back to a plaintext device-key file, 0600 — explicitly documented
- * here and in `credentials.ts`, not a silent downgrade.
+ * Backed by `@napi-rs/keyring` (real OS vault on macOS/Windows/Linux). If the vault is
+ * unavailable on this machine (no Secret Service daemon running, locked, etc.), falls
+ * back to a plaintext device-key file, 0600 — explicitly documented here and in
+ * `credentials.ts`, not a silent downgrade.
  */
-import { execFileSync } from "node:child_process";
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { userInfo } from "node:os";
 import path from "node:path";
+import { Entry } from "@napi-rs/keyring";
 
 export interface DeviceWrapped {
   v: 1;
@@ -32,7 +31,8 @@ export interface DeviceWrapped {
   ct: string;
 }
 
-const KEYCHAIN_SERVICE = "Falcon-device-key";
+const KEYRING_SERVICE = "Falcon-device-key";
+const KEYRING_ACCOUNT = "falcon";
 const FALLBACK_KEY_FILE = "device.key";
 const DEVICE_KEY_BYTES = 32;
 const NONCE_BYTES = 12;
@@ -42,39 +42,23 @@ function fallbackKeyPath(homeDir: string): string {
   return path.join(homeDir, FALLBACK_KEY_FILE);
 }
 
-function defaultReadMacKeychainKey(): Buffer | null {
-  if (process.platform !== "darwin") return null;
+function defaultReadKeyringKey(): Buffer | null {
   try {
-    const out = execFileSync("security", ["find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 3000,
-    });
-    const key = Buffer.from(out.trim(), "base64");
+    const entry = new Entry(KEYRING_SERVICE, KEYRING_ACCOUNT);
+    const stored = entry.getPassword();
+    if (!stored) return null;
+    const key = Buffer.from(stored, "base64");
     return key.length === DEVICE_KEY_BYTES ? key : null;
   } catch {
-    // Not found, Keychain locked, or `security` unavailable.
+    // Not found, vault locked/unavailable, or no vault daemon on this machine.
     return null;
   }
 }
 
-function defaultWriteMacKeychainKey(key: Buffer): boolean {
-  if (process.platform !== "darwin") return false;
+function defaultWriteKeyringKey(key: Buffer): boolean {
   try {
-    execFileSync(
-      "security",
-      [
-        "add-generic-password",
-        "-s",
-        KEYCHAIN_SERVICE,
-        "-a",
-        userInfo().username,
-        "-w",
-        key.toString("base64"),
-        "-U", // update in place if an entry already exists, rather than erroring
-      ],
-      { stdio: ["ignore", "ignore", "ignore"], timeout: 3000 },
-    );
+    const entry = new Entry(KEYRING_SERVICE, KEYRING_ACCOUNT);
+    entry.setPassword(key.toString("base64"));
     return true;
   } catch {
     return false;
@@ -100,36 +84,36 @@ function writeFallbackKey(homeDir: string, key: Buffer): void {
 }
 
 export interface DeviceKeyDeps {
-  /** Overrides the macOS Keychain read. Defaults to a real `security` CLI call — tests
-   * inject a fake instead of touching the host machine's actual Keychain. */
+  /** Overrides the OS vault read. Defaults to a real `@napi-rs/keyring` call — tests
+   * inject a fake instead of touching the host machine's actual vault. */
   readKeychainKey?: () => Buffer | null;
-  /** Overrides the macOS Keychain write; returns whether it succeeded. */
+  /** Overrides the OS vault write; returns whether it succeeded. */
   writeKeychainKey?: (key: Buffer) => boolean;
 }
 
 /**
  * Loads this machine's device key, creating and persisting one on first use.
- * Keychain-first (macOS): only falls back to (and creates) the plaintext file when the
- * Keychain is unavailable or the `security` CLI itself fails — never both at once, so a
- * key wrapped one way is always found the same way later.
+ * Vault-first: only falls back to (and creates) the plaintext file when the vault is
+ * unavailable or the write itself fails — never both at once, so a key wrapped one way
+ * is always found the same way later.
  */
 function loadOrCreateDeviceKey(homeDir: string, deps: DeviceKeyDeps): Buffer {
-  const readKeychainKey = deps.readKeychainKey ?? defaultReadMacKeychainKey;
-  const writeKeychainKey = deps.writeKeychainKey ?? defaultWriteMacKeychainKey;
+  const readKeyringKey = deps.readKeychainKey ?? defaultReadKeyringKey;
+  const writeKeyringKey = deps.writeKeychainKey ?? defaultWriteKeyringKey;
 
-  const fromKeychain = readKeychainKey();
-  if (fromKeychain) return fromKeychain;
+  const fromKeyring = readKeyringKey();
+  if (fromKeyring) return fromKeyring;
 
   const fromFallback = readFallbackKey(homeDir);
   if (fromFallback) return fromFallback;
 
   const key = randomBytes(DEVICE_KEY_BYTES);
-  if (writeKeychainKey(key)) return key;
+  if (writeKeyringKey(key)) return key;
   writeFallbackKey(homeDir, key);
   return key;
 }
 
-/** Wrap `secret` under this machine's device key (Keychain-backed where available). */
+/** Wrap `secret` under this machine's device key (OS-vault-backed where available). */
 export function wrapWithDeviceKey(
   secret: Uint8Array,
   homeDir: string,

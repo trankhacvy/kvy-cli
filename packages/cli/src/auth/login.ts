@@ -14,10 +14,38 @@ import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";
 import { openBrowser } from "./browser.js";
 import { resolveBackendUrl, resolveFrontendUrl } from "./config.js";
-import { writeCredentials } from "./credentials.js";
+import { readCredentials, writeCredentials } from "./credentials.js";
 import { wrapNewKeyMaterial } from "./keyMaterial.js";
 import { type PairFailureReason, pairDevice } from "./pair.js";
 import { displayPairingQrCode } from "./qrcode.js";
+
+const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
+
+/**
+ * First-run UX (plan.md §16 PRD FR-1.2's "no separate setup steps" goal, extended to
+ * auth): `falcon claude` shouldn't hard-fail with an instruction to run a second command
+ * when nobody's logged in yet — if a human is actually present at this terminal (a real
+ * TTY), just run the same pairing flow `falcon auth login` uses, inline, then let the
+ * caller continue straight into the session. A non-interactive invocation (CI, a
+ * headless script) has no one to show a QR code to, so that case keeps the old, honest
+ * hard-fail instead of hanging.
+ */
+export async function ensureLoggedIn(
+  logger: Logger,
+  homeDir: string = resolveHomeDir(),
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (readCredentials(homeDir)) return { ok: true };
+
+  if (process.stdin.isTTY !== true) {
+    return { ok: false, message: NOT_LOGGED_IN_MESSAGE };
+  }
+
+  process.stdout.write("You're not logged in yet — let's get you set up.\n");
+  const code = await runAuthLogin(logger);
+  // `runAuthLogin` already wrote a full explanation of what went wrong to stdout —
+  // nothing further to say here, just propagate the failure.
+  return code === 0 ? { ok: true } : { ok: false, message: "" };
+}
 
 function describeFailure(reason: PairFailureReason): string {
   switch (reason) {
@@ -69,13 +97,10 @@ export async function runAuthLogin(logger: Logger): Promise<number> {
       return 1;
     }
 
-    // issue-4-plan.md §6.1/§6.5: an interactive terminal (a real human present to type a
-    // PIN) PIN-wraps the master secret; a non-interactive login (CI, a headless
-    // provisioning script — no TTY, no one to prompt) falls back to the device-key
-    // wrap instead, same as the daemon's own default custody mode.
-    const keyMaterial = await wrapNewKeyMaterial(outcome.result.masterSecret, resolveHomeDir(), {
-      interactive: process.stdin.isTTY === true,
-    });
+    // issue-4-plan.md §6.1/§6.5, revised: always device-key wrap — no PIN prompt for the
+    // CLI, interactive or not. Works unattended (the daemon needs exactly that) and
+    // avoids asking a human to type a PIN on every future `falcon claude` invocation.
+    const keyMaterial = await wrapNewKeyMaterial(outcome.result.masterSecret, resolveHomeDir());
     writeCredentials({ refreshToken: outcome.result.refreshToken, keyMaterial });
 
     logger.info("auth login: succeeded");

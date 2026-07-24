@@ -20,6 +20,9 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 10 | [Session card's relative timestamp reflects the wrong signal — not real chat activity](#issue-10) | Fixed |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is read-only by default](#issue-11) | Open |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
+| 13 | [ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang](#issue-13) | Open |
+| 14 | [`/pair` approval page can never actually complete — real users always get bounced to sign-in](#issue-14) | Open |
+| 15 | [`falcon claude` self-recurses and dies silently when the shell shim is installed](#issue-15) | Open |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -448,3 +451,138 @@ flip that default on is still open.
 
 **Status:** landed behind a flag, not yet live-soaked — same status class as issue #11's
 `setMode`. Remove this entry once the flag has been soaked and flipped on by default.
+
+<a id="issue-13"></a>
+
+## 13. ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang
+
+**Where:** `packages/cli/src/adapters/manifest.ts`, `install.ts`, `verify.ts`, `spawn.ts`
+(the adapter manager); `packages/cli/src/acp/acpConnection.ts` (`connect()` refuses if
+verification fails); `packages/cli/src/commands/adapters.ts` (the only caller of the
+installer — `falcon adapters install|upgrade`); `packages/cli/src/daemon/spawnEngine.ts`
+(the `spawn` RPC handler); `packages/cli/src/commands/start.ts:587`
+(`notifyDaemonSessionStarted`, Claude-only); `packages/cli/src/commands/startCodex.ts`
+(never calls `notifyDaemonSessionStarted`, and hard-exits before bootstrap if the real
+`codex` CLI isn't on PATH).
+
+**What's open:** each supported agent (`claude-code`, `codex`) is a separate npm package
+(`@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`), installed
+into `~/.falcon/adapters/` via a pinned-version, integrity-checked `npm install` — but
+that install is **only ever triggered manually**, by a user running
+`falcon adapters install`/`upgrade`. Nothing calls it automatically: no `postinstall` hook
+on the `falcon` package itself, and no lazy-install on first use — `AcpConnection.connect()`
+just throws `AcpConnectionError` if the adapter isn't already verified-installed.
+
+That's a tolerable UX for a local terminal user (they see the error, run the install
+command themselves). It breaks down for sessions spawned from the web, where nobody is
+watching that machine's terminal:
+
+- **Claude:** the daemon's `spawn` RPC reports "session started"
+  (`notifyDaemonSessionStarted`) right after bootstrap, *before* the adapter is ever
+  touched. The web UI shows a session that looks live, then the failure surfaces later as
+  a confusing in-transcript message ("Remote session failed to start: ACP adapter ...
+  not-installed") — no proactive install offered, no upfront error.
+- **Codex is worse.** `commands/startCodex.ts` never calls `notifyDaemonSessionStarted` at
+  all (confirmed the only provider command that doesn't), and separately hard-exits before
+  bootstrap if the real `codex` CLI binary isn't on PATH — a second dependency Falcon
+  can't fix by installing its own package. A daemon-initiated Codex spawn on a machine
+  missing either dependency likely just hangs until the web UI's own spawn-await times
+  out, with no clear error surfaced anywhere. This path isn't proven end-to-end either
+  way — `docs/plan.md` itself marks Codex web-spawn E2E as "pending."
+
+**What a real fix needs:** (1) have the daemon auto-run the installer itself (still
+pinned-version, still integrity-checked — just triggered automatically) on daemon startup
+or on first spawn request for an agent it's never installed, since the daemon is the one
+unattended process built for exactly this; (2) for Codex specifically, since a missing
+`codex` CLI can't be auto-installed, detect that up front and report a clear, immediate,
+web-visible error instead of a silent `spawnAwaiter` timeout; (3) an end-to-end test
+covering daemon-spawn → adapter-missing → web-visible outcome, which doesn't exist today
+(the gap sits between `spawnEngine.test.ts`'s mocks and `acpConnection.test.ts`, which
+never goes through the daemon).
+
+**Status:** open, not started — newly found, not previously documented anywhere.
+
+<a id="issue-14"></a>
+
+## 14. `/pair` approval page can never actually complete — real users always get bounced to sign-in
+
+**Where:** `packages/web/src/app/(public)/pair/page.tsx:68-72,89-101`,
+`packages/web/src/features/auth/require-auth.tsx:67-71` (the working comparison),
+`packages/web/src/lib/session.ts:25-28,88-89` (`isSignedIn`/`getToken`,
+in-memory-only access token).
+
+**What's open:** found while E2E-testing the CLI auth changes (issue-4-plan.md), not part
+of that diff — this page has been broken since it landed. `isSignedIn()` is purely
+`getToken() !== null && !isTokenExpired()`, and `getToken()` reads a plain in-memory
+module variable that's wiped by any full page navigation (`session.ts:25-28`) — by
+design, so a reload always re-asks for the PIN. The pairing link
+(`app.falcon.dev/pair#<ephPub>`) is *always* opened via a full navigation: a new tab, a
+scanned QR code, or a pasted URL — there is no other way to reach it. So on page load,
+`getIdentity()` may resolve fine (the crypto worker is a separate, persistent thing), but
+`isSignedIn()` is unconditionally `false` at that point, and the effect
+(`page.tsx:68-72`) immediately does `stashPendingPair(ephPub); router.replace("/signin/")`
+— every single time, for every user, with no way through via normal navigation.
+
+Contrast with `require-auth.tsx:67-71`, which checks `isSignedIn()` and, if false, tries
+`await silentRefresh()` before giving up — this page never calls `silentRefresh()` at
+all, either in the initial gate or in `approve()` (`page.tsx:89-101`, which calls
+`getToken()` directly and shows "You've been signed out. Please sign in again." if it's
+null).
+
+Confirmed via direct reproduction: the only way to get an approval to actually happen
+was scripting a same-page SPA navigation (`window.next.router.push()` from the browser
+console) instead of a real one, bypassing the redirect. A real user has no equivalent
+workaround — this currently blocks the entire CLI pairing flow end-to-end (`falcon auth
+login` / a brand-new `falcon claude`'s auto-login).
+
+**What a real fix needs:** call `silentRefresh()` before the `isSignedIn()` check in the
+gating effect (mirroring `require-auth.tsx`), and likely also as a just-in-case
+re-attempt inside `approve()` if `getToken()` comes back null there — the crypto worker
+already holds an unlocked/persisted key, `silentRefresh()` just needs the chance to run.
+
+**Status:** open, not started — newly found, not previously documented anywhere.
+
+<a id="issue-15"></a>
+
+## 15. `falcon claude` self-recurses and dies silently when the shell shim is installed
+
+**Where:** `packages/cli/src/provider/claudeCliLocator.ts:153-162` (`findClaudeInPath`'s
+existing shim-skip guard), `packages/cli/src/session/sessionLock.ts` (the
+per-`(machineId, workspacePath)` live-pid lock that fires when the recursion collides
+with itself), `packages/cli/src/shim/` (`falcon shim install`, FR-9.6).
+
+**What's open:** found while E2E-testing the CLI auth changes, unrelated to that diff.
+On a machine with `falcon shim install` active (`~/.falcon/bin/claude` →
+`exec falcon claude "$@"`, prepended to PATH ahead of the real `claude`), a real
+`falcon claude` session dies right after printing "starting session", with no error
+explaining why, confirmed 100% reproducible via debug logs showing a SECOND, nested
+`main()` invocation with argv like `[..., "--append-system-prompt", "--settings",
+".../session-hook-....json"]` — Claude-Code-internal flags, not anything Falcon passed.
+`parseArgs`'s catch-all (by design, for verbatim flag passthrough — see `args.ts`) treats
+that nested invocation as a fresh default-provider start, which then collides with the
+*outer* invocation's own just-acquired session lock for the same working directory
+(`sessionLock.ts`) and exits 1 — silently killing the whole session.
+
+Falcon's own locator already has an anti-recursion guard for exactly this class of
+problem: `findClaudeInPath` explicitly skips a `claude` resolved to `shimBinDir()` and
+falls through to npm/Bun/Homebrew/native-installer detection instead
+(`claudeCliLocator.ts:153-162`, itself written to prevent this same failure mode for
+Falcon's own initial CLI-path resolution). That guard evidently does not cover whatever
+internal mechanism produces the SECOND, nested invocation observed here — root cause of
+that specific recursion trigger (most plausibly something inside the real Claude Code
+process itself shelling out to a bare `claude` — e.g. for hook execution — which goes
+through the shell's PATH and hits the shim, rather than reusing Falcon's already-resolved
+absolute path) was not pinned down further; flagging the confirmed symptom and workaround
+rather than asserting an unverified exact mechanism.
+
+**Confirmed workaround:** stripping `~/.falcon/bin` from PATH avoids the recursion
+entirely. This affects anyone who's completed the (encouraged, FR-9.6) shim onboarding
+prompt — likely a meaningful fraction of real users, not an edge case.
+
+**What a real fix needs:** trace exactly what spawns the nested `claude` invocation
+(most likely inside the real Claude Code process, not Falcon's own code) and either make
+that call site resolve an absolute path the same way `findGlobalClaudeCliPath` does, or
+extend the shim script itself to detect (and refuse, or transparently exec the real
+binary for) a re-entrant call so recursion can't happen regardless of who triggers it.
+
+**Status:** open, not started — newly found, not previously documented anywhere.

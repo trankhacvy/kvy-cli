@@ -1,17 +1,17 @@
 /**
- * PIN prompting for the CLI's interactive-foreground credential mode
- * (issue-4-plan.md §6.1/§6.5): `falcon auth login` run at a real terminal PIN-wraps the
- * masterSecret with a PIN the user types, the same `wrapWithPin`/`unwrapWithPin`
- * (`@falcon/crypto`) the web client uses — a wrapped blob is byte-portable between the
- * two (same argon2id params, `pin-params.ts`). Mirrors `shim/onboardingPrompt.ts`'s
- * `node:readline/promises` + injectable-prompt pattern so this is unit-testable without
- * a real TTY.
+ * PIN unwrapping for reading credentials written by an older `falcon` build
+ * (issue-4-plan.md §6.1/§6.5, revised): `falcon auth login` no longer writes PIN-wrapped
+ * credentials — see `keyMaterial.ts` — but a machine that paired before that change may
+ * still have a `"pin"`-mode `access.key` on disk, and this lets that credential still
+ * unlock rather than forcing a re-login. Uses the same `unwrapWithPin` (`@falcon/crypto`)
+ * the web client uses (same argon2id params, `pin-params.ts`). Mirrors
+ * `shim/onboardingPrompt.ts`'s `node:readline/promises` + injectable-prompt pattern so
+ * this is unit-testable without a real TTY.
  */
 import { createInterface } from "node:readline/promises";
+import { unwrapWithPin } from "@falcon/crypto";
 import type { PinWrapped } from "@falcon/crypto";
-import { unwrapWithPin, wrapWithPin } from "@falcon/crypto";
 
-const MIN_PIN_LENGTH = 6;
 const MAX_UNLOCK_ATTEMPTS = 3;
 
 export interface PinPromptDeps {
@@ -27,39 +27,6 @@ async function defaultPrompt(question: string): Promise<string> {
     return await rl.question(question);
   } finally {
     rl.close();
-  }
-}
-
-/**
- * Prompts for a brand-new PIN (with confirmation) and wraps `secret` under it.
- * Retries on a too-short PIN or a confirmation mismatch rather than silently accepting
- * a weak/mistyped one — there's no server-side recovery for a lost PIN short of the
- * rotate-epoch flow (issue-4-plan.md §6.2), so getting it right at set-time matters.
- *
- * **Known gap**: this reads the PIN as plain visible input — `node:readline` has no
- * built-in masked-input mode, and adding raw-mode character-by-character echo
- * suppression was cut from this pass (docs/issue-4-plan.md's Phase 5 checklist).
- */
-export async function promptAndWrapWithPin(
-  secret: Uint8Array,
-  deps: PinPromptDeps = {},
-): Promise<{ pin: string; wrapped: PinWrapped }> {
-  const prompt = deps.prompt ?? defaultPrompt;
-  const write = deps.write ?? ((text: string) => process.stdout.write(text));
-
-  for (;;) {
-    const pin = (await prompt(`Create a PIN (at least ${MIN_PIN_LENGTH} characters): `)).trim();
-    if (pin.length < MIN_PIN_LENGTH) {
-      write(`PIN must be at least ${MIN_PIN_LENGTH} characters.\n`);
-      continue;
-    }
-    const confirmation = (await prompt("Confirm PIN: ")).trim();
-    if (confirmation !== pin) {
-      write("PINs didn't match — try again.\n");
-      continue;
-    }
-    const wrapped = await wrapWithPin(secret, pin);
-    return { pin, wrapped };
   }
 }
 

@@ -4,20 +4,33 @@ const pairDeviceMock = vi.fn();
 const openBrowserMock = vi.fn();
 const displayPairingQrCodeMock = vi.fn();
 const writeCredentialsMock = vi.fn();
+const readCredentialsMock = vi.fn();
 const wrapWithDeviceKeyMock = vi.fn();
 
 vi.mock("./pair.js", () => ({ pairDevice: pairDeviceMock }));
 vi.mock("./browser.js", () => ({ openBrowser: openBrowserMock }));
 vi.mock("./qrcode.js", () => ({ displayPairingQrCode: displayPairingQrCodeMock }));
-vi.mock("./credentials.js", () => ({ writeCredentials: writeCredentialsMock }));
-// Non-interactive test process (`process.stdin.isTTY` is falsy under vitest) always
-// takes `wrapNewKeyMaterial`'s device-key branch — mocked so this suite never shells
-// out to the real macOS Keychain or touches a real `~/.falcon/device.key`.
+vi.mock("./credentials.js", () => ({
+  writeCredentials: writeCredentialsMock,
+  readCredentials: readCredentialsMock,
+}));
+// `wrapNewKeyMaterial` always device-key wraps now — mocked so this suite never touches
+// a real OS vault or a real `~/.falcon/device.key`.
 vi.mock("./deviceKey.js", () => ({
   wrapWithDeviceKey: wrapWithDeviceKeyMock,
 }));
 
-const { runAuthLogin } = await import("./login.js");
+const { runAuthLogin, ensureLoggedIn } = await import("./login.js");
+
+/** Temporarily overrides `process.stdin.isTTY` for one test, restoring it after. */
+function withStdinTTY(value: boolean | undefined, fn: () => Promise<void>): Promise<void> {
+  const stdin = process.stdin as unknown as { isTTY: boolean | undefined };
+  const original = stdin.isTTY;
+  stdin.isTTY = value;
+  return fn().finally(() => {
+    stdin.isTTY = original;
+  });
+}
 
 function fakeLogger() {
   return { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
@@ -32,6 +45,7 @@ beforeEach(() => {
   openBrowserMock.mockReset().mockResolvedValue(false);
   displayPairingQrCodeMock.mockReset();
   writeCredentialsMock.mockReset();
+  readCredentialsMock.mockReset().mockReturnValue(null);
   wrapWithDeviceKeyMock.mockReset().mockReturnValue({ v: 1, nonce: "n", ct: "c" });
 });
 
@@ -60,7 +74,6 @@ describe("runAuthLogin", () => {
     expect(writeCredentialsMock).toHaveBeenCalledTimes(1);
     const written = writeCredentialsMock.mock.calls[0]?.[0];
     expect(written.refreshToken).toBe("refresh-token-1");
-    // Non-interactive test process -> device-key mode (mocked above), never PIN mode.
     expect(written.keyMaterial).toEqual({ mode: "device", wrapped: { v: 1, nonce: "n", ct: "c" } });
     expect(wrapWithDeviceKeyMock).toHaveBeenCalledWith(masterSecret, expect.any(String));
     expect(displayPairingQrCodeMock).toHaveBeenCalledWith("http://web.invalid/pair#frag");
@@ -110,4 +123,55 @@ describe("runAuthLogin", () => {
 
     expect(process.listenerCount("SIGINT")).toBe(before);
   });
+});
+
+describe("ensureLoggedIn", () => {
+  it("returns ok immediately when credentials already exist, without touching pairing", async () => {
+    readCredentialsMock.mockReturnValue({ refreshToken: "t", keyMaterial: { mode: "device", wrapped: {} } });
+
+    const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
+
+    expect(result).toEqual({ ok: true });
+    expect(pairDeviceMock).not.toHaveBeenCalled();
+  });
+
+  it("fails fast with the non-interactive message when no credentials and not a TTY", async () =>
+    withStdinTTY(undefined, async () => {
+      const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
+
+      expect(result).toEqual({
+        ok: false,
+        message: 'falcon: not logged in — run "falcon auth login" first\n',
+      });
+      expect(pairDeviceMock).not.toHaveBeenCalled();
+    }));
+
+  it("auto-triggers the pairing flow at a real TTY and succeeds when pairing succeeds", async () =>
+    withStdinTTY(true, async () => {
+      const masterSecret = new Uint8Array(32).fill(1);
+      pairDeviceMock.mockImplementation(
+        async (options: { onPairingUrlReady: (u: string) => unknown }) => {
+          await options.onPairingUrlReady("http://web.invalid/pair#frag");
+          return { ok: true, result: { refreshToken: "refresh-token-1", masterSecret } };
+        },
+      );
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
+
+      expect(result).toEqual({ ok: true });
+      expect(pairDeviceMock).toHaveBeenCalledOnce();
+      expect(writeCredentialsMock).toHaveBeenCalledOnce();
+      expect(joinedOutput(stdout)).toContain("let's get you set up");
+    }));
+
+  it("propagates failure (with no extra message) when the auto-triggered pairing fails", async () =>
+    withStdinTTY(true, async () => {
+      pairDeviceMock.mockResolvedValue({ ok: false, reason: "cancelled" });
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
+
+      expect(result).toEqual({ ok: false, message: "" });
+    }));
 });

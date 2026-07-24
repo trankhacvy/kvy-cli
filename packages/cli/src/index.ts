@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
 import { runAuthCommand } from "./auth/index.js";
+import { ensureLoggedIn } from "./auth/login.js";
 import { runAdaptersInstallCommand, runAdaptersUpgradeCommand } from "./commands/adapters.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import { runGithubLogin, runGithubLogout, runGithubStatus } from "./commands/github.js";
@@ -326,8 +327,24 @@ async function runUpdate(): Promise<number> {
  * honest `describeStart` stub. The daemon auto-start this depends on (PRD
  * FR-1.2) is real either way: this is the first place a fresh install
  * actually touches the daemon.
+ *
+ * For `claude` specifically, auth is checked *before* the daemon is started
+ * (`ensureLoggedIn()`, first-run UX): the daemon only attempts machine
+ * registration once, at its own startup, and only if credentials already
+ * exist at that moment — starting it ahead of a first-time login would risk
+ * a daemon that came up with nothing to register and never retries. Checking
+ * (and, at a real TTY, completing) login first means the daemon always sees
+ * credentials the one time it looks.
  */
 async function runStart(command: Extract<FalconCommand, { type: "start" }>): Promise<number> {
+  if (command.provider === "claude") {
+    const auth = await ensureLoggedIn(logger);
+    if (!auth.ok) {
+      if (auth.message) process.stderr.write(auth.message);
+      return 1;
+    }
+  }
+
   const daemon = await ensureDaemon();
   if (!daemon.ok) {
     process.stderr.write(daemon.message);
@@ -352,12 +369,17 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
 
 /**
  * `falcon auth login|logout|status` (plan.md §5, design §5) — the real
- * OAuth browser flow + pairing fallback lives in `./auth/`. `ensureDaemon()`
- * runs first for consistency with every other agent-adjacent subcommand
- * (PRD FR-1.2) — a fresh install's very first command is commonly `falcon
- * auth login`, and that should still trigger the daemon auto-start — even
- * though the auth flow itself talks to the backend/browser directly and
- * doesn't otherwise depend on the daemon being up.
+ * OAuth browser flow + pairing fallback lives in `./auth/`.
+ *
+ * `login` specifically runs *before* `ensureDaemon()` (same rationale as
+ * `runStart`'s claude path): the daemon only attempts
+ * machine registration once, at its own startup, and only if credentials
+ * already exist at that moment. A fresh install's very first command is
+ * commonly `falcon auth login` — starting the daemon ahead of that would
+ * risk it coming up with nothing to register and never retrying, even
+ * moments later once login succeeds. `logout`/`status` don't create
+ * credentials, so for them `ensureDaemon()` still runs first, consistent
+ * with every other agent-adjacent subcommand (PRD FR-1.2).
  *
  * A successful `login` additionally offers the FR-9.6 shell-shim opt-in
  * prompt (`./shim/onboardingPrompt.js`) — the first moment a fresh install
@@ -366,16 +388,25 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
  * (see `maybePromptShimOptIn`'s own `onboardingCompleted` gate).
  */
 async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promise<number> {
+  if (command.action === "login") {
+    const code = await runAuthCommand(command.action, logger);
+    if (code === 0) {
+      await maybePromptShimOptIn();
+    }
+    const daemon = await ensureDaemon();
+    if (!daemon.ok) {
+      process.stderr.write(daemon.message);
+      return 1;
+    }
+    return code;
+  }
+
   const daemon = await ensureDaemon();
   if (!daemon.ok) {
     process.stderr.write(daemon.message);
     return 1;
   }
-  const code = await runAuthCommand(command.action, logger);
-  if (command.action === "login" && code === 0) {
-    await maybePromptShimOptIn();
-  }
-  return code;
+  return runAuthCommand(command.action, logger);
 }
 
 /**
