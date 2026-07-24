@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canMutateMode, nextModeAfterSetMode, shouldShowTakeControl } from "./mode-switch-state";
+import { canMutateModel, nextModelAfterSetModel } from "./model-switch-state";
 import {
   initialStopSessionDialogState,
   resetStopSessionDialogState,
@@ -83,6 +84,39 @@ describe("nextModeAfterSetMode (W4.3 — revert an unconfirmed PTY mode switch)"
     expect(nextModeAfterSetMode("plan", "default", { ok: false })).toEqual({
       mode: "default",
       error: "Could not confirm the mode switch — reverted.",
+    });
+  });
+});
+
+describe("canMutateModel (issue #12 — web model selector, PTY-only)", () => {
+  it("disallows mutating the model selector for a local session by default (flag off)", () => {
+    expect(canMutateModel("local")).toBe(false);
+  });
+
+  it("un-hides the model selector for a local session once ptySetModelEnabled is true", () => {
+    expect(canMutateModel("local", true)).toBe(true);
+  });
+
+  it("never allows mutating the model selector for a remote-loop session, flag or not — setModel is PTY-only, unlike setMode", () => {
+    expect(canMutateModel("remote")).toBe(false);
+    expect(canMutateModel("remote", true)).toBe(false);
+  });
+});
+
+describe("nextModelAfterSetModel (issue #12 — model switch error surfacing)", () => {
+  it("clears the error on {ok:true}", () => {
+    expect(nextModelAfterSetModel({ ok: true, observedModel: "Sonnet 5" })).toEqual({
+      error: null,
+    });
+    expect(nextModelAfterSetModel({ ok: true })).toEqual({ error: null });
+  });
+
+  it("surfaces an error on {ok:false}, regardless of any observedModel — it's free text, not a selectable value", () => {
+    expect(nextModelAfterSetModel({ ok: false })).toEqual({
+      error: "Could not confirm the model switch — reverted.",
+    });
+    expect(nextModelAfterSetModel({ ok: false, observedModel: "Sonnet 5" })).toEqual({
+      error: "Could not confirm the model switch — reverted.",
     });
   });
 });

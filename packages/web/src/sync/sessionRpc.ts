@@ -21,6 +21,8 @@ import {
   type MessageRpcStatusSchema,
   type PermAnswerParamsSchema,
   PermAnswerResultSchema,
+  type SetModelParamsSchema,
+  SetModelResultSchema,
   type SetModeParamsSchema,
   SetModeResultSchema,
   type StopRpcParamsSchema,
@@ -40,6 +42,8 @@ export type PermAnswerParams = z.infer<typeof PermAnswerParamsSchema>;
 export type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;
 export type SetModeParams = z.infer<typeof SetModeParamsSchema>;
 export type SetModeResult = z.infer<typeof SetModeResultSchema>;
+export type SetModelParams = z.infer<typeof SetModelParamsSchema>;
+export type SetModelResult = z.infer<typeof SetModelResultSchema>;
 export type InterruptResult = z.infer<typeof InterruptResultSchema>;
 export type TakeControlResult = z.infer<typeof TakeControlResultSchema>;
 export type StopRpcParams = z.infer<typeof StopRpcParamsSchema>;
@@ -51,6 +55,7 @@ export interface SessionRpcParams {
   interrupt: Record<string, never>;
   takeControl: Record<string, never>;
   setMode: SetModeParams;
+  setModel: SetModelParams;
   "perm.answer": PermAnswerParams;
   stop: StopRpcParams;
 }
@@ -67,6 +72,7 @@ export interface SessionRpcResults {
   interrupt: InterruptResult;
   takeControl: TakeControlResult;
   setMode: SetModeResult;
+  setModel: SetModelResult;
   "perm.answer": PermAnswerResult;
   stop: StopRpcResult;
 }
@@ -78,6 +84,7 @@ const RESULT_SCHEMAS: { [M in SessionRpcMethod]: ZodType<SessionRpcResults[M]> }
   interrupt: InterruptResultSchema,
   takeControl: TakeControlResultSchema,
   setMode: SetModeResultSchema,
+  setModel: SetModelResultSchema,
   "perm.answer": PermAnswerResultSchema,
   stop: StopRpcResultSchema,
 };

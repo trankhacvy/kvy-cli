@@ -60,8 +60,19 @@ describe("ComposerControls disabled wiring", () => {
     expect(count).toBeGreaterThanOrEqual(2);
   });
 
-  it("shows the model chip only when a real model id exists (never fabricated)", () => {
-    expect(renderControls({ modelChip: null })).not.toContain("claude");
+  it("always shows the model chip, falling back to 'Model unknown' rather than disappearing (issue #12)", () => {
+    const html = renderControls({ modelChip: null });
+    expect(html).not.toContain("claude");
+    expect(html).toContain("Model unknown");
     expect(renderControls({ modelChip: "claude-sonnet-4" })).toContain("claude-sonnet-4");
+  });
+
+  it("hides the mutating model selector by default (flag off) even on a local session — read-only chip only (issue #12)", () => {
+    const html = renderControls({ modelChip: "Sonnet 5" });
+    expect(html).toContain("Sonnet 5");
+    // No second combobox beyond none at all — the mode selector is also
+    // read-only for a local session by default, so there should be zero.
+    expect(html).not.toContain('role="combobox"');
+    expect(html).not.toContain("Change model");
   });
 });

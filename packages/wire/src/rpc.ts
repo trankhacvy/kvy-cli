@@ -727,6 +727,50 @@ export const SetModeResultSchema = z.object({
   observedMode: PermissionModeSchema.optional(),
 });
 
+/**
+ * Curated `/model` aliases the CLI's PTY injection path is allowed to type
+ * into a live terminal (docs/known-issues.md issue #12, "web model
+ * selector") — a closed enum, not a free `z.string()` like
+ * `SpawnParamsSchema.model` above. That field only ever becomes a
+ * `--model` CLI flag argument, never raw keystrokes, so an arbitrary string
+ * is safe there. This one is typed character-for-character into a live PTY
+ * (`ptyClaudeSession.ts`'s `sendModelChange`), so an arbitrary string here
+ * would be a keystroke-injection vector (e.g. an embedded "\r" could submit
+ * a second, attacker-chosen command as if typed at the terminal) — the
+ * server-side wire validation on this schema IS the enforcement point, not
+ * just a CLI-side convention. Mirrors the aliases
+ * `packages/web/src/features/new-session/model-meta.ts` already curates for
+ * spawn time — those resolve against `claude`'s own `--model` flag, and the
+ * same short names are what its live `/model` slash command accepts.
+ */
+export const RUNNING_SESSION_MODEL_ALIASES = [
+  "sonnet",
+  "opus",
+  "haiku",
+  "sonnet[1m]",
+  "opus[1m]",
+] as const;
+export type RunningSessionModelAlias = (typeof RUNNING_SESSION_MODEL_ALIASES)[number];
+
+export const SetModelParamsSchema = z.object({
+  model: z.enum(RUNNING_SESSION_MODEL_ALIASES),
+});
+export const SetModelResultSchema = z.object({
+  ok: z.boolean(),
+  // Additive, mirrors `SetModeResultSchema.observedMode` above: the PTY
+  // path can't blindly trust its own `/model` keystrokes landed as a real
+  // switch. It verifies via the next transcript "Set model to ..." echo
+  // (`claude/modelChange.ts`) and reports whatever it actually parsed here
+  // — free text (e.g. "Sonnet 5" for a requested "sonnet", Claude Code's
+  // own display name, not necessarily string-equal to the request) rather
+  // than the closed alias enum `model` above uses — so the caller can
+  // revert an optimistic UI update to the true state on a failed/unverified
+  // switch. There is no dedicated hook field for "current model" the way
+  // `permission_mode` exists for mode, so this echo is inherently a looser
+  // signal than `SetModeResultSchema.observedMode`'s hook-sourced one.
+  observedModel: z.string().optional(),
+});
+
 // ---------------------------------------------------------------------------
 // Per-workspace Setup/Run scripts (docs/features/setup-run-scripts.md,
 // docs/competitive-notes-omnara.md #7): a persisted "Setup script" (runs

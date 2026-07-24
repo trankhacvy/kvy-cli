@@ -174,6 +174,10 @@ export class FakeSessionProcess {
           this.permissionMode = params.mode;
           return { ok: true };
         },
+        // docs/known-issues.md issue #12's web model selector has no
+        // scripted scenario in this harness yet either — same "honest
+        // {ok:true} ack, no invented behavior" precedent as `stop` below.
+        setModel: (params) => ({ ok: true, observedModel: params.model }),
         permAnswer: (params) => this.permissionHandler.resolve(params),
         // `stop` (plan-v2.md W2.3 "Stop session from the web") has no
         // scripted scenario in this harness yet — an honest `{ok:true}`

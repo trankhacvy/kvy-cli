@@ -21,6 +21,7 @@ function pendingSessionControl(): SessionControlActions {
     interrupt: notReady,
     takeControl: notReady,
     setMode: notReady,
+    setModel: notReady,
     stopSession: notReady,
   };
 }

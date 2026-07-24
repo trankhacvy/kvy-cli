@@ -43,6 +43,8 @@ import {
   MessageRpcResultSchema,
   PermAnswerParamsSchema,
   PermAnswerResultSchema,
+  SetModelParamsSchema,
+  SetModelResultSchema,
   SetModeParamsSchema,
   SetModeResultSchema,
   StopRpcParamsSchema,
@@ -63,6 +65,8 @@ type InterruptResult = z.infer<typeof InterruptResultSchema>;
 type TakeControlResult = z.infer<typeof TakeControlResultSchema>;
 type SetModeParams = z.infer<typeof SetModeParamsSchema>;
 type SetModeResult = z.infer<typeof SetModeResultSchema>;
+type SetModelParams = z.infer<typeof SetModelParamsSchema>;
+type SetModelResult = z.infer<typeof SetModelResultSchema>;
 type PermAnswerParams = z.infer<typeof PermAnswerParamsSchema>;
 type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;
 type StopRpcParams = z.infer<typeof StopRpcParamsSchema>;
@@ -79,6 +83,7 @@ export const SESSION_RPC_METHODS = [
   "interrupt",
   "takeControl",
   "setMode",
+  "setModel",
   "perm.answer",
   "stop",
 ] as const;
@@ -89,6 +94,7 @@ export interface SessionRpcHandlers {
   interrupt: () => Promise<InterruptResult> | InterruptResult;
   takeControl: () => Promise<TakeControlResult> | TakeControlResult;
   setMode: (params: SetModeParams) => Promise<SetModeResult> | SetModeResult;
+  setModel: (params: SetModelParams) => Promise<SetModelResult> | SetModelResult;
   permAnswer: (params: PermAnswerParams) => Promise<PermAnswerResult> | PermAnswerResult;
   stop: (params: StopRpcParams) => Promise<StopRpcResult> | StopRpcResult;
 }
@@ -149,6 +155,7 @@ function buildMethodTable(
     interrupt: defineMethod(NoParamsSchema, InterruptResultSchema, handlers.interrupt),
     takeControl: defineMethod(NoParamsSchema, TakeControlResultSchema, handlers.takeControl),
     setMode: defineMethod(SetModeParamsSchema, SetModeResultSchema, handlers.setMode),
+    setModel: defineMethod(SetModelParamsSchema, SetModelResultSchema, handlers.setModel),
     "perm.answer": defineMethod(
       PermAnswerParamsSchema,
       PermAnswerResultSchema,
