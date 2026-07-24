@@ -4,7 +4,7 @@ import type { EncryptedBox } from "@falcon/wire";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { sessionMessages } from "../../db/schema.js";
+import { sessionMessages, sessions } from "../../db/schema.js";
 import type { EmitUpdateParams } from "../events/eventRouter.js";
 import { buildServer } from "../server.js";
 import { createTestAccount, createTestDb, RecordingEventRouter } from "./testHelpers.js";
@@ -104,6 +104,44 @@ describe("POST/GET /v1/sessions/:id/messages", () => {
     });
 
     expect(r2.json().seq).toBe(r1.json().seq + 1);
+  });
+
+  it("bumps sessions.updatedAt on a real chat message (known-issues.md #10)", async () => {
+    const { authHeader: freshHeader } = await createTestAccount(db);
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: freshHeader },
+      payload: {
+        tag: "updated-at-test-session",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    const freshSessionId = createResponse.json().id;
+
+    const [before] = await db.select().from(sessions).where(eq(sessions.id, freshSessionId));
+    if (!before) throw new Error("session row missing after create");
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${freshSessionId}/messages`,
+      headers: { authorization: freshHeader },
+      payload: { localId: "updated-at-msg", content: fakeBox() },
+    });
+    expect(response.statusCode).toBe(200);
+
+    const [after] = await db.select().from(sessions).where(eq(sessions.id, freshSessionId));
+    if (!after) throw new Error("session row missing after message post");
+    // Not a `toBeGreaterThan`: `before` comes from the DB's own
+    // `defaultNow()` and `after` from this write path's `new Date()` — under
+    // the PGlite driver these two clock sources land in different timezones
+    // (a driver-level quirk distinct from the postgres-js driver's UTC-safe
+    // parsing verified in known-issues.md #10's own investigation), so only
+    // inequality is a safe cross-driver assertion that the column changed at
+    // all — which is what the bug was: it never changed.
+    expect(after.updatedAt.getTime()).not.toEqual(before.updatedAt.getTime());
   });
 
   it("404s posting to a session that doesn't belong to the caller", async () => {
