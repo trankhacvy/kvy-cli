@@ -7,8 +7,9 @@ import { PinUnlockForm } from "@/components/auth/pin-unlock-form";
 import { Button } from "@/components/ui/button";
 import { ApiError, approvePairing, mintPairSession } from "@/lib/api";
 import { stashPendingPair } from "@/lib/pending-pair";
-import { getToken, isSignedIn } from "@/lib/session";
+import { getToken, isSignedIn, silentRefresh } from "@/lib/session";
 import { useUnlockedCryptoBridge } from "@/lib/use-unlocked-crypto-bridge";
+import { resolvePairGate } from "./pair-gate";
 
 const X25519_PUBLIC_KEY_BYTES = 32;
 
@@ -65,7 +66,9 @@ export default function PairPage() {
       const identity = await bridge.getIdentity();
       if (cancelled) return;
 
-      if (!identity || !isSignedIn()) {
+      const gate = await resolvePairGate(identity, { isSignedIn, silentRefresh });
+      if (cancelled) return;
+      if (gate === "signin") {
         stashPendingPair(ephPub);
         router.replace("/signin/");
         return;
@@ -90,7 +93,14 @@ export default function PairPage() {
     if (bridgeStatus.kind !== "ready") return;
     const bridge = bridgeStatus.bridge;
     setStatus({ kind: "approving", ephPub });
-    const token = getToken();
+    let token = getToken();
+    if (!token) {
+      // Just-in-case retry (known-issues.md #14): `/pair` has its own one-shot
+      // gate above rather than `RequireAuth`'s mounted 60s re-check interval,
+      // so a token that expired in the gap between that gate and clicking
+      // Approve wouldn't otherwise get a chance to refresh.
+      token = (await silentRefresh()) ? getToken() : null;
+    }
     if (!token) {
       setStatus({
         kind: "error",
