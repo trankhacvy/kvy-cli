@@ -19,7 +19,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-falcon}
       POSTGRES_DB: falcon
     volumes:
-      - falcon-pg-data:/var/lib/postgresql/data
+      - falcon-pg-data-v2:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U falcon -d falcon"]
       interval: 5s
@@ -75,5 +75,5 @@ networks:
     driver: bridge
 
 volumes:
-  falcon-pg-data:
+  falcon-pg-data-v2:
     driver: local
