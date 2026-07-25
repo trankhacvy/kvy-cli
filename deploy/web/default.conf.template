@@ -67,6 +67,14 @@ server {
         try_files $uri =404;
     }
 
+    # crypto/factory.ts loads this as a plain static file at a fixed name (not
+    # a content-hashed `/_next/static/*` chunk — see that file's own comment
+    # for why), so the same stale-cache risk as `sw.js` above applies.
+    location = /crypto-worker.js {
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
+    }
+
     location / {
         try_files $uri $uri.html $uri/index.html =404;
     }
