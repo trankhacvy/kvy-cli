@@ -75,6 +75,44 @@ server {
         try_files $uri =404;
     }
 
+    # `/session/<id>/...` are Next.js dynamic routes inside a fully static
+    # export (next.config.ts's `output: "export"`) — only the `demo`
+    # placeholder id is prerendered (see each `session/**/[id]/page.tsx`'s
+    # own comment), so a real session id (the only kind that ever actually
+    # exists — minted at runtime by `POST /v1/sessions`, never known at
+    # build time) has no matching HTML file on disk and 404s, both on a
+    # direct/reload navigation and on Next's own client-side router (which
+    # still needs a matching static route for the RSC payload even during
+    # an in-app transition). This broke clicking any session from the list
+    # and a push notification's deep link alike. Fall back to the `demo`
+    # shell for any id/subroute combination that isn't itself a real file
+    # (checked first by `try_files`) — the shell's client JS then reads the
+    # real id from `window.location`, exactly as every one of these pages'
+    # own doc comments already assumed happens. Mirrored in
+    # `packages/web/vercel.json`'s `rewrites` for the Vercel deployment,
+    # which has no nginx layer of its own.
+    location ~ ^/session/unmanaged/[^/]+/?$ {
+        try_files $uri $uri/index.html /session/unmanaged/demo/index.html;
+    }
+    location ~ ^/session/[^/]+/checks/?$ {
+        try_files $uri $uri/index.html /session/demo/checks/index.html;
+    }
+    location ~ ^/session/[^/]+/files/?$ {
+        try_files $uri $uri/index.html /session/demo/files/index.html;
+    }
+    location ~ ^/session/[^/]+/preview/?$ {
+        try_files $uri $uri/index.html /session/demo/preview/index.html;
+    }
+    location ~ ^/session/[^/]+/run/?$ {
+        try_files $uri $uri/index.html /session/demo/run/index.html;
+    }
+    location ~ ^/session/[^/]+/git/?$ {
+        try_files $uri $uri/index.html /session/demo/git/index.html;
+    }
+    location ~ ^/session/[^/]+/?$ {
+        try_files $uri $uri/index.html /session/demo/index.html;
+    }
+
     location / {
         try_files $uri $uri.html $uri/index.html =404;
     }

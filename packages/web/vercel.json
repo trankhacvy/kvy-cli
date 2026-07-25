@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/session/unmanaged/:id/",
+      "destination": "/session/unmanaged/demo/"
+    },
+    { "source": "/session/:id/checks/", "destination": "/session/demo/checks/" },
+    { "source": "/session/:id/files/", "destination": "/session/demo/files/" },
+    { "source": "/session/:id/preview/", "destination": "/session/demo/preview/" },
+    { "source": "/session/:id/run/", "destination": "/session/demo/run/" },
+    { "source": "/session/:id/git/", "destination": "/session/demo/git/" },
+    { "source": "/session/:id/", "destination": "/session/demo/" }
+  ]
+}
