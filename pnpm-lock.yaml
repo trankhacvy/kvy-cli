@@ -12,9 +12,15 @@ importers:
 
   .:
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1089.0
+        version: 3.1089.0
       '@biomejs/biome':
         specifier: ^2.5.4
         version: 2.5.4
+      dotenv:
+        specifier: ^17.4.2
+        version: 17.4.2
       turbo:
         specifier: ^2.5.0
         version: 2.10.5
@@ -174,9 +180,6 @@ importers:
 
   packages/server:
     dependencies:
-      '@aws-sdk/client-s3':
-        specifier: ^3.700.0
-        version: 3.1089.0
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.700.0
         version: 3.1089.0
@@ -235,6 +238,9 @@ importers:
         specifier: ^4.0.0
         version: 4.4.3
     devDependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.1089.0
+        version: 3.1089.0
       '@electric-sql/pglite':
         specifier: ^0.5.4
         version: 0.5.4
