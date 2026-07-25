@@ -185,4 +185,36 @@ const EnvSchema = z
 
 export type Env = z.infer<typeof EnvSchema>;
 
-export const env: Env = EnvSchema.parse(process.env);
+// Docker Compose's `${VAR}` interpolation sets an env var to an empty string rather than
+// omitting it when the underlying value is unset (self-host `.env`, Coolify, etc.). For the
+// optional, "missing config = skipped capability" fields documented above, treat that the
+// same as "not provided" so they fall back to their default/undefined instead of failing
+// min-length/url validation on an empty string. Core infra fields (HOST, DATABASE_URL, secrets,
+// ...) deliberately keep hard-failing on an explicit empty string — see config.test.ts.
+const OPTIONAL_ENV_KEYS = [
+  "GOOGLE_OAUTH_CLIENT_ID",
+  "GITHUB_OAUTH_CLIENT_ID",
+  "GITHUB_OAUTH_CLIENT_SECRET",
+  "VAPID_PUBLIC_KEY",
+  "VAPID_PRIVATE_KEY",
+  "VAPID_SUBJECT",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_BOT_USERNAME",
+  "TELEGRAM_WEBHOOK_SECRET",
+  "NTFY_BASE_URL",
+  "PUBLIC_WEB_ORIGIN",
+  "PUBLIC_API_ORIGIN",
+  "S3_BUCKET",
+  "S3_ENDPOINT",
+  "S3_ACCESS_KEY_ID",
+  "S3_SECRET_ACCESS_KEY",
+  "BLOB_LOCAL_TOKEN_SECRET",
+] as const;
+
+const rawEnv = Object.fromEntries(
+  Object.entries(process.env).filter(
+    ([key, value]) => !(value === "" && (OPTIONAL_ENV_KEYS as readonly string[]).includes(key)),
+  ),
+);
+
+export const env: Env = EnvSchema.parse(rawEnv);
