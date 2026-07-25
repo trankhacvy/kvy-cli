@@ -97,6 +97,38 @@ function resolveClaudeEntrypoint(pkgDir: string): string | null {
   return null;
 }
 
+/**
+ * Content-based fallback for detecting Falcon's own shell shim (see the call
+ * site in `findClaudeInPath` below). The directory comparison there
+ * (`path.dirname(claudePath) === shimBinDir({ env })`) is a false negative
+ * whenever the shim actually installed on PATH lives under a *different*
+ * `~/.falcon` than the one this process currently resolves — e.g.
+ * `FALCON_HOME_DIR` overridden for an isolated test/dev session (exactly
+ * CLAUDE.md's own e2e runbook) while a real shim from the user's default
+ * `~/.falcon/bin` is still first on PATH. When that happens, the locator
+ * mistakes the shim for a real Claude Code install, spawns it, and the
+ * shim's `exec falcon claude "$@"` recursively re-invokes an entirely new
+ * top-level `falcon claude` — a second, independent session for the same
+ * directory that collides with (or duplicates) the first.
+ *
+ * The shim script (`shim/install.ts`) is a fixed, tiny, generated file, so
+ * sniffing its content is a reliable, home-dir-independent way to recognize
+ * it regardless of which `~/.falcon` it was installed under.
+ */
+function isFalconShimScript(filePath: string): boolean {
+  try {
+    const stat = statSync(filePath);
+    if (!stat.isFile() || stat.size > 4096) return false;
+    const content = readFileSync(filePath, "utf8");
+    return (
+      content.includes("Installed by `falcon shim install`") &&
+      /exec falcon (claude|codex)/.test(content)
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isPlainTextWithoutShebang(filePath: string): boolean {
   try {
     const fd = openSync(filePath, "r");
@@ -159,7 +191,15 @@ export function findClaudeInPath(env: NodeJS.ProcessEnv = process.env): ClaudeCl
     // "falcon: not found". Skip it here so the caller's fallback chain
     // (`findGlobalClaudeCliPath`) proceeds to npm/Bun/Homebrew/native-installer
     // detection, which finds the real binary independently of PATH.
-    if (path.dirname(claudePath) === shimBinDir({ env })) return null;
+    //
+    // The directory comparison is the fast, common-case check, but it's a
+    // false negative whenever this process's `~/.falcon` (possibly
+    // `FALCON_HOME_DIR`-overridden) differs from the one the shim on PATH
+    // was actually installed under — content-sniffing the (tiny, fixed)
+    // shim script is the robust fallback for that case (see
+    // `isFalconShimScript`'s own doc comment).
+    if (path.dirname(claudePath) === shimBinDir({ env }) || isFalconShimScript(claudePath))
+      return null;
 
     const resolvedPath = resolvePathSafe(claudePath) ?? claudePath;
 

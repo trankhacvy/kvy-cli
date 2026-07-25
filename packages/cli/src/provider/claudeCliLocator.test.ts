@@ -310,6 +310,37 @@ describe("findClaudeInPath", () => {
 
     expect(findClaudeInPath({ FALCON_HOME_DIR: falconHomeDir })).toBeNull();
   });
+
+  it("skips Falcon's own shim even when it lives under a different FALCON_HOME_DIR than the current one (regression: isolated/test FALCON_HOME_DIR override missed a real shim installed under the default ~/.falcon, causing falcon claude to spawn its own shim and recursively re-invoke itself)", () => {
+    if (process.platform === "win32") return;
+
+    // The shim on PATH belongs to a DIFFERENT `~/.falcon` (e.g. the user's
+    // real, default install) than the one this process currently resolves
+    // (e.g. FALCON_HOME_DIR overridden for an isolated CLI test/dev
+    // session per CLAUDE.md's own e2e runbook) — the directory comparison
+    // alone can't catch this; only content-sniffing the shim script can.
+    const realFalconHomeDir = path.join(root, "real-falcon-home");
+    const shimDir = path.join(realFalconHomeDir, "bin");
+    mkdirSync(shimDir, { recursive: true });
+    const shimPath = path.join(shimDir, "claude");
+    // Exact content `shim/install.ts` writes.
+    writeFileSync(
+      shimPath,
+      [
+        "#!/usr/bin/env sh",
+        "# Installed by `falcon shim install` — do not edit by hand.",
+        "# Remove with `falcon shim uninstall`.",
+        'exec falcon claude "$@"',
+        "",
+      ].join("\n"),
+    );
+    chmodSync(shimPath, 0o755);
+
+    process.env.PATH = `${shimDir}:${originalPath ?? ""}`;
+
+    const differentFalconHomeDir = path.join(root, "isolated-test-falcon-home");
+    expect(findClaudeInPath({ FALCON_HOME_DIR: differentFalconHomeDir })).toBeNull();
+  });
 });
 
 describe("findGlobalClaudeCliPath", () => {
