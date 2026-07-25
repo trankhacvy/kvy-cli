@@ -37,10 +37,29 @@ const nextConfig = (phase: string): NextConfig => ({
   // JS/CSS bundle without the browser refusing to execute it. This is the one
   // half of "CSP+SRI" that's a build-time concern; the CSP header itself is
   // set at serve time by `deploy/web/default.conf.template`.
+  //
+  // Off on Vercel (`process.env.VERCEL` — set automatically by every Vercel
+  // build, docs.vercel.com/deployments/environments): confirmed twice, with a
+  // cache-free `curl`/Playwright client, that Vercel's edge served an
+  // `index.html` and a `webpack-*.js` chunk from two different builds whose
+  // content didn't match each other's baked-in hash — SRI then did exactly
+  // its job and blocked the mismatched chunk, but since that chunk *is* the
+  // webpack runtime, nothing else could execute either: a silent, totally
+  // blank page with no console error a user would ever see reported (the
+  // browser drops the "resource blocked" message before Next's own
+  // error-reporting code has even loaded). This is a real gap in Vercel's
+  // (or this project's Vercel config's) atomic-deploy guarantee, not
+  // something `next.config.ts` can fix from this side — self-host's own
+  // Docker image build + nginx serve never goes through that CDN layer, so
+  // SRI stays on there.
   experimental: {
-    sri: {
-      algorithm: "sha256",
-    },
+    ...(process.env.VERCEL
+      ? {}
+      : {
+          sri: {
+            algorithm: "sha256",
+          },
+        }),
   },
   // Pin the workspace root explicitly (this is the pnpm monorepo root, two
   // levels up from packages/web) so Next's file tracing doesn't guess wrong

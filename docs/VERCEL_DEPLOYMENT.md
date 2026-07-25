@@ -108,9 +108,18 @@ If you change `NEXT_PUBLIC_API_URL`:
 - Verify `CORS_ALLOWED_ORIGINS` in server .env includes your Vercel domain
 - Check that both web and API are using `https://` (not mixed http/https)
 
-**SRI integrity failures:**
-- Rare, usually means a CDN/proxy cached stale assets
-- Vercel cache → Purge cache → redeploy
+**SRI integrity failures:** shouldn't happen anymore — `next.config.ts` turns
+`experimental.sri` off when `process.env.VERCEL` is set (Vercel sets this on
+every build automatically), specifically because Vercel's edge has been
+observed serving an `index.html` and a JS chunk from two different builds
+whose SRI hashes don't match each other, which is fatal when the mismatched
+chunk is the webpack runtime itself: a silently blank page, no console error
+a user would see (the "resource blocked" message races Next's own
+error-reporting code and loses). SRI stays on for the self-host nginx image,
+which doesn't go through that CDN layer. If this resurfaces, it means
+`next.config.ts`'s Vercel detection stopped matching — check
+`vercel deploy` / dashboard build logs for `Experiments (use with caution): · sri`;
+its *presence* on a Vercel build is the bug.
 
 **OAuth provider buttons missing:**
 - Check Vercel env vars: `NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID`, etc.
