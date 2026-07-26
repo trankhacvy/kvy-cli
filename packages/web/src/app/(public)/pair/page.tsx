@@ -1,10 +1,14 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { AlertTriangle, Check, Laptop, Unlink } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AuthArtPanel } from "@/components/auth/auth-art-panel";
+import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
+import { InlineCodeText } from "@/components/auth/inline-code-text";
 import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { SIGNIN_PATH } from "@/features/auth";
 import { ApiError, approvePairing, fetchPairDetails, mintPairSession } from "@/lib/api";
 import { copy } from "@/lib/copy";
@@ -30,6 +34,10 @@ function formatRelative(iso: string | null): string {
  * This page used to check the crypto bridge before checking whether the visitor was even
  * signed in, so a fresh browser hit a "no key material … reopen this pairing link" dead
  * end while still signed out.
+ *
+ * Layout shares `/signin`'s shell (`AuthArtPanel`, `AuthBrandMark`) so a page whose whole
+ * job is "prove to the user this approval request is legit" doesn't show up unbranded —
+ * see docs' review notes on this page for why that matters more here than anywhere else.
  */
 export default function PairPage() {
   const router = useRouter();
@@ -40,7 +48,9 @@ export default function PairPage() {
   const [gate, setGate] = useState<Gate>({ kind: "checking" });
   // Hoisted out of the `confirm` gate so the key-fetch detour (below) can restore it —
   // `needs-keys` keeps only `ephPub`, so without this the machine name/folder/timestamp
-  // would be lost the moment the bridge reports no keys.
+  // would be lost the moment the bridge reports no keys. Also what a failed approval's
+  // Retry button reads from, so it doesn't fall back to "Unknown machine" on a browser
+  // that already knew better.
   const [pairDetails, setPairDetails] = useState<PairDetails | null>(null);
 
   useEffect(() => {
@@ -121,101 +131,173 @@ export default function PairPage() {
     }
   }
 
-  if (gate.kind === "needs-keys") {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <RequestKeysPanel
-          onReady={() => void refresh()}
-          context={copy.pair.resumeAfterKeys(pairDetails?.label ?? copy.pair.unknownMachine)}
-        />
-      </main>
-    );
-  }
+  const machineLabel = pairDetails?.label ?? copy.pair.unknownMachine;
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
-      {gate.kind === "checking" && (
-        <p className="text-sm text-muted-foreground">{copy.pair.checking}</p>
-      )}
+    <main className="min-h-svh bg-background p-4 sm:p-5">
+      <div className="flex min-h-[calc(100svh-2rem)] sm:min-h-[calc(100svh-2.5rem)]">
+        <section className="flex grow items-center justify-center px-6 py-12">
+          <div className="w-full max-w-sm">
+            <AuthBrandMark className="mb-10 justify-center lg:hidden" />
 
-      {gate.kind === "invalid-link" && (
-        <p className="max-w-sm text-center text-sm text-destructive">{copy.pair.invalidLink}</p>
-      )}
-
-      {gate.kind === "confirm" && (
-        <div className="w-full max-w-sm space-y-4 text-left">
-          <h1 className="text-xl font-semibold">{copy.pair.approveTitle}</h1>
-          <dl className="rounded-lg border p-4 text-sm">
-            <div className="flex justify-between gap-4">
-              <dt className="text-muted-foreground">Machine</dt>
-              <dd className="font-medium">{gate.label ?? copy.pair.unknownMachine}</dd>
-            </div>
-            {gate.cwd && (
-              <div className="mt-2 flex justify-between gap-4">
-                <dt className="text-muted-foreground">Folder</dt>
-                <dd className="truncate font-mono text-xs">{gate.cwd}</dd>
+            {(gate.kind === "checking" || gate.kind === "approving") && (
+              <div className="flex flex-col items-center gap-3 py-6 text-center" aria-live="polite">
+                <Spinner className="size-6 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  {gate.kind === "checking"
+                    ? copy.pair.checking
+                    : copy.pair.approvingLabel(machineLabel)}
+                </p>
               </div>
             )}
-            <div className="mt-2 flex justify-between gap-4">
-              <dt className="text-muted-foreground">Requested</dt>
-              <dd>{formatRelative(gate.requestedAt)}</dd>
-            </div>
-          </dl>
-          <p className="text-sm text-muted-foreground">{copy.pair.approveWarning}</p>
-          <div className="flex gap-3">
-            <Button
-              type="button"
-              disabled={bridgeStatus.kind !== "ready"}
-              onClick={() => void approve(gate.ephPub, gate.label)}
-            >
-              {bridgeStatus.kind === "ready" ? copy.pair.approveCta : copy.pair.preparingCta}
-            </Button>
-            <Button type="button" variant="outline" onClick={() => router.replace("/dashboard/")}>
-              {copy.pair.cancelCta}
-            </Button>
+
+            {gate.kind === "invalid-link" && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-amber-500/10">
+                  <Unlink className="size-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="font-semibold text-xl tracking-tight">
+                    {copy.pair.invalidLinkTitle}
+                  </h1>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    <InlineCodeText text={copy.pair.invalidLinkBody} />
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-11"
+                  onClick={() => router.push("/")}
+                >
+                  {copy.pair.backCta}
+                </Button>
+              </div>
+            )}
+
+            {gate.kind === "needs-keys" && (
+              <RequestKeysPanel
+                onReady={() => void refresh()}
+                context={copy.pair.resumeAfterKeys(machineLabel)}
+              />
+            )}
+
+            {gate.kind === "confirm" && (
+              <div className="space-y-6 text-left">
+                <div className="space-y-2">
+                  <h1 className="font-semibold text-2xl tracking-tight">
+                    {copy.pair.approveTitle}
+                  </h1>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {copy.pair.confirmSubtitle}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border/70 bg-card/60 p-4">
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted">
+                      <Laptop className="size-4.5 text-foreground" aria-hidden="true" />
+                    </span>
+                    <p className="font-medium text-sm">{gate.label ?? copy.pair.unknownMachine}</p>
+                  </div>
+                  <dl className="mt-4 space-y-2 border-border/60 border-t pt-4 text-sm">
+                    {gate.cwd && (
+                      <div className="flex items-center justify-between gap-4">
+                        <dt className="text-muted-foreground">Folder</dt>
+                        <dd className="truncate font-mono text-xs">{gate.cwd}</dd>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-4">
+                      <dt className="text-muted-foreground">Requested</dt>
+                      <dd>{formatRelative(gate.requestedAt)}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-700 text-sm dark:text-amber-400">
+                  <InlineCodeText text={copy.pair.approveWarning} />
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="h-11 flex-1 gap-2"
+                    disabled={bridgeStatus.kind !== "ready"}
+                    onClick={() => void approve(gate.ephPub, gate.label)}
+                  >
+                    {bridgeStatus.kind === "ready" ? copy.pair.approveCta : copy.pair.preparingCta}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-11 flex-1"
+                    onClick={() => router.replace("/dashboard/")}
+                  >
+                    {copy.pair.cancelCta}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {gate.kind === "approved" && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10">
+                  <Check className="size-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="font-semibold text-2xl tracking-tight">{copy.pair.doneTitle}</h1>
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    {copy.pair.doneBody(gate.label ?? copy.pair.unknownMachine)}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-11"
+                  onClick={() => router.replace("/dashboard/")}
+                >
+                  {copy.pair.doneCta}
+                </Button>
+              </div>
+            )}
+
+            {gate.kind === "error" && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-destructive/10">
+                  <AlertTriangle className="size-5 text-destructive" aria-hidden="true" />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="font-semibold text-2xl tracking-tight">{copy.pair.errorTitle}</h1>
+                  <p className="text-sm leading-6 text-muted-foreground">{gate.message}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-11"
+                  onClick={() =>
+                    setGate({
+                      kind: "confirm",
+                      ephPub: gate.ephPub,
+                      label: pairDetails?.label ?? null,
+                      cwd: pairDetails?.cwd ?? null,
+                      requestedAt: pairDetails?.requestedAt ?? null,
+                    })
+                  }
+                >
+                  {copy.pair.retryCta}
+                </Button>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        </section>
 
-      {gate.kind === "approving" && (
-        <p className="text-sm text-muted-foreground">{copy.pair.approvingLabel}</p>
-      )}
-
-      {gate.kind === "approved" && (
-        <div className="flex max-w-sm flex-col items-center gap-4 text-center">
-          <div className="rounded-full bg-emerald-500/10 p-3">
-            <Check className="size-6 text-emerald-600" aria-hidden="true" />
-          </div>
-          <h1 className="text-xl font-semibold">{copy.pair.doneTitle}</h1>
-          <p className="text-sm text-muted-foreground">
-            {copy.pair.doneBody(gate.label ?? "Your machine")}
-          </p>
-          <Button type="button" variant="outline" onClick={() => router.replace("/dashboard/")}>
-            {copy.pair.doneCta}
-          </Button>
-        </div>
-      )}
-
-      {gate.kind === "error" && (
-        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-          <p className="text-sm text-destructive">{gate.message}</p>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setGate({
-                kind: "confirm",
-                ephPub: gate.ephPub,
-                label: null,
-                cwd: null,
-                requestedAt: null,
-              })
-            }
-          >
-            {copy.pair.retryCta}
-          </Button>
-        </div>
-      )}
+        <AuthArtPanel caption={copy.signin.panelCaption} />
+      </div>
     </main>
   );
 }

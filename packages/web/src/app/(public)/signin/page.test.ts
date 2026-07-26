@@ -48,7 +48,16 @@ describe("signin/page.tsx", () => {
 
   it("only shows the 'no OAuth provider configured' note when neither OAuth provider is available", () => {
     expect(pageSource).toContain("!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID");
-    expect(pageSource).toContain("No OAuth provider is configured for this deployment.");
+    expect(pageSource).toContain("copy.signin.oauthUnavailable");
+  });
+
+  // An unconfigured provider is an admin setup concern: its button is hidden
+  // outright, never shown disabled to an end user.
+  it("hides each provider's button when that provider isn't configured", () => {
+    expect(pageSource).toContain("{GOOGLE_OAUTH_CLIENT_ID && (");
+    expect(pageSource).toContain("{GITHUB_OAUTH_CLIENT_ID && (");
+    expect(pageSource).not.toContain("disabled={!GOOGLE_OAUTH_CLIENT_ID}");
+    expect(pageSource).not.toContain("disabled={!GITHUB_OAUTH_CLIENT_ID}");
   });
 
   // docs/auth-ux-hardening-plan.md item 7 ("session-expiry-reason"): the "expired"

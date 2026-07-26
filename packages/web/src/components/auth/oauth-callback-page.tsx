@@ -1,13 +1,19 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AuthArtPanel } from "@/components/auth/auth-art-panel";
+import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
 import { KeyProtectionChoice } from "@/components/auth/key-protection-choice";
 import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { type KeyWrapMode, provisionKeyProtection } from "@/crypto";
 import { ApiError, register } from "@/lib/api";
 import { completeOAuthSignIn } from "@/lib/complete-oauth-sign-in";
+import { copy } from "@/lib/copy";
+import { clearTitleOverride, setTitleOverride } from "@/lib/document-title-store";
 import { consumePendingStepUp, setStepUpReturn } from "@/lib/pending-stepup";
 import { getAccountId, setToken } from "@/lib/session";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
@@ -41,6 +47,11 @@ export function OAuthCallbackPage({
   const router = useRouter();
   const bridge = useCryptoBridge();
   const [status, setStatus] = useState<Status>({ kind: "working" });
+
+  useEffect(() => {
+    setTitleOverride("oauth-callback", "Signing in · Falcon");
+    return () => clearTitleOverride("oauth-callback");
+  }, []);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: resolveProof is stable per page mount (constructed from the immutable initial URL); including it would refire this effect on every render
   useEffect(() => {
@@ -145,27 +156,59 @@ export function OAuthCallbackPage({
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-8">
-      {status.kind === "working" && (
-        <p className="text-sm text-muted-foreground">Finishing sign-in…</p>
-      )}
+    <main className="min-h-svh bg-background p-4 sm:p-5">
+      <div className="flex min-h-[calc(100svh-2rem)] sm:min-h-[calc(100svh-2.5rem)]">
+        <section className="flex grow items-center justify-center px-6 py-12">
+          <div className="w-full max-w-sm">
+            <AuthBrandMark className="mb-10 justify-center lg:hidden" />
 
-      {status.kind === "error" && (
-        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-          <p className="text-sm text-destructive">{status.message}</p>
-          <Button variant="outline" onClick={() => router.replace("/signin/")}>
-            Back to sign in
-          </Button>
-        </div>
-      )}
+            {status.kind === "working" && (
+              <div
+                className="flex flex-col items-center gap-3 py-6 text-center"
+                aria-live="polite"
+              >
+                <Spinner className="size-6 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">{copy.oauthCallback.working}</p>
+              </div>
+            )}
 
-      {status.kind === "choose-protection" && (
-        <KeyProtectionChoice onChoose={(mode) => void handleProtectionChoice(mode)} />
-      )}
+            {status.kind === "error" && (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <span className="flex size-12 items-center justify-center rounded-full bg-destructive/10">
+                  <AlertTriangle className="size-5 text-destructive" aria-hidden="true" />
+                </span>
+                <div className="space-y-2">
+                  <h1 className="font-semibold text-2xl tracking-tight">
+                    {copy.oauthCallback.errorTitle}
+                  </h1>
+                  <p className="text-sm leading-6 text-muted-foreground" aria-live="polite">
+                    {status.message}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-11"
+                  onClick={() => router.replace("/signin/")}
+                >
+                  {copy.oauthCallback.backToSigninCta}
+                </Button>
+              </div>
+            )}
 
-      {status.kind === "needs-keys" && (
-        <RequestKeysPanel onReady={() => router.replace(status.nextUrl)} />
-      )}
+            {status.kind === "choose-protection" && (
+              <KeyProtectionChoice onChoose={(mode) => void handleProtectionChoice(mode)} />
+            )}
+
+            {status.kind === "needs-keys" && (
+              <RequestKeysPanel onReady={() => router.replace(status.nextUrl)} />
+            )}
+          </div>
+        </section>
+
+        <AuthArtPanel caption={copy.signin.panelCaption} />
+      </div>
     </main>
   );
 }

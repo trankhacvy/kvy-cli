@@ -13,11 +13,11 @@ describe("derivePhaseFromReturn", () => {
   // PIN-setup ("returned") phase identically.
   it("with a return payload, reaches the PIN-setup phase regardless of the entrant's prior bridge state", () => {
     const ret = { provider: "google" as const, oauthProof: "id-token-1", refreshToken: "rt1" };
-    expect(derivePhaseFromReturn(ret)).toEqual({ kind: "returned", ...ret });
+    expect(derivePhaseFromReturn(ret)).toEqual({ kind: "returned", method: "oauth", ...ret });
   });
 
   it("carries the github provider through the same way", () => {
     const ret = { provider: "github" as const, oauthProof: "gh-token-1", refreshToken: "rt2" };
-    expect(derivePhaseFromReturn(ret)).toEqual({ kind: "returned", ...ret });
+    expect(derivePhaseFromReturn(ret)).toEqual({ kind: "returned", method: "oauth", ...ret });
   });
 });

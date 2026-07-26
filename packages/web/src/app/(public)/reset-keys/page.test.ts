@@ -38,11 +38,22 @@ describe("reset-keys/page.tsx", () => {
   });
 
   it("offers key sharing as primary and reset as a demoted, confirm-gated secondary action", () => {
-    expect(pageSource).toContain("Get my keys from another device");
-    expect(pageSource).toContain("Reset keys instead");
+    expect(pageSource).toContain("copy.reset.fetchKeysCta");
+    expect(pageSource).toContain("copy.reset.resetInsteadCta");
     expect(pageSource).toContain("confirmingReset");
     expect(pageSource).toContain("Confirm with Google");
     expect(pageSource).toContain("Confirm with GitHub");
+  });
+
+  // The destructive confirm box used to only offer Google/GitHub step-up — with neither
+  // configured (a self-host with no OAuth app set up), both buttons rendered disabled and
+  // the single most dangerous screen in the app became a silent dead end. The password
+  // step-up form is always available regardless of OAuth config, so that can't happen again.
+  it("always offers a password step-up alongside OAuth, so the confirm box is never a dead end", () => {
+    expect(pageSource).toContain("copy.reset.passwordCta");
+    expect(pageSource).toContain("handlePasswordStepUp");
+    expect(pageSource).not.toContain("disabled={!GOOGLE_OAUTH_CLIENT_ID}");
+    expect(pageSource).not.toContain("disabled={!GITHUB_OAUTH_CLIENT_ID}");
   });
 
   it("consumes the in-memory step-up return channel for the proof/token, never sessionStorage", () => {
