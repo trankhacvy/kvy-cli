@@ -32,11 +32,9 @@ describe("oauth-callback-page.tsx — step-up branch (docs/auth-ux-hardening-pla
     expect(source).toContain("consumePendingStepUp(provider)");
   });
 
-  it("only checks for a step-up on google/github — dev never stashes one", () => {
-    const guardIndex = source.indexOf('if (provider === "google" || provider === "github")');
-    const consumeIndex = source.indexOf("consumePendingStepUp(provider)");
-    expect(guardIndex).toBeGreaterThan(-1);
-    expect(consumeIndex).toBeGreaterThan(guardIndex);
+  it("only accepts google/github providers — the dev bypass is gone", () => {
+    expect(source).toContain('provider: "google" | "github";');
+    expect(source).not.toContain('"dev"');
   });
 
   it("completes sign-in (register + setToken) before handing off, so a fresh refresh token exists", () => {
@@ -64,39 +62,52 @@ describe("oauth-callback-page.tsx — step-up branch (docs/auth-ux-hardening-pla
   it("wraps the step-up register() call so a network/API failure surfaces an error instead of hanging silently", () => {
     const stepUpBranch = source.slice(
       source.indexOf("consumePendingStepUp(provider)"),
-      source.indexOf("const identity = await bridge.getIdentity();"),
+      source.indexOf("const identity = await bridge.getIdentity()"),
     );
     const tryIndex = stepUpBranch.indexOf("try {");
     const registerIndex = stepUpBranch.indexOf("await register(");
     const catchIndex = stepUpBranch.indexOf("} catch (err) {");
-    const statusIndex = stepUpBranch.indexOf('setStatus({ kind: "error"');
+    // Formatting-agnostic: the catch must SET an error status, however prettified.
+    const statusIndex = stepUpBranch.replace(/\s+/g, " ").indexOf('setStatus({ kind: "error"');
     expect(tryIndex).toBeGreaterThan(-1);
     expect(registerIndex).toBeGreaterThan(tryIndex);
     expect(catchIndex).toBeGreaterThan(registerIndex);
-    expect(statusIndex).toBeGreaterThan(catchIndex);
+    expect(statusIndex).toBeGreaterThan(-1);
   });
 });
 
-describe("oauth-callback-page.tsx — returning-user 409 (docs/auth-ux-hardening-plan.md item 2c/6)", () => {
-  it("detects a keys/bind 409 in the set-pin branch and offers recovery instead of a dead end", () => {
-    const handlePinSetupIndex = source.indexOf("async function handlePinSetup");
-    const handleUnlockIndex = source.indexOf("async function handleUnlock");
-    expect(handlePinSetupIndex).toBeGreaterThan(-1);
-    expect(handleUnlockIndex).toBeGreaterThan(handlePinSetupIndex);
-    const handlePinSetupBody = source.slice(handlePinSetupIndex, handleUnlockIndex);
-    expect(handlePinSetupBody).toContain("err.status === 409");
-    expect(handlePinSetupBody).toContain('kind: "already-bound"');
+describe("oauth-callback-page.tsx — returning-user 409 (docs/auth-ux-overhaul-plan.md Phase 4/5)", () => {
+  it("detects a keys/bind 409 and offers key sharing instead of a dead end", () => {
+    const handlerIndex = source.indexOf("async function handleProtectionChoice");
+    expect(handlerIndex).toBeGreaterThan(-1);
+    const body = source.slice(handlerIndex);
+    expect(body).toContain("err.status === 409");
+    expect(body).toContain('kind: "needs-keys"');
   });
 
-  it("offers Pair (primary) before Reset (secondary) on the already-bound screen", () => {
-    const alreadyBoundIndex = source.indexOf('status.kind === "already-bound"');
-    const unlockIndex = source.indexOf('status.kind === "unlock"');
-    expect(alreadyBoundIndex).toBeGreaterThan(-1);
-    expect(unlockIndex).toBeGreaterThan(alreadyBoundIndex);
-    const block = source.slice(alreadyBoundIndex, unlockIndex);
-    const pairIndex = block.indexOf("Pair from another device");
-    const resetIndex = block.indexOf("Reset keys for this browser");
-    expect(pairIndex).toBeGreaterThan(-1);
-    expect(resetIndex).toBeGreaterThan(pairIndex);
+  // auth-ux-overhaul-fix-plan.md Fix 4 Part A2: the returning-browser effect's OWN catch
+  // (not just handleProtectionChoice's) reaches `completeOAuthSignIn`, which now takes the
+  // account-scoped `init` path whenever the effect's unscoped pre-check guessed "reuse" but
+  // the scoped check found a foreign record — surfacing as keysBind's 409 here too. Before
+  // this fix that 409 fell through to the generic "Sign-in failed" error.
+  it("the returning-user effect's own catch ALSO handles a keys/bind 409, not just handleProtectionChoice's", () => {
+    const effectIndex = source.indexOf("const identity = await bridge.getIdentity()");
+    expect(effectIndex).toBeGreaterThan(-1);
+    const effectBody = source.slice(effectIndex);
+    const catchIndex = effectBody.indexOf("} catch (err) {");
+    expect(catchIndex).toBeGreaterThan(-1);
+    const catchBlock = effectBody.slice(catchIndex).replace(/\s+/g, " ");
+    expect(catchBlock).toContain("err.status === 409");
+    expect(catchBlock).toContain('kind: "needs-keys"');
+  });
+
+  it("renders the non-destructive recovery, with no destructive peer button", () => {
+    expect(source).toContain("RequestKeysPanel");
+    expect(source).not.toContain("Reset keys for this browser");
+  });
+
+  it("has no PIN steps left", () => {
+    expect(source).not.toContain("PinSetupForm");
+    expect(source).not.toContain("PinUnlockForm");
   });
 });

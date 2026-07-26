@@ -26,6 +26,19 @@ vi.mock("./previewTunnel.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./previewTunnel.js")>();
   return { ...actual, closeAllTunnels: vi.fn().mockResolvedValue(undefined) };
 });
+// Wraps the real `startTranscriptIndexer` (so it still boots/stops cleanly)
+// while exposing every call's `deps` — the only way to reach the `isManaged`
+// closure `startMachineIntegration` builds and hands it, since that closure
+// isn't part of `MachineIntegrationHandle`'s own return shape.
+vi.mock("./transcriptIndexer.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./transcriptIndexer.js")>();
+  return {
+    ...actual,
+    startTranscriptIndexer: vi.fn((deps: Parameters<typeof actual.startTranscriptIndexer>[0]) =>
+      actual.startTranscriptIndexer(deps),
+    ),
+  };
+});
 
 /** Minimal fake standing in for a socket.io-client `Socket` (mirrors `machineRpc.test.ts`'s `FakeSocket`). */
 class FakeSocket {
@@ -267,5 +280,65 @@ describe("startMachineIntegration — preview-tunnel wiring", () => {
     await handle?.stop();
 
     expect(closeAllTunnels).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("startMachineIntegration — transcript indexer isManaged wiring", () => {
+  let homeDir: string;
+  let masterSecret: Uint8Array;
+  let credentials: FalconCredentials;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-transcript-"));
+    masterSecret = getRandomBytes(32);
+    credentials = {
+      refreshToken: "test-refresh-token",
+      keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+    };
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
+  // Confirms the regression this fix closes: `startTranscriptIndexer` used
+  // to be wired with no `isManaged` override at all here, so it silently
+  // ran with `createTranscriptIndexerDeps`'s permanent `() => false` default
+  // — nothing was ever recognized as already Falcon-managed, which is
+  // exactly why a session's own transcript kept getting duplicated as
+  // "Unmanaged" (docs/auth-ux-post-verification-fixes.md).
+  it("wires isManaged to the injected registry's isProviderSessionManaged, not the indexer's own no-op default", async () => {
+    const { startTranscriptIndexer } = await import("./transcriptIndexer.js");
+    const isProviderSessionManaged = vi.fn((providerSessionId: string) => providerSessionId === "provider-abc");
+    const registry = {
+      getSessions: () => [],
+      isProviderSessionManaged,
+    };
+
+    const handle = await startMachineIntegration(
+      createMachineIntegrationDeps(
+        { homeDir, registry: registry as never, awaiter: createSpawnAwaiter() },
+        {
+          logger: silentLogger(),
+          serverUrl: "http://localhost:4000",
+          fetchImpl: fakeServer().fetchImpl,
+          ioFactory: () => new FakeSocket() as unknown as Socket,
+          readCredentials: () => credentials,
+        },
+      ),
+    );
+    expect(handle).not.toBeNull();
+
+    expect(startTranscriptIndexer).toHaveBeenCalledTimes(1);
+    const indexerDeps = vi.mocked(startTranscriptIndexer).mock.calls[0]?.[0];
+    expect(indexerDeps).toBeDefined();
+
+    expect(await indexerDeps?.isManaged("provider-abc")).toBe(true);
+    expect(await indexerDeps?.isManaged("provider-unrelated")).toBe(false);
+    expect(isProviderSessionManaged).toHaveBeenCalledWith("provider-abc");
+    expect(isProviderSessionManaged).toHaveBeenCalledWith("provider-unrelated");
+
+    await handle?.stop();
   });
 });

@@ -8,7 +8,7 @@ import type { CryptoBridgeClient } from "@/crypto";
 import type { EphemeralSource } from "@/features/session-control";
 import { getSessionMessages } from "@/lib/api";
 import { getToken } from "@/lib/session";
-import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { apiSocket, decryptMessageBatches, type MessagesQueryData, messagesQueryKey } from "@/sync";
 import { type RenderItem, reduceEnvelopes } from "@/sync/reducer";
@@ -64,19 +64,19 @@ import {
  * `messagesQueryKey` so `sync/engine.ts`'s per-session message fast-path
  * keeps a rendered row's page current across `message-new` events, exactly
  * like the Timeline's own `useLiveRenderItems`), decrypted sequentially
- * against `useDecryptedItems`'s *own* `useCryptoBridge()` instance — a
- * separate worker from `useDecryptedTitles`'s, not shared with it. A
+ * against `useDecryptedItems`'s *own* `useDedicatedCryptoBridge()` instance —
+ * a separate worker from `useDecryptedTitles`'s, not shared with it. A
  * crypto-bridge worker only ever holds one active session key at once
  * (`setSessionKey` doc comment), but that constraint is *within* a single
  * worker; `useDecryptedTitles` and `useDecryptedItems` are two independent
  * React effects with no mutual exclusion between them, so a single shared
  * bridge could have one effect's `setSessionKey` land between the other's
  * `setSessionKey`+`open`, decrypting under the wrong key. Giving each hook
- * its own worker (same "each owns its own worker" precedent
- * `use-crypto-bridge.ts` documents, and the same shape
- * `session-list-screen.tsx` already has for `useLiveSessionListSnapshot`
- * vs. `useLiveUnmanagedSessions`) sidesteps the race entirely instead of
- * building a cross-hook decrypt queue. `attention` comes from the live `attention` ephemeral
+ * its own worker via `useDedicatedCryptoBridge()` (`lib/use-crypto-bridge.ts` —
+ * plain `useCryptoBridge()` is a refcounted app-wide singleton and does NOT
+ * give isolation on its own, see that hook's doc comment) sidesteps the race
+ * entirely instead of building a cross-hook decrypt queue. `attention` comes
+ * from the live `attention` ephemeral
  * (`useLiveAttention`) — the wire's `SessionEvent` union has no "agent asked
  * a question" variant, so this is the only source for it, mirroring
  * `features/session-control/use-session-ephemerals.ts`'s per-session
@@ -264,7 +264,7 @@ function useSessionMessagePages(sessionIds: string[]) {
 /**
  * Decrypts each session's fetched message page into `RenderItem[]`
  * (`reduceEnvelopes`), one session at a time against `bridge` — this hook's
- * *own* `useCryptoBridge()` instance, deliberately not shared with
+ * *own* `useDedicatedCryptoBridge()` instance, deliberately not shared with
  * `useDecryptedTitles`'s bridge (see the module doc comment above: a
  * crypto-bridge worker only ever holds one active session key at once, and
  * two independent effects racing `setSessionKey` calls against the same
@@ -418,11 +418,11 @@ export function buildSnapshot(
  * crypto bridge is ready: a live source has to tolerate "no data yet" at
  * every layer rather than assume a fixture's always-present rows. */
 export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
-  const titlesBridge = useCryptoBridge();
+  const titlesBridge = useDedicatedCryptoBridge();
   // Its own worker, deliberately not shared with `titlesBridge` — see the
   // module doc comment: two independent effects racing `setSessionKey`
   // calls against one shared worker can decrypt under the wrong key.
-  const itemsBridge = useCryptoBridge();
+  const itemsBridge = useDedicatedCryptoBridge();
   const query = useSyncSnapshotQuery();
 
   const sessionRows = query.data?.sessions ?? EMPTY_SESSIONS;

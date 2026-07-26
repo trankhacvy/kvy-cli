@@ -246,7 +246,9 @@ describe("pendingToRenderItem", () => {
 
 describe("mergeRenderItems", () => {
   it("returns items unchanged (same reference) when there's nothing pending", () => {
-    const items: RenderItem[] = [{ id: "a", time: 1, role: "agent", kind: "text", md: "hi", thinking: false }];
+    const items: RenderItem[] = [
+      { id: "a", time: 1, role: "agent", kind: "text", md: "hi", thinking: false },
+    ];
     expect(mergeRenderItems(items, [])).toBe(items);
   });
 
@@ -256,7 +258,14 @@ describe("mergeRenderItems", () => {
     // pending-send echo reconciles — a naive concat would render the result
     // above the message that caused it.
     const items: RenderItem[] = [
-      { id: "msg1", time: 100, role: "user", kind: "text", md: "first question please", thinking: false },
+      {
+        id: "msg1",
+        time: 100,
+        role: "user",
+        kind: "text",
+        md: "first question please",
+        thinking: false,
+      },
       { id: "card1", time: 200, role: "agent", kind: "text", md: "answered", thinking: false },
     ];
     const pending: PendingMessage[] = [
@@ -264,7 +273,14 @@ describe("mergeRenderItems", () => {
     ];
     expect(mergeRenderItems(items, pending)).toEqual([
       items[0],
-      { id: "msg2", time: 150, role: "user", kind: "text", md: "second question please", thinking: false },
+      {
+        id: "msg2",
+        time: 150,
+        role: "user",
+        kind: "text",
+        md: "second question please",
+        thinking: false,
+      },
       items[1],
     ]);
   });

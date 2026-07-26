@@ -13,6 +13,12 @@ export function stashPendingPair(ephPub: string): void {
   window.sessionStorage.setItem(PENDING_PAIR_KEY, ephPub);
 }
 
+/** Read without consuming — the sign-in page needs to KNOW a pairing is pending (to
+ * change its heading) without spending it. Only the pair page consumes. */
+export function peekPendingPair(): string | null {
+  return window.sessionStorage.getItem(PENDING_PAIR_KEY);
+}
+
 export function consumePendingPair(): string | null {
   const ephPub = window.sessionStorage.getItem(PENDING_PAIR_KEY);
   window.sessionStorage.removeItem(PENDING_PAIR_KEY);

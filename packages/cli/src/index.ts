@@ -8,6 +8,7 @@ import { ensureLoggedIn } from "./auth/login.js";
 import { runAdaptersInstallCommand, runAdaptersUpgradeCommand } from "./commands/adapters.js";
 import { createAdoptCommandDeps, runAdoptCommand } from "./commands/adopt.js";
 import { runGithubLogin, runGithubLogout, runGithubStatus } from "./commands/github.js";
+import { runKeysApproveCommand } from "./commands/keysApprove.js";
 import { runResumeCommand } from "./commands/resume.js";
 import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
@@ -150,6 +151,7 @@ Usage:
   falcon workspace list             List registered workspace directories
   falcon workspace unregister [--directory <path>]
   falcon workspace sync             (coming soon)
+  falcon keys approve              Send your keys to another device that asked for them
   falcon shim install|uninstall|status
                                      Manage the claude/codex PATH shim (Tier 3 adoption)
   falcon adapters install|upgrade   Install/upgrade the pinned ACP adapter packages
@@ -328,21 +330,25 @@ async function runUpdate(): Promise<number> {
  * FR-1.2) is real either way: this is the first place a fresh install
  * actually touches the daemon.
  *
- * For `claude` specifically, auth is checked *before* the daemon is started
- * (`ensureLoggedIn()`, first-run UX): the daemon only attempts machine
- * registration once, at its own startup, and only if credentials already
- * exist at that moment — starting it ahead of a first-time login would risk
- * a daemon that came up with nothing to register and never retries. Checking
- * (and, at a real TTY, completing) login first means the daemon always sees
- * credentials the one time it looks.
+ * Auth is checked *before* the daemon is started (`ensureLoggedIn()`, first-run
+ * UX): the daemon only attempts machine registration once, at its own startup,
+ * and only if credentials already exist at that moment — starting it ahead of a
+ * first-time login would risk a daemon that came up with nothing to register and
+ * never retries. Checking (and, at a real TTY, completing) login first means the
+ * daemon always sees credentials the one time it looks.
+ *
+ * This ordering is load-bearing: `commands/start.ts` deliberately does NOT run
+ * the inline login itself, because it executes after `ensureDaemon()` below.
+ * Its own re-pair path (a dead refresh token) therefore asks the daemon to
+ * reload credentials afterwards (`daemon/reloadAuth.ts`).
  */
 async function runStart(command: Extract<FalconCommand, { type: "start" }>): Promise<number> {
-  if (command.provider === "claude") {
-    const auth = await ensureLoggedIn(logger);
-    if (!auth.ok) {
-      if (auth.message) process.stderr.write(auth.message);
-      return 1;
-    }
+  // Every provider, not just claude (AX-1.1) — `startCodex` had the same
+  // read-credentials-then-hard-fail shape, and both now depend on this having run.
+  const auth = await ensureLoggedIn(logger);
+  if (!auth.ok) {
+    if (auth.message) process.stderr.write(auth.message);
+    return 1;
   }
 
   const daemon = await ensureDaemon();
@@ -593,6 +599,8 @@ function run(command: FalconCommand): number | Promise<number> {
       return runResume(command);
     case "adopt":
       return runAdopt(command);
+    case "keys":
+      return runKeysApproveCommand({ logger });
     case "shim":
       return runShim(command);
     case "adapters":

@@ -61,6 +61,34 @@ export interface RegisteredWorkspace {
   workspaceId: string;
   /** Absolute working-directory path Claude Code was/would be run in. */
   path: string;
+  /**
+   * ISO-8601 first-registration time, from `workspace/registry.ts`. Transcripts whose files
+   * haven't been touched since then are pre-Falcon history, not "the session the user just
+   * left" (falcon-prd.md FR-9.1), and are not indexed — a brand-new account's first
+   * `falcon claude` was otherwise uploading the machine's entire prior Claude Code archive
+   * for that folder as unmanaged sessions.
+   *
+   * Optional: absent means index everything, which keeps the daemon's default
+   * `listWorkspaces: async () => []` and every existing test's fixture valid.
+   */
+  registeredAt?: string;
+}
+
+/**
+ * How far back a workspace's FIRST registration reaches. falcon-prd.md:221's canonical entry
+ * path is "run plain `claude`, work a while, THEN reach for Falcon", so the session the user
+ * just left is minutes older than `registeredAt` — a strict `mtime >= registeredAt` gate would
+ * drop precisely the transcript Tier 1 exists to catch. One hour is long enough for "I just
+ * finished that" and far short of the days-old archive that made a brand-new account show 11
+ * unrelated cards.
+ */
+const FIRST_REGISTRATION_GRACE_MS = 60 * 60 * 1000;
+
+function isWithinWatchWindow(workspace: RegisteredWorkspace, mtimeMs: number): boolean {
+  if (!workspace.registeredAt) return true;
+  const registeredAtMs = Date.parse(workspace.registeredAt);
+  if (Number.isNaN(registeredAtMs)) return true;
+  return mtimeMs >= registeredAtMs - FIRST_REGISTRATION_GRACE_MS;
 }
 
 export interface TranscriptIndexerDeps {
@@ -346,6 +374,7 @@ export function startTranscriptIndexer(deps: TranscriptIndexerDeps): TranscriptI
       const [readContents, stats] = await Promise.all([readFile(file, "utf-8"), stat(file)]);
       contents = readContents;
       mtimeMs = stats.mtimeMs;
+      if (!isWithinWatchWindow(workspace, mtimeMs)) return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
         deps.logger.warn("[transcript-indexer] failed to read transcript", {
@@ -397,9 +426,12 @@ export function startTranscriptIndexer(deps: TranscriptIndexerDeps): TranscriptI
     try {
       const names = await readdir(projectDir);
       for (const name of names) {
-        if (name.endsWith(JSONL_EXT)) {
-          scheduleProcess(workspace, name.slice(0, -JSONL_EXT.length));
-        }
+        if (!name.endsWith(JSONL_EXT)) continue;
+        // Cheap pre-filter so a directory with months of history doesn't get read and
+        // parsed on every watcher (re)attach only to be dropped. `processFile` re-checks.
+        const stats = await stat(path.join(projectDir, name)).catch(() => null);
+        if (stats && !isWithinWatchWindow(workspace, stats.mtimeMs)) continue;
+        scheduleProcess(workspace, name.slice(0, -JSONL_EXT.length));
       }
     } catch {
       // Project dir doesn't exist yet — `watchDirectoryForever`'s `onReady`

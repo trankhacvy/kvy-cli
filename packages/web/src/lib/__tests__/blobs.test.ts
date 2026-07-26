@@ -19,13 +19,18 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
   };
   return {
     init: notImplemented,
-    unlock: notImplemented,
     setSessionKey: notImplemented,
     seal: notImplemented,
     open: notImplemented,
     sealBlob: async (data) => new Uint8Array([0xff, ...data]), // trivial "encryption" marker
     openBlob: async (bundle) => (bundle[0] === 0xff ? bundle.subarray(1) : null),
     clear: notImplemented,
+    describeStorage: notImplemented,
+    ensureLoaded: notImplemented,
+    migrateFromPin: notImplemented,
+    beginKeyRequest: notImplemented,
+    acceptKeyResponse: notImplemented,
+    sealKeysForPeer: notImplemented,
     getIdentity: notImplemented,
     sealForPeer: notImplemented,
     bindKeysProof: notImplemented,

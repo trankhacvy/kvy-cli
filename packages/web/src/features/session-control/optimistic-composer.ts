@@ -1,5 +1,5 @@
 import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
-import { stableSortByTime, type FileItem, type RenderItem, type TextItem } from "@/sync/reducer";
+import { type FileItem, type RenderItem, stableSortByTime, type TextItem } from "@/sync/reducer";
 import type { MessageRpcResult } from "@/sync/sessionRpc";
 
 /**

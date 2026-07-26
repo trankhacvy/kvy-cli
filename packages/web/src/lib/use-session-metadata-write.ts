@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import type { CryptoBridgeClient } from "@/crypto";
 import { putSessionMetadataCas } from "@/lib/api";
 import { getToken } from "@/lib/session";
-import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
 import type { SyncSnapshot } from "@/sync";
 import { syncQueryKey } from "@/sync";
 
@@ -37,7 +37,7 @@ const MAX_ATTEMPTS = 5;
 /**
  * The CAS-retry core, deliberately split out from the hook below so tests
  * can drive it with a real (loopback-worker-backed) crypto bridge instead of
- * needing `useCryptoBridge`'s mount effect to fire — the same split
+ * needing `useDedicatedCryptoBridge`'s mount effect to fire — the same split
  * `features/git-diff/live-actions.ts` uses relative to its
  * `use-live-git-diff-actions.ts` hook wrapper.
  *
@@ -93,16 +93,16 @@ export async function patchSessionMetadataCas(
  * `useSessionMetadataPatchMutation(sessionId)` — Rename/Pin's shared
  * mutation hook. Reads the session's current `{dek, metadata}` off the
  * `['sync']` TanStack cache (kept current by the sync engine), uses its OWN
- * `useCryptoBridge()` worker (never shared with `live-source.ts`'s title/
- * item-decryption bridges — a worker only ever holds one active session key
- * at once), and on success patches the `['sync']` cache's row so
+ * `useDedicatedCryptoBridge()` worker (never shared with `live-source.ts`'s
+ * title/item-decryption bridges — a worker only ever holds one active
+ * session key at once), and on success patches the `['sync']` cache's row so
  * `useDecryptedTitles`/`useSessionTitle` (both `metadata.version`-gated)
  * re-decrypt everywhere with no extra invalidation — the WS `session-update`
  * fan-out reconciles moments later to the same state.
  */
 export function useSessionMetadataPatchMutation(sessionId: string) {
   const queryClient = useQueryClient();
-  const bridge = useCryptoBridge();
+  const bridge = useDedicatedCryptoBridge();
 
   return useMutation({
     mutationFn: async (patch: SessionMetadataPatch): Promise<SessionMetadataWriteResult> => {

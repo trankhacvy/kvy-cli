@@ -10,6 +10,7 @@ import {
   useLiveUnmanagedSessions,
   useMockUnmanagedActions,
 } from "@/features/unmanaged-sessions";
+import { FirstMachineOnboarding } from "./components/first-machine-onboarding";
 import { SessionListSkeleton } from "./components/session-list-skeleton";
 import { WorkspaceSection } from "./components/workspace-section";
 import { groupSessionsByWorkspace } from "./group";
@@ -60,6 +61,7 @@ export function SessionListScreen({
   );
   const groups = useMemo(() => groupSessionsByWorkspace(activeSnapshot), [activeSnapshot]);
   const machinesById = useMemo(() => new Map(snapshot.machines.map((m) => [m.id, m])), [snapshot]);
+  const hasMachines = snapshot.machines.length > 0;
   const unmanagedSnapshot = useUnmanagedSnapshot();
 
   // Skeleton only for the true first-load window: the initial account fetch
@@ -78,16 +80,23 @@ export function SessionListScreen({
     );
   }
 
+  // No machines at all is a DIFFERENT state from "machines, but no sessions": the old
+  // copy pointed at a "paired machine" the user did not have, and offered a button that
+  // needs one.
+  if (!hasMachines && unmanagedSnapshot.sessions.length === 0) {
+    return <FirstMachineOnboarding />;
+  }
+
   if (groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on any
-          paired machine to start one — it shows up here automatically. Or spawn one remotely:
+          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on one of
+          your machines to start one — it shows up here automatically. Or start one remotely:
         </p>
         <Button asChild>
-          <Link href="/session/new/">New session</Link>
+          <Link href="/dashboard/session/new/">New session</Link>
         </Button>
       </div>
     );
@@ -99,11 +108,13 @@ export function SessionListScreen({
         <h1 className="text-lg font-semibold tracking-tight">Sessions</h1>
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
-            <Link href="/completed/">Completed</Link>
+            <Link href="/dashboard/completed/">Completed</Link>
           </Button>
-          <Button asChild size="sm">
-            <Link href="/session/new/">New session</Link>
-          </Button>
+          {hasMachines && (
+            <Button asChild size="sm">
+              <Link href="/dashboard/session/new/">New session</Link>
+            </Button>
+          )}
         </div>
       </div>
       {groups.map((group) => (

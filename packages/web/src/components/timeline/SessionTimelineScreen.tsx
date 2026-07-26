@@ -260,10 +260,10 @@ function SessionTimelineBody({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={`/session/${sessionId}/preview/`}>Preview</Link>
+              <Link href={`/dashboard/session/${sessionId}/preview/`}>Preview</Link>
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link href={`/session/${sessionId}/run/`}>Setup / Run</Link>
+              <Link href={`/dashboard/session/${sessionId}/run/`}>Setup / Run</Link>
             </Button>
             <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu

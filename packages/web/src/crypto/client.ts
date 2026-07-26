@@ -10,12 +10,15 @@
  * `__tests__/loopback.ts`) instead of spinning up a real Worker thread.
  */
 import type { EncryptedBox } from "@falcon/crypto/web";
+import type { KeyProtection } from "./key-protection.js";
 import type {
   BindKeysProofResult,
   CryptoWorkerRequest,
   CryptoWorkerRequestPayload,
   CryptoWorkerResponse,
   DeviceIdentity,
+  RefreshOutcome,
+  StorageDescription,
 } from "./protocol.js";
 
 export interface WorkerLike {
@@ -30,15 +33,29 @@ export interface WorkerLike {
 }
 
 export interface CryptoBridgeClient {
-  /** Provision the master secret: PIN-wraps and persists it (in the worker, via
-   * IndexedDB — issue-4-plan.md §6.1) and derives the key tree in worker memory.
-   * `refreshToken` is PIN-wrapped and persisted the same way (security review F1) —
-   * it never touches `localStorage`. */
-  init(masterSecret: Uint8Array, pin: string, refreshToken: string): Promise<void>;
-  /** Load the PIN-wrapped master secret (and refresh token, if one was ever set) from
-   * storage and unwrap them into worker memory. Resolves `false` on a wrong PIN.
-   * Rejects if nothing was ever provisioned on this device (`not-initialized`). */
-  unlock(pin: string): Promise<boolean>;
+  /** Provision the master secret: wraps and persists it under `mode`, tagged with
+   * `accountId` (whose keys these are — see `StoredKeyRecordV2.accountId`), and derives
+   * the key tree in worker memory. `refreshToken` goes to the separate session store. */
+  init(
+    masterSecret: Uint8Array,
+    refreshToken: string,
+    accountId: string,
+    protection: KeyProtection,
+  ): Promise<void>;
+  /** What this browser has stored, and under which scheme. The input to the
+   * loading/no-keys/needs-migration decision — `getIdentity()` must NOT be used for that,
+   * because it answers for a pre-Phase-5 record too.
+   * `accountId` scopes the answer: omit it for today's permissive (whatever-is-there)
+   * behavior, or pass it to get `present: false` back for a record known to belong to a
+   * different account. */
+  describeStorage(accountId?: string): Promise<StorageDescription>;
+  /** Load and unwrap stored key material into worker memory. No interaction for
+   * `"device"` mode; a biometric gesture for `"prf"`. False if there is nothing usable, or
+   * if `accountId` is given and the loaded/stored record is known to belong to someone
+   * else. */
+  ensureLoaded(accountId?: string, wrapKey?: CryptoKey): Promise<boolean>;
+  /** One-time upgrade of a pre-Phase-5 PIN-wrapped record. False on a wrong PIN. */
+  migrateFromPin(pin: string, protection: KeyProtection): Promise<boolean>;
   /** Unwrap a per-session DEK and hold it as the active session key. Resolves `false` on a bad/foreign DEK. */
   setSessionKey(wrappedDek: Uint8Array): Promise<boolean>;
   /** Seal `data` under the active session key. */
@@ -51,24 +68,32 @@ export interface CryptoBridgeClient {
   openBlob(bundle: Uint8Array): Promise<Uint8Array | null>;
   /** Wipe in-memory keys and persisted key material (logout). */
   clear(): Promise<void>;
-  /** The account identity provisioned on this device, or `null` if none yet. Never requires an unlock. */
-  getIdentity(): Promise<DeviceIdentity | null>;
+  /** The account identity provisioned on this device, or `null` if none yet (or, when
+   * `accountId` is given, none belonging to that account). Never requires an unlock. */
+  getIdentity(accountId?: string): Promise<DeviceIdentity | null>;
   /** Seal the master secret + the current session's refresh token to a pairing
    * peer's ephemeral X25519 public key (base64) — issue-4-plan.md §6.3. Requires the
    * worker to be unlocked. */
   sealForPeer(ephPub: string, refreshToken: string): Promise<string>;
   /** Sign a server-issued `keys/bind` nonce (issue-4-plan.md §6.2). Rejects if not initialized/locked. */
   bindKeysProof(accountId: string, nonce: string): Promise<BindKeysProofResult>;
-  /** F1: PIN-wraps and persists a (freshly-issued or freshly-rotated) refresh token
-   * against an already-provisioned identity, without touching the master secret's own
-   * wrapped blob — the returning-device login path, where `init` never runs again.
-   * Requires the worker to already be unlocked. */
+  /** Persist a freshly-issued or freshly-rotated refresh token. Needs no key material —
+   * a signed-in browser with no keys must still be able to hold a session. */
   setRefreshToken(refreshToken: string): Promise<void>;
-  /** F1: mints a fresh access token from the in-memory (PIN-recovered) refresh token via
-   * a real `/v1/auth/refresh` call made from inside the worker — the raw refresh token
-   * never crosses back out to the main thread. Resolves `null` (never rejects) when
-   * there's nothing to refresh with, or the server rejects it (dead/revoked). */
-  refreshSession(): Promise<string | null>;
+  /** Mint a fresh access token from the stored refresh token via a real
+   * `/v1/auth/refresh` call made from inside the worker — the raw refresh token never
+   * crosses back out to the main thread. Never rejects — resolves a `RefreshOutcome`
+   * distinguishing "nothing to refresh with", "the server rejected it", and "the request
+   * never got anywhere" (see `RefreshOutcome`'s docblock). */
+  refreshSession(): Promise<RefreshOutcome>;
+  /** Generate an ephemeral keypair inside the worker and return only its public half. */
+  beginKeyRequest(): Promise<string>;
+  /** Open a sealed `[0x02 | masterSecret]` box with an ephemeral secret the worker still
+   * holds, then derive and persist. Resolves `false` on any failure. */
+  acceptKeyResponse(sealed: string, protection: KeyProtection): Promise<boolean>;
+  /** Seal ONLY the master secret to a peer's ephemeral public key — the requesting device
+   * already has its own session. */
+  sealKeysForPeer(ephPub: string): Promise<string>;
   /** Terminate the underlying worker. */
   terminate(): void;
 }
@@ -79,11 +104,34 @@ function nextRequestId(): string {
   return `cb-${requestCounter}`;
 }
 
+// How long `terminate()` waits for in-flight requests to settle for real before killing
+// the worker thread outright — see `terminate()`'s own doc comment for why this exists.
+const TERMINATE_DRAIN_TIMEOUT_MS = 500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient {
   const pending = new Map<
     string,
     { resolve: (value: unknown) => void; reject: (reason: Error) => void }
   >();
+  // Resolved (in FIFO order, doesn't matter which) the moment `pending` empties out —
+  // `terminate()`'s drain waits on this instead of polling.
+  let drainWaiters: Array<() => void> = [];
+
+  function notifyIfDrained(): void {
+    if (pending.size !== 0 || drainWaiters.length === 0) return;
+    const waiters = drainWaiters;
+    drainWaiters = [];
+    for (const waiter of waiters) waiter();
+  }
+
+  function waitForDrain(): Promise<void> {
+    if (pending.size === 0) return Promise.resolve();
+    return new Promise((resolve) => drainWaiters.push(resolve));
+  }
 
   worker.onmessage = (event) => {
     const response = event.data;
@@ -97,6 +145,7 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     } else {
       entry.reject(new Error(response.error));
     }
+    notifyIfDrained();
   };
 
   /**
@@ -110,6 +159,7 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
       pending.delete(id);
       entry.reject(reason);
     }
+    notifyIfDrained();
   }
 
   worker.onerror = (event) => {
@@ -126,26 +176,54 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
   }
 
   return {
-    init: (masterSecret, pin, refreshToken) =>
-      call<null>({ type: "init", masterSecret, pin, refreshToken }).then(() => undefined),
-    unlock: (pin) => call<boolean>({ type: "unlock", pin }),
+    init: (masterSecret, refreshToken, accountId, protection) =>
+      call<null>({ type: "init", masterSecret, refreshToken, accountId, ...protection }).then(
+        () => undefined,
+      ),
+    describeStorage: (accountId) =>
+      call<StorageDescription>({ type: "describeStorage", accountId }),
+    ensureLoaded: (accountId, wrapKey) =>
+      call<boolean>({ type: "ensureLoaded", accountId, wrapKey }),
+    migrateFromPin: (pin, protection) =>
+      call<boolean>({ type: "migrateFromPin", pin, ...protection }),
     setSessionKey: (wrappedDek) => call<boolean>({ type: "setSessionKey", wrappedDek }),
     seal: (data) => call<EncryptedBox>({ type: "seal", data }),
     open: <T>(box: EncryptedBox) => call<T | null>({ type: "open", box }),
     sealBlob: (data) => call<Uint8Array>({ type: "sealBlob", data }),
     openBlob: (bundle) => call<Uint8Array | null>({ type: "openBlob", bundle }),
     clear: () => call<null>({ type: "clear" }).then(() => undefined),
-    getIdentity: () => call<DeviceIdentity | null>({ type: "getIdentity" }),
+    getIdentity: (accountId) => call<DeviceIdentity | null>({ type: "getIdentity", accountId }),
     sealForPeer: (ephPub, refreshToken) =>
       call<string>({ type: "sealForPeer", ephPub, refreshToken }),
     bindKeysProof: (accountId, nonce) =>
       call<BindKeysProofResult>({ type: "bindKeysProof", accountId, nonce }),
     setRefreshToken: (refreshToken) =>
       call<null>({ type: "setRefreshToken", refreshToken }).then(() => undefined),
-    refreshSession: () => call<string | null>({ type: "refreshSession" }),
+    refreshSession: () => call<RefreshOutcome>({ type: "refreshSession" }),
+    beginKeyRequest: () => call<string>({ type: "beginKeyRequest" }),
+    acceptKeyResponse: (sealed, protection) =>
+      call<boolean>({ type: "acceptKeyResponse", sealed, ...protection }),
+    sealKeysForPeer: (ephPub) => call<string>({ type: "sealKeysForPeer", ephPub }),
     terminate: () => {
-      rejectAllPending(new Error("crypto-bridge worker terminated"));
-      worker.terminate?.();
+      if (pending.size === 0) {
+        rejectAllPending(new Error("crypto-bridge worker terminated"));
+        worker.terminate?.();
+        return;
+      }
+      // A request is still in flight against the worker — most likely
+      // `key-storage.ts`'s `openDb()`-based load/save, which closes its IndexedDB
+      // connection in a `finally` block once its transaction completes.
+      // `Worker.terminate()` is abrupt and skips that `finally`: killing the thread
+      // mid-transaction can leave the connection open with no code path left to ever
+      // close it, wedging a later `indexedDB.deleteDatabase()`/`open()` call behind it
+      // forever (auth-ux-post-verification-fixes.md Bug B). Give in-flight requests a
+      // bounded grace period to actually settle for real before rejecting them and
+      // killing the thread — a request that genuinely answers in that window resolves
+      // with its real result, same as if `terminate()` were never called.
+      void Promise.race([waitForDrain(), delay(TERMINATE_DRAIN_TIMEOUT_MS)]).then(() => {
+        rejectAllPending(new Error("crypto-bridge worker terminated"));
+        worker.terminate?.();
+      });
     },
   };
 }

@@ -11,7 +11,7 @@
  *  - `push`: decode the generic `{sessionId, kind}` payload (design §6.4 —
  *    never session content, the server holds no keys to encrypt anything
  *    richer anyway) and show a fixed, kind-keyed notification.
- *  - `notificationclick`: deep-link to `/session/<id>/`, focusing an
+ *  - `notificationclick`: deep-link to `/dashboard/session/<id>/`, focusing an
  *    already-open Falcon tab instead of opening a new one when possible.
  */
 
@@ -41,7 +41,7 @@ self.addEventListener("push", (event) => {
   const sessionId = payload && typeof payload.sessionId === "string" ? payload.sessionId : null;
   const kind = payload && typeof payload.kind === "string" ? payload.kind : null;
   const title = (kind && KIND_LABELS[kind]) || "Falcon";
-  const url = sessionId ? `/session/${sessionId}/` : "/";
+  const url = sessionId ? `/dashboard/session/${sessionId}/` : "/dashboard/";
 
   event.waitUntil(
     self.registration.showNotification(title, {
@@ -54,7 +54,7 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification.data?.url || "/";
+  const url = event.notification.data?.url || "/dashboard/";
 
   event.waitUntil(
     (async () => {

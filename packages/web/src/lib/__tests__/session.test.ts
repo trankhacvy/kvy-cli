@@ -150,39 +150,63 @@ describe("session", () => {
     });
   });
 
-  describe("silentRefresh (security review finding F1)", () => {
-    it("resolves false without touching the token when no unlocked bridge is available", async () => {
+  describe("silentRefresh (security review finding F1; tri-state per auth-ux-overhaul-fix-plan.md Fix 2)", () => {
+    it('resolves "unreachable" without touching the token when no unlocked bridge is available', async () => {
       getSharedCryptoBridgeMock.mockReturnValue(null);
       setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
 
       const result = await silentRefresh();
 
-      expect(result).toBe(false);
+      expect(result).toBe("unreachable");
       // No bridge to ask -> the existing (possibly still-valid) token is left alone,
       // not wiped out from under an otherwise-fine session.
       expect(getToken()).not.toBeNull();
     });
 
-    it("mints a fresh access token from the bridge and never touches the refresh token itself", async () => {
-      const refreshSessionMock = vi.fn().mockResolvedValue("fresh-access-token");
+    it('mints a fresh access token and resolves "ok" on a successful refresh', async () => {
+      const refreshSessionMock = vi
+        .fn()
+        .mockResolvedValue({ kind: "ok", accessToken: "fresh-access-token" });
       getSharedCryptoBridgeMock.mockReturnValue({ refreshSession: refreshSessionMock });
 
       const result = await silentRefresh();
 
-      expect(result).toBe(true);
+      expect(result).toBe("ok");
       expect(getToken()).toBe("fresh-access-token");
       expect(refreshSessionMock).toHaveBeenCalledWith();
     });
 
-    it("clears the token and resolves false when the bridge has nothing to refresh with", async () => {
-      const refreshSessionMock = vi.fn().mockResolvedValue(null);
+    it('clears the token and resolves "signed-out" when there is no credential to refresh with', async () => {
+      const refreshSessionMock = vi.fn().mockResolvedValue({ kind: "no-credential" });
       getSharedCryptoBridgeMock.mockReturnValue({ refreshSession: refreshSessionMock });
       setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
 
       const result = await silentRefresh();
 
-      expect(result).toBe(false);
+      expect(result).toBe("signed-out");
       expect(getToken()).toBeNull();
+    });
+
+    it('clears the token and resolves "signed-out" when the server rejects the credential', async () => {
+      const refreshSessionMock = vi.fn().mockResolvedValue({ kind: "rejected" });
+      getSharedCryptoBridgeMock.mockReturnValue({ refreshSession: refreshSessionMock });
+      setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
+
+      const result = await silentRefresh();
+
+      expect(result).toBe("signed-out");
+      expect(getToken()).toBeNull();
+    });
+
+    it('does NOT clear the token and resolves "unreachable" when the request never got anywhere', async () => {
+      const refreshSessionMock = vi.fn().mockResolvedValue({ kind: "unreachable" });
+      getSharedCryptoBridgeMock.mockReturnValue({ refreshSession: refreshSessionMock });
+      setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));
+
+      const result = await silentRefresh();
+
+      expect(result).toBe("unreachable");
+      expect(getToken()).not.toBeNull();
     });
   });
 });

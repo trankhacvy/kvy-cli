@@ -5,6 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // dynamic import. vi.resetModules() clears vitest's module registry so the
 // next import re-runs the top-level `EnvSchema.parse(process.env)` instead
 // of returning the cached module from a previous test.
+//
+// config.ts's own dotenv load is guarded by a `FALCON_DOTENV_LOADED` sentinel so it
+// only reads the real root `.env.local` once per process — but every test below resets
+// process.env to this ORIGINAL_ENV snapshot, so the sentinel must already be baked into
+// it, otherwise each fresh import would see the sentinel missing and re-read `.env.local`,
+// silently reintroducing real secrets (OAuth client ids, etc.) into whatever env a test
+// deliberately left unset.
+process.env.FALCON_DOTENV_LOADED = "1";
 const ORIGINAL_ENV = { ...process.env };
 
 async function importFreshConfig() {
@@ -29,6 +37,9 @@ describe("config env parsing", () => {
     delete process.env.LOG_LEVEL;
     delete process.env.DATABASE_URL;
     delete process.env.FALCON_MASTER_SECRET;
+    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    delete process.env.GITHUB_OAUTH_CLIENT_ID;
+    delete process.env.GITHUB_OAUTH_CLIENT_SECRET;
     delete process.env.VAPID_PUBLIC_KEY;
     delete process.env.VAPID_PRIVATE_KEY;
     delete process.env.VAPID_SUBJECT;
@@ -87,6 +98,12 @@ describe("config env parsing", () => {
   });
 
   it("accepts a fully-specified valid env", async () => {
+    // Explicitly cleared (not just omitted) so this test's full-snapshot `toEqual` below
+    // doesn't depend on whether the real root `.env.local` happens to set these on the
+    // machine running the suite (`config.ts` loads it via `dotenv`).
+    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+    delete process.env.GITHUB_OAUTH_CLIENT_ID;
+    delete process.env.GITHUB_OAUTH_CLIENT_SECRET;
     process.env.NODE_ENV = "production";
     process.env.PORT = "4321";
     process.env.HOST = "127.0.0.1";
@@ -113,6 +130,7 @@ describe("config env parsing", () => {
     process.env.BLOB_URL_EXPIRY_SECONDS = "120";
     process.env.BLOB_MAX_SIZE_BYTES = "1048576";
     process.env.CORS_ALLOWED_ORIGINS = "https://app.falcon.dev, https://staging.falcon.dev";
+    process.env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT = "25";
 
     const { env } = await importFreshConfig();
 
@@ -123,7 +141,6 @@ describe("config env parsing", () => {
       LOG_LEVEL: "warn",
       DATABASE_URL: "postgres://user:pass@db.internal:5432/falcon_prod",
       FALCON_MASTER_SECRET: "a".repeat(32),
-      FALCON_DEV_AUTH: false,
       VAPID_PUBLIC_KEY: "test-vapid-public-key",
       VAPID_PRIVATE_KEY: "test-vapid-private-key",
       VAPID_SUBJECT: "mailto:ops@falcon.dev",
@@ -144,7 +161,13 @@ describe("config env parsing", () => {
       BLOB_URL_EXPIRY_SECONDS: 120,
       BLOB_MAX_SIZE_BYTES: 1048576,
       CORS_ALLOWED_ORIGINS: ["https://app.falcon.dev", "https://staging.falcon.dev"],
+      MAX_ACTIVE_SESSIONS_PER_ACCOUNT: 25,
     });
+  });
+
+  it("defaults MAX_ACTIVE_SESSIONS_PER_ACCOUNT to 0 (quota disabled)", async () => {
+    const { env } = await importFreshConfig();
+    expect(env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT).toBe(0);
   });
 
   it("trims whitespace and drops empty entries from CORS_ALLOWED_ORIGINS", async () => {
@@ -213,23 +236,6 @@ describe("config env parsing", () => {
     expect(env.NODE_ENV).toBe("production");
   });
 
-  it("throws when NODE_ENV=production and FALCON_DEV_AUTH is enabled", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
-    process.env.FALCON_DEV_AUTH = "1";
-
-    await expect(importFreshConfig()).rejects.toThrow(/FALCON_DEV_AUTH/);
-  });
-
-  it("allows NODE_ENV=production when FALCON_DEV_AUTH is left unset", async () => {
-    process.env.NODE_ENV = "production";
-    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
-
-    const { env } = await importFreshConfig();
-
-    expect(env.FALCON_DEV_AUTH).toBe(false);
-  });
-
   it("throws when S3_BUCKET is set without S3 credentials (half-configured S3 driver)", async () => {
     process.env.S3_BUCKET = "falcon-blobs";
     delete process.env.S3_ACCESS_KEY_ID;
@@ -248,5 +254,22 @@ describe("config env parsing", () => {
     const { env } = await importFreshConfig();
 
     expect(env.S3_BUCKET).toBe("falcon-blobs");
+  });
+
+  it("treats DATABASE_URL_UNPOOLED='' as unset, matching the other optional keys", async () => {
+    process.env.DATABASE_URL_UNPOOLED = "";
+
+    const { env } = await importFreshConfig();
+
+    expect(env.DATABASE_URL_UNPOOLED).toBeUndefined();
+  });
+
+  it("keeps a set DATABASE_URL_UNPOOLED distinct from DATABASE_URL", async () => {
+    process.env.DATABASE_URL = "postgres://user:pass@db-pooler.internal:5432/falcon";
+    process.env.DATABASE_URL_UNPOOLED = "postgres://user:pass@db.internal:5432/falcon";
+
+    const { env } = await importFreshConfig();
+
+    expect(env.DATABASE_URL_UNPOOLED).toBe("postgres://user:pass@db.internal:5432/falcon");
   });
 });

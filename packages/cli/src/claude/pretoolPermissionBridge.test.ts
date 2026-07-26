@@ -191,7 +191,10 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
   it("a local turn's perm-request resolves via resolveLocalOutcome, not resolve() (no channel to drive the terminal from web)", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
     await bridge.handlePermissionRequest({ tool_name: "Bash", tool_input: { command: "ls" } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     // A web `perm.answer` racing in gets an honest "can't drive this" answer
     // — not the misleading `already-answered` (nothing has been answered).

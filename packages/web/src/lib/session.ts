@@ -94,20 +94,32 @@ export function isSignedIn(): boolean {
  * worker's own (PIN-recovered, never-persisted-in-plaintext) refresh token —
  * `require-auth.tsx` calls this once the worker is confirmed unlocked, and
  * `apiSocket.ts` calls it on an auth `connect_error`, so a normal 15-minute
- * access-token boundary never forces a visible re-login. Resolves `false` (and clears
- * the in-memory access token) when there's no unlocked bridge to ask, no refresh token
- * recovered into it, or the server rejects the refresh (dead/revoked) — the caller is
- * then responsible for redirecting to sign-in.
+ * access-token boundary never forces a visible re-login.
+ *
+ * Tri-state, not a boolean — collapsing "the server rejected this credential" into the
+ * same value as "the request never got anywhere" is what turned a bundler misconfiguration
+ * (an empty worker `API_URL`) into a total sign-out for every user on every reload
+ * (auth-ux-overhaul-e2e-results.md E2E-4.1). Only `"signed-out"` should ever redirect to
+ * sign-in; `"unreachable"` means keep the session and let the caller retry.
  */
-export async function silentRefresh(): Promise<boolean> {
-  const bridge = getSharedCryptoBridge();
-  if (!bridge) return false;
+export type SilentRefreshResult = "ok" | "signed-out" | "unreachable";
 
-  const accessToken = await bridge.refreshSession();
-  if (!accessToken) {
-    clearToken();
-    return false;
+export async function silentRefresh(): Promise<SilentRefreshResult> {
+  const bridge = getSharedCryptoBridge();
+  // No live worker to ask. Not evidence of a dead session — leave the token alone, same
+  // as this function always has.
+  if (!bridge) return "unreachable";
+
+  const outcome = await bridge.refreshSession();
+  switch (outcome.kind) {
+    case "ok":
+      setToken(outcome.accessToken);
+      return "ok";
+    case "no-credential":
+    case "rejected":
+      clearToken();
+      return "signed-out";
+    case "unreachable":
+      return "unreachable";
   }
-  setToken(accessToken);
-  return true;
 }

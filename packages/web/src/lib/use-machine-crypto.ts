@@ -3,7 +3,7 @@
 import { decodeBase64 } from "@falcon/crypto/web";
 import { useEffect, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
-import { useCryptoBridge } from "./use-crypto-bridge";
+import { useDedicatedCryptoBridge } from "./use-crypto-bridge";
 import { useSyncSnapshotQuery } from "./use-sync-snapshot";
 
 /**
@@ -23,7 +23,7 @@ import { useSyncSnapshotQuery } from "./use-sync-snapshot";
  * feature needed it: there should be exactly one place that owns this.
  */
 export function useMachineCrypto(machineId: string): CryptoBridgeClient | null {
-  const bridge = useCryptoBridge();
+  const bridge = useDedicatedCryptoBridge();
   const snapshot = useSyncSnapshotQuery();
   const [ready, setReady] = useState(false);
 

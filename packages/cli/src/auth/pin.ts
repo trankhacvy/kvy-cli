@@ -9,8 +9,8 @@
  * this is unit-testable without a real TTY.
  */
 import { createInterface } from "node:readline/promises";
-import { unwrapWithPin } from "@falcon/crypto";
 import type { PinWrapped } from "@falcon/crypto";
+import { unwrapWithPin } from "@falcon/crypto";
 
 const MAX_UNLOCK_ATTEMPTS = 3;
 

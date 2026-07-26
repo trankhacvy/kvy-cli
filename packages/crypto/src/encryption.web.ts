@@ -34,6 +34,19 @@ export function libsodiumPublicKeyFromSecretKey(seed: Uint8Array): Uint8Array {
   return new Uint8Array(sodium.crypto_box_seed_keypair(seed).publicKey);
 }
 
+/**
+ * A throwaway X25519 keypair for one device-to-device handshake — the recipient half of
+ * `libsodiumEncryptForPublicKey`. Callers hold the secret key only in memory, for the
+ * lifetime of a single request, and never persist it.
+ */
+export function generateEphemeralKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array } {
+  const keyPair = sodium.crypto_box_keypair();
+  return {
+    publicKey: new Uint8Array(keyPair.publicKey),
+    secretKey: new Uint8Array(keyPair.privateKey),
+  };
+}
+
 export function libsodiumEncryptForPublicKey(
   data: Uint8Array,
   recipientPublicKey: Uint8Array,

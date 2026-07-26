@@ -143,8 +143,7 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
-import { resolveKeyMaterial } from "../auth/keyMaterial.js";
-import { createTokenProviderForCredentials } from "../auth/resolveAccessToken.js";
+import { ensureLoggedIn as ensureLoggedInDefault } from "../auth/login.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
@@ -159,6 +158,7 @@ import {
 import { findClaudeModelChangeInEnvelopes } from "../claude/modelChange.js";
 import { permissionModeCyclePresses } from "../claude/pretoolPermissionBridge.js";
 import {
+  notifyTerminal,
   type PtyClaudeSessionHandle,
   startPtyClaudeSession as startPtyClaudeSessionDefault,
 } from "../claude/ptyClaudeSession.js";
@@ -171,6 +171,7 @@ import {
   createNotifyDaemonSessionStartedDeps,
   notifyDaemonSessionStarted as notifyDaemonSessionStartedDefault,
 } from "../daemon/notify.js";
+import { reloadDaemonAuth as reloadDaemonAuthDefault } from "../daemon/reloadAuth.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import {
@@ -193,10 +194,10 @@ import {
   acquireSessionLock as acquireSessionLockDefault,
   type SessionLockHandle,
 } from "../session/sessionLock.js";
+import { KEY_REQUEST_PENDING, NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
 import { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
-
-const MASTER_SECRET_LENGTH_BYTES = 32;
-const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
+import { runKeysApproveCommand as runKeysApproveCommandDefault } from "./keysApprove.js";
+import { runPreflightWithReauth } from "./startPreflight.js";
 
 /**
  * `setMode` on the PTY path (plan-v2.md W4.3 "Real setMode for the PTY
@@ -233,16 +234,6 @@ export interface OutboxLike {
   enqueue(events: readonly SessionEnvelope[]): void;
   dispose(): void;
 }
-
-// The daemon persists `machineId` to `daemon.state.json` only once its own
-// (async, network-bound) machine registration completes — see
-// `machineIntegration.ts` — which can land a beat after `ensureDaemon()`
-// above already returned (that call only waits for the control port, not
-// for machine registration). A short bounded wait here covers the common
-// "just logged in, this is the very first `falcon claude`" race without
-// turning into an unbounded retry loop.
-const MACHINE_ID_WAIT_TIMEOUT_MS = 3000;
-const MACHINE_ID_POLL_MS = 100;
 
 export interface StartClaudeCommandDeps {
   homeDir: string;
@@ -314,6 +305,15 @@ export interface StartClaudeCommandDeps {
    * session start, matching `notifyDaemonSessionStarted`'s precedent above.
    */
   registerWorkspace?: typeof registerWorkspaceDefault;
+  /**
+   * Injectable for tests; defaults to the real `ensureLoggedIn()`. Injected rather
+   * than called directly because `ensureLoggedIn` reads credentials through the
+   * module-level reader, not `deps.readCredentials` — a test stubbing only the
+   * latter would otherwise get two contradictory answers.
+   */
+  ensureLoggedIn?: typeof ensureLoggedInDefault;
+  /** Injectable for tests; defaults to the real `reloadDaemonAuth()` (AX-1.6). */
+  reloadDaemonAuth?: (homeDir: string) => Promise<boolean>;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   /**
@@ -329,6 +329,13 @@ export interface StartClaudeCommandDeps {
   write?: (text: string) => void;
   writeError?: (text: string) => void;
   logger?: Logger;
+  /**
+   * Injectable for tests; defaults to the real `runKeysApproveCommand()`
+   * (`commands/keysApprove.ts`). Backs the post-session review Fix 7 runs when a key
+   * request arrived during this session and a human is present (`stdin.isTTY`) —
+   * principle 1, never print "run X" when the exit path can run X itself.
+   */
+  runKeysApproveCommand?: typeof runKeysApproveCommandDefault;
 }
 
 const noopLogger: Logger = {
@@ -367,28 +374,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Waits (briefly) for the daemon to have persisted a `machineId`. Returns
- * `null` on timeout rather than throwing — the caller turns that into an
- * honest, actionable error instead of a stack trace.
- */
-async function waitForMachineId(
-  homeDir: string,
-  deps: {
-    readDaemonState: (homeDir: string) => Promise<DaemonState | null>;
-    sleep: (ms: number) => Promise<void>;
-    now: () => number;
-  },
-): Promise<string | null> {
-  const deadline = deps.now() + MACHINE_ID_WAIT_TIMEOUT_MS;
-  for (;;) {
-    const state = await deps.readDaemonState(homeDir);
-    if (state?.machineId) return state.machineId;
-    if (deps.now() >= deadline) return null;
-    await deps.sleep(MACHINE_ID_POLL_MS);
-  }
-}
-
 /** Runs `falcon claude [args...]`. Returns the process exit code. */
 export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
@@ -411,6 +396,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
   const setTimeoutImpl = deps.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimeoutImpl = deps.clearTimeoutImpl ?? ((handle) => clearTimeout(handle));
+  const doRunKeysApprove = deps.runKeysApproveCommand ?? runKeysApproveCommandDefault;
 
   // W4.4: `--force-new-session` is Falcon's own flag, never Claude Code's —
   // strip it out of the passthrough args before they ever reach the real
@@ -419,13 +405,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // Claude Code's to interpret at all).
   const forceNewSession = deps.claudeArgs.includes("--force-new-session");
   const claudeArgs = deps.claudeArgs.filter((arg) => arg !== "--force-new-session");
-
-  // 1. Never touch the network without credentials (no silent failures).
-  const credentials = readCreds(deps.homeDir);
-  if (!credentials) {
-    writeError(NOT_LOGGED_IN_MESSAGE);
-    return 1;
-  }
 
   // 9. Fail honestly, not silently, when the real `claude` CLI can't be found.
   const location = locate(env);
@@ -437,66 +416,34 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // `location` does not carry into the nested run* closures below.
   const claudeCliPath = location.path;
 
-  // issue-4-plan.md §6.1: PIN-mode key material can prompt right here — a real
-  // terminal, a human present — so `falcon claude` unwraps interactively when it can
-  // (`process.stdin.isTTY`), and fails closed with the same honest message a
-  // reduced-custody bundle already produced below when it can't (headless/CI/no TTY,
-  // or the PIN was never entered correctly within the retry budget).
-  const masterSecret = await resolveKeyMaterial(
-    credentials.keyMaterial,
-    deps.homeDir,
-    process.stdin.isTTY === true ? {} : undefined,
-  );
-  if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
-    // Mirrors `machineIntegration.ts`'s own same guard: a reduced-custody
-    // pairing bundle (rather than a full masterSecret) can't derive a
-    // content keypair the same way — honest failure, not a wrong-key crash.
-    writeError(
-      "falcon claude: stored credentials can't derive a content key for local sessions (reduced-custody pairing, or a PIN unlock that didn't succeed) — run `falcon auth login` on this machine\n",
-    );
-    return 1;
-  }
-  const { content: contentKeyPair } = deriveKeyTree(masterSecret);
-
-  // 3. Reuse the daemon's own machineId — `ensureDaemon()` (already run by
-  // the caller) guarantees a daemon is up, but not that it's finished
-  // registering a machine yet (see `waitForMachineId`'s doc comment).
-  const machineId = await waitForMachineId(deps.homeDir, {
-    readDaemonState: readState,
-    sleep: deps.sleep ?? sleep,
-    now: deps.now ?? Date.now,
-  });
-  if (!machineId) {
-    writeError(
-      "falcon claude: this machine hasn't finished registering with the Falcon server yet — try again in a few seconds (see `falcon daemon status`)\n",
-    );
-    return 1;
-  }
-
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
 
-  // issue-4-plan.md §6.6: one `TokenProvider` for this whole `falcon claude` invocation
-  // — mints/caches access tokens from the stored refresh token, rotating (and
-  // persisting the rotation) as needed. The session-scoped WS client
-  // (`session/sessionClient.ts`, wired below) holds onto this SAME provider for its
-  // entire lifetime, so a long-running interactive session survives the access
-  // token's TTL with proactive in-band renewal + a forced refresh on an auth-shaped
-  // `connect_error` — not just a token resolved once at startup. **Remaining scope
-  // cut:** the outbox/status-report/session-metadata HTTP side channels below still
-  // use the token resolved once here, not re-minted from `tokenProvider` per call —
-  // those are short bursts around session start/exit, not a multi-hour-lived
-  // connection, so this is a narrower gap than the WS client's used to be.
-  const tokenProvider = createTokenProviderForCredentials(credentials, {
-    backendUrl,
+  // 1. Resolve credentials, key material, machineId and an access token as ONE
+  // restartable unit (AX-1.3/AX-1.5). A dead refresh token re-pairs inline and
+  // re-runs the whole thing — re-deriving `contentKeyPair` in the process, since a
+  // fresh pairing can land on a different key epoch.
+  const preflightResult = await runPreflightWithReauth({
     homeDir: deps.homeDir,
+    backendUrl,
+    readCredentials: readCreds,
+    readDaemonState: readState,
     fetchImpl,
+    sleep: deps.sleep ?? sleep,
+    now: deps.now ?? Date.now,
     logger,
+    interactive: process.stdin.isTTY === true,
+    ensureLoggedIn: deps.ensureLoggedIn ?? ensureLoggedInDefault,
+    reloadDaemonAuth: deps.reloadDaemonAuth ?? reloadDaemonAuthDefault,
+    write,
   });
-  const accessToken = await tokenProvider.getAccessToken();
-  if (!accessToken) {
-    writeError("falcon claude: could not obtain an access token — run `falcon auth login` again\n");
+  if (!preflightResult.ok) {
+    writeError(
+      preflightResult.reason === "error" ? preflightResult.message : NO_TTY_CANNOT_SIGN_IN,
+    );
     return 1;
   }
+  const { credentials, masterSecret, contentKeyPair, machineId, tokenProvider, accessToken } =
+    preflightResult.preflight;
 
   const sessionMetadata = {
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,
@@ -602,6 +549,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // defaults for a freshly created (or freshly reattached) row; later
   // updates to those counters are this session's own concern, not this
   // startup self-report's.
+  const sessionEncryptionData = {
+    encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
+    seq: 0,
+    metadataVersion: 0,
+    agentStateVersion: 0,
+  };
   const notifyResult = await doNotifyDaemonSessionStarted(
     createNotifyDaemonSessionStartedDeps({
       homeDir: deps.homeDir,
@@ -611,18 +564,41 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     {
       sessionId: bootstrap.sessionId,
       metadata: sessionMetadata,
-      encryption: {
-        encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
-        seq: 0,
-        metadataVersion: 0,
-        agentStateVersion: 0,
-      },
+      encryption: sessionEncryptionData,
     },
   );
   logger.debug("[start-claude] daemon self-report", {
     sessionId: bootstrap.sessionId,
     notifyResult,
   });
+
+  // Re-notify the daemon once the real provider session id is known (the
+  // PTY flow's `onSessionId` hook, below) — the FIRST self-report above
+  // fires before Claude Code has reported one, so its `metadata` never
+  // carries `providerSessionId`. Without this second report the daemon's
+  // local session registry never learns which transcript file this Falcon
+  // session actually backs, and `transcriptIndexer.ts`'s `isManaged` lineage
+  // lookup (`daemon/machineIntegration.ts`) can never recognize this
+  // session's own transcript as already managed — it would otherwise get
+  // re-surfaced as a duplicate "Unmanaged" card (docs/auth-ux-post-
+  // verification-fixes.md, "own transcript re-flagged as unmanaged").
+  // Same best-effort contract as the report above: never blocks/throws.
+  function notifyDaemonProviderSessionId(providerSessionId: string): void {
+    void doNotifyDaemonSessionStarted(
+      createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+      {
+        sessionId: bootstrap.sessionId,
+        metadata: { ...sessionMetadata, providerSessionId },
+        encryption: sessionEncryptionData,
+      },
+    ).then((result) => {
+      logger.debug("[start-claude] daemon self-report (provider session id)", {
+        sessionId: bootstrap.sessionId,
+        providerSessionId,
+        result,
+      });
+    });
+  }
 
   write(`falcon claude: starting session ${bootstrap.sessionId}\n`);
 
@@ -786,6 +762,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     for (const watcher of [...modelWatchers]) watcher(nextModel);
   };
 
+  // Fix 7 (auth-ux-overhaul-fix-plan.md): a key request raised on another device while
+  // this session runs must reach the person at THIS terminal, not just a log file nobody
+  // tails. `undefined` means "none seen"; once set, the exit path below runs the review.
+  let pendingKeyRequestLabel: string | null | undefined;
+
   // The session-scoped `/v1/stream` connection `message`/`interrupt`/
   // `takeControl`/`setMode`/`perm.answer` arrive over (design §4.4). Without
   // this, nothing on the CLI side ever joins the `s:<sessionId>:<method>`
@@ -797,7 +778,17 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         tokenProvider,
         sessionId: bootstrap.sessionId,
       },
-      { logger },
+      {
+        logger,
+        onKeyRequest: ({ label }) => {
+          pendingKeyRequestLabel = label;
+          // Best-effort, live half of the notification — a terminal without OSC 9
+          // support just ignores this. The guarantee is the exit-path review below.
+          if (process.stdout.isTTY) {
+            notifyTerminal(write, "Falcon: a device is asking for your keys");
+          }
+        },
+      },
     ),
   );
 
@@ -901,6 +892,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         onSessionId: (id) => {
           logger.debug("[start-claude] provider session id from SessionStart hook", { id });
           ptyHandle?.notifyProviderSessionId(id);
+          notifyDaemonProviderSessionId(id);
         },
         // "perm"/"question" mean Claude Code is showing (or about to show) a
         // TUI dialog at the terminal — gate injection so a queued web
@@ -1329,6 +1321,26 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     // `pendingStatusReport`'s doc comment above for why this can't just
     // rely on the normal-exit path's own `await reportStatusOnce(...)`.
     if (pendingStatusReport) await pendingStatusReport;
+
+    // Fix 7: the durable half of the key-request notification, and — when a human is
+    // actually here to answer it — the review itself, run inline rather than telling the
+    // user to go run `falcon keys approve` (principle 1). Safe to open a `readline` on
+    // stdin here: both flows above have already restored raw mode as part of their own
+    // teardown by the time their awaited promise resolves.
+    if (pendingKeyRequestLabel !== undefined) {
+      write(KEY_REQUEST_PENDING);
+      if (process.stdin.isTTY) {
+        await doRunKeysApprove({
+          homeDir: deps.homeDir,
+          backendUrl,
+          fetchImpl,
+          logger,
+          write,
+          writeError,
+        });
+      }
+    }
+
     sessionClient.stop();
     outbox.dispose();
     if (sessionLock) await sessionLock.release();

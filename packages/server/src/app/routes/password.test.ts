@@ -16,13 +16,14 @@ const migrationsFolder = path.resolve(
 );
 
 // docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): the four password.ts
-// handlers now 404 unless `FALCON_DEV_AUTH` is on (see password-gate.test.ts for the
-// flag-off behavior, in its own file/worker — see that file's header comment for why).
-// `config.ts`'s `env` singleton is parsed once from `process.env` at import time (same
-// caveat as config.test.ts/oauth.test.ts), so exercising these routes with the flag on
-// requires setting `process.env` *before* a fresh dynamic import of `buildServer`, not
-// just before the `app.inject()` call. `vi.resetModules()` clears vitest's module
-// registry so that fresh import re-runs `config.ts`'s top-level `EnvSchema.parse(...)`.
+// handlers 404 under `NODE_ENV=production` (see password-gate.test.ts for that
+// behavior, in its own file/worker — see that file's header comment for why); this file
+// exercises the non-production, always-on behavior. `config.ts`'s `env` singleton is
+// parsed once from `process.env` at import time (same caveat as
+// config.test.ts/oauth.test.ts), so pinning `NODE_ENV` requires setting `process.env`
+// *before* a fresh dynamic import of `buildServer`, not just before the `app.inject()`
+// call. `vi.resetModules()` clears vitest's module registry so that fresh import
+// re-runs `config.ts`'s top-level `EnvSchema.parse(...)`.
 // Done exactly ONCE for this whole file (not per describe block) — `server.ts` pulls in
 // `routes/metrics.ts`, which registers process-level `prom-client` default metrics on
 // import; `prom-client` itself lives in `node_modules` and isn't reset by
@@ -60,14 +61,14 @@ async function buildApp() {
   return { app, db, email, pglite };
 }
 
-describe("password auth routes — FALCON_DEV_AUTH=1 (local-testing surface, item 3)", () => {
+describe("password auth routes — NODE_ENV=test (local-testing surface, item 3)", () => {
   let pglite: PGlite;
   let db: ReturnType<typeof drizzle<typeof schema>>;
   let app: FastifyInstance;
   let email: ReturnType<typeof recordingEmailTransport>;
 
   beforeAll(async () => {
-    process.env = { ...ORIGINAL_ENV, FALCON_DEV_AUTH: "1" };
+    process.env = { ...ORIGINAL_ENV, NODE_ENV: "test" };
     vi.resetModules();
     ({ buildServer } = await import("../server.js"));
     ({ verifyToken } = await import("../../auth/index.js"));

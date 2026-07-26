@@ -239,9 +239,53 @@ export const pairRequests = pgTable("pair_requests", {
   ephPub: text("eph_pub").notNull().unique(), // requester's ephemeral X25519 pubkey, base64
   state: text("state").notNull().default("pending"), // 'pending' | 'authorized' | 'expired'
   response: bytea("response"), // sealed box to ephPub: [version|masterSecret|refreshToken]
+  // docs/auth-ux-overhaul-plan.md AX-1.11: shown on the approver's confirm card so a
+  // human can see WHAT they are approving. UNTRUSTED, attacker-controllable display
+  // strings — length-capped at the route, rendered as plain text only, and never used
+  // for any authorization decision.
+  label: text("label"),
+  cwd: text("cwd"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   expiresAt: timestamp("expires_at").notNull(),
 });
+
+/**
+ * docs/auth-ux-overhaul-plan.md Phase 4: a device that already has an account session but
+ * no key material asks one of the account's other devices for a copy.
+ *
+ * Deliberately a separate table from `pair_requests`, whose pickup route is
+ * unauthenticated by necessity (a pairing CLI has no session yet) — every route touching
+ * this one requires `app.authenticate` AND an `accountId` match, so a key request is only
+ * ever visible to, approvable by, and claimable by the account that created it.
+ *
+ * `response` is the sealed box `[0x02 | masterSecret]`; the server cannot open it.
+ */
+export const keyRequests = pgTable(
+  "key_requests",
+  {
+    id: text("id").primaryKey().$defaultFn(createId),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    ephPub: text("eph_pub").notNull(),
+    /**
+     * The device session that RAISED the request. Only this session may claim the
+     * response — an `accountId` match alone would let any session of the account,
+     * including an attacker's, consume a legitimate delivery.
+     */
+    requestedBySessionId: text("requested_by_session_id").notNull(),
+    /** Untrusted display string. Never used for an authorization decision. */
+    label: text("label"),
+    response: bytea("response"),
+    approvedBySessionId: text("approved_by_session_id"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+  },
+  // Scoped, NOT globally unique: a global unique index on `ephPub` would let anyone who
+  // observes a broadcast key pre-insert a colliding row under their own account and
+  // permanently deny delivery to the victim.
+  (t) => [uniqueIndex().on(t.accountId, t.ephPub), index().on(t.accountId)],
+);
 
 export const pushSubscriptions = pgTable(
   "push_subscriptions",

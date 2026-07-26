@@ -49,6 +49,39 @@ export const authPlugin: FastifyPluginAsync = fp(
     app.decorateRequest("sessionId", "");
     app.decorateRequest("clientKind", "web");
 
+    /**
+     * Best-effort, NON-enforcing identification, so anything running later in the request
+     * lifecycle can key on the account.
+     *
+     * This exists because global `preHandler` hooks run before route-level ones: the
+     * rate limiter's `keyGenerator` (`app/server.ts`) is a global hook, while
+     * `app.authenticate` is a route-level `preHandler`, so `request.accountId` was still
+     * `""` at keying time and every "per-account" limit silently degraded to per-IP.
+     * That let an attacker on a different IP get their own budget against a victim.
+     *
+     * Deliberately never rejects — enforcement stays entirely with `app.authenticate`, so
+     * an unauthenticated or malformed request just falls through with `accountId` unset
+     * and gets IP-keyed as before. Registered before the rate-limit plugin so it runs
+     * first; the `TokenCache` keeps the extra verification to one per token.
+     */
+    app.addHook("preHandler", async (request) => {
+      const token = extractBearerToken(request.headers.authorization);
+      if (!token) return;
+      const cached = cache.get(token);
+      if (cached) {
+        request.accountId = cached.accountId;
+        request.sessionId = cached.sessionId;
+        request.clientKind = cached.clientKind;
+        return;
+      }
+      const verified = await verifyToken(token);
+      if (!verified) return;
+      cache.set(token, verified);
+      request.accountId = verified.accountId;
+      request.sessionId = verified.sessionId;
+      request.clientKind = verified.clientKind;
+    });
+
     app.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
       const token = extractBearerToken(request.headers.authorization);
       if (!token) {

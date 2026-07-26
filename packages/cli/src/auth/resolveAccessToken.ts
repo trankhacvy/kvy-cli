@@ -9,7 +9,7 @@
  */
 
 import type { Logger } from "../logger.js";
-import { type FalconCredentials, writeCredentials } from "./credentials.js";
+import { type FalconCredentials, readCredentials, writeCredentials } from "./credentials.js";
 import { createTokenProvider, type TokenProvider } from "./tokenProvider.js";
 
 export interface ResolveAccessTokenOptions {
@@ -49,5 +49,18 @@ export async function resolveAccessToken(
   credentials: FalconCredentials,
   options: ResolveAccessTokenOptions,
 ): Promise<string | null> {
-  return createTokenProviderForCredentials(credentials, options).getAccessToken();
+  const provider = createTokenProviderForCredentials(credentials, options);
+  const token = await provider.getAccessToken();
+  if (!provider.isDead) return token;
+
+  // The refresh token we started with may already be one rotation behind another
+  // process sharing this home dir (the daemon's `machineClient.ts` renewing on its own
+  // schedule, or a long-running `falcon claude` session's own preflight token
+  // provider) — `refresh.ts` rotates single-use, with only a 60s grace for the
+  // immediately-previous hash, so a stale-by-one read 401s even though the account is
+  // genuinely signed in. Re-read the credentials file once — another process may have
+  // already persisted the newer token — and retry with THAT before giving up.
+  const fresh = readCredentials(options.homeDir);
+  if (!fresh || fresh.refreshToken === credentials.refreshToken) return null;
+  return createTokenProviderForCredentials(fresh, options).getAccessToken();
 }

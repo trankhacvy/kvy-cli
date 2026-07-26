@@ -12,10 +12,9 @@ const migrationsFolder = path.resolve(
   "../../../drizzle",
 );
 
-// docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): with `FALCON_DEV_AUTH`
-// off — the production default, and the only state `config.ts`'s `.refine()` allows under
-// `NODE_ENV=production` — all four `password.ts` handlers must 404 rather than expose any
-// email+password behavior (no enumeration oracle, no way to register/login/reset). See
+// docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): under `NODE_ENV=production`,
+// all four `password.ts` handlers must 404 rather than expose any email+password behavior
+// (no enumeration oracle, no way to register/login/reset). See
 // password.test.ts's own header comment for why this lives in a SEPARATE file: each
 // vitest test file gets its own isolated module registry/worker, so this file's one
 // `vi.resetModules()` + fresh `buildServer` import doesn't collide with that file's
@@ -25,13 +24,18 @@ const migrationsFolder = path.resolve(
 // and isn't reset by `vi.resetModules()`).
 const ORIGINAL_ENV = { ...process.env };
 
-describe("password auth routes — FALCON_DEV_AUTH off (production gate, item 3)", () => {
+describe("password auth routes — NODE_ENV=production (production gate, item 3)", () => {
   let pglite: PGlite;
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    process.env = { ...ORIGINAL_ENV };
-    delete process.env.FALCON_DEV_AUTH;
+    // `NODE_ENV=production` also trips config.ts's dev-only-secret refine unless a real
+    // secret is set — unrelated to what this file tests, but required to boot at all.
+    process.env = {
+      ...ORIGINAL_ENV,
+      NODE_ENV: "production",
+      FALCON_MASTER_SECRET: "a".repeat(32),
+    };
     vi.resetModules();
     const { buildServer } = await import("../server.js");
 
@@ -117,8 +121,8 @@ describe("password auth routes — FALCON_DEV_AUTH off (production gate, item 3)
     expect(response.json()).toEqual({ error: "Not found" });
   });
 
-  // The malformed-body regression above only covers /register — `requireDevAuth` is wired
-  // as the exact same `preValidation` hook on all four routes (password.ts), so the fix
+  // The malformed-body regression above only covers /register — `requireNonProduction` is
+  // wired as the exact same `preValidation` hook on all four routes (password.ts), so the fix
   // must hold uniformly, not just for the one route that happened to get a test first.
   // Each of these payloads is deliberately shaped wrong for its OWN route's body schema
   // (e.g. reset/confirm's `password` must be min(8), reset/request has no `token` field at

@@ -88,7 +88,7 @@ function sendJson<T>(
  * login identity for this provider. Key material (signPubKey/contentPubKey) is bound
  * separately afterward via `keysChallenge`/`keysBind` (§6.2), same as password sign-up. */
 export function register(body: {
-  oauthProvider: "google" | "github" | "dev";
+  oauthProvider: "google" | "github";
   oauthProof: string;
 }): Promise<{ success: true; token: string; refreshToken: string }> {
   return postJson("/v1/auth/register", body);
@@ -136,7 +136,7 @@ export function keysChallenge(token: string): Promise<{ nonce: string }> {
  * accounts re-do the OAuth round trip. */
 export type StepUpProof =
   | { kind: "password"; password: string }
-  | { kind: "oauth"; provider: "google" | "github" | "dev"; oauthProof: string };
+  | { kind: "oauth"; provider: "google" | "github"; oauthProof: string };
 
 /** `POST /v1/auth/keys/bind` — issue-4-plan.md §6.2: bind (first-bind) or, with
  * `rotate: true` + a `stepUpProof`, explicitly rotate this device's key material. */
@@ -200,6 +200,59 @@ export function approvePairing(
   body: { ephPub: string; response: string },
 ): Promise<{ success: true }> {
   return postJson("/v1/auth/pair/approve", body, token);
+}
+
+export interface PairRequestDetails {
+  status: "not_found" | "pending" | "authorized" | "expired";
+  label?: string | null;
+  cwd?: string | null;
+  requestedAt?: string | null;
+}
+
+/** `GET /v1/auth/pair/status` — what the approver's confirm card renders. `label`/`cwd`
+ * are supplied by the requesting device and are display-only. */
+export function fetchPairDetails(ephPub: string): Promise<PairRequestDetails> {
+  return getJson(`/v1/auth/pair/status?ephPub=${encodeURIComponent(ephPub)}`);
+}
+
+/** `POST /v1/keys/request` — ask this account's other devices for a copy of the keys. */
+export function createKeyRequest(
+  token: string,
+  body: { ephPub: string; label?: string },
+): Promise<{ success: true }> {
+  return postJson("/v1/keys/request", body, token);
+}
+
+export interface PendingKeyRequest {
+  ephPub: string;
+  label: string | null;
+  createdAt: string;
+  requesterClientKind: string | null;
+  requesterCreatedAt: string | null;
+}
+
+/** `GET /v1/keys/requests` — pending requests for this account, with server-attested
+ * facts about the asking device. */
+export function listKeyRequests(token: string): Promise<{ requests: PendingKeyRequest[] }> {
+  return getJson("/v1/keys/requests", token);
+}
+
+/** `POST /v1/keys/request/approve` — a holder device stores the sealed `[0x02|masterSecret]` box. */
+export function approveKeyRequest(
+  token: string,
+  body: { ephPub: string; response: string },
+): Promise<{ success: true }> {
+  return postJson("/v1/keys/request/approve", body, token);
+}
+
+export type ClaimKeyRequestResult =
+  | { state: "pending" }
+  | { state: "expired" }
+  | { state: "ready"; response: string };
+
+/** `POST /v1/keys/request/claim` — single-use pickup, bound to the requesting session. */
+export function claimKeyRequest(token: string, ephPub: string): Promise<ClaimKeyRequestResult> {
+  return postJson("/v1/keys/request/claim", { ephPub }, token);
 }
 
 /** `POST /v1/push/subscribe` — register (or update) a push subscription (design §6.2, FR-7.6). */

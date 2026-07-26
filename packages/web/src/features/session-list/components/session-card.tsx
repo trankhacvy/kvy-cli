@@ -31,7 +31,7 @@ export function SessionCard({
     // nested inside an `<a>`, which is both invalid HTML and would need a
     // stopPropagation dance to keep a click from also navigating.
     <div className="group relative">
-      <Link href={`/session/${session.id}/`} className="block">
+      <Link href={`/dashboard/session/${session.id}/`} className="block">
         <Card className="gap-2 py-3 pr-10 transition-colors hover:bg-accent/50">
           <CardHeader className="flex-row items-center gap-2 px-3">
             <SessionStatusDot status={status} />

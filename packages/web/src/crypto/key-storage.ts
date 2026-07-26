@@ -1,40 +1,87 @@
 /**
- * Persistence for the crypto worker's key material. The worker (not the main
- * thread) owns this store: it's opened and read from inside `worker.ts`, at
- * worker startup, so key bytes never have to cross the postMessage boundary
- * to be loaded — design §9.1 ("keys live in worker memory, loaded from
- * IndexedDB at startup").
+ * Persistence for the crypto worker's key material. The worker (not the main thread)
+ * owns this store — design §9.1 ("keys live in worker memory, loaded from IndexedDB at
+ * startup").
  *
- * issue-4-plan.md §6.1/§6.4: the master secret itself is never stored raw —
- * only PIN-wrapped (`wrapped`, AES-256-GCM under an argon2id-derived key, see
- * `@falcon/crypto`'s `wrapWithPin`). The two public identity keys are kept
- * alongside it in the clear so `getIdentity()` can answer "does this browser
- * already have an identity" (known-device vs. new-device, for the sign-in
- * page) without requiring a PIN unlock first.
+ * docs/auth-ux-overhaul-plan.md Phase 5: the master secret is no longer PIN-wrapped.
+ * A v2 record wraps it under one of two mechanisms, recorded in `mode`:
  *
- * Security review finding F1: the 60-day refresh token used to live in plain
- * `localStorage` (fully XSS-readable, undoing the whole point of the 15-minute
- * access-token hardening). It's now PIN-wrapped here too (`wrappedRefreshToken`,
- * same `wrapWithPin` mechanism, own nonce/salt) — recovered only by the same PIN
- * unlock that recovers the master secret, and re-wrapped in place every time it
- * rotates (`lib/session.ts`'s `silentRefresh`, `crypto/worker-handler.ts`'s
- * `refreshSession`/`setRefreshToken`). Optional because a record can exist with
- * a master secret but no refresh token yet (e.g. mid-signup, before the first
- * `setRefreshToken` call lands).
+ *   - `"prf"`    — the wrap key is re-derived per session from a passkey (`prf-key.ts`).
+ *                  Key material never exists at rest; unlocking needs a biometric gesture.
+ *   - `"device"` — the wrap key is a non-extractable `CryptoKey` stored right here
+ *                  (`device-key.ts`). Zero friction, and honestly labelled in the UI as
+ *                  "anyone who can use this computer can read your sessions", because
+ *                  same-origin script can use the handle even though it can't export it.
+ *
+ * The two public identity keys stay in the clear so `getIdentity()` can answer "does this
+ * browser have keys" without any unlock step.
+ *
+ * `wrappedRefreshToken` is gone from v2 — the session credential lives in its own store
+ * now (`session-storage.ts`, Phase 4a) so a browser with no key material can still hold a
+ * session. It remains on the v1 shape purely so the migration can carry it across.
  */
 import type { PinWrapped } from "@falcon/crypto/web";
+import type { WrappedBytes } from "./device-key.js";
 
-export interface StoredKeyRecord {
+export type KeyWrapMode = "prf" | "device";
+
+export interface StoredKeyRecordV2 {
+  v: 2;
+  /**
+   * Which account this key material belongs to (the access token's `sub`). Absent on
+   * records written before this field existed — see `worker-handler.ts`'s `belongsTo`
+   * for the legacy-adoption policy.
+   *
+   * This slot has always been single-tenant, but nothing recorded WHOSE keys were in it, so
+   * signing into a second account on the same browser produced a worker loaded with the
+   * first account's key tree and a silent `setSessionKey` failure on every session.
+   */
+  accountId?: string;
+  mode: KeyWrapMode;
+  /** Present only for `mode: "device"`. */
+  wrapKey?: CryptoKey;
+  /** Present only for `mode: "prf"`. */
+  credentialId?: Uint8Array;
+  wrapped: WrappedBytes;
+  signPubKey: string;
+  contentPubKey: string;
+}
+
+/**
+ * The pre-Phase-5 PIN-wrapped record. It has no version field at all, so v1 detection is
+ * "no `v` property" — not `v === 1`.
+ */
+export interface StoredKeyRecordV1 {
+  v?: undefined;
   wrapped: PinWrapped;
   signPubKey: string;
   contentPubKey: string;
   wrappedRefreshToken?: PinWrapped;
 }
 
+export type AnyStoredKeyRecord = StoredKeyRecordV1 | StoredKeyRecordV2;
+
+export function isV2Record(record: AnyStoredKeyRecord): record is StoredKeyRecordV2 {
+  return record.v === 2;
+}
+
 export interface KeyStorage {
-  save(record: StoredKeyRecord): Promise<void>;
-  load(): Promise<StoredKeyRecord | null>;
+  save(record: StoredKeyRecordV2): Promise<void>;
+  load(): Promise<AnyStoredKeyRecord | null>;
   clear(): Promise<void>;
+  /**
+   * Wipe the record AND remove the database itself. `clear()` empties the store, which
+   * leaves `falcon-crypto-bridge` enumerable by `indexedDB.databases()` after a sign-out
+   * (auth-ux-overhaul-e2e-results.md E2E-5.5) — the data is gone, but "both are gone" was
+   * the stated guarantee and an empty shell is not that.
+   *
+   * Safe to call from the worker: every operation in this module opens and closes its own
+   * connection, so nothing here is holding one open for `deleteDatabase` to block on. The
+   * `onblocked` path still resolves rather than hanging — a connection from ANOTHER context
+   * (the shared bridge worker, a second tab) can block the delete, and logout is
+   * best-effort past the crypto step by design (`lib/logout.ts`).
+   */
+  destroy(): Promise<void>;
 }
 
 const DB_NAME = "falcon-crypto-bridge";
@@ -55,7 +102,6 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-/** Real, browser IndexedDB-backed key storage — used by the worker at runtime. */
 export function createIndexedDbKeyStorage(): KeyStorage {
   return {
     async save(record) {
@@ -74,10 +120,10 @@ export function createIndexedDbKeyStorage(): KeyStorage {
     async load() {
       const db = await openDb();
       try {
-        return await new Promise<StoredKeyRecord | null>((resolve, reject) => {
+        return await new Promise<AnyStoredKeyRecord | null>((resolve, reject) => {
           const tx = db.transaction(STORE_NAME, "readonly");
           const req = tx.objectStore(STORE_NAME).get(RECORD_KEY);
-          req.onsuccess = () => resolve((req.result as StoredKeyRecord | undefined) ?? null);
+          req.onsuccess = () => resolve((req.result as AnyStoredKeyRecord | undefined) ?? null);
           req.onerror = () => reject(req.error ?? new Error("failed to load key material"));
         });
       } finally {
@@ -97,12 +143,21 @@ export function createIndexedDbKeyStorage(): KeyStorage {
         db.close();
       }
     },
+    async destroy() {
+      await this.clear();
+      await new Promise<void>((resolve) => {
+        const request = indexedDB.deleteDatabase(DB_NAME);
+        request.onsuccess = () => resolve();
+        request.onerror = () => resolve();
+        request.onblocked = () => resolve();
+      });
+    },
   };
 }
 
 /** In-memory key storage — used by tests, which run outside a browser/IndexedDB. */
-export function createMemoryKeyStorage(): KeyStorage {
-  let stored: StoredKeyRecord | null = null;
+export function createMemoryKeyStorage(initial: AnyStoredKeyRecord | null = null): KeyStorage {
+  let stored = initial;
   return {
     async save(record) {
       stored = record;
@@ -111,6 +166,9 @@ export function createMemoryKeyStorage(): KeyStorage {
       return stored;
     },
     async clear() {
+      stored = null;
+    },
+    async destroy() {
       stored = null;
     },
   };

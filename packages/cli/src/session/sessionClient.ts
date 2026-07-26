@@ -45,6 +45,7 @@
  *    connected state so a dead connection never appears "alive" server-side.
  */
 
+import { EphemeralSchema } from "@falcon/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
 import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -73,6 +74,14 @@ export interface SessionClientDeps {
    * `false`.
    */
   getWorking: () => boolean;
+  /**
+   * Fires when another device asks for a copy of this account's keys, learned via the
+   * `"key-request"` ephemeral (auth-ux-overhaul-fix-plan.md Fix 7). Optional: the daemon's
+   * own `machineClient.ts` already logs this to a file nobody reads, so a caller that
+   * doesn't supply this simply keeps that (invisible) behavior — no regression, just no
+   * improvement.
+   */
+  onKeyRequest?: (payload: { label: string | null }) => void;
 }
 
 export function createSessionClientDeps(
@@ -185,6 +194,17 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
     deps.logger.info("[session-client] connected", { sessionId: deps.sessionId });
     startAlive();
     armRenewTimer();
+  });
+
+  // The session socket joins `user:${accountId}` like every other connection
+  // (server/src/app/events/eventRouter.ts:116-118), so a key request raised on another
+  // device already lands here — it was simply never listened for. The daemon's own handler
+  // (daemon/machineClient.ts) logs it to a file nobody reads; this is the copy that can
+  // reach a human, because a `falcon claude` session has a real terminal attached.
+  socket.on("ephemeral", (payload: unknown) => {
+    const parsed = EphemeralSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.t !== "key-request") return;
+    deps.onKeyRequest?.({ label: parsed.data.label });
   });
 
   socket.on("connect_error", (error: Error) => {

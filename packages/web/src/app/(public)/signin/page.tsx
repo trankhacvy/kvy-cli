@@ -6,18 +6,17 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { DEV_AUTH_ENABLED, GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
+import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
+import { copy } from "@/lib/copy";
 import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
+import { peekPendingPair } from "@/lib/pending-pair";
 import { isExpiredReason } from "./signin-gate";
 
 // Sign-in / sign-up page (design §5.2, §9.2 "Home" is gated behind this).
-// issue-4-plan.md §5.5/Phase 4: the legacy "trusted-device silently signs in via a
-// self-issued challenge" path (`POST /v1/auth`) and the recovery-code restore flow
-// are both gone — a lost/wiped browser now recovers via `keys/bind`'s rotate-epoch
-// flow (see `/password/`'s "Forgot your PIN?" / "no key material" steps) instead of
-// a client-trusted code. OAuth here is a straightforward "authenticate with the
-// provider, then the callback page binds this device's key material" flow, same as
-// email+password at `/password/`.
+// A lost or wiped browser recovers by asking one of the account's other devices for a
+// copy of its keys (docs/auth-ux-overhaul-plan.md Phase 4), not by rotating and erasing.
+// OAuth here is a straightforward "authenticate with the provider, then the callback page
+// sets this browser up" flow, same as email+password at `/password/`.
 export default function SignInPage() {
   const router = useRouter();
   // docs/auth-ux-hardening-plan.md item 7: `RequireAuth` redirects a failed silent
@@ -27,10 +26,14 @@ export default function SignInPage() {
   // first paint — so this reads `window.location.search` in an effect rather than
   // `useSearchParams()`, matching the OAuth callback pages' convention
   // (`github/page.tsx`'s `consumeGithubCallback(window.location.search)`).
-  const [expired, setExpired] = useState(false);
+  const [banner, setBanner] = useState<"expired" | "pair" | null>(null);
 
   useEffect(() => {
-    setExpired(isExpiredReason(window.location.search));
+    if (isExpiredReason(window.location.search)) {
+      setBanner("expired");
+      return;
+    }
+    if (peekPendingPair()) setBanner("pair");
   }, []);
 
   return (
@@ -45,7 +48,7 @@ export default function SignInPage() {
               </div>
               <div className="space-y-3">
                 <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Sign in to your secure workspace
+                  {banner === "pair" ? copy.signin.titleWithPendingPair : copy.signin.titleDefault}
                 </h1>
                 <p className="text-sm leading-6 text-muted-foreground sm:text-base">
                   End-to-end encrypted mission control for coding agents, designed for trusted
@@ -54,9 +57,15 @@ export default function SignInPage() {
               </div>
             </div>
 
-            {expired && (
+            {banner === "expired" && (
               <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                Your session expired — sign in again to continue.
+                {copy.signin.expiredBanner}
+              </div>
+            )}
+
+            {banner === "pair" && (
+              <div className="rounded-lg border border-border/60 bg-muted/40 px-4 py-3 text-sm">
+                {copy.signin.subtitleWithPendingPair("your machine")}
               </div>
             )}
 
@@ -64,9 +73,7 @@ export default function SignInPage() {
               <CardHeader className="space-y-2">
                 <CardTitle>Continue to Falcon</CardTitle>
                 <CardDescription>
-                  {DEV_AUTH_ENABLED
-                    ? "Sign in with a provider, or use email + password instead."
-                    : "Sign in with a provider."}
+                  Sign in with a provider, or use email + password instead.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -98,53 +105,40 @@ export default function SignInPage() {
                     </span>
                     <KeyRound className="size-4 opacity-70" aria-hidden="true" />
                   </Button>
-                  {!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && !DEV_AUTH_ENABLED && (
+                  {!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && (
                     <p className="text-xs text-muted-foreground">
                       No OAuth provider is configured for this deployment.
                     </p>
                   )}
                 </div>
 
-                {DEV_AUTH_ENABLED && (
-                  <>
-                    <div className="relative">
-                      <Separator />
-                      <span className="absolute inset-x-0 -top-2 mx-auto w-fit bg-card px-3 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-                        Or
-                      </span>
-                    </div>
+                <div className="relative">
+                  <Separator />
+                  <span className="absolute inset-x-0 -top-2 mx-auto w-fit bg-card px-3 text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+                    Or
+                  </span>
+                </div>
 
-                    <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        Prefer email + password? That flow also sets up (or unlocks) this browser's
-                        encrypted key material with a PIN. (Local testing only.)
-                      </p>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => router.push("/password/")}
-                      >
-                        Continue with email + password
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => router.push("/auth/callback/dev/")}
-                      >
-                        Continue without OAuth (dev only)
-                      </Button>
-                    </div>
-                  </>
-                )}
+                <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
+                  <p className="text-sm leading-6 text-muted-foreground">
+                    Prefer email + password? That flow sets this browser up the same way. (Local
+                    testing only.)
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => router.push("/password/")}
+                  >
+                    Continue with email + password
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
             <p className="text-center text-sm leading-6 text-muted-foreground">
-              {DEV_AUTH_ENABLED
-                ? "OAuth and email+password are both first-class login identities — either one provisions this browser's key material the first time it's used here."
-                : "Signing in provisions this browser's key material the first time it's used here."}
+              OAuth and email+password are both first-class login identities — either one provisions
+              this browser the first time you use it.
             </p>
           </div>
         </section>

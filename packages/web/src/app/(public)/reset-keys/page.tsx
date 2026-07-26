@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PinSetupForm } from "@/components/auth/pin-setup-form";
+import { KeyProtectionChoice } from "@/components/auth/key-protection-choice";
+import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { type KeyWrapMode, provisionKeyProtection } from "@/crypto";
 import { rotateKeyEpochOAuth } from "@/lib/complete-password-sign-in";
 import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
 import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
@@ -46,7 +48,7 @@ export default function ResetKeysPage() {
     else beginGithubSignIn();
   }
 
-  async function handleNewPin(pin: string): Promise<void> {
+  async function handleProtectionChoice(mode: KeyWrapMode): Promise<void> {
     if (!bridge) return;
     if (phase.kind !== "returned") return;
     const token = getToken();
@@ -56,7 +58,8 @@ export default function ResetKeysPage() {
     }
     const { provider, oauthProof, refreshToken } = phase;
     setPhase({ kind: "rotating" });
-    const outcome = await rotateKeyEpochOAuth(bridge, token, refreshToken, pin, {
+    const protection = await provisionKeyProtection(mode, "Falcon");
+    const outcome = await rotateKeyEpochOAuth(bridge, token, refreshToken, protection, {
       provider,
       oauthProof,
     });
@@ -83,8 +86,8 @@ export default function ResetKeysPage() {
             </p>
           </div>
 
-          <Button type="button" size="lg" onClick={() => router.push("/pair/")}>
-            Pair from another device
+          <Button type="button" size="lg" onClick={() => setPhase({ kind: "fetch-keys" })}>
+            Get my keys from another device
           </Button>
 
           <Separator />
@@ -127,9 +130,13 @@ export default function ResetKeysPage() {
         </div>
       )}
 
+      {phase.kind === "fetch-keys" && (
+        <RequestKeysPanel onReady={() => router.replace("/dashboard/")} />
+      )}
+
       {phase.kind === "returned" && (
         <div className="w-full max-w-sm">
-          <PinSetupForm onSubmit={handleNewPin} />
+          <KeyProtectionChoice onChoose={(mode) => void handleProtectionChoice(mode)} />
         </div>
       )}
 

@@ -62,7 +62,14 @@ docker compose -f deploy/docker-compose.prod.yml logs -f server
 curl http://localhost:3005/health
 ```
 
-**Migrations run automatically on boot** — no separate migration step needed.
+**Migrations run automatically on boot** — no separate migration step needed. If your
+`DATABASE_URL` points at a connection pooler (PgBouncer, Neon's `-pooler` host, Vercel's
+pooled URL), also set `DATABASE_URL_UNPOOLED` to the same database's **direct** connection
+string — the migration runner needs it for its advisory lock and DDL transaction, and a
+pooled connection there is what silently left `key_requests` un-migrated in one deployment.
+Only the boot-time migrator reads this var; the request path keeps using `DATABASE_URL`. An
+unreachable `DATABASE_URL_UNPOOLED` now fails boot loudly with a connection error rather than
+falling back — a misconfigured value is a new way to fail, not a new way to silently degrade.
 
 ### Option B: VPS (Manual)
 
@@ -119,7 +126,7 @@ curl https://app.yourcompany.com/
 
 ### 2. Test End-to-End
 
-- [ ] Sign-up with email/password (if `FALCON_DEV_AUTH=true` locally; should be off in prod)
+- [ ] Sign-up with email/password (only works when `NODE_ENV` isn't `production`; 404s in prod)
 - [ ] Sign-in with Google/GitHub (if OAuth configured)
 - [ ] Create a session (CLI or web)
 - [ ] Verify transcript is encrypted server-side (server sees ciphertext only)

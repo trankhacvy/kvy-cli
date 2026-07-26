@@ -5,6 +5,7 @@ const openBrowserMock = vi.fn();
 const displayPairingQrCodeMock = vi.fn();
 const writeCredentialsMock = vi.fn();
 const readCredentialsMock = vi.fn();
+const clearCredentialsMock = vi.fn();
 const wrapWithDeviceKeyMock = vi.fn();
 
 vi.mock("./pair.js", () => ({ pairDevice: pairDeviceMock }));
@@ -13,6 +14,7 @@ vi.mock("./qrcode.js", () => ({ displayPairingQrCode: displayPairingQrCodeMock }
 vi.mock("./credentials.js", () => ({
   writeCredentials: writeCredentialsMock,
   readCredentials: readCredentialsMock,
+  clearCredentials: clearCredentialsMock,
 }));
 // `wrapNewKeyMaterial` always device-key wraps now — mocked so this suite never touches
 // a real OS vault or a real `~/.falcon/device.key`.
@@ -46,6 +48,7 @@ beforeEach(() => {
   displayPairingQrCodeMock.mockReset();
   writeCredentialsMock.mockReset();
   readCredentialsMock.mockReset().mockReturnValue(null);
+  clearCredentialsMock.mockReset();
   wrapWithDeviceKeyMock.mockReset().mockReturnValue({ v: 1, nonce: "n", ct: "c" });
 });
 
@@ -78,10 +81,11 @@ describe("runAuthLogin", () => {
     expect(wrapWithDeviceKeyMock).toHaveBeenCalledWith(masterSecret, expect.any(String));
     expect(displayPairingQrCodeMock).toHaveBeenCalledWith("http://web.invalid/pair#frag");
     expect(logger.info).toHaveBeenCalledWith("auth login: succeeded");
-    expect(joinedOutput(stdout)).toContain("Logged in to Falcon.");
+    expect(joinedOutput(stdout)).toContain("✓ Connected");
+    expect(joinedOutput(stdout)).toContain("Starting your session");
   });
 
-  it("prints the opened-browser message when openBrowser succeeds", async () => {
+  it("only prints the URL fallback when the browser could not be opened (AX-1.10)", async () => {
     openBrowserMock.mockResolvedValue(true);
     pairDeviceMock.mockImplementation(
       async (options: { onPairingUrlReady: (u: string) => unknown }) => {
@@ -93,12 +97,29 @@ describe("runAuthLogin", () => {
 
     await runAuthLogin(fakeLogger());
 
-    expect(joinedOutput(stdout)).toContain("Opened your browser");
+    expect(joinedOutput(stdout)).toContain("Opening your browser");
+    expect(joinedOutput(stdout)).not.toContain("If it didn't open");
+  });
+
+  it("prints the URL fallback when the browser could not be opened", async () => {
+    openBrowserMock.mockResolvedValue(false);
+    pairDeviceMock.mockImplementation(
+      async (options: { onPairingUrlReady: (u: string) => unknown }) => {
+        await options.onPairingUrlReady("http://web.invalid/pair#frag");
+        return { ok: false, reason: "cancelled" };
+      },
+    );
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await runAuthLogin(fakeLogger());
+
+    expect(joinedOutput(stdout)).toContain("If it didn't open");
+    expect(joinedOutput(stdout)).toContain("http://web.invalid/pair#frag");
   });
 
   it.each([
     ["request-failed", "Could not reach the Falcon server"],
-    ["expired", "Pairing request expired"],
+    ["expired", "That sign-in link expired"],
     ["cancelled", "Sign-in cancelled."],
     ["decrypt-failed", "unreadable response"],
   ] as const)("prints a message and exits 1 for reason=%s", async (reason, expectedText) => {
@@ -127,7 +148,10 @@ describe("runAuthLogin", () => {
 
 describe("ensureLoggedIn", () => {
   it("returns ok immediately when credentials already exist, without touching pairing", async () => {
-    readCredentialsMock.mockReturnValue({ refreshToken: "t", keyMaterial: { mode: "device", wrapped: {} } });
+    readCredentialsMock.mockReturnValue({
+      refreshToken: "t",
+      keyMaterial: { mode: "device", wrapped: {} },
+    });
 
     const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
 
@@ -139,10 +163,9 @@ describe("ensureLoggedIn", () => {
     withStdinTTY(undefined, async () => {
       const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
 
-      expect(result).toEqual({
-        ok: false,
-        message: 'falcon: not logged in — run "falcon auth login" first\n',
-      });
+      expect(result.ok).toBe(false);
+      expect(result.ok === false && result.message).toContain("not logged in");
+      expect(result.ok === false && result.message).toContain("no terminal here");
       expect(pairDeviceMock).not.toHaveBeenCalled();
     }));
 
@@ -162,7 +185,7 @@ describe("ensureLoggedIn", () => {
       expect(result).toEqual({ ok: true });
       expect(pairDeviceMock).toHaveBeenCalledOnce();
       expect(writeCredentialsMock).toHaveBeenCalledOnce();
-      expect(joinedOutput(stdout)).toContain("let's get you set up");
+      expect(joinedOutput(stdout)).toContain("Welcome to Falcon");
     }));
 
   it("propagates failure (with no extra message) when the auto-triggered pairing fails", async () =>
@@ -173,5 +196,37 @@ describe("ensureLoggedIn", () => {
       const result = await ensureLoggedIn(fakeLogger(), "/home/fake");
 
       expect(result).toEqual({ ok: false, message: "" });
+    }));
+
+  // auth-ux-overhaul-fix-plan.md Fix 3 / E2E-6.4: web-side revocation never deletes
+  // `access.key`, so a stale-but-present credentials file must NOT short-circuit
+  // `ensureLoggedIn` when the caller has already proved (via a real 401) that the token
+  // is dead. `{ force: true }` is that proof, and re-pairing must clear the dead file
+  // FIRST so a Ctrl-C mid-pairing can't leave the short-circuit re-triggering.
+  it("re-pairs instead of short-circuiting when credentials exist but the caller passes force:true", async () =>
+    withStdinTTY(true, async () => {
+      readCredentialsMock.mockReturnValue({
+        refreshToken: "stale-refresh-token",
+        keyMaterial: { mode: "device", wrapped: {} },
+      });
+      const masterSecret = new Uint8Array(32).fill(2);
+      pairDeviceMock.mockImplementation(
+        async (options: { onPairingUrlReady: (u: string) => unknown }) => {
+          await options.onPairingUrlReady("http://web.invalid/pair#frag");
+          return { ok: true, result: { refreshToken: "refresh-token-2", masterSecret } };
+        },
+      );
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      const result = await ensureLoggedIn(fakeLogger(), "/home/fake", { force: true });
+
+      expect(result).toEqual({ ok: true });
+      expect(clearCredentialsMock).toHaveBeenCalledWith("/home/fake");
+      expect(pairDeviceMock).toHaveBeenCalledOnce();
+      expect(writeCredentialsMock).toHaveBeenCalledOnce();
+      // clearCredentials must run BEFORE pairing starts writing anything new.
+      const clearOrder = clearCredentialsMock.mock.invocationCallOrder[0];
+      const writeOrder = writeCredentialsMock.mock.invocationCallOrder[0];
+      expect(clearOrder).toBeLessThan(writeOrder as number);
     }));
 });

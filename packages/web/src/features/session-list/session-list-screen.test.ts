@@ -40,7 +40,7 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
   it("renders exactly the active session, excluding the archived one", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [{ id: "w1", name: "falcon" }],
-      machines: [],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [
         session({ id: "active-sess", title: "Active session", status: "active" }),
         session({ id: "archived-sess", title: "Archived session", status: "archived" }),
@@ -55,7 +55,7 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
   it("falls through to the empty state when every session is archived", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [{ id: "w1", name: "falcon" }],
-      machines: [],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [session({ id: "archived-sess", status: "archived" })],
     };
 
@@ -66,7 +66,7 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
   it("links to the Completed Chats screen", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [{ id: "w1", name: "falcon" }],
-      machines: [],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [session({ id: "active-sess", status: "active" })],
     };
 
@@ -81,7 +81,7 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
         { id: "w1", name: "has-active" },
         { id: "w2", name: "all-archived" },
       ],
-      machines: [],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [
         session({ id: "a", workspaceId: "w1", status: "active" }),
         session({ id: "b", workspaceId: "w2", status: "archived" }),

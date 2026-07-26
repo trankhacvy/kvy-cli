@@ -64,7 +64,7 @@ const StepUpProofSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("password"), password: z.string().min(1) }),
   z.object({
     kind: z.literal("oauth"),
-    provider: z.enum(["google", "github", "dev"]),
+    provider: z.enum(["google", "github"]),
     oauthProof: z.string().min(1),
   }),
 ]);

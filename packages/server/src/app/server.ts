@@ -35,6 +35,7 @@ import {
 import { buildPushDispatcher } from "./push/dispatch.js";
 import type { PushDispatcherPort } from "./push/types.js";
 import { buildBlobsRoutes } from "./routes/blobs.js";
+import { buildKeyRequestRoutes } from "./routes/keyRequests.js";
 import { buildKeysRoutes } from "./routes/keys.js";
 import { buildMachinesRoutes } from "./routes/machines.js";
 import { buildMessagesRoutes } from "./routes/messages.js";
@@ -147,18 +148,25 @@ export async function buildServer(
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
+  // Decorates `app.authenticate` (design §16 "0.4 Server foundation") so routes
+  // registered below can require a valid bearer JWT via `{ preHandler: app.authenticate }`.
+  //
+  // Registered BEFORE the rate limiter on purpose (docs/auth-ux-overhaul-plan.md AX-7.4):
+  // it also installs a non-enforcing global `preHandler` that populates `req.accountId`,
+  // and global hooks run in registration order — so this must precede the limiter's own
+  // hook for account-keying below to see anything.
+  await app.register(authPlugin);
+
   // Global default; individual routes narrow it further via `config.rateLimit`
-  // (design §4.3: "rate limits on auth + ingest routes"). Keyed by the
-  // authenticated account when available (set by `app.authenticate` below)
-  // so one account can't starve another sharing an IP/NAT; falls back to IP
-  // for routes that run before/without authentication (health checks, and
-  // the auth routes themselves). `hook: "preHandler"` (rather than the
-  // plugin's default `onRequest`) is required for that account-keying to
-  // ever take effect: `app.authenticate` itself runs as a route `preHandler`
-  // and only sets `req.accountId` there, which is *after* `onRequest` fires —
-  // an `onRequest`-hooked key generator would see `req.accountId` unset on
-  // every request and silently degrade to IP-only keying for authenticated
-  // routes too.
+  // (design §4.3: "rate limits on auth + ingest routes"). Keyed by the authenticated
+  // account when available so one account can't starve another sharing an IP/NAT, and
+  // so an attacker on a different IP can't get their own budget against a victim; falls
+  // back to IP for routes that run without authentication (health checks, the auth
+  // routes themselves).
+  //
+  // `hook: "preHandler"` — the plugin's default `onRequest` fires before ANY preHandler,
+  // including `authPlugin`'s identification hook above, and would silently degrade to
+  // IP-only keying everywhere.
   await app.register(rateLimit, {
     global: true,
     max: 300,
@@ -166,11 +174,6 @@ export async function buildServer(
     hook: "preHandler",
     keyGenerator: (req) => req.accountId || req.ip,
   });
-
-  // Decorates `app.authenticate` (design §16 "0.4 Server foundation") so routes
-  // registered below or in later phases can require a valid bearer JWT via
-  // `{ preHandler: app.authenticate }`.
-  await app.register(authPlugin);
 
   // `onResponse` (not a route-level hook) so every route registered below —
   // present and future — is covered without each one remembering to
@@ -204,6 +207,7 @@ export async function buildServer(
     ),
   );
   await app.register(pairRoutes);
+  await app.register(buildKeyRequestRoutes(db, eventRouter));
   await app.register(buildSessionsRoutes(db, eventRouter));
   await app.register(buildMessagesRoutes(db, eventRouter));
   await app.register(buildSessionCasRoutes(db, eventRouter));

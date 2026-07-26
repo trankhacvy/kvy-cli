@@ -28,7 +28,7 @@
 
 import { homedir, hostname, platform } from "node:os";
 import { encodeBase64, encrypt } from "@falcon/crypto";
-import type { EncryptedBox, MachineRow } from "@falcon/wire";
+import { type EncryptedBox, EphemeralSchema, type MachineRow } from "@falcon/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
 import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -452,6 +452,19 @@ export async function startMachineClient(
           error: error instanceof Error ? error.message : String(error),
         });
       });
+  });
+
+  // AX-4.17: the daemon holds the master secret, so it can answer a key request even
+  // when no browser is open — but it never auto-approves. Surfacing the request in the
+  // log is what tells the user to run `falcon keys approve`; approving it silently would
+  // hand full read access to anyone holding a stolen account session.
+  socket.on("ephemeral", (payload: unknown) => {
+    const parsed = EphemeralSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.t !== "key-request") return;
+    deps.logger.info(
+      "[machine-client] a device is asking for your keys — run `falcon keys approve` to review it",
+      { label: parsed.data.label },
+    );
   });
 
   socket.on("connect_error", (error: Error) => {

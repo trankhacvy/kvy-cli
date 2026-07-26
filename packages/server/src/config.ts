@@ -1,6 +1,18 @@
 import { homedir } from "node:os";
 import path from "node:path";
+import { config as loadEnv } from "dotenv";
 import { z } from "zod";
+
+// Load exactly once per process, not once per import: tests re-import this module many
+// times via `vi.resetModules()` (each one deliberately `delete`ing a specific env var
+// first, to exercise the "unset in production" path) — without this guard, dotenv would
+// re-read the real root `.env.local` on every one of those re-imports and silently
+// resurrect the var the test just deleted, since dotenv only skips keys already present
+// in `process.env`, not keys that were removed after an earlier load.
+if (!process.env.FALCON_DOTENV_LOADED) {
+  loadEnv({ path: path.join(import.meta.dirname, "../../../.env.local") });
+  process.env.FALCON_DOTENV_LOADED = "1";
+}
 
 // The default is only safe for local dev/test; every real deployment MUST override it,
 // since anyone holding this value can mint tokens for any account.
@@ -20,6 +32,12 @@ const EnvSchema = z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
     DATABASE_URL: z.string().min(1).default("postgres://falcon:falcon@localhost:5432/falcon"),
+    // Direct (non-pooled) connection used ONLY by the boot-time migration runner — see
+    // db/migrate.ts. A transaction pooler (Neon's `-pooler` host, PgBouncer, Vercel's pooled
+    // URL) is the wrong transport for the session-scoped advisory lock and long DDL
+    // transaction `runMigrations()` needs. Unset is fine when DATABASE_URL already points at
+    // a direct endpoint (local Postgres, self-host docker-compose).
+    DATABASE_URL_UNPOOLED: z.string().min(1).optional(),
     // HMAC signing key for auth JWTs (design §5.2: HS256 at MVP — see src/auth/tokens.ts).
     FALCON_MASTER_SECRET: z
       .string()
@@ -39,12 +57,6 @@ const EnvSchema = z
     // — GitHub sign-in simply refuses exchanges (401) until both are configured.
     GITHUB_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
-    // Local-testing-only sign-up path that skips real Google/GitHub verification
-    // entirely (`auth/oauth.ts`'s "dev" provider always succeeds when this is on) —
-    // for a fresh self-host box with no OAuth app registered yet. Defaults to off,
-    // and the `.refine()` below makes it structurally impossible to boot with this
-    // on in production, same belt-and-suspenders stance as `FALCON_MASTER_SECRET`.
-    FALCON_DEV_AUTH: z.coerce.boolean().default(false),
     // Web Push (VAPID) — falcon-system-design.md §6.4/§3 "Push | Web Push (VAPID)
     // via `web-push`". Optional: unset simply means the `webpush` channel logs and
     // skips sending (src/app/push/channels/webpush.ts) rather than failing closed —
@@ -120,6 +132,10 @@ const EnvSchema = z
     // separately only if you want blob-URL forgery and auth-token forgery
     // to require compromising two different secrets instead of one.
     BLOB_LOCAL_TOKEN_SECRET: z.string().min(1).optional(),
+    // docs/auth-ux-overhaul-plan.md AX-7.1: max concurrent (non-archived) sessions per
+    // account. 0 disables the check entirely, which is the default — a self-host has no
+    // reason to cap itself, and a hosted deployment sets this explicitly.
+    MAX_ACTIVE_SESSIONS_PER_ACCOUNT: z.coerce.number().int().min(0).default(0),
     // How long a presigned/local blob upload or download URL stays valid.
     BLOB_URL_EXPIRY_SECONDS: z.coerce.number().int().positive().default(300),
     // Hard cap on a single blob's encrypted byte size, enforced by
@@ -165,12 +181,6 @@ const EnvSchema = z
       path: ["FALCON_MASTER_SECRET"],
     },
   )
-  // Same fail-fast stance as the master-secret check above: a fake, always-succeeding
-  // sign-up path must never be reachable outside local dev/self-host testing.
-  .refine((parsed) => !(parsed.NODE_ENV === "production" && parsed.FALCON_DEV_AUTH), {
-    message: "FALCON_DEV_AUTH must not be enabled when NODE_ENV=production",
-    path: ["FALCON_DEV_AUTH"],
-  })
   // A bucket name with no credentials is a half-configured S3 driver, not a
   // "fall back to local disk" signal — that fallback is only for the fully
   // unset case (see `S3_BUCKET`'s own comment). Failing fast here beats
@@ -209,6 +219,7 @@ const OPTIONAL_ENV_KEYS = [
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
   "BLOB_LOCAL_TOKEN_SECRET",
+  "DATABASE_URL_UNPOOLED",
 ] as const;
 
 const rawEnv = Object.fromEntries(

@@ -131,7 +131,9 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       await pair(ephPub);
 
       const response = await status(ephPub);
-      expect(response.json()).toEqual({ status: "pending" });
+      // AX-2.6 added display metadata (label/cwd/requestedAt) alongside the status, so
+      // this asserts the status specifically rather than the whole envelope.
+      expect(response.json()).toMatchObject({ status: "pending" });
     });
 
     it("reports expired past the TTL", async () => {
@@ -221,7 +223,7 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       expect(approveResponse.json()).toEqual({ success: true });
 
       const statusResponse = await status(ephPub);
-      expect(statusResponse.json()).toEqual({ status: "authorized" });
+      expect(statusResponse.json()).toMatchObject({ status: "authorized" });
 
       const poll = await pair(ephPub);
       const body = poll.json() as { state: string; response?: string; token?: string };

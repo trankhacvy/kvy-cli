@@ -11,7 +11,7 @@ import {
   type SessionListMachine,
   useMachinePresence,
 } from "@/features/session-list";
-import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import type {
   UnmanagedSessionItem,
@@ -209,7 +209,7 @@ export function buildSnapshot(
  * the crypto bridge is ready, same "never crash on absent data" shape the
  * mock's static fixture doesn't need to worry about. */
 export const useLiveUnmanagedSessions: UseUnmanagedSessionsSnapshot = () => {
-  const bridge = useCryptoBridge();
+  const bridge = useDedicatedCryptoBridge();
   const query = useSyncSnapshotQuery();
   const presence = useMachinePresence();
 

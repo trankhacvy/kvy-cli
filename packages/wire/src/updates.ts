@@ -99,5 +99,20 @@ export const EphemeralSchema = z.discriminatedUnion("t", [
     sessionId: z.string(),
     kind: LifecycleKindSchema,
   }),
+  // docs/auth-ux-overhaul-plan.md Phase 4: another device of this account is asking for a
+  // copy of the keys. Carries no secret — only the requester's ephemeral PUBLIC key and a
+  // display label.
+  //
+  // ⚠️ Unlike `machine-presence.needsReauth`, this is a new UNION MEMBER, not an optional
+  // field, so the repo's additive-only rule does not make it invisible to old clients:
+  // `EphemeralSchema` is a discriminatedUnion and `sync/apiSocket.ts` safeParses then
+  // drops what it can't parse. A stale, service-worker-cached build logs a dropped-payload
+  // error and never shows the approve card — which is why the requester side also polls.
+  z.object({
+    t: z.literal("key-request"),
+    ephPub: z.string(),
+    /** Untrusted display string supplied by the requesting device. Plain text only. */
+    label: z.string().nullable(),
+  }),
 ]);
 export type Ephemeral = z.infer<typeof EphemeralSchema>;

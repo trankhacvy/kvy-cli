@@ -418,9 +418,9 @@ describe("parseAskAnswers", () => {
   });
 
   it("parses an answer containing a comma without mis-splitting on it", () => {
-    expect(
-      parseAskAnswers('Your questions have been answered: "Drink?"="Yes, please".'),
-    ).toEqual([{ question: "Drink?", answer: "Yes, please" }]);
+    expect(parseAskAnswers('Your questions have been answered: "Drink?"="Yes, please".')).toEqual([
+      { question: "Drink?", answer: "Yes, please" },
+    ]);
   });
 
   // A free-text "Type something" answer (verified live, same session) uses a

@@ -22,6 +22,7 @@ export {
   encryptBlob,
   encryptLegacy,
   encryptWithDataKey,
+  generateEphemeralKeyPair,
   getRandomBytes,
   libsodiumDecryptWithSecretKey,
   libsodiumEncryptForPublicKey,

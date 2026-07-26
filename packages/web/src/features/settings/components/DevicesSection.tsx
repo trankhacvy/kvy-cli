@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SIGNIN_PATH } from "@/features/auth";
 import { listDeviceSessions, revokeOtherSessions, revokeSession } from "@/lib/api";
+import { copy } from "@/lib/copy";
 import { logout } from "@/lib/logout";
 import { getToken } from "@/lib/session";
 import {
@@ -157,6 +158,10 @@ export function DevicesSection() {
           {pendingId === "others" ? "Working…" : "Log out all other devices"}
         </Button>
       </div>
+
+      <p className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+        {copy.devices.explainer}
+      </p>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 

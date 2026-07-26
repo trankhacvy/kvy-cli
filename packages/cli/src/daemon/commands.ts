@@ -20,6 +20,7 @@ import { acquireDaemonLock, isProcessAlive } from "./lock.js";
 import {
   createMachineIntegrationDeps,
   type MachineIntegrationDeps,
+  type MachineIntegrationHandle,
   startMachineIntegration,
 } from "./machineIntegration.js";
 import { listProcesses, type ProcessEntry, resolveProcessCwd } from "./processScan.js";
@@ -396,6 +397,12 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     }
   }
 
+  // Assigned further down, once the singleton lock is held — but captured by the
+  // control server's `reloadAuth` closure here so a re-paired session can ask the
+  // daemon to pick up new credentials without a full restart (AX-1.6).
+  let machineIntegrationDeps: MachineIntegrationDeps | null = null;
+  let machineIntegration: MachineIntegrationHandle | null = null;
+
   const controlServer = await startControlServer({
     getSessions: registry.getSessions,
     stopSession: registry.stopSession,
@@ -405,6 +412,15 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     }),
     requestShutdown: () => triggerShutdown(),
     onSessionStarted,
+    reloadAuth: async () => {
+      if (!machineIntegrationDeps) return false;
+      await machineIntegration?.stop();
+      machineIntegration = await startMachineIntegration(machineIntegrationDeps);
+      logger.info("daemon reload-auth: machine integration restarted", {
+        connected: machineIntegration !== null,
+      });
+      return machineIntegration !== null;
+    },
     logger,
   });
 
@@ -459,7 +475,7 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   // handlers (design §4.4/§8, plan.md §16 "3.1"/"3.2"/"3.3") now that the
   // lock is held and the registry is restored — a `null` result just means
   // "not logged in yet", not a boot failure (see machineIntegration.ts).
-  const machineIntegrationDeps: MachineIntegrationDeps = createMachineIntegrationDeps(
+  machineIntegrationDeps = createMachineIntegrationDeps(
     { homeDir, registry, awaiter: spawnAwaiter },
     {
       logger,
@@ -490,7 +506,7 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
       },
     },
   );
-  const machineIntegration = await startMachineIntegration(machineIntegrationDeps);
+  machineIntegration = await startMachineIntegration(machineIntegrationDeps);
 
   // Self-update detection (§8: "watch installed artifact mtime ... restart
   // when idle") shares this same heartbeat with dead-session pruning (§8:

@@ -2,144 +2,149 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { PinUnlockForm } from "@/components/auth/pin-unlock-form";
+import { KeyRequestListener } from "@/components/auth/key-request-listener";
+import { MigratePinPrompt } from "@/components/auth/migrate-pin-prompt";
+import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
 import { Button } from "@/components/ui/button";
-import { isSignedIn, silentRefresh } from "@/lib/session";
-import { useUnlockedCryptoBridge } from "@/lib/use-unlocked-crypto-bridge";
+import { copy } from "@/lib/copy";
+import { getAccountId, isSignedIn, silentRefresh } from "@/lib/session";
+import { useCryptoBridgeStatus } from "@/lib/use-crypto-bridge-status";
 
-/**
- * Where a signed-out visitor to an auth-gated route is sent. Exported so
- * `shouldRedirectToSignin`'s test (below/`__tests__`) locks the value, not
- * just the boolean.
- */
 export const SIGNIN_PATH = "/signin/";
 
 /**
- * Where a *silently-failed-refresh* redirect lands (docs/auth-ux-hardening-plan.md
- * item 7) — same route, `?reason=expired` appended so `/signin/` can render a banner
- * explaining why the visitor is here instead of looking like a bare cold visit.
- * Deliberate logouts (`DevicesSection`, `nav-user.tsx`) keep using plain `SIGNIN_PATH`
- * — that redirect isn't a surprise to the person who just clicked "log out".
+ * Where a *silently-failed-refresh* redirect lands — same route, `?reason=expired`
+ * appended so `/signin/` can explain why the visitor is here instead of looking like a
+ * bare cold visit. Deliberate logouts keep using plain `SIGNIN_PATH`.
  */
 export const SIGNIN_EXPIRED_PATH = "/signin/?reason=expired";
 
-/** How often `RequireAuth` re-checks the session while a protected route stays mounted
- * — the proactive half of bug-fix-plan.md issue #9: a token that expires *while the
- * user is already on the page* should be silently refreshed within one tick of this
- * interval, rather than only being caught the next time the layout happens to remount
- * (or, worse, only surfacing once the socket's next reconnect attempt gets rejected —
- * issue #10). Comfortably inside the 15-minute access-token TTL (§8 Phase 6). */
+/** How often the session is re-checked while a protected route stays mounted — a token
+ * that expires on-page is silently refreshed within one tick, rather than surfacing as a
+ * rejected socket reconnect. Comfortably inside the 15-minute access-token TTL. */
 const EXPIRY_CHECK_INTERVAL_MS = 60_000;
 
-/** The gate's actual decision, pulled out of the component so it's testable
- * without mounting React (this package has no DOM test environment — see
- * `__tests__/require-auth.test.ts`). */
 export function shouldRedirectToSignin(signedIn: boolean): boolean {
   return !signedIn;
 }
 
 /**
- * Auth-gate for a page component (W1.9, plan.md §16 wave 1: `/session/[id]`,
- * `/session/[id]/git`, `/session/new` all render for signed-out visitors
- * today and then throw from `getToken()` inside a hook). Extracted out of
- * `app/page.tsx`'s own inline `isSignedIn()` + `router.replace("/signin/")`
- * effect so all four call sites share one gate instead of a fourth
- * hand-rolled copy.
+ * Auth gate for every protected page.
  *
- * Static export → this has to stay a client-side gate (design §5.3: no
- * server ever renders user content, so there's no server-side redirect to
- * do this with instead). `children` never renders — not even for a single
- * frame — for a signed-out visitor; a bare render-time check would flash
- * `children` on a client-side navigation into the route, where there's no
- * server-rendered HTML for this check to run against before paint.
+ * Static export → this has to stay a client-side gate (design §5.3: no server ever
+ * renders user content). `children` never renders — not even for a frame — for a
+ * signed-out visitor.
  *
- * issue-4-plan.md §6.1/§6.4, security review finding F1: the crypto-worker-unlock gate
- * is now the FIRST gate, not a second one layered after an independent token check —
- * the refresh token only exists PIN-wrapped inside the worker (`lib/session.ts`'s
- * `silentRefresh` reads it via `getSharedCryptoBridge()`, which resolves to nothing
- * until the worker is unlocked), so there is no token to refresh FROM until
- * `useUnlockedCryptoBridge()` reports `"ready"`. Once it does, this re-checks/refreshes
- * the in-memory access token on the same `EXPIRY_CHECK_INTERVAL_MS` timer as before,
- * for as long as the gate stays mounted.
+ * docs/auth-ux-overhaul-plan.md Phase 4a: the SESSION check runs independently of key
+ * material now. The refresh token lives in its own store, so a browser with no keys can
+ * still be signed in — which is exactly the state `RequestKeysPanel` needs in order to
+ * ask another device for a copy. Gating the session on crypto readiness (as this did
+ * before) made that state unreachable and left the user staring at a spinner.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { status, unlock } = useUnlockedCryptoBridge();
+  /** `null` until the session effect below confirms a real access token — on a cold load
+   *  that's AFTER this component's first render, so `useCryptoBridgeStatus` must stay
+   *  `"loading"` until then rather than evaluating readiness for nobody in particular
+   *  (auth-ux-overhaul-fix-plan.md Fix 4 Part C). */
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const { status, refresh } = useCryptoBridgeStatus(accountId);
   const [sessionReady, setSessionReady] = useState(false);
-  const [unlockError, setUnlockError] = useState<string | undefined>(undefined);
-  const [unlocking, setUnlocking] = useState(false);
+  /** Set when a refresh could not reach the server at all — distinct from signed-out, which
+   *  redirects. Without this the gate renders `null` forever and the user sees a blank page
+   *  with no explanation: `OfflineBanner` mounts INSIDE this gate and can never help here. */
+  const [unreachable, setUnreachable] = useState(false);
+  /** Bumped by the retry button to re-run the effect below on demand, on top of its own
+   *  60s interval. */
+  const [retryCount, setRetryCount] = useState(0);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retryCount is an "epoch" counter the retry button bumps purely to force this effect to re-run on demand — it's never read inside.
   useEffect(() => {
-    if (status.kind !== "ready") return;
     let cancelled = false;
 
     async function ensureSession(): Promise<void> {
       if (isSignedIn()) {
-        if (!cancelled) setSessionReady(true);
+        if (!cancelled) {
+          setUnreachable(false);
+          setAccountId(getAccountId());
+          setSessionReady(true);
+        }
         return;
       }
-      const refreshed = await silentRefresh();
+      const result = await silentRefresh();
       if (cancelled) return;
-      if (refreshed) {
+      if (result === "ok") {
+        setUnreachable(false);
+        setAccountId(getAccountId());
         setSessionReady(true);
-      } else {
+      } else if (result === "signed-out") {
         router.replace(SIGNIN_EXPIRED_PATH);
+      } else {
+        // Only a server-side rejection means "sign in again". A transport fault leaves the
+        // gate on its own 60s re-check instead of throwing away a session that is probably
+        // fine — the offline case is a wait, not a logout.
+        setUnreachable(true);
       }
     }
 
     void ensureSession();
-
-    const interval = setInterval(() => {
-      void ensureSession();
-    }, EXPIRY_CHECK_INTERVAL_MS);
+    const interval = setInterval(() => void ensureSession(), EXPIRY_CHECK_INTERVAL_MS);
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [status, router]);
+  }, [router, retryCount]);
 
-  async function handleUnlock(pin: string): Promise<void> {
-    setUnlocking(true);
-    setUnlockError(undefined);
-    const ok = await unlock(pin);
-    setUnlocking(false);
-    if (!ok) setUnlockError("Wrong PIN. Try again.");
-  }
-
-  // No local identity at all (device wiped, or genuinely new to this account) — not
-  // this gate's job to recover: point at pairing/settings rather than block forever.
-  if (status.kind === "no-identity") {
+  if (!sessionReady && unreachable) {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-3 p-8 text-center">
-        <p className="max-w-sm text-sm text-muted-foreground">
-          This browser has no Falcon key material for your account. Pair it from a device that
-          already has your keys, or reset keys to generate new ones.
-        </p>
-        <Button type="button" onClick={() => router.push("/reset-keys/")}>
-          Reset keys for this browser
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <p className="max-w-sm text-sm text-muted-foreground">{copy.session.cantReachServer}</p>
+        <Button type="button" onClick={() => setRetryCount((count) => count + 1)}>
+          {copy.session.retryCta}
         </Button>
       </main>
     );
   }
 
-  if (status.kind === "needs-unlock") {
+  if (!sessionReady) return null;
+
+  if (status.kind === "needs-migration") {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
-        <div className="w-full max-w-sm">
-          <PinUnlockForm
-            pending={unlocking}
-            error={unlockError}
-            onSubmit={handleUnlock}
-            // docs/auth-ux-hardening-plan.md item 2: the provider-agnostic reset-keys
-            // route (email+password auth is dev-only in production, so `/password/`'s
-            // rotate-epoch flow isn't reachable there anymore).
-            onForgotPin={() => router.push("/reset-keys/")}
-          />
-        </div>
+        <MigratePinPrompt onMigrated={() => void refresh()} />
       </main>
     );
   }
 
-  if (status.kind !== "ready" || !sessionReady) return null;
-  return <>{children}</>;
+  if (status.kind === "locked-out") {
+    // The keys ARE on this browser; the passkey check was dismissed or failed. Offering
+    // to re-fetch them from another device would be the wrong answer here.
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <p className="max-w-sm text-sm text-muted-foreground">
+          We couldn't confirm it's you on this device.
+        </p>
+        <Button type="button" onClick={() => void refresh()}>
+          Try again
+        </Button>
+      </main>
+    );
+  }
+
+  if (status.kind === "no-keys") {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-8">
+        <RequestKeysPanel onReady={() => void refresh()} />
+      </main>
+    );
+  }
+
+  if (status.kind !== "ready") return null;
+
+  return (
+    <>
+      {children}
+      <KeyRequestListener />
+    </>
+  );
 }

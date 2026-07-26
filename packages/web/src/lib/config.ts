@@ -26,15 +26,6 @@ export const GITHUB_OAUTH_CLIENT_ID: string | undefined =
   process.env.NEXT_PUBLIC_GITHUB_OAUTH_CLIENT_ID || undefined;
 
 /**
- * Mirrors the server's `FALCON_DEV_AUTH` flag (packages/server/src/config.ts) — purely
- * cosmetic here (it only toggles whether the sign-in page renders the dev-bypass
- * button), since the server independently fails closed if this is on but the server
- * itself doesn't have `FALCON_DEV_AUTH=1` set. Set `NEXT_PUBLIC_FALCON_DEV_AUTH=1`
- * for local testing against a server that also has dev auth enabled.
- */
-export const DEV_AUTH_ENABLED: boolean = process.env.NEXT_PUBLIC_FALCON_DEV_AUTH === "1";
-
-/**
  * Web Push VAPID public key (design §3/§6.4), base64url-encoded — the
  * `applicationServerKey` `PushManager.subscribe` needs. Safe to ship in a
  * public bundle (it's the *public* half of the server's VAPID key pair);

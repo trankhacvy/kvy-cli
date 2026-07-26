@@ -24,12 +24,12 @@ import {
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
 const workspaceNav: NavItem[] = [
-  { href: "/", label: "Sessions", icon: HomeIcon },
-  { href: "/session/new/", label: "New session", icon: PlusIcon },
+  { href: "/dashboard/", label: "Sessions", icon: HomeIcon },
+  { href: "/dashboard/session/new/", label: "New session", icon: PlusIcon },
 ];
 
 function isActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
+  if (href === "/dashboard/") return pathname === "/dashboard/";
   return pathname.startsWith(href);
 }
 
@@ -41,7 +41,7 @@ function isActive(pathname: string, href: string): boolean {
  * session content gets the full width (competitive-notes-omnara.md #20).
  */
 export function isSessionRoute(pathname: string): boolean {
-  return pathname.startsWith("/session/") && pathname !== "/session/new/";
+  return pathname.startsWith("/dashboard/session/") && pathname !== "/dashboard/session/new/";
 }
 
 /**
@@ -54,11 +54,11 @@ export function sidebarCollapsible(pathname: string): "icon" | "offcanvas" {
 }
 
 function pageTitle(pathname: string): string {
-  if (pathname === "/") return "Sessions";
-  if (pathname === "/session/new/") return "New session";
+  if (pathname === "/dashboard/") return "Sessions";
+  if (pathname === "/dashboard/session/new/") return "New session";
   if (pathname.includes("/git/")) return "Files changed";
   if (pathname.includes("/files/")) return "Repo files";
-  if (pathname.startsWith("/session/")) return "Session";
+  if (pathname.startsWith("/dashboard/session/")) return "Session";
   return "Falcon";
 }
 
@@ -111,7 +111,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton asChild size="lg" tooltip="Falcon">
-                <Link href="/">
+                <Link href="/dashboard/">
                   {/*
                    * `shrink-0` + `aspect-square` keep the logo box a full
                    * 32×32 when the collapsed icon rail squeezes the button to
@@ -142,9 +142,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 sm:px-6">
           <SidebarTrigger />
           <p className="min-w-0 flex-1 truncate text-sm font-medium">{title}</p>
-          {pathname !== "/session/new/" && (
+          {pathname !== "/dashboard/session/new/" && (
             <Button asChild size="sm" className="hidden sm:inline-flex">
-              <Link href="/session/new/">
+              <Link href="/dashboard/session/new/">
                 <PlusIcon data-icon="inline-start" />
                 New session
               </Link>

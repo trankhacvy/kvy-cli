@@ -42,6 +42,7 @@ export type FalconCommand =
   | { type: "workspace-sync" }
   | { type: "notify"; message: string }
   | { type: "adopt"; list: boolean; remote: boolean }
+  | { type: "keys"; action: "approve" }
   | { type: "shim"; action: "install" | "uninstall" | "status" }
   | { type: "adapters"; action: "install" | "upgrade" }
   | { type: "github"; action: "login" | "logout" | "status"; token: boolean; clientId?: string }
@@ -126,6 +127,8 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseNotify(rest);
     case "adopt":
       return parseAdopt(rest);
+    case "keys":
+      return parseKeys(rest);
     case "shim":
       return parseShim(rest);
     case "adapters":
@@ -365,6 +368,17 @@ function parseAdopt(rest: string[]): FalconCommand {
     else throw new ArgParseError(`Unknown "falcon adopt" flag: ${arg}`, ADOPT_USAGE);
   }
   return { type: "adopt", list, remote };
+}
+
+/** `falcon keys approve` — answer another device's request for a copy of this account's
+ * keys (docs/auth-ux-overhaul-plan.md AX-4.19). */
+function parseKeys(rest: string[]): FalconCommand {
+  const action = rest[0];
+  if (action === "approve") return { type: "keys", action };
+  throw new ArgParseError(
+    `Unknown "falcon keys" action: ${action ?? "(none)"}`,
+    "falcon keys approve",
+  );
 }
 
 function parseShim(rest: string[]): FalconCommand {

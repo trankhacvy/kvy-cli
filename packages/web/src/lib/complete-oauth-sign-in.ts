@@ -23,11 +23,10 @@
  * once its own post-login unlock step confirms the worker is unlocked.
  */
 import { getRandomBytes, ready } from "@falcon/crypto/web";
-import type { CryptoBridgeClient } from "@/crypto";
+import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
 import { keysBind, keysChallenge, register } from "./api.js";
 import { consumePendingPair } from "./pending-pair.js";
 import { setToken } from "./session.js";
-import { markCryptoBridgeUnlocked } from "./use-crypto-bridge.js";
 
 export type OAuthSignInOutcome =
   | { kind: "existing-identity"; nextUrl: string; refreshToken: string }
@@ -47,21 +46,27 @@ function decodeAccountId(accessToken: string): string {
 
 export async function completeOAuthSignIn(
   bridge: CryptoBridgeClient,
-  provider: "google" | "github" | "dev",
+  provider: "google" | "github",
   oauthProof: string,
-  pin: string,
+  protection: KeyProtection,
 ): Promise<OAuthSignInOutcome> {
   const { token, refreshToken } = await register({ oauthProvider: provider, oauthProof });
   setToken(token);
 
-  let identity = await bridge.getIdentity();
+  // Scoped to THIS account. Unscoped, "a record exists" meant "this account's record", so
+  // signing in as B on a browser holding A's keys reused A's key tree, skipped the bind
+  // entirely, and left every one of B's sessions failing `setSessionKey` in silence.
+  // Unlike the password path this branch is NOT deletable — `/v1/auth/register` is
+  // find-or-create (server/src/app/routes/oauth.ts:130-150), so a returning user reusing
+  // their own key material is the normal case.
+  const accountId = decodeAccountId(token);
+  let identity = await bridge.getIdentity(accountId);
   const isNewIdentity = !identity;
   if (!identity) {
     await ready;
     const masterSecret = getRandomBytes(32);
-    await bridge.init(masterSecret, pin, refreshToken);
-    markCryptoBridgeUnlocked();
-    identity = await bridge.getIdentity();
+    await bridge.init(masterSecret, refreshToken, accountId, protection);
+    identity = await bridge.getIdentity(accountId);
   }
 
   if (!identity) {
@@ -72,7 +77,6 @@ export async function completeOAuthSignIn(
   }
 
   if (isNewIdentity) {
-    const accountId = decodeAccountId(token);
     const { nonce } = await keysChallenge(token);
     const proof = await bridge.bindKeysProof(accountId, nonce);
     await keysBind(token, {
@@ -84,7 +88,7 @@ export async function completeOAuthSignIn(
   }
 
   const pendingEphPub = consumePendingPair();
-  const nextUrl = pendingEphPub ? `/pair/#${pendingEphPub}` : "/";
+  const nextUrl = pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/";
 
   return isNewIdentity
     ? { kind: "new-identity", nextUrl }

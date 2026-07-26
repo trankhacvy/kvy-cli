@@ -75,7 +75,7 @@ export function UnmanagedSessionCard({
             </Button>
           ) : (
             <Button asChild size="sm" variant="outline">
-              <Link href={`/session/unmanaged/${session.id}/`}>View</Link>
+              <Link href={`/dashboard/session/unmanaged/${session.id}/`}>View</Link>
             </Button>
           )}
           <Button

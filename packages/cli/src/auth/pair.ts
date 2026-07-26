@@ -56,6 +56,10 @@ export interface PairOptions {
   pollIntervalMs?: number;
   /** Lets the caller (e.g. a SIGINT handler) cancel an in-flight poll loop. */
   signal?: AbortSignal;
+  /** Machine name shown on the approver's confirm card. Display only, never an auth input. */
+  label?: string;
+  /** Working directory shown on the approver's confirm card. Display only. */
+  cwd?: string;
 }
 
 export interface PairSuccess {
@@ -80,12 +84,18 @@ const PairStatusResponseSchema = z.object({
   status: z.enum(["not_found", "pending", "authorized", "expired"]),
 });
 
-async function postPair(backendUrl: string, ephPub: string): Promise<PairPostResponse | null> {
+interface PairPostBody {
+  ephPub: string;
+  label?: string;
+  cwd?: string;
+}
+
+async function postPair(backendUrl: string, body: PairPostBody): Promise<PairPostResponse | null> {
   try {
     const res = await fetch(`${backendUrl}/v1/auth/pair`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ ephPub }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) return null;
     const parsed = PairPostResponseSchema.safeParse(await res.json());
@@ -135,15 +145,24 @@ export function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
-  const { backendUrl, frontendUrl, onPairingUrlReady, pollIntervalMs = 2000, signal } = options;
+  const {
+    backendUrl,
+    frontendUrl,
+    onPairingUrlReady,
+    pollIntervalMs = 2000,
+    signal,
+    label,
+    cwd,
+  } = options;
 
   // Ephemeral X25519 keypair — the CLI's only key material for this login
   // attempt. Never written to disk; if the process dies mid-pairing, the
   // next `falcon auth login` simply starts over with a fresh one.
   const keypair = tweetnacl.box.keyPair();
   const ephPub = encodeBase64(keypair.publicKey);
+  const postBody: PairPostBody = { ephPub, label, cwd };
 
-  const created = await postPair(backendUrl, ephPub);
+  const created = await postPair(backendUrl, postBody);
   if (!created) return { ok: false, reason: "request-failed" };
   if (created.state === "expired") return { ok: false, reason: "expired" };
 
@@ -171,7 +190,7 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
     // (see the server route), so fetch the sealed box via one more POST — this is
     // also the single-use pickup: the server deletes the row the moment this
     // succeeds, so this exact response can never be re-served to a second poller.
-    const authorized = await postPair(backendUrl, ephPub);
+    const authorized = await postPair(backendUrl, postBody);
     // Server-side expiry can race the last poll tick: GET /status said
     // "authorized" but by the time this POST lands the request has expired.
     // Surface that immediately rather than silently retrying until the

@@ -6,7 +6,7 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { GitDiffPanel } from "./GitDiffPanel";
 
 /**
- * The Git panel's session-scoped entry point (`/session/[id]/git/`) —
+ * The Git panel's session-scoped entry point (`/dashboard/session/[id]/git/`) —
  * mirrors `SessionTimelineScreen`'s role: a "screen" component that owns
  * resolving real ids off the live sync snapshot, so the route itself
  * (`app/session/[id]/git/page.tsx`) stays a thin static-export shell.
@@ -27,7 +27,7 @@ export function SessionGitScreen({ sessionId }: { sessionId: string }) {
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="text-sm font-medium">Session {sessionId} — Changed files</p>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/session/${sessionId}/`}>Back to session</Link>
+          <Link href={`/dashboard/session/${sessionId}/`}>Back to session</Link>
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">

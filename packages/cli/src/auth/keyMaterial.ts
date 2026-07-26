@@ -19,7 +19,10 @@ import { unwrapWithDeviceKey, wrapWithDeviceKey } from "./deviceKey.js";
 import { type PinPromptDeps, promptAndUnwrapWithPin } from "./pin.js";
 
 /** Device-wraps `secret` — the only mode `falcon auth login` writes. */
-export async function wrapNewKeyMaterial(secret: Uint8Array, homeDir: string): Promise<KeyMaterial> {
+export async function wrapNewKeyMaterial(
+  secret: Uint8Array,
+  homeDir: string,
+): Promise<KeyMaterial> {
   return { mode: "device", wrapped: wrapWithDeviceKey(secret, homeDir) };
 }
 

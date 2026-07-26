@@ -12,43 +12,43 @@ import { isSessionRoute, sidebarCollapsible } from "./app-shell";
  */
 describe("isSessionRoute", () => {
   it("is true for a session timeline route", () => {
-    expect(isSessionRoute("/session/abc-123/")).toBe(true);
+    expect(isSessionRoute("/dashboard/session/abc-123/")).toBe(true);
   });
 
   it("is true for a session's git panel route", () => {
-    expect(isSessionRoute("/session/abc-123/git/")).toBe(true);
+    expect(isSessionRoute("/dashboard/session/abc-123/git/")).toBe(true);
   });
 
   it("is true for an unmanaged session route", () => {
-    expect(isSessionRoute("/session/unmanaged/abc-123/")).toBe(true);
+    expect(isSessionRoute("/dashboard/session/unmanaged/abc-123/")).toBe(true);
   });
 
   it("is false for the new-session wizard", () => {
-    expect(isSessionRoute("/session/new/")).toBe(false);
+    expect(isSessionRoute("/dashboard/session/new/")).toBe(false);
   });
 
   it("is false for the sessions list and other non-session routes", () => {
-    expect(isSessionRoute("/")).toBe(false);
+    expect(isSessionRoute("/dashboard/")).toBe(false);
     expect(isSessionRoute("/signin/")).toBe(false);
   });
 });
 
 describe("sidebarCollapsible", () => {
   it("fully hides the nav (offcanvas) on a session timeline route", () => {
-    expect(sidebarCollapsible("/session/abc-123/")).toBe("offcanvas");
+    expect(sidebarCollapsible("/dashboard/session/abc-123/")).toBe("offcanvas");
   });
 
   it("fully hides the nav on a session's git panel route", () => {
-    expect(sidebarCollapsible("/session/abc-123/git/")).toBe("offcanvas");
+    expect(sidebarCollapsible("/dashboard/session/abc-123/git/")).toBe("offcanvas");
   });
 
   it("fully hides the nav on an unmanaged session route", () => {
-    expect(sidebarCollapsible("/session/unmanaged/abc-123/")).toBe("offcanvas");
+    expect(sidebarCollapsible("/dashboard/session/unmanaged/abc-123/")).toBe("offcanvas");
   });
 
   it("shrinks to an icon rail everywhere else", () => {
-    expect(sidebarCollapsible("/")).toBe("icon");
-    expect(sidebarCollapsible("/session/new/")).toBe("icon");
+    expect(sidebarCollapsible("/dashboard/")).toBe("icon");
+    expect(sidebarCollapsible("/dashboard/session/new/")).toBe("icon");
     expect(sidebarCollapsible("/signin/")).toBe("icon");
   });
 });

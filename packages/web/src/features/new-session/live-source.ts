@@ -4,7 +4,7 @@ import { decodeBase64 } from "@falcon/crypto/web";
 import type { MachineRow } from "@falcon/wire";
 import { useEffect, useMemo, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
-import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
 import { useMachineCrypto } from "@/lib/use-machine-crypto";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { apiSocket, createMachineRpcClient } from "@/sync";
@@ -103,7 +103,7 @@ function useDecryptedMachineNames(
 
 /** Real `UseNewSessionMachines` — the machine-picker step's data source. */
 export function useLiveNewSessionMachines(): NewSessionMachine[] {
-  const bridge = useCryptoBridge();
+  const bridge = useDedicatedCryptoBridge();
   const query = useSyncSnapshotQuery();
   const machineRows = query.data?.machines ?? EMPTY_MACHINES;
   const names = useDecryptedMachineNames(machineRows, bridge);

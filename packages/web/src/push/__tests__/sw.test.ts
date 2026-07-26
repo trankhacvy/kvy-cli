@@ -82,7 +82,7 @@ describe("public/sw.js", () => {
 
     expect(sw.showNotification).toHaveBeenCalledWith(
       "Falcon needs your permission",
-      expect.objectContaining({ tag: "sess_1", data: { url: "/session/sess_1/" } }),
+      expect.objectContaining({ tag: "sess_1", data: { url: "/dashboard/session/sess_1/" } }),
     );
   });
 
@@ -100,7 +100,7 @@ describe("public/sw.js", () => {
 
     expect(sw.showNotification).toHaveBeenCalledWith(
       "Falcon",
-      expect.objectContaining({ data: { url: "/" } }),
+      expect.objectContaining({ data: { url: "/dashboard/" } }),
     );
   });
 
@@ -112,19 +112,21 @@ describe("public/sw.js", () => {
 
     expect(sw.showNotification).toHaveBeenCalledWith(
       "Falcon",
-      expect.objectContaining({ data: { url: "/" } }),
+      expect.objectContaining({ data: { url: "/dashboard/" } }),
     );
   });
 
   it("notificationclick: focuses an already-open tab for the exact same session URL", async () => {
     const focus = vi.fn().mockResolvedValue(undefined);
-    sw.matchAll.mockResolvedValue([{ url: "https://falcon.example/session/sess_1/", focus }]);
+    sw.matchAll.mockResolvedValue([
+      { url: "https://falcon.example/dashboard/session/sess_1/", focus },
+    ]);
     const notificationclick = sw.listeners.get("notificationclick");
     if (!notificationclick) throw new Error("no notificationclick handler registered");
     const close = vi.fn();
 
     await fireWaitUntil(notificationclick, {
-      notification: { close, data: { url: "/session/sess_1/" } },
+      notification: { close, data: { url: "/dashboard/session/sess_1/" } },
     });
 
     expect(close).toHaveBeenCalled();
@@ -138,27 +140,27 @@ describe("public/sw.js", () => {
     if (!notificationclick) throw new Error("no notificationclick handler registered");
 
     await fireWaitUntil(notificationclick, {
-      notification: { close: vi.fn(), data: { url: "/session/sess_2/" } },
+      notification: { close: vi.fn(), data: { url: "/dashboard/session/sess_2/" } },
     });
 
-    expect(sw.openWindow).toHaveBeenCalledWith("https://falcon.example/session/sess_2/");
+    expect(sw.openWindow).toHaveBeenCalledWith("https://falcon.example/dashboard/session/sess_2/");
   });
 
   it("notificationclick: navigates an existing tab to the target session when none matches exactly", async () => {
     const navigate = vi.fn().mockResolvedValue(undefined);
     const focus = vi.fn().mockResolvedValue(undefined);
     sw.matchAll.mockResolvedValue([
-      { url: "https://falcon.example/session/other/", focus, navigate },
+      { url: "https://falcon.example/dashboard/session/other/", focus, navigate },
     ]);
     const notificationclick = sw.listeners.get("notificationclick");
     if (!notificationclick) throw new Error("no notificationclick handler registered");
 
     await fireWaitUntil(notificationclick, {
-      notification: { close: vi.fn(), data: { url: "/session/sess_3/" } },
+      notification: { close: vi.fn(), data: { url: "/dashboard/session/sess_3/" } },
     });
 
     expect(focus).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith("https://falcon.example/session/sess_3/");
+    expect(navigate).toHaveBeenCalledWith("https://falcon.example/dashboard/session/sess_3/");
     expect(sw.openWindow).not.toHaveBeenCalled();
   });
 });

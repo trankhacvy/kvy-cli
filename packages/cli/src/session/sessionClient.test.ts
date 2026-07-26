@@ -318,6 +318,54 @@ describe("startSessionClient", () => {
     }
   });
 
+  // auth-ux-overhaul-fix-plan.md Fix 7: the session socket joins `user:${accountId}` like
+  // every other connection, so a key request raised on another device already lands here —
+  // it was simply never listened for before this fix.
+  it("fires onKeyRequest for a valid key-request ephemeral", () => {
+    const fakeSocket = new FakeSocket();
+    const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+    const onKeyRequest = vi.fn();
+    const deps = buildDeps({
+      ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+      onKeyRequest,
+    });
+
+    startSessionClient(deps);
+    fakeSocket.trigger("ephemeral", { t: "key-request", ephPub: "eph-1", label: "Chrome on Mac" });
+
+    expect(onKeyRequest).toHaveBeenCalledExactlyOnceWith({ label: "Chrome on Mac" });
+  });
+
+  it("does not fire onKeyRequest for a non-key-request ephemeral", () => {
+    const fakeSocket = new FakeSocket();
+    const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+    const onKeyRequest = vi.fn();
+    const deps = buildDeps({
+      ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+      onKeyRequest,
+    });
+
+    startSessionClient(deps);
+    fakeSocket.trigger("ephemeral", { t: "activity", sessionId: "sess_1", working: true });
+
+    expect(onKeyRequest).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onKeyRequest, and does not throw, for an unparsable ephemeral payload", () => {
+    const fakeSocket = new FakeSocket();
+    const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+    const onKeyRequest = vi.fn();
+    const deps = buildDeps({
+      ioFactory: ioFactory as unknown as SessionClientDeps["ioFactory"],
+      onKeyRequest,
+    });
+
+    startSessionClient(deps);
+    expect(() => fakeSocket.trigger("ephemeral", { garbage: true })).not.toThrow();
+
+    expect(onKeyRequest).not.toHaveBeenCalled();
+  });
+
   it("stops the renew timer on stop() and on disconnect", async () => {
     vi.useFakeTimers();
     try {

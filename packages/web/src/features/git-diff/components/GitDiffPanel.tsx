@@ -41,7 +41,7 @@ const WORKSPACE_ERROR_COPY: Record<string, string> = {
  * target machine's unwrapped DEK) — `mock-source.ts`'s `useMockGitDiffActions`
  * stays exported for tests/standalone review, same precedent as
  * `NewSessionScreen`'s mocks. The toolbar lives here (not a separate
- * timeline-sidebar variant) so `/session/[id]/git/`'s `SessionGitScreen`
+ * timeline-sidebar variant) so `/dashboard/session/[id]/git/`'s `SessionGitScreen`
  * gets it for free.
  */
 export function GitDiffPanel({

@@ -98,7 +98,7 @@ export function TakeOverDialog({
             )}
             <DialogFooter>
               <Button asChild>
-                <Link href={`/session/${state.outcome.sessionId}/`}>Open session</Link>
+                <Link href={`/dashboard/session/${state.outcome.sessionId}/`}>Open session</Link>
               </Button>
             </DialogFooter>
           </>

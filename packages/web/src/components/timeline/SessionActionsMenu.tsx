@@ -134,7 +134,7 @@ export function SessionActionsMenu({
             <DropdownMenuItem
               disabled={archiveMutation.isPending}
               onSelect={() =>
-                archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+                archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/dashboard/") })
               }
             >
               <Archive className="size-4" />
@@ -207,7 +207,7 @@ export function SessionActionsMenu({
               variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={() =>
-                deleteMutation.mutate(sessionId, { onSuccess: () => router.push("/") })
+                deleteMutation.mutate(sessionId, { onSuccess: () => router.push("/dashboard/") })
               }
             >
               {deleteMutation.isPending ? "Deleting…" : "Delete"}

@@ -69,7 +69,10 @@ function Header() {
   return (
     <div className="flex items-center justify-between">
       <h1 className="text-lg font-semibold tracking-tight">Completed Chats</h1>
-      <Link href="/" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+      <Link
+        href="/dashboard/"
+        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+      >
         Back to Home
       </Link>
     </div>

@@ -1,8 +1,9 @@
 import { decodeBase64 } from "@falcon/crypto";
 import { EncryptedBoxSchema, SessionRowSchema } from "@falcon/wire";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, count, desc, eq, lt, ne, or } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
+import { env } from "../../config.js";
 import { encodeBox } from "../../db/box.js";
 import { sessions } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
@@ -51,12 +52,36 @@ export function buildSessionsRoutes(
         config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
         schema: {
           body: CreateSessionBodySchema,
-          response: { 200: SessionRowSchema, 201: SessionRowSchema },
+          response: {
+            200: SessionRowSchema,
+            201: SessionRowSchema,
+            429: z.object({ error: z.string() }),
+          },
         },
       },
       async (req, reply) => {
         const accountId = req.accountId;
         const { tag, provider, workspaceId, machineId, executionTarget, metadata, dek } = req.body;
+
+        // AX-7.1: concurrent-session quota. Checked before the insert, and deliberately
+        // NOT inside the transaction — this route is idempotent by (accountId, tag), so a
+        // retry of an already-created session must never be refused for being over quota.
+        if (env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT > 0) {
+          const existingForTag = await db.query.sessions.findFirst({
+            where: and(eq(sessions.accountId, accountId), eq(sessions.tag, tag)),
+          });
+          if (!existingForTag) {
+            const [counted] = await db
+              .select({ count: count() })
+              .from(sessions)
+              .where(and(eq(sessions.accountId, accountId), ne(sessions.status, "archived")));
+            if ((counted?.count ?? 0) >= env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT) {
+              return reply.code(429).send({
+                error: `You've reached your limit of ${env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT} running sessions. Finish one before starting another.`,
+              });
+            }
+          }
+        }
 
         // Create-or-get by (accountId, tag) — idempotent (design §4.3). The
         // unique index on (account_id, tag) is the actual dedup mechanism

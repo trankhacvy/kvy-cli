@@ -91,6 +91,33 @@ export interface SessionRegistry {
   pruneDeadSessions(isAlive: (pid: number) => boolean): void;
   /** `true` while at least one pid-tracked session is still live — the self-update heartbeat's "restart when idle" gate (`selfUpdate.ts`). */
   hasLiveSessions(): boolean;
+  /**
+   * True if `providerSessionId` (a Claude Code/Codex transcript's own id —
+   * the JSONL filename) is already tracked, live or durably persisted, as
+   * one of THIS daemon's own Falcon-managed sessions — `transcriptIndexer.ts`'s
+   * `isManaged` lineage-lookup hook (falcon-system-design.md §8/§11 UC9): a
+   * session's own local transcript must never be independently re-surfaced
+   * as "unmanaged" while (or after) Falcon is already managing it. Checks
+   * both `pidToSession` (live) and `resumable` (ended-but-still-tracked, and
+   * whatever `restore()` reloaded from `sessions.json`) so a session that
+   * already exited is still recognized. `providerSessionId` only ever
+   * reaches this registry via `onSessionStarted`'s `metadata` payload
+   * (`commands/start.ts` re-notifies once the real provider session id is
+   * known) — a terminal session's first self-report never carries one yet.
+   */
+  isProviderSessionManaged(providerSessionId: string): boolean;
+}
+
+/**
+ * `TrackedSession`/`PersistedSession.metadata` is `unknown` by design (an
+ * opaque local, plaintext payload — see `types.ts`'s own doc comment); this
+ * pulls out the one field `isProviderSessionManaged` needs, tolerating any
+ * shape (including the common case of no `providerSessionId` at all yet).
+ */
+function extractProviderSessionId(metadata: unknown): string | null {
+  if (!metadata || typeof metadata !== "object") return null;
+  const value = (metadata as Record<string, unknown>).providerSessionId;
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
 
 const noopLogger: Logger = {
@@ -256,6 +283,16 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
 
     hasLiveSessions() {
       return pidToSession.size > 0;
+    },
+
+    isProviderSessionManaged(providerSessionId) {
+      for (const session of pidToSession.values()) {
+        if (extractProviderSessionId(session.metadata) === providerSessionId) return true;
+      }
+      for (const session of resumable.values()) {
+        if (extractProviderSessionId(session.metadata) === providerSessionId) return true;
+      }
+      return false;
     },
   };
 }

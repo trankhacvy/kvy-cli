@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { MobileHandoffButton, sessionShareUrl } from "./MobileHandoffDialog";
 
 describe("sessionShareUrl", () => {
-  it("joins the origin and session id into the /session/<id>/ convention", () => {
+  it("joins the origin and session id into the /dashboard/session/<id>/ convention", () => {
     expect(sessionShareUrl("https://app.falcon.example", "abc123")).toBe(
-      "https://app.falcon.example/session/abc123/",
+      "https://app.falcon.example/dashboard/session/abc123/",
     );
   });
 
@@ -13,7 +13,7 @@ describe("sessionShareUrl", () => {
     // `window.location.origin` never has a trailing slash, so this is a
     // documentation-by-test of that assumption rather than a defensive case.
     expect(sessionShareUrl("http://localhost:3000", "s1")).toBe(
-      "http://localhost:3000/session/s1/",
+      "http://localhost:3000/dashboard/session/s1/",
     );
   });
 });
@@ -33,7 +33,7 @@ describe("MobileHandoffButton", () => {
     // (also an `<svg>`) — assert on the dialog-content-only signals instead:
     // the encoded session URL text, and Radix's own portal-content marker.
     const html = renderToStaticMarkup(<MobileHandoffButton sessionId="abc123" />);
-    expect(html).not.toContain("/session/abc123/");
+    expect(html).not.toContain("/dashboard/session/abc123/");
     expect(html).not.toContain('data-slot="dialog-content"');
   });
 });

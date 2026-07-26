@@ -5,6 +5,7 @@ import type { CryptoBridgeClient } from "@/crypto";
 import { createCryptoBridgeClient } from "@/crypto";
 import { createLoopbackWorker } from "@/crypto/__tests__/loopback.js";
 import { createMemoryKeyStorage } from "@/crypto/key-storage.js";
+import { createMemorySessionStorage } from "@/crypto/session-storage";
 import { createCryptoWorkerHandler } from "@/crypto/worker-handler.js";
 import type { PutSessionMetadataCasResult } from "@/lib/api";
 import { patchSessionMetadataCas } from "./use-session-metadata-write";
@@ -24,9 +25,11 @@ async function createTestBridge(): Promise<{ bridge: CryptoBridgeClient; dek: st
   const rawDek = getRandomBytes(32);
   const wrappedDek = wrapDek(rawDek, tree.content.publicKey);
 
-  const worker = createLoopbackWorker(createCryptoWorkerHandler(createMemoryKeyStorage()));
+  const worker = createLoopbackWorker(
+    createCryptoWorkerHandler(createMemoryKeyStorage(), createMemorySessionStorage()),
+  );
   const bridge = createCryptoBridgeClient(worker);
-  await bridge.init(masterSecret, "123456", "test-refresh-token");
+  await bridge.init(masterSecret, "test-refresh-token", "acct-test", { mode: "device" });
   // Establish the active session key up front so fixture boxes below can be
   // sealed under it (mirroring a real prior write by another client) —
   // `patchSessionMetadataCas` re-sets the same key itself before its own

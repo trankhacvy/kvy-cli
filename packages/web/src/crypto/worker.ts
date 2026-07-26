@@ -11,9 +11,13 @@
  */
 import { createIndexedDbKeyStorage } from "./key-storage.js";
 import type { CryptoWorkerErrResponse, CryptoWorkerRequest } from "./protocol.js";
+import { createIndexedDbSessionStorage } from "./session-storage.js";
 import { createCryptoWorkerHandler } from "./worker-handler.js";
 
-const handler = createCryptoWorkerHandler(createIndexedDbKeyStorage());
+const handler = createCryptoWorkerHandler(
+  createIndexedDbKeyStorage(),
+  createIndexedDbSessionStorage(),
+);
 
 self.onmessage = (event: MessageEvent<CryptoWorkerRequest>) => {
   handler.handle(event.data).then(

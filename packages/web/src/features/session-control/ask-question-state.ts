@@ -65,7 +65,9 @@ export function allAskQuestionsAnswered(
   selections: AskSelections,
   freeText: AskFreeTextAnswers = new Map(),
 ): boolean {
-  return questions.every((_, qi) => (selections.get(qi)?.size ?? 0) > 0 || Boolean(freeText.get(qi)));
+  return questions.every(
+    (_, qi) => (selections.get(qi)?.size ?? 0) > 0 || Boolean(freeText.get(qi)),
+  );
 }
 
 /** Builds the `{question: "label, label"}` (or `{question: "typed text"}`)

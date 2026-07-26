@@ -6,7 +6,7 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { RepoFilesPanel } from "./RepoFilesPanel";
 
 /**
- * The Repo Files panel's session-scoped entry point (`/session/[id]/files/`,
+ * The Repo Files panel's session-scoped entry point (`/dashboard/session/[id]/files/`,
  * docs/competitive-notes-omnara.md #5 "Full repo file browser") — mirrors
  * `SessionGitScreen`'s role exactly: a "screen" component that owns
  * resolving real ids off the live sync snapshot, so the route itself
@@ -27,7 +27,7 @@ export function SessionFilesScreen({ sessionId }: { sessionId: string }) {
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="text-sm font-medium">Session {sessionId} — Repo files</p>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/session/${sessionId}/`}>Back to session</Link>
+          <Link href={`/dashboard/session/${sessionId}/`}>Back to session</Link>
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">

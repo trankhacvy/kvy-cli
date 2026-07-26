@@ -17,7 +17,6 @@
  * (design §7.6), so nothing Codex-specific is needed on the permission path.
  */
 import path from "node:path";
-import { deriveKeyTree } from "@falcon/crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
 import { createHttpClient } from "../api/httpClient.js";
@@ -27,8 +26,7 @@ import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
-import { resolveKeyMaterial } from "../auth/keyMaterial.js";
-import { createTokenProviderForCredentials } from "../auth/resolveAccessToken.js";
+import { ensureLoggedIn as ensureLoggedInDefault } from "../auth/login.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import {
   CODEX_NO_LOCAL_MODE_NOTE,
@@ -36,6 +34,7 @@ import {
   detectCodex as detectCodexDefault,
   type ProviderDetectionResult,
 } from "../codex/index.js";
+import { reloadDaemonAuth as reloadDaemonAuthDefault } from "../daemon/reloadAuth.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import { registerSessionRpcHandlers, type SessionRpcHandlers } from "../rpc/sessionRpc.js";
@@ -48,12 +47,8 @@ import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
 } from "../session/sessionClient.js";
-
-const MASTER_SECRET_LENGTH_BYTES = 32;
-const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
-
-const MACHINE_ID_WAIT_TIMEOUT_MS = 3000;
-const MACHINE_ID_POLL_MS = 100;
+import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
+import { runPreflightWithReauth } from "./startPreflight.js";
 
 const noopLogger: Logger = {
   debug: () => {},
@@ -82,6 +77,10 @@ export interface StartCodexCommandDeps {
    * one-shot `SIGINT` listener.
    */
   waitForExit?: () => Promise<void>;
+  /** Injectable for tests; defaults to the real `ensureLoggedIn()` (AX-1.8). */
+  ensureLoggedIn?: typeof ensureLoggedInDefault;
+  /** Injectable for tests; defaults to the real `reloadDaemonAuth()` (AX-1.6). */
+  reloadDaemonAuth?: (homeDir: string) => Promise<boolean>;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   write?: (text: string) => void;
@@ -103,23 +102,6 @@ function waitForSigint(): Promise<void> {
   });
 }
 
-async function waitForMachineId(
-  homeDir: string,
-  deps: {
-    readDaemonState: (homeDir: string) => Promise<DaemonState | null>;
-    sleep: (ms: number) => Promise<void>;
-    now: () => number;
-  },
-): Promise<string | null> {
-  const deadline = deps.now() + MACHINE_ID_WAIT_TIMEOUT_MS;
-  for (;;) {
-    const state = await deps.readDaemonState(homeDir);
-    if (state?.machineId) return state.machineId;
-    if (deps.now() >= deadline) return null;
-    await deps.sleep(MACHINE_ID_POLL_MS);
-  }
-}
-
 /** Runs `falcon codex [args...]`. Returns the process exit code. */
 export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
@@ -136,14 +118,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
   const waitForExit = deps.waitForExit ?? waitForSigint;
 
-  // 1. Credentials first — never touch the network without them.
-  const credentials = readCreds(deps.homeDir);
-  if (!credentials) {
-    writeError(NOT_LOGGED_IN_MESSAGE);
-    return 1;
-  }
-
-  // 2. Fail honestly if the Codex CLI (its `app-server` the adapter drives)
+  // 1. Fail honestly if the Codex CLI (its `app-server` the adapter drives)
   // isn't installed.
   const detection = await detect({ env });
   if (!detection.installed) {
@@ -151,50 +126,32 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     return 1;
   }
 
-  // issue-4-plan.md §6.1: same interactive-unlock treatment as `commands/start.ts` —
-  // see that module's comment for the full rationale.
-  const masterSecret = await resolveKeyMaterial(
-    credentials.keyMaterial,
-    deps.homeDir,
-    process.stdin.isTTY === true ? {} : undefined,
-  );
-  if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
-    writeError(
-      "falcon codex: stored credentials can't derive a content key for local sessions (reduced-custody pairing, or a PIN unlock that didn't succeed) — run `falcon auth login` on this machine\n",
-    );
-    return 1;
-  }
-  const { content: contentKeyPair } = deriveKeyTree(masterSecret);
-
-  const machineId = await waitForMachineId(deps.homeDir, {
-    readDaemonState: readState,
-    sleep: deps.sleep ?? sleep,
-    now: deps.now ?? Date.now,
-  });
-  if (!machineId) {
-    writeError(
-      "falcon codex: this machine hasn't finished registering with the Falcon server yet — try again in a few seconds (see `falcon daemon status`)\n",
-    );
-    return 1;
-  }
-
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
 
-  // issue-4-plan.md §6.6: one `TokenProvider` for this invocation — see
-  // `commands/start.ts`'s own comment for the full rationale; the session-scoped WS
-  // client below holds onto this same provider for live in-band renewal across a
-  // long-running session, same as `falcon claude`.
-  const tokenProvider = createTokenProviderForCredentials(credentials, {
-    backendUrl,
+  // 2. Credentials, key material, machineId and an access token as one restartable
+  // unit — see `commands/startPreflight.ts` (AX-1.3/AX-1.8).
+  const preflightResult = await runPreflightWithReauth({
     homeDir: deps.homeDir,
+    backendUrl,
+    readCredentials: readCreds,
+    readDaemonState: readState,
     fetchImpl,
+    sleep: deps.sleep ?? sleep,
+    now: deps.now ?? Date.now,
     logger,
+    interactive: process.stdin.isTTY === true,
+    ensureLoggedIn: deps.ensureLoggedIn ?? ensureLoggedInDefault,
+    reloadDaemonAuth: deps.reloadDaemonAuth ?? reloadDaemonAuthDefault,
+    write,
   });
-  const accessToken = await tokenProvider.getAccessToken();
-  if (!accessToken) {
-    writeError("falcon codex: could not obtain an access token — run `falcon auth login` again\n");
+  if (!preflightResult.ok) {
+    writeError(
+      preflightResult.reason === "error" ? preflightResult.message : NO_TTY_CANNOT_SIGN_IN,
+    );
     return 1;
   }
+  const { masterSecret, contentKeyPair, machineId, tokenProvider, accessToken } =
+    preflightResult.preflight;
 
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {

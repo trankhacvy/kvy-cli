@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCryptoBridgeClient, type WorkerLike } from "../client.js";
 import type { CryptoWorkerRequest, CryptoWorkerResponse } from "../protocol.js";
 
@@ -147,5 +147,71 @@ describe("createCryptoBridgeClient — request/response matching", () => {
 
     await expect(pending).rejects.toThrow(/terminated/);
     expect(worker.terminate).toHaveBeenCalledTimes(1);
+  });
+
+  describe("terminate()'s drain (auth-ux-post-verification-fixes.md Bug B)", () => {
+    // `Worker.terminate()` is abrupt and skips a request's pending `finally` block (e.g.
+    // key-storage.ts closing its IndexedDB connection) — killing the thread while a
+    // request is still in flight can leak a connection that wedges every future
+    // `indexedDB.open()`/`deleteDatabase()` against the same database behind it forever.
+    // `terminate()` now waits for genuinely in-flight requests to settle (bounded by a
+    // timeout) before killing the underlying worker.
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("does not kill the worker thread while a request is still unsettled", async () => {
+      const worker = createManualWorker() as ReturnType<typeof createManualWorker> & {
+        respond(response: CryptoWorkerResponse): void;
+      };
+      const client = createCryptoBridgeClient(worker);
+
+      client.seal({ n: 1 });
+      client.terminate();
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(worker.terminate).not.toHaveBeenCalled();
+    });
+
+    it("lets a request that settles for real resolve with its actual result, then kills the thread", async () => {
+      const worker = createManualWorker() as ReturnType<typeof createManualWorker> & {
+        respond(response: CryptoWorkerResponse): void;
+      };
+      const client = createCryptoBridgeClient(worker);
+
+      const sealed = client.seal({ n: 1 });
+      client.terminate();
+
+      const [id] = worker.requests.map((r) => r.id);
+      worker.respond({ id: id!, ok: true, result: { t: "enc", v: 1, c: "c1" } });
+      await vi.advanceTimersByTimeAsync(20);
+
+      // Settled for real before the drain timeout — the caller gets its actual result,
+      // not a fabricated "terminated" rejection.
+      await expect(sealed).resolves.toMatchObject({ c: "c1" });
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+    });
+
+    it("kills the thread anyway once the drain grace period elapses, for a request that never settles", async () => {
+      const worker = createManualWorker();
+      const client = createCryptoBridgeClient(worker);
+
+      const pending = client.seal({ n: 1 });
+      // Attached immediately (before the timer that rejects it fires) so Node never
+      // observes even a transient "unhandled rejection" window.
+      pending.catch(() => {});
+      client.terminate();
+
+      await vi.advanceTimersByTimeAsync(499);
+      expect(worker.terminate).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(50);
+      expect(worker.terminate).toHaveBeenCalledTimes(1);
+      await expect(pending).rejects.toThrow(/terminated/);
+    });
   });
 });

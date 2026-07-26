@@ -17,14 +17,15 @@ import { QrCodeSvg } from "./QrCodeSvg";
 
 /**
  * Builds the absolute, shareable URL for a session (`origin +
- * /session/<id>/` — the same trailing-slash convention every other in-app
- * link to a session already uses: `SessionGitScreen.tsx`, `session-card.tsx`,
- * `take-over-dialog.tsx`, `new-session-screen.tsx`). Exported standalone
+ * /dashboard/session/<id>/` — the same trailing-slash convention every other
+ * in-app link to a session already uses: `SessionGitScreen.tsx`,
+ * `session-card.tsx`, `take-over-dialog.tsx`, `new-session-screen.tsx`).
+ * Exported standalone
  * (pure, no `window` access) so it's directly unit-testable without
  * mounting the dialog below.
  */
 export function sessionShareUrl(origin: string, sessionId: string): string {
-  return `${origin}/session/${sessionId}/`;
+  return `${origin}/dashboard/session/${sessionId}/`;
 }
 
 /**
@@ -34,7 +35,7 @@ export function sessionShareUrl(origin: string, sessionId: string): string {
  * same PWA, since Falcon has no separate mobile app), or paste the link
  * anywhere. Session content itself stays end-to-end encrypted regardless —
  * this only hands off *which session to open*, the same as any other link
- * to `/session/<id>/`; whoever opens it still needs to be signed in.
+ * to `/dashboard/session/<id>/`; whoever opens it still needs to be signed in.
  *
  * The URL is derived from `window.location.origin` only once the dialog is
  * actually open — `open` defaults to `false`, so the ternary below never

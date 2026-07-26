@@ -101,6 +101,8 @@ const SpawnErrorResponseSchema = z.object({
 
 const StopResponseSchema = z.object({ status: z.string() });
 
+const ReloadAuthResponseSchema = z.object({ reloaded: z.boolean() });
+
 export interface ControlServerDeps {
   /** Snapshot of currently tracked sessions; only `startedBy`/`sessionId`/`pid` surface over `/list`. */
   getSessions: () => TrackedSession[];
@@ -110,6 +112,13 @@ export interface ControlServerDeps {
   spawnSession: (options: SpawnSessionOptions) => Promise<SpawnSessionResult>;
   /** Called once `/stop` is hit; the caller decides how the daemon process actually exits. */
   requestShutdown: () => void;
+  /**
+   * Re-read `~/.falcon/access.key` and restart machine integration in place —
+   * the daemon only registers a machine once at startup, so a session that just
+   * re-paired needs this rather than a full daemon restart (AX-1.6). Optional:
+   * a caller that doesn't own machine integration (tests) can leave it unset.
+   */
+  reloadAuth?: () => Promise<boolean>;
   /** Invoked when a spawned session self-reports via `/session-started`. */
   onSessionStarted: (
     sessionId: string,
@@ -126,8 +135,15 @@ export interface ControlServerHandle {
 }
 
 export function startControlServer(deps: ControlServerDeps): Promise<ControlServerHandle> {
-  const { getSessions, stopSession, spawnSession, requestShutdown, onSessionStarted, logger } =
-    deps;
+  const {
+    getSessions,
+    stopSession,
+    spawnSession,
+    requestShutdown,
+    onSessionStarted,
+    reloadAuth,
+    logger,
+  } = deps;
 
   return new Promise((resolve, reject) => {
     const app = fastify({ logger: false }).withTypeProvider<ZodTypeProvider>();
@@ -211,6 +227,17 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
             reply.code(500);
             return { success: false, error: result.errorMessage };
         }
+      },
+    );
+
+    // Re-read credentials and restart machine integration in place (AX-1.6).
+    app.post(
+      "/reload-auth",
+      { schema: { response: { 200: ReloadAuthResponseSchema } } },
+      async () => {
+        logger?.debug("[control-server] reload-auth request received");
+        if (!reloadAuth) return { reloaded: false };
+        return { reloaded: await reloadAuth() };
       },
     );
 

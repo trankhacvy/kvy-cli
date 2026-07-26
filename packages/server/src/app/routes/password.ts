@@ -53,26 +53,23 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-// docs/auth-ux-hardening-plan.md item 3: email+password is dev/local-testing only — reuse
-// the same `FALCON_DEV_AUTH` flag the dev-OAuth-bypass already gates on (auth/oauth.ts's
-// "dev" provider), fail-closed with a 404 (route effectively does not exist) rather than a
-// 403, so a production deployment doesn't even advertise that this endpoint exists.
-// `config.ts`'s `.refine()` already makes `FALCON_DEV_AUTH=1` structurally impossible under
-// `NODE_ENV=production`, so this is unreachable in prod transitively — no separate
-// production check needed here.
+// docs/auth-ux-hardening-plan.md item 3: email+password is dev/local-testing only — gated
+// on `NODE_ENV` directly (no separate opt-in flag), fail-closed with a 404 (route
+// effectively does not exist) rather than a 403, so a production deployment doesn't even
+// advertise that this endpoint exists.
 //
 // Wired as `preValidation` (review fix), NOT as the handler's first statement: Fastify runs
 // its own request-lifecycle hooks — onRequest → preParsing → preValidation → **body-schema
 // validation** → preHandler → handler — so a check placed as the handler's first line only
-// runs *after* the zod body schema has already validated the request. With the flag off, a
+// runs *after* the zod body schema has already validated the request. In production, a
 // well-formed body correctly 404s, but a malformed one (e.g. a missing field) still gets
 // rejected by schema validation first and answers 400 "Bad Request" before ever reaching the
 // handler — which both confirms the route exists AND leaks its expected shape, defeating the
 // "doesn't even advertise this endpoint exists" goal for exactly the kind of request a route-
 // enumerating prober would send. `preValidation` runs before schema validation, so every
-// request — well-formed or not — gets the same 404 when the flag is off.
-async function requireDevAuth(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
-  if (!env.FALCON_DEV_AUTH) {
+// request — well-formed or not — gets the same 404 in production.
+async function requireNonProduction(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (env.NODE_ENV === "production") {
     await reply.code(404).send({ error: "Not found" });
   }
 }
@@ -83,7 +80,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/register",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
-        preValidation: requireDevAuth,
+        preValidation: requireNonProduction,
         schema: {
           body: z.object({ email: z.string().email(), password: z.string().min(8) }),
           response: { 200: SessionResponseSchema, 400: ErrorSchema, 404: ErrorSchema },
@@ -141,7 +138,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/login",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
-        preValidation: requireDevAuth,
+        preValidation: requireNonProduction,
         schema: {
           body: z.object({ email: z.string().email(), password: z.string().min(1) }),
           response: { 200: SessionResponseSchema, 401: ErrorSchema, 404: ErrorSchema },
@@ -207,7 +204,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/reset/request",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
-        preValidation: requireDevAuth,
+        preValidation: requireNonProduction,
         schema: {
           body: z.object({ email: z.string().email() }),
           response: { 200: OkResponseSchema, 404: ErrorSchema },
@@ -244,7 +241,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       "/v1/auth/password/reset/confirm",
       {
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
-        preValidation: requireDevAuth,
+        preValidation: requireNonProduction,
         schema: {
           body: z.object({ token: z.string().min(1), password: z.string().min(8) }),
           response: { 200: OkResponseSchema, 401: ErrorSchema, 404: ErrorSchema },

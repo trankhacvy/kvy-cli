@@ -58,14 +58,20 @@ describe("require-auth.tsx — failed-refresh redirect wiring", () => {
   );
 
   it("a failed silentRefresh() redirects to SIGNIN_EXPIRED_PATH, not plain SIGNIN_PATH", () => {
-    const refreshedIndex = source.indexOf("const refreshed = await silentRefresh();");
+    const refreshedIndex = source.indexOf("const result = await silentRefresh();");
     expect(refreshedIndex).toBeGreaterThan(-1);
-    const afterRefresh = source.slice(refreshedIndex);
-    const elseIndex = afterRefresh.indexOf("} else {");
-    expect(elseIndex).toBeGreaterThan(-1);
-    const redirectBlock = afterRefresh.slice(elseIndex, afterRefresh.indexOf("}", elseIndex + 8));
-    expect(redirectBlock).toContain("router.replace(SIGNIN_EXPIRED_PATH);");
-    expect(redirectBlock).not.toContain("router.replace(SIGNIN_PATH);");
+    // Formatting-agnostic: whatever the branch shape, the FAILURE arm must land on the
+    // reason-carrying path so /signin/ can explain itself instead of looking like a bare
+    // cold visit.
+    const afterRefresh = source.slice(refreshedIndex).replace(/\s+/g, " ");
+    expect(afterRefresh).toContain("router.replace(SIGNIN_EXPIRED_PATH)");
+    expect(afterRefresh).not.toContain("router.replace(SIGNIN_PATH)");
+  });
+
+  it('only a "signed-out" outcome triggers the redirect — "unreachable" must not', () => {
+    const refreshedIndex = source.indexOf("const result = await silentRefresh();");
+    const afterRefresh = source.slice(refreshedIndex).replace(/\s+/g, " ");
+    expect(afterRefresh).toMatch(/result === "signed-out"\)\s*\{?\s*router\.replace/);
   });
 });
 
@@ -91,23 +97,34 @@ describe("RequireAuth", () => {
 // `/reset-keys/` route instead of `/password/` (dev-only in production, per item 3).
 // Asserted against the shipped source text, same technique `signin/page.test.ts` and
 // `(protected)/layout.test.ts` use for hook-heavy JSX this vitest config can't render.
-describe("require-auth.tsx — /reset-keys/ wiring", () => {
+describe("require-auth.tsx — key-state wiring (docs/auth-ux-overhaul-plan.md Phase 4a/5)", () => {
   const source = readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../require-auth.tsx"),
     "utf-8",
   );
 
-  it("the no-identity dead-end offers a button to /reset-keys/", () => {
-    const noIdentityIndex = source.indexOf('status.kind === "no-identity"');
-    const needsUnlockIndex = source.indexOf('status.kind === "needs-unlock"');
-    expect(noIdentityIndex).toBeGreaterThan(-1);
-    expect(needsUnlockIndex).toBeGreaterThan(noIdentityIndex);
-    const noIdentityBlock = source.slice(noIdentityIndex, needsUnlockIndex);
-    expect(noIdentityBlock).toContain('router.push("/reset-keys/")');
+  it("offers to fetch keys rather than dead-ending a browser that has none", () => {
+    const noKeysIndex = source.indexOf('status.kind === "no-keys"');
+    expect(noKeysIndex).toBeGreaterThan(-1);
+    expect(source.slice(noKeysIndex, noKeysIndex + 400)).toContain("RequestKeysPanel");
   });
 
-  it('"Forgot your PIN?" (onForgotPin) repoints to /reset-keys/, not /password/', () => {
-    expect(source).toContain('onForgotPin={() => router.push("/reset-keys/")}');
-    expect(source).not.toContain('onForgotPin={() => router.push("/password/")}');
+  it("has no PIN gate left", () => {
+    expect(source).not.toContain("PinUnlockForm");
+    expect(source).not.toContain("needs-unlock");
+    expect(source).not.toContain("onForgotPin");
+  });
+
+  it("checks the session independently of key material", () => {
+    // Phase 4a: gating the session effect on crypto readiness made "signed in but no
+    // keys" unreachable — the exact state RequestKeysPanel has to run in.
+    const effectIndex = source.indexOf("async function ensureSession()");
+    expect(effectIndex).toBeGreaterThan(-1);
+    const beforeEffect = source.slice(0, effectIndex);
+    expect(beforeEffect).not.toContain('if (status.kind !== "ready") return;');
+  });
+
+  it("mounts the key-request approve listener for signed-in users", () => {
+    expect(source).toContain("KeyRequestListener");
   });
 });

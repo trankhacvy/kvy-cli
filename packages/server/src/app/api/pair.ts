@@ -51,7 +51,13 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       // "4.4 Hardening").
       config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
       schema: {
-        body: z.object({ ephPub: EphPubSchema }),
+        body: z.object({
+          ephPub: EphPubSchema,
+          // AX-1.11: display-only, shown on the approver's confirm card. Untrusted and
+          // length-capped; never used for an authorization decision.
+          label: z.string().max(80).optional(),
+          cwd: z.string().max(200).optional(),
+        }),
         response: {
           200: z.union([
             z.object({ state: z.literal("pending") }),
@@ -63,7 +69,7 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request, reply) => {
-      const { ephPub } = request.body;
+      const { ephPub, label, cwd } = request.body;
       if (!isValidEphPub(ephPub)) {
         return reply.code(401).send({ error: "Invalid public key" });
       }
@@ -75,7 +81,7 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       // insert that just falls through to the pickup attempt below.
       await db
         .insert(pairRequests)
-        .values({ ephPub, expiresAt: new Date(Date.now() + PAIR_REQUEST_TTL_MS) })
+        .values({ ephPub, label, cwd, expiresAt: new Date(Date.now() + PAIR_REQUEST_TTL_MS) })
         .onConflictDoNothing({ target: pairRequests.ephPub });
 
       // Single-use pickup: only a row that already has a sealed `response` can match
@@ -123,7 +129,16 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       schema: {
         querystring: z.object({ ephPub: EphPubSchema }),
         response: {
-          200: z.object({ status: z.enum(["not_found", "pending", "authorized", "expired"]) }),
+          200: z.object({
+            status: z.enum(["not_found", "pending", "authorized", "expired"]),
+            // AX-2.6: display metadata for the approver's confirm card. Untrusted —
+            // whatever the requesting device sent. Deliberately NOT the account's email
+            // or any other account fact: this route is unauthenticated, so anything it
+            // returns is readable by whoever holds the pairing link.
+            label: z.string().nullable().optional(),
+            cwd: z.string().nullable().optional(),
+            requestedAt: z.string().nullable().optional(),
+          }),
         },
       },
     },
@@ -138,8 +153,14 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       });
       if (!row) return reply.send({ status: "not_found" });
       if (isExpired(row.expiresAt)) return reply.send({ status: "expired" });
-      if (row.response) return reply.send({ status: "authorized" });
-      return reply.send({ status: "pending" });
+
+      const details = {
+        label: row.label,
+        cwd: row.cwd,
+        requestedAt: row.createdAt.toISOString(),
+      };
+      if (row.response) return reply.send({ status: "authorized", ...details });
+      return reply.send({ status: "pending", ...details });
     },
   );
 

@@ -175,7 +175,7 @@ export function NewSessionScreen({
       <main className="mx-auto flex w-full max-w-md flex-col items-center gap-4 p-8 text-center">
         <p className="text-lg font-semibold">Session started</p>
         <Button asChild>
-          <Link href={`/session/${spawnState.sessionId}/`}>Open session</Link>
+          <Link href={`/dashboard/session/${spawnState.sessionId}/`}>Open session</Link>
         </Button>
       </main>
     );

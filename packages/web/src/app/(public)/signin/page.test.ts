@@ -36,34 +36,18 @@ describe("signin/page.tsx", () => {
   });
 
   // docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): the email+password
-  // link (and the dev-only "Continue without OAuth" bypass beside it) must be gated
-  // behind the same `DEV_AUTH_ENABLED` flag the server's `FALCON_DEV_AUTH` mirrors —
-  // a production build (`DEV_AUTH_ENABLED=false`) must not render a clickable path to
-  // an endpoint that 404s. Still source-text-based (see file header): asserts the
-  // email+password link and the dev-bypass button both sit textually inside the
-  // `{DEV_AUTH_ENABLED && (...)}` block, not just gated individually.
-  it("gates both the email+password link and the dev-only OAuth bypass behind DEV_AUTH_ENABLED", () => {
-    const gateStart = pageSource.indexOf("{DEV_AUTH_ENABLED && (");
-    expect(gateStart).toBeGreaterThan(-1);
-
-    const passwordLinkIndex = pageSource.indexOf('router.push("/password/")');
-    const devBypassIndex = pageSource.indexOf('router.push("/auth/callback/dev/")');
-    expect(passwordLinkIndex).toBeGreaterThan(gateStart);
-    expect(devBypassIndex).toBeGreaterThan(gateStart);
-
-    // The Google/GitHub OAuth buttons themselves must NOT be inside that gate — they
-    // render unconditionally, before the flag check even appears in the source.
-    const googleIndex = pageSource.indexOf("Continue with Google");
-    const githubIndex = pageSource.indexOf("Continue with GitHub");
-    expect(googleIndex).toBeGreaterThan(-1);
-    expect(googleIndex).toBeLessThan(gateStart);
-    expect(githubIndex).toBeLessThan(gateStart);
+  // link renders unconditionally now — the server (`password.ts`'s
+  // `requireNonProduction`) is what actually 404s the underlying routes in
+  // production, so the client no longer needs (or has) a matching build-time flag.
+  // The dev-only OAuth bypass is gone entirely, not just ungated.
+  it("always offers the email+password link and no longer has a dev-only OAuth bypass", () => {
+    expect(pageSource).toContain('router.push("/password/")');
+    expect(pageSource).not.toContain("/auth/callback/dev/");
+    expect(pageSource).not.toContain("DEV_AUTH_ENABLED");
   });
 
-  it("only shows the 'no OAuth provider configured' note when neither OAuth nor dev auth is available", () => {
-    expect(pageSource).toContain(
-      "!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && !DEV_AUTH_ENABLED",
-    );
+  it("only shows the 'no OAuth provider configured' note when neither OAuth provider is available", () => {
+    expect(pageSource).toContain("!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID");
     expect(pageSource).toContain("No OAuth provider is configured for this deployment.");
   });
 
@@ -73,8 +57,17 @@ describe("signin/page.tsx", () => {
   // effect — source-text check that the wiring is what it looks like (the actual
   // parsing is covered behaviorally, without a DOM, by `signin-gate.test.ts`).
   it("renders the expiry banner gated on isExpiredReason(window.location.search)", () => {
-    expect(pageSource).toContain("setExpired(isExpiredReason(window.location.search))");
-    expect(pageSource).toContain("{expired && (");
-    expect(pageSource).toContain("Your session expired — sign in again to continue.");
+    expect(pageSource).toContain("isExpiredReason(window.location.search)");
+    expect(pageSource).toContain('setBanner("expired")');
+    expect(pageSource).toContain('{banner === "expired" && (');
+    expect(pageSource).toContain("copy.signin.expiredBanner");
+  });
+
+  // AX-2.5: a visitor bounced here mid-pairing is told why, instead of seeing a bare
+  // sign-in page. `peekPendingPair` reads WITHOUT consuming — only the pair page spends it.
+  it("switches its heading when a pairing is waiting", () => {
+    expect(pageSource).toContain("peekPendingPair()");
+    expect(pageSource).toContain('setBanner("pair")');
+    expect(pageSource).toContain("copy.signin.titleWithPendingPair");
   });
 });

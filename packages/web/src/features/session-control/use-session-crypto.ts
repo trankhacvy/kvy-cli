@@ -3,7 +3,7 @@
 import { decodeBase64 } from "@falcon/crypto/web";
 import { useEffect, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
-import { useCryptoBridge } from "@/lib/use-crypto-bridge";
+import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 
 /**
@@ -16,7 +16,7 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
  * which session's key is loaded, without sharing any other state.
  */
 export function useSessionCrypto(sessionId: string): CryptoBridgeClient | null {
-  const bridge = useCryptoBridge();
+  const bridge = useDedicatedCryptoBridge();
   const snapshot = useSyncSnapshotQuery();
   const [ready, setReady] = useState(false);
 

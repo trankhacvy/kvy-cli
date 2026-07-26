@@ -437,6 +437,24 @@ describe("parseArgs — stray leading `--` (pnpm script-arg passthrough)", () =>
   });
 });
 
+describe("falcon keys", () => {
+  it("parses the approve action", () => {
+    expect(parseArgs(["keys", "approve"])).toEqual({ type: "keys", action: "approve" });
+  });
+
+  it("rejects an unknown or missing action with a usage string", () => {
+    for (const argv of [["keys"], ["keys", "send"]]) {
+      try {
+        parseArgs(argv);
+        throw new Error("expected parseArgs to throw");
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArgParseError);
+        expect((error as ArgParseError).usage).toBe("falcon keys approve");
+      }
+    }
+  });
+});
+
 describe("ArgParseError", () => {
   it("carries a usage string alongside the message", () => {
     try {

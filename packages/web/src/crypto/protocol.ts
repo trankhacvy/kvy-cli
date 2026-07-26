@@ -1,38 +1,45 @@
 /**
- * crypto-bridge RPC protocol — the postMessage-shaped contract between the
- * main thread (`client.ts`) and the crypto worker (`worker.ts` /
- * `worker-handler.ts`). See falcon-system-design.md §5.3, §9.1: keys must
- * live in worker memory only, so every response shape here is deliberately
- * incapable of carrying raw key material — only ciphertext (`EncryptedBox`)
- * or booleans/void cross back out.
+ * crypto-bridge RPC protocol — the postMessage-shaped contract between the main thread
+ * (`client.ts`) and the crypto worker (`worker.ts` / `worker-handler.ts`). See
+ * falcon-system-design.md §5.3, §9.1: keys live in worker memory only, so every response
+ * shape here is deliberately incapable of carrying raw key material — only ciphertext
+ * (`EncryptedBox`), booleans, or already-public values cross back out.
  */
 import type { EncryptedBox } from "@falcon/crypto/web";
+import type { KeyWrapMode } from "./key-storage.js";
 
 /**
- * Provision the master secret: PIN-wraps it (issue-4-plan.md §6.1) and persists the
- * wrapped blob (+ the plaintext public identity keys) to IndexedDB, then derives the
- * key tree in worker memory so the freshly-provisioned device is immediately usable
- * without a separate `unlock` round trip. Also PIN-wraps and persists `refreshToken`
- * the same way (security review finding F1: the refresh token never touches
- * `localStorage` — it only ever exists PIN-wrapped here, or in worker memory after an
- * `unlock`/`init`).
+ * Provision the master secret: wraps and persists it under `mode` (Phase 5 — no PIN),
+ * then derives the key tree in worker memory so the freshly-provisioned device is
+ * immediately usable. `refreshToken` goes to the separate session store (Phase 4a).
  */
 export interface InitRequest {
   id: string;
   type: "init";
   masterSecret: Uint8Array;
-  pin: string;
   refreshToken: string;
+  /**
+   * Whose keys these are (the access token's `sub`) — persisted onto the stored record so
+   * a later `describeStorage`/`getIdentity`/`ensureLoaded` scoped to a DIFFERENT account
+   * can tell it isn't theirs. Required: every real caller of `init` already has an
+   * authenticated session (a genuinely new account, or a step-up-proved rotation) by the
+   * time it calls this, so there is never a legitimate "provision keys for nobody in
+   * particular" case.
+   */
+  accountId: string;
+  mode: KeyWrapMode;
+  /**
+   * For `mode: "prf"` only — a non-extractable wrap key the MAIN THREAD derived from a
+   * passkey, plus the credential id to re-derive it from later. WebAuthn is unavailable
+   * inside a Worker (`prf-key.ts`), so the worker can never produce these itself; if they
+   * are absent the worker records `"device"` instead of silently storing something it
+   * could never unwrap.
+   */
+  wrapKey?: CryptoKey;
+  credentialId?: Uint8Array;
 }
 
-/**
- * Wraps and persists a (freshly-issued or freshly-rotated) refresh token against an
- * ALREADY-provisioned identity, without touching the master secret's own wrapped blob
- * — the returning-device login path (`complete-password-sign-in.ts`'s
- * `completePasswordSignIn`), where `init` never runs again. Requires the worker to
- * already be unlocked (the PIN is needed to wrap) — fails with `locked`/`not-initialized`
- * otherwise.
- */
+/** Persist a freshly-issued or freshly-rotated refresh token. No key material required. */
 export interface SetRefreshTokenRequest {
   id: string;
   type: "setRefreshToken";
@@ -40,100 +47,115 @@ export interface SetRefreshTokenRequest {
 }
 
 /**
- * F1: mints a fresh access token from the in-memory refresh token via a real
- * `POST /v1/auth/refresh` call made FROM INSIDE THE WORKER — the raw refresh token
- * never has to cross back out to the main thread to do this. On success, re-wraps and
- * persists the rotated refresh token the server returns (so the next `unlock` recovers
- * the CURRENT one, not one the server will reject as a replay) and resolves the fresh
- * access token (safe to hold in ordinary main-thread memory — it's short-lived and
- * carries no more authority than any other bearer token this app already sends over
- * HTTP). Resolves `null` (never rejects) when there's no refresh token to use, or the
- * server rejects it (dead/revoked) — the caller is responsible for treating that as
- * "signed out".
+ * Mint a fresh access token from the stored refresh token via a real
+ * `POST /v1/auth/refresh` made from inside the worker. Never rejects — resolves a
+ * `RefreshOutcome` distinguishing "no credential stored", "the server rejected it", and
+ * "the request never got anywhere" (see `RefreshOutcome`'s docblock).
  */
 export interface RefreshSessionRequest {
   id: string;
   type: "refreshSession";
 }
 
-/**
- * Load the PIN-wrapped master secret from storage and unwrap it into worker memory.
- * Resolves `true` on success, `false` on a wrong PIN (never throws for that case —
- * mirrors `unwrapWithPin`'s own never-throw contract). Rejects with `not-initialized`
- * if no key material has ever been provisioned on this device.
- */
-export interface UnlockRequest {
-  id: string;
-  type: "unlock";
-  pin: string;
-}
-
-/** Unwrap a per-session DEK with the in-memory content secret key and hold it as the active session key. */
+/** Unwrap a per-session DEK with the in-memory content secret key and hold it active. */
 export interface SetSessionKeyRequest {
   id: string;
   type: "setSessionKey";
   wrappedDek: Uint8Array;
 }
 
-/** Seal `data` under the active session DEK. */
 export interface SealRequest {
   id: string;
   type: "seal";
   data: unknown;
 }
 
-/** Open `box` with the active session DEK. */
 export interface OpenRequest {
   id: string;
   type: "open";
   box: EncryptedBox;
 }
 
-/**
- * Encrypt binary `data` under the active session's blob key —
- * `deriveBlobKey(activeDek)` (falcon-system-design.md §5.1: "blob key:
- * HKDF(DEK, "falcon-blobs") → attachments isolated from text"), never the
- * DEK itself — backing the composer's encrypted attachment path (plan.md
- * §16 "4.3 Distribution & self-host"). Result is raw `encryptBlob` output
- * bytes, ready to `PUT` at a blob-storage upload target.
- */
+/** Encrypt binary data under the active session's blob key — `deriveBlobKey(activeDek)`. */
 export interface SealBlobRequest {
   id: string;
   type: "sealBlob";
   data: Uint8Array;
 }
 
-/** Inverse of `SealBlobRequest`: decrypt a downloaded blob's bytes under the same session blob key. */
 export interface OpenBlobRequest {
   id: string;
   type: "openBlob";
   bundle: Uint8Array;
 }
 
-/** Wipe in-memory keys and cached IndexedDB key material (logout). */
+/** Wipe in-memory keys, the key store, and the session store (logout). */
 export interface ClearRequest {
   id: string;
   type: "clear";
 }
 
 /**
- * Report the account identity provisioned on this device, if any — read
- * straight from the stored record's plaintext public keys, so it answers
- * without requiring a PIN unlock first (used by the sign-in page to decide
- * "known device, prompt for PIN" vs "new device, show sign-up").
+ * Report the public identity provisioned on this device, if any — read straight from the
+ * stored record's plaintext public keys.
+ *
+ * NOTE: this answers for a v1 (pre-Phase-5) record too, so it must NOT be used as the
+ * readiness check. Use `describeStorage` + `ensureLoaded` instead.
  */
 export interface GetIdentityRequest {
   id: string;
   type: "getIdentity";
+  /**
+   * Scope the answer to this account. Omitted is permissive (answers for whatever record
+   * is there, today's behavior) — deliberately, since some callers (the OAuth callback's
+   * pre-check, before `register()` has minted a token) have no account id available yet.
+   * See `worker-handler.ts`'s `belongsTo`.
+   */
+  accountId?: string;
 }
 
 /**
- * CLI pairing approval (design §5.2 "CLI pairing", issue-4-plan.md §6.3): seal this
- * device's master secret AND the current session's refresh token to a new device's
- * ephemeral X25519 public key (`ephPub`, base64), so both can be relayed through the
- * server without it ever reading either. Requires the worker to be unlocked (the raw
- * master secret must be in memory) — fails with `locked`/`not-initialized` otherwise.
+ * What this browser has stored, and under which scheme — the input to the
+ * loading/no-keys/needs-migration decision.
  */
+export interface DescribeStorageRequest {
+  id: string;
+  type: "describeStorage";
+  /** Same permissive-when-omitted scoping as `GetIdentityRequest.accountId`. */
+  accountId?: string;
+}
+
+/** Load and unwrap the stored key material into worker memory. No user interaction for
+ * `"device"` mode; a biometric gesture for `"prf"`. */
+export interface EnsureLoadedRequest {
+  id: string;
+  type: "ensureLoaded";
+  /** Same permissive-when-omitted scoping as `GetIdentityRequest.accountId`. */
+  accountId?: string;
+  /** Required for a `"prf"` record — see `InitRequest.wrapKey`. */
+  wrapKey?: CryptoKey;
+}
+
+/** One-time upgrade of a pre-Phase-5 PIN-wrapped record to the current shape. */
+export interface MigrateFromPinRequest {
+  id: string;
+  type: "migrateFromPin";
+  pin: string;
+  mode: KeyWrapMode;
+  wrapKey?: CryptoKey;
+  credentialId?: Uint8Array;
+}
+
+/** Sign a server-issued `keys/bind` nonce over `accountId‖contentPubKey‖nonce`. */
+export interface BindKeysProofRequest {
+  id: string;
+  type: "bindKeysProof";
+  accountId: string;
+  nonce: string;
+}
+
+/** CLI pairing approval: seal the master secret + the new device's refresh token to its
+ * ephemeral X25519 public key. */
 export interface SealForPeerRequest {
   id: string;
   type: "sealForPeer";
@@ -142,23 +164,41 @@ export interface SealForPeerRequest {
 }
 
 /**
- * issue-4-plan.md §6.2 "keys/bind": sign the server-issued nonce so
- * `POST /v1/auth/keys/bind` can verify this device really holds the identity's
- * signing secret key. The signed payload is `accountId‖contentPubKey‖nonce`
- * (matching `server/src/app/routes/keys.ts` byte-for-byte) — a bare signed
- * nonce alone would let a signature minted for one account/content-key pair
- * be replayed against another.
+ * Start asking another device for a copy of the keys. Generates an ephemeral X25519
+ * keypair inside the worker — the secret half never crosses postMessage — and returns
+ * only the public half, base64.
  */
-export interface BindKeysProofRequest {
+export interface BeginKeyRequestRequest {
   id: string;
-  type: "bindKeysProof";
-  accountId: string;
-  nonce: string;
+  type: "beginKeyRequest";
+}
+
+/**
+ * Open a sealed `[0x02 | masterSecret]` box produced by a holder device, using an
+ * ephemeral secret key `beginKeyRequest` is holding. On success, derives the key tree and
+ * persists it. Resolves `false` on any failure.
+ */
+export interface AcceptKeyResponseRequest {
+  id: string;
+  type: "acceptKeyResponse";
+  sealed: string;
+  mode: KeyWrapMode;
+  wrapKey?: CryptoKey;
+  credentialId?: Uint8Array;
+}
+
+/**
+ * Holder side: seal ONLY the master secret to a peer's ephemeral public key — no refresh
+ * token, because the requesting device already has its own session.
+ */
+export interface SealKeysForPeerRequest {
+  id: string;
+  type: "sealKeysForPeer";
+  ephPub: string;
 }
 
 export type CryptoWorkerRequest =
   | InitRequest
-  | UnlockRequest
   | SetSessionKeyRequest
   | SealRequest
   | OpenRequest
@@ -166,41 +206,70 @@ export type CryptoWorkerRequest =
   | OpenBlobRequest
   | ClearRequest
   | GetIdentityRequest
+  | DescribeStorageRequest
+  | EnsureLoadedRequest
+  | MigrateFromPinRequest
   | SealForPeerRequest
   | BindKeysProofRequest
   | SetRefreshTokenRequest
-  | RefreshSessionRequest;
+  | RefreshSessionRequest
+  | BeginKeyRequestRequest
+  | AcceptKeyResponseRequest
+  | SealKeysForPeerRequest;
 
-/** Public identity (base64-encoded keys) provisioned on this device. */
 export interface DeviceIdentity {
   signPubKey: string;
   contentPubKey: string;
 }
 
-/** Everything `POST /v1/auth/keys/bind` needs, for the caller's `nonce`. */
 export interface BindKeysProofResult extends DeviceIdentity {
   signature: string;
 }
 
+export interface StorageDescription {
+  present: boolean;
+  /** 1 = pre-Phase-5 PIN record needing migration, 2 = current. */
+  version: 1 | 2;
+  mode: KeyWrapMode | null;
+  /** For a `"prf"` record — the main thread needs it to re-derive the wrap key. Not a
+   * secret: it identifies a passkey, it does not unlock one. */
+  credentialId: Uint8Array | null;
+}
+
 /**
- * Result payload per request type — kept as a lookup map so `client.ts` can
- * type each RPC call's return value from a single source of truth. None of
- * these shapes can carry raw key bytes.
+ * Why a refresh did or didn't produce a token. Deliberately NOT a bare `string | null`:
+ * collapsing "the server rejected this credential" into the same value as "the request
+ * never arrived" is what turned a bundler misconfiguration into a total sign-out for every
+ * user on every reload (auth-ux-overhaul-e2e-results.md E2E-4.1).
  */
+export type RefreshOutcome =
+  | { kind: "ok"; accessToken: string }
+  /** Nothing stored to refresh with — a genuinely signed-out browser. */
+  | { kind: "no-credential" }
+  /** The server answered 401/403: dead, revoked, or replayed. Sign out. */
+  | { kind: "rejected" }
+  /** The request failed or answered something unusable. Keep the session; retry. */
+  | { kind: "unreachable" };
+
 export interface CryptoWorkerResults {
   init: null;
-  unlock: boolean;
   setSessionKey: boolean;
   seal: EncryptedBox;
-  open: unknown | null;
+  open: unknown;
   sealBlob: Uint8Array;
   openBlob: Uint8Array | null;
   clear: null;
   getIdentity: DeviceIdentity | null;
+  describeStorage: StorageDescription;
+  ensureLoaded: boolean;
+  migrateFromPin: boolean;
   sealForPeer: string;
   bindKeysProof: BindKeysProofResult;
   setRefreshToken: null;
-  refreshSession: string | null;
+  refreshSession: RefreshOutcome;
+  beginKeyRequest: string;
+  acceptKeyResponse: boolean;
+  sealKeysForPeer: string;
 }
 
 export interface CryptoWorkerOkResponse<T = unknown> {
@@ -218,12 +287,9 @@ export interface CryptoWorkerErrResponse {
 export type CryptoWorkerResponse<T = unknown> = CryptoWorkerOkResponse<T> | CryptoWorkerErrResponse;
 
 /**
- * `Omit<CryptoWorkerRequest, "id">` is NOT distributive over the request
- * union — TypeScript first collapses the union to its common shape, so a
- * `{ type: "init", masterSecret }` literal would only be checked against the
- * intersection of every member's fields. This distributes member-by-member
- * (naked type parameter in a conditional type) so each request's own extra
- * fields stay required and specific to its `type`.
+ * `Omit<CryptoWorkerRequest, "id">` is NOT distributive over the request union — TypeScript
+ * collapses the union to its common shape first. This distributes member-by-member (naked
+ * type parameter in a conditional type) so each request keeps its own required fields.
  */
 export type CryptoWorkerRequestPayload<T = CryptoWorkerRequest> = T extends CryptoWorkerRequest
   ? Omit<T, "id">

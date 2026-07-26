@@ -480,16 +480,29 @@ describe("main()", () => {
   describe("daemon auto-start wiring (ensureDaemonRunning)", () => {
     afterEach(() => {
       vi.doUnmock("./daemon/ensureDaemonRunning.js");
+      vi.doUnmock("./auth/login.js");
     });
 
+    /**
+     * AX-1.1: `ensureLoggedIn` now gates EVERY provider, not just claude, and it
+     * runs ahead of `ensureDaemon()` — so a test about daemon wiring has to get
+     * past auth first. Stubbing it keeps these tests about what they say they're
+     * about; the real not-logged-in path is covered separately above.
+     */
+    function mockSignedIn(): void {
+      vi.doMock("./auth/login.js", () => ({
+        ensureLoggedIn: vi.fn(async () => ({ ok: true })),
+        runAuthLogin: vi.fn(async () => 0),
+      }));
+    }
+
     it("calls ensureDaemonRunning before the start command, and proceeds when it succeeds", async () => {
-      // `codex` here (not `claude`) deliberately: this test is about the
-      // ensureDaemonRunning gating that runs ahead of every provider. With an
-      // empty temp FALCON_HOME_DIR the real `runStartCodexCommand` then fails
-      // its credentials pre-flight (exit 1, "not logged in") — which proves
-      // the daemon check ran first and control proceeded into the command,
-      // without needing a full logged-in stack.
+      // `codex` here (not `claude`) deliberately: with an empty temp
+      // FALCON_HOME_DIR the real `runStartCodexCommand` still fails its own
+      // pre-flight (exit 1) — which proves the daemon check ran first and
+      // control proceeded into the command, without needing a full stack.
       delete process.env.FALCON_NO_SERVICE;
+      mockSignedIn();
       const ensureDaemonRunning = vi.fn(async () => ({
         ok: true,
         state: { pid: 123, port: 4242, version: "0.1.0-test", startedAt: 1 },
@@ -506,8 +519,6 @@ describe("main()", () => {
 
       expect(code).toBe(1);
       expect(ensureDaemonRunning).toHaveBeenCalledOnce();
-      expect(stderr.mock.calls[0]?.[0]).toContain("not logged in");
-      expect(stdout).not.toHaveBeenCalled();
       stdout.mockRestore();
       stderr.mockRestore();
     });
@@ -519,7 +530,9 @@ describe("main()", () => {
       delete process.env.FALCON_NO_SERVICE;
       const runAuthCommand = vi.fn(async () => 0);
       vi.doMock("./auth/index.js", () => ({ runAuthCommand }));
-      vi.doMock("./shim/onboardingPrompt.js", () => ({ maybePromptShimOptIn: vi.fn(async () => {}) }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({
+        maybePromptShimOptIn: vi.fn(async () => {}),
+      }));
       const callOrder: string[] = [];
       runAuthCommand.mockImplementation(async () => {
         callOrder.push("login");
@@ -548,7 +561,9 @@ describe("main()", () => {
     it("still reports exit 1 if the daemon fails to start after a successful `auth login`", async () => {
       delete process.env.FALCON_NO_SERVICE;
       vi.doMock("./auth/index.js", () => ({ runAuthCommand: vi.fn(async () => 0) }));
-      vi.doMock("./shim/onboardingPrompt.js", () => ({ maybePromptShimOptIn: vi.fn(async () => {}) }));
+      vi.doMock("./shim/onboardingPrompt.js", () => ({
+        maybePromptShimOptIn: vi.fn(async () => {}),
+      }));
       vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
         createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
         ensureDaemonRunning: vi.fn(async () => ({
@@ -570,12 +585,10 @@ describe("main()", () => {
     });
 
     it("exits 1 and never describes the start when ensureDaemonRunning fails to bring up the daemon", async () => {
-      // `codex` here (not `claude`) for the same reason as the sibling test above:
-      // `claude` now checks auth *before* the daemon (first-run UX,
-      // `ensureLoggedIn()`), so an unauthenticated `claude` invocation would fail on
-      // that check first and never exercise the daemon-failure path this test is
-      // actually about.
+      // Auth runs before the daemon for every provider now (AX-1.1), so this has to
+      // get past it to exercise the daemon-failure path it's actually about.
       delete process.env.FALCON_NO_SERVICE;
+      mockSignedIn();
       vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
         createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
         ensureDaemonRunning: vi.fn(async () => ({
@@ -623,14 +636,23 @@ describe("main()", () => {
   describe("auto-update wiring (maybeTriggerAutoUpdate)", () => {
     afterEach(() => {
       vi.doUnmock("./update/autoUpdateTrigger.js");
+      vi.doUnmock("./auth/login.js");
     });
 
+    /** Same rationale as the daemon-wiring block's own helper — see AX-1.1 there. */
+    function mockSignedIn(): void {
+      vi.doMock("./auth/login.js", () => ({
+        ensureLoggedIn: vi.fn(async () => ({ ok: true })),
+        runAuthLogin: vi.fn(async () => 0),
+      }));
+    }
+
     it("calls maybeTriggerAutoUpdate alongside the daemon auto-start check", async () => {
-      // `codex`: the auto-update side effect fires from `ensureDaemon()`
-      // regardless of the (now credential-requiring) command that follows —
-      // with an empty temp home the codex command then exits 1 (not logged
-      // in), which is fine; we only assert the update trigger ran.
+      // The auto-update side effect fires from `ensureDaemon()` regardless of the
+      // command that follows — the codex command then exits 1 against an empty temp
+      // home, which is fine; we only assert the update trigger ran.
       delete process.env.FALCON_NO_UPDATE;
+      mockSignedIn();
       const maybeTriggerAutoUpdate = vi.fn(async () => {});
       vi.doMock("./update/autoUpdateTrigger.js", () => ({ maybeTriggerAutoUpdate }));
       const main = await importMain();
@@ -646,11 +668,10 @@ describe("main()", () => {
     });
 
     it("never throws main() even if maybeTriggerAutoUpdate rejects unexpectedly", async () => {
-      // `codex`, not `claude` — see the sibling test above's comment: `claude` now
-      // checks auth before the daemon (and thus before `maybeTriggerAutoUpdate`, which
-      // lives inside `ensureDaemon()`), so an unauthenticated `claude` run would never
-      // reach this rejection at all.
+      // Auth runs before `ensureDaemon()` (and thus before `maybeTriggerAutoUpdate`,
+      // which lives inside it), so this has to get past auth to reach the rejection.
       delete process.env.FALCON_NO_UPDATE;
+      mockSignedIn();
       vi.doMock("./update/autoUpdateTrigger.js", () => ({
         maybeTriggerAutoUpdate: vi.fn(async () => {
           throw new Error("boom");

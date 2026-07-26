@@ -321,4 +321,62 @@ describe("sessionRegistry", () => {
 
     expect(registry.hasLiveSessions()).toBe(false);
   });
+
+  describe("isProviderSessionManaged", () => {
+    it("is false for a provider session id this registry has never heard of", () => {
+      const registry = createSessionRegistry({ homeDir });
+      expect(registry.isProviderSessionManaged("provider-abc")).toBe(false);
+    });
+
+    it("is true once a live tracked session's metadata carries that providerSessionId (the re-notify once Claude Code reports it)", () => {
+      const registry = createSessionRegistry({ homeDir });
+      registry.onSessionStarted(
+        "sess_1",
+        { title: "x", path: "/tmp/w", providerSessionId: "provider-abc" },
+        ENCRYPTION,
+        4242,
+      );
+
+      expect(registry.isProviderSessionManaged("provider-abc")).toBe(true);
+      expect(registry.isProviderSessionManaged("provider-other")).toBe(false);
+    });
+
+    it("is false while metadata has not yet been updated with the provider session id (the window before the SessionStart hook fires)", () => {
+      const registry = createSessionRegistry({ homeDir });
+      registry.onSessionStarted("sess_1", { title: "x", path: "/tmp/w" }, ENCRYPTION, 4242);
+
+      expect(registry.isProviderSessionManaged("provider-abc")).toBe(false);
+    });
+
+    it("stays true after the session ends — a durably persisted (resumable) record still counts as managed", () => {
+      const registry = createSessionRegistry({ homeDir });
+      registry.onSessionStarted(
+        "sess_1",
+        { title: "x", path: "/tmp/w", providerSessionId: "provider-abc" },
+        ENCRYPTION,
+        4242,
+      );
+
+      registry.pruneDeadSessions(() => false);
+
+      expect(registry.hasLiveSessions()).toBe(false);
+      expect(registry.isProviderSessionManaged("provider-abc")).toBe(true);
+    });
+
+    it("survives a daemon restart via restore() from sessions.json", async () => {
+      const first = createSessionRegistry({ homeDir });
+      first.onSessionStarted(
+        "sess_1",
+        { title: "x", path: "/tmp/w", providerSessionId: "provider-abc" },
+        ENCRYPTION,
+        4242,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      const second = createSessionRegistry({ homeDir });
+      await second.restore();
+
+      expect(second.isProviderSessionManaged("provider-abc")).toBe(true);
+    });
+  });
 });

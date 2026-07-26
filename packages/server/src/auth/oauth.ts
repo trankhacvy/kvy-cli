@@ -7,13 +7,8 @@ import { env } from "../config.js";
  * The schema column itself has no enum constraint, but every writer (only
  * `buildOAuthRoutes`, see routes/oauth.ts) goes through this module, so this union is
  * the effective source of truth.
- *
- * "dev" is not a real provider — it's the `FALCON_DEV_AUTH` local-testing bypass
- * (see `verifyDevProof` below), included in this union so it flows through the
- * same register route / identity row shape as a real provider rather than needing
- * a parallel code path.
  */
-export type OAuthProvider = "google" | "github" | "dev";
+export type OAuthProvider = "google" | "github";
 
 export interface OAuthIdentity {
   provider: OAuthProvider;
@@ -218,20 +213,6 @@ export const defaultGithubCodeExchanger: GithubCodeExchanger = {
 };
 
 /**
- * The `FALCON_DEV_AUTH` local-testing bypass: always succeeds, binding whatever
- * `proof` string the caller sent as the subject (the web app sends a fixed literal —
- * see `signin/page.tsx` — there being nothing real to prove). Fail-closed when the
- * flag is off: returns `null`, exactly like an unconfigured Google/GitHub provider
- * above, so a server that never opted in rejects every "dev" proof rather than
- * silently ignoring the provider name. `config.ts`'s `.refine()` additionally makes
- * enabling this in `NODE_ENV=production` a boot-time error, not just a runtime no-op.
- */
-function verifyDevProof(proof: string): OAuthIdentity | null {
-  if (!env.FALCON_DEV_AUTH) return null;
-  return { provider: "dev", subject: proof || "dev", email: null, emailVerified: false };
-}
-
-/**
  * Verifies an `oauthProof` for a given provider. The interface (rather than calling
  * `verifyGoogleIdToken`/`verifyGithubAccessToken` directly from the route) exists so
  * `buildRegisterRoute` can be tested with a fake verifier that never touches the
@@ -245,7 +226,6 @@ export interface OAuthVerifier {
 export const defaultOAuthVerifier: OAuthVerifier = {
   verify(provider, proof) {
     if (provider === "google") return verifyGoogleIdToken(proof);
-    if (provider === "github") return verifyGithubAccessToken(proof);
-    return Promise.resolve(verifyDevProof(proof));
+    return verifyGithubAccessToken(proof);
   },
 };

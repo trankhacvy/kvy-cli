@@ -33,8 +33,8 @@ import { createBrowserVisibilitySource } from "./visibility.js";
 // access-token boundary the same way a fresh page load would, without ever forcing
 // a visible logout.
 async function renewAccessToken(): Promise<string | null> {
-  const refreshed = await silentRefresh();
-  return refreshed ? getToken() : null;
+  const result = await silentRefresh();
+  return result === "ok" ? getToken() : null;
 }
 
 export const apiSocket = createApiSocket(

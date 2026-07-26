@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { appendFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -251,4 +251,61 @@ describe("startTranscriptIndexer", () => {
     await sleep(1700);
     expect(upserts.some((u) => u.providerRef === "sess-late")).toBe(true);
   }, 10_000);
+
+  // auth-ux-overhaul-fix-plan.md Fix 6: a brand-new account's first `falcon claude` was
+  // uploading the machine's ENTIRE prior Claude Code history for that folder as unmanaged
+  // sessions. Gate on the workspace's `registeredAt` (with a grace window for the "just
+  // exited a plain `claude` session, then reached for Falcon" case falcon-prd.md:221
+  // describes) so only transcripts touched since (or shortly before) registration surface.
+  describe("registeredAt gating (Fix 6)", () => {
+    it("upserts nothing for a transcript untouched since long before registeredAt (pre-Falcon history)", async () => {
+      await writeFile(join(projectDir, "sess-history.jsonl"), userLine("months-old chat"));
+      // Registered two hours "from now" relative to the file's real write time — well
+      // outside the one-hour first-registration grace window.
+      const registeredAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+
+      const upserts: UpsertUnmanagedSessionParams[] = [];
+      handle = startTranscriptIndexer(
+        baseDeps({
+          listWorkspaces: async () => [{ ...baseWorkspace(), registeredAt }],
+          upsert: async (params) => (upserts.push(params), true),
+        }),
+      );
+
+      await sleep(300);
+      expect(upserts).toHaveLength(0);
+    });
+
+    it("upserts once the transcript's mtime moves inside [registeredAt - grace, ∞)", async () => {
+      const file = join(projectDir, "sess-resumed.jsonl");
+      await writeFile(file, userLine("resumed session"));
+      const registeredAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+      // Inside the grace window: registeredAt minus 30 minutes, under the 60-minute cap.
+      const freshMtime = new Date(Date.parse(registeredAt) - 30 * 60 * 1000);
+      await utimes(file, freshMtime, freshMtime);
+
+      const upserts: UpsertUnmanagedSessionParams[] = [];
+      handle = startTranscriptIndexer(
+        baseDeps({
+          listWorkspaces: async () => [{ ...baseWorkspace(), registeredAt }],
+          upsert: async (params) => (upserts.push(params), true),
+        }),
+      );
+
+      await sleep(300);
+      expect(upserts).toHaveLength(1);
+      expect(upserts[0]?.providerRef).toBe("sess-resumed");
+    });
+
+    it("an absent registeredAt indexes everything (existing tests' fixtures stay valid)", async () => {
+      await writeFile(join(projectDir, "sess-no-registered-at.jsonl"), userLine("anything"));
+      const upserts: UpsertUnmanagedSessionParams[] = [];
+      handle = startTranscriptIndexer(
+        baseDeps({ upsert: async (params) => (upserts.push(params), true) }),
+      );
+
+      await sleep(300);
+      expect(upserts).toHaveLength(1);
+    });
+  });
 });

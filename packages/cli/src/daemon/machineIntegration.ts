@@ -209,7 +209,11 @@ export interface MachineIntegrationDeps {
    * spawn-directory-dedup"), the same registry handle `resumeSessionHandler`
    * already used `findResumable`/`stopSession`/`trackSpawned` from.
    */
-  registry: ResumeSessionRegistry & { getSessions(): TrackedSession[] };
+  registry: ResumeSessionRegistry & {
+    getSessions(): TrackedSession[];
+    /** Backs the transcript indexer's `isManaged` hook below — see `sessionRegistry.ts`'s own doc comment. */
+    isProviderSessionManaged(providerSessionId: string): boolean;
+  };
   awaiter: SpawnAwaiter;
   /** Test-only escape hatch: extra overrides merged into `spawnEngine.ts`'s deps (e.g. a fake process launcher). Production leaves this unset — `spawnEngine.ts`'s own real defaults (tmux/detached launch) apply. */
   spawnEngineOverrides?: Partial<SpawnEngineDeps>;
@@ -603,7 +607,15 @@ export async function startMachineIntegration(
         listWorkspaces: deps.listWorkspaces,
         upsert: (params) => upsertUnmanagedSession(unmanagedSessionDeps, params),
       },
-      { logger: deps.logger },
+      {
+        logger: deps.logger,
+        // Real lineage lookup (module header's "isManaged" seam, previously
+        // left at the permanent "nothing is managed yet" default): a
+        // transcript whose provider session id this daemon already tracks —
+        // live or durably persisted — is this session's OWN backing file,
+        // not an independent unmanaged one, and must never be dup-listed.
+        isManaged: (providerRef) => deps.registry.isProviderSessionManaged(providerRef),
+      },
     ),
   );
 

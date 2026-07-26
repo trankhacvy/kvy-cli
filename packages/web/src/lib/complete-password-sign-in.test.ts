@@ -2,19 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CryptoBridgeClient } from "@/crypto";
 import { createMemoryStorage } from "./__tests__/test-storage.js";
 
-const {
-  passwordRegisterMock,
-  passwordLoginMock,
-  keysChallengeMock,
-  keysBindMock,
-  markCryptoBridgeUnlockedMock,
-} = vi.hoisted(() => ({
-  passwordRegisterMock: vi.fn(),
-  passwordLoginMock: vi.fn(),
-  keysChallengeMock: vi.fn(),
-  keysBindMock: vi.fn(),
-  markCryptoBridgeUnlockedMock: vi.fn(),
-}));
+const { passwordRegisterMock, passwordLoginMock, keysChallengeMock, keysBindMock } = vi.hoisted(
+  () => ({
+    passwordRegisterMock: vi.fn(),
+    passwordLoginMock: vi.fn(),
+    keysChallengeMock: vi.fn(),
+    keysBindMock: vi.fn(),
+  }),
+);
 
 vi.mock("./api.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api.js")>();
@@ -26,10 +21,6 @@ vi.mock("./api.js", async (importOriginal) => {
     keysBind: keysBindMock,
   };
 });
-
-vi.mock("./use-crypto-bridge.js", () => ({
-  markCryptoBridgeUnlocked: markCryptoBridgeUnlockedMock,
-}));
 
 const { ApiError } = await import("./api.js");
 const { completePasswordSignIn, completePasswordSignUp, rotateKeyEpoch, rotateKeyEpochOAuth } =
@@ -52,13 +43,18 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
     init: async () => {
       identity = { signPubKey: "sign-pub", contentPubKey: "content-pub" };
     },
-    unlock: notImplemented,
     setSessionKey: notImplemented,
     seal: notImplemented,
     open: notImplemented,
     sealBlob: notImplemented,
     openBlob: notImplemented,
     clear: notImplemented,
+    describeStorage: notImplemented,
+    ensureLoaded: notImplemented,
+    migrateFromPin: notImplemented,
+    beginKeyRequest: notImplemented,
+    acceptKeyResponse: notImplemented,
+    sealKeysForPeer: notImplemented,
     getIdentity: async () => identity,
     sealForPeer: notImplemented,
     bindKeysProof: async () => ({
@@ -78,7 +74,6 @@ beforeEach(() => {
   passwordLoginMock.mockReset();
   keysChallengeMock.mockReset().mockResolvedValue({ nonce: "n1" });
   keysBindMock.mockReset().mockResolvedValue({ success: true, keyEpoch: 1 });
-  markCryptoBridgeUnlockedMock.mockReset();
 });
 
 afterEach(() => {
@@ -103,14 +98,15 @@ describe("completePasswordSignUp", () => {
     passwordRegisterMock.mockResolvedValue({ success: true, token, refreshToken: "rt1" });
     const bridge = fakeBridge();
 
-    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
+    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", {
+      mode: "device",
+    });
 
-    expect(outcome).toEqual({ kind: "ok", nextUrl: "/" });
+    expect(outcome).toEqual({ kind: "ok", nextUrl: "/dashboard/" });
     expect(keysBindMock).toHaveBeenCalledWith(
       token,
       expect.objectContaining({ signPubKey: "sign-pub", contentPubKey: "content-pub" }),
     );
-    expect(markCryptoBridgeUnlockedMock).toHaveBeenCalled();
   });
 
   it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
@@ -120,34 +116,54 @@ describe("completePasswordSignUp", () => {
     passwordRegisterMock.mockResolvedValue({ success: true, token, refreshToken: "rt1" });
     const bridge = fakeBridge();
 
-    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
+    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", {
+      mode: "device",
+    });
 
     expect(outcome).toEqual({ kind: "ok", nextUrl: "/pair/#eph-pub-base64==" });
   });
 
-  it("reuses an existing identity instead of generating a second one", async () => {
+  // auth-ux-overhaul-fix-plan.md Fix 4, Part A: a genuinely new account (this function only
+  // ever runs for one — the already-registered case is the blank-token branch below) can
+  // never legitimately already have key material on this browser, so the old reuse branch
+  // is gone. A browser holding a DIFFERENT account's leftover keys must still provision
+  // fresh, account-scoped ones rather than silently reusing (and later trying to bind) the
+  // other account's public key.
+  it("always provisions fresh key material for a new account, even when this browser already holds a DIFFERENT account's identity", async () => {
     const token = fakeAccessToken("acct_1");
     passwordRegisterMock.mockResolvedValue({ success: true, token, refreshToken: "rt1" });
-    const initSpy = vi.fn();
+    const initSpy = vi.fn(async () => {});
     const bridge = fakeBridge({
       init: initSpy,
-      getIdentity: async () => ({ signPubKey: "existing", contentPubKey: "existing-content" }),
+      // A foreign identity already sitting in this browser's key store.
+      getIdentity: async () => ({ signPubKey: "foreign-sign", contentPubKey: "foreign-content" }),
     });
 
-    await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
+    await completePasswordSignUp(bridge, "a@b.com", "password123", { mode: "device" });
 
-    expect(initSpy).not.toHaveBeenCalled();
+    expect(initSpy).toHaveBeenCalledOnce();
+    expect(initSpy).toHaveBeenCalledWith(
+      expect.any(Uint8Array),
+      "rt1",
+      "acct_1",
+      expect.objectContaining({ mode: "device" }),
+    );
+    expect(keysBindMock).toHaveBeenCalledWith(
+      token,
+      expect.objectContaining({ signPubKey: "sign-pub", contentPubKey: "content-pub" }),
+    );
   });
 
   it("reports existing-account (not a crash) on password.ts's §5.2 no-enumeration blank-token response", async () => {
     passwordRegisterMock.mockResolvedValue({ success: true, token: "", refreshToken: "" });
     const bridge = fakeBridge();
 
-    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", "123456");
+    const outcome = await completePasswordSignUp(bridge, "a@b.com", "password123", {
+      mode: "device",
+    });
 
     expect(outcome).toEqual({ kind: "existing-account" });
     expect(keysBindMock).not.toHaveBeenCalled();
-    expect(markCryptoBridgeUnlockedMock).not.toHaveBeenCalled();
   });
 });
 
@@ -169,7 +185,7 @@ describe("completePasswordSignIn", () => {
 
     const outcome = await completePasswordSignIn("a@b.com", "password123");
 
-    expect(outcome).toEqual({ nextUrl: "/", refreshToken: "rt1" });
+    expect(outcome).toEqual({ nextUrl: "/dashboard/", refreshToken: "rt1" });
   });
 
   it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
@@ -200,9 +216,11 @@ describe("rotateKeyEpoch", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", "654321");
+    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", {
+      mode: "device",
+    });
 
-    expect(outcome).toEqual({ kind: "ok", nextUrl: "/" });
+    expect(outcome).toEqual({ kind: "ok", nextUrl: "/dashboard/" });
     expect(keysBindMock).toHaveBeenCalledWith(
       token,
       expect.objectContaining({
@@ -210,7 +228,6 @@ describe("rotateKeyEpoch", () => {
         stepUpProof: { kind: "password", password: "correct-password" },
       }),
     );
-    expect(markCryptoBridgeUnlockedMock).toHaveBeenCalled();
   });
 
   it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
@@ -219,7 +236,9 @@ describe("rotateKeyEpoch", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", "654321");
+    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", {
+      mode: "device",
+    });
 
     expect(outcome).toEqual({ kind: "ok", nextUrl: "/pair/#eph-pub-base64==" });
   });
@@ -229,7 +248,9 @@ describe("rotateKeyEpoch", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "wrong-password", "654321");
+    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "wrong-password", {
+      mode: "device",
+    });
 
     expect(outcome.kind).toBe("wrong-password");
   });
@@ -241,7 +262,9 @@ describe("rotateKeyEpoch", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", "654321");
+    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", {
+      mode: "device",
+    });
 
     expect(outcome.kind).toBe("other-devices-online");
   });
@@ -264,12 +287,18 @@ describe("rotateKeyEpochOAuth", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpochOAuth(bridge, token, "rt1", "654321", {
-      provider: "google",
-      oauthProof: "id-token-1",
-    });
+    const outcome = await rotateKeyEpochOAuth(
+      bridge,
+      token,
+      "rt1",
+      { mode: "device" },
+      {
+        provider: "google",
+        oauthProof: "id-token-1",
+      },
+    );
 
-    expect(outcome).toEqual({ kind: "ok", nextUrl: "/" });
+    expect(outcome).toEqual({ kind: "ok", nextUrl: "/dashboard/" });
     expect(keysBindMock).toHaveBeenCalledWith(
       token,
       expect.objectContaining({
@@ -277,7 +306,6 @@ describe("rotateKeyEpochOAuth", () => {
         stepUpProof: { kind: "oauth", provider: "google", oauthProof: "id-token-1" },
       }),
     );
-    expect(markCryptoBridgeUnlockedMock).toHaveBeenCalled();
   });
 
   it("resolves nextUrl from a pending /pair stash, same as completeOAuthSignIn", async () => {
@@ -286,10 +314,16 @@ describe("rotateKeyEpochOAuth", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpochOAuth(bridge, token, "rt1", "654321", {
-      provider: "github",
-      oauthProof: "gh-token-1",
-    });
+    const outcome = await rotateKeyEpochOAuth(
+      bridge,
+      token,
+      "rt1",
+      { mode: "device" },
+      {
+        provider: "github",
+        oauthProof: "gh-token-1",
+      },
+    );
 
     expect(outcome).toEqual({ kind: "ok", nextUrl: "/pair/#eph-pub-base64==" });
   });
@@ -299,10 +333,16 @@ describe("rotateKeyEpochOAuth", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpochOAuth(bridge, token, "rt1", "654321", {
-      provider: "google",
-      oauthProof: "id-token-1",
-    });
+    const outcome = await rotateKeyEpochOAuth(
+      bridge,
+      token,
+      "rt1",
+      { mode: "device" },
+      {
+        provider: "google",
+        oauthProof: "id-token-1",
+      },
+    );
 
     expect(outcome.kind).toBe("identity-mismatch");
   });
@@ -314,10 +354,16 @@ describe("rotateKeyEpochOAuth", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpochOAuth(bridge, token, "rt1", "654321", {
-      provider: "google",
-      oauthProof: "id-token-1",
-    });
+    const outcome = await rotateKeyEpochOAuth(
+      bridge,
+      token,
+      "rt1",
+      { mode: "device" },
+      {
+        provider: "google",
+        oauthProof: "id-token-1",
+      },
+    );
 
     expect(outcome.kind).toBe("other-devices-online");
   });
@@ -331,10 +377,16 @@ describe("rotateKeyEpochOAuth", () => {
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
-    const outcome = await rotateKeyEpochOAuth(bridge, token, "rt1", "654321", {
-      provider: "google",
-      oauthProof: "id-token-1",
-    });
+    const outcome = await rotateKeyEpochOAuth(
+      bridge,
+      token,
+      "rt1",
+      { mode: "device" },
+      {
+        provider: "google",
+        oauthProof: "id-token-1",
+      },
+    );
 
     expect(outcome.kind).toBe("error");
   });

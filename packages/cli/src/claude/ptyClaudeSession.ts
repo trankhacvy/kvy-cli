@@ -345,6 +345,22 @@ export interface PtyClaudeSessionHandle {
 }
 
 /**
+ * A desktop notification via OSC 9, plus a BEL. Deliberately NOT a screen write: the
+ * provider's TUI owns the framebuffer while a session runs, and painting into it would
+ * corrupt its rendering exactly the way `logger.ts` exists to prevent
+ * (auth-ux-overhaul-fix-plan.md Fix 7).
+ *
+ * HONEST SCOPE: OSC 9 is implemented by iTerm2, WezTerm, kitty and Ghostty, and ignored by
+ * terminals that don't support it. This raises the chance the user notices in time; it does
+ * not guarantee it. The guarantee is `start.ts`'s post-session review, which always runs.
+ */
+export function notifyTerminal(write: (text: string) => void, text: string): void {
+  // ESC ] 9 ; <text> BEL — OSC 9, BEL-terminated. Non-rendering: no cursor movement and
+  // no framebuffer write, so there is nothing for the provider TUI to repaint over.
+  write(`\x1b]9;${text}\x07`);
+}
+
+/**
  * Start one PTY-attached Claude session. Returns immediately with a handle;
  * spawn/setup happens asynchronously, and `injectMessage` calls made before
  * setup finishes are queued by the `InjectionController` until the TUI is

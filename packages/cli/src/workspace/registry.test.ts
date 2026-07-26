@@ -44,6 +44,12 @@ describe("registerWorkspace", () => {
     expect(entry.displayName).toBe("My Repo");
   });
 
+  // Load-bearing for auth-ux-overhaul-fix-plan.md Fix 6: `transcriptIndexer.ts`'s watch-window
+  // gate trusts `registeredAt` as a stable "first registration" timestamp to filter
+  // pre-Falcon history against. If re-registration ever bumped it, every already-registered
+  // workspace's pre-existing transcripts would become eligible again on the next
+  // `falcon claude` in that folder — reopening the exact over-upload bug the gate exists to
+  // close.
   it("is idempotent: re-registering the same directory doesn't duplicate or change registeredAt", async () => {
     const first = await registerWorkspace(workspaceDir, {}, { homeDir });
     const second = await registerWorkspace(workspaceDir, {}, { homeDir });
@@ -53,6 +59,7 @@ describe("registerWorkspace", () => {
     expect(all).toHaveLength(1);
   });
 
+  // Load-bearing for Fix 6 — see the comment above.
   it("re-registering with a new displayName updates it without touching registeredAt", async () => {
     const first = await registerWorkspace(workspaceDir, { displayName: "old" }, { homeDir });
     const second = await registerWorkspace(workspaceDir, { displayName: "new" }, { homeDir });

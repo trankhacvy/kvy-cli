@@ -28,5 +28,5 @@ export function notificationLabel(kind: LifecycleKind): string {
  */
 export function notificationDeepLink(sessionId: string): string | null {
   if (!env.PUBLIC_WEB_ORIGIN) return null;
-  return new URL(`/session/${sessionId}/`, env.PUBLIC_WEB_ORIGIN).toString();
+  return new URL(`/dashboard/session/${sessionId}/`, env.PUBLIC_WEB_ORIGIN).toString();
 }

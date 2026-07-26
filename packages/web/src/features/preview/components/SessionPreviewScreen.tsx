@@ -6,7 +6,7 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { PreviewPanel } from "./PreviewPanel";
 
 /**
- * The Preview tab's session-scoped entry point (`/session/[id]/preview/`) —
+ * The Preview tab's session-scoped entry point (`/dashboard/session/[id]/preview/`) —
  * verbatim structural copy of `features/git-diff/components/
  * SessionGitScreen.tsx` / `features/github-checks/components/
  * SessionChecksScreen.tsx`: resolves the session's real (plaintext)
@@ -26,7 +26,7 @@ export function SessionPreviewScreen({ sessionId }: { sessionId: string }) {
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <p className="text-sm font-medium">Session {sessionId} — Preview</p>
         <Button asChild variant="outline" size="sm">
-          <Link href={`/session/${sessionId}/`}>Back to session</Link>
+          <Link href={`/dashboard/session/${sessionId}/`}>Back to session</Link>
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">

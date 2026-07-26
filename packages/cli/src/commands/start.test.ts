@@ -20,12 +20,13 @@ import type { DaemonState } from "../daemon/state.js";
 import type { ClaudeCliLocation } from "../provider/claudeCliLocator.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
-import type { SessionClientHandle } from "../session/sessionClient.js";
+import type { SessionClientDeps, SessionClientHandle } from "../session/sessionClient.js";
 import type {
   acquireSessionLock as acquireSessionLockType,
   SessionLockHandle,
 } from "../session/sessionLock.js";
 import type { registerWorkspace as registerWorkspaceType } from "../workspace/registry.js";
+import type { runKeysApproveCommand as runKeysApproveCommandType } from "./keysApprove.js";
 import { type OutboxLike, runStartClaudeCommand, type StartClaudeCommandDeps } from "./start.js";
 
 /** Captures every envelope batch handed to `outbox.enqueue()` — stands in for
@@ -250,7 +251,7 @@ describe("runStartClaudeCommand — preflight", () => {
       }),
     );
     expect(code).toBe(1);
-    expect(stderr.join("")).toContain("reduced-custody");
+    expect(stderr.join("")).toContain("can't unlock your sessions");
   });
 
   it("times out honestly when the daemon never persists a machineId", async () => {
@@ -268,7 +269,7 @@ describe("runStartClaudeCommand — preflight", () => {
       }),
     );
     expect(code).toBe(1);
-    expect(stderr.join("")).toContain("hasn't finished registering");
+    expect(stderr.join("")).toContain("hasn't finished connecting");
   });
 
   it("surfaces a bootstrapSession failure as an honest error instead of throwing", async () => {
@@ -683,6 +684,48 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
     onSessionId?.("11111111-2222-3333-4444-555555555555");
     expect(notifyProviderSessionId).toHaveBeenCalledExactlyOnceWith(
+      "11111111-2222-3333-4444-555555555555",
+    );
+  });
+
+  it("re-notifies the daemon with the provider session id once the SessionStart hook reports one (docs/auth-ux-post-verification-fixes.md — own-transcript duplicate-unmanaged fix)", async () => {
+    let onSessionId: ((id: string) => void) | undefined;
+    const installRemotePermissionHook = (async (opts: { onSessionId?: (id: string) => void }) => {
+      onSessionId = opts.onSessionId;
+      return fakeRemotePermissionHook();
+    }) as unknown as typeof installRemotePermissionHookType;
+    const notifyDaemonSessionStarted = vi.fn(async () => ({
+      type: "ok" as const,
+    }));
+
+    await runStartClaudeCommand(
+      baseDeps({
+        installRemotePermissionHook,
+        notifyDaemonSessionStarted:
+          notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+      }),
+    );
+    // The initial self-report (before any provider session id is known) —
+    // this is the ONLY call so far, and it must not carry one.
+    expect(notifyDaemonSessionStarted).toHaveBeenCalledOnce();
+    const [, firstCallParams] = notifyDaemonSessionStarted.mock.calls[0] as unknown as [
+      unknown,
+      { metadata?: { providerSessionId?: string | null } },
+    ];
+    expect(firstCallParams.metadata?.providerSessionId).toBeUndefined();
+
+    onSessionId?.("11111111-2222-3333-4444-555555555555");
+    // The re-notify is fire-and-forget — let its promise chain settle.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(notifyDaemonSessionStarted).toHaveBeenCalledTimes(2);
+    const [, secondCallParams] = notifyDaemonSessionStarted.mock.calls[1] as unknown as [
+      unknown,
+      { sessionId: string; metadata?: { providerSessionId?: string | null } },
+    ];
+    expect(secondCallParams.sessionId).toBe("sess_1");
+    expect(secondCallParams.metadata?.providerSessionId).toBe(
       "11111111-2222-3333-4444-555555555555",
     );
   });
@@ -2401,5 +2444,97 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
     expect(code).toBe(1);
     expect(loop).not.toHaveBeenCalled();
     expect(stderr.join("")).toContain("sess_existing");
+  });
+});
+
+// auth-ux-overhaul-fix-plan.md Fix 7: a key request arriving mid-session was previously
+// only ever logged to a file nobody tails. The exit path must print a durable line always,
+// and — with a human actually present — run the approve review itself rather than telling
+// the user to go run a second command (principle 1).
+describe("runStartClaudeCommand — key-request review on exit (Fix 7)", () => {
+  const originalStdinIsTTY = process.stdin.isTTY;
+
+  afterEach(() => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: originalStdinIsTTY,
+      configurable: true,
+    });
+  });
+
+  function withStdinTTY(value: boolean): void {
+    Object.defineProperty(process.stdin, "isTTY", { value, configurable: true });
+  }
+
+  /** Captures the `onKeyRequest` callback `start.ts` wires into the session client, and
+   * fires it immediately — simulating a key request that arrived at some point mid-session,
+   * without needing to race the fake PTY's `done` promise. */
+  function startSessionClientThatRaisesAKeyRequest(
+    label: string | null = "Chrome on Mac",
+  ): ReturnType<typeof vi.fn> {
+    return vi.fn((clientDeps: SessionClientDeps) => {
+      clientDeps.onKeyRequest?.({ label });
+      return fakeSessionClientHandle();
+    });
+  }
+
+  it("prints the durable line and runs the approve review inline when a human is present (stdin.isTTY)", async () => {
+    withStdinTTY(true);
+    const startSessionClient = startSessionClientThatRaisesAKeyRequest("Chrome on Mac");
+    const runKeysApproveCommand = vi.fn(
+      async () => 0,
+    ) as unknown as typeof runKeysApproveCommandType;
+    const written: string[] = [];
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        startSessionClient,
+        runKeysApproveCommand,
+        write: (text) => written.push(text),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(written.join("")).toContain("A device asked for a copy of your keys");
+    expect(runKeysApproveCommand).toHaveBeenCalledOnce();
+  });
+
+  it("prints the durable line but does NOT try to open a readline when there's no terminal (stdin.isTTY false)", async () => {
+    withStdinTTY(false);
+    const startSessionClient = startSessionClientThatRaisesAKeyRequest("Chrome on Mac");
+    const runKeysApproveCommand = vi.fn(
+      async () => 0,
+    ) as unknown as typeof runKeysApproveCommandType;
+    const written: string[] = [];
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        startSessionClient,
+        runKeysApproveCommand,
+        write: (text) => written.push(text),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(written.join("")).toContain("A device asked for a copy of your keys");
+    expect(runKeysApproveCommand).not.toHaveBeenCalled();
+  });
+
+  it("never runs the review, and prints nothing extra, when no key request arrived", async () => {
+    withStdinTTY(true);
+    const runKeysApproveCommand = vi.fn(
+      async () => 0,
+    ) as unknown as typeof runKeysApproveCommandType;
+    const written: string[] = [];
+
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        runKeysApproveCommand,
+        write: (text) => written.push(text),
+      }),
+    );
+
+    expect(code).toBe(0);
+    expect(written.join("")).not.toContain("A device asked for a copy of your keys");
+    expect(runKeysApproveCommand).not.toHaveBeenCalled();
   });
 });

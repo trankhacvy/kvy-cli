@@ -48,6 +48,10 @@ export function createTranscriptIndexerWorkspaceLister(
 ): () => Promise<RegisteredWorkspace[]> {
   return async () => {
     const entries = await listWorkspaces(options);
-    return entries.map((entry) => ({ workspaceId: entry.path, path: entry.path }));
+    return entries.map((entry) => ({
+      workspaceId: entry.path,
+      path: entry.path,
+      registeredAt: entry.registeredAt,
+    }));
   };
 }

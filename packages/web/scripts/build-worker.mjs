@@ -8,6 +8,7 @@
 // sidesteps it entirely — no dynamic chunk URL to get wrong, just a fixed
 // file any static host serves the same way factory.ts always expected.
 import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -60,9 +61,36 @@ await build({
   // so the blanket `process.env` fallback keeps any of those from throwing
   // a ReferenceError at module-load time; the specific API_URL define below
   // takes precedence over it for that one access.
+  // `?? ""` here used to DEFEAT `lib/config.ts`'s own `?? "http://localhost:3005"` fallback:
+  // `??` triggers on undefined, not on an empty string, so an unset var baked API_URL as ""
+  // and every worker-side fetch became a same-origin relative URL against the WEB origin.
+  // That is the whole of auth-ux-overhaul-e2e-results.md E2E-4.1/6.1 — a reload signed the
+  // user out because the refresh call went to :3000 and 404'd. Emit the define only when the
+  // var is actually set; otherwise let `process.env` -> `{}` yield `undefined` and config.ts
+  // apply its own default, exactly as the main bundle does.
   define: {
     "process.env": "{}",
-    "process.env.NEXT_PUBLIC_API_URL": JSON.stringify(process.env.NEXT_PUBLIC_API_URL ?? ""),
+    ...(process.env.NEXT_PUBLIC_API_URL
+      ? {
+          "process.env.NEXT_PUBLIC_API_URL": JSON.stringify(process.env.NEXT_PUBLIC_API_URL),
+        }
+      : {}),
   },
   plugins: [localImportPlugin],
 });
+
+// Fail the build rather than ship a worker that silently talks to the wrong origin. The
+// bundle is minified and the URL is concatenated at runtime (`fetch(`${API_URL}/v1/auth/…`)`),
+// so don't pattern-match the final URL — assert the exact base string this build should have
+// inlined is present verbatim.
+const expectedBase = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3005").replace(
+  /\/+$/,
+  "",
+);
+const emitted = await readFile(path.join(root, "public/crypto-worker.js"), "utf8");
+if (!emitted.includes(JSON.stringify(expectedBase))) {
+  throw new Error(
+    `build-worker: expected the bundle to inline ${expectedBase} as its API base — ` +
+      "check NEXT_PUBLIC_API_URL",
+  );
+}

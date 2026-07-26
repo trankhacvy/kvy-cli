@@ -37,8 +37,8 @@ describe("reset-keys/page.tsx", () => {
     expect(pageSource).toContain("if (!bridge) return");
   });
 
-  it("offers pairing as primary and reset as a demoted, confirm-gated secondary action", () => {
-    expect(pageSource).toContain("Pair from another device");
+  it("offers key sharing as primary and reset as a demoted, confirm-gated secondary action", () => {
+    expect(pageSource).toContain("Get my keys from another device");
     expect(pageSource).toContain("Reset keys instead");
     expect(pageSource).toContain("confirmingReset");
     expect(pageSource).toContain("Confirm with Google");
@@ -51,7 +51,7 @@ describe("reset-keys/page.tsx", () => {
   });
 
   it("passes the carried refresh token to rotateKeyEpochOAuth as a parameter — no bridge.getRefreshToken()", () => {
-    expect(pageSource).toContain("rotateKeyEpochOAuth(bridge, token, refreshToken, pin");
+    expect(pageSource).toContain("rotateKeyEpochOAuth(bridge, token, refreshToken, protection");
     expect(pageSource).not.toContain("getRefreshToken");
   });
 

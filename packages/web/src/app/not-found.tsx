@@ -16,7 +16,7 @@ export default function NotFound() {
         This page doesn't exist, or you don't have a link for it yet.
       </p>
       <Button asChild>
-        <Link href="/">Back to sessions</Link>
+        <Link href="/dashboard/">Back to sessions</Link>
       </Button>
     </main>
   );

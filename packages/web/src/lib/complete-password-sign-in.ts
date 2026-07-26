@@ -23,11 +23,10 @@
  * "other devices online" 409 interlock (`keys/bind`'s own check).
  */
 import { getRandomBytes, ready } from "@falcon/crypto/web";
-import type { CryptoBridgeClient } from "@/crypto";
+import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
 import { ApiError, keysBind, keysChallenge, passwordLogin, passwordRegister } from "./api.js";
 import { consumePendingPair } from "./pending-pair.js";
 import { setToken } from "./session.js";
-import { markCryptoBridgeUnlocked } from "./use-crypto-bridge.js";
 
 export interface PasswordSignInOutcome {
   nextUrl: string;
@@ -81,7 +80,7 @@ export async function completePasswordSignUp(
   bridge: CryptoBridgeClient,
   email: string,
   password: string,
-  pin: string,
+  protection: KeyProtection,
 ): Promise<PasswordSignUpOutcome> {
   const { token, refreshToken } = await passwordRegister({ email, password });
   if (!token || !refreshToken) {
@@ -94,32 +93,26 @@ export async function completePasswordSignUp(
   }
   setToken(token);
 
-  let identity = await bridge.getIdentity();
-  const isNewIdentity = !identity;
-  if (!identity) {
-    await ready;
-    const masterSecret = getRandomBytes(32);
-    await bridge.init(masterSecret, pin, refreshToken);
-    markCryptoBridgeUnlocked();
-    identity = await bridge.getIdentity();
-  }
+  // Reaching this line means `passwordRegister` returned a real session, which the server
+  // only does for a genuinely NEW account (the already-registered case is the blanked-token
+  // branch above). A brand-new account therefore cannot legitimately have key material on
+  // this browser — so ALWAYS provision fresh. The old `getIdentity()` reuse branch treated
+  // "some record exists" as "this account's record", which meant signing up on a browser
+  // that had ANY prior account's keys skipped `init` entirely and tried to bind the other
+  // account's public key (the server's own cross-account guard, routes/keys.ts:207, then
+  // 409s — so the user got an unexplained dead end instead of an account).
+  const accountId = decodeAccountId(token);
+  await ready;
+  const masterSecret = getRandomBytes(32);
+  await bridge.init(masterSecret, refreshToken, accountId, protection);
+  const identity = await bridge.getIdentity(accountId);
   if (!identity) {
     throw new Error("crypto bridge failed to provision an identity");
   }
-  if (!isNewIdentity) {
-    // Reusing an already-provisioned identity (this browser signed up before) — `init`
-    // above didn't run, so the fresh refresh token still needs persisting. Requires the
-    // worker to already be unlocked, same assumption the reuse branch already made to
-    // reach `bindKeysProof` below at all.
-    await bridge.setRefreshToken(refreshToken);
-  }
 
   // §6.2: bind this device's key material now that we have an authenticated session.
-  // We need the account id to sign the correct payload, but the register response
-  // doesn't carry it directly — `keys/bind`'s own nonce round trip doesn't need it
-  // client-side either; the WORKER signs accountId‖contentPubKey‖nonce, and the
-  // account id is exactly the `sub` claim of the access token we just received.
-  const accountId = decodeAccountId(token);
+  // The WORKER signs accountId‖contentPubKey‖nonce; the account id is the `sub` claim of
+  // the access token we just received.
   const { nonce } = await keysChallenge(token);
   const proof = await bridge.bindKeysProof(accountId, nonce);
   await keysBind(token, {
@@ -130,7 +123,7 @@ export async function completePasswordSignUp(
   });
 
   const pendingEphPub = consumePendingPair();
-  return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
+  return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
 }
 
 /**
@@ -148,7 +141,7 @@ export async function completePasswordSignIn(
   const { token, refreshToken } = await passwordLogin({ email, password });
   setToken(token);
   const pendingEphPub = consumePendingPair();
-  const nextUrl = pendingEphPub ? `/pair/#${pendingEphPub}` : "/";
+  const nextUrl = pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/";
   return { nextUrl, refreshToken };
 }
 
@@ -167,20 +160,22 @@ export async function rotateKeyEpoch(
   accessToken: string,
   refreshToken: string,
   stepUpPassword: string,
-  newPin: string,
+  protection: KeyProtection,
 ): Promise<RotateKeyEpochOutcome> {
   await ready;
+  const accountId = decodeAccountId(accessToken);
   const masterSecret = getRandomBytes(32);
-  await bridge.init(masterSecret, newPin, refreshToken);
-  markCryptoBridgeUnlocked();
+  await bridge.init(masterSecret, refreshToken, accountId, protection);
 
+  // Deliberately unscoped: this reads back the identity `init` just provisioned above, for
+  // THIS account, in the same call — not a "does this browser already know someone" check,
+  // so there is no foreign-record risk to guard against here.
   const identity = await bridge.getIdentity();
   if (!identity) {
     return { kind: "error", message: "Crypto bridge failed to provision new key material." };
   }
 
   try {
-    const accountId = decodeAccountId(accessToken);
     const { nonce } = await keysChallenge(accessToken);
     const proof = await bridge.bindKeysProof(accountId, nonce);
     await keysBind(accessToken, {
@@ -192,7 +187,7 @@ export async function rotateKeyEpoch(
       stepUpProof: { kind: "password", password: stepUpPassword },
     });
     const pendingEphPub = consumePendingPair();
-    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
+    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       return { kind: "wrong-password", message: "That password is incorrect." };
@@ -239,21 +234,20 @@ export async function rotateKeyEpochOAuth(
   bridge: CryptoBridgeClient,
   accessToken: string,
   refreshToken: string,
-  newPin: string,
+  protection: KeyProtection,
   step: { provider: "google" | "github"; oauthProof: string },
 ): Promise<RotateKeyEpochOAuthOutcome> {
   await ready;
+  const accountId = decodeAccountId(accessToken);
   const masterSecret = getRandomBytes(32);
-  await bridge.init(masterSecret, newPin, refreshToken);
-  markCryptoBridgeUnlocked();
+  await bridge.init(masterSecret, refreshToken, accountId, protection);
 
-  // `decodeAccountId`/`keysChallenge`/`bindKeysProof` are inside this same try (matching
-  // `rotateKeyEpoch`'s scope above) — `keysChallenge` is a network call and can throw an
-  // `ApiError` (e.g. a 401 from an already-expired access token) just like `keysBind` does;
-  // leaving it unguarded would silently strand the caller on the "rotating" phase forever
-  // with no error surfaced ("no silent failures").
+  // `keysChallenge`/`bindKeysProof` are inside this same try (matching `rotateKeyEpoch`'s
+  // scope above) — `keysChallenge` is a network call and can throw an `ApiError` (e.g. a 401
+  // from an already-expired access token) just like `keysBind` does; leaving it unguarded
+  // would silently strand the caller on the "rotating" phase forever with no error surfaced
+  // ("no silent failures").
   try {
-    const accountId = decodeAccountId(accessToken);
     const { nonce } = await keysChallenge(accessToken);
     const proof = await bridge.bindKeysProof(accountId, nonce);
     await keysBind(accessToken, {
@@ -265,7 +259,7 @@ export async function rotateKeyEpochOAuth(
       stepUpProof: { kind: "oauth", provider: step.provider, oauthProof: step.oauthProof },
     });
     const pendingEphPub = consumePendingPair();
-    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/" };
+    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
   } catch (err) {
     if (err instanceof ApiError && err.status === 401) {
       return { kind: "identity-mismatch", message: "That account doesn't match this one." };

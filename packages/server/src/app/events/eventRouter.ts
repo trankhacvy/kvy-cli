@@ -323,6 +323,15 @@ export function disconnectSession(router: EventRouter, accountId: string, sessio
  * common "just a normal connect/disconnect" case (existing socket.test.ts
  * assertions rely on this exact shape).
  */
+/**
+ * docs/auth-ux-overhaul-plan.md Phase 4: pushed to every authenticated connection of the
+ * account so a holder device can offer to approve a key request without polling. Carries
+ * no secret — only the requester's ephemeral PUBLIC key and an untrusted display label.
+ */
+export function buildKeyRequestEphemeral(ephPub: string, label: string | null): Ephemeral {
+  return { t: "key-request", ephPub, label };
+}
+
 export function buildMachinePresenceEphemeral(
   machineId: string,
   online: boolean,

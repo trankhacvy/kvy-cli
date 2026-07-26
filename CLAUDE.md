@@ -49,7 +49,11 @@ Each package builds with `pkgroll` to dual CJS/ESM + `.d.ts`, and exposes
 Drizzle ORM + Postgres. Schema lives in `packages/server/src/db/schema.ts`; every
 encrypted column uses the shared `bytea` custom type (raw ciphertext bytes, never
 decrypted server-side — design §5.3/§6.1). `DATABASE_URL` config env var, defaults to
-`postgres://falcon:falcon@localhost:5432/falcon` for local dev.
+`postgres://falcon:falcon@localhost:5432/falcon` for local dev — but this repo's
+root `.env.local` currently points it at a hosted Neon Postgres instead, so **no
+local/Docker Postgres is needed to run or test the stack**; only switch back to the
+localhost default (and start Docker for it) if `.env.local`'s `DATABASE_URL` is
+ever pointed back at `localhost`.
 
 ```bash
 pnpm --filter @falcon/server db:generate   # drizzle-kit generate — diff schema.ts, emit drizzle/*.sql
@@ -62,10 +66,11 @@ to run against an already-current database.
 
 ## Local dev stack
 
-Run the three processes locally (each in its own long-lived shell / tmux pane):
+Run the two processes locally (each in its own long-lived shell / tmux pane) —
+**no Docker needed**: `DATABASE_URL` in root `.env.local` points at a hosted Neon
+Postgres (see Database above), not a local container.
 
 ```bash
-# 0. Postgres must be up at postgres://falcon:falcon@localhost:5432/falcon (see Database above).
 pnpm --filter @falcon/server dev   # Fastify API on :3005 (tsx watch; migrates on boot)
 pnpm --filter @falcon/web dev      # Next.js web on :3000 (defaults its API to http://localhost:3005)
 ```
@@ -90,13 +95,20 @@ Identity and the encryption key are **separate** now (see `docs/issue-4-plan.md`
 
 - **Identity** = email+password (or Google/GitHub). Sessions are long-lived: a short access
   token (15 min) auto-refreshed by a rotating refresh token; revocable per device.
-- **Key custody** = a client-held `masterSecret`, **PIN-wrapped at rest** (web: in the crypto
-  worker + IndexedDB; CLI: `~/.falcon/access.key`). The PIN unlocks it; a browser **reload
-  clears the worker, so the PIN is prompted again** — that's expected, test it.
-- **Losing the PIN loses encrypted sessions, not the account** — the user can start a fresh
-  key epoch (old E2E data becomes "archived", account/identity survive).
-- New devices get the key via **pairing** (`falcon auth login` → approve in an already-signed-in
-  browser), never by copying a secret. There is no recovery code anymore.
+- **Key custody** = a client-held `masterSecret`, wrapped at rest (web: crypto worker +
+  IndexedDB; CLI: `~/.falcon/access.key` under an OS-vault device key). **There is no PIN
+  any more** — a browser reload loads the key with no prompt (`"device"` mode) or one
+  biometric tap (`"prf"` mode, a passkey-derived wrap key). See
+  docs/auth-ux-overhaul-plan.md Phase 5 for the honest threat table on that trade.
+- **A browser with no keys is still signed in** — the refresh token lives in its own store
+  (`crypto/session-storage.ts`), which is what lets it ask another device for a copy.
+- New devices get the key two ways, never by copying a secret: **CLI pairing**
+  (`falcon auth login` → approve in a signed-in browser) and **device-to-device key
+  sharing** (a keyless browser asks; a holder approves after comparing a 6-digit code —
+  in the browser, or via `falcon keys approve` on a machine that has the keys).
+- **Losing every device that holds the keys loses encrypted sessions, not the account** —
+  `/reset-keys/` starts a fresh key epoch (old E2E data archived, identity survives). It is
+  deliberately the last resort, behind a link that states what it erases.
 
 Dev DBs are disposable — a reset DB has no accounts, so **re-register** each time.
 For email/password tests you do **not** need any OAuth app configured.
@@ -107,25 +119,54 @@ Use **tmux** to drive the CLI (a real Claude Code TUI — keep it on **haiku** t
 and the **Chrome MCP tools** to drive the web. Load the Chrome tools first with one
 ToolSearch (`select:mcp__claude-in-chrome__tabs_context_mcp,…navigate,…computer,…read_page,…tabs_create_mcp,…form_input,…read_console_messages`).
 
-1. **Stack up:** Postgres running; `@falcon/server` dev on :3005 and `@falcon/web` dev on :3000
-   in tmux panes (or background). If ports clash with another worktree, pick free ones and set
+1. **Stack up:** `@falcon/server` dev on :3005 and `@falcon/web` dev on :3000 in tmux panes
+   (or background) — no Docker/local Postgres needed, `DATABASE_URL` already points at Neon.
+   If ports clash with another worktree, pick free ones and set
    `PORT`/`NEXT_PUBLIC_API_URL`/`FALCON_BACKEND_URL` to match — never blanket-kill by process name.
-2. **Prepare the account (Chrome MCP):** open `http://localhost:3000` → it redirects to `/signin/`
-   → go to `/password/` → **Sign up** with a throwaway email + password, then **set a PIN**
-   (use a fixed test PIN, e.g. `123456`, and remember it). This registers the account, generates
-   the `masterSecret`, PIN-wraps it, and binds the key epoch — you land authenticated.
+2. **Prepare the account (Chrome MCP):** open `http://localhost:3000/signin/` (`/` is the public
+   landing page; the app lives under `/dashboard/**`, auth-gated)
+   → go to `/password/` → **Sign up** with a throwaway email + password, then pick how this
+   browser protects its keys (headless Chrome has no platform authenticator, so it
+   auto-resolves to "stay signed in"). This registers the account, generates the
+   `masterSecret`, and binds the key epoch — you land authenticated.
 3. **Pair the CLI (tmux):** with the env vars above, run `falcon auth login`. It prints a pairing
    URL/QR — open that URL in the already-signed-in Chrome tab and **approve**. The CLI now holds a
    real refresh token + the sealed `masterSecret`; check with `falcon auth status`.
 4. **Start a session (tmux):** in a project dir, `falcon claude --model haiku`. The daemon
    auto-starts, registers the machine, and mirrors the (encrypted) transcript.
 5. **Verify (Chrome MCP):** the session appears on Home; open its timeline. Exercise the auth
-   surface specifically: **reload → PIN unlock keeps you in** (silent refresh, no `/signin/`
-   bounce); Settings → **Devices** lists sessions and "log out other devices" drops the revoked
-   session's socket immediately; wrong-password lockout after repeated attempts.
+   surface specifically: **reload keeps you in with no prompt at all** (silent refresh, no
+   `/signin/` bounce); Settings → **Devices** lists sessions and "log out other devices"
+   drops the revoked session's socket immediately; wrong-password lockout after repeated
+   attempts.
+6. **Key sharing (Chrome MCP):** open a second browser profile, sign in with the same
+   account → it shows "One more step" with a 6-digit code. The first profile pops an
+   approve card showing the **same** code plus a server-attested device row. Approve, and
+   the second profile continues on its own. Also check a **mismatch drill**: raise a
+   request from a third profile and confirm the codes differ.
+7. **Zero machines:** sign in on a fresh account without running the CLI — expect the
+   three-step install onboarding, no "New session" button, and the screen advancing by
+   itself once `falcon` registers a machine.
 
 Process hygiene: only manage processes you started, verify a PID's cwd before killing it, and
 prefer non-default ports when another worktree may be running its own stack.
+
+## Auth & UX principles
+
+Seven rules every auth-adjacent change follows (docs/auth-ux-overhaul-plan.md):
+
+1. **Never print "run X" when you can run X.** A missing login is a first run, not an error.
+2. **Identity first, crypto second.** Sign-in gates always run before key-material gates.
+3. **First device = zero questions.** A user with no data never sees a crypto screen.
+4. **No internal words in the UI.** Banned: `keyEpoch`, `masterSecret`, `bind`, `custody`,
+   `bridge`, `epoch`, `DEK`, `nonce`, `ephPub`. Enforced by `lib/__tests__/copy.test.ts`
+   and `cli/src/ui/messages.test.ts`.
+5. **Never put a destructive button next to a safe one.** Destructive goes behind a link
+   and states its consequence in the label (`components/auth/start-over-link.tsx`).
+6. **Every waiting screen updates itself.** No "reopen this link", no manual refresh.
+7. **Never claim a security property you have not verified.** If a control only raises
+   cost rather than preventing an attack, say so in the same sentence — see
+   `web/src/crypto/device-key.ts`'s docblock for the shape of an honest one.
 
 ## Conventions
 

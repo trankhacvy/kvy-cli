@@ -86,42 +86,56 @@ time (there's no server at request time to read env from), so
 
 `packages/server/src/main.ts` calls `runMigrations()`
 (`packages/server/src/db/migrate.ts`) before `app.listen` on every process
-start — a session-scoped Postgres advisory lock keeps concurrent boots (e.g.
-scaling `server` to multiple replicas) from racing each other, and it's a
-no-op against an already-current database. That's the entire "migrate on
-boot" story; `deploy/server-entrypoint.sh` is a thin, documented wrapper
-around `node dist/main.js` for operators who want a hook point (pre-flight
-checks, secrets fetch, ...) without duplicating the migration call itself.
+start — a bounded Postgres advisory lock (`pg_try_advisory_lock`, 10s of
+retries) keeps concurrent boots (e.g. scaling `server` to multiple replicas)
+from racing each other without being able to wedge one, and it's a no-op
+against an already-current database. After migrating, it reads back the
+applied-migration count and throws if it doesn't match the shipped
+`drizzle/meta/_journal.json` — a run that silently applied nothing now fails
+boot loudly instead of starting against a stale schema. That's the entire
+"migrate on boot" story; `deploy/server-entrypoint.sh` is a thin, documented
+wrapper around `node dist/main.js` for operators who want a hook point
+(pre-flight checks, secrets fetch, ...) without duplicating the migration
+call itself.
 
-## Upgrading to the email+password production gate (docs/auth-ux-hardening-plan.md item 3)
+**Set `DATABASE_URL_UNPOOLED` if `DATABASE_URL` goes through a connection
+pooler.** `docker-compose.yml`'s own `postgres` service is a direct
+connection, so self-hosters following the quick start above never need this.
+It matters if you point `DATABASE_URL` at a managed Postgres pooler
+(PgBouncer, Neon's `-pooler` host, Vercel's pooled URL): a session-scoped
+advisory lock is not reliably bound to one backend under transaction
+pooling, which is exactly what let one deployment boot with two pending
+migrations silently unapplied. Set `DATABASE_URL_UNPOOLED` to the same
+database's direct endpoint and only `runMigrations()` uses it — the request
+path stays on `DATABASE_URL`'s pool.
+
+## Email+password is dev/local-testing only (docs/auth-ux-hardening-plan.md item 3)
 
 Email+password (`POST /v1/auth/password/{register,login,reset/request,reset/confirm}`) is
-dev/local-testing only — every self-host deployment that leaves `FALCON_DEV_AUTH` unset
-(the default) gets a fail-closed `404` on all four routes instead of a live password
-identity, matching the "no OAuth app configured yet" dev-bypass this flag already gates
-(`config.ts`).
+gated on `NODE_ENV` directly (`password.ts`'s `requireNonProduction`), with no operator
+opt-in: any deployment running with `NODE_ENV=production` gets a fail-closed `404` on all
+four routes, unconditionally. There is no flag to re-enable it there.
 
-**Before upgrading a deployment that predates this gate**, confirm no existing account
-depends on email+password as its *only* identity — once the gate is on, `password/login`
-404s, and (per `docs/issue-4-plan.md`'s step-up design) the OAuth-only "reset keys" recovery
-path can't help an account that never linked a Google/GitHub identity either. Run this
-against the deployment's own Postgres before rolling the upgrade out:
+**If a deployment has existing password-only accounts** (from before this gate existed, or
+from having run with a non-production `NODE_ENV` at some point), confirm none of them
+depend on email+password as their *only* identity before deploying with
+`NODE_ENV=production` — once gated, `password/login` 404s, and (per
+`docs/issue-4-plan.md`'s step-up design) the OAuth-only "reset keys" recovery path can't
+help an account that never linked a Google/GitHub identity either. Run this against the
+deployment's own Postgres first:
 
 ```sql
 SELECT count(*) FROM auth_identities WHERE kind = 'password';
 ```
 
-- **`0`** — gating is safe as-is; nothing to migrate.
+- **`0`** — nothing to migrate.
 - **`> 0`** — there is currently no self-serve "link a Google/GitHub identity to an
-  existing password account" flow, so flipping the gate on immediately locks those
-  accounts out of login (and, per `docs/issue-4-plan.md`'s step-up design, out of the
-  OAuth-only "reset keys" recovery path too, since they never linked a second identity).
-  Do **not** enable this gate for a deployment with `count > 0` until either an
-  account-linking flow ships, or every affected account has been migrated out-of-band
-  (e.g. an operator-run script that inserts a matching `auth_identities` row of
-  `kind = 'oauth'` for the same `account_id`, or direct support contact with the account
-  holder). Keep `FALCON_DEV_AUTH=1` on that deployment in the meantime — it's the only
-  thing keeping password login reachable there.
+  existing password account" flow, so those accounts lose their only way to log in (and,
+  per `docs/issue-4-plan.md`'s step-up design, the OAuth-only "reset keys" recovery path
+  too, since they never linked a second identity) the moment the deployment runs with
+  `NODE_ENV=production`. Migrate every affected account out-of-band first (e.g. an
+  operator-run script that inserts a matching `auth_identities` row of `kind = 'oauth'`
+  for the same `account_id`, or direct support contact with the account holder).
 
 ## Blob storage: local disk vs. MinIO/S3
 

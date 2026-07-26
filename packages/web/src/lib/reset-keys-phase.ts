@@ -2,6 +2,8 @@ import type { StepUpProvider } from "./pending-stepup.js";
 
 export type ResetKeysPhase =
   | { kind: "confirm-identity" }
+  /** The non-destructive path: ask a device that already has the keys for a copy. */
+  | { kind: "fetch-keys" }
   | { kind: "returned"; provider: StepUpProvider; oauthProof: string; refreshToken: string }
   | { kind: "rotating"; error?: string }
   | { kind: "error"; message: string };

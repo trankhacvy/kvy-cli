@@ -41,18 +41,36 @@ describe("createTranscriptIndexerWorkspaceLister", () => {
     expect(await list()).toEqual([]);
   });
 
-  it("maps every registered entry to {workspaceId, path} using the path as the id", async () => {
-    await registerWorkspace(workspaceDir, { displayName: "repo" }, { homeDir });
+  it("maps every registered entry to {workspaceId, path, registeredAt} using the path as the id", async () => {
+    const entry = await registerWorkspace(workspaceDir, { displayName: "repo" }, { homeDir });
     const list = createTranscriptIndexerWorkspaceLister({ homeDir });
 
-    expect(await list()).toEqual([{ workspaceId: workspaceDir, path: workspaceDir }]);
+    expect(await list()).toEqual([
+      { workspaceId: workspaceDir, path: workspaceDir, registeredAt: entry.registeredAt },
+    ]);
   });
 
   it("reflects registry changes on each call (no stale caching)", async () => {
     const list = createTranscriptIndexerWorkspaceLister({ homeDir });
     expect(await list()).toEqual([]);
 
-    await registerWorkspace(workspaceDir, {}, { homeDir });
-    expect(await list()).toEqual([{ workspaceId: workspaceDir, path: workspaceDir }]);
+    const entry = await registerWorkspace(workspaceDir, {}, { homeDir });
+    expect(await list()).toEqual([
+      { workspaceId: workspaceDir, path: workspaceDir, registeredAt: entry.registeredAt },
+    ]);
+  });
+
+  // auth-ux-overhaul-fix-plan.md Fix 6: `registeredAt` used to be structurally discarded
+  // here (`{workspaceId: entry.path, path: entry.path}`, no timestamp) before it could ever
+  // reach `transcriptIndexer.ts`'s watch-window gate. This is the production wiring path —
+  // closes the gap `machineIntegration.test.ts` doesn't cover (no indexer-wiring test there
+  // at all).
+  it("preserves registeredAt through to the indexer's RegisteredWorkspace shape, not just workspaceId/path", async () => {
+    const entry = await registerWorkspace(workspaceDir, {}, { homeDir });
+    const list = createTranscriptIndexerWorkspaceLister({ homeDir });
+    const [workspace] = await list();
+
+    expect(workspace?.registeredAt).toBe(entry.registeredAt);
+    expect(typeof workspace?.registeredAt).toBe("string");
   });
 });
