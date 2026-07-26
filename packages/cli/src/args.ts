@@ -8,7 +8,7 @@
  *
  * Two parsing modes coexist:
  *  - Falcon's own subcommands (`auth`, `daemon`, `kill`, `doctor`,
- *    `sessions`, `resume`, `workspace`, `notify`, `shim`, `--help`,
+ *    `sessions`, `resume`, `workspace`, `notify`, `--help`,
  *    `--version`) are parsed and validated below.
  *  - `falcon claude [args...]` / `falcon codex [args...]` — and the
  *    default `falcon [args...]` form — never inspect `args`; they are
@@ -43,7 +43,6 @@ export type FalconCommand =
   | { type: "notify"; message: string }
   | { type: "adopt"; list: boolean; remote: boolean }
   | { type: "keys"; action: "approve" }
-  | { type: "shim"; action: "install" | "uninstall" | "status" }
   | { type: "adapters"; action: "install" | "upgrade" }
   | { type: "github"; action: "login" | "logout" | "status"; token: boolean; clientId?: string }
   | { type: "update" };
@@ -129,8 +128,6 @@ export function parseArgs(argv: string[]): FalconCommand {
       return parseAdopt(rest);
     case "keys":
       return parseKeys(rest);
-    case "shim":
-      return parseShim(rest);
     case "adapters":
       return parseAdapters(rest);
     case "github":
@@ -378,17 +375,6 @@ function parseKeys(rest: string[]): FalconCommand {
   throw new ArgParseError(
     `Unknown "falcon keys" action: ${action ?? "(none)"}`,
     "falcon keys approve",
-  );
-}
-
-function parseShim(rest: string[]): FalconCommand {
-  const action = rest[0];
-  if (action === "install" || action === "uninstall" || action === "status") {
-    return { type: "shim", action };
-  }
-  throw new ArgParseError(
-    `Unknown "falcon shim" action: ${action ?? "(none)"}`,
-    "falcon shim install|uninstall|status",
   );
 }
 

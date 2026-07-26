@@ -234,7 +234,7 @@ Three tiers:
 - **[P0] FR-9.5 Identity mapping.** Provider resume mints a new provider session-id; the importer maps old→new ids so the Falcon session presents one continuous timeline (dedupe imported vs. live-resumed messages by content/id ring buffer, same mechanism as mode switching FR-3.4).
 
 **Tier 3 — Make the problem disappear (recommended default):**
-- **[P1] FR-9.6 Shell shim (opt-in at onboarding).** Install a `claude`/`codex` PATH shim in `~/.falcon/bin` so plain invocations transparently become Falcon-managed sessions (Superset's managed-binary pattern). Users who accept never need adoption; Tiers 1–2 remain the safety net. `falcon shim install/uninstall/status`; never modify user rc files beyond the documented PATH block.
+- **~~[P1] FR-9.6 Shell shim (opt-in at onboarding).~~ Descoped.** Was: install a `claude`/`codex` PATH shim in `~/.falcon/bin` so plain invocations transparently become Falcon-managed sessions. Removed — the shim gated every invocation behind a round-trip to Falcon's own backend/daemon with no fallback, so any Falcon-side outage silently broke the user's plain `claude`/`codex` command instead of degrading to it (the opposite of "transparent"). Falcon must never shadow those commands; Tiers 1–2 remain the only adoption path (explicit `falcon claude`/`falcon codex`).
 
 **Honest limitation (UX copy requirement):** takeover-from-phone leaves the original terminal detached; regaining the local TUI uses the standard take-back-control flow (FR-3.4 / `falcon resume <id>`).
 
@@ -319,7 +319,7 @@ falcon/
 | **M1 — Mirror** | 3 wk | Transcript tailing → encrypted relay → web session list + read-only timeline; daemon + machine presence | UC1: watch a live session from the browser |
 | **M2 — Control** | 4 wk | Remote mode (SDK), permission pipeline, composer, mode switching, notifications (web push + suppression) | UC2, UC3, UC4 end-to-end; magic moment demo |
 | **M3 — Fleet** | 3 wk | Remote spawn (UC5), tmux, session resume/durability, kill commands, Codex adapter, `falcon doctor`, **session adoption Tiers 1–2** (`falcon adopt`, unmanaged-session mirror, phone takeover) | UC5, UC8, UC9; chaos tests pass (kill daemon mid-session, sleep laptop) |
-| **M4 — Ship** | 2 wk | Git diff panel, session import polish, **shell shim (Tier 3)**, PWA polish, self-host image, docs site, installers | Public beta; onboarding < 5 min measured |
+| **M4 — Ship** | 2 wk | Git diff panel, session import polish, ~~shell shim (Tier 3)~~ *(descoped, see FR-9.6)*, PWA polish, self-host image, docs site, installers | Public beta; onboarding < 5 min measured |
 
 Fast-follows post-MVP (ordered): git commit/push/PR → live previews (cloudflared) → native mobile app → voice → remote sandboxing.
 

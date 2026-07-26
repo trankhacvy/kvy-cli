@@ -120,7 +120,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
 
   // 1. Fail honestly if the Codex CLI (its `app-server` the adapter drives)
   // isn't installed.
-  const detection = await detect({ env });
+  const detection = await detect();
   if (!detection.installed) {
     writeError(`falcon codex: ${detection.error ?? "Codex CLI is not installed."}\n`);
     return 1;

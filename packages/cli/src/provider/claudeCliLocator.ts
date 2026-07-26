@@ -11,7 +11,6 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import { shimBinDir } from "../shim/paths.js";
 
 /**
  * Locates the globally-installed Claude Code CLI across every install method
@@ -97,38 +96,6 @@ function resolveClaudeEntrypoint(pkgDir: string): string | null {
   return null;
 }
 
-/**
- * Content-based fallback for detecting Falcon's own shell shim (see the call
- * site in `findClaudeInPath` below). The directory comparison there
- * (`path.dirname(claudePath) === shimBinDir({ env })`) is a false negative
- * whenever the shim actually installed on PATH lives under a *different*
- * `~/.falcon` than the one this process currently resolves — e.g.
- * `FALCON_HOME_DIR` overridden for an isolated test/dev session (exactly
- * CLAUDE.md's own e2e runbook) while a real shim from the user's default
- * `~/.falcon/bin` is still first on PATH. When that happens, the locator
- * mistakes the shim for a real Claude Code install, spawns it, and the
- * shim's `exec falcon claude "$@"` recursively re-invokes an entirely new
- * top-level `falcon claude` — a second, independent session for the same
- * directory that collides with (or duplicates) the first.
- *
- * The shim script (`shim/install.ts`) is a fixed, tiny, generated file, so
- * sniffing its content is a reliable, home-dir-independent way to recognize
- * it regardless of which `~/.falcon` it was installed under.
- */
-function isFalconShimScript(filePath: string): boolean {
-  try {
-    const stat = statSync(filePath);
-    if (!stat.isFile() || stat.size > 4096) return false;
-    const content = readFileSync(filePath, "utf8");
-    return (
-      content.includes("Installed by `falcon shim install`") &&
-      /exec falcon (claude|codex)/.test(content)
-    );
-  } catch {
-    return false;
-  }
-}
-
 function isPlainTextWithoutShebang(filePath: string): boolean {
   try {
     const fd = openSync(filePath, "r");
@@ -166,12 +133,8 @@ export function findNpmGlobalCliPath(): string | null {
 /**
  * Find Claude CLI using the system PATH (`which`/`where`). Respects the
  * user's own shell configuration and works across all platforms.
- *
- * `env` is threaded through only to resolve `shimBinDir()` below (which
- * honors `FALCON_HOME_DIR`) — `which`/`where` themselves always read the
- * real process PATH, not `env`.
  */
-export function findClaudeInPath(env: NodeJS.ProcessEnv = process.env): ClaudeCliLocation | null {
+export function findClaudeInPath(): ClaudeCliLocation | null {
   try {
     const command = process.platform === "win32" ? "where claude" : "which claude";
     const result = execSync(command, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
@@ -181,25 +144,6 @@ export function findClaudeInPath(env: NodeJS.ProcessEnv = process.env): ClaudeCl
 
     // Check existence BEFORE resolving.
     if (!existsSync(claudePath)) return null;
-
-    // `falcon shim install` (FR-9.6) prepends `~/.falcon/bin` to PATH so a
-    // bare `claude` runs under Falcon — but that means Falcon's OWN locator
-    // must not find that shim and mistake it for a real install: the shim's
-    // script is `exec falcon claude "$@"`, and spawning it back into itself
-    // either loops or (when `falcon` isn't a global command, e.g. running
-    // from a local checkout via `node bin/falcon.mjs`) fails outright with
-    // "falcon: not found". Skip it here so the caller's fallback chain
-    // (`findGlobalClaudeCliPath`) proceeds to npm/Bun/Homebrew/native-installer
-    // detection, which finds the real binary independently of PATH.
-    //
-    // The directory comparison is the fast, common-case check, but it's a
-    // false negative whenever this process's `~/.falcon` (possibly
-    // `FALCON_HOME_DIR`-overridden) differs from the one the shim on PATH
-    // was actually installed under — content-sniffing the (tiny, fixed)
-    // shim script is the robust fallback for that case (see
-    // `isFalconShimScript`'s own doc comment).
-    if (path.dirname(claudePath) === shimBinDir({ env }) || isFalconShimScript(claudePath))
-      return null;
 
     const resolvedPath = resolvePathSafe(claudePath) ?? claudePath;
 
@@ -484,7 +428,7 @@ export function findGlobalClaudeCliPath(
   }
 
   // 2. Check PATH (respects the user's shell config).
-  const pathResult = findClaudeInPath(env);
+  const pathResult = findClaudeInPath();
   if (pathResult) return pathResult;
 
   // 3. Fall back to package-manager-specific detection.

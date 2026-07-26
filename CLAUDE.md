@@ -189,9 +189,11 @@ Seven rules every auth-adjacent change follows (docs/auth-ux-overhaul-plan.md):
 - `falcon-system-design.md` — architecture, protocol, and encryption design.
 - `falcon-prd.md` — product requirements.
 - `docs/protocol.md`, `docs/encryption.md` — short stubs pointing into the design doc.
-- `docs/uninstall.md` — user-facing uninstall/cleanup guide: `falcon shim uninstall`,
-  `falcon daemon service uninstall`, and the full `rm -rf ~/.falcon` walkthrough
-  (falcon-prd.md FR-1.6).
+- `docs/uninstall.md` — user-facing uninstall/cleanup guide: `falcon daemon service
+  uninstall` and the full `rm -rf ~/.falcon` walkthrough (falcon-prd.md FR-1.6). There is
+  no shell shim — `falcon` never shadows the real `claude`/`codex`/`opencode` commands;
+  the only supported invocation is explicit (`falcon claude`, `falcon codex`, or bare
+  `falcon` for the default provider).
 - `deploy/README.md` — self-host walkthrough (`deploy/docker-compose.yml`: server +
   postgres + optional minio, migrate-on-boot, split-origin web with strict CSP + SRI).
 

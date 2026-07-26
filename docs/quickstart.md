@@ -79,17 +79,6 @@ and any pending permission prompts route to your browser as Allow / Deny /
 Allow-for-session cards (falcon-prd.md FR-3.4/FR-7.3/FR-7.4). Press Ctrl-T
 in the terminal any time to take local control back.
 
-## 5. (Optional) Make it automatic
-
-```bash
-falcon shim install
-```
-
-Installs a `claude`/`codex` shim on your `PATH` so plain invocations of
-those commands transparently become Falcon-managed sessions from then on —
-you never have to remember to type `falcon` first (falcon-prd.md FR-9.6).
-Uninstall any time with `falcon shim uninstall`.
-
 ## Troubleshooting
 
 - `falcon doctor` — one-shot diagnostic: auth state, provider detection,

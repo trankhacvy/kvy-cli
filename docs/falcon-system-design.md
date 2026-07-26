@@ -516,7 +516,6 @@ adapters/            # managed ACP adapter installs — own npm prefix, pinned e
 claims/<sessionId>.json  # send-idempotency claims + terminal results (§7.10);
                      #   atomic tmp-write+rename, bounded retention window
 logs/…               # file-only logging; NEVER stdout (would corrupt provider TUI)
-bin/                 # optional shims (Tier 3 adoption): claude, codex → falcon
 ```
 
 ### 7.3 Provider adapter interface

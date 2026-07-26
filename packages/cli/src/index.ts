@@ -12,7 +12,6 @@ import { runKeysApproveCommand } from "./commands/keysApprove.js";
 import { runResumeCommand } from "./commands/resume.js";
 import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
-import { runShimCommand } from "./commands/shim.js";
 import { runStartClaudeCommand } from "./commands/start.js";
 import { runStartCodexCommand } from "./commands/startCodex.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
@@ -49,7 +48,6 @@ import {
 } from "./daemon/kill.js";
 import { resolveHomeDir } from "./home.js";
 import { createLogger } from "./logger.js";
-import { maybePromptShimOptIn } from "./shim/onboardingPrompt.js";
 import { maybeTriggerAutoUpdate } from "./update/autoUpdateTrigger.js";
 import { runUpdateCommand } from "./update/runUpdateCommand.js";
 
@@ -152,8 +150,6 @@ Usage:
   falcon workspace unregister [--directory <path>]
   falcon workspace sync             (coming soon)
   falcon keys approve              Send your keys to another device that asked for them
-  falcon shim install|uninstall|status
-                                     Manage the claude/codex PATH shim (Tier 3 adoption)
   falcon adapters install|upgrade   Install/upgrade the pinned ACP adapter packages
   falcon github login [--token] [--client-id <id>] | logout | status
                                      Connect this machine to GitHub for PR/CI checks
@@ -286,8 +282,8 @@ async function runDaemon(command: Extract<FalconCommand, { type: "daemon" }>): P
  * Deliberately does **not** call `ensureDaemon()`: this only registers/
  * removes the OS-level service definition (a plist/unit file plus a
  * `launchctl`/`systemctl` call) — the running daemon it points at is a
- * separate concern, same rationale as `shim`/`workspace config` skipping
- * daemon auto-start.
+ * separate concern, same rationale as `workspace config` skipping daemon
+ * auto-start.
  */
 async function runDaemonService(
   command: Extract<FalconCommand, { type: "daemon-service" }>,
@@ -387,18 +383,10 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
  * credentials, so for them `ensureDaemon()` still runs first, consistent
  * with every other agent-adjacent subcommand (PRD FR-1.2).
  *
- * A successful `login` additionally offers the FR-9.6 shell-shim opt-in
- * prompt (`./shim/onboardingPrompt.js`) — the first moment a fresh install
- * has proven there's a real account behind it. `logout`/`status` never
- * trigger it, and it's a no-op past the first successful login regardless
- * (see `maybePromptShimOptIn`'s own `onboardingCompleted` gate).
  */
 async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promise<number> {
   if (command.action === "login") {
     const code = await runAuthCommand(command.action, logger);
-    if (code === 0) {
-      await maybePromptShimOptIn();
-    }
     const daemon = await ensureDaemon();
     if (!daemon.ok) {
       process.stderr.write(daemon.message);
@@ -416,24 +404,12 @@ async function runAuth(command: Extract<FalconCommand, { type: "auth" }>): Promi
 }
 
 /**
- * `falcon shim install|uninstall|status` (falcon-prd.md FR-9.6, plan.md §16
- * "4.2 Adoption Tier 3 + polish") — see `commands/shim.ts` for the actual
- * bin/PATH-block logic. Deliberately does **not** call `ensureDaemon()`,
- * same rationale as `workspace config`/`workspace register`: no daemon
- * interaction at all, just local filesystem writes under `~/.falcon/bin`
- * and the user's shell rc file.
- */
-async function runShim(command: Extract<FalconCommand, { type: "shim" }>): Promise<number> {
-  return runShimCommand(command.action);
-}
-
-/**
  * `falcon adapters install|upgrade` (design §7.9, plan.md §16 "Phase 2.0 —
  * foundation") — see `commands/adapters.ts` / `adapters/install.ts` for the
  * actual npm-prefix install + integrity-verification logic. Deliberately
- * does **not** call `ensureDaemon()`, same rationale as `shim`/`workspace
- * config`: a local filesystem/npm operation under `~/.falcon/adapters`, no
- * daemon interaction at all.
+ * does **not** call `ensureDaemon()`, same rationale as `workspace config`:
+ * a local filesystem/npm operation under `~/.falcon/adapters`, no daemon
+ * interaction at all.
  */
 async function runAdapters(command: Extract<FalconCommand, { type: "adapters" }>): Promise<number> {
   const deps = { homeDir: resolveHomeDir() };
@@ -446,7 +422,7 @@ async function runAdapters(command: Extract<FalconCommand, { type: "adapters" }>
  * `falcon github login|logout|status` (docs/features/github-pr-ci.md
  * "GITHUB AUTH") — see `commands/github.ts` for the token-store/device-flow
  * logic. Deliberately does **not** call `ensureDaemon()`, same rationale as
- * `shim`/`workspace config`/`adapters`: a local `~/.falcon/github.key` write
+ * `workspace config`/`adapters`: a local `~/.falcon/github.key` write
  * plus a direct GitHub API call, no daemon interaction at all — the
  * daemon's `github.checks` RPC handler reads the same token file fresh off
  * disk on its own next call.
@@ -601,8 +577,6 @@ function run(command: FalconCommand): number | Promise<number> {
       return runAdopt(command);
     case "keys":
       return runKeysApproveCommand({ logger });
-    case "shim":
-      return runShim(command);
     case "adapters":
       return runAdapters(command);
     case "github":
