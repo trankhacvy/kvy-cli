@@ -41,9 +41,7 @@ let entries;
 try {
   entries = walk(outDir).sort();
 } catch (err) {
-  console.error(
-    `build-sw-precache: expected static export at ${outDir} (run next build first)`,
-  );
+  console.error(`build-sw-precache: expected static export at ${outDir} (run next build first)`);
   throw err;
 }
 

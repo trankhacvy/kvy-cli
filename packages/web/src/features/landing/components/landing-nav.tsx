@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { FalconMark } from "@/components/falcon-mark";
+import { Button } from "@/components/ui/button";
 
 /**
  * Landing top bar — Briefberry-bare: logo left, auth actions right, no link
