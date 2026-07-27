@@ -34,7 +34,14 @@ COPY packages/server/package.json packages/server/
 COPY packages/cli/package.json packages/cli/
 COPY packages/web/package.json packages/web/
 
-RUN SKIP_FALCON_WIRE_BUILD=1 pnpm install --frozen-lockfile
+# `--ignore-scripts`: the lockfile's `onlyBuiltDependencies: ["node-pty"]`
+# (root package.json) is only there for @falcon/cli's PTY sessions — this
+# image never runs cli, but pnpm still resolves its package.json (workspace
+# completeness, comment above) and would otherwise try to compile node-pty's
+# native addon here. node-pty ships prebuilt binaries for darwin/win32 only,
+# NOT linux, so that build falls back to node-gyp — which needs
+# python3/make/g++, none of which `node:20-slim` has.
+RUN SKIP_FALCON_WIRE_BUILD=1 pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 

@@ -2,11 +2,13 @@
 # plan.md §16 "4.3 Distribution & self-host"). Multi-stage: install workspace
 # deps once, build just the packages `@falcon/server` needs at runtime
 # (`@falcon/wire` -> `@falcon/crypto` -> `@falcon/server`, in that dependency
-# order), then ship a slim runtime layer. No native/build-tooling deps are
-# required anywhere in this workspace's dependency tree (no `requiresBuild`
-# entries in pnpm-lock.yaml), so `node:20-slim` is enough at every stage —
-# no python3/make/g++ needed (contrast with Happy's Dockerfile.server, which
-# needed those for its own dependency tree).
+# order), then ship a slim runtime layer. `node:20-slim` is enough at every
+# stage — this image never needs python3/make/g++ (contrast with Happy's
+# Dockerfile.server, which needed those for its own dependency tree) — but
+# only because the deps stage installs with `--ignore-scripts` (see its own
+# comment): the workspace's `node-pty` dependency (only actually used by
+# `@falcon/cli`, never this image) has no Linux prebuilt binary, so an
+# ordinary install would try to compile it via node-gyp and fail here.
 #
 # Build from the repo root (docker-compose.yml's `build.context: ..` does
 # this automatically):
@@ -35,8 +37,19 @@ COPY packages/web/package.json packages/web/
 # The workspace postinstall hook (scripts/postinstall.cjs) builds
 # @falcon/wire right after install — skip it here since wire's full source
 # isn't copied in yet; the builder stage below builds it explicitly, in
-# dependency order, alongside crypto and server.
-RUN SKIP_FALCON_WIRE_BUILD=1 pnpm install --frozen-lockfile
+# dependency order, alongside crypto and server. `--ignore-scripts`: the
+# lockfile's `onlyBuiltDependencies: ["node-pty"]` (root package.json) is
+# only there for @falcon/cli's PTY sessions — this image never runs cli, but
+# pnpm still resolves its package.json (workspace completeness, comment
+# above) and would otherwise try to compile node-pty's native addon here.
+# node-pty ships prebuilt binaries for darwin/win32 only, NOT linux, so that
+# build falls back to node-gyp — which needs python3/make/g++, none of which
+# `node:20-slim` has (confirmed failing without this flag: node-gyp's own
+# "find Python" step fails outright). Safe to skip entirely: this stage's
+# only job is populating node_modules, and no script this workspace's own
+# postinstall/build steps need runs here (wire's real build is the explicit
+# `turbo run build` below, unaffected by this install's --ignore-scripts).
+RUN SKIP_FALCON_WIRE_BUILD=1 pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 
