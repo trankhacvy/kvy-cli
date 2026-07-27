@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { FalconMark } from "@/components/falcon-mark";
 
 /**
  * Landing top bar — Briefberry-bare: logo left, auth actions right, no link
@@ -11,9 +12,7 @@ export function LandingNav() {
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5" aria-label="Falcon home">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary font-semibold text-primary-foreground text-sm">
-            F
-          </span>
+          <FalconMark className="size-8" />
           <span className="font-semibold tracking-tight">Falcon</span>
         </Link>
         <nav className="flex items-center gap-2" aria-label="Account">

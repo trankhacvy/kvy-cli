@@ -17,6 +17,15 @@ export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:300
   "",
 );
 
+/** Public web origin for canonical URLs, Open Graph, and the sitemap. */
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.falcon.dev").replace(
+  /\/+$/,
+  "",
+);
+
+/** Brand chrome / splash color — keep in sync with `public/manifest.webmanifest`. */
+export const THEME_COLOR = "#0b0f19";
+
 /** Google OAuth client id (OIDC implicit flow) — unset disables the Google button. */
 export const GOOGLE_OAUTH_CLIENT_ID: string | undefined =
   process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || undefined;

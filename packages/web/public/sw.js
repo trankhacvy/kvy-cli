@@ -1,19 +1,6 @@
-/**
- * Falcon's service worker (design §8.5/§9.3, FR-7.6). A plain static file —
- * not part of the TS build — because Next's static export (`next.config.ts`:
- * `output: "export"`) doesn't bundle anything under `public/`, and there's
- * no equivalent of `new Worker(new URL(...))`'s webpack integration for
- * service workers (contrast `src/crypto/worker.ts`, which *is* bundled that
- * way, since it's a regular Worker). Registered from
- * `src/push/subscribe.ts`'s `createBrowserPushEnvironment()`.
- *
- * Two responsibilities only:
- *  - `push`: decode the generic `{sessionId, kind}` payload (design §6.4 —
- *    never session content, the server holds no keys to encrypt anything
- *    richer anyway) and show a fixed, kind-keyed notification.
- *  - `notificationclick`: deep-link to `/dashboard/session/<id>/`, focusing an
- *    already-open Falcon tab instead of opening a new one when possible.
- */
+const SHELL_CACHE = "falcon-shell-v1";
+const PRECACHE_URL = "/precache-manifest.json";
+const OFFLINE_URL = "/offline.html";
 
 const KIND_LABELS = {
   perm: "Falcon needs your permission",
@@ -22,12 +9,129 @@ const KIND_LABELS = {
   failed: "A Falcon session failed",
 };
 
-self.addEventListener("install", () => {
-  self.skipWaiting();
+const BASE_SHELL = [
+  "/",
+  "/dashboard/",
+  "/offline.html",
+  "/manifest.webmanifest",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+  "/favicon.ico",
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      const urls = new Set(BASE_SHELL);
+      try {
+        const res = await fetch(PRECACHE_URL, { cache: "no-cache" });
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list)) {
+            for (const entry of list) {
+              if (typeof entry === "string" && entry.startsWith("/")) urls.add(entry);
+            }
+          }
+        }
+      } catch {
+        // Precache manifest is optional at install (dev / first deploy).
+      }
+      await Promise.all(
+        [...urls].map(async (url) => {
+          try {
+            await cache.add(url);
+          } catch {
+            // Skip missing assets so install still succeeds.
+          }
+        }),
+      );
+      await self.skipWaiting();
+    })(),
+  );
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(self.clients.claim());
+  event.waitUntil(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((key) => key !== SHELL_CACHE).map((key) => caches.delete(key)));
+      await self.clients.claim();
+    })(),
+  );
+});
+
+function isSameOrigin(url) {
+  return url.origin === self.location.origin;
+}
+
+function shouldBypassCache(url) {
+  if (url.pathname.startsWith("/v1/")) return true;
+  if (url.pathname === "/sw.js") return true;
+  if (url.pathname === "/crypto-worker.js") return true;
+  if (url.pathname === PRECACHE_URL) return true;
+  return false;
+}
+
+self.addEventListener("fetch", (event) => {
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  let url;
+  try {
+    url = new URL(request.url);
+  } catch {
+    return;
+  }
+  if (!isSameOrigin(url) || shouldBypassCache(url)) return;
+
+  if (request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(request);
+          if (response.ok) {
+            const cache = await caches.open(SHELL_CACHE);
+            await cache.put(request, response.clone());
+          }
+          return response;
+        } catch {
+          const cached = await caches.match(request);
+          if (cached) return cached;
+          const offline = await caches.match(OFFLINE_URL);
+          if (offline) return offline;
+          return new Response("Offline", {
+            status: 503,
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+          });
+        }
+      })(),
+    );
+    return;
+  }
+
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(SHELL_CACHE);
+      const cached = await cache.match(request);
+      const networkPromise = fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            void cache.put(request, response.clone());
+          }
+          return response;
+        })
+        .catch(() => undefined);
+      if (cached) {
+        void networkPromise;
+        return cached;
+      }
+      const network = await networkPromise;
+      if (network) return network;
+      return new Response("", { status: 504, statusText: "Offline" });
+    })(),
+  );
 });
 
 self.addEventListener("push", (event) => {
@@ -46,7 +150,9 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: "Tap to open the session.",
-      tag: sessionId || "falcon-notification", // coalesce repeat notifications per session
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: sessionId || "falcon-notification",
       data: { url },
     }),
   );
@@ -69,8 +175,6 @@ self.addEventListener("notificationclick", (event) => {
           return;
         }
       }
-      // No existing tab has this exact session open — reuse any Falcon tab
-      // by navigating it, or fall back to opening a fresh one.
       const existing = clientsList[0];
       if (existing && "navigate" in existing && "focus" in existing) {
         await existing.focus();

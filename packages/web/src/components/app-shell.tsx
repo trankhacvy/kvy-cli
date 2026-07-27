@@ -3,6 +3,7 @@
 import { HomeIcon, type LucideIcon, PlusIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { FalconMark } from "@/components/falcon-mark";
 import { NavUser } from "@/components/nav-user";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,9 +121,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                    * (the broken-header bug). The label hides in icon mode
                    * instead. Same shape as shadcn's TeamSwitcher logo box.
                    */}
-                  <span className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                    F
-                  </span>
+                  <FalconMark className="aspect-square size-8 shrink-0" />
                   <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
                     Falcon
                   </span>

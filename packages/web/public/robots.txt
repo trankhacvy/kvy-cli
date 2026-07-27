@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard/
+Disallow: /pair/
+Disallow: /auth/
+Disallow: /password/
+Disallow: /reset-keys/
+Disallow: /signin/
+
+Sitemap: https://app.falcon.dev/sitemap.xml

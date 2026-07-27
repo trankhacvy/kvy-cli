@@ -47,11 +47,14 @@ server {
     # on a custom domain, this fixed pattern (and the docker-entrypoint.sh
     # envsubst wiring, currently untouched since the domain isn't
     # env-configurable) will need revisiting.
+    #
+    # `microphone=(self)` — voice input in the composer (speech-input.ts)
+    # needs the mic; all other powerful features stay disabled.
     add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${API_ORIGIN} ${API_ORIGIN_WS}; frame-src https://*.trycloudflare.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header X-Frame-Options "DENY" always;
-    add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+    add_header Permissions-Policy "geolocation=(), microphone=(self), camera=(), payment=()" always;
 
     # `/_next/static/*` filenames are content-hashed by Next — safe to cache
     # forever; a new build always ships new filenames.
@@ -75,42 +78,36 @@ server {
         try_files $uri =404;
     }
 
-    # `/session/<id>/...` are Next.js dynamic routes inside a fully static
-    # export (next.config.ts's `output: "export"`) — only the `demo`
-    # placeholder id is prerendered (see each `session/**/[id]/page.tsx`'s
-    # own comment), so a real session id (the only kind that ever actually
-    # exists — minted at runtime by `POST /v1/sessions`, never known at
-    # build time) has no matching HTML file on disk and 404s, both on a
-    # direct/reload navigation and on Next's own client-side router (which
-    # still needs a matching static route for the RSC payload even during
-    # an in-app transition). This broke clicking any session from the list
-    # and a push notification's deep link alike. Fall back to the `demo`
-    # shell for any id/subroute combination that isn't itself a real file
-    # (checked first by `try_files`) — the shell's client JS then reads the
-    # real id from `window.location`, exactly as every one of these pages'
-    # own doc comments already assumed happens. Mirrored in
-    # `packages/web/vercel.json`'s `rewrites` for the Vercel deployment,
-    # which has no nginx layer of its own.
-    location ~ ^/session/unmanaged/[^/]+/?$ {
-        try_files $uri $uri/index.html /session/unmanaged/demo/index.html;
+    location = /precache-manifest.json {
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
     }
-    location ~ ^/session/[^/]+/checks/?$ {
-        try_files $uri $uri/index.html /session/demo/checks/index.html;
+
+    # `/dashboard/session/<id>/...` are Next.js dynamic routes inside a fully
+    # static export (next.config.ts's `output: "export"`) — only the `demo`
+    # placeholder id is prerendered, so a real session id has no matching
+    # HTML file on disk. Fall back to the `demo` shell; client JS reads the
+    # real id from `window.location`. Mirrored in packages/web/vercel.json.
+    location ~ ^/dashboard/session/unmanaged/[^/]+/?$ {
+        try_files $uri $uri/index.html /dashboard/session/unmanaged/demo/index.html;
     }
-    location ~ ^/session/[^/]+/files/?$ {
-        try_files $uri $uri/index.html /session/demo/files/index.html;
+    location ~ ^/dashboard/session/[^/]+/checks/?$ {
+        try_files $uri $uri/index.html /dashboard/session/demo/checks/index.html;
     }
-    location ~ ^/session/[^/]+/preview/?$ {
-        try_files $uri $uri/index.html /session/demo/preview/index.html;
+    location ~ ^/dashboard/session/[^/]+/files/?$ {
+        try_files $uri $uri/index.html /dashboard/session/demo/files/index.html;
     }
-    location ~ ^/session/[^/]+/run/?$ {
-        try_files $uri $uri/index.html /session/demo/run/index.html;
+    location ~ ^/dashboard/session/[^/]+/preview/?$ {
+        try_files $uri $uri/index.html /dashboard/session/demo/preview/index.html;
     }
-    location ~ ^/session/[^/]+/git/?$ {
-        try_files $uri $uri/index.html /session/demo/git/index.html;
+    location ~ ^/dashboard/session/[^/]+/run/?$ {
+        try_files $uri $uri/index.html /dashboard/session/demo/run/index.html;
     }
-    location ~ ^/session/[^/]+/?$ {
-        try_files $uri $uri/index.html /session/demo/index.html;
+    location ~ ^/dashboard/session/[^/]+/git/?$ {
+        try_files $uri $uri/index.html /dashboard/session/demo/git/index.html;
+    }
+    location ~ ^/dashboard/session/[^/]+/?$ {
+        try_files $uri $uri/index.html /dashboard/session/demo/index.html;
     }
 
     location / {

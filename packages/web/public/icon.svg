@@ -1,13 +1,4 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>Falcon</title>
-  <rect width="512" height="512" rx="96" fill="#0b0f19"/>
-  <text
-    x="256"
-    y="370"
-    text-anchor="middle"
-    font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif"
-    font-weight="700"
-    font-size="330"
-    fill="#5b9bff"
-  >F</text>
+  <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAFLUlEQVR42u2dW2gUZxiGc29REVE8tBIkUIqI2tJSUYtisEqUKrVqqSi1UKmIikrqCfXGi1KsXghqqVCR1tZjL4onSg+K8VwvNIkx0XqqOXjIyZxIMvINrsSwOzOZnZ2d+b/nhfcm2Z2deb9nZ3b///9mc3ICVK8+gyyceedESRREIQwErxgGglYKAeEqBoFAFUNAkIohIEDFEBCcYggITDEEBKUcAkJSDAABKYaAYJRDQCgAQDBaASAQ5RAQBgAQiFYACEI5BIQAAAQBABgAMABgAMAAgAEAAwAGAAwAGAAwAGAAwACAAQADQBA+cfIPwu/m34+d1ANAQ0MDRe/m5uYWHQAcO37K6ujooOjdLJn8euCI+QAkNGz4CAr/wpKFqLOz02wApk2f/RKAc+cuUvwXliwSyv/wI3MBuF5c8vJA5ZQ3Zdos9cWfMHGqnUVCkpGxALS3t1td9fBhpXoA7j/4/5VM2trazAUgmbQDkO1MQgNATvcA4A2AqQUfmwfAzZsVSQ921+49gb/W2+99YF9enjU1Wa2tbfalRz5h+5Fcn2UbjY2N1sVLV6zcvJGB7ec3325P+prl5bfMA6C6uibpwQZ1zft67Sbr0uV/7e1lWgJTVVW1Ne+zRYF+JkpIsjIOAHkHpVJTc7Pv7X46/4uUQYYhOa4Ro97v8X7LMTtt0zgA5DTq9q76bvuOHm2zpuaRFRUVl5R62mc5RrfLkWRlHABe36VyzZXHyqlcgkjlrt+do6JU+y1/k/953Wd5rHEAhHFtNkVhjgWEBoDMdiFvamlpNQ+Ap09rqaxHSVbGAXD5ylUq61Gnz5zVMxSMlAwFi0tLy6iui8rKys1eEMK3gWh8+s8aABUVt6l0Cv13566ORaG1tXVUu5skE1V9ATKzls0x/CiNHhYVXdDbGPL9Dz9mbFj30OHfrIFD8qze/YZaP+8/2OMpYZmwWbFqrb2fqwrX2wM0QRZ+7779dAYl3G/AMGvOvIV24OK//znjO1ynyRSnWbiuGvPuhKTPr6ys8r1f8tpyjHKstIa5+O69+76DliniVNsdOz7f9fluK5b97luYQ7yxB8Bp/UC6Aylu6tv/DcfnjxwzNhaDPLEGIJ3xgnQByOSoJgCEMGwcZQCidP0HgCwAkPfmaADQDEDYrV+xBKD/wFxjAVhduAEA3Ozlq1pcAZABKQBw8YLPF2cVALfOnPkLv/S9byUlNwDAzTLsmo6k49atF99JBw4ezdjqpsePnwCAm3fu2pMWAE63W6mvr/e0jdf6Ds7IdHZdXR0AuPnPv04HMuGybEXhK6ftnk4GSYvWqHfG2c+fOLnALl66itr9kSIJgDR2mippWAUAl85ek5eQp9MHqQKAJUtXep6yjaOiNiMYOQA2bt7i2kgaZ4XZ+BlLAGQVj+lLwADAwWeLzhsNQDbuBRgrAKQxwnQBgINlpMx0vZ77FgBkYilYXDQpvwAA/N5KxgQt/mo5ADjdNdt0rVm3GQA0t5DLZBcAKAZAfjMBAJJY7sKpQdeuFwNAMs+YOVcFANnqBI48AFu37bC0CABStIwDgGIANIwCAoCDva7XAwBDAdAwDAwAPm+hDgAKAAjyFiwAEEMAUv2qiGmK0rrASAHwydwFaf2+Txwkk137fvoFADAAYADAAIABAAMABgAMABgAMABgAMChASAiCMXFBwAAAADtAACB8uIDAAAAgHYAgEB58YGA4gMAAACB+uIDAcUHAooPBBQfCCg+EFB8QKDwQEDxgYGiA4OZRX8OdXjgLlGjdKkAAAAASUVORK5CYII=" width="512" height="512" preserveAspectRatio="xMidYMid meet"/>
 </svg>

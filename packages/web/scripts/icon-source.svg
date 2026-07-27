@@ -1,14 +1,13 @@
 <!--
-  Source for the PWA icon set (plan-v2.md W4.2 "PWA manifest icons"). Regenerate
-  the raster assets in ../public/ with rsvg-convert (or any SVG rasterizer):
-    rsvg-convert -w 512 -h 512 icon-source.svg -o ../public/icon-512.png
-    rsvg-convert -w 192 -h 192 icon-source.svg -o ../public/icon-192.png
-    rsvg-convert -w 180 -h 180 icon-source.svg -o ../public/apple-touch-icon.png
-  favicon.ico is a plain PNG-in-ICO container (16px + 32px frames) — see the
-  git history for this file for the packer script used to build it.
-  ../public/icon.svg is the same artwork minus this comment (kept minimal
-  since it's served directly, as the `any`-size manifest icon and one of
-  layout.tsx's `<link rel="icon">`s).
+  The brand mark is now the falcon-head glyph traced from
+  `../src/app/apple-icon.png` (the source of truth — black mark on white),
+  not this file. `falcon-mark-512.png` in this directory is a white-on-transparent
+  master cut from it; every raster icon (icon-192/512, web-app-manifest-*,
+  apple-touch-icon, favicon.ico, og.png, screenshots) and `../public/icon.svg`
+  (a `<image>`-embedded variant) are derived from that master via a one-off
+  script (see git history for the exact generation code) rather than this SVG.
+  Keep this file only as a fallback flat "F" mark if the traced artwork is
+  ever lost; it is not wired into the build.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <title>Falcon</title>

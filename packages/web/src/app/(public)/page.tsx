@@ -1,11 +1,15 @@
+import type { Metadata } from "next";
 import { LandingScreen } from "@/features/landing/landing-screen";
+import { landingMetadata, softwareApplicationJsonLd } from "@/lib/seo";
 
-/**
- * `/` — the public landing page. The app itself (session list, timelines,
- * git panels) lives under `/dashboard/**` behind `(protected)`'s
- * `RequireAuth` boundary; this route renders under the root layout only, so
- * a signed-out visitor gets instant static HTML with no auth flash.
- */
+export const metadata: Metadata = landingMetadata();
+
 export default function LandingPage() {
-  return <LandingScreen />;
+  const jsonLd = softwareApplicationJsonLd();
+  return (
+    <>
+      <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      <LandingScreen />
+    </>
+  );
 }
