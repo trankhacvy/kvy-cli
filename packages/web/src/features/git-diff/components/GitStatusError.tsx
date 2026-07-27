@@ -29,8 +29,13 @@ export const WORKSPACE_ERROR_COPY: Record<string, string> = {
  * failure keeps the alarming red text.
  */
 export function GitStatusError({ panel }: { panel: GitPanelState }) {
-  const { statusError, statusErrorCode, removeWorkspace, isRemoveWorkspacePending, removeWorkspaceDone } =
-    panel;
+  const {
+    statusError,
+    statusErrorCode,
+    removeWorkspace,
+    isRemoveWorkspacePending,
+    removeWorkspaceDone,
+  } = panel;
   const workspaceProblem = statusErrorCode && WORKSPACE_ERROR_COPY[statusErrorCode];
 
   if (workspaceProblem) {

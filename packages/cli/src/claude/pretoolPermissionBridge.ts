@@ -911,10 +911,9 @@ export class PreToolPermissionBridge {
     const localEntry = this.localOutcomePending.find((entry) => entry.reqId === params.reqId);
     if (localEntry) {
       if (this.drivenLocalReqIds.has(params.reqId)) {
-        this.deps.logger?.debug(
-          "[pretool-bridge] resolve: local request already driven from web",
-          { reqId: params.reqId },
-        );
+        this.deps.logger?.debug("[pretool-bridge] resolve: local request already driven from web", {
+          reqId: params.reqId,
+        });
         return { ok: false, reason: "already-answered" };
       }
       const drove = localEntry.questions

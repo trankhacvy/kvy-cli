@@ -247,7 +247,10 @@ describe("PreToolPermissionBridge — driveLocalDialog (real two-way remote cont
       driveLocalDialog: () => true,
     });
     await bridge.handlePermissionRequest({ tool_name: "Bash", tool_input: { command: "ls" } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
     expect(ev.answerable).toBe(true);
   });
 
@@ -255,7 +258,10 @@ describe("PreToolPermissionBridge — driveLocalDialog (real two-way remote cont
     const driveLocalDialog = vi.fn(() => true);
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalDialog });
     await bridge.handlePermissionRequest({ tool_name: "Write", tool_input: { file: "demo.txt" } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     const decision = { kind: "allow" as const, scope: "once" as const };
     const result = bridge.resolve({ reqId: ev.reqId, decision });
@@ -277,7 +283,10 @@ describe("PreToolPermissionBridge — driveLocalDialog (real two-way remote cont
       driveLocalDialog: () => false,
     });
     await bridge.handlePermissionRequest({ tool_name: "Bash" });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     const result = bridge.resolve({ reqId: ev.reqId, decision: { kind: "deny" } });
     expect(result).toEqual({ ok: false, reason: "local-turn" });
@@ -287,7 +296,10 @@ describe("PreToolPermissionBridge — driveLocalDialog (real two-way remote cont
     const driveLocalDialog = vi.fn(() => true);
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalDialog });
     await bridge.handlePermissionRequest({ tool_name: "Bash" });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     const first = bridge.resolve({ reqId: ev.reqId, decision: { kind: "allow", scope: "once" } });
     const second = bridge.resolve({ reqId: ev.reqId, decision: { kind: "deny" } });
@@ -304,7 +316,10 @@ describe("PreToolPermissionBridge — driveLocalDialog (real two-way remote cont
       tool_name: "AskUserQuestion",
       tool_input: { questions: [{ question: "Which color?", options: ["Red", "Blue"] }] },
     });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     // Never marked answerable — this widget can't be driven regardless of
     // whether driveLocalDialog is wired for ordinary permission dialogs.
@@ -331,7 +346,10 @@ describe("PreToolPermissionBridge — driveLocalQuestion (real two-way remote co
       tool_name: "AskUserQuestion",
       tool_input: { questions },
     });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
     expect(ev.answerable).toBe(true);
   });
 
@@ -339,7 +357,10 @@ describe("PreToolPermissionBridge — driveLocalQuestion (real two-way remote co
     const driveLocalQuestion = vi.fn(() => true);
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalQuestion });
     await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     const decision = {
       kind: "allow" as const,
@@ -363,7 +384,10 @@ describe("PreToolPermissionBridge — driveLocalQuestion (real two-way remote co
       driveLocalQuestion: () => false,
     });
     await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     const result = bridge.resolve({
       reqId: ev.reqId,
@@ -385,7 +409,10 @@ describe("PreToolPermissionBridge — driveLocalQuestion (real two-way remote co
       driveLocalQuestion,
     });
     await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     bridge.resolve({
       reqId: ev.reqId,
@@ -400,7 +427,10 @@ describe("PreToolPermissionBridge — driveLocalQuestion (real two-way remote co
     const driveLocalQuestion = vi.fn(() => true);
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalQuestion });
     await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
-    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    const ev = permRequests(emitted)[0]?.ev as Extract<
+      SessionEnvelope["ev"],
+      { t: "perm-request" }
+    >;
 
     const decision = {
       kind: "allow" as const,

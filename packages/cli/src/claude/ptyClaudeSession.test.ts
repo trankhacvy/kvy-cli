@@ -769,9 +769,9 @@ describe("startPtyClaudeSession", () => {
       const handle = startPtyClaudeSession(baseOptions(), h.deps);
       await tick();
 
-      expect(
-        handle.answerPermission({ kind: "allow", scope: "session" }, "default", "Write"),
-      ).toBe(true);
+      expect(handle.answerPermission({ kind: "allow", scope: "session" }, "default", "Write")).toBe(
+        true,
+      );
       expect(h.fakePty.writes).toEqual([shiftTab, enter]);
 
       handle.stop();
@@ -869,7 +869,11 @@ describe("startPtyClaudeSession", () => {
       await tick();
 
       expect(
-        handle.answerPermission({ kind: "mode", mode: "bypassPermissions" }, "default", "ExitPlanMode"),
+        handle.answerPermission(
+          { kind: "mode", mode: "bypassPermissions" },
+          "default",
+          "ExitPlanMode",
+        ),
       ).toBe(false);
       expect(h.fakePty.writes).toEqual([]);
 

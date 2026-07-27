@@ -500,7 +500,9 @@ function planAskUserQuestionKeystrokes(
     const indices: number[] = [];
     let allMatched = selectedLabels.length > 0;
     for (const label of selectedLabels) {
-      const index = question.options.findIndex((option) => askQuestionOptionLabel(option) === label);
+      const index = question.options.findIndex(
+        (option) => askQuestionOptionLabel(option) === label,
+      );
       if (index === -1) {
         allMatched = false;
         break;
