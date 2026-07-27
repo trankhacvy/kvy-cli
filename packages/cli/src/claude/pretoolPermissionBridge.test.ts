@@ -182,6 +182,9 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     const ev = requests[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
     expect(ev.name).toBe("Bash");
     expect(ev.args).toEqual({ command: "ls" });
+    // A web click has no channel to drive this request — the card must
+    // render read-only, not a false "you can answer this" affordance.
+    expect(ev.answerable).toBe(false);
 
     // Tracked pending (for the local-resolution correlation), not blocking —
     // there's nothing left to await.
@@ -199,7 +202,7 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     // A web `perm.answer` racing in gets an honest "can't drive this" answer
     // — not the misleading `already-answered` (nothing has been answered).
     const raced = bridge.resolve({ reqId: ev.reqId, decision: { kind: "allow", scope: "once" } });
-    expect(raced).toEqual({ ok: false });
+    expect(raced).toEqual({ ok: false, reason: "local-turn" });
     expect(permResolves(emitted)).toHaveLength(0);
     expect(bridge.pendingCount).toBe(1);
 
@@ -235,7 +238,185 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     bridge.resolveLocalOutcome("Bash", "approved");
     expect(permResolves(emitted)).toHaveLength(0);
   });
+});
 
+describe("PreToolPermissionBridge — driveLocalDialog (real two-way remote control)", () => {
+  it("marks a local turn's permission request answerable when driveLocalDialog is wired", async () => {
+    const { bridge, emitted } = makeBridge({
+      isWebTurnActive: () => false,
+      driveLocalDialog: () => true,
+    });
+    await bridge.handlePermissionRequest({ tool_name: "Bash", tool_input: { command: "ls" } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    expect(ev.answerable).toBe(true);
+  });
+
+  it("resolve() calls driveLocalDialog with the submitted decision and reports ok:true, without resolving the request itself", async () => {
+    const driveLocalDialog = vi.fn(() => true);
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalDialog });
+    await bridge.handlePermissionRequest({ tool_name: "Write", tool_input: { file: "demo.txt" } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    const decision = { kind: "allow" as const, scope: "once" as const };
+    const result = bridge.resolve({ reqId: ev.reqId, decision });
+
+    expect(result).toEqual({ ok: true });
+    expect(driveLocalDialog).toHaveBeenCalledExactlyOnceWith(decision, "Write");
+    // The request itself is still open — driving the keystrokes isn't the
+    // resolution, the terminal's own tool-start/tool-end pair is.
+    expect(permResolves(emitted)).toHaveLength(0);
+    expect(bridge.pendingCount).toBe(1);
+
+    bridge.resolveLocalOutcome("Write", "approved");
+    expect(permResolves(emitted)).toHaveLength(1);
+  });
+
+  it("falls back to the honest local-turn reason when driveLocalDialog reports it couldn't write anything", async () => {
+    const { bridge, emitted } = makeBridge({
+      isWebTurnActive: () => false,
+      driveLocalDialog: () => false,
+    });
+    await bridge.handlePermissionRequest({ tool_name: "Bash" });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    const result = bridge.resolve({ reqId: ev.reqId, decision: { kind: "deny" } });
+    expect(result).toEqual({ ok: false, reason: "local-turn" });
+  });
+
+  it("a second resolve() for an already-driven reqId does not replay the keystrokes", async () => {
+    const driveLocalDialog = vi.fn(() => true);
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalDialog });
+    await bridge.handlePermissionRequest({ tool_name: "Bash" });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    const first = bridge.resolve({ reqId: ev.reqId, decision: { kind: "allow", scope: "once" } });
+    const second = bridge.resolve({ reqId: ev.reqId, decision: { kind: "deny" } });
+
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: false, reason: "already-answered" });
+    expect(driveLocalDialog).toHaveBeenCalledOnce();
+  });
+
+  it("never attempts to drive an AskUserQuestion widget, even when driveLocalDialog is wired (no keystroke mapping for it)", async () => {
+    const driveLocalDialog = vi.fn(() => true);
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalDialog });
+    await bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions: [{ question: "Which color?", options: ["Red", "Blue"] }] },
+    });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    // Never marked answerable — this widget can't be driven regardless of
+    // whether driveLocalDialog is wired for ordinary permission dialogs.
+    expect(ev.answerable).toBe(false);
+
+    const result = bridge.resolve({
+      reqId: ev.reqId,
+      decision: { kind: "allow", scope: "once", updatedInput: { answers: {} } },
+    });
+    expect(result).toEqual({ ok: false, reason: "local-turn" });
+    expect(driveLocalDialog).not.toHaveBeenCalled();
+  });
+});
+
+describe("PreToolPermissionBridge — driveLocalQuestion (real two-way remote control for AskUserQuestion)", () => {
+  const questions = [{ question: "Which color?", options: ["Red", "Blue"] }];
+
+  it("marks a local turn's question answerable when driveLocalQuestion is wired", async () => {
+    const { bridge, emitted } = makeBridge({
+      isWebTurnActive: () => false,
+      driveLocalQuestion: () => true,
+    });
+    await bridge.handlePreToolUse({
+      tool_name: "AskUserQuestion",
+      tool_input: { questions },
+    });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+    expect(ev.answerable).toBe(true);
+  });
+
+  it("resolve() calls driveLocalQuestion with the decision and the original questions, reporting ok:true without resolving the request itself", async () => {
+    const driveLocalQuestion = vi.fn(() => true);
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalQuestion });
+    await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    const decision = {
+      kind: "allow" as const,
+      scope: "once" as const,
+      updatedInput: { answers: { "Which color?": "Blue" } },
+    };
+    const result = bridge.resolve({ reqId: ev.reqId, decision });
+
+    expect(result).toEqual({ ok: true });
+    expect(driveLocalQuestion).toHaveBeenCalledExactlyOnceWith(decision, questions);
+    expect(permResolves(emitted)).toHaveLength(0);
+    expect(bridge.pendingCount).toBe(1);
+
+    bridge.resolveLocalOutcome("AskUserQuestion", "approved");
+    expect(permResolves(emitted)).toHaveLength(1);
+  });
+
+  it("falls back to the honest local-turn reason when driveLocalQuestion can't map the answer (e.g. free text)", async () => {
+    const { bridge, emitted } = makeBridge({
+      isWebTurnActive: () => false,
+      driveLocalQuestion: () => false,
+    });
+    await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    const result = bridge.resolve({
+      reqId: ev.reqId,
+      decision: {
+        kind: "allow",
+        scope: "once",
+        updatedInput: { answers: { "Which color?": "Purple" } },
+      },
+    });
+    expect(result).toEqual({ ok: false, reason: "local-turn" });
+  });
+
+  it("never attempts driveLocalDialog for a question entry, even when both are wired", async () => {
+    const driveLocalDialog = vi.fn(() => true);
+    const driveLocalQuestion = vi.fn(() => true);
+    const { bridge, emitted } = makeBridge({
+      isWebTurnActive: () => false,
+      driveLocalDialog,
+      driveLocalQuestion,
+    });
+    await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    bridge.resolve({
+      reqId: ev.reqId,
+      decision: { kind: "deny" },
+    });
+
+    expect(driveLocalQuestion).toHaveBeenCalledOnce();
+    expect(driveLocalDialog).not.toHaveBeenCalled();
+  });
+
+  it("a second resolve() for an already-driven question reqId does not replay the keystrokes", async () => {
+    const driveLocalQuestion = vi.fn(() => true);
+    const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, driveLocalQuestion });
+    await bridge.handlePreToolUse({ tool_name: "AskUserQuestion", tool_input: { questions } });
+    const ev = permRequests(emitted)[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
+
+    const decision = {
+      kind: "allow" as const,
+      scope: "once" as const,
+      updatedInput: { answers: { "Which color?": "Blue" } },
+    };
+    const first = bridge.resolve({ reqId: ev.reqId, decision });
+    const second = bridge.resolve({ reqId: ev.reqId, decision });
+
+    expect(first).toEqual({ ok: true });
+    expect(second).toEqual({ ok: false, reason: "already-answered" });
+    expect(driveLocalQuestion).toHaveBeenCalledOnce();
+  });
+});
+
+describe("PreToolPermissionBridge — handlePermissionRequest — web turn", () => {
   it("emits a perm-request for a web turn and blocks until resolved", async () => {
     const { bridge, emitted } = makeBridge();
     const pending = bridge.handlePermissionRequest({
@@ -249,6 +430,8 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     expect(ev.name).toBe("Bash");
     expect(ev.args).toEqual({ command: "rm -rf x" });
     expect(ev.modes).toEqual(["default", "acceptEdits", "plan", "bypassPermissions"]);
+    // A web turn's request is genuinely answerable from the web card.
+    expect(ev.answerable).toBe(true);
     expect(bridge.pendingCount).toBe(1);
 
     const result = bridge.resolve({ reqId: ev.reqId, decision: { kind: "allow", scope: "once" } });
@@ -662,6 +845,7 @@ describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion speci
     const ev = requests[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
     expect(ev.name).toBe("AskUserQuestion");
     expect(ev.modes).toEqual([]);
+    expect(ev.answerable).toBe(false);
     expect(bridge.pendingCount).toBe(1);
 
     // Completed once the terminal's mirrored tool-end correlates it — not by
@@ -686,6 +870,7 @@ describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion speci
     expect(reqEv.name).toBe("AskUserQuestion");
     expect(reqEv.args).toEqual({ questions });
     expect(reqEv.modes).toEqual([]);
+    expect(reqEv.answerable).toBe(true);
     expect(bridge.pendingCount).toBe(1);
 
     bridge.resolve({

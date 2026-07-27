@@ -687,9 +687,15 @@ export const PermAnswerParamsSchema = z.object({
 // First-wins across devices (design §7.6): the session process resolves each
 // reqId exactly once. The losing answer gets ok:false plus the decision that
 // actually won, so the client can render "answered on another device".
+// `"local-turn"` (no `decision` — nobody has answered yet) is the other
+// ok:false case: the reqId belongs to a locally-typed terminal turn, which
+// has no channel for a web click to drive Claude Code's own live dialog
+// (packages/cli/src/claude/pretoolPermissionBridge.ts's `resolve()`). Kept as
+// a multi-value `z.literal` (not `z.enum`) so the wire additive-only compat
+// check still sees this as a widened literal, not a retyped field.
 export const PermAnswerResultSchema = z.object({
   ok: z.boolean(),
-  reason: z.literal("already-answered").optional(),
+  reason: z.literal(["already-answered", "local-turn"]).optional(),
   decision: PermDecisionSchema.optional(),
 });
 

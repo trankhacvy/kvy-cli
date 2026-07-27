@@ -60,6 +60,7 @@ import {
   startHookServer as startHookServerDefault,
   writeHookSettingsFile as writeHookSettingsFileDefault,
 } from "./hookServer.js";
+import type { AskQuestion } from "./pretoolPermissionBridge.js";
 import { PreToolPermissionBridge } from "./pretoolPermissionBridge.js";
 
 /** Env var carrying the generated `--settings` path onto the spawned `claude`'s environment. */
@@ -106,6 +107,14 @@ export interface RemotePermissionHookOptions {
    * pending permission/question even when the turn originated locally.
    */
   onPendingAttention?: (kind: "perm" | "question") => void;
+  /** Forwarded straight to {@link PreToolPermissionBridge}'s own
+   * `driveLocalDialog` — real keystroke-injection into the live PTY for a
+   * web decision on a locally-typed turn's ordinary permission prompt. */
+  driveLocalDialog?: (decision: PermDecision, toolName: string) => boolean;
+  /** Forwarded straight to {@link PreToolPermissionBridge}'s own
+   * `driveLocalQuestion` — same idea, for a locally-typed turn's
+   * `AskUserQuestion` widget. */
+  driveLocalQuestion?: (decision: PermDecision, questions: AskQuestion[]) => boolean;
   /** Max wait for a web answer before the bridge falls back to a deny. */
   answerTimeoutMs?: number;
   /**
@@ -230,6 +239,8 @@ export async function installRemotePermissionHook(
     onModeChange: opts.onModeChange,
     onPromptLikely: opts.onPromptLikely,
     onPendingAttention: opts.onPendingAttention,
+    driveLocalDialog: opts.driveLocalDialog,
+    driveLocalQuestion: opts.driveLocalQuestion,
     answerTimeoutMs: opts.answerTimeoutMs,
     initialPermissionMode: opts.initialPermissionMode,
     logger: opts.logger,

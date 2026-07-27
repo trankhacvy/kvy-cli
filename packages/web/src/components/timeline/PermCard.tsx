@@ -1,12 +1,14 @@
 "use client";
 
-import type { PermDecision, PermissionMode } from "@falcon/wire";
+import type { PermDecision } from "@falcon/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   applyAnswerResult,
+  buildMessageEnvelope,
   fromError,
   type PermCardPhase,
   useSessionControl,
@@ -42,24 +44,67 @@ export function extractPlanMarkdown(name: string, args: unknown): string | null 
   return typeof plan === "string" ? plan : null;
 }
 
-const MODE_LABEL: Record<PermissionMode, string> = {
-  default: "Default",
-  acceptEdits: "Accept edits",
-  plan: "Plan",
-  bypassPermissions: "Bypass permissions",
-};
+/** The edit-diff / plan-markdown / raw-JSON preview shared by both the
+ * interactive card body and the read-only "not answerable" body below —
+ * factored out so the two don't drift on how a tool's args are shown. */
+function PermCardPreview({ name, args }: { name: string; args: unknown }) {
+  const isEdit = EDIT_TOOLS.has(name);
+  const editArgs = isEdit ? parseEditArgs(args) : null;
+  const planMd = extractPlanMarkdown(name, args);
+
+  if (editArgs) {
+    return (
+      <div className="flex flex-col gap-2">
+        {editArgs.filePath && (
+          <p className="truncate font-mono text-xs text-muted-foreground">{editArgs.filePath}</p>
+        )}
+        {(editArgs.edits && editArgs.edits.length > 0
+          ? editArgs.edits
+          : [{ oldString: editArgs.oldString, newString: editArgs.newString ?? editArgs.content }]
+        ).map((edit) => (
+          <DiffView
+            key={`${edit.oldString ?? ""}::${edit.newString ?? ""}`}
+            oldText={edit.oldString}
+            newText={edit.newString}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (planMd) {
+    return (
+      <div className="max-h-96 overflow-y-auto rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+        <Markdown md={planMd} />
+      </div>
+    );
+  }
+
+  return args !== undefined ? <JsonBlock value={args} /> : null;
+}
 
 /**
  * Interactive permission card (falcon-system-design.md §9.2 "Session" row:
- * `PermCard` "Allow/Deny/Allow-session/mode"; plan.md §16 "2.4 Web control
+ * `PermCard` "Allow/Deny/Allow-session"; plan.md §16 "2.4 Web control
  * surface"). Replaces the read-only `PermissionBadge` at both call sites
  * that carry a `PermissionInfo` (`PermPlaceholder`, `ToolCardShell`):
  *
  *  - `permission.decision` already set (canonical, from the reducer) ->
  *    falls straight through to `PermissionBadge`'s read-only display —
  *    that's always authoritative, regardless of this card's own local phase.
- *  - `decision` undefined -> Allow / Allow-for-session / mode-switch / Deny
- *    buttons, calling the `perm.answer` session RPC (design §4.4/§7.6).
+ *  - `decision` undefined -> Allow / Allow-for-session / Deny buttons,
+ *    calling the `perm.answer` session RPC (design §4.4/§7.6). Only these
+ *    three — matches the terminal's own dialog exactly (verified live: it
+ *    never offers a full mode menu here, only "allow this session" via
+ *    shift+tab). Switching to `plan`/`bypassPermissions`/`default` outside
+ *    the context of answering a pending request is `ComposerControls`'
+ *    job (the composer's own mode dropdown), not this card's.
+ *  - An optional note next to Allow mirrors the terminal's "Tab to amend"
+ *    (verified live: Tab does NOT edit the tool's input — it approves as-is
+ *    and lets you type a follow-up chat message that's sent right after,
+ *    which Claude then acts on as a new instruction). Approving with a note
+ *    here does the same two things web already has separately — answer,
+ *    then `actions.sendMessage` — rather than any new/edited-input channel.
  *
  * `showPreview` controls the edit-preview diff (falcon-prd.md FR-7.4: "for
  * edits, the proposed change preview") — `PermPlaceholder` has no other
@@ -85,6 +130,7 @@ export function PermCard({
 }) {
   const { actions } = useSessionControl();
   const [phase, setPhase] = useState<PermCardPhase>({ kind: "idle" });
+  const [note, setNote] = useState("");
 
   const mutation = useMutation({
     mutationFn: (vars: { reqId: string; decision: PermDecision }) =>
@@ -111,6 +157,40 @@ export function PermCard({
     );
   }
 
+  const isExitPlan = isExitPlanTool(name);
+
+  // A locally-typed terminal turn's request (`answerable: false`) has no
+  // channel for a web click to drive it — the terminal, not this card, owns
+  // the outcome. Rendering interactive buttons here would be a false
+  // affordance (falcon-prd.md's "never claim a control you can't honor"
+  // principle); the card resolves on its own once the reducer's
+  // `permission.decision` catches up from the terminal's real answer.
+  // `phase.kind === "not-answerable"` covers the defensive case where a
+  // click still slipped through (e.g. an older CLI build that doesn't yet
+  // send `answerable`) and the CLI told us so after the fact.
+  if (permission.answerable === false || phase.kind === "not-answerable") {
+    return (
+      <div
+        className={
+          showHeader
+            ? "flex flex-col gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-sm"
+            : "flex flex-col gap-2"
+        }
+      >
+        {showHeader && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">Permission requested — {name}</span>
+            <Badge variant="secondary">Waiting at the terminal</Badge>
+          </div>
+        )}
+        {showPreview && <PermCardPreview name={name} args={args} />}
+        <p className="text-xs text-muted-foreground">
+          Waiting for a response at the terminal — this can't be answered from the web.
+        </p>
+      </div>
+    );
+  }
+
   const submitting = phase.kind === "submitting" || mutation.isPending;
 
   function submit(decision: PermDecision) {
@@ -124,10 +204,24 @@ export function PermCard({
     );
   }
 
-  const isEdit = EDIT_TOOLS.has(name);
-  const editArgs = isEdit ? parseEditArgs(args) : null;
-  const isExitPlan = isExitPlanTool(name);
-  const planMd = extractPlanMarkdown(name, args);
+  // "Allow" carries whatever's in the note field, same as the terminal's
+  // "Tab to amend" — only sent once the allow decision actually won (not on
+  // a lost-race/local-turn fallback, where nothing here actually happened).
+  function submitAllow() {
+    const decision: PermDecision = { kind: "allow", scope: "once" };
+    const trimmedNote = note.trim();
+    setPhase({ kind: "submitting", decision });
+    mutation.mutate(
+      { reqId: permission.reqId, decision },
+      {
+        onSuccess: (result) => {
+          setPhase(applyAnswerResult(decision, result));
+          if (result.ok && trimmedNote) void actions.sendMessage(buildMessageEnvelope(trimmedNote));
+        },
+        onError: (error) => setPhase(fromError(error)),
+      },
+    );
+  }
 
   return (
     <div
@@ -144,46 +238,20 @@ export function PermCard({
         </div>
       )}
 
-      {showPreview &&
-        (editArgs ? (
-          <div className="flex flex-col gap-2">
-            {editArgs.filePath && (
-              <p className="truncate font-mono text-xs text-muted-foreground">
-                {editArgs.filePath}
-              </p>
-            )}
-            {(editArgs.edits && editArgs.edits.length > 0
-              ? editArgs.edits
-              : [
-                  {
-                    oldString: editArgs.oldString,
-                    newString: editArgs.newString ?? editArgs.content,
-                  },
-                ]
-            ).map((edit) => (
-              <DiffView
-                key={`${edit.oldString ?? ""}::${edit.newString ?? ""}`}
-                oldText={edit.oldString}
-                newText={edit.newString}
-              />
-            ))}
-          </div>
-        ) : planMd ? (
-          <div className="max-h-96 overflow-y-auto rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-            <Markdown md={planMd} />
-          </div>
-        ) : (
-          args !== undefined && <JsonBlock value={args} />
-        ))}
+      {showPreview && <PermCardPreview name={name} args={args} />}
 
       {phase.kind === "error" && <p className="text-xs text-destructive">{phase.message}</p>}
 
+      <Input
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        disabled={submitting}
+        placeholder="Optionally tell Claude what to do next (sent after Allow)…"
+        className="h-8 text-sm"
+      />
+
       <div className="flex flex-wrap gap-1.5">
-        <Button
-          size="sm"
-          disabled={submitting}
-          onClick={() => submit({ kind: "allow", scope: "once" })}
-        >
+        <Button size="sm" disabled={submitting} onClick={submitAllow}>
           {isExitPlan ? "Approve plan" : "Allow"}
         </Button>
         <Button
@@ -194,17 +262,6 @@ export function PermCard({
         >
           Allow for session
         </Button>
-        {permission.modes.map((mode) => (
-          <Button
-            key={mode}
-            size="sm"
-            variant="outline"
-            disabled={submitting}
-            onClick={() => submit({ kind: "mode", mode })}
-          >
-            {isExitPlan ? `Approve & ${MODE_LABEL[mode]}` : `Switch to ${mode}`}
-          </Button>
-        ))}
         <Button
           size="sm"
           variant="destructive"

@@ -102,6 +102,11 @@ export interface PermissionInfo {
   reqId: string;
   modes: PermissionMode[];
   decision?: PermDecision;
+  /** False when this request was raised by a locally-typed terminal turn —
+   * the human at the keyboard, not a web click, drives the outcome, so the
+   * card renders read-only. Undefined (an older CLI build) is treated as
+   * answerable, matching the pre-existing behavior. */
+  answerable?: boolean;
 }
 
 /**

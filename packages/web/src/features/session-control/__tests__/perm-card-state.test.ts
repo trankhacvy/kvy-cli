@@ -32,6 +32,12 @@ describe("applyAnswerResult", () => {
     const result = applyAnswerResult(allowOnce, { ok: false, reason: "already-answered" });
     expect(result.kind).toBe("error");
   });
+
+  it("transitions to 'not-answerable' when reason is local-turn — not a generic error", () => {
+    expect(applyAnswerResult(allowOnce, { ok: false, reason: "local-turn" })).toEqual({
+      kind: "not-answerable",
+    });
+  });
 });
 
 describe("fromError", () => {

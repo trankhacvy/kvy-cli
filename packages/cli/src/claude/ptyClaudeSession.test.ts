@@ -736,6 +736,328 @@ describe("startPtyClaudeSession", () => {
     });
   });
 
+  describe("answerPermission (real two-way remote control — a web decision drives the live PTY dialog)", () => {
+    const shiftTab = `${String.fromCharCode(0x1b)}[Z`;
+    const enter = "\r";
+
+    it("writes ESC for a deny decision", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerPermission({ kind: "deny" }, "default", "Write")).toBe(true);
+      expect(h.fakePty.writes).toEqual([String.fromCharCode(0x1b)]);
+
+      handle.stop();
+    });
+
+    it("writes '1' then Enter for an allow-once decision", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerPermission({ kind: "allow", scope: "once" }, "default", "Write")).toBe(
+        true,
+      );
+      expect(h.fakePty.writes).toEqual(["1", enter]);
+
+      handle.stop();
+    });
+
+    it("cycles Shift+Tab to acceptEdits then Enter for an allow-session decision", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(
+        handle.answerPermission({ kind: "allow", scope: "session" }, "default", "Write"),
+      ).toBe(true);
+      expect(h.fakePty.writes).toEqual([shiftTab, enter]);
+
+      handle.stop();
+    });
+
+    it("cycles Shift+Tab to the requested mode then Enter for a mode decision", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerPermission({ kind: "mode", mode: "plan" }, "default", "Write")).toBe(
+        true,
+      );
+      expect(h.fakePty.writes).toEqual([shiftTab, shiftTab, enter]);
+
+      handle.stop();
+    });
+
+    it("treats a missing currentMode as 'default' when computing the Shift+Tab cycle", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerPermission({ kind: "mode", mode: "acceptEdits" }, null, "Write")).toBe(
+        true,
+      );
+      expect(h.fakePty.writes).toEqual([shiftTab, enter]);
+
+      handle.stop();
+    });
+
+    it("is NOT gated by an open TUI dialog — unlike sendModeCycle, its whole job is to answer the open dialog", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      handle.setPromptOpen(true);
+      expect(handle.answerPermission({ kind: "deny" }, "default", "Write")).toBe(true);
+      expect(h.fakePty.writes).toEqual([String.fromCharCode(0x1b)]);
+
+      handle.stop();
+    });
+
+    it("reports failure when the pty never spawned", async () => {
+      const h = makeHarness();
+      h.spawnPty.mockImplementation(() => {
+        throw new Error("spawn failed");
+      });
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerPermission({ kind: "deny" }, "default", "Write")).toBe(false);
+    });
+
+    it("writes '2' then Enter for ExitPlanMode's allow-once decision — 'Yes, manually approve edits', NOT digit '1' (live-verified: '1' on this dialog means auto-accept-edits, a mode switch)", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(
+        handle.answerPermission({ kind: "allow", scope: "once" }, "default", "ExitPlanMode"),
+      ).toBe(true);
+      expect(h.fakePty.writes).toEqual(["2", enter]);
+
+      handle.stop();
+    });
+
+    it("writes '1' then Enter for ExitPlanMode's allow-session decision — 'Yes, auto-accept edits', no Shift+Tab cycle", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(
+        handle.answerPermission({ kind: "allow", scope: "session" }, "default", "ExitPlanMode"),
+      ).toBe(true);
+      expect(h.fakePty.writes).toEqual(["1", enter]);
+
+      handle.stop();
+    });
+
+    it("still writes ESC for ExitPlanMode's deny decision", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerPermission({ kind: "deny" }, "default", "ExitPlanMode")).toBe(true);
+      expect(h.fakePty.writes).toEqual([String.fromCharCode(0x1b)]);
+
+      handle.stop();
+    });
+
+    it("writes nothing and returns false for a 'mode' decision on ExitPlanMode — its dialog has no general mode picker", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(
+        handle.answerPermission({ kind: "mode", mode: "bypassPermissions" }, "default", "ExitPlanMode"),
+      ).toBe(false);
+      expect(h.fakePty.writes).toEqual([]);
+
+      handle.stop();
+    });
+
+    it("recognizes the 'exit_plan_mode' tool-name spelling too", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(
+        handle.answerPermission({ kind: "allow", scope: "once" }, "default", "exit_plan_mode"),
+      ).toBe(true);
+      expect(h.fakePty.writes).toEqual(["2", enter]);
+
+      handle.stop();
+    });
+  });
+
+  describe("answerAskUserQuestion (real two-way remote control for the AskUserQuestion widget)", () => {
+    const right = `${String.fromCharCode(0x1b)}[C`;
+    const colorQuestion = {
+      question: "Which color?",
+      options: ["Red", "Blue", "Green"],
+    };
+    const fruitsQuestion = {
+      question: "Pick fruits",
+      multiSelect: true,
+      options: ["Apple", "Banana", "Cherry"],
+    };
+
+    it("writes ESC for a deny decision (the web card's 'Chat about this')", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerAskUserQuestion({ kind: "deny" }, [colorQuestion])).toBe(true);
+      expect(h.fakePty.writes).toEqual([String.fromCharCode(0x1b)]);
+
+      handle.stop();
+    });
+
+    it("writes ONLY the matching digit for a lone single-select question (no tab bar, no separate Submit step at all)", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      const decision = {
+        kind: "allow" as const,
+        scope: "once" as const,
+        updatedInput: { answers: { "Which color?": "Blue" } },
+      };
+      expect(handle.answerAskUserQuestion(decision, [colorQuestion])).toBe(true);
+      // "Blue" is option 2. A single question with no multi-select has no
+      // tab bar at all — the digit press both answers AND submits the whole
+      // form immediately (live-verified: a trailing "1" here would instead
+      // leak into the next chat prompt as a stray keystroke).
+      expect(h.fakePty.writes).toEqual(["2"]);
+
+      handle.stop();
+    });
+
+    it("toggles digits then presses Right to reach Submit for a multi-select answer", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      const decision = {
+        kind: "allow" as const,
+        scope: "once" as const,
+        updatedInput: { answers: { "Pick fruits": "Apple, Cherry" } },
+      };
+      expect(handle.answerAskUserQuestion(decision, [fruitsQuestion])).toBe(true);
+      expect(h.fakePty.writes).toEqual(["1", "3", right, "1"]);
+
+      handle.stop();
+    });
+
+    it("paces consecutive keystrokes one timer tick apart (live-verified: writing two digits back to back silently dropped the second one)", async () => {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll(); // drain the readyDelay timer only
+
+      const decision = {
+        kind: "allow" as const,
+        scope: "once" as const,
+        updatedInput: { answers: { "Pick fruits": "Apple, Cherry" } },
+      };
+      expect(handle.answerAskUserQuestion(decision, [fruitsQuestion])).toBe(true);
+
+      // Only the first keystroke is written synchronously — the rest are
+      // scheduled, not fired back to back.
+      expect(h.fakePty.writes).toEqual(["1"]);
+
+      timers.runNext();
+      expect(h.fakePty.writes).toEqual(["1", "3"]);
+
+      timers.runNext();
+      expect(h.fakePty.writes).toEqual(["1", "3", right]);
+
+      timers.runNext();
+      expect(h.fakePty.writes).toEqual(["1", "3", right, "1"]);
+
+      handle.stop();
+    });
+
+    it("handles a mixed multi-question form (single-select then multi-select)", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      const decision = {
+        kind: "allow" as const,
+        scope: "once" as const,
+        updatedInput: {
+          answers: { "Which color?": "Red", "Pick fruits": "Banana" },
+        },
+      };
+      expect(handle.answerAskUserQuestion(decision, [colorQuestion, fruitsQuestion])).toBe(true);
+      // "Red" (single-select, digit 1) auto-advances to the fruits tab;
+      // "Banana" (multi-select, digit 2) needs the explicit Right to Submit.
+      expect(h.fakePty.writes).toEqual(["1", "2", right, "1"]);
+
+      handle.stop();
+    });
+
+    it("drives a free-text answer that matches no listed option via the widget's own 'Type something' row", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      const decision = {
+        kind: "allow" as const,
+        scope: "once" as const,
+        updatedInput: { answers: { "Which color?": "Purple" } },
+      };
+      expect(handle.answerAskUserQuestion(decision, [colorQuestion])).toBe(true);
+      // colorQuestion has 3 options, so "Type something" is digit "4" — its
+      // digit only opens the row for editing (live-verified: it does NOT
+      // submit like every other option's digit does), then each typed
+      // character replaces its placeholder text, then Enter confirms. A lone
+      // free-text question has no separate review tab either, same as a
+      // lone matched single-select answer.
+      expect(h.fakePty.writes).toEqual(["4", "P", "u", "r", "p", "l", "e", "\r"]);
+
+      handle.stop();
+    });
+
+    it("drives a free-text answer anywhere in a multi-question form, then reaches the review tab's Submit", async () => {
+      const h = makeHarness();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      const decision = {
+        kind: "allow" as const,
+        scope: "once" as const,
+        updatedInput: {
+          answers: { "Which color?": "Red", "Pick fruits": "Durian" },
+        },
+      };
+      expect(handle.answerAskUserQuestion(decision, [colorQuestion, fruitsQuestion])).toBe(true);
+      // "Red" (single-select, digit 1) auto-advances to the fruits tab;
+      // "Durian" doesn't match any of fruitsQuestion's 3 options, so it's
+      // typed into that question's own "Type something" row (digit "4"),
+      // confirmed with Enter, then the form's review tab is reached — "1" +
+      // Enter (already the trailing "1" a multi-question form always needs).
+      expect(h.fakePty.writes).toEqual(["1", "4", "D", "u", "r", "i", "a", "n", "\r", "1"]);
+
+      handle.stop();
+    });
+
+    it("reports failure when the pty never spawned", async () => {
+      const h = makeHarness();
+      h.spawnPty.mockImplementation(() => {
+        throw new Error("spawn failed");
+      });
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      expect(handle.answerAskUserQuestion({ kind: "deny" }, [colorQuestion])).toBe(false);
+    });
+  });
+
   describe("sendModelChange (issue #12 — real setModel's /model slash command)", () => {
     it("types /model <alias> then Enter, and reports success when the gate is open", async () => {
       const h = makeHarness();

@@ -2,6 +2,7 @@ export { ChangedFilesList } from "./components/ChangedFilesList";
 export { CompareAgainstSelect } from "./components/CompareAgainstSelect";
 export { FileStatusBadge } from "./components/FileStatusBadge";
 export { GitDiffPanel } from "./components/GitDiffPanel";
+export { GitStatusError } from "./components/GitStatusError";
 export { GitToolbar } from "./components/GitToolbar";
 export { SessionGitScreen } from "./components/SessionGitScreen";
 export { UnifiedDiffViewer } from "./components/UnifiedDiffViewer";

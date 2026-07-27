@@ -53,7 +53,7 @@
  * hooks and race the session-id/attention signals.
  */
 
-import type { SessionEnvelope } from "@falcon/wire";
+import type { PermDecision, PermissionMode, SessionEnvelope } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { spawn as spawnPtyDefault } from "node-pty";
 import type { Logger } from "../logger.js";
@@ -66,6 +66,12 @@ import {
   type SessionTurnEndStatus,
 } from "./envelopeMapper.js";
 import { InjectionController, type PendingInjection } from "./injectionController.js";
+import {
+  type AskQuestion,
+  type AskQuestionOption,
+  isExitPlanTool,
+  permissionModeCyclePresses,
+} from "./pretoolPermissionBridge.js";
 import {
   createFetchSignalServer as createFetchSignalServerDefault,
   type FetchSignalEvent,
@@ -123,6 +129,11 @@ const CLOSE_TURN_QUIET_FLUSHES_REQUIRED = 2;
 const SUBMIT_KEY = "\r";
 /** Shift+Tab — Claude Code's own permission-mode cycle keystroke (plan-v2.md W4.3). */
 const SHIFT_TAB_KEY = "[Z";
+/** Right arrow — moves between the `AskUserQuestion` widget's per-question
+ * tabs and its final "Submit" review tab (live-verified against Claude Code
+ * 2.1.220: a multi-select question's checkboxes don't auto-advance the way a
+ * single-select answer does, so this is the only way off that tab). */
+const RIGHT_ARROW_KEY = "[C";
 
 /**
  * Claude Code's own confirmation dialog when `/model <alias>` is run mid-
@@ -283,6 +294,91 @@ export interface PtyClaudeSessionHandle {
    */
   sendModeCycle(presses: number): boolean;
   /**
+   * Answers a locally-typed turn's OPEN permission dialog from a web
+   * `perm.answer` decision — real two-way remote control (the point of
+   * running `falcon claude` in a terminal at all: a user can walk away and
+   * approve from their phone). Deliberately NOT gated by
+   * `InjectionController.canInjectNow` like {@link sendModeCycle}/{@link
+   * injectMessage} — those exist to keep a keystroke OUT of an open dialog;
+   * this method's whole job is to answer the dialog that's currently open,
+   * so requiring `!promptOpen` would make it unable to ever fire. Mirrors
+   * {@link sendInterrupt}'s simpler gate instead (just "is there a live PTY
+   * to write to").
+   *
+   * Keystroke mapping for an ORDINARY permission dialog (matches Claude
+   * Code's own conventions — "1. Yes" / an optional "session" option
+   * shortcut-labeled `(shift+tab)` / "N. No", "Esc to cancel"):
+   *  - `{kind:"deny"}` → Escape, the dialog's own documented cancel gesture.
+   *  - `{kind:"mode", mode}` or `{kind:"allow", scope:"session"}` (session-
+   *    scoped allow IS a mode switch to `acceptEdits` in the live TUI) →
+   *    the same Shift+Tab cycle {@link sendModeCycle} uses, computed from
+   *    `currentMode` via `permissionModeCyclePresses`, then Enter to confirm.
+   *  - `{kind:"allow", scope:"once"}` → `"1"` then Enter — the dialog's
+   *    first, most conservative affirmative option, explicit rather than
+   *    relying on it staying the pre-highlighted default (same reasoning
+   *    {@link MODEL_SWITCH_CONFIRM_PATTERN}'s watcher already uses above).
+   *
+   * `ExitPlanMode`'s OWN dialog ({@link isExitPlanTool}) is a DIFFERENT
+   * widget with different option semantics — live-verified against 2.1.220,
+   * NOT assumed:
+   *  - `{kind:"deny"}` → still Escape (confirmed: rejects the plan cleanly,
+   *    same as the dialog's own "Tell Claude what to change" + no feedback).
+   *  - `{kind:"allow", scope:"once"}` → `"2"` then Enter — "Yes, manually
+   *    approve edits" (approves the plan, mode unchanged — every subsequent
+   *    edit still asks). Digit `"1"` here is a DIFFERENT thing entirely
+   *    ("Yes, auto-accept edits", a mode switch), the reverse of what `"1"`
+   *    means on every other permission dialog — using it for a plain
+   *    "once" approval would silently flip the session into acceptEdits.
+   *  - `{kind:"allow", scope:"session"}` → `"1"` then Enter — "Yes,
+   *    auto-accept edits". No Shift+Tab cycle: this dialog's own Shift+Tab
+   *    means "approve with this feedback" (tied to option 4), unrelated to
+   *    {@link sendModeCycle}'s generic mode-cycle gesture.
+   *  - `{kind:"mode", mode}` → `false`, nothing written. This dialog has no
+   *    general mode picker (only the two affirmative options above), so an
+   *    arbitrary target mode has no keystroke to reach it.
+   *
+   * This has an inherent, irreducible race this method cannot fully close:
+   * if the human at the keyboard answers the SAME dialog at the same moment
+   * a web decision drives it, both inputs land on one live TUI. Accepted
+   * trade-off for the feature actually working, not a bug to "fix" here.
+   *
+   * Returns `false` (writes nothing) only when there's no live PTY child at
+   * all (not spawned yet, or already exited), or for an unreachable
+   * `ExitPlanMode` mode target as above.
+   */
+  answerPermission(
+    decision: PermDecision,
+    currentMode: PermissionMode | null,
+    toolName: string,
+  ): boolean;
+  /**
+   * Answers a locally-typed turn's OPEN `AskUserQuestion` widget from a web
+   * decision — same real two-way remote control as {@link answerPermission},
+   * a distinct keystroke model. Live-verified against Claude Code 2.1.220:
+   *
+   *  - `{kind:"deny"}` (the web card's "Chat about this") → Escape, this
+   *    widget's own documented cancel gesture.
+   *  - `{kind:"allow", updatedInput:{answers}}` — for each question in
+   *    order, its answer string (a label, or comma-joined labels for a
+   *    multi-select question) is matched against that question's own
+   *    options: matched option(s) get their 1-based digit pressed (a
+   *    single-select question's digit press auto-advances to the next tab;
+   *    a multi-select question's does not, so {@link RIGHT_ARROW_KEY}
+   *    explicitly advances after its digits). An answer that matches none of
+   *    the options is driven as free text instead: the digit one past the
+   *    last option selects the widget's own always-present "Type something"
+   *    row (live-verified: that digit only puts the row into an inline edit
+   *    field, it does NOT submit on its own — unlike every other option's
+   *    digit), then each character of the answer is typed into it, then
+   *    Enter confirms that question's answer and advances. Answering the
+   *    LAST question lands on the widget's own "Submit answers" review tab,
+   *    so `"1"` + Enter there confirms.
+   *
+   * Computes every keystroke for every question BEFORE writing anything, and
+   * writes nothing at all (returns `false`) if any question has no answer.
+   */
+  answerAskUserQuestion(decision: PermDecision, questions: AskQuestion[]): boolean;
+  /**
    * Types `/model <alias>` + submit into the live PTY — Claude Code's own
    * model-switch slash command (docs/known-issues.md issue #12, "web model
    * selector"). Unlike {@link sendModeCycle}'s raw Shift+Tab escape bytes,
@@ -358,6 +454,109 @@ export function notifyTerminal(write: (text: string) => void, text: string): voi
   // ESC ] 9 ; <text> BEL — OSC 9, BEL-terminated. Non-rendering: no cursor movement and
   // no framebuffer write, so there is nothing for the provider TUI to repaint over.
   write(`\x1b]9;${text}\x07`);
+}
+
+function askQuestionOptionLabel(option: AskQuestionOption): string {
+  return typeof option === "string" ? option : option.label;
+}
+
+/** `decision.updatedInput.answers` narrowed to `Record<string,string>`, or
+ * `null` for any other shape (including a plain `allow` with no `answers`
+ * at all) — mirrors the web's own `extractAskAnswers` (`ask-question-state.ts`). */
+function extractQuestionAnswers(updatedInput: unknown): Record<string, string> | null {
+  if (typeof updatedInput !== "object" || updatedInput === null || Array.isArray(updatedInput)) {
+    return null;
+  }
+  const answers = (updatedInput as Record<string, unknown>).answers;
+  if (typeof answers !== "object" || answers === null || Array.isArray(answers)) return null;
+  for (const value of Object.values(answers)) {
+    if (typeof value !== "string") return null;
+  }
+  return answers as Record<string, string>;
+}
+
+/**
+ * The exact keystrokes to answer every question in order, or `null` if any
+ * question has no answer at all. An answer that doesn't match one of the
+ * question's own option labels is driven as free text (live-verified against
+ * 2.1.220): the widget always appends its own "Type something" row right
+ * after the listed options; that row's digit puts it into an inline edit
+ * field instead of submitting, typed characters replace its placeholder text
+ * in place, and Enter then confirms it like any other answered tab.
+ */
+function planAskUserQuestionKeystrokes(
+  questions: AskQuestion[],
+  answers: Record<string, string>,
+): string[] | null {
+  const keystrokes: string[] = [];
+  for (const question of questions) {
+    const answer = answers[question.question];
+    if (!answer) return null;
+    const selectedLabels = answer
+      .split(",")
+      .map((label) => label.trim())
+      .filter((label) => label.length > 0);
+
+    const indices: number[] = [];
+    let allMatched = selectedLabels.length > 0;
+    for (const label of selectedLabels) {
+      const index = question.options.findIndex((option) => askQuestionOptionLabel(option) === label);
+      if (index === -1) {
+        allMatched = false;
+        break;
+      }
+      indices.push(index);
+    }
+
+    if (allMatched) {
+      for (const index of indices) keystrokes.push(String(index + 1));
+      // A single-select answer auto-advances to the next tab; a multi-select
+      // one doesn't, so it needs an explicit push off its own tab.
+      if (question.multiSelect) keystrokes.push(RIGHT_ARROW_KEY);
+    } else {
+      keystrokes.push(String(question.options.length + 1));
+      keystrokes.push(...answer.split(""));
+      keystrokes.push(SUBMIT_KEY);
+    }
+  }
+  // A lone single-select question has no tab bar at all — its digit press
+  // both answers AND submits the whole form immediately (live-verified: a
+  // trailing "1" here would leak into the next chat prompt instead). Any
+  // multi-select question, or more than one question, DOES use the tabbed
+  // flow, which lands on the widget's own "Submit answers" review tab
+  // (itself option "1") once every question is answered.
+  if (questions.length > 1 || questions.some((question) => question.multiSelect)) {
+    keystrokes.push("1");
+  }
+  return keystrokes;
+}
+
+/**
+ * Gap between consecutive `answerAskUserQuestion` keystrokes. Live-verified
+ * necessary against Claude Code 2.1.220: writing two digit keystrokes back
+ * to back with no gap (e.g. toggling two multi-select checkboxes) silently
+ * dropped the second one — the widget's own re-render needs a moment to
+ * catch up before it can register the next keypress, the same reasoning
+ * `injectionController.ts`'s `submitDelayMs` documents for pasted text vs.
+ * its trailing Enter.
+ */
+const ASK_QUESTION_KEYSTROKE_DELAY_MS = 150;
+
+/** Writes `keystrokes` to `pty` one at a time, `delayMs` apart — see {@link
+ * ASK_QUESTION_KEYSTROKE_DELAY_MS}'s doc for why consecutive writes can't
+ * just happen synchronously back to back. */
+function writeKeystrokesPaced(
+  pty: PtyLike,
+  keystrokes: string[],
+  delayMs: number,
+  setTimeoutImpl: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>,
+): void {
+  const [next, ...rest] = keystrokes;
+  if (next === undefined) return;
+  pty.write(next);
+  if (rest.length > 0) {
+    setTimeoutImpl(() => writeKeystrokesPaced(pty, rest, delayMs, setTimeoutImpl), delayMs);
+  }
 }
 
 /**
@@ -720,6 +919,60 @@ export function startPtyClaudeSession(
       // typing a message would be (plan-v2.md W4.3).
       if (!controller.canInjectNow) return false;
       for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
+      return true;
+    },
+    answerPermission: (decision, currentMode, toolName) => {
+      if (!ptyProcess) return false;
+      if (decision.kind === "deny") {
+        ptyProcess.write("\u001b"); // ESC — the dialog's own "Esc to cancel" gesture
+        return true;
+      }
+      if (isExitPlanTool(toolName)) {
+        // ExitPlanMode's own dialog offers only two affirmative options —
+        // no general mode picker — and their digits mean the OPPOSITE of a
+        // plain permission dialog's: "1" is a mode switch, "2" is the plain
+        // approve. See this method's doc for the live-verified mapping.
+        if (decision.kind === "allow" && decision.scope === "session") {
+          ptyProcess.write("1"); // "Yes, auto-accept edits"
+          ptyProcess.write(SUBMIT_KEY);
+          return true;
+        }
+        if (decision.kind === "allow" && decision.scope === "once") {
+          ptyProcess.write("2"); // "Yes, manually approve edits"
+          ptyProcess.write(SUBMIT_KEY);
+          return true;
+        }
+        return false; // a `mode` decision has no reachable option here
+      }
+      const targetMode =
+        decision.kind === "mode"
+          ? decision.mode
+          : decision.kind === "allow" && decision.scope === "session"
+            ? "acceptEdits"
+            : null;
+      if (targetMode) {
+        const presses = permissionModeCyclePresses(currentMode ?? "default", targetMode);
+        for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
+        ptyProcess.write(SUBMIT_KEY);
+        return true;
+      }
+      // allow, scope "once" — the dialog's first, most conservative option.
+      ptyProcess.write("1");
+      ptyProcess.write(SUBMIT_KEY);
+      return true;
+    },
+    answerAskUserQuestion: (decision, questions) => {
+      if (!ptyProcess) return false;
+      if (decision.kind === "deny") {
+        ptyProcess.write(""); // ESC — this widget's own "Esc to cancel" gesture
+        return true;
+      }
+      if (decision.kind !== "allow") return false; // a mode decision doesn't apply to a question
+      const answers = extractQuestionAnswers(decision.updatedInput);
+      if (!answers) return false;
+      const keystrokes = planAskUserQuestionKeystrokes(questions, answers);
+      if (!keystrokes) return false; // no answer for some question — nothing safe to drive
+      writeKeystrokesPaced(ptyProcess, keystrokes, ASK_QUESTION_KEYSTROKE_DELAY_MS, setTimeoutImpl);
       return true;
     },
     sendModelChange: (model) => {

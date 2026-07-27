@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChangedFilesList,
   CompareAgainstSelect,
+  GitStatusError,
   GitToolbar,
   useGitPanel,
   useLiveGitDiffActions,
@@ -60,11 +61,7 @@ function ChangesTab({
   }
 
   if (panel.statusError || !panel.status) {
-    return (
-      <p className="p-4 text-sm text-destructive">
-        Could not load git status{panel.statusError ? `: ${panel.statusError}` : "."}
-      </p>
-    );
+    return <GitStatusError panel={panel} />;
   }
 
   return (
