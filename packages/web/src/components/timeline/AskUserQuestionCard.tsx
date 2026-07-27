@@ -40,10 +40,11 @@ import { AskQuestionOptions } from "./AskQuestionOptions";
  * Type something" / "N+1. Chat about this" rows Claude Code always appends
  * to its own TUI list, docs/known-issues.md #5 follow-up): a free-text input
  * under each question's option list, and a "Chat about this instead" escape
- * hatch that declines the whole form. This only applies when the web card
- * itself is the answering surface (a web-originated turn) — it does not, and
- * cannot, drive a local terminal's own live TUI (that would need PTY
- * keystroke injection, a separate, out-of-scope stretch goal).
+ * hatch that declines the whole form. For a web-originated turn this submits
+ * straight to the model as above; for a local terminal turn it's driven into
+ * the live TUI by PTY keystrokes instead (`ptyClaudeSession.ts`'s
+ * `answerAskUserQuestion` — typing into the widget's own "Type something"
+ * row, live-verified against Claude Code 2.1.220).
  */
 export function AskUserQuestionCard({
   args,
@@ -67,6 +68,35 @@ export function AskUserQuestionCard({
   // regardless of this card's own optimistic phase.
   if (permission.decision || phase.kind === "answered" || phase.kind === "lost-race") {
     return <AskAnsweredSummary questions={questions} permission={permission} phase={phase} />;
+  }
+
+  // A locally-typed terminal turn's question (`answerable: false`) has no
+  // channel for a web click to drive it — the human at the keyboard answers
+  // Claude Code's own question widget there. Rendering Submit/Chat-about-this
+  // buttons here would be a false affordance; the card resolves on its own
+  // once the reducer's `permission.decision` catches up from that terminal
+  // answer. `phase.kind === "not-answerable"` covers a click that slipped
+  // through anyway (e.g. an older CLI build that doesn't yet send
+  // `answerable`) and the CLI told us so after the fact.
+  if (permission.answerable === false || phase.kind === "not-answerable") {
+    return (
+      <div className="flex flex-col gap-3 rounded-lg border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-sm">
+        {questions.map((q) => (
+          <div key={q.question} className="flex flex-col gap-1.5">
+            {q.header && (
+              <Badge variant="secondary" className="w-fit">
+                {q.header}
+              </Badge>
+            )}
+            <p className="font-medium">{q.question}</p>
+            <AskQuestionOptions question={q} />
+          </div>
+        ))}
+        <p className="text-xs text-muted-foreground">
+          Waiting for a response at the terminal — this can't be answered from the web.
+        </p>
+      </div>
+    );
   }
 
   const toggle = (qi: number, oi: number, multi: boolean) => {

@@ -62,6 +62,12 @@ export const SessionEventSchema = z.discriminatedUnion("t", [
     name: z.string(),
     args: z.unknown(),
     modes: z.array(PermissionModeSchema),
+    /** Whether a `perm.answer` RPC from the web client can actually settle
+     * this request. False for a permission/question raised by a locally-typed
+     * terminal turn, where the human at the keyboard — not a web click —
+     * drives Claude Code's own live dialog. Omitted (older producers) is
+     * treated as answerable, matching the pre-existing behavior. */
+    answerable: z.boolean().optional(),
   }),
   z.object({
     t: z.literal("perm-resolve"),

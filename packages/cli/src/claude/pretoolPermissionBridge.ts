@@ -88,25 +88,29 @@
  *  - A web turn still blocks (as before) until {@link resolve}, the answer
  *    timeout, or {@link reset} settles it.
  *  - A local turn ALWAYS emits its `perm-request` too (so web always shows a
- *    live, actionable card, regardless of who started the turn) but still
- *    hands off to the terminal immediately — `undefined` / `output("ask",
- *    ...)` — with zero added latency, so the real TUI dialog/widget renders
- *    exactly as fast as it does today. The request is tracked in {@link
- *    localOutcomePending} (NOT the blocking `pending`/`permRequestPending`
- *    maps — there is no promise left open to settle) instead, and {@link
- *    resolveLocalOutcome} — fed from `start.ts`'s transcript tailer, which
- *    already observes the tool's own `tool-start`/`tool-end` pair the moment
- *    the terminal human answers (Claude Code records a `tool_result` for a
- *    permission-gated call either way, allowed or denied — see this header's
- *    `PreToolUse` contract) — completes it and emits the matching
- *    `perm-resolve` the instant the real outcome is known, so the web card
- *    resolves instead of hanging forever. A web `perm.answer` call racing in
- *    for one of these reqIds gets an honest `{ok:false}` with no
- *    `reason`/`decision` (see {@link resolve}) — nothing was "already
- *    answered", this bridge just has no channel to make a web click actually
- *    drive the live terminal dialog without also keystroke-injecting it
- *    (docs/known-issues.md issue #5's stretch goal — real PTY-based racing —
- *    is intentionally not implemented here).
+ *    live card, regardless of who started the turn) but still hands off to
+ *    the terminal immediately — `undefined` / `output("ask", ...)` — with
+ *    zero added latency, so the real TUI dialog/widget renders exactly as
+ *    fast as it does today. This `perm-request` carries `answerable: false`
+ *    (see the wire schema) so the web card renders read-only — the terminal,
+ *    not a web click, is what actually drives the outcome, and offering
+ *    interactive buttons that can't do anything would just be a false
+ *    affordance. The request is tracked in {@link localOutcomePending} (NOT
+ *    the blocking `pending`/`permRequestPending` maps — there is no promise
+ *    left open to settle) instead, and {@link resolveLocalOutcome} — fed
+ *    from `start.ts`'s transcript tailer, which already observes the tool's
+ *    own `tool-start`/`tool-end` pair the moment the terminal human answers
+ *    (Claude Code records a `tool_result` for a permission-gated call either
+ *    way, allowed or denied — see this header's `PreToolUse` contract) —
+ *    completes it and emits the matching `perm-resolve` the instant the real
+ *    outcome is known, so the web card resolves instead of hanging forever. A
+ *    web `perm.answer` call racing in for one of these reqIds (e.g. an older
+ *    web build that doesn't yet honor `answerable`) gets an honest
+ *    `{ok:false, reason:"local-turn"}` (see {@link resolve}) — nothing was
+ *    "already answered", this bridge just has no channel to make a web click
+ *    actually drive the live terminal dialog without also keystroke-injecting
+ *    it (docs/known-issues.md issue #5's stretch goal — real PTY-based racing
+ *    — is intentionally not implemented here).
  *
  * ## AskUserQuestion deny-with-answer (plan-v2.md Wave 2.1, gated on the W0.2
  * probe — **PASS**, 2026-07-18, claude 2.1.214)
@@ -189,6 +193,11 @@ export type PreToolPermissionDecision = "allow" | "deny" | "ask";
  * (the SDK/hook payload has used both across versions). */
 export const isAskUserQuestion = (name: string): boolean =>
   name === "AskUserQuestion" || name === "ask_user_question";
+
+/** True for either of Claude Code's two `ExitPlanMode` tool-name spellings
+ * (an ACP adapter can normalize casing differently — plan-v2.md W2.2). */
+export const isExitPlanTool = (name: string): boolean =>
+  name === "ExitPlanMode" || name === "exit_plan_mode";
 
 /** One option Claude Code's `AskUserQuestion` tool offers — either a bare
  * string or `{label, description?}`, per the tool's own input schema. */
@@ -320,9 +329,7 @@ const ALL_MODES: readonly PermissionMode[] = [
 const EXIT_PLAN_MODES: readonly PermissionMode[] = ["default", "acceptEdits", "bypassPermissions"];
 
 function availableModes(toolName: string): PermissionMode[] {
-  return [
-    ...(toolName === "ExitPlanMode" || toolName === "exit_plan_mode" ? EXIT_PLAN_MODES : ALL_MODES),
-  ];
+  return [...(isExitPlanTool(toolName) ? EXIT_PLAN_MODES : ALL_MODES)];
 }
 
 /**
@@ -396,6 +403,35 @@ export interface PreToolPermissionBridgeDeps {
    * suppression already avoids over-notifying an actively-watching tab.
    */
   onPendingAttention?: (kind: "perm" | "question") => void;
+  /**
+   * Attempts to actually drive a locally-typed turn's live TUI dialog from a
+   * web `perm.answer` decision, by writing the matching keystrokes into the
+   * PTY (`ptyClaudeSession.ts`'s `answerPermission`) — real two-way remote
+   * control, not just a read-only mirror. Called only for a `drivable`
+   * {@link localOutcomePending} entry (an ordinary permission/`ExitPlanMode`
+   * prompt — never `AskUserQuestion`'s own widget, which uses {@link
+   * driveLocalQuestion} instead). Returns `false` (nothing written) when
+   * there's no live PTY to drive — `resolve()` falls back to the honest
+   * `{ok:false, reason:"local-turn"}` in that case. Undefined entirely means
+   * the caller hasn't wired real terminal-driving (e.g. tests, or a future
+   * transport with no PTY at all) — same fallback. `toolName` is passed
+   * through so the driver can special-case `ExitPlanMode`'s dialog, whose
+   * option digits mean something different from every other permission
+   * dialog's ({@link isExitPlanTool}; `ptyClaudeSession.ts`'s
+   * `answerPermission` doc has the live-verified keystroke mapping).
+   */
+  driveLocalDialog?: (decision: PermDecision, toolName: string) => boolean;
+  /**
+   * Same as {@link driveLocalDialog}, but for a locally-typed turn's
+   * `AskUserQuestion` widget (`ptyClaudeSession.ts`'s
+   * `answerAskUserQuestion`) — a distinct keystroke model (per-question
+   * tabs, digit-select, Right-arrow between tabs) that only ever applies
+   * when every question's answer matches a listed option; a free-text
+   * answer returns `false` without writing anything (live-verified: driving
+   * that path wrong silently declines the whole form) and `resolve()` falls
+   * back to the honest local-turn reason.
+   */
+  driveLocalQuestion?: (decision: PermDecision, questions: AskQuestion[]) => boolean;
   /** Max wait for a web answer before falling back to a deny. Default {@link DEFAULT_ANSWER_TIMEOUT_MS}. */
   answerTimeoutMs?: number;
   /** Injectable timer (default `setTimeout`) so tests can trigger the timeout on demand. */
@@ -491,7 +527,23 @@ export class PreToolPermissionBridge {
   // queue rather than `pending`/`permRequestPending`. Populated by both
   // {@link handlePermissionRequest} and {@link handleAskUserQuestion}'s
   // local-turn branches, drained by {@link resolveLocalOutcome}.
-  private readonly localOutcomePending: { reqId: string; toolName: string }[] = [];
+  private readonly localOutcomePending: {
+    reqId: string;
+    toolName: string;
+    /** True for an ordinary permission/`ExitPlanMode` prompt {@link resolve}
+     * may attempt to drive via {@link PreToolPermissionBridgeDeps.driveLocalDialog}.
+     * Irrelevant when {@link questions} is set — that case always routes
+     * through {@link PreToolPermissionBridgeDeps.driveLocalQuestion} instead. */
+    drivable: boolean;
+    /** Set only for an `AskUserQuestion` entry — the original parsed
+     * questions, needed by {@link PreToolPermissionBridgeDeps.driveLocalQuestion}
+     * to map a web decision's answer strings back to option indices. */
+    questions?: AskQuestion[];
+  }[] = [];
+  /** `reqId`s of {@link localOutcomePending} entries a web decision has
+   * already driven into the live PTY — a second `resolve()` call for the
+   * same reqId must not replay the keystrokes (e.g. a double-click). */
+  private readonly drivenLocalReqIds = new Set<string>();
   private requests: Record<string, AgentStateRequest> = {};
   private completedRequests: Record<string, AgentStateCompletedRequest> = {};
   private readonly answerTimeoutMs: number;
@@ -649,6 +701,7 @@ export class PreToolPermissionBridge {
         name: input.tool_name,
         args: toolInput,
         modes: [], // a question offers no mode switches
+        answerable: this.deps.isWebTurnActive() || this.deps.driveLocalQuestion !== undefined,
       }),
     );
 
@@ -660,7 +713,14 @@ export class PreToolPermissionBridge {
       // blocking `pending` map — the hook already hands off below, so there's
       // no promise left to settle) for {@link resolveLocalOutcome} to
       // complete once that mirrored tool-end arrives.
-      this.localOutcomePending.push({ reqId, toolName: input.tool_name });
+      // `questions` carried through for {@link PreToolPermissionBridgeDeps.driveLocalQuestion}
+      // to map a web decision's answers back to this widget's option digits.
+      this.localOutcomePending.push({
+        reqId,
+        toolName: input.tool_name,
+        drivable: false,
+        questions,
+      });
       this.deps.onPromptLikely?.();
       return Promise.resolve(
         output("ask", "Locally-initiated turn — answer the widget at the terminal."),
@@ -747,6 +807,11 @@ export class PreToolPermissionBridge {
         name: toolName,
         args: toolInput,
         modes: availableModes(toolName),
+        // A locally-typed turn is still answerable from web when a
+        // `driveLocalDialog` is wired (real keystroke-injection into the live
+        // PTY) — only falls back to read-only when the caller hasn't wired
+        // that (e.g. tests).
+        answerable: this.deps.isWebTurnActive() || this.deps.driveLocalDialog !== undefined,
       }),
     );
 
@@ -757,8 +822,9 @@ export class PreToolPermissionBridge {
       // delay. Tracked in `localOutcomePending` (not the blocking map below —
       // there's no promise left to settle) for {@link resolveLocalOutcome} to
       // complete once a matching tool-start/tool-end pair reveals the real
-      // outcome.
-      this.localOutcomePending.push({ reqId, toolName });
+      // outcome. `drivable: true` — an ordinary permission/`ExitPlanMode`
+      // prompt `resolve()` may attempt to answer via `driveLocalDialog`.
+      this.localOutcomePending.push({ reqId, toolName, drivable: true });
       this.deps.logger?.debug("[pretool-bridge] local turn — TUI dialog owns it", {
         toolName,
         reqId,
@@ -826,20 +892,46 @@ export class PreToolPermissionBridge {
    *
    * A `reqId` that belongs to a LOCAL turn (in {@link localOutcomePending}
    * instead of either blocking map — docs/known-issues.md issue #5) is
-   * neither of those: it hasn't been "already answered" (nobody knows the
-   * outcome yet), this bridge just has no channel to make a web click
-   * actually drive the live terminal dialog without also keystroke-injecting
-   * it (issue #5's stretch goal, not implemented here). Answering honestly
-   * with `{ok:false}` and no `reason`/`decision`, rather than the misleading
-   * `already-answered`, keeps that distinction visible to the caller.
+   * neither "already answered" nor a normal blocked hook to settle. If it's
+   * `drivable` (or, for an `AskUserQuestion` entry, has `questions`) and the
+   * caller wired the matching {@link PreToolPermissionBridgeDeps.driveLocalDialog}/
+   * {@link PreToolPermissionBridgeDeps.driveLocalQuestion}, this actually
+   * writes the matching keystrokes into the live PTY — real two-way remote
+   * control, not just a mirror — and reports `{ok:true}`; the request itself
+   * still resolves later, the normal way, once {@link resolveLocalOutcome}
+   * sees the terminal's own tool-start/tool-end pair. Otherwise (no live PTY
+   * to drive, or an answer `driveLocalQuestion` can't safely map to this
+   * widget's option digits — e.g. free text) it falls back to the honest
+   * `{ok:false, reason:"local-turn"}` — nobody knows the outcome yet, this
+   * call just had no way to affect it. A second `resolve()` call for a reqId
+   * already driven once gets `{ok:false, reason:"already-answered"}` so a
+   * double-click can't replay the keystrokes.
    */
   resolve(params: { reqId: string; decision: PermDecision }): PermAnswerResult {
-    if (this.localOutcomePending.some((entry) => entry.reqId === params.reqId)) {
+    const localEntry = this.localOutcomePending.find((entry) => entry.reqId === params.reqId);
+    if (localEntry) {
+      if (this.drivenLocalReqIds.has(params.reqId)) {
+        this.deps.logger?.debug("[pretool-bridge] resolve: local request already driven from web", {
+          reqId: params.reqId,
+        });
+        return { ok: false, reason: "already-answered" };
+      }
+      const drove = localEntry.questions
+        ? this.deps.driveLocalQuestion?.(params.decision, localEntry.questions)
+        : localEntry.drivable && this.deps.driveLocalDialog?.(params.decision, localEntry.toolName);
+      if (drove) {
+        this.drivenLocalReqIds.add(params.reqId);
+        this.deps.logger?.debug(
+          "[pretool-bridge] resolve: drove the live terminal dialog from a web decision",
+          { reqId: params.reqId },
+        );
+        return { ok: true };
+      }
       this.deps.logger?.debug(
         "[pretool-bridge] resolve: reqId belongs to a locally-handled request — no channel to drive it from web",
         { reqId: params.reqId },
       );
-      return { ok: false };
+      return { ok: false, reason: "local-turn" };
     }
 
     const preToolPending = this.pending.get(params.reqId);
@@ -905,6 +997,7 @@ export class PreToolPermissionBridge {
     if (index === -1) return;
     const [entry] = this.localOutcomePending.splice(index, 1);
     if (!entry) return;
+    this.drivenLocalReqIds.delete(entry.reqId);
 
     const decision: PermDecision =
       outcome === "approved"
@@ -941,6 +1034,7 @@ export class PreToolPermissionBridge {
       this.finishRequest(entry.reqId, { kind: "deny", message: finalReason }, "canceled");
     }
     this.localOutcomePending.length = 0;
+    this.drivenLocalReqIds.clear();
   }
 
   private mapDecision(

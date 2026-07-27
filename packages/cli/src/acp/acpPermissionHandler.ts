@@ -247,6 +247,11 @@ export class AcpPermissionHandler {
           name: toolName,
           args: input,
           modes: availableModes(toolName),
+          // ACP mode has no "local terminal turn" concept — the agent process
+          // has no TUI of its own, so every request genuinely is answerable
+          // from the web card (contrast pretoolPermissionBridge.ts's
+          // local-turn fork, which sets this to false).
+          answerable: true,
         }),
       );
 

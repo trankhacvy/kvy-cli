@@ -78,6 +78,7 @@ describe("handleRequest → perm-request envelope", () => {
       name: "Bash",
       args: { command: "pnpm build" },
       modes: ["default", "acceptEdits", "plan", "bypassPermissions"],
+      answerable: true,
     });
     expect(h.handler.pendingCount).toBe(1);
     expect(h.snapshots.at(-1)?.requests).toHaveProperty(reqIdFrom(h.envelopes));

@@ -18,6 +18,11 @@ export type PermCardPhase =
    * device" case. `decision` is the winning one, so the UI can show what
    * actually happened rather than just "you lost". */
   | { kind: "lost-race"; decision: PermDecision }
+  /** The click landed on a locally-typed terminal turn's request — there was
+   * never a channel for it to do anything (the terminal, not the web, drives
+   * the outcome). Distinct from `error`: nothing failed, the click just had
+   * no authority. */
+  | { kind: "not-answerable" }
   | { kind: "error"; message: string };
 
 /** The shape `SessionRpcClient.call("perm.answer", ...)` resolves to
@@ -25,7 +30,7 @@ export type PermCardPhase =
  * this module doesn't need a compile-time dependency on `@/sync`. */
 export interface PermAnswerResultLike {
   ok: boolean;
-  reason?: "already-answered";
+  reason?: "already-answered" | "local-turn";
   decision?: PermDecision;
 }
 
@@ -39,6 +44,7 @@ export function applyAnswerResult(
   if (result.reason === "already-answered" && result.decision) {
     return { kind: "lost-race", decision: result.decision };
   }
+  if (result.reason === "local-turn") return { kind: "not-answerable" };
   return { kind: "error", message: "The permission request was rejected." };
 }
 

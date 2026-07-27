@@ -933,6 +933,20 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // is a harmless side-signal, and the server's own presence
         // suppression already avoids over-notifying an actively-watching tab.
         onPendingAttention: (kind) => reportAttention(kind),
+        // Real two-way remote control (the point of `falcon claude`): a web
+        // decision on a locally-typed turn's permission dialog actually
+        // drives the live PTY, not just a read-only mirror. `ptyHandle` is
+        // assigned once `runPtySession` returns below — safe to reference
+        // here since this closure only ever fires after that (same
+        // forward-ref pattern `onPromptLikely`/`onSessionId` already use).
+        driveLocalDialog: (decision, toolName) =>
+          ptyHandle?.answerPermission(
+            decision,
+            permHook?.getCurrentPermissionMode() ?? null,
+            toolName,
+          ) ?? false,
+        driveLocalQuestion: (decision, questions) =>
+          ptyHandle?.answerAskUserQuestion(decision, questions) ?? false,
         // The mode this local PTY session actually launched in
         // (docs/bug-fix-plan.md issue #5) — a `--permission-mode` passthrough
         // flag if the user gave one, else Claude Code's own "default". Seeds

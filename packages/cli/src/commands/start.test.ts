@@ -97,6 +97,8 @@ function fakePtyHandle(overrides: Partial<PtyClaudeSessionHandle> = {}): PtyClau
     setPromptOpen: vi.fn(),
     sendInterrupt: vi.fn(() => true),
     sendModeCycle: vi.fn(() => true),
+    answerPermission: vi.fn(() => true),
+    answerAskUserQuestion: vi.fn(() => true),
     sendModelChange: vi.fn(() => true),
     closeTurn: vi.fn(),
     stop: vi.fn(),

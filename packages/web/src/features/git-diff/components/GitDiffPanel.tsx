@@ -1,27 +1,13 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import type { UseGitDiffActions } from "../types";
 import { useGitPanel } from "../use-git-panel";
 import { useLiveGitDiffActions } from "../use-live-git-diff-actions";
 import { ChangedFilesList } from "./ChangedFilesList";
 import { CompareAgainstSelect } from "./CompareAgainstSelect";
+import { GitStatusError, WORKSPACE_ERROR_COPY } from "./GitStatusError";
 import { GitToolbar } from "./GitToolbar";
 import { UnifiedDiffViewer } from "./UnifiedDiffViewer";
-
-/**
- * Plain-language copy for the daemon's typed workspace error codes
- * (known-issues.md #3, `workspacePath.ts`'s `WorkspaceValidationErrorCode`)
- * — replaces raw `git` stderr ("fatal: not a git repository") with wording
- * a non-technical user can act on. Falls back to the raw message for any
- * other error (an ordinary git failure, a network/transport issue, etc.) —
- * this list is deliberately not exhaustive.
- */
-const WORKSPACE_ERROR_COPY: Record<string, string> = {
-  "workspace-missing":
-    "We can't find this project's folder anymore. It may have been moved, renamed, or deleted.",
-  "workspace-not-a-repo": "This folder isn't set up as a git project anymore.",
-};
 
 /**
  * The Git panel (falcon-prd.md FR-7.7 "Git panel"; plan.md §16 "4.1 Git
@@ -58,7 +44,6 @@ export function GitDiffPanel({
   const {
     status,
     statusError,
-    statusErrorCode,
     isStatusLoading,
     selectedPath,
     selectFile,
@@ -69,45 +54,14 @@ export function GitDiffPanel({
     compareRef,
     setCompareRef,
     branches,
-    removeWorkspace,
-    isRemoveWorkspacePending,
-    removeWorkspaceDone,
   } = panel;
 
   if (isStatusLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading changed files…</p>;
   }
 
-  const workspaceProblem = statusErrorCode && WORKSPACE_ERROR_COPY[statusErrorCode];
-
   if (statusError || !status) {
-    if (workspaceProblem) {
-      return (
-        <div className="flex flex-col items-start gap-3 p-4 text-sm">
-          <p className="text-destructive">{workspaceProblem}</p>
-          {removeWorkspaceDone ? (
-            <p className="text-muted-foreground">
-              Removed. You can add it again from a new session's folder picker once it's back in
-              place.
-            </p>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isRemoveWorkspacePending}
-              onClick={() => removeWorkspace()}
-            >
-              {isRemoveWorkspacePending ? "Removing…" : "Remove this workspace"}
-            </Button>
-          )}
-        </div>
-      );
-    }
-    return (
-      <p className="p-4 text-sm text-destructive">
-        Could not load git status{statusError ? `: ${statusError}` : "."}
-      </p>
-    );
+    return <GitStatusError panel={panel} />;
   }
 
   return (
