@@ -45,6 +45,10 @@ async function importMain() {
   return mod.main;
 }
 
+// `beforeEach` above resets modules and every test here re-imports index.js
+// fresh, which now loads node-pty's real compiled native addon — cold-loading
+// that (plus a full fresh CLI module graph) can outrun vitest's 5s default on
+// a loaded CI runner, even though a warm process re-import is fast.
 describe("main()", () => {
   it("prints help and exits 0 for --help", async () => {
     const main = await importMain();
@@ -771,4 +775,4 @@ describe("main()", () => {
       vi.doUnmock("./daemon/ensureDaemonRunning.js");
     });
   });
-});
+}, 15_000);
