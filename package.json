@@ -23,7 +23,8 @@
     "overrides": {
       "@types/react": "^19.2.17",
       "@types/react-dom": "^19.2.3"
-    }
+    },
+    "onlyBuiltDependencies": ["node-pty"]
   },
   "packageManager": "pnpm@10.15.0",
   "engines": {
