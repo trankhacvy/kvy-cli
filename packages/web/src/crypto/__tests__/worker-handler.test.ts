@@ -302,7 +302,10 @@ describe("createCryptoWorkerHandler", () => {
       ).toEqual({ id: "1", ok: true, result: false });
       expect((await storage.load())?.v).toBeUndefined();
     });
-  });
+    // `seedV1` + `migrateFromPin` each drive a real, deliberately-slow PIN key
+    // derivation (2-3 per test here) — comfortably under 5s locally, but a loaded
+    // CI runner can push the priciest one (seed + migrate) past vitest's default.
+  }, 15_000);
 
   describe("session credential (Phase 4a)", () => {
     it("persists a refresh token with NO key material present", async () => {
