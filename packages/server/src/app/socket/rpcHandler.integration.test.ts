@@ -1,19 +1,13 @@
 import type { AddressInfo } from "node:net";
+import type { PGlite } from "@electric-sql/pglite";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { issueSession } from "../../auth/index.js";
-import { db } from "../../db/client.js";
 import { accounts } from "../../db/schema.js";
+import type { Database } from "../../db/types.js";
+import { createTestDb } from "../routes/testHelpers.js";
 import { buildServer } from "../server.js";
-
-// issue-4-plan.md §4.5a: see socket.test.ts's identical helper's own comment — the
-// connect handshake now requires a real `device_sessions` row, not just a well-formed JWT.
-async function mintToken(accountId: string): Promise<string> {
-  await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
-  const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
-  return accessToken;
-}
 
 // RPC integration tests (plan.md §16 "4.4 Hardening & release gate": "RPC integration
 // tests: dead-daemon fast-fail <2s, reconnect storm, double-takeover race"; falcon-
@@ -33,12 +27,32 @@ async function mintToken(accountId: string): Promise<string> {
 //    see rpcHandler.ts's header comment), so a leak here would silently accumulate
 //    forever.
 describe("rpcHandler (integration: dead-daemon fast-fail + reconnect storm)", () => {
+  let pglite: PGlite;
+  let db: Database;
   let app: FastifyInstance;
   let url: string;
   const clients: ClientSocket[] = [];
 
+  // issue-4-plan.md §4.5a: see socket.test.ts's identical helper's own comment — the
+  // connect handshake now requires a real `device_sessions` row, not just a well-formed JWT.
+  async function mintToken(accountId: string): Promise<string> {
+    await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+    const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
+    return accessToken;
+  }
+
+  beforeAll(async () => {
+    const created = await createTestDb();
+    db = created.db;
+    pglite = created.pglite;
+  });
+
+  afterAll(async () => {
+    await pglite.close();
+  });
+
   beforeEach(async () => {
-    app = await buildServer({ logger: false });
+    app = await buildServer({ logger: false }, { db });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const { port } = app.server.address() as AddressInfo;
     url = `http://127.0.0.1:${port}`;

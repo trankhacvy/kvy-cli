@@ -68,7 +68,9 @@ describe("telegramChannel", () => {
     await telegramChannel.send(fakeSubscription(), { sessionId: "sess_1", kind: "done" });
 
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
-    expect(body.text).toBe("Falcon finished a task\nhttps://app.falcon.dev/session/sess_1/");
+    expect(body.text).toBe(
+      "Falcon finished a task\nhttps://app.falcon.dev/dashboard/session/sess_1/",
+    );
   });
 
   it("maps a 400/403 (gone chat) onto statusCode 410 for dispatch.ts's pruning rule", async () => {

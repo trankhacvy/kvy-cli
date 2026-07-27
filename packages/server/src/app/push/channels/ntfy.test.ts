@@ -58,7 +58,7 @@ describe("ntfyChannel", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://ntfy.internal/my-ntfy-topic",
       expect.objectContaining({
-        headers: { Title: "Falcon", Click: "https://app.falcon.dev/session/sess_1/" },
+        headers: { Title: "Falcon", Click: "https://app.falcon.dev/dashboard/session/sess_1/" },
       }),
     );
   });

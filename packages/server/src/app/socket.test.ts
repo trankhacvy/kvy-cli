@@ -7,20 +7,7 @@ import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { issueSession } from "../auth/index.js";
 import { encodeBox } from "../db/box.js";
-import { db } from "../db/client.js";
 import { accounts, deviceSessions, machines } from "../db/schema.js";
-
-// issue-4-plan.md §4.5a: the connect handshake now looks up a real `device_sessions` row
-// to check `revokedAt`/`expiresAt`, so a token minted here needs a real account +
-// issued session behind it, not just a well-formed JWT — a bare `mintAccessToken` call
-// (no DB row) would be rejected as "Session revoked" the moment §4.5a landed. Explicit
-// `id` on the insert lets every existing call site's literal `"acct_1"`-style id keep
-// working unchanged.
-async function mintToken(accountId: string): Promise<string> {
-  await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
-  const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
-  return accessToken;
-}
 
 import { eventRouter } from "./events/eventRouter.js";
 import { createTestAccount, createTestDb } from "./routes/testHelpers.js";
@@ -35,12 +22,36 @@ function fakeBox() {
 // than fastify.inject(), and connects real socket.io-client sockets against it.
 
 describe("startSocket (/v1/stream handshake)", () => {
+  let pglite: PGlite;
+  let db: Awaited<ReturnType<typeof createTestDb>>["db"];
   let app: FastifyInstance;
   let url: string;
   const clients: ClientSocket[] = [];
 
+  // issue-4-plan.md §4.5a: the connect handshake now looks up a real `device_sessions` row
+  // to check `revokedAt`/`expiresAt`, so a token minted here needs a real account +
+  // issued session behind it, not just a well-formed JWT — a bare `mintAccessToken` call
+  // (no DB row) would be rejected as "Session revoked" the moment §4.5a landed. Explicit
+  // `id` on the insert lets every existing call site's literal `"acct_1"`-style id keep
+  // working unchanged.
+  async function mintToken(accountId: string): Promise<string> {
+    await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();
+    const { accessToken } = await issueSession(db, { accountId, clientKind: "web" });
+    return accessToken;
+  }
+
+  beforeAll(async () => {
+    const created = await createTestDb();
+    db = created.db;
+    pglite = created.pglite;
+  });
+
+  afterAll(async () => {
+    await pglite.close();
+  });
+
   beforeEach(async () => {
-    app = await buildServer({ logger: false });
+    app = await buildServer({ logger: false }, { db });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const { port } = app.server.address() as AddressInfo;
     url = `http://127.0.0.1:${port}`;
