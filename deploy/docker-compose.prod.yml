@@ -40,7 +40,11 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=3005
-      - DATABASE_URL=postgres://falcon:${POSTGRES_PASSWORD:-falcon}@postgres:5432/falcon
+      # Set DATABASE_URL directly to point at a Postgres you provisioned
+      # yourself (a Coolify-managed database resource, Neon, RDS, ...) —
+      # it always wins. Left unset, this falls back to the bundled
+      # `postgres` service above, using POSTGRES_PASSWORD for its password.
+      - DATABASE_URL=${DATABASE_URL:-postgres://falcon:${POSTGRES_PASSWORD:-falcon}@postgres:5432/falcon}
       # REQUIRED: HMAC signing key for auth JWTs
       - FALCON_MASTER_SECRET=${FALCON_MASTER_SECRET:?Set FALCON_MASTER_SECRET in .env}
       # Web app origin (Vercel) for CORS allowlist
