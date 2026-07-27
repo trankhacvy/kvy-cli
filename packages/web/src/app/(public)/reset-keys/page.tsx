@@ -200,9 +200,7 @@ export default function ResetKeysPage() {
                     )}
 
                     {!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && (
-                      <p className="text-muted-foreground text-xs">
-                        {copy.reset.oauthUnavailable}
-                      </p>
+                      <p className="text-muted-foreground text-xs">{copy.reset.oauthUnavailable}</p>
                     )}
 
                     {!passwordFormOpen ? (

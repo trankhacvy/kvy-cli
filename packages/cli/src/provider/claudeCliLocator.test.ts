@@ -291,7 +291,6 @@ describe("findClaudeInPath", () => {
     expect(result).not.toBeNull();
     expect(result?.path).toBe(realpathSync(realBinary));
   });
-
 });
 
 describe("findGlobalClaudeCliPath", () => {

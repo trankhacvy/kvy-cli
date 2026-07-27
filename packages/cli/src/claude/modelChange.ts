@@ -1,5 +1,6 @@
 import type { SessionEnvelope } from "@falcon/wire";
 
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matches the real ESC control byte terminal ANSI escapes start with.
 const ANSI_ESCAPE_SEQUENCE = /\u001B\[[0-?]*[ -/]*[@-~]/g;
 const ORPHANED_ANSI_MARKER = /\[(?:\d+;)*\d+m/g;
 const MODEL_CHANGE_PATTERN =

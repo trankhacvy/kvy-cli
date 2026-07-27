@@ -26,6 +26,7 @@ function ButtonGroup({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof buttonGroupVariants>) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings its own UA border/padding/legend semantics this toolbar-style wrapper doesn't want.
     <div
       role="group"
       data-slot="button-group"

@@ -208,7 +208,9 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     bridge.resolveLocalOutcome("Bash", "approved");
     const resolves = permResolves(emitted);
     expect(resolves).toHaveLength(1);
-    expect((resolves[0]?.ev as { decision: unknown }).decision).toEqual({
+    const [resolve] = resolves;
+    if (!resolve) throw new Error("no perm-resolve emitted");
+    expect((resolve.ev as { decision: unknown }).decision).toEqual({
       kind: "allow",
       scope: "once",
     });
@@ -222,7 +224,9 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     bridge.resolveLocalOutcome("Write", "denied");
     const resolves = permResolves(emitted);
     expect(resolves).toHaveLength(1);
-    expect((resolves[0]?.ev as { decision: { kind: string } }).decision.kind).toBe("deny");
+    const [resolve] = resolves;
+    if (!resolve) throw new Error("no perm-resolve emitted");
+    expect((resolve.ev as { decision: { kind: string } }).decision.kind).toBe("deny");
     expect(bridge.pendingCount).toBe(0);
   });
 
@@ -475,7 +479,9 @@ describe("PreToolPermissionBridge — handlePermissionRequest — first-wins, ti
 
     const resolves = permResolves(emitted);
     expect(resolves).toHaveLength(1);
-    expect((resolves[0]?.ev as { decision: { kind: string } }).decision.kind).toBe("deny");
+    const [resolve] = resolves;
+    if (!resolve) throw new Error("no perm-resolve emitted");
+    expect((resolve.ev as { decision: { kind: string } }).decision.kind).toBe("deny");
     expect(bridge.pendingCount).toBe(0);
 
     // A tool-end arriving after reset() no longer matches anything.

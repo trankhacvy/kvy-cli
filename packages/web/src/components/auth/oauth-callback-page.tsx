@@ -163,10 +163,7 @@ export function OAuthCallbackPage({
             <AuthBrandMark className="mb-10 justify-center lg:hidden" />
 
             {status.kind === "working" && (
-              <div
-                className="flex flex-col items-center gap-3 py-6 text-center"
-                aria-live="polite"
-              >
+              <div className="flex flex-col items-center gap-3 py-6 text-center" aria-live="polite">
                 <Spinner className="size-6 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">{copy.oauthCallback.working}</p>
               </div>

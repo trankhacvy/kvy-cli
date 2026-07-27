@@ -154,7 +154,10 @@ export default function PairPage() {
             {gate.kind === "invalid-link" && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <span className="flex size-12 items-center justify-center rounded-full bg-amber-500/10">
-                  <Unlink className="size-5 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+                  <Unlink
+                    className="size-5 text-amber-600 dark:text-amber-400"
+                    aria-hidden="true"
+                  />
                 </span>
                 <div className="space-y-2">
                   <h1 className="font-semibold text-xl tracking-tight">
@@ -245,7 +248,10 @@ export default function PairPage() {
             {gate.kind === "approved" && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/10">
-                  <Check className="size-5 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
+                  <Check
+                    className="size-5 text-emerald-600 dark:text-emerald-400"
+                    aria-hidden="true"
+                  />
                 </span>
                 <div className="space-y-2">
                   <h1 className="font-semibold text-2xl tracking-tight">{copy.pair.doneTitle}</h1>

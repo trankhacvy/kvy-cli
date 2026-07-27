@@ -310,7 +310,9 @@ describe("startMachineIntegration — transcript indexer isManaged wiring", () =
   // "Unmanaged" (docs/auth-ux-post-verification-fixes.md).
   it("wires isManaged to the injected registry's isProviderSessionManaged, not the indexer's own no-op default", async () => {
     const { startTranscriptIndexer } = await import("./transcriptIndexer.js");
-    const isProviderSessionManaged = vi.fn((providerSessionId: string) => providerSessionId === "provider-abc");
+    const isProviderSessionManaged = vi.fn(
+      (providerSessionId: string) => providerSessionId === "provider-abc",
+    );
     const registry = {
       getSessions: () => [],
       isProviderSessionManaged,

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings its own UA border/padding/legend semantics this composer-style wrapper doesn't want.
     <div
       data-slot="input-group"
       role="group"
@@ -46,6 +47,8 @@ function InputGroupAddon({
   ...props
 }: React.ComponentProps<"div"> & VariantProps<typeof inputGroupAddonVariants>) {
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a <fieldset> brings its own UA border/padding/legend semantics this composer-style wrapper doesn't want.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: onClick only redirects focus to the already-independently-focusable input/button inside — no action is mouse-only.
     <div
       role="group"
       data-slot="input-group-addon"

@@ -124,7 +124,7 @@
  * code.
  */
 import path from "node:path";
-import { deriveKeyTree, encodeBase64, wrapDek } from "@falcon/crypto";
+import { encodeBase64, wrapDek } from "@falcon/crypto";
 import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
@@ -442,8 +442,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     );
     return 1;
   }
-  const { credentials, masterSecret, contentKeyPair, machineId, tokenProvider, accessToken } =
-    preflightResult.preflight;
+  const { contentKeyPair, machineId, tokenProvider, accessToken } = preflightResult.preflight;
 
   const sessionMetadata = {
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,

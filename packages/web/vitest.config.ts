@@ -6,17 +6,7 @@ export default defineConfig({
   // `tsconfig.json`'s `"jsx": "preserve"`) handles JSX for the app itself,
   // but vitest runs test files straight through esbuild, which needs an
   // explicit runtime to know what a bare `<div>` compiles to.
-  esbuild: {
-    jsx: "automatic",
-  },
-  resolve: {
-    alias: {
-      // Mirrors the `@/*` -> `./src/*` alias from tsconfig.json so modules
-      // under test (e.g. button.tsx importing `@/lib/utils`) resolve the
-      // same way here as they do under `next build`.
-      "@": path.resolve(import.meta.dirname, "./src"),
-    },
-  },
+  //
   // tsconfig.json sets `"jsx": "preserve"` (Next's own SWC compiler does the
   // real transform at build time — tsc never touches it). Vite's esbuild
   // pretransform has no bundler-level JSX plugin registered here to fall
@@ -29,6 +19,14 @@ export default defineConfig({
   // plain functions from one, so this wasn't needed before.
   esbuild: {
     jsx: "automatic",
+  },
+  resolve: {
+    alias: {
+      // Mirrors the `@/*` -> `./src/*` alias from tsconfig.json so modules
+      // under test (e.g. button.tsx importing `@/lib/utils`) resolve the
+      // same way here as they do under `next build`.
+      "@": path.resolve(import.meta.dirname, "./src"),
+    },
   },
   test: {
     globals: false,

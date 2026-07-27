@@ -12,6 +12,7 @@ export function InlineCodeText({ text }: { text: string }) {
   return (
     <>
       {parts.map((part, i) => (
+        // biome-ignore lint/suspicious/noArrayIndexKey: `parts` is a fresh array from a full re-split every render — there's no reordering/mutation for index-as-key to get wrong.
         <Fragment key={i}>
           {i % 2 === 1 ? (
             <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em]">{part}</code>

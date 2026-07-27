@@ -150,8 +150,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     );
     return 1;
   }
-  const { masterSecret, contentKeyPair, machineId, tokenProvider, accessToken } =
-    preflightResult.preflight;
+  const { contentKeyPair, machineId, tokenProvider, accessToken } = preflightResult.preflight;
 
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {
