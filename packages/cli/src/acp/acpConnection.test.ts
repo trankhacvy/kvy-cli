@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { SessionNotification } from "@agentclientprotocol/sdk";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ADAPTER_MANIFEST, adapterEntryPath, installedLockPath } from "../adapters/index.js";
 import { AcpConnection, AcpConnectionError, boundMeta } from "./acpConnection.js";
 
@@ -35,13 +35,19 @@ async function installFakeAdapter(mode?: string): Promise<void> {
   void mode;
 }
 
-function createConnection(mode?: string): AcpConnection {
-  return new AcpConnection({
-    adapterId: "claude-code",
-    homeDir,
-    clientInfo: { name: "falcon-test", version: "0.0.0" },
-    envOverrides: mode ? { FAKE_ACP_MODE: mode } : undefined,
-  });
+function createConnection(
+  mode?: string,
+  deps?: ConstructorParameters<typeof AcpConnection>[1],
+): AcpConnection {
+  return new AcpConnection(
+    {
+      adapterId: "claude-code",
+      homeDir,
+      clientInfo: { name: "falcon-test", version: "0.0.0" },
+      envOverrides: mode ? { FAKE_ACP_MODE: mode } : undefined,
+    },
+    deps,
+  );
 }
 
 beforeEach(async () => {
@@ -53,9 +59,125 @@ afterEach(async () => {
 });
 
 describe("AcpConnection.connect", () => {
-  it("refuses to connect when the adapter isn't installed", async () => {
-    const connection = createConnection();
+  // A2: "not-installed" now triggers an auto-install attempt before giving
+  // up (design §7.9) — this proves the *still-fails* half of that: if the
+  // auto-install itself fails, connect() still refuses honestly rather than
+  // pretending to succeed. Injects a failing `installAdapter` fake so this
+  // never shells out to a real `npm install`.
+  it("refuses to connect when the adapter isn't installed and auto-install fails", async () => {
+    const installAdapterSpy = vi.fn(async () => ({
+      id: "claude-code" as const,
+      ok: false as const,
+      error: "simulated npm install failure",
+    }));
+    const connection = createConnection(undefined, { installAdapter: installAdapterSpy });
     await expect(connection.connect()).rejects.toThrow(AcpConnectionError);
+    await expect(connection.connect()).rejects.toThrow(/auto-install failed/);
+    expect(connection.getState()).toBe("closed");
+    expect(installAdapterSpy).toHaveBeenCalled();
+  });
+
+  // A2's actual fix: a clean "never installed" verification result now
+  // auto-installs (via the real install pipeline's seam, faked here to
+  // avoid a real `npm install`/network call) and then connects successfully
+  // — a daemon-initiated spawn no longer has to fail once just to trigger a
+  // manual `falcon adapters install` before it can ever work.
+  it("auto-installs the adapter when verification reports not-installed, then connects", async () => {
+    const entry = ADAPTER_MANIFEST["claude-code"];
+    const installAdapterSpy = vi.fn(async () => {
+      await installFakeAdapter();
+      return {
+        id: "claude-code" as const,
+        ok: true as const,
+        status: "installed" as const,
+        version: entry.version,
+        path: adapterEntryPath("claude-code", homeDir),
+      };
+    });
+    const connection = createConnection(undefined, { installAdapter: installAdapterSpy });
+    await connection.connect();
+    try {
+      expect(installAdapterSpy).toHaveBeenCalledOnce();
+      expect(connection.getState()).toBe("ready");
+    } finally {
+      await connection.disconnect();
+    }
+  });
+
+  // No redundant install: an already-correctly-installed adapter must never
+  // trigger the auto-install path at all.
+  it("does not attempt an auto-install when the adapter is already correctly installed", async () => {
+    await installFakeAdapter();
+    const installAdapterSpy = vi.fn();
+    const connection = createConnection(undefined, { installAdapter: installAdapterSpy });
+    await connection.connect();
+    try {
+      expect(installAdapterSpy).not.toHaveBeenCalled();
+      expect(connection.getState()).toBe("ready");
+    } finally {
+      await connection.disconnect();
+    }
+  });
+
+  // A2's deliberate scoping decision: an integrity mismatch (installed bytes
+  // don't match the pinned manifest hash — `verify.ts`'s "tampered/
+  // corrupted install" case) must still fail loudly and must NOT trigger an
+  // auto-reinstall, since silently reinstalling over it would mask exactly
+  // the signal this check exists to raise.
+  it("still fails loudly on an integrity mismatch, without attempting an auto-reinstall", async () => {
+    const entry = ADAPTER_MANIFEST["claude-code"];
+    const lockPath = installedLockPath(homeDir);
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(
+      lockPath,
+      JSON.stringify({
+        packages: {
+          [`node_modules/${entry.packageName}`]: {
+            version: entry.version,
+            integrity: "sha512-tampered-does-not-match-manifest",
+          },
+        },
+      }),
+      "utf8",
+    );
+    const entryPath = adapterEntryPath("claude-code", homeDir);
+    await mkdir(path.dirname(entryPath), { recursive: true });
+    await writeFile(entryPath, await readFile(FIXTURE_PATH, "utf8"), "utf8");
+
+    const installAdapterSpy = vi.fn();
+    const connection = createConnection(undefined, { installAdapter: installAdapterSpy });
+    await expect(connection.connect()).rejects.toThrow(/integrity-mismatch/);
+    expect(installAdapterSpy).not.toHaveBeenCalled();
+    expect(connection.getState()).toBe("closed");
+  });
+
+  // Same scoping decision for a version bump: `falcon adapters upgrade` is
+  // the intended, visible path for this, not a silent background reinstall
+  // triggered by a daemon spawn.
+  it("still fails loudly on a version mismatch, without attempting an auto-reinstall", async () => {
+    const entry = ADAPTER_MANIFEST["claude-code"];
+    const lockPath = installedLockPath(homeDir);
+    await mkdir(path.dirname(lockPath), { recursive: true });
+    await writeFile(
+      lockPath,
+      JSON.stringify({
+        packages: {
+          [`node_modules/${entry.packageName}`]: {
+            version: "0.0.1-old",
+            integrity: entry.integrity,
+          },
+        },
+      }),
+      "utf8",
+    );
+    const entryPath = adapterEntryPath("claude-code", homeDir);
+    await mkdir(path.dirname(entryPath), { recursive: true });
+    await writeFile(entryPath, await readFile(FIXTURE_PATH, "utf8"), "utf8");
+
+    const installAdapterSpy = vi.fn();
+    const connection = createConnection(undefined, { installAdapter: installAdapterSpy });
+    await expect(connection.connect()).rejects.toThrow(/version-mismatch/);
+    expect(installAdapterSpy).not.toHaveBeenCalled();
     expect(connection.getState()).toBe("closed");
   });
 

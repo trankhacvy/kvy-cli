@@ -14,6 +14,8 @@
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import crossSpawnDefault from "cross-spawn";
 import type { Logger } from "../logger.js";
+import { isProcessAlive } from "./lock.js";
+import type { ProcessExitInfo, ProcessExitWatcher } from "./types.js";
 
 export type SpawnFn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 
@@ -30,15 +32,93 @@ export interface LaunchProcessDeps {
   /** Injectable for tests; defaults to `cross-spawn`'s `spawn`. */
   spawnImpl?: SpawnFn;
   logger?: Logger;
+  /**
+   * Injectable for tests; defaults to `lock.ts`'s real `isProcessAlive`
+   * (a `process.kill(pid, 0)` liveness probe). Backs the tmux-mode exit
+   * watcher (A3/A4) — the daemon holds no direct child handle for a tmux
+   * pane process, so liveness has to be polled rather than observed via a
+   * Node `"exit"` event.
+   */
+  isProcessAlive?: (pid: number) => boolean;
+  /** Injectable for tests; how often the tmux-mode watcher polls. Defaults to 1000ms. */
+  tmuxExitPollIntervalMs?: number;
 }
 
 export type LaunchedProcess =
-  | { method: "tmux"; pid: number; tmuxSessionName: string }
-  | { method: "detached"; pid: number };
+  | { method: "tmux"; pid: number; tmuxSessionName: string; watchExit: ProcessExitWatcher }
+  | { method: "detached"; pid: number; watchExit: ProcessExitWatcher };
 
 const TMUX_STARTUP_TIMEOUT_MS = 5_000;
 /** How long a detached spawn waits for an immediate async `error` event (e.g. ENOENT) before declaring success. */
 const DETACHED_SPAWN_GRACE_MS = 200;
+/** Default tmux-mode pane-pid liveness poll interval (A3/A4) — see `LaunchProcessDeps.tmuxExitPollIntervalMs`. */
+const DEFAULT_TMUX_EXIT_POLL_INTERVAL_MS = 1000;
+
+/**
+ * A one-shot exit broadcaster (A3/A4): `fire()` is idempotent (only the
+ * first call has any effect) and `watch()` always calls its subscriber
+ * eventually, even if `fire()` already ran before `watch()` was called —
+ * `spawnAwaiter.ts`'s `waitFor` subscribes some time after launch, never
+ * synchronously with it, so a process that exits immediately (e.g. a bad
+ * exec) must not be missed just because nobody was listening yet.
+ */
+function createExitBroadcaster(): {
+  watch: ProcessExitWatcher;
+  fire: (info: ProcessExitInfo) => void;
+} {
+  let fired: ProcessExitInfo | null = null;
+  const subscribers = new Set<(info: ProcessExitInfo) => void>();
+  return {
+    watch(onExit) {
+      if (fired) {
+        const info = fired;
+        queueMicrotask(() => onExit(info));
+        return () => {};
+      }
+      subscribers.add(onExit);
+      return () => {
+        subscribers.delete(onExit);
+      };
+    },
+    fire(info) {
+      if (fired) return;
+      fired = info;
+      for (const cb of [...subscribers]) cb(info);
+      subscribers.clear();
+    },
+  };
+}
+
+/** Wires a real `ChildProcess`'s own `"exit"` event straight through — the precise, no-polling case (the detached-spawn path, where the daemon holds a direct handle). */
+function watchChildExit(child: ChildProcess): ProcessExitWatcher {
+  const broadcaster = createExitBroadcaster();
+  child.once("exit", (code, signal) => broadcaster.fire({ code, signal }));
+  return broadcaster.watch;
+}
+
+/**
+ * Polls a pid's liveness (`process.kill(pid, 0)`) until it disappears — the
+ * only option for the tmux-mode pane pid, which is a separate process the
+ * daemon never directly spawned (tmux itself daemonizes it), so there is no
+ * `ChildProcess` handle to attach a real `"exit"` listener to. Necessarily
+ * imprecise: it can only ever report "gone" (`code`/`signal` both `null`),
+ * and detection lags the true exit by up to `intervalMs`.
+ */
+function watchPidByPolling(
+  pid: number,
+  checkAlive: (pid: number) => boolean,
+  intervalMs: number,
+): ProcessExitWatcher {
+  const broadcaster = createExitBroadcaster();
+  const timer = setInterval(() => {
+    if (!checkAlive(pid)) {
+      clearInterval(timer);
+      broadcaster.fire({ code: null, signal: null });
+    }
+  }, intervalMs);
+  timer.unref?.();
+  return broadcaster.watch;
+}
 
 const noopLogger: Logger = {
   debug: () => {},
@@ -111,6 +191,8 @@ async function trySpawnViaTmux(
   opts: LaunchProcessOptions,
   spawnImpl: SpawnFn,
   logger: Logger,
+  checkAlive: (pid: number) => boolean,
+  pollIntervalMs: number,
 ): Promise<LaunchedProcess | null> {
   const sessionName = tmuxSessionName(opts.sessionLabel);
   const result = await runToCompletion(
@@ -138,7 +220,12 @@ async function trySpawnViaTmux(
 
   const pid = await queryTmuxPanePid(spawnImpl, sessionName);
   logger.debug("[process-launcher] spawned via tmux", { sessionName, pid });
-  return { method: "tmux", pid, tmuxSessionName: sessionName };
+  return {
+    method: "tmux",
+    pid,
+    tmuxSessionName: sessionName,
+    watchExit: watchPidByPolling(pid, checkAlive, pollIntervalMs),
+  };
 }
 
 /** Detached, unref'd fallback for when tmux isn't installed. */
@@ -150,6 +237,11 @@ function spawnDetached(opts: LaunchProcessOptions, spawnImpl: SpawnFn): Promise<
       detached: true,
       stdio: "ignore",
     });
+    // Attach the real exit watcher immediately — before the grace timer even
+    // settles — so a process that exits (or fails to spawn) right away is
+    // never missed (A3/A4: this is what lets `spawnAwaiter.waitFor` reject
+    // fast on a dead child instead of always waiting out the full timeout).
+    const watchExit = watchChildExit(child);
 
     let settled = false;
 
@@ -161,7 +253,7 @@ function spawnDetached(opts: LaunchProcessOptions, spawnImpl: SpawnFn): Promise<
         return;
       }
       child.unref?.();
-      resolve({ method: "detached", pid: child.pid });
+      resolve({ method: "detached", pid: child.pid, watchExit });
     }, DETACHED_SPAWN_GRACE_MS);
     timer.unref?.();
 
@@ -186,8 +278,10 @@ export async function launchProviderProcess(
 ): Promise<LaunchedProcess> {
   const spawnImpl = deps.spawnImpl ?? (crossSpawnDefault as unknown as SpawnFn);
   const logger = deps.logger ?? noopLogger;
+  const checkAlive = deps.isProcessAlive ?? isProcessAlive;
+  const pollIntervalMs = deps.tmuxExitPollIntervalMs ?? DEFAULT_TMUX_EXIT_POLL_INTERVAL_MS;
 
-  const viaTmux = await trySpawnViaTmux(opts, spawnImpl, logger);
+  const viaTmux = await trySpawnViaTmux(opts, spawnImpl, logger, checkAlive, pollIntervalMs);
   if (viaTmux) return viaTmux;
 
   const detached = await spawnDetached(opts, spawnImpl);

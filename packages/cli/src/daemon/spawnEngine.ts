@@ -81,7 +81,7 @@ import {
   launchProviderProcess as launchProviderProcessDefault,
 } from "./processLauncher.js";
 import type { SpawnAwaiter } from "./spawnAwaiter.js";
-import type { TrackedSession } from "./types.js";
+import type { ProcessExitWatcher, TrackedSession } from "./types.js";
 import { validateSpawnWorkspace, type WorkspaceRootLookup } from "./workspacePath.js";
 
 /** Thrown for any failure along the spawn path — validation, env expansion, launch, or the post-launch webhook wait. */
@@ -148,6 +148,21 @@ export interface SpawnEngineDeps {
    * simply omit it.
    */
   runSetupScript?: (workspaceRoot: string, spawnDirectory: string) => void;
+  /**
+   * A5 (docs/known-issues.md #8's sibling gap — "orphaned active session
+   * rows when the process dies after DB-row creation, on an otherwise-
+   * healthy machine"): called once, right after this spawn's `sessionId` is
+   * known (the `/session-started` webhook landed), with a `watchExit`
+   * subscribed to the SAME launched process for the rest of its life —
+   * letting the caller (`machineIntegration.ts`) notice if that process
+   * later dies WITHOUT the session's own clean `POST /v1/sessions/:id/
+   * status` report ever landing (e.g. an ACP adapter connection failure
+   * that throws instead of returning a reportable exit code — see that
+   * module's own doc comment for the full failure-matrix reasoning).
+   * Optional: a caller that doesn't care about this longer-lived tracking
+   * (most tests) can simply omit it.
+   */
+  onSessionTracked?: (sessionId: string, watchExit: ProcessExitWatcher) => void;
   logger?: Logger;
 }
 
@@ -317,7 +332,16 @@ export async function spawnSession(
   });
 
   try {
-    const started = await deps.awaiter.waitFor(launched.pid);
+    // A3: hand the launched process's real exit signal through so the
+    // awaiter can reject fast on a dead child instead of always waiting out
+    // the full timeout (`spawnAwaiter.ts`'s own doc comment has the full
+    // rationale).
+    const started = await deps.awaiter.waitFor(launched.pid, { watchExit: launched.watchExit });
+    // A5: hand the SAME watchExit to the caller for the rest of this
+    // process's life, now that we know its sessionId — this is what lets
+    // the daemon notice a later, unreported death (not just a spawn-phase
+    // one, which `spawnAwaiter` above already covers).
+    deps.onSessionTracked?.(started.sessionId, launched.watchExit);
     return { sessionId: started.sessionId };
   } catch (error) {
     throw new SpawnError(

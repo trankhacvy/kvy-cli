@@ -126,3 +126,77 @@ export async function notifyDaemonSessionStarted(
     return { type: "unreachable", error: message };
   }
 }
+
+/**
+ * A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+ * reason"): the CLI-side client half of the `/session-start-failed`
+ * self-report webhook (`controlServer.ts`). Called from `start.ts`'s/
+ * `startCodex.ts`'s `bootstrapSession()` catch block — the one place a
+ * daemon-spawned session can fail before it ever has a `sessionId` to
+ * report anything else with. Same best-effort contract as
+ * `notifyDaemonSessionStarted` above: never throws, and an absent/
+ * unreachable daemon is a normal, silent no-op — a session must still fail
+ * (and print its own honest error to stderr) exactly the same whether or
+ * not a daemon is listening.
+ *
+ * `pid` defaults to `process.pid`, same correlation key
+ * `notifyDaemonSessionStarted` uses — `spawnAwaiter.ts`'s `reject(pid,
+ * error)` matches it back to the pending `spawn` RPC.
+ */
+export interface ReportSessionStartFailedParams {
+  error: string;
+  /** Defaults to `process.pid`. */
+  pid?: number;
+}
+
+export type ReportSessionStartFailedResult =
+  | { type: "no-daemon" }
+  | { type: "ok" }
+  | { type: "unreachable"; error: string };
+
+export async function reportSessionStartFailed(
+  deps: NotifyDaemonSessionStartedDeps,
+  params: ReportSessionStartFailedParams,
+): Promise<ReportSessionStartFailedResult> {
+  const {
+    homeDir,
+    fetchImpl,
+    isProcessAlive: checkAlive,
+    logger,
+    timeoutMs = DEFAULT_TIMEOUT_MS,
+  } = deps;
+
+  const state = await readDaemonState(homeDir);
+  if (!state || !checkAlive(state.pid)) {
+    logger?.debug("[notify] no daemon running, skipping session-start-failed self-report");
+    return { type: "no-daemon" };
+  }
+
+  try {
+    const pid = params.pid ?? process.pid;
+    const res = await fetchImpl(`http://127.0.0.1:${state.port}/session-start-failed`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ pid, error: params.error }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+
+    if (!res.ok) {
+      const error = `daemon responded with HTTP ${res.status}`;
+      logger?.warn("[notify] daemon rejected session-start-failed self-report", { error });
+      return { type: "unreachable", error };
+    }
+
+    logger?.debug("[notify] session-start-failed self-report delivered to daemon");
+    return { type: "ok" };
+  } catch (error) {
+    // Same "never block the caller's own failure path" contract as
+    // `notifyDaemonSessionStarted` — this is a best-effort ADDITION to an
+    // already-failing start, never allowed to introduce a new crash.
+    const message = error instanceof Error ? error.message : String(error);
+    logger?.warn("[notify] failed to reach daemon control server (session-start-failed)", {
+      error: message,
+    });
+    return { type: "unreachable", error: message };
+  }
+}

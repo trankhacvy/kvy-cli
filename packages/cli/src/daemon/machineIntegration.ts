@@ -125,6 +125,7 @@ import type {
   WorkspaceGetConfigResult,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
+import { reportSessionStatus } from "../api/sessionStatus.js";
 import type { FalconCredentials } from "../auth/credentials.js";
 import { writeCredentials } from "../auth/credentials.js";
 import { resolveKeyMaterial } from "../auth/keyMaterial.js";
@@ -168,7 +169,7 @@ import {
 } from "./transcriptIndexer.js";
 import { handleAdoptMirror } from "./transcriptMirror.js";
 import { createTunnelRegistry, reapOrphanedTunnels } from "./tunnelRegistry.js";
-import type { TrackedSession } from "./types.js";
+import type { ProcessExitWatcher, TrackedSession } from "./types.js";
 import {
   createUnmanagedSessionClientDeps,
   upsertUnmanagedSession,
@@ -414,6 +415,68 @@ export async function startMachineIntegration(
     );
   }
 
+  // A5 (docs/known-issues.md #8's sibling gap — "orphaned active session
+  // rows when the process dies after DB-row creation, on an otherwise-
+  // healthy machine"): subscribes to the SAME `watchExit` `spawnAwaiter`
+  // already used to resolve the spawn (A3/A4), but for the rest of this
+  // process's life — not just the initial `/session-started` wait. If the
+  // process later dies without the session's own clean `POST
+  // /v1/sessions/:id/status` report ever landing (e.g. `runRemoteLoop()`'s
+  // ACP connection setup throws instead of returning a reportable exit
+  // code — `start.ts`'s `reportStatusOnce` is only ever reached from a
+  // *returned* exit code or a caught signal, never from an uncaught throw),
+  // the daemon itself files a best-effort `failed` report so the row
+  // doesn't sit `active` forever on an otherwise-healthy machine.
+  //
+  // Deliberately best-effort and imprecise, made SAFE by a server-side
+  // guard rather than by being precise here (`sessionStatus.ts`'s `failed`
+  // transition now requires the session to still be `active` — see that
+  // route's own doc comment): a redundant/late report for a session that
+  // already cleanly reported `ended` or `failed` itself is a genuine no-op,
+  // not a downgrade, so this never needs to determine "did the CLI already
+  // report?" — it only needs to try, and let the server decide whether the
+  // report was still needed. Skips the one genuinely unambiguous case (a
+  // plain `code === 0, signal === null` exit) purely to cut noise — every
+  // other exit shape (nonzero code, an uncaught signal like SIGKILL, or the
+  // tmux-mode poll watcher's inherently-imprecise "gone" with both fields
+  // `null`) still fires.
+  function watchForUnreportedDeath(sessionId: string, watchExit: ProcessExitWatcher): void {
+    watchExit((info) => {
+      if (info.code === 0 && info.signal === null) return;
+      void (async () => {
+        const accessToken = await tokenProvider.getAccessToken();
+        if (!accessToken) {
+          deps.logger.debug(
+            "[machine-integration] watchForUnreportedDeath: no access token available, skipping",
+            { sessionId },
+          );
+          return;
+        }
+        const result = await reportSessionStatus(
+          {
+            backendUrl: deps.serverUrl,
+            accessToken,
+            fetchImpl: deps.fetchImpl,
+            logger: deps.logger,
+          },
+          {
+            sessionId,
+            status: "failed",
+            error: new Error(
+              `daemon observed the spawned process exit (code ${info.code ?? "unknown"}${
+                info.signal ? `, signal ${info.signal}` : ""
+              }) without a clean self-report`,
+            ),
+          },
+        );
+        deps.logger.debug("[machine-integration] watchForUnreportedDeath: reported", {
+          sessionId,
+          result,
+        });
+      })();
+    });
+  }
+
   async function spawnSessionHandler(params: SpawnParams): Promise<SpawnResult> {
     return spawnSessionCore(params, {
       resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
@@ -428,6 +491,7 @@ export async function startMachineIntegration(
         scanForLiveSessionInDirectory(deps.registry.getSessions(), realDirectory),
       trackSpawned: deps.registry.trackSpawned,
       runSetupScript: runSetupScriptHandler,
+      onSessionTracked: watchForUnreportedDeath,
       ...deps.spawnEngineOverrides,
     });
   }
@@ -454,6 +518,7 @@ export async function startMachineIntegration(
       logger: deps.logger,
       trackSpawned: deps.registry.trackSpawned,
       runSetupScript: runSetupScriptHandler,
+      onSessionTracked: watchForUnreportedDeath,
       ...deps.spawnEngineOverrides,
     });
   }

@@ -3,25 +3,31 @@
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import type { ImportCandidate } from "@/features/new-session";
 import { formatRelativeTime } from "@/features/session-list";
 import { cn } from "@/lib/utils";
-import type { ImportCandidate, NewSessionActions } from "../types";
 
 /**
- * Step 3 (optional): "continue from a recent CLI session" (falcon-prd.md
- * FR-7.8 UC7). Lists `directory`'s recent plain `claude`/`codex` sessions
- * via `actions.listImportCandidates` (the daemon's `adopt.list` RPC) and
- * lets the user pick one to continue, or explicitly start fresh — mirrors
- * `DirectoryStep`'s browse-on-mount shape, and `MachineStep`'s
- * card-as-radio-option selection pattern.
+ * "Continue from a recent CLI session" (falcon-prd.md FR-7.8 UC7) — the old
+ * wizard's `ImportStep`'s new home (B5, new-session-from-web redesign, see
+ * the task's own header comment). `ImportStep` itself wasn't actually
+ * dependent on free-form directory *browsing* — it only ever needed an
+ * already-resolved `directory` string, which this panel always already has
+ * (a workspace's own registered id/path). So rather than dropping the
+ * feature, it moves here, folded into the inline panel's Advanced
+ * disclosure (closed by default, same as provider/permission/model) since
+ * "continue an existing session" is a secondary choice, not the primary
+ * "Start session" action.
+ *
+ * Same browse-on-mount/card-radio-option shape as the original.
  */
-export function ImportStep({
-  actions,
+export function ContinueSessionPicker({
+  listImportCandidates,
   directory,
   selected,
   onSelect,
 }: {
-  actions: NewSessionActions;
+  listImportCandidates: (directory: string) => Promise<ImportCandidate[]>;
   directory: string;
   selected: ImportCandidate | null;
   onSelect: (candidate: ImportCandidate | null) => void;
@@ -34,8 +40,7 @@ export function ImportStep({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    actions
-      .listImportCandidates(directory)
+    listImportCandidates(directory)
       .then((items) => {
         if (!cancelled) setCandidates(items);
       })
@@ -48,24 +53,20 @@ export function ImportStep({
     return () => {
       cancelled = true;
     };
-  }, [actions, directory]);
+  }, [listImportCandidates, directory]);
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-sm text-muted-foreground">
-        Continue a recent <code className="rounded bg-muted px-1 py-0.5">claude</code> /{" "}
-        <code className="rounded bg-muted px-1 py-0.5">codex</code> session in this directory, or
-        start a fresh one.
-      </p>
+    <div className="flex flex-col gap-2">
+      <p className="text-xs font-medium text-muted-foreground">Continue from a recent session</p>
 
       <ImportCandidateOption
         selected={selected === null}
         onClick={() => onSelect(null)}
-        title="Start a new session"
+        title="Start fresh"
       />
 
-      {loading && <p className="text-sm text-muted-foreground">Looking for recent sessions…</p>}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {loading && <p className="text-xs text-muted-foreground">Looking for recent sessions…</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
       {!loading && !error && candidates?.length === 0 && (
         <p className="text-xs text-muted-foreground">No recent CLI sessions found here.</p>
       )}
@@ -106,7 +107,7 @@ function ImportCandidateOption({
         if (e.key === "Enter" || e.key === " ") onClick();
       }}
       className={cn(
-        "cursor-pointer flex-row items-center justify-between gap-2 px-4 py-3 hover:bg-accent",
+        "cursor-pointer flex-row items-center justify-between gap-2 px-3 py-2 hover:bg-accent",
         selected && "border-primary ring-1 ring-primary",
       )}
     >

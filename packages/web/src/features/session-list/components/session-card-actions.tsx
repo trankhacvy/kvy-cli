@@ -4,6 +4,7 @@ import type { SessionRow } from "@falcon/wire";
 import {
   Archive,
   CircleStop,
+  FolderX,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -44,9 +45,14 @@ import {
 } from "@/lib/use-session-lifecycle";
 import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import { apiSocket, createSessionRpcClient } from "@/sync";
+import { RemoveWorktreeDialog } from "./remove-worktree-dialog";
 import { RenameSessionDialog } from "./rename-session-dialog";
 import { RestartSessionDialog } from "./restart-session-dialog";
-import { buildPinTogglePatch, isSessionStoppable } from "./session-card-actions-logic";
+import {
+  buildPinTogglePatch,
+  canOfferRemoveWorktree,
+  isSessionStoppable,
+} from "./session-card-actions-logic";
 
 /**
  * Lifecycle actions for one Home-screen `SessionCard`
@@ -73,6 +79,7 @@ export function SessionCardActions({
   machineId,
   machineOnline,
   machineName,
+  workspaceId,
 }: {
   sessionId: string;
   title: string;
@@ -83,11 +90,18 @@ export function SessionCardActions({
   machineId: string | null;
   machineOnline: boolean;
   machineName: string | null;
+  /** This session's `workspaceId` — backs "Remove worktree" (Phase C):
+   * only offered when it looks like a Falcon-managed `.worktrees/<branch>`
+   * directory (`looksLikeWorktreePath`), never for an ordinary repo-root
+   * session. `null` mirrors `SessionListSession.workspaceId`'s own
+   * nullability. */
+  workspaceId: string | null;
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
+  const [removeWorktreeOpen, setRemoveWorktreeOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const restoreMutation = useRestoreSessionMutation();
@@ -97,6 +111,7 @@ export function SessionCardActions({
   const stoppable = isSessionStoppable(status);
   const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
   const restartReason = restartDisabledReason({ machineId, machineOnline, status });
+  const canRemoveWorktree = canOfferRemoveWorktree(machineId, workspaceId);
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -149,6 +164,12 @@ export function SessionCardActions({
               Restart
             </DropdownMenuItem>
           )}
+          {canRemoveWorktree && (
+            <DropdownMenuItem onSelect={() => setRemoveWorktreeOpen(true)}>
+              <FolderX className="size-4" />
+              Remove worktree
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           {archived ? (
             <DropdownMenuItem
@@ -189,6 +210,16 @@ export function SessionCardActions({
           machineName={machineName}
           open={restartOpen}
           onOpenChange={setRestartOpen}
+        />
+      )}
+
+      {canRemoveWorktree && machineId !== null && workspaceId !== null && (
+        <RemoveWorktreeDialog
+          machineId={machineId}
+          worktree={workspaceId}
+          sessionTitle={title}
+          open={removeWorktreeOpen}
+          onOpenChange={setRemoveWorktreeOpen}
         />
       )}
 

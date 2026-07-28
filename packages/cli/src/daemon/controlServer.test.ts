@@ -94,6 +94,52 @@ describe("startControlServer", () => {
     }
   });
 
+  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+  // reason"): the child's own best-effort self-report of a startup failure.
+  describe("POST /session-start-failed", () => {
+    it("forwards pid and error verbatim to onSessionStartFailed", async () => {
+      const onSessionStartFailed = vi.fn();
+      const server = await startControlServer(buildDeps({ onSessionStartFailed }));
+      try {
+        const res = await post(server.port, "/session-start-failed", {
+          pid: 4242,
+          error: "You've reached your limit of 3 running sessions.",
+        });
+        expect(res.status).toBe(200);
+        await expect(res.json()).resolves.toEqual({ status: "ok" });
+        expect(onSessionStartFailed).toHaveBeenCalledExactlyOnceWith(
+          4242,
+          "You've reached your limit of 3 running sessions.",
+        );
+      } finally {
+        await server.stop();
+      }
+    });
+
+    it("400s a body missing the required pid or error", async () => {
+      const server = await startControlServer(buildDeps());
+      try {
+        const res = await post(server.port, "/session-start-failed", { pid: 4242 });
+        expect(res.status).toBe(400);
+      } finally {
+        await server.stop();
+      }
+    });
+
+    it("still responds 200 when no onSessionStartFailed callback is wired (optional dep, same tolerance as /session-started)", async () => {
+      const server = await startControlServer(buildDeps());
+      try {
+        const res = await post(server.port, "/session-start-failed", {
+          pid: 1,
+          error: "boom",
+        });
+        expect(res.status).toBe(200);
+      } finally {
+        await server.stop();
+      }
+    });
+  });
+
   it("POST /list returns only sessions that have self-reported a sessionId", async () => {
     const sessions: TrackedSession[] = [
       { startedBy: "daemon", sessionId: "sess_a", pid: 111 },

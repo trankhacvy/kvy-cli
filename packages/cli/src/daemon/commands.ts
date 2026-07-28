@@ -397,6 +397,15 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     }
   }
 
+  // A4: the child's own best-effort self-report of why it failed to start
+  // (`/session-start-failed`, `start.ts`'s/`startCodex.ts`'s
+  // `bootstrapSession()` catch block) — routes straight into the same
+  // `spawnAwaiter` so a daemon-initiated `spawn` RPC's `waitFor` can reject
+  // with the real message instead of only ever seeing a generic timeout.
+  function onSessionStartFailed(pid: number, error: string): void {
+    spawnAwaiter.reject(pid, error);
+  }
+
   // Assigned further down, once the singleton lock is held — but captured by the
   // control server's `reloadAuth` closure here so a re-paired session can ask the
   // daemon to pick up new credentials without a full restart (AX-1.6).
@@ -412,6 +421,7 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     }),
     requestShutdown: () => triggerShutdown(),
     onSessionStarted,
+    onSessionStartFailed,
     reloadAuth: async () => {
       if (!machineIntegrationDeps) return false;
       await machineIntegration?.stop();

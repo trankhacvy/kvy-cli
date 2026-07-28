@@ -5,16 +5,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { syncQueryKey } from "@/sync/queryKeys";
 import type { SyncSnapshot } from "@/sync/types";
-import { useLiveNewSessionActions, useLiveNewSessionMachines } from "./live-source";
-import type { NewSessionActions, NewSessionMachine } from "./types";
+import { useLiveNewSessionActions } from "./live-source";
+import type { NewSessionActions } from "./types";
 
 // Neither `useCryptoBridge` (worker spun up in a `useEffect`) nor
 // `useMachineCrypto`'s own unwrap effect ever runs under
 // `renderToStaticMarkup` (it never flushes effects — same fact
 // `require-auth.test.ts` relies on), so every render in this file is the
-// deterministic "crypto not ready yet" frame: `bridge`/`crypto` stay `null`
-// for the lifetime of the test. That's exactly the state these two hooks'
-// fallback paths (unnamed machine, "not ready yet" rejection) are for.
+// deterministic "crypto not ready yet" frame: `crypto` stays `null` for the
+// lifetime of the test. That's exactly the state `useLiveNewSessionActions`'
+// fallback path ("not ready yet" rejection) is for.
 
 function box(c: string): EncryptedBox {
   return { t: "enc", v: 1, c };
@@ -51,50 +51,12 @@ function snapshotWithMachines(machines: MachineRow[]): SyncSnapshot {
   return { headerSeq: 1, sessions: [], machines, unmanagedSessions: [] };
 }
 
-describe("useLiveNewSessionMachines", () => {
-  it("returns no machines against an empty synced snapshot", () => {
-    const machines = renderWithSnapshot(useLiveNewSessionMachines, snapshotWithMachines([]));
-    expect(machines).toEqual<NewSessionMachine[]>([]);
-  });
-
-  it("falls back to the unnamed-machine placeholder before the crypto bridge is ready to decrypt metadata", () => {
-    const machines = renderWithSnapshot(
-      useLiveNewSessionMachines,
-      snapshotWithMachines([makeMachine({ id: "mach-1" })]),
-    );
-    expect(machines).toEqual([{ id: "mach-1", name: "(unnamed machine)", online: false }]);
-  });
-
-  it("marks a machine online when lastSeenAt is inside the 3-minute window", () => {
-    const now = Date.now();
-    const machines = renderWithSnapshot(
-      useLiveNewSessionMachines,
-      snapshotWithMachines([makeMachine({ id: "mach-fresh", lastSeenAt: now - 60_000 })]),
-    );
-    expect(machines[0]?.online).toBe(true);
-  });
-
-  it("marks a machine offline once lastSeenAt is past the 3-minute window", () => {
-    const now = Date.now();
-    const machines = renderWithSnapshot(
-      useLiveNewSessionMachines,
-      snapshotWithMachines([makeMachine({ id: "mach-stale", lastSeenAt: now - 4 * 60_000 })]),
-    );
-    expect(machines[0]?.online).toBe(false);
-  });
-
-  it("marks a machine offline when it has never been seen at all", () => {
-    const machines = renderWithSnapshot(
-      useLiveNewSessionMachines,
-      snapshotWithMachines([makeMachine({ id: "mach-never", lastSeenAt: null })]),
-    );
-    expect(machines[0]?.online).toBe(false);
-  });
-});
-
 describe("useLiveNewSessionActions", () => {
   function renderActions(machineId: string): NewSessionActions {
-    return renderWithSnapshot(() => useLiveNewSessionActions(machineId), snapshotWithMachines([]));
+    return renderWithSnapshot(
+      () => useLiveNewSessionActions(machineId),
+      snapshotWithMachines([makeMachine()]),
+    );
   }
 
   it("rejects every action method with an honest 'key isn't unwrapped yet' message before the machine key has unwrapped", async () => {

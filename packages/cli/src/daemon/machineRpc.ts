@@ -38,7 +38,11 @@
  * the Setup/Run scripts subsystem's read-only config surface and
  * long-lived, remotely start/stop-able `run.*` process, `runProcess.ts`/
  * `workspaceConfigRpc.ts`) — are in
- * scope here —
+ * scope here — as is `worktree.remove` (Phase C, new-session-from-web
+ * redesign — `worktreeRemove.ts`'s own doc comment): the manual "clean up
+ * this session's worktree" action, since every session spawned via the
+ * workspace-row `+` flow now creates a fresh `.worktrees/<branch>`
+ * directory with nothing that ever cleans it up automatically.
  * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
  * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
  * same way without touching this module's dispatch shape.
@@ -257,6 +261,10 @@ import {
   WorkspaceUnregisterParamsSchema,
   type WorkspaceUnregisterResult,
   WorkspaceUnregisterResultSchema,
+  type WorktreeRemoveParams,
+  WorktreeRemoveParamsSchema,
+  type WorktreeRemoveResult,
+  WorktreeRemoveResultSchema,
 } from "@falcon/wire";
 import type { Socket } from "socket.io-client";
 import type { ZodType } from "zod";
@@ -288,6 +296,7 @@ import {
   registerWorkspace as registerWorkspaceDefault,
   unregisterWorkspace as unregisterWorkspaceDefault,
 } from "./workspaceRegisterRpc.js";
+import { removeWorktree as removeWorktreeDefault } from "./worktreeRemove.js";
 
 export const MACHINE_RPC_METHODS = [
   "spawn",
@@ -320,6 +329,7 @@ export const MACHINE_RPC_METHODS = [
   "run.stop",
   "run.status",
   "run.setup",
+  "worktree.remove",
 ] as const;
 export type MachineRpcMethod = (typeof MACHINE_RPC_METHODS)[number];
 
@@ -394,6 +404,8 @@ export interface MachineRpcDeps {
   runStatus?: (params: RunStatusParams) => Promise<RunStatusResult>;
   /** Backs the `run.setup` RPC ("Re-run setup"). Injectable for tests; defaults to `runProcess.ts`'s real handler, which itself delegates to `setupScript.ts`. Throws on an unauthorized worktree. */
   runSetup?: (params: RunSetupParams) => Promise<RunSetupResult>;
+  /** Backs the `worktree.remove` RPC (Phase C, new-session-from-web redesign — manual "clean up this session's worktree" action). Injectable for tests; defaults to `worktreeRemove.ts`'s real handler (gated on the registered-workspace authorizer plus its own `.worktrees/` structural safety check). Throws on an unauthorized/non-worktree path or an unexpected git failure. */
+  removeWorktree?: (params: WorktreeRemoveParams) => Promise<WorktreeRemoveResult>;
   logger?: Logger;
 }
 
@@ -603,6 +615,19 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const cachedRunStop = withIdempotencyCache(deps.runStop ?? handleRunStopDefault);
   const cachedRunSetup = withIdempotencyCache(deps.runSetup ?? handleRunSetupDefault);
   const runStatus = deps.runStatus ?? handleRunStatusDefault;
+  // `worktree.remove`'s whole point is a side effect (a real `git worktree
+  // remove`/`git branch -D`) — same idempotency-key replay reasoning as
+  // `git.commit`/`git.push`/`git.renameBranch` above: a lost-ack retry must
+  // replay the prior result rather than re-running the removal (harmless
+  // here since it's already-removed-safe, but replay is still the correct,
+  // uniform contract for a mutating RPC in this family). Also gets the same
+  // resource guard as `run.start` — keyed on `params.worktree` — so two
+  // devices clicking "Remove" concurrently with different `idempotencyKey`s
+  // join one real attempt instead of racing two `git worktree remove` calls
+  // against the same directory.
+  const cachedRemoveWorktree = withIdempotencyCache(
+    withResourceGuard(deps.removeWorktree ?? removeWorktreeDefault, (params) => params.worktree),
+  );
 
   function handleSpawn(params: SpawnParams): Promise<SpawnResult> {
     const cached = spawnResults.get(params.idempotencyKey);
@@ -790,6 +815,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: RunSetupParamsSchema,
       resultSchema: RunSetupResultSchema,
       handle: cachedRunSetup as (params: unknown) => Promise<unknown>,
+    },
+    "worktree.remove": {
+      paramsSchema: WorktreeRemoveParamsSchema,
+      resultSchema: WorktreeRemoveResultSchema,
+      handle: cachedRemoveWorktree as (params: unknown) => Promise<unknown>,
     },
   };
 

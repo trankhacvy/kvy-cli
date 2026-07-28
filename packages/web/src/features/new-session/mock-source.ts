@@ -4,29 +4,25 @@ import type {
   DirectoryListing,
   ImportCandidate,
   NewSessionActions,
-  NewSessionMachine,
   SpawnOutcome,
   UseNewSessionActions,
-  UseNewSessionMachines,
 } from "./types";
 
 /**
- * The screen's default data source — mirrors `features/session-list/
- * mock-source.ts`'s role: `apiSocket`/a live per-machine crypto client
- * aren't wired into this screen yet, so this simulates the daemon's
- * `fs.list`/`fs.mkdir`/`spawn` RPCs against a small in-memory fake
- * filesystem, kept to the same call signatures (`UseNewSessionMachines`,
- * `UseNewSessionActions`) so swapping in the real hooks later is a one-line
- * change at the call site.
+ * `NewSessionActions`' mock implementation — used by this package's own
+ * unit tests (`__tests__/mock-source.test.ts`) and available for any future
+ * standalone-review harness, mirroring `features/session-list/
+ * mock-source.ts`'s role. Simulates the daemon's `fs.list`/`fs.mkdir`/
+ * `spawn`/`adopt.list`/`git.branches` RPCs against a small in-memory fake
+ * filesystem. The old wizard's machine-picker mock (`useMockNewSessionMachines`)
+ * was retired alongside `MachineStep`/`DirectoryStep` (B5,
+ * new-session-from-web redesign) — the workspace-row `+` flow always already
+ * knows its machine (B1's `deriveDefaultTargetMachineId`), so there is no
+ * machine-list step left to mock.
  */
 
 const LATENCY_MS = 250;
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const MOCK_MACHINES: NewSessionMachine[] = [
-  { id: "mach-laptop", name: "vy-macbook-pro", online: true },
-  { id: "mach-server", name: "prod-build-box", online: false },
-];
 
 /** name → child directory names. Missing keys behave as "not created yet" — browsing them 404s the same way a real not-yet-existing directory would, and `spawn`ing into one triggers the create-directory approval loop. */
 function seedFakeFs(): Map<string, string[]> {
@@ -177,5 +173,3 @@ export function createMockNewSessionActions(_machineId: string): NewSessionActio
 /** `useMemo`'d on `machineId` so the fake filesystem's mutable state (created directories) survives re-renders — a real hook backed by a live `MachineRpcClient` will want the same memoization (avoid resealing/reconnecting every render), so this mirrors that shape rather than papering over it. */
 export const useMockNewSessionActions: UseNewSessionActions = (machineId) =>
   useMemo(() => createMockNewSessionActions(machineId), [machineId]);
-
-export const useMockNewSessionMachines: UseNewSessionMachines = () => MOCK_MACHINES;

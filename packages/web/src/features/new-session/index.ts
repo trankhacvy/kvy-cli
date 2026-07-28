@@ -1,28 +1,30 @@
-export { DirectoryStep } from "./components/directory-step";
-export { ImportStep } from "./components/import-step";
-export { MachineStep } from "./components/machine-step";
-export { OptionsStep } from "./components/options-step";
+// B5 (new-session-from-web redesign, see the task's own header comment):
+// `NewSessionScreen`/`MachineStep`/`DirectoryStep`/`OptionsStep`/`ImportStep`
+// — the old free-form wizard's screen and its step components — are
+// retired. What's left here are the pieces the new workspace-row inline
+// creation panel (`features/session-list/components/new-session-panel.tsx`)
+// actually reuses: the extracted pickers, the spawn RPC wiring, and the
+// pure request-building/favorites/defaults logic.
+export { BaseBranchPicker } from "./components/base-branch-picker";
+export { ModelPicker } from "./components/model-picker";
+export { PermissionModePicker } from "./components/permission-mode-picker";
+export { ProviderPicker } from "./components/provider-picker";
+export { getDefaultBranchMode, setDefaultBranchMode } from "./git-defaults";
 export { machineRpcToActions } from "./live-actions";
-export { useLiveNewSessionActions, useLiveNewSessionMachines } from "./live-source";
-export {
-  createMockNewSessionActions,
-  useMockNewSessionActions,
-  useMockNewSessionMachines,
-} from "./mock-source";
-export { NewSessionScreen } from "./new-session-screen";
+export { useLiveNewSessionActions } from "./live-source";
+export { createMockNewSessionActions, useMockNewSessionActions } from "./mock-source";
 export { runSpawnFlow, SpawnFlowError, type SpawnFlowResult } from "./spawn-flow";
 export type {
+  BranchItem,
   BranchOption,
   DirectoryEntry,
   DirectoryListing,
   ImportCandidate,
   NewSessionActions,
-  NewSessionMachine,
   NewSessionProvider,
   SpawnOutcome,
   SpawnRequest,
   UseNewSessionActions,
-  UseNewSessionMachines,
 } from "./types";
 export {
   buildSpawnRequest,

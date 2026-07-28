@@ -15,6 +15,7 @@ function fakeAwaiter(overrides: Partial<SpawnAwaiter> = {}): SpawnAwaiter {
   return {
     waitFor: vi.fn(async (pid: number) => ({ sessionId: "sess_1", pid })),
     resolve: vi.fn(() => true),
+    reject: vi.fn(() => true),
     ...overrides,
   };
 }
@@ -31,7 +32,11 @@ function fakeRegistry(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe("resumeSession", () => {
   it("re-spawns with FALCON_RECONNECT_* env carrying the persisted encryption material", async () => {
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 555,
+      watchExit: () => () => {},
+    }));
     const registry = fakeRegistry();
 
     const result = await resumeSession("sess_1", {
@@ -71,7 +76,11 @@ describe("resumeSession", () => {
   });
 
   it("re-tracks the relaunched pid WITH the resolved directory, so spawn-dedup survives across the resume (Flow 3 — spawn-directory-dedup)", async () => {
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 777 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 777,
+      watchExit: () => () => {},
+    }));
     const registry = fakeRegistry();
 
     await resumeSession("sess_1", {
@@ -93,7 +102,11 @@ describe("resumeSession", () => {
   });
 
   it("uses the codex CLI name for a persisted codex session", async () => {
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 555,
+      watchExit: () => () => {},
+    }));
 
     await resumeSession("sess_1", {
       registry: fakeRegistry({
@@ -118,7 +131,11 @@ describe("resumeSession", () => {
       registry,
       awaiter: fakeAwaiter(),
       resolveDirectory: () => "/tmp/proj",
-      launchProcess: vi.fn(async () => ({ method: "detached" as const, pid: 1 })),
+      launchProcess: vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 1,
+        watchExit: () => () => {},
+      })),
       falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
       isAlive: () => false,
     });
@@ -140,7 +157,7 @@ describe("resumeSession", () => {
     });
     const launchProcess = vi.fn(async () => {
       callOrder.push("launch");
-      return { method: "detached" as const, pid: 1 };
+      return { method: "detached" as const, pid: 1, watchExit: () => () => {} };
     });
 
     await resumeSession("sess_1", {
@@ -174,7 +191,11 @@ describe("resumeSession", () => {
       registry,
       awaiter: fakeAwaiter(),
       resolveDirectory: () => "/tmp/proj",
-      launchProcess: vi.fn(async () => ({ method: "detached" as const, pid: 1 })),
+      launchProcess: vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 1,
+        watchExit: () => () => {},
+      })),
       falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
       isAlive,
       killPid,
@@ -189,7 +210,11 @@ describe("resumeSession", () => {
 
   it("throws ResumeSessionError and never launches a replacement if the old process survives SIGKILL", async () => {
     const registry = fakeRegistry({ stopSession: vi.fn(() => true), getLivePid: vi.fn(() => 999) });
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 1 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 1,
+      watchExit: () => () => {},
+    }));
     let now = 0;
 
     await expect(
@@ -254,7 +279,11 @@ describe("resumeSession", () => {
           }),
         }),
         resolveDirectory: () => "/tmp/proj",
-        launchProcess: vi.fn(async () => ({ method: "detached" as const, pid: 1 })),
+        launchProcess: vi.fn(async () => ({
+          method: "detached" as const,
+          pid: 1,
+          watchExit: () => () => {},
+        })),
         falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
       }),
     ).rejects.toThrow(/resume launched \(pid 1, detached\) but/);

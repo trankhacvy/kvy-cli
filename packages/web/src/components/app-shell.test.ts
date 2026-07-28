@@ -9,6 +9,12 @@ import { isSessionRoute, sidebarCollapsible } from "./app-shell";
  * `isSessionRoute`/`sidebarCollapsible` decide whether collapsing the left
  * nav shrinks it to an icon rail or fully hides it for a full-width session
  * view (competitive-notes-omnara.md #20).
+ *
+ * B5 (new-session-from-web redesign, see the task's own header comment):
+ * `/dashboard/session/new/` no longer exists — the standalone new-session
+ * wizard route was retired in favor of the workspace-row `+` inline panel
+ * (`features/session-list/components/new-session-panel.tsx`), so these
+ * helpers no longer special-case it.
  */
 describe("isSessionRoute", () => {
   it("is true for a session timeline route", () => {
@@ -21,10 +27,6 @@ describe("isSessionRoute", () => {
 
   it("is true for an unmanaged session route", () => {
     expect(isSessionRoute("/dashboard/session/unmanaged/abc-123/")).toBe(true);
-  });
-
-  it("is false for the new-session wizard", () => {
-    expect(isSessionRoute("/dashboard/session/new/")).toBe(false);
   });
 
   it("is false for the sessions list and other non-session routes", () => {
@@ -48,7 +50,6 @@ describe("sidebarCollapsible", () => {
 
   it("shrinks to an icon rail everywhere else", () => {
     expect(sidebarCollapsible("/dashboard/")).toBe("icon");
-    expect(sidebarCollapsible("/dashboard/session/new/")).toBe("icon");
     expect(sidebarCollapsible("/signin/")).toBe("icon");
   });
 });

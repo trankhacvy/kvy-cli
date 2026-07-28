@@ -1,22 +1,21 @@
 import type { PermissionMode } from "@falcon/wire";
 
 /**
- * View-model types for the New Session flow (falcon-system-design.md §9.2
- * "New session" row, falcon-prd.md FR-7.5/UC5): machine → directory picker
- * → provider/mode/model → (optional branch/worktree) → spawn.
+ * Shared RPC/view-model types for spawning a session against a machine
+ * (falcon-system-design.md §9.2 "New session" row, falcon-prd.md
+ * FR-7.5/UC5). Originally the old free-form wizard's types (machine picker →
+ * directory picker → provider/mode/model → spawn); the machine/directory
+ * concepts (`NewSessionMachine`, `DirectoryListing`'s browse-centric
+ * companions) were retired in the B5 redesign — the workspace-row `+` flow
+ * always already knows its machine and directory (B1's `target-machine.ts`,
+ * a workspace's own registered id) — but `NewSessionActions`/`SpawnRequest`/
+ * `BranchOption`/`BranchItem`/`ImportCandidate` remain the shared contract
+ * `features/session-list`'s inline creation panel spawns through.
  *
- * `NewSessionMachine`/`DirectoryListing` are decrypted/plaintext-routing
- * view-models the same way `features/session-list/types.ts`'s
- * `SessionListMachine` is — the underlying `MachineRow.metadata` is an
- * `EncryptedBox`, decrypted upstream of this screen.
+ * `DirectoryListing` is a decrypted/plaintext-routing view-model the same
+ * way `features/session-list/types.ts`'s `SessionListMachine` is — the
+ * underlying `MachineRow.metadata` is an `EncryptedBox`, decrypted upstream.
  */
-
-export interface NewSessionMachine {
-  id: string;
-  /** Decrypted machine name (e.g. hostname). */
-  name: string;
-  online: boolean;
-}
 
 export interface DirectoryEntry {
   name: string;
@@ -134,6 +133,3 @@ export interface NewSessionActions {
 
 /** One machine RPC actions client per chosen machine — mirrors `UseSessionControl = (sessionId) => SessionControlActions`. */
 export type UseNewSessionActions = (machineId: string) => NewSessionActions;
-
-/** Injectable data source for the machine-picker step — mirrors `features/session-list`'s `UseSessionListSnapshot` seam. */
-export type UseNewSessionMachines = () => NewSessionMachine[];

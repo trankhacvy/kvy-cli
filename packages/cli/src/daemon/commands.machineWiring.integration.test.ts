@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { PGlite } from "@electric-sql/pglite";
-import { deriveKeyTree, getRandomBytes, open, seal, unwrapDek } from "@falcon/crypto";
+import { deriveKeyTree, encodeBase64, getRandomBytes, open, seal, unwrapDek } from "@falcon/crypto";
 import type { EncryptedBox } from "@falcon/wire";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
@@ -23,7 +23,11 @@ import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { Logger } from "../logger.js";
 import { readSettings } from "../persistence.js";
 import { createDaemonCommandDeps, type DaemonCommandDeps, runDaemonStartSync } from "./commands.js";
-import { createNotifyDaemonSessionStartedDeps, notifyDaemonSessionStarted } from "./notify.js";
+import {
+  createNotifyDaemonSessionStartedDeps,
+  notifyDaemonSessionStarted,
+  reportSessionStartFailed,
+} from "./notify.js";
 import type { LaunchedProcess, LaunchProcessOptions } from "./processLauncher.js";
 import { createSleepInhibitManager, type SleepInhibitChild } from "./sleepInhibit.js";
 import { readDaemonState } from "./state.js";
@@ -141,7 +145,93 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
           },
         );
       }, 20);
-      return { method: "detached", pid };
+      return { method: "detached", pid, watchExit: () => () => {} };
+    };
+  }
+
+  /**
+   * A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+   * reason"): mints a pid, then self-reports a FAILURE via the real
+   * `notify.ts` `reportSessionStartFailed` client hitting the daemon's own
+   * real `/session-start-failed` control-server route — exactly what
+   * `start.ts`'s/`startCodex.ts`'s `bootstrapSession()` catch block does on
+   * a real failure (e.g. a 429 session-quota rejection). Never actually
+   * spawns a subprocess.
+   */
+  function buildFakeLaunchProcessThatReportsFailure(
+    errorMessage: string,
+  ): (opts: LaunchProcessOptions) => Promise<LaunchedProcess> {
+    let nextPid = 800_000;
+    return async (): Promise<LaunchedProcess> => {
+      const pid = nextPid++;
+      setTimeout(() => {
+        void reportSessionStartFailed(
+          createNotifyDaemonSessionStartedDeps({
+            homeDir,
+            fetchImpl: fetch,
+            isProcessAlive: () => true,
+          }),
+          { pid, error: errorMessage },
+        );
+      }, 20);
+      return { method: "detached", pid, watchExit: () => () => {} };
+    };
+  }
+
+  /**
+   * A5 (docs/known-issues.md — "orphaned active session rows when the
+   * process dies after DB-row creation, on an otherwise-healthy machine"):
+   * mints a pid, self-reports `/session-started` for a REAL, pre-created
+   * session id (so its row genuinely exists and is `active`), then fires
+   * its `watchExit` with a nonzero exit shortly after — simulating "the ACP
+   * adapter connection failed and the child process exited" with no clean
+   * `POST /v1/sessions/:id/status` report ever sent, exactly the gap this
+   * fix closes.
+   */
+  function buildFakeLaunchProcessThatDiesAfterStarting(
+    realSessionId: string,
+  ): (opts: LaunchProcessOptions) => Promise<LaunchedProcess> {
+    let nextPid = 700_000;
+    return async (): Promise<LaunchedProcess> => {
+      const pid = nextPid++;
+      let fireExit:
+        | ((info: { code: number | null; signal: NodeJS.Signals | null }) => void)
+        | null = null;
+      setTimeout(() => {
+        void notifyDaemonSessionStarted(
+          createNotifyDaemonSessionStartedDeps({
+            homeDir,
+            fetchImpl: fetch,
+            isProcessAlive: () => true,
+          }),
+          {
+            sessionId: realSessionId,
+            pid,
+            metadata: {},
+            encryption: {
+              encryptionKey: "fake-wrapped-key",
+              seq: 0,
+              metadataVersion: 0,
+              agentStateVersion: 0,
+            },
+          },
+        ).then(() => {
+          // The process dies shortly AFTER successfully reporting started —
+          // no status report of its own, exactly like an ACP connect()
+          // failure that throws instead of returning a reportable exit code.
+          setTimeout(() => fireExit?.({ code: 1, signal: null }), 30);
+        });
+      }, 20);
+      return {
+        method: "detached",
+        pid,
+        watchExit: (onExit) => {
+          fireExit = onExit;
+          return () => {
+            fireExit = null;
+          };
+        },
+      };
     };
   }
 
@@ -262,6 +352,188 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
       mode: "fork",
     });
     expect(adopted.sessionId).toBeTruthy();
+  });
+
+  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+  // reason"): proves the full real path — `spawn` RPC -> real spawnEngine ->
+  // fake launch -> real HTTP POST /session-start-failed -> real
+  // spawnAwaiter.reject -> the `spawn` RPC call itself rejects with the
+  // REAL reported error, not a 15s-later generic timeout message.
+  it("spawn RPC rejects with the child's real self-reported error, fast, once it posts to /session-start-failed", async () => {
+    // A fresh account/machine (same reasoning as the sleepInhibit test
+    // below): isolates this boot's spawnAwaiter/session state from the
+    // other tests in this shared-db file.
+    const account = await createTestAccount(db);
+    writeCredentials(
+      {
+        refreshToken: account.refreshToken,
+        keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+      },
+      homeDir,
+    );
+
+    const quotaMessage =
+      "You've reached your limit of 3 running sessions. Finish one before starting another.";
+    const deps: DaemonCommandDeps = createDaemonCommandDeps({
+      homeDir,
+      logger: noopLogger(),
+      registerShutdownSignals: (onShutdown) => {
+        triggerShutdown = onShutdown;
+        return () => {};
+      },
+      isProcessAlive: () => true,
+      machineServerUrl: serverUrl,
+      resolveWorkspaceRoot: (workspaceId) => (workspaceId === "ws_1" ? workspaceDir : null),
+      resolveProviderSession: async () => null,
+      resolveResumeDirectory: () => undefined,
+      spawnEngineOverrides: {
+        launchProcess: buildFakeLaunchProcessThatReportsFailure(quotaMessage),
+      },
+    });
+
+    bootPromise = runDaemonStartSync(deps);
+    await waitFor(() => readDaemonState(homeDir));
+
+    const machineRow = await waitFor(() =>
+      db.query.machines.findFirst({ where: (m, { eq }) => eq(m.accountId, account.account.id) }),
+    );
+    machineId = machineRow.id;
+    const contentSecretKey = deriveKeyTree(masterSecret).content.secretKey;
+    dek = unwrapDek(machineRow.dek, contentSecretKey);
+    expect(dek).not.toBeNull();
+
+    caller = ioClient(serverUrl, {
+      path: "/v1/stream",
+      transports: ["websocket"],
+      auth: { token: account.token },
+    });
+    await new Promise<void>((resolve) => caller.once("connect", () => resolve()));
+
+    const start = Date.now();
+    // The RPC transport itself still acks `ok:true` (the handler's error is
+    // carried inside the sealed result payload, `machineRpc.ts`'s own
+    // `errorBox` convention — see that module's `onRpcRequest` catch block)
+    // — so the real error surfaces in the decrypted result, not as a
+    // rejected `callRpc()` promise.
+    const result = await callRpc<{ ok: false; error: string }>("spawn", {
+      idempotencyKey: "idem-spawn-fail-1",
+      workspaceId: "ws_1",
+      directory: workspaceDir,
+      provider: "claude-code",
+      permissionMode: "default",
+    });
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain(quotaMessage);
+    // Well under the 15s default timeout — this is the fast-reject path
+    // (A4), not the flat-timeout fallback.
+    expect(Date.now() - start).toBeLessThan(10_000);
+  });
+
+  // A5 (docs/known-issues.md — "orphaned active session rows when the
+  // process dies after DB-row creation, on an otherwise-healthy machine"):
+  // proves the full real path end to end — a REAL session row (`POST
+  // /v1/sessions`, genuinely `active`) is spawned, self-reports started,
+  // then its process dies with no clean status report of its own. The
+  // daemon's `watchForUnreportedDeath` (`machineIntegration.ts`) must
+  // notice via the launched process's real `watchExit` and best-effort
+  // `POST /v1/sessions/:id/status` it to `failed` — proving the machine
+  // stays "healthy" (no 5-minute machine-staleness reconciliation involved
+  // at all) yet the orphaned row still resolves.
+  it("watchForUnreportedDeath flips a session to failed after its process dies with no clean self-report, on an otherwise-healthy machine", async () => {
+    const account = await createTestAccount(db);
+    writeCredentials(
+      {
+        refreshToken: account.refreshToken,
+        keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+      },
+      homeDir,
+    );
+
+    // A real, `active` session row — same shape `sessionStatus.test.ts`
+    // creates one with.
+    const createSessionResponse = await fetch(`${serverUrl}/v1/sessions`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: account.authHeader,
+      },
+      body: JSON.stringify({
+        tag: "a5-orphan-session",
+        provider: "claude-code",
+        metadata: { t: "enc", v: 1, c: encodeBase64(getRandomBytes(16)) },
+        dek: encodeBase64(getRandomBytes(32)),
+      }),
+    });
+    expect(createSessionResponse.status).toBe(201);
+    const realSessionId = (await createSessionResponse.json()).id as string;
+
+    const deps: DaemonCommandDeps = createDaemonCommandDeps({
+      homeDir,
+      logger: noopLogger(),
+      registerShutdownSignals: (onShutdown) => {
+        triggerShutdown = onShutdown;
+        return () => {};
+      },
+      isProcessAlive: () => true,
+      machineServerUrl: serverUrl,
+      resolveWorkspaceRoot: (workspaceId) => (workspaceId === "ws_1" ? workspaceDir : null),
+      resolveProviderSession: async () => null,
+      resolveResumeDirectory: () => undefined,
+      spawnEngineOverrides: {
+        launchProcess: buildFakeLaunchProcessThatDiesAfterStarting(realSessionId),
+      },
+    });
+
+    bootPromise = runDaemonStartSync(deps);
+    await waitFor(() => readDaemonState(homeDir));
+
+    const machineRow = await waitFor(() =>
+      db.query.machines.findFirst({ where: (m, { eq }) => eq(m.accountId, account.account.id) }),
+    );
+    machineId = machineRow.id;
+    const contentSecretKey = deriveKeyTree(masterSecret).content.secretKey;
+    dek = unwrapDek(machineRow.dek, contentSecretKey);
+    expect(dek).not.toBeNull();
+
+    caller = ioClient(serverUrl, {
+      path: "/v1/stream",
+      transports: ["websocket"],
+      auth: { token: account.token },
+    });
+    await new Promise<void>((resolve) => caller.once("connect", () => resolve()));
+
+    const spawned = await callRpc<{ sessionId?: string }>("spawn", {
+      idempotencyKey: "idem-spawn-a5-1",
+      workspaceId: "ws_1",
+      directory: workspaceDir,
+      provider: "claude-code",
+      permissionMode: "default",
+    });
+    // The spawn resolved via the REAL session's own `/session-started`
+    // self-report — proving this is genuinely the same row, not a
+    // synthetic id.
+    expect(spawned.sessionId).toBe(realSessionId);
+
+    // The fake process's exit (30ms after its own started-report) plus the
+    // daemon's own best-effort report round trip — give it real time to
+    // land, well under this test's own timeout.
+    async function fetchSessionStatus(): Promise<string> {
+      const res = await fetch(`${serverUrl}/v1/sessions`, {
+        headers: { authorization: account.authHeader },
+      });
+      const body = (await res.json()) as { sessions: { id: string; status: string }[] };
+      const row = body.sessions.find((s) => s.id === realSessionId);
+      return row?.status ?? "not-found";
+    }
+    // Sanity: genuinely active immediately after spawn resolves — this is
+    // what makes the eventual "failed" meaningful (not just always-failed).
+    expect(await fetchSessionStatus()).toBe("active");
+
+    const finalStatus = await waitFor(async () => {
+      const status = await fetchSessionStatus();
+      return status === "failed" ? status : null;
+    });
+    expect(finalStatus).toBe("failed");
   });
 
   it("sleepInhibit.set persists to settings.json and sleepInhibit.get reflects the applied state (docs/features/sleep-inhibit.md)", async () => {

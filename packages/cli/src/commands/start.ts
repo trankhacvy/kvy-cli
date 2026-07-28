@@ -175,6 +175,7 @@ import {
 import {
   createNotifyDaemonSessionStartedDeps,
   notifyDaemonSessionStarted as notifyDaemonSessionStartedDefault,
+  reportSessionStartFailed as reportSessionStartFailedDefault,
 } from "../daemon/notify.js";
 import { reloadDaemonAuth as reloadDaemonAuthDefault } from "../daemon/reloadAuth.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
@@ -300,6 +301,15 @@ export interface StartClaudeCommandDeps {
    */
   notifyDaemonSessionStarted?: typeof notifyDaemonSessionStartedDefault;
   /**
+   * Injectable for tests; defaults to the real `reportSessionStartFailed()`
+   * (A4, `daemon/notify.ts` — best-effort, never throws). Fired from the
+   * `bootstrapSession()` catch block below so a daemon-initiated spawn's
+   * `spawnAwaiter.reject(pid, error)` can surface the REAL failure (e.g. a
+   * 429 session-quota message) instead of the caller only ever learning
+   * about a generic "did not report back" timeout once this process exits.
+   */
+  reportSessionStartFailed?: typeof reportSessionStartFailedDefault;
+  /**
    * Injectable for tests; defaults to the real `registerWorkspace()`
    * (`workspace/registry.ts`). A bare terminal `falcon claude` run — unlike
    * the web "New Session" wizard's `spawn` RPC, which already registers a
@@ -399,6 +409,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const doAcquireSessionLock = deps.acquireSessionLock ?? acquireSessionLockDefault;
   const doNotifyDaemonSessionStarted =
     deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
+  const doReportSessionStartFailed =
+    deps.reportSessionStartFailed ?? reportSessionStartFailedDefault;
   const setTimeoutImpl = deps.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimeoutImpl = deps.clearTimeoutImpl ?? ((handle) => clearTimeout(handle));
   const doRunKeysApprove = deps.runKeysApproveCommand ?? runKeysApproveCommandDefault;
@@ -536,6 +548,15 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-claude] bootstrapSession failed", { message });
     writeError(`falcon claude: failed to start session — ${message}\n`);
+    // A4: best-effort self-report to the daemon (never throws, absent/
+    // unreachable daemon is a silent no-op) so a daemon-initiated spawn's
+    // `spawnAwaiter` can reject with THIS real message instead of only ever
+    // seeing a generic timeout once this process exits.
+    const reportResult = await doReportSessionStartFailed(
+      createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+      { error: message },
+    );
+    logger.debug("[start-claude] daemon self-report (start failed)", { reportResult });
     if (sessionLock) await sessionLock.release();
     return 1;
   }

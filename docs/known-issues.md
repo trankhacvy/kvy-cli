@@ -14,7 +14,9 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 6 | [`falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open (codex-only; `falcon claude` fixed) |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
-| 13 | [ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang](#issue-13) | Open |
+| 13 | [New Session from web: daemon-initiated spawn reproducibly fails in ~1s, with no diagnostic trail](#issue-13) | Open |
+| 14 | [ACP adapter auto-install can genuinely fail/be slow — pinned adapter requires Node ≥22, this machine (and likely others) runs Node 20](#issue-14) | Open |
+| 15 | [A workspace's `+` spawn registers the new worktree as its own separate top-level workspace, not nested under the parent](#issue-15) | Open (needs product decision) |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -75,23 +77,37 @@ this pass, not bugs:
   help text advertises the flag, so this is a real CLI/remote parity gap, not just an
   omission. A real fix would call `ensureBranchWorkspace` before launching the local TUI,
   the same way `spawnEngine.ts` does for a remote spawn. Re-verified 2026-07-28: still true.
-- **No worktree cleanup lifecycle.** Nothing ever runs `git worktree remove` or deletes the
-  branch once a session ends — `.worktrees/<branch>` directories (and their branches)
-  accumulate forever. The new `.git/info/exclude` entry (Phase 3) only hides them from
-  `git status`; it doesn't reclaim disk. This ties to the separate "session lifecycle
-  actions" competitive item and should land before the global default (below) flips.
+- **Worktree cleanup: now manual, still not automatic.** Fixed partially by the
+  new-session-from-web redesign's Phase C: `worktree.remove` (`packages/cli/src/daemon/worktreeRemove.ts`,
+  wired through `machineRpc.ts` and a web action in `session-list/components/remove-worktree-dialog.tsx`)
+  lets a user manually clean up a session's worktree — plain removal first, an explicit
+  second confirm for `--force` if the worktree has uncommitted/untracked changes, branch
+  deletion offered as a separate, off-by-default, more-destructive choice. Nothing still
+  runs this automatically on session end (deliberately out of scope — what if the user wants
+  to keep working in that worktree after the session ends? — a real design question, not an
+  oversight) — `.worktrees/<branch>` directories still accumulate forever unless a user
+  remembers to clean them up by hand.
 - **`git.branches` is local-only.** The RPC lists `refs/heads` only — no remote-tracking
   branches. Fine for the MVP existing-branch picker (you can only worktree a branch that
   already exists locally on that machine anyway), but worth revisiting if a "check out a
   remote branch" flow is ever wanted.
-- **Global default stays `repo-root`.** Settings → Git ships with "Repo root" as the shipped
-  default (no silent behavior change), diverging from Omnara's worktree-by-default framing.
-  Revisit flipping `git-defaults.ts`'s fallback to `"new-branch"` once the cleanup lifecycle
-  above exists — recommending "New worktree" daily without any cleanup story would be a
-  worse default, not a better one.
+- **Global default (`repo-root` vs `new-branch`) is now moot for the primary flow, and the
+  Settings control that used to drive it is orphaned.** The new-session-from-web redesign's
+  workspace-row `+` entry point (which replaced the old free-form wizard) no longer offers a
+  repo-root/existing-branch choice at all — every session from there always gets a fresh
+  worktree + fresh branch, unconditionally (two parallel sessions sharing a `repo-root`
+  working directory was a real correctness risk, not just a preference). But
+  `packages/web/src/features/settings/components/GitSection.tsx`'s "default branch mode"
+  toggle (`git-defaults.ts`'s `getDefaultBranchMode`/`setDefaultBranchMode`) is still there
+  and still functional as a control — it's just that nothing reads its value anymore
+  (confirmed via `grep -rl getDefaultBranchMode packages/web/src` — only `GitSection.tsx`
+  and its own module/test reference it). A user can still change this setting and see no
+  effect anywhere. Worth a product decision: remove the now-meaningless control, or
+  repurpose it for something the new flow actually reads.
 
-**Status:** all four are scope decisions the feature's plan doc made explicitly, not defects
-in what landed — parking them here so the next planner finds them instead of rediscovering
+**Status:** the first bullet is now partially resolved (manual cleanup exists); the other
+three are scope decisions/consequences of the broader redesign, not defects in what
+landed — parking them here so the next planner finds them instead of rediscovering
 them from scratch.
 
 <a id="issue-6"></a>
@@ -277,66 +293,143 @@ soak is even worth running." Both flags confirmed still off by default.
 
 <a id="issue-13"></a>
 
-## 13. ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang
+## 13. New Session from web: daemon-initiated spawn reproducibly fails in ~1s, with no diagnostic trail
 
-**Where:** `packages/cli/src/adapters/manifest.ts`, `install.ts:94,160`, `verify.ts:55-93`,
-`spawn.ts:29-37` (the adapter manager); `packages/cli/src/acp/acpConnection.ts:282-311`
-(`connect()`, throws `AcpConnectionError` with no auto-install fallback if verification
-fails); `packages/cli/src/commands/adapters.ts:16,40` (the only caller of the installer —
-`falcon adapters install|upgrade`); `packages/cli/src/daemon/spawnEngine.ts:320`
-(`awaiter.waitFor(launched.pid)`, the `spawn` RPC handler); `packages/cli/src/daemon/spawnAwaiter.ts:40`
-(`DEFAULT_SPAWN_AWAITER_TIMEOUT_MS = 15_000`); `packages/cli/src/commands/start.ts:562`
-(`doNotifyDaemonSessionStarted(...)`, Claude-only — corrected from this entry's earlier
-`:587`); `packages/cli/src/commands/startCodex.ts:123-127` (hard-exits before bootstrap if
-the real `codex` CLI isn't on PATH; never calls `notifyDaemonSessionStarted` under any
-circumstance — see strengthened claim below).
+**Where:** `packages/cli/src/daemon/spawnEngine.ts` (`spawnSession`, the `spawn` RPC handler),
+`packages/cli/src/daemon/processLauncher.ts` (`trySpawnViaTmux`, `watchPidByPolling`),
+`packages/cli/src/daemon/spawnAwaiter.ts` (`waitFor`'s exit-watcher fast-rejection, landed as
+part of the new-session-from-web redesign's Phase A). Found via live manual QA (real dev
+stack, real paired machine, real web UI) — not caught by any test in the repo.
 
-**What's open:** each supported agent (`claude-code`, `codex`) is a separate npm package
-(`@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`), installed
-into `~/.falcon/adapters/` via a pinned-version, integrity-checked `npm install` — but
-that install is **only ever triggered manually**, by a user running
-`falcon adapters install`/`upgrade`. Nothing calls it automatically: no `postinstall` hook
-on the `falcon` package itself, and no lazy-install on first use — `AcpConnection.connect()`
-just throws `AcpConnectionError` if the adapter isn't already verified-installed.
-`install.ts`'s own doc comment states explicitly: "No daemon interaction... not something
-the daemon mediates" — confirmed by grep, daemon startup code never calls the installer.
+**What's open:** clicking a workspace row's `+` and submitting "Start session" against a real
+paired machine reproducibly fails after ~1 second, every time (3/3 attempts). The web UI
+correctly shows the honest, translated error this session's own Phase B4 work added —
+*"The session process exited before it could start. Check that machine's `falcon` logs for
+what went wrong"* — which is a real improvement over the old generic 15s-timeout message, but
+following that instruction leads nowhere: the daemon's own log only records the fact of the
+fast exit, not why:
 
-That's a tolerable UX for a local terminal user (they see the error, run the install
-command themselves). It breaks down for sessions spawned from the web, where nobody is
-watching that machine's terminal:
+```
+[spawn-engine] launched provider process {"method":"tmux","pid":44961,"directory":".../worktrees/wf/20260728-bb09"}
+[machine-rpc] handler threw {"method":"spawn","error":"spawn launched (pid 44961, tmux) but spawned process (pid 44961) exited before it reported starting"}
+```
 
-- **Claude:** the daemon's `spawn` RPC reports "session started"
-  (`notifyDaemonSessionStarted`, `start.ts:562`) right after bootstrap, *before* the adapter
-  is ever touched — the ACP connection is only opened later, inside `runRemoteLoop()`
-  (`start.ts:1290+` → `acpRemote.ts:191`). The web UI shows a session that looks live, then
-  the failure surfaces later as a confusing in-transcript message ("Remote session failed to
-  start: ACP adapter ... not-installed") — no proactive install offered, no upfront error.
-- **Codex is worse than originally scoped here — re-verified 2026-07-28.** A repo-wide
-  search confirms `commands/startCodex.ts` never calls `notifyDaemonSessionStarted` under
-  **any** circumstance, not just when a dependency happens to be missing — the `/session-started`
-  callback is only ever issued from the `falcon claude` path. That means a daemon-initiated
-  Codex spawn (`spawnEngine.ts:320`'s `awaiter.waitFor`) will **always** hit
-  `spawnAwaiter.ts`'s bounded 15-second timeout and reject with a `SpawnError`, regardless of
-  whether `codex`/the adapter are even installed correctly — Codex web-spawn cannot
-  currently succeed at all via this path, dependency status aside. (It's a bounded ~15s
-  timeout ending in a clear `SpawnError`, not a literal infinite hang — worth being precise
-  about that.) `startCodex.ts:123-127` separately hard-exits before bootstrap if the real
-  `codex` CLI binary isn't on PATH — a second dependency Falcon can't fix by installing its
-  own package. `docs/plan.md:1182` still shows Codex web-spawn E2E as an unchecked item,
-  consistent with this.
+Confirmed via direct investigation:
 
-**What a real fix needs:** (1) have the daemon auto-run the installer itself (still
-pinned-version, still integrity-checked — just triggered automatically) on daemon startup
-or on first spawn request for an agent it's never installed, since the daemon is the one
-unattended process built for exactly this; (2) for Codex specifically, since a missing
-`codex` CLI can't be auto-installed, detect that up front and report a clear, immediate,
-web-visible error instead of a silent `spawnAwaiter` timeout; (2b) **also fix `startCodex.ts`
-to call `notifyDaemonSessionStarted` on the success path** — right now a daemon-initiated
-Codex spawn can never succeed even in the best case, which is a stronger bug than the
-original entry captured; (3) an end-to-end test covering daemon-spawn → adapter-missing →
-web-visible outcome, which doesn't exist today (the gap sits between `spawnEngine.test.ts`'s
-mocks and `acpConnection.test.ts`, which never goes through the daemon — confirmed no test
-references `notifyDaemonSessionStarted`/`session-started` from `startCodex.test.ts`).
+- The worktree/branch creation itself succeeds correctly — the target directory exists on
+  disk with the right content every time, ruling out `gitWorktree.ts` as the cause.
+- Session-lock collision was ruled out directly: `sessionLock.ts`'s lock key includes the
+  exact `workingDirectory` (`start.ts:483,538`), which differs between the worktree and any
+  other concurrently-running session in the same repo — confirmed via code read, not just
+  assumption.
+- The daemon process's own environment was directly inspected (`ps eww <daemon-pid>`) and
+  correctly has `FALCON_HOME_DIR`/`FALCON_BACKEND_URL`/`FALCON_FRONTEND_URL` set, ruling out
+  an obvious env-inheritance gap for the daemon itself.
+- **Root cause not fully isolated, because tmux itself makes this undebuggable in
+  production today.** `processLauncher.ts`'s `trySpawnViaTmux` never sets
+  `remain-on-exit`, so the instant the spawned command process exits, tmux destroys the
+  session/pane along with any stdout/stderr it produced — there is no way, in the current
+  code, to recover *why* a tmux-spawned remote session died fast, whether from a real daemon
+  spawn or from manual reproduction of the identical `tmux new-session` invocation.
+- A **manual, non-tmux** reproduction of the exact same `falcon claude --starting-mode remote
+  --started-by daemon` invocation (run directly, cwd'd into the same worktree) got further —
+  it reached the ACP adapter connection/auto-install stage before eventually failing there
+  (see issue #14) — meaning the tmux path is failing at some EARLIER step than the non-tmux
+  path does, for a reason specific to how the daemon actually launches it.
 
-**Status:** open, not started — re-verified 2026-07-28, still accurate and the Codex half
-is confirmed more severe than originally documented.
+**What a real fix needs:** (1) add `remain-on-exit on` (or an equivalent output-capture
+mechanism, e.g. redirecting the tmux pane's command to a log file before it runs) to
+`trySpawnViaTmux` so a fast-failing tmux-spawned session leaves a diagnostic trail instead of
+vanishing — this is required groundwork before the actual root cause of the ~1s failure can
+even be identified with confidence; (2) once real output is captured, root-cause and fix the
+actual ~1s failure itself — this issue only captures the confirmed symptom, not yet the
+underlying cause.
+
+**Status:** open, not started — newly found via live end-to-end testing 2026-07-28, not
+caught by any existing test (the daemon-spawn unit tests mock the child process entirely; the
+one e2e harness fakes away the same thing). This is the core "New Session from web" flow the
+whole redesign exists for — treat as highest priority among currently-open issues.
+
+<a id="issue-14"></a>
+
+## 14. ACP adapter auto-install can genuinely fail/be slow — pinned adapter requires Node ≥22, this machine (and likely others) runs Node 20
+
+**Where:** `packages/cli/src/adapters/manifest.ts` (`ADAPTER_MANIFEST`, the pinned
+`@agentclientprotocol/claude-agent-acp@0.59.0` version), `packages/cli/src/adapters/install.ts`
+(`installAdapter`, the underlying `npm install` call), `packages/cli/src/acp/acpConnection.ts`
+(`connect()`'s auto-install trigger, landed this session for known-issues #13's original
+scope). Found via live manual QA.
+
+**What's open:** the new-session-from-web redesign's auto-install fix (`AcpConnection.connect()`
+now auto-installs a missing adapter instead of just failing) was confirmed live to actually
+trigger correctly:
+
+```
+[acp-connection] adapter "claude-code" is not installed — auto-installing before spawn
+...
+[acp-remote] failed to start ACP session {"error":"ACP adapter \"claude-code\" is not installed and auto-install failed: Command failed: npm install @agentclientprotocol/claude-agent-acp@0.59.0 --save-exact --omit=dev --no-audit --no-fund\n"}
+```
+
+Reproducing the same `npm install` command standalone on this machine confirms why it's
+fragile: the pinned package declares `"engines": {"node": ">=22"}`, but this machine's active
+Node is v20.15.1 — `npm warn EBADENGINE` — and the install still took **37 seconds** to
+resolve/complete even though it eventually succeeded when given enough time and run outside
+whatever budget the daemon's own attempt was working within. Node 20 is not an exotic,
+misconfigured setup — LTS Node 20 is a very plausible version for a real user's machine to
+still be on. This is a **real**, live-confirmed failure mode of the fix landed this session,
+not a hypothetical.
+
+**What a real fix needs:** (1) at minimum, detect an `EBADENGINE`-class failure specifically
+and surface an honest, actionable message ("this machine's Node version (20.x) is too old for
+the Claude Code adapter — upgrade to Node 22+") instead of the current opaque "Command failed:
+npm install ..." string, which is exactly the kind of raw, untranslated error this session's
+own Phase B4 work was built to eliminate elsewhere; (2) consider whether `install.ts` should
+proactively check the running Node version against the manifest's engine requirement *before*
+attempting the install, so this fails fast with a clear message rather than waiting out a slow
+`npm install` first; (3) separately, confirm what timeout (if any) bounds the auto-install
+attempt inside a daemon-initiated spawn — if it's tighter than the ~37s a real install can
+take under normal conditions, a *correctly configured* machine with adequate Node could still
+time out through no fault of its own.
+
+**Status:** open, not started — newly found via live end-to-end testing 2026-07-28. Likely a
+meaningful contributor to issue #13's fast-failure symptom on machines where the tmux path
+gets far enough to reach this step (not yet confirmed whether it's the SAME failure as #13's
+~1s crash, which happens too fast to be this — see #13's own notes on the two reproductions
+diverging).
+
+<a id="issue-15"></a>
+
+## 15. A workspace's `+` spawn registers the new worktree as its own separate top-level workspace, not nested under the parent
+
+**Where:** `packages/cli/src/workspace/registry.ts` (`registerWorkspace`, called by
+`start.ts`/`startCodex.ts` against `process.cwd()` with no ancestor-directory resolution —
+already documented as a deliberate design choice elsewhere in this codebase),
+`packages/web/src/features/session-list/group.ts` (`WorkspaceGroup`, groups purely by
+`workspaceId`, which is one-per-registered-directory). Found via live manual QA.
+
+**What's open:** clicking "project-a"'s `+` and starting a session created a new worktree at
+`project-a/.worktrees/wf/20260728-bb09` — but on the Home screen, that session did not appear
+nested under the "project-a" workspace group the user clicked `+` from. It appeared as a
+**separate, top-level workspace group** named "20260728-bb09" (the worktree directory's own
+basename), sitting alongside "project-a" rather than under it. This is a direct, mechanical
+consequence of two already-existing, individually-reasonable design choices — each worktree
+gets registered as its own workspace (no ancestor-directory resolution), and the Home screen
+groups purely by `workspaceId` — but the *combined* effect at the exact moment this session's
+redesign asks a user to click `+` on a specific, named workspace is a visibly surprising one:
+the thing you clicked "+" on is not where the result shows up.
+
+**What a real fix needs:** a product decision, not obviously a bug fix. Options worth
+considering: (a) have the Home screen group by the worktree's *parent* repo/workspace instead
+of by the exact registered `workspaceId` when the two differ only by a `.worktrees/<branch>`
+suffix (a client-side display grouping change, no server/schema change needed); (b) don't
+register a worktree as its own independent workspace entry at all, and instead associate its
+sessions with the parent workspace's existing `workspaceId` directly; (c) accept the current
+behavior as correct/intentional (parallel worktrees really are semi-independent working
+directories) and instead make the `+` flow's own post-submit UX clearer about where the new
+session will land, so it's not a surprise.
+
+**Status:** open, not started — newly found via live end-to-end testing 2026-07-28. Not
+blocking (the session is fully functional and reachable, just grouped differently than a user
+would expect), but worth resolving since it directly affects the discoverability the `+`-per-
+workspace redesign was meant to improve.
+
