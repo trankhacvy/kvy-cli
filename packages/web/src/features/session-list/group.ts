@@ -17,7 +17,7 @@ export const UNGROUPED_WORKSPACE_ID = "__ungrouped__";
 /** Pinned sessions first (Pin — docs/features/session-lifecycle-actions.md
  * Phase 4), then most-recently-updated first within each of those two
  * groups — applies uniformly to every bucket, including the ungrouped one. */
-function byPinnedThenUpdatedAtDesc(a: SessionListSession, b: SessionListSession): number {
+export function byPinnedThenUpdatedAtDesc(a: SessionListSession, b: SessionListSession): number {
   if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
   return b.updatedAt - a.updatedAt;
 }
@@ -73,4 +73,44 @@ export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): Workspa
   }
 
   return groups;
+}
+
+/**
+ * Groups an already-selected, already-ordered slice of sessions (e.g. the top
+ * N by `updatedAt` for one page of Home) by workspace, WITHOUT re-deriving
+ * group order from recency — group order instead follows first-appearance in
+ * `sessions`, so "page 1's top 10 by recency, clustered for readability"
+ * doesn't get silently re-sorted back into whole-group recency order (that's
+ * `groupSessionsByWorkspace`'s job for the unpaginated case; this is a
+ * deliberately different, paging-aware sibling, not a replacement).
+ */
+export function groupPagedSessions(
+  sessions: readonly SessionListSession[],
+  workspaces: readonly SessionListWorkspace[],
+): WorkspaceGroup[] {
+  const workspaceById = new Map(workspaces.map((w) => [w.id, w]));
+  const order: string[] = [];
+  const buckets = new Map<string, SessionListSession[]>();
+
+  for (const session of sessions) {
+    const key =
+      session.workspaceId !== null && workspaceById.has(session.workspaceId)
+        ? session.workspaceId
+        : UNGROUPED_WORKSPACE_ID;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = [];
+      buckets.set(key, bucket);
+      order.push(key);
+    }
+    bucket.push(session);
+  }
+
+  return order.map((id) => ({
+    workspace:
+      id === UNGROUPED_WORKSPACE_ID
+        ? { id: UNGROUPED_WORKSPACE_ID, name: "Other sessions" }
+        : (workspaceById.get(id) as SessionListWorkspace),
+    sessions: [...(buckets.get(id) ?? [])].sort(byPinnedThenUpdatedAtDesc),
+  }));
 }

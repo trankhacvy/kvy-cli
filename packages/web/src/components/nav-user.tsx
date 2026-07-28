@@ -1,8 +1,8 @@
 "use client";
 
-import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon } from "lucide-react";
+import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -15,31 +15,57 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { SIGNIN_PATH } from "@/features/auth";
+import { listDeviceSessions } from "@/lib/api";
 import { logout } from "@/lib/logout";
-import { getAccountId } from "@/lib/session";
+import { getAccountId, getToken } from "@/lib/session";
 
-/** Two-letter avatar fallback from the account id (key-based accounts have no
- * name/avatar — design §5.2 — so the id's prefix is all there is to show). */
-function accountInitials(accountId: string | null): string {
+/** Two-letter avatar fallback — the email's local part when we have one
+ * (password sign-up or a Google/GitHub identity, issue-6), else the account
+ * id's prefix for the rare account with none on file yet. */
+function accountInitials(email: string | null, accountId: string | null): string {
+  if (email) return email.split("@")[0]?.slice(0, 2).toUpperCase() || "?";
   if (!accountId) return "?";
   return accountId.slice(0, 2).toUpperCase();
 }
 
 /**
  * The sidebar footer's account menu (adapted from shadcn's `nav-user` block
- * to this codebase: lucide icons, key-based account identity from the stored
- * JWT via `getAccountId()` — there's no name/email/avatar to show). The popup
- * opens top-center above the trigger. "Settings" opens `SettingsDialog`;
- * "Log out" runs `lib/logout.ts`'s teardown (wipe key material → disconnect
- * the socket → clear the token) and lands on `/signin/`.
+ * to this codebase: lucide icons, "Log out" running `lib/logout.ts`'s
+ * teardown). The popup opens top-center above the trigger. "Settings" opens
+ * `SettingsDialog`.
+ *
+ * The JWT itself carries no email claim by design (`sub`/`sid`/`ct` only —
+ * `lib/session.ts`'s own doc comment) — the account's best-effort captured
+ * email (password sign-up or a Google/GitHub identity, issue-6) instead comes
+ * from `GET /v1/auth/sessions` (`listDeviceSessions`), the same call
+ * `DevicesSection` already makes for its own "Signed in as {email}" line.
+ * Falls back to the account id's prefix for the rare account with no email on
+ * file (or before this fetch resolves), rather than showing nothing.
  */
 export function NavUser() {
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [email, setEmail] = useState<string | null>(null);
   // Read lazily per render — the footer only exists inside the protected
   // route group, so a token is present by the time this mounts.
   const accountId = getAccountId();
-  const accountLabel = accountId ? `Account ${accountId.slice(0, 8)}` : "Not signed in";
+  const accountLabel = email ?? (accountId ? `Account ${accountId.slice(0, 8)}` : "Not signed in");
+
+  useEffect(() => {
+    let cancelled = false;
+    const token = getToken();
+    if (!token) return;
+    listDeviceSessions(token)
+      .then((result) => {
+        if (!cancelled) setEmail(result.email);
+      })
+      .catch(() => {
+        // Best-effort only — falls back to the account-id label above.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleLogout() {
     await logout();
@@ -59,15 +85,12 @@ export function NavUser() {
               >
                 <Avatar className="size-8 rounded-lg">
                   <AvatarFallback className="rounded-lg">
-                    {accountInitials(accountId)}
+                    {accountInitials(email, accountId)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{accountLabel}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    End-to-end encrypted
-                  </span>
-                </div>
+                <span className="flex-1 truncate text-left text-sm font-medium">
+                  {accountLabel}
+                </span>
                 <ChevronsUpDownIcon className="ml-auto size-4" />
               </SidebarMenuButton>
             </DropdownMenuTrigger>
@@ -81,25 +104,18 @@ export function NavUser() {
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="size-8 rounded-lg">
                     <AvatarFallback className="rounded-lg">
-                      {accountInitials(accountId)}
+                      {accountInitials(email, accountId)}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{accountLabel}</span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      End-to-end encrypted
-                    </span>
-                  </div>
+                  <span className="flex-1 truncate text-left text-sm font-medium">
+                    {accountLabel}
+                  </span>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
                 <SettingsIcon />
                 Settings
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <ShieldCheckIcon />
-                End-to-end encrypted
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => void handleLogout()}>

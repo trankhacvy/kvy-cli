@@ -32,3 +32,4 @@ export {
   type MachineStatus,
   useMachinePresence,
 } from "./use-machine-presence";
+export { useWorkspaceNavGroups } from "./use-workspace-nav";

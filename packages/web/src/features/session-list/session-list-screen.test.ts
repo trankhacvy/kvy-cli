@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { useMockUnmanagedSessions } from "@/features/unmanaged-sessions";
 import { SessionListScreen } from "./session-list-screen";
 import type { SessionListSession, SessionListSnapshot } from "./types";
@@ -28,10 +29,14 @@ function render(snapshot: SessionListSnapshot) {
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(SessionListScreen, {
-        useData: () => snapshot,
-        useUnmanagedSnapshot: () => ({ machines: [], sessions: [] }),
-      }),
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(SessionListScreen, {
+          useData: () => snapshot,
+          useUnmanagedSnapshot: () => ({ machines: [], sessions: [] }),
+        }),
+      ),
     ),
   );
 }
@@ -105,5 +110,68 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
       ),
     );
     expect(html).not.toContain("No sessions yet");
+  });
+});
+
+describe("SessionListScreen (pagination)", () => {
+  function sessionsAcross(workspaceId: string, count: number, startUpdatedAt: number) {
+    return Array.from({ length: count }, (_, i) =>
+      session({
+        id: `${workspaceId}-${i}`,
+        title: `${workspaceId} session ${i}`,
+        workspaceId,
+        updatedAt: startUpdatedAt - i,
+      }),
+    );
+  }
+
+  it("renders only the first page (10) and shows a Load more button when there are more", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [{ id: "w1", name: "falcon" }],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
+      sessions: sessionsAcross("w1", 12, 1000),
+    };
+
+    const html = render(snapshot);
+    for (let i = 0; i < 10; i++) expect(html).toContain(`w1 session ${i}`);
+    expect(html).not.toContain("w1 session 10");
+    expect(html).not.toContain("w1 session 11");
+    expect(html).toContain("Load 10 more");
+  });
+
+  it("doesn't show a Load more button when everything already fits on one page", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [{ id: "w1", name: "falcon" }],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
+      sessions: sessionsAcross("w1", 5, 1000),
+    };
+
+    const html = render(snapshot);
+    expect(html).not.toContain("Load 10 more");
+  });
+
+  it("groups the top-N-by-recency slice by first appearance, not whole-group recency", () => {
+    // "b" has the single most recent session (updatedAt 100), but "a" has
+    // more sessions overall — with only 10 slots, the flat top-10 cut is
+    // dominated by "a", and "b"'s one recent session must still surface
+    // grouped in the order it actually appears in that cut.
+    const snapshot: SessionListSnapshot = {
+      workspaces: [
+        { id: "a", name: "workspace-a" },
+        { id: "b", name: "workspace-b" },
+      ],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
+      sessions: [
+        session({ id: "b1", title: "b session", workspaceId: "b", updatedAt: 100 }),
+        ...sessionsAcross("a", 9, 90),
+      ],
+    };
+
+    const html = render(snapshot);
+    const bIndex = html.indexOf("b session");
+    const aIndex = html.indexOf("workspace-a");
+    expect(bIndex).toBeGreaterThan(-1);
+    expect(aIndex).toBeGreaterThan(-1);
+    expect(bIndex).toBeLessThan(aIndex);
   });
 });

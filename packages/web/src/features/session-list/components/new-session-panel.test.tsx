@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { WorkspaceGroup } from "../group";
 import type { SessionListMachine, SessionListSession } from "../types";
-import { InlineNewSessionPanel, NewSessionTrigger } from "./new-session-panel";
+import { NewSessionForm, NewSessionTrigger } from "./new-session-panel";
 
 /**
  * Component/rendering tests (via `react-dom/server`'s `renderToStaticMarkup`
@@ -62,7 +63,9 @@ function machinesById(machines: SessionListMachine[]): Map<string, SessionListMa
 function render(node: React.ReactElement): string {
   const queryClient = new QueryClient();
   return renderToStaticMarkup(
-    <QueryClientProvider client={queryClient}>{node}</QueryClientProvider>,
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>{node}</TooltipProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -77,7 +80,14 @@ describe("NewSessionTrigger", () => {
     expect(html).not.toContain("new-session-branch-name");
   });
 
-  it("renders the inline panel's fields when opened via defaultOpen", () => {
+  it("reflects the open state on the trigger via defaultOpen", () => {
+    // `DialogContent` is portal-based (`components/ui/dialog.tsx`'s
+    // `DialogPortal`) and never mounts under `renderToStaticMarkup` in this
+    // jsdom-less vitest setup, regardless of `open` — same constraint
+    // `GitToolbar.test.tsx` documents for its own confirm dialog. The form's
+    // own fields (branch name, Start session, ...) are covered directly by
+    // the `NewSessionForm` describe block below, which renders that
+    // component standalone (no Dialog/Portal involved).
     const html = render(
       <NewSessionTrigger
         group={singleMachineGroup()}
@@ -85,16 +95,20 @@ describe("NewSessionTrigger", () => {
         defaultOpen
       />,
     );
+    // Not asserting on `data-state` here: stacking `TooltipTrigger asChild`
+    // around `DialogTrigger asChild` on the same button means both write
+    // that attribute, and Tooltip's own (closed) value wins the prop merge —
+    // a real Radix composition quirk, harmless in practice since nothing in
+    // this codebase styles off the trigger's own `data-state`. `aria-expanded`
+    // doesn't collide (Tooltip never sets it) and is the unambiguous signal.
     expect(html).toContain('aria-expanded="true"');
-    expect(html).toContain("new-session-branch-name");
-    expect(html).toContain("Start session");
   });
 });
 
-describe("InlineNewSessionPanel", () => {
+describe("NewSessionForm", () => {
   it("does not render a machine picker for a single-machine workspace group", () => {
     const html = render(
-      <InlineNewSessionPanel
+      <NewSessionForm
         group={singleMachineGroup()}
         machinesById={machinesById([{ id: "m1", name: "laptop", online: true, status: "online" }])}
         onClose={() => {}}
@@ -105,7 +119,7 @@ describe("InlineNewSessionPanel", () => {
 
   it("renders a machine picker for a workspace group that spans more than one machine", () => {
     const html = render(
-      <InlineNewSessionPanel
+      <NewSessionForm
         group={multiMachineGroup()}
         machinesById={machinesById([
           { id: "m1", name: "laptop", online: true, status: "online" },
@@ -127,7 +141,7 @@ describe("InlineNewSessionPanel", () => {
 
   it("keeps the Advanced section collapsed by default (no provider/permission/model fields visible)", () => {
     const html = render(
-      <InlineNewSessionPanel
+      <NewSessionForm
         group={singleMachineGroup()}
         machinesById={machinesById([{ id: "m1", name: "laptop", online: true, status: "online" }])}
         onClose={() => {}}
@@ -144,7 +158,7 @@ describe("InlineNewSessionPanel", () => {
 
   it("shows provider/permission/model pickers when Advanced starts expanded", () => {
     const html = render(
-      <InlineNewSessionPanel
+      <NewSessionForm
         group={singleMachineGroup()}
         machinesById={machinesById([{ id: "m1", name: "laptop", online: true, status: "online" }])}
         defaultAdvancedOpen
@@ -159,7 +173,7 @@ describe("InlineNewSessionPanel", () => {
 
   it("renders the Start session button disabled until a machine is chosen (multi-machine group)", () => {
     const html = render(
-      <InlineNewSessionPanel
+      <NewSessionForm
         group={multiMachineGroup()}
         machinesById={machinesById([
           { id: "m1", name: "laptop", online: true, status: "online" },
