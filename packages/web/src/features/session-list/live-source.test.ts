@@ -151,12 +151,19 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     expect(status).toBe("working");
   });
 
-  it("degrades honestly to idle (never a fabricated 'working') before this session's page has decrypted", () => {
+  it("degrades honestly to idle (never a fabricated 'working' OR 'ready') before this session's page has decrypted", () => {
     const session = makeSession({ id: "sess-1", machineId: "mach-1" });
     const machine = makeMachine({ id: "mach-1", lastSeenAt: Date.now() });
 
     // No entry in the items map yet — this session's message page hasn't
-    // decrypted (or hasn't been fetched) this pass.
+    // decrypted (or hasn't been fetched) this pass. `buildSnapshot` carries
+    // that through as `items: null` (not `[]`), same `null`-means-unknown
+    // precedent as `title`/Issue #13 — this session could have years of real
+    // history that just hasn't loaded, so it must NOT be indistinguishable
+    // from a genuinely brand-new session with zero turns. Regression guard
+    // for exactly that: an earlier revision of known-issues.md #9's fix
+    // collapsed "not loaded" into the same `[]` as "genuinely empty", which
+    // made every session flash a fabricated "ready" on load.
     const snapshot = buildSnapshot(
       [session],
       [machine],
@@ -166,11 +173,11 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
       new Map(),
     );
 
-    expect(snapshot.sessions[0]?.items).toEqual([]);
+    expect(snapshot.sessions[0]?.items).toBeNull();
     const status = deriveSessionStatus({
       status: "active",
       machineOnline: true,
-      items: snapshot.sessions[0]?.items ?? [],
+      items: snapshot.sessions[0]?.items ?? null,
       attention: snapshot.sessions[0]?.attention ?? null,
     });
     expect(status).toBe("idle");

@@ -71,8 +71,15 @@ export interface SessionListSession {
   /** This session's reduced transcript (`@falcon/web`'s sync reducer output)
    * — the event-stream input `deriveSessionStatus` walks to find an open
    * turn or an unresolved permission (design principle #3: derived, never
-   * stored). Empty for a session with no messages yet. */
-  items: RenderItem[];
+   * stored). `null` means "this session's message page hasn't decrypted /
+   * been fetched yet this pass" — distinct from a resolved, genuinely empty
+   * `[]` for a session with zero turns (same `null`-means-unknown precedent
+   * as `title` above, Issue #13: `deriveSessionStatus` must not flash a
+   * fabricated "ready" while decryption is still in flight — docs/known-
+   * issues.md #9's own follow-up, since collapsing "not loaded" into the
+   * same empty array as "genuinely new" just moves the mislabeling bug
+   * rather than fixing it). */
+  items: RenderItem[] | null;
   /** See `AttentionKind` — `null` when nothing is outstanding. */
   attention: AttentionKind | null;
 }

@@ -6,11 +6,19 @@ import { deriveSessionStatus } from "./status";
 const base = { status: "active" as const, machineOnline: true, attention: null };
 
 describe("deriveSessionStatus", () => {
-  it("is idle for a session with no messages yet", () => {
-    expect(deriveSessionStatus({ ...base, items: [] })).toBe("idle");
+  it("is ready for a session with no turns yet", () => {
+    expect(deriveSessionStatus({ ...base, items: [] })).toBe("ready");
   });
 
-  it("is working while a turn is open with nothing blocking it", () => {
+  it("is idle (NOT ready) while items is null — message page not decrypted yet, not confirmed empty", () => {
+    // A session with real history that just hasn't decrypted this pass must
+    // not flash "ready" — see `SessionListSession.items`'s doc comment and
+    // live-source.test.ts's "degrades honestly to idle" fixture for the
+    // regression this specifically guards.
+    expect(deriveSessionStatus({ ...base, items: null })).toBe("idle");
+  });
+
+  it("is working (not ready) while a turn is open, even on a session's very first turn — isTurnOpen is checked before the ready/idle fallback", () => {
     const items = reduceEnvelopes([createEnvelope("user", { t: "turn-start" }, { time: 1 })]);
     expect(deriveSessionStatus({ ...base, items })).toBe("working");
   });
@@ -19,6 +27,18 @@ describe("deriveSessionStatus", () => {
     const items = reduceEnvelopes([
       createEnvelope("user", { t: "turn-start" }, { time: 1 }),
       createEnvelope("agent", { t: "turn-end", status: "completed" }, { time: 2 }),
+    ]);
+    expect(deriveSessionStatus({ ...base, items })).toBe("idle");
+  });
+
+  it("stays idle (not ready) for a session with real turn history that's since gone quiet", () => {
+    const items = reduceEnvelopes([
+      createEnvelope("user", { t: "turn-start" }, { time: 1 }),
+      createEnvelope("agent", { t: "turn-end", status: "completed" }, { time: 2 }),
+      createEnvelope("user", { t: "turn-start" }, { time: 3 }),
+      createEnvelope("agent", { t: "turn-end", status: "completed" }, { time: 4 }),
+      createEnvelope("user", { t: "turn-start" }, { time: 5 }),
+      createEnvelope("agent", { t: "turn-end", status: "completed" }, { time: 6 }),
     ]);
     expect(deriveSessionStatus({ ...base, items })).toBe("idle");
   });
@@ -118,7 +138,7 @@ describe("deriveSessionStatus", () => {
   });
 
   it("ignores machine presence when the session isn't tied to a machine", () => {
-    expect(deriveSessionStatus({ ...base, items: [], machineOnline: null })).toBe("idle");
+    expect(deriveSessionStatus({ ...base, items: [], machineOnline: null })).toBe("ready");
   });
 
   it("is failed for a session row already marked failed, regardless of live signals", () => {

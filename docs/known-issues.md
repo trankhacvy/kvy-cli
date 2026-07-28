@@ -12,7 +12,6 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked (draft exists) |
 | 2 | [Automatic per-session git worktree isolation — deliberately deferred follow-ups](#issue-2) | Deferred |
 | 6 | [`falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open (codex-only; `falcon claude` fixed) |
-| 9 | ["Idle" status doesn't distinguish a brand-new session from a genuinely dormant one](#issue-9) | Open |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
 | 13 | [ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang](#issue-13) | Open |
@@ -131,38 +130,6 @@ machine/workspace recorded yet" — re-confirmed still gating on both fields: gi
 
 **Status:** open, codex-only — the `falcon claude` half of this issue is resolved and
 verified; re-scope any future work to `startCodex.ts` specifically.
-
-<a id="issue-9"></a>
-
-## 9. "Idle" status doesn't distinguish a brand-new session from a genuinely dormant one
-
-**Where:** `packages/web/src/features/session-list/status.ts:98-114` (`deriveSessionStatus`),
-`status.ts:124-137` (`SESSION_STATUS_META`), `status.ts:11-19` (the `SessionListStatus`
-union — confirmed no `"ready"`-equivalent variant exists in it).
-
-**What's open (re-verified 2026-07-28, still fully accurate, no code changes since):** the
-Home screen's per-session status badge is not the session's DB
-lifecycle state (that really does stay `"active"` the whole time the process is alive) — it's
-a separate, more granular "what's happening right now" signal: failed/ended/archived → those
-labels, offline machine → "Offline", pending permission → "Needs permission", agent asked a
-question → "Needs input", an open turn → "Working", and otherwise it falls back to **"Idle"**.
-
-That fallback is technically accurate (nothing is happening right now) but conflates two very
-different situations under one identical label: a session that was just created and has never
-had a single turn yet, and a session that's been used productively for a while and is
-momentarily quiet between messages. Both show "Idle" with no way to tell them apart from the
-Home screen — a first-time user starting `falcon claude` and opening the web UI sees the exact
-same badge a long-dormant session would show, which reads as less informative/slightly
-concerning ("is this actually connected?") than it should for a freshly-started, healthy
-session.
-
-**What a real fix needs:** not a rename to "Active" (that would collide with the existing
-lifecycle-status meaning, and would be equally mislabeled the moment a used session goes
-quiet). Instead, add a distinct state — e.g. "Ready" — for a session with zero turns in its
-history yet, keeping "Idle" for the between-turns case where real history exists. A small
-naming/state-modeling fix, not a functional bug.
-
-**Status:** open, not started — newly found, not previously documented anywhere.
 
 <a id="issue-11"></a>
 
