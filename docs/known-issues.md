@@ -9,17 +9,13 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 
 | # | Issue | Status |
 |---|-------|--------|
-| 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked |
+| 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked (draft exists) |
 | 2 | [Automatic per-session git worktree isolation — deliberately deferred follow-ups](#issue-2) | Deferred |
-| 6 | [`falcon claude`/`falcon codex` never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open |
-| 7 | ["Repo root" header button opens a mostly-fake duplicate side panel](#issue-7) | Open |
-| 8 | [A session never reconciles server-side if the machine dies without a clean exit](#issue-8) | Open |
+| 6 | [`falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open (codex-only; `falcon claude` fixed) |
 | 9 | ["Idle" status doesn't distinguish a brand-new session from a genuinely dormant one](#issue-9) | Open |
-| 10 | [Session card's relative timestamp reflects the wrong signal — not real chat activity](#issue-10) | Fixed |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
 | 13 | [ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang](#issue-13) | Open |
-| 15 | [`falcon claude` self-recurses and dies silently when the shell shim is installed](#issue-15) | Open |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -32,33 +28,37 @@ When an issue is resolved and verified, remove its row from this table and its s
 ("session-sharing-design-review"), Phase 2.
 
 **What's open:** Flow 4 — letting a genuinely different person view/approve your session
-from their own account/device — is not implemented and, more importantly, not yet
-*designed*. There's no schema, no authorization model, and no invite flow decided for it.
-The two implementation units that would build it (`FL4.3` schema/authz, `FL4.4`
-socket/web UI) are explicitly blocked on `FL4.1` and must not start until it's done.
+from their own account/device — is not implemented, and `FL4.1` (design review) is still
+unchecked in `docs/plan-flows-3-4-5.md:868`. `FL4.3` (schema/authz, line 907) and `FL4.4`
+(socket/web UI, line 921) are both still unchecked and explicitly annotated "BLOCKED on
+FL4.1"/"BLOCKED on FL4.3."
 
-**What a real fix needs:** a written design doc (recommended path:
-`docs/design-session-sharing.md`) that settles, at minimum:
+**Update (re-verified 2026-07-28):** a draft design doc now exists at
+`docs/design-session-sharing.md`, headed **"Status: DRAFT — awaiting product/design
+review, not yet approved."** It's a thorough first-pass proposal (threat model, schema,
+authz helper, the RPC-routing fix below, invite-flow options, revocation semantics) written
+specifically to unblock `FL4.1` — but `FL4.1`'s own Definition of Done requires **human
+sign-off**, not just a draft, so this doesn't move the issue's status; a design now exists,
+it just isn't approved yet. Still true as of this doc's own re-audit:
 
-- Threat/trust model for a second identity accessing someone else's session.
-- The sharing schema (a `session_shares`-style table — per-session vs per-workspace scope,
-  what roles exist: view-only vs. can-approve).
-- The authorization-helper mechanism that replaces the ~15 existing
-  `eq(sessions.accountId, accountId)` checks server-side.
-- The RPC-routing fix for `packages/server/src/app/socket/rpcHandler.ts` — its rooms are
-  keyed by the *caller's* account today, so a teammate's `perm.answer`/`message`/interrupt
-  calls would silently resolve to nothing without this.
-- The invite/handshake flow (how the owner learns a teammate's `contentPubKey`).
-- Revocation semantics, including the honest fact that a key already delivered to a
-  teammate's device can't be un-taught by revoking server-side access alone.
+- No `session_shares`-style table exists yet (`packages/server/src/db/schema.ts` has no
+  such table).
+- The authorization-helper mechanism doesn't exist yet — current count of
+  `eq(sessions.accountId, accountId)`-style ownership checks it would need to replace is
+  **19, across 9 files** (server routes: `sessionNotify.ts`, `sessionStatus.ts`, `blobs.ts`,
+  `notificationSettings.ts`, `messages.ts`, `sync.ts`, `sessionArchive.ts`, `sessions.ts`,
+  `sessionCas.ts`) — corrected from this entry's earlier "~15" estimate.
+- `packages/server/src/app/socket/rpcHandler.ts`'s rooms are still keyed by the *caller's*
+  account (`rpcRoom(accountId, target)` → `` `rpc:${accountId}:${target}` ``, used both at
+  `socket.join` on the registering side and at the lookup path using the *caller's own*
+  accountId) — a teammate's `perm.answer`/`message`/interrupt calls would still silently
+  resolve to nothing without the fix the design doc proposes.
+- `wrapDek`/`unwrapDek` (`packages/crypto/src/dek.ts`) still supports wrapping a session's
+  DEK to any content public key, not just the owner's — confirmed by the landed round-trip
+  test (`FL4.2`, `packages/crypto/src/__tests__/sessionSharing.test.ts`).
 
-One piece is already de-risked and needs no new design: the crypto primitive
-(`wrapDek`/`unwrapDek` in `packages/crypto/src/dek.ts`) already supports wrapping a
-session's DEK to any content public key, not just the owner's — confirmed by a real
-round-trip test (`FL4.2`, already landed).
-
-**Status:** open, waiting on a human-authored and human-approved design doc. Not something
-an automated workflow can produce or check off.
+**Status:** open, waiting on human approval of the now-existing draft design doc. Not
+something an automated workflow can produce or check off.
 
 <a id="issue-2"></a>
 
@@ -69,12 +69,13 @@ an automated workflow can produce or check off.
 **What's open:** four items the feature's own plan flagged as consciously out of scope for
 this pass, not bugs:
 
-- **Local `falcon -b <branch>` parity.** `args.ts` still parses `-b`/`--branch` but
-  `commands/start.ts` never consumes it — local-mode sessions don't create a worktree at
-  all today (only remote `spawn` does, via `gitWorktree.ts`). `index.ts`'s own help text
-  advertises the flag, so this is a real CLI/remote parity gap, not just an omission.
-  A real fix would call `ensureBranchWorkspace` before launching the local TUI, the same
-  way `spawnEngine.ts` does for a remote spawn.
+- **Local `falcon -b <branch>` parity.** `args.ts:159-166` (`parseDefaultStart`) still
+  parses `-b`/`--branch` into `FalconCommand.branch`, but `index.ts`'s `runStart`
+  (lines 341-367) never reads `command.branch` at all — local-mode sessions don't create a
+  worktree at all today (only remote `spawn` does, via `gitWorktree.ts`). `index.ts`'s own
+  help text advertises the flag, so this is a real CLI/remote parity gap, not just an
+  omission. A real fix would call `ensureBranchWorkspace` before launching the local TUI,
+  the same way `spawnEngine.ts` does for a remote spawn. Re-verified 2026-07-28: still true.
 - **No worktree cleanup lifecycle.** Nothing ever runs `git worktree remove` or deletes the
   branch once a session ends — `.worktrees/<branch>` directories (and their branches)
   accumulate forever. The new `.git/info/exclude` entry (Phase 3) only hides them from
@@ -96,112 +97,51 @@ them from scratch.
 
 <a id="issue-6"></a>
 
-## 6. `falcon claude`/`falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels
+## 6. `falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels
 
-**Where:** `packages/cli/src/commands/start.ts:441-459` (the `doBootstrapSession(...)` call),
-`packages/cli/src/session/bootstrap.ts:239-261`, `packages/server/src/app/routes/sessions.ts:16-17,72`.
+**Where:** `packages/cli/src/commands/startCodex.ts:155-176` (the `doBootstrapSession(...)`
+call), `packages/cli/src/session/bootstrap.ts:246` (`workspaceId: params.workspaceId ?? null`),
+`packages/server/src/app/routes/sessions.ts` (`CreateSessionBodySchema`, `workspaceId ?? null`
+insert), `packages/cli/src/workspace/registry.ts:211` (`registerWorkspace`, the fix pattern
+below already reuses).
 
-**What's open:** a session started the normal way — running `falcon claude`/`falcon codex`
-directly in a terminal, in an arbitrary folder — never sends a `workspaceId` when the session
-row is created. `start.ts`'s params object to `bootstrapSession()` has no `workspaceId` key at
-all (not even `null`), so it falls through `bootstrap.ts`'s `params.workspaceId ?? null` and
-the server (`CreateSessionBodySchema`'s `workspaceId` is optional/nullable, no server-side
-fallback/auto-create) just stores `null`. `machineId` is fine — `start.ts` hard-fails the
-command if that's missing, so it's always populated; **only `workspaceId` is the gap.**
+**Fixed for `falcon claude` (commit `898baa4`, "record workspaceId on falcon claude, rebuild
+session side panel").** `packages/cli/src/commands/start.ts:496-534` now has an explicit
+step ("3.5. Register (or resolve) this directory as a workspace") that calls
+`doRegisterWorkspace(deps.workingDirectory)` (default: real `registerWorkspace`) and threads
+the resulting `workspaceId` into `doBootstrapSession(...)`'s params (failure is caught,
+logged, and falls back to the old `null` behavior rather than blocking start). `start.ts`'s
+own doc comment at this call site explicitly references closing this issue.
 
-The only path that DOES populate `workspaceId` is the daemon's `spawn` RPC
-(`daemon/spawnEngine.ts`, used by the web "New Session" wizard / remote spawn) — it registers
-a workspace and resolves/passes its id before launching. A bare terminal `falcon claude` run
-skips that registration step entirely.
+**Still open for `falcon codex`.** `packages/cli/src/commands/startCodex.ts:155-176` has no
+`registerWorkspace` call anywhere in the file — its `doBootstrapSession(...)` params object
+has no `workspaceId` key at all, so `bootstrap.ts:246`'s `params.workspaceId ?? null`
+fallback fires every time, identical to the original bug, just narrower in scope now.
+`machineId` is unaffected (both provider commands hard-fail without it).
 
-**Blast radius:** every web panel that gates on `session.machineId`/`session.workspaceId` both
-being present shows the same "This session has no machine/workspace recorded yet" message for
-any session started this way — confirmed to affect all four: **Files changed** (git diff),
-**Checks**, **Repo files**, and **Setup / Run**. This is the common, everyday way to start a
-session (a bare terminal command, not the web wizard), so this is a high-impact, previously
-undocumented gap.
+**Blast radius (still real for codex sessions):** every web panel that gates on
+`session.machineId`/`session.workspaceId` both being present shows "This session has no
+machine/workspace recorded yet" — re-confirmed still gating on both fields: git-diff
+(`SessionGitScreen.tsx:40`), Repo files (`SessionFilesScreen.tsx:40`), Checks
+(`SessionChecksScreen.tsx:36`), and the timeline's file-open path
+(`SessionTimelineScreen.tsx:250,279`).
 
-**What a real fix needs:** have `start.ts`'s local-PTY path resolve/register a workspace for
-its `workingDirectory` (reusing `workspace/registry.ts`'s register-or-resolve logic, the same
-way `spawnEngine.ts` does) before calling `bootstrapSession()`, and thread the resulting id
-through as `workspaceId`.
+**What a real fix needs:** apply the same register-or-resolve call in `startCodex.ts` that
+`start.ts` already has for the Claude path.
 
-**Status:** open, not started — newly found, not previously documented anywhere.
-
-<a id="issue-7"></a>
-
-## 7. "Repo root" header button opens a mostly-fake duplicate side panel
-
-**Where:** `packages/web/src/components/timeline/SessionTimelineScreen.tsx:274-283` (the
-`FolderGit2`-icon `panelOpen` toggle), `packages/web/src/components/timeline/SessionSidePanel.tsx`.
-
-**What's open:** this button (labeled "Repo root") toggles a 3-tab side panel — Changes / Repo
-Files / Checks — that duplicates the header's own dedicated "Files changed"/"Repo files"/
-"Checks" pages, but almost entirely with fake data:
-
-- **Changes tab** renders a hardcoded `DUMMY_CHANGES` array — the component's own comment
-  admits "no git backend wired here yet," even though the real git data already exists
-  (that's exactly what "Files changed" shows correctly elsewhere in the same header).
-- **Repo Files tab** renders a hardcoded, non-interactive fake file tree of literal path
-  strings — not connected to the real, already-live Repo Files feature.
-- **Commit/push/refresh/search controls** in this panel are all `disabled`, with tooltips
-  literally saying "isn't wired up yet."
-- Only the **Checks tab** is real (it reuses the live `ChecksPanel`).
-- `SessionSidePanel.tsx`'s own doc comment calls itself "mostly still placeholder UI" — this
-  isn't a subtle regression, it's acknowledged in-code.
-- The "Repo root" label doesn't match what it opens either (defaults to the fake Changes tab,
-  not a file tree) — reads like leftover copy from an earlier "Cursor-style side panel"
-  iteration that predates the now-real dedicated pages.
-
-**What a real fix needs:** either remove this button/panel entirely (the dedicated
-Files-changed/Repo-files/Checks pages already cover this, live), or, if a side-panel-without-
-navigating-away UX is still wanted, rewire its Changes/Repo Files tabs to reuse the same
-already-live `git-diff`/`repo-files` hooks instead of maintaining a second, fake data path.
-
-**Status:** open, not started — newly found, not previously documented anywhere.
-
-<a id="issue-8"></a>
-
-## 8. A session never reconciles server-side if the machine dies without a clean exit
-
-**Where:** `packages/cli/src/commands/start.ts` (`onSignal`/`reportStatusOnce`, the
-clean-exit/SIGTERM/SIGHUP paths), `packages/cli/src/daemon/readoptSessions.ts`
-(`findLiveOrphanedSessions`), `packages/cli/src/daemon/sessionRegistry.ts`
-(`pruneDeadSessions`).
-
-**What's open:** a clean `/exit`, or the terminal window closing (`SIGHUP`), or the wrapper
-process receiving `SIGTERM`, are all handled correctly — each reliably reports
-`status: "ended"`/`"failed"` to the server before exiting (the wrapper explicitly awaits that
-report before actually terminating). But if the machine loses power, is hard-killed, or the
-process dies before that signal handler can run, **nothing ever reports the session's true
-status.** The DB row stays `status: "active"` forever — there is no timeout anywhere that
-flags it. Even the *next* time a daemon starts on that machine, its boot-time reconciliation
-(`findLiveOrphanedSessions`) only re-adopts sessions whose pid is still alive; for a pid
-that's gone, it does nothing at all — no call back to the server, ever.
-`sessionRegistry.ts`'s `pruneDeadSessions()` (runs every heartbeat tick while a daemon IS
-running) only moves the dead entry into a local "resumable" bookkeeping map for later
-`resumeSession` — it never calls `POST /v1/sessions/:id/status` either.
-
-**Impact:** a user who kills their laptop mid-session sees that session sit as "active"
-(controls enabled, no lifecycle banner) in the web UI indefinitely, with no self-healing —
-purely cosmetic/misleading, since nothing can actually reach the real (gone) process anymore,
-but confusing and never resolves on its own.
-
-**What a real fix needs:** a server-side staleness check — e.g. treat a session as
-functionally dead if its machine has been offline (no heartbeat) past some window AND the
-session was never cleanly closed, and flip it to `"failed"` automatically, rather than relying
-solely on the originating process getting a chance to self-report.
-
-**Status:** open, not started — newly found, not previously documented anywhere.
+**Status:** open, codex-only — the `falcon claude` half of this issue is resolved and
+verified; re-scope any future work to `startCodex.ts` specifically.
 
 <a id="issue-9"></a>
 
 ## 9. "Idle" status doesn't distinguish a brand-new session from a genuinely dormant one
 
-**Where:** `packages/web/src/features/session-list/status.ts` (`deriveSessionStatus`,
-`SESSION_STATUS_META`).
+**Where:** `packages/web/src/features/session-list/status.ts:98-114` (`deriveSessionStatus`),
+`status.ts:124-137` (`SESSION_STATUS_META`), `status.ts:11-19` (the `SessionListStatus`
+union — confirmed no `"ready"`-equivalent variant exists in it).
 
-**What's open:** the Home screen's per-session status badge is not the session's DB
+**What's open (re-verified 2026-07-28, still fully accurate, no code changes since):** the
+Home screen's per-session status badge is not the session's DB
 lifecycle state (that really does stay `"active"` the whole time the process is alive) — it's
 a separate, more granular "what's happening right now" signal: failed/ended/archived → those
 labels, offline machine → "Offline", pending permission → "Needs permission", agent asked a
@@ -224,60 +164,18 @@ naming/state-modeling fix, not a functional bug.
 
 **Status:** open, not started — newly found, not previously documented anywhere.
 
-<a id="issue-10"></a>
-
-## 10. Session card's relative timestamp reflects the wrong signal — not real chat activity
-
-**Where:** `packages/web/src/features/session-list/components/session-card.tsx:45`
-(`formatRelativeTime(session.updatedAt)`), `packages/server/src/app/routes/sessionCas.ts:71,76`,
-`sessionStatus.ts:95`, `sessionArchive.ts:65,130`, `notificationSettings.ts:107`,
-`packages/server/src/db/schema.ts` (`sessions.updatedAt`).
-
-**What's open:** the Home screen's per-session card shows a relative time
-("just now"/"5m"/"2h") derived from `sessions.updatedAt`, framed to the user as "when was this
-session last touched." But `updatedAt` is **only** written by four narrow code paths: muting
-notifications, archiving/restoring, an `agentState` (permission-mode/pending-permission) CAS
-write, or an explicit status change (ended/failed). **Sending or receiving an ordinary chat
-message never touches it** — `packages/server/src/app/routes/messages.ts` inserts into the
-separate `sessionMessages` table and never updates the owning `sessions` row at all. So the
-timestamp shown is not "last chat activity" — it's "last time one of those four unrelated
-side-events happened to fire," which can make it look wrong in either direction: too stale (a
-long, active, plain-text conversation with no permission events never bumps it) or, as
-reported, misleadingly fresh (some incidental `agentState`/status write landing recently even
-though the user's real last interaction was much earlier).
-
-One specific hypothesis was investigated and **ruled out** with a real reproduction: a
-timezone-drift theory (the columns use `timestamp()` without `withTimezone: true`, and the
-dev machine's timezone is `Asia/Saigon`, UTC+7). Confirmed via a direct test against
-`drizzle-orm`'s actual postgres-js driver in `node_modules` that this is NOT a bug — Drizzle
-disables the underlying driver's own timestamp parser and does its own UTC-safe parsing
-(explicitly appends `+0000` before constructing the `Date`). So the columns' lack of
-`withTimezone: true` is not implicated here.
-
-**What a real fix needs:** bump `sessions.updatedAt` on real message activity too (e.g. from
-the same write path `messages.ts` already uses to allocate `msgSeq`), not just on the four
-current incidental triggers — so the Home screen's timestamp actually reflects what it claims
-to.
-
-**Status:** Fixed — `allocMsgSeq` (`packages/server/src/db/seq.ts`), the atomic
-`msg_seq + 1` update every `messages.ts` POST already goes through, now also sets
-`updatedAt: new Date()` in the same statement, so real chat activity bumps the column.
-
-The exact
-trigger that produced "just now" for the reporter's specific 1-hour-old session was not
-pinned down with live data (would need the raw `updatedAt` value from a live `/v1/sync`
-response to confirm precisely), but the structural gap (chat messages never bump this field)
-is confirmed by code and is real regardless of the exact reproduction.
-
 <a id="issue-11"></a>
 
 ## 11. Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default
 
-**Where:** `packages/cli/src/claude/pretoolPermissionBridge.ts` (`cachePermissionMode`,
-`notePermissionMode`), `packages/cli/src/claude/ptyClaudeSession.ts` (`MODE_STATUS_PATTERNS`,
-`waitForModeStatus`), `packages/cli/src/commands/start.ts` (`raceModeConfirmation`, `setMode`
-RPC handler), `packages/web/src/components/timeline/mode-switch-state.ts` (`canMutateMode`),
-`packages/web/src/lib/config.ts` (`PTY_SET_MODE_ENABLED`).
+**Where:** `packages/cli/src/claude/pretoolPermissionBridge.ts:618` (`cachePermissionMode`),
+`:614-616` (`notePermissionMode`), `:677`/`:789` (`handlePreToolUse`/`handlePermissionRequest`,
+the only two callers of `cachePermissionMode`), `packages/cli/src/claude/ptyClaudeSession.ts:212-216`
+(`MODE_STATUS_PATTERNS`), `:381` (`waitForModeStatus`), `packages/cli/src/commands/start.ts:1148-1192`
+(`setMode` RPC handler, `raceModeConfirmation`), `:215` (`PTY_SET_MODE_ENV_VAR = "FALCON_PTY_SETMODE"`
+constant), `:1149` (the CLI-side gate check, `!= "1"` → off), `packages/web/src/components/timeline/mode-switch-state.ts:19`
+(`canMutateMode`), `packages/web/src/lib/config.ts:75` (`PTY_SET_MODE_ENABLED = ... === "1"`,
+confirmed off by default).
 
 **Fixed (2026-07-28):** the `setMode` RPC's own reliability. The original bug — `setMode`
 verified a switch ONLY by waiting for the next hook call's `permission_mode` field
@@ -317,17 +215,23 @@ live-reconfirmed during the 2026-07-28 fix (cycling past `plan` prints "auto mod
 for this model" and falls back to `default`) — unrelated to Falcon, not a bug here.)
 
 **Status:** partially fixed — the `setMode` RPC reliability half is done and live-verified; the
-local-Shift+Tab-detection-latency half and the default-off decision remain open.
+local-Shift+Tab-detection-latency half and the default-off decision remain open. Re-verified
+2026-07-28 against current code: both flags (`NEXT_PUBLIC_FALCON_PTY_SETMODE` web-side,
+`FALCON_PTY_SETMODE` CLI-side) are still off by default, `cachePermissionMode` is still only
+reachable from hook input handlers, and no code has landed since the fix commit (`d6bc2b9`)
+touching any of the five referenced files — everything above still holds exactly as written.
 
 <a id="issue-12"></a>
 
 ## 12. No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change
 
-**Where:** `packages/wire/src/rpc.ts` (`SetModelParamsSchema`/`SetModelResultSchema`,
-`RUNNING_SESSION_MODEL_ALIASES`), `packages/cli/src/claude/ptyClaudeSession.ts`
-(`sendModelChange`, the "Switch model?" confirm-dialog watcher), `packages/cli/src/commands/start.ts`
-(`setModel` RPC handler, flag-gated behind `FALCON_PTY_SETMODEL`), `packages/web/src/components/timeline/ComposerControls.tsx`
-(the "Change model" selector + the model chip's "Model unknown" fallback), `packages/web/src/components/timeline/model-switch-state.ts`.
+**Where:** `packages/wire/src/rpc.ts:752-765` (`SetModelParamsSchema`/`SetModelResultSchema`,
+`RUNNING_SESSION_MODEL_ALIASES`), `packages/cli/src/claude/ptyClaudeSession.ts:1115`
+(`sendModelChange`), `packages/cli/src/commands/start.ts:226` (`PTY_SET_MODEL_ENV_VAR`
+constant), `:1203` (the CLI-side gate check), `packages/web/src/components/timeline/ComposerControls.tsx:140-149`
+(the "Change model" selector), `packages/web/src/components/timeline/model-switch-state.ts:14-18`
+(`canMutateModel`), `packages/web/src/lib/config.ts:90` (`PTY_SET_MODEL_ENABLED = ... === "1"`,
+confirmed off by default).
 
 **What shipped:** a real `setModel` session RPC, mirroring `setMode`'s PTY-injection design —
 the CLI types `/model <alias>` into the live PTY through the same `InjectionController` gate
@@ -357,21 +261,68 @@ selector only appears once `NEXT_PUBLIC_FALCON_PTY_SETMODEL=1` is set on the web
 live-soaked, same double-flag-gating precedent `setMode` uses). A decision on when/whether to
 flip that default on is still open.
 
-**Status:** landed behind a flag, not yet live-soaked — same status class as issue #11's
-`setMode`. Remove this entry once the flag has been soaked and flipped on by default.
+**Deep-dived 2026-07-28 (prompted by "hasn't this already shipped, can the gate come off?")
+— verdict: no, and the gap is worse than "just needs a soak."** Unlike `setMode`, which has
+an explicit, still-unchecked `[human]` live-soak task (`docs/plan-v2.md` U4.5, "20 real-world
+switches, no TUI corruption"), `setModel` was never run through that unit pipeline at all —
+it landed directly via commit `40620ac`, with exactly one live-verification event on record
+(that commit's own message). Re-reading the actual current implementation surfaced concrete,
+demonstrable correctness bugs, not just "unverified":
+
+- **False-positive on a switch Claude Code itself refused.** Claude Code appends
+  `" [blocked]"` when it declines a `/model` change (e.g. unavailable for the account tier).
+  `packages/cli/src/claude/modelChange.ts`'s parser strips that marker and returns the model
+  name identically either way — confirmed by a *passing* test
+  (`modelChange.test.ts:72-85`) that captures exactly this case without flagging it. Since
+  `start.ts`'s `waitForModelEcho` consumes the same parser, a refused switch is reported to
+  web as `{ok:true}`.
+- **No requested-vs-observed equality check.** `setMode`'s handler checks
+  `observed === mode` before confirming; `setModel`'s `waitForModelEcho`
+  (`start.ts:742-760`) accepts *whatever* "Set model to ..." echo appears next within the 8s
+  window, even from an unrelated event. No test exercises a mismatch — the two existing
+  tests (`start.test.ts:1392,1404`) both request and observe the same model.
+- **The "Switch model?" dialog isn't covered by the general open-prompt gate.**
+  `armModelSwitchConfirmWatcher` (`ptyClaudeSession.ts:696-703`) never calls
+  `controller.setPromptOpen(true)`, so once the injection controller's ~1200ms post-submit
+  cooldown expires, a second queued injection (another chat message, a mode switch) could
+  land keystrokes into the still-open dialog instead of/alongside the intended "1"+Enter.
+  Not exercised by any test.
+- **Silent stuck-dialog failure mode.** If Claude Code ever changes the dialog's wording,
+  the 5s watcher (`MODEL_SWITCH_CONFIRM_ARM_MS`) just disarms with no signal to the caller —
+  the real terminal is left with an open, unanswered dialog and nothing re-arms or notifies
+  anyone.
+- The e2e/integration harness's `setModel` (`e2e/src/fakeSessionProcess.ts:177-180`) is an
+  unconditional `{ok:true}` stub with an explicit comment that it has no scripted scenario —
+  it doesn't exercise the real PTY-dialog logic at all, so CI gives no signal on any of the
+  above.
+
+The comparison that matters: `setMode` — the sibling everyone already agrees needs its human
+soak — has *stronger* verification (dual signal + equality check) and is *more reversible*
+(Shift+Tab again vs. a one-shot confirm with no recovery path), and it just received a live
+E2E bug-fix pass today (`d6bc2b9`) that found and fixed a real reliability issue. `setModel`
+has had zero follow-up passes since its original landing. If the more-defended, more-
+reversible sibling still needed that pass, this one needs it more, not less.
+
+**Status:** landed behind a flag, not ready to flip — re-scoped 2026-07-28 from "just needs a
+soak" to "has specific, fixable correctness bugs (false-positive on blocked switches, no
+observed-model equality check, unguarded confirm-dialog race) that should be fixed before any
+soak is even worth running." Both flags confirmed still off by default.
 
 <a id="issue-13"></a>
 
 ## 13. ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang
 
-**Where:** `packages/cli/src/adapters/manifest.ts`, `install.ts`, `verify.ts`, `spawn.ts`
-(the adapter manager); `packages/cli/src/acp/acpConnection.ts` (`connect()` refuses if
-verification fails); `packages/cli/src/commands/adapters.ts` (the only caller of the
-installer — `falcon adapters install|upgrade`); `packages/cli/src/daemon/spawnEngine.ts`
-(the `spawn` RPC handler); `packages/cli/src/commands/start.ts:587`
-(`notifyDaemonSessionStarted`, Claude-only); `packages/cli/src/commands/startCodex.ts`
-(never calls `notifyDaemonSessionStarted`, and hard-exits before bootstrap if the real
-`codex` CLI isn't on PATH).
+**Where:** `packages/cli/src/adapters/manifest.ts`, `install.ts:94,160`, `verify.ts:55-93`,
+`spawn.ts:29-37` (the adapter manager); `packages/cli/src/acp/acpConnection.ts:282-311`
+(`connect()`, throws `AcpConnectionError` with no auto-install fallback if verification
+fails); `packages/cli/src/commands/adapters.ts:16,40` (the only caller of the installer —
+`falcon adapters install|upgrade`); `packages/cli/src/daemon/spawnEngine.ts:320`
+(`awaiter.waitFor(launched.pid)`, the `spawn` RPC handler); `packages/cli/src/daemon/spawnAwaiter.ts:40`
+(`DEFAULT_SPAWN_AWAITER_TIMEOUT_MS = 15_000`); `packages/cli/src/commands/start.ts:562`
+(`doNotifyDaemonSessionStarted(...)`, Claude-only — corrected from this entry's earlier
+`:587`); `packages/cli/src/commands/startCodex.ts:123-127` (hard-exits before bootstrap if
+the real `codex` CLI isn't on PATH; never calls `notifyDaemonSessionStarted` under any
+circumstance — see strengthened claim below).
 
 **What's open:** each supported agent (`claude-code`, `codex`) is a separate npm package
 (`@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`), installed
@@ -380,77 +331,45 @@ that install is **only ever triggered manually**, by a user running
 `falcon adapters install`/`upgrade`. Nothing calls it automatically: no `postinstall` hook
 on the `falcon` package itself, and no lazy-install on first use — `AcpConnection.connect()`
 just throws `AcpConnectionError` if the adapter isn't already verified-installed.
+`install.ts`'s own doc comment states explicitly: "No daemon interaction... not something
+the daemon mediates" — confirmed by grep, daemon startup code never calls the installer.
 
 That's a tolerable UX for a local terminal user (they see the error, run the install
 command themselves). It breaks down for sessions spawned from the web, where nobody is
 watching that machine's terminal:
 
 - **Claude:** the daemon's `spawn` RPC reports "session started"
-  (`notifyDaemonSessionStarted`) right after bootstrap, *before* the adapter is ever
-  touched. The web UI shows a session that looks live, then the failure surfaces later as
-  a confusing in-transcript message ("Remote session failed to start: ACP adapter ...
-  not-installed") — no proactive install offered, no upfront error.
-- **Codex is worse.** `commands/startCodex.ts` never calls `notifyDaemonSessionStarted` at
-  all (confirmed the only provider command that doesn't), and separately hard-exits before
-  bootstrap if the real `codex` CLI binary isn't on PATH — a second dependency Falcon
-  can't fix by installing its own package. A daemon-initiated Codex spawn on a machine
-  missing either dependency likely just hangs until the web UI's own spawn-await times
-  out, with no clear error surfaced anywhere. This path isn't proven end-to-end either
-  way — `docs/plan.md` itself marks Codex web-spawn E2E as "pending."
+  (`notifyDaemonSessionStarted`, `start.ts:562`) right after bootstrap, *before* the adapter
+  is ever touched — the ACP connection is only opened later, inside `runRemoteLoop()`
+  (`start.ts:1290+` → `acpRemote.ts:191`). The web UI shows a session that looks live, then
+  the failure surfaces later as a confusing in-transcript message ("Remote session failed to
+  start: ACP adapter ... not-installed") — no proactive install offered, no upfront error.
+- **Codex is worse than originally scoped here — re-verified 2026-07-28.** A repo-wide
+  search confirms `commands/startCodex.ts` never calls `notifyDaemonSessionStarted` under
+  **any** circumstance, not just when a dependency happens to be missing — the `/session-started`
+  callback is only ever issued from the `falcon claude` path. That means a daemon-initiated
+  Codex spawn (`spawnEngine.ts:320`'s `awaiter.waitFor`) will **always** hit
+  `spawnAwaiter.ts`'s bounded 15-second timeout and reject with a `SpawnError`, regardless of
+  whether `codex`/the adapter are even installed correctly — Codex web-spawn cannot
+  currently succeed at all via this path, dependency status aside. (It's a bounded ~15s
+  timeout ending in a clear `SpawnError`, not a literal infinite hang — worth being precise
+  about that.) `startCodex.ts:123-127` separately hard-exits before bootstrap if the real
+  `codex` CLI binary isn't on PATH — a second dependency Falcon can't fix by installing its
+  own package. `docs/plan.md:1182` still shows Codex web-spawn E2E as an unchecked item,
+  consistent with this.
 
 **What a real fix needs:** (1) have the daemon auto-run the installer itself (still
 pinned-version, still integrity-checked — just triggered automatically) on daemon startup
 or on first spawn request for an agent it's never installed, since the daemon is the one
 unattended process built for exactly this; (2) for Codex specifically, since a missing
 `codex` CLI can't be auto-installed, detect that up front and report a clear, immediate,
-web-visible error instead of a silent `spawnAwaiter` timeout; (3) an end-to-end test
-covering daemon-spawn → adapter-missing → web-visible outcome, which doesn't exist today
-(the gap sits between `spawnEngine.test.ts`'s mocks and `acpConnection.test.ts`, which
-never goes through the daemon).
+web-visible error instead of a silent `spawnAwaiter` timeout; (2b) **also fix `startCodex.ts`
+to call `notifyDaemonSessionStarted` on the success path** — right now a daemon-initiated
+Codex spawn can never succeed even in the best case, which is a stronger bug than the
+original entry captured; (3) an end-to-end test covering daemon-spawn → adapter-missing →
+web-visible outcome, which doesn't exist today (the gap sits between `spawnEngine.test.ts`'s
+mocks and `acpConnection.test.ts`, which never goes through the daemon — confirmed no test
+references `notifyDaemonSessionStarted`/`session-started` from `startCodex.test.ts`).
 
-**Status:** open, not started — newly found, not previously documented anywhere.
-
-<a id="issue-15"></a>
-
-## 15. `falcon claude` self-recurses and dies silently when the shell shim is installed
-
-**Where:** `packages/cli/src/provider/claudeCliLocator.ts:153-162` (`findClaudeInPath`'s
-existing shim-skip guard), `packages/cli/src/session/sessionLock.ts` (the
-per-`(machineId, workspacePath)` live-pid lock that fires when the recursion collides
-with itself), `packages/cli/src/shim/` (`falcon shim install`, FR-9.6).
-
-**What's open:** found while E2E-testing the CLI auth changes, unrelated to that diff.
-On a machine with `falcon shim install` active (`~/.falcon/bin/claude` →
-`exec falcon claude "$@"`, prepended to PATH ahead of the real `claude`), a real
-`falcon claude` session dies right after printing "starting session", with no error
-explaining why, confirmed 100% reproducible via debug logs showing a SECOND, nested
-`main()` invocation with argv like `[..., "--append-system-prompt", "--settings",
-".../session-hook-....json"]` — Claude-Code-internal flags, not anything Falcon passed.
-`parseArgs`'s catch-all (by design, for verbatim flag passthrough — see `args.ts`) treats
-that nested invocation as a fresh default-provider start, which then collides with the
-*outer* invocation's own just-acquired session lock for the same working directory
-(`sessionLock.ts`) and exits 1 — silently killing the whole session.
-
-Falcon's own locator already has an anti-recursion guard for exactly this class of
-problem: `findClaudeInPath` explicitly skips a `claude` resolved to `shimBinDir()` and
-falls through to npm/Bun/Homebrew/native-installer detection instead
-(`claudeCliLocator.ts:153-162`, itself written to prevent this same failure mode for
-Falcon's own initial CLI-path resolution). That guard evidently does not cover whatever
-internal mechanism produces the SECOND, nested invocation observed here — root cause of
-that specific recursion trigger (most plausibly something inside the real Claude Code
-process itself shelling out to a bare `claude` — e.g. for hook execution — which goes
-through the shell's PATH and hits the shim, rather than reusing Falcon's already-resolved
-absolute path) was not pinned down further; flagging the confirmed symptom and workaround
-rather than asserting an unverified exact mechanism.
-
-**Confirmed workaround:** stripping `~/.falcon/bin` from PATH avoids the recursion
-entirely. This affects anyone who's completed the (encouraged, FR-9.6) shim onboarding
-prompt — likely a meaningful fraction of real users, not an edge case.
-
-**What a real fix needs:** trace exactly what spawns the nested `claude` invocation
-(most likely inside the real Claude Code process, not Falcon's own code) and either make
-that call site resolve an absolute path the same way `findGlobalClaudeCliPath` does, or
-extend the shim script itself to detect (and refuse, or transparently exec the real
-binary for) a re-entrant call so recursion can't happen regardless of who triggers it.
-
-**Status:** open, not started — newly found, not previously documented anywhere.
+**Status:** open, not started — re-verified 2026-07-28, still accurate and the Codex half
+is confirmed more severe than originally documented.

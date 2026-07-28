@@ -1,14 +1,16 @@
 import { decodeBase64 } from "@falcon/crypto";
 import { EncryptedBoxSchema, SessionRowSchema } from "@falcon/wire";
-import { and, count, desc, eq, lt, ne, or } from "drizzle-orm";
+import { and, count, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { env } from "../../config.js";
 import { encodeBox } from "../../db/box.js";
-import { sessions } from "../../db/schema.js";
+import { machines, sessions } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
 import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
+import type { PushDispatcherPort } from "../push/types.js";
+import { reconcileStaleSessions } from "../staleSessions.js";
 import { toSessionRow } from "./mappers.js";
 import { decodeSessionCursor, encodeSessionCursor } from "./shared.js";
 
@@ -43,6 +45,7 @@ const ListSessionsResponseSchema = z.object({
 export function buildSessionsRoutes(
   db: Database,
   eventRouter: EventRouterPort,
+  pushDispatcher: PushDispatcherPort,
 ): FastifyPluginAsyncZod {
   return async (app) => {
     app.post(
@@ -177,7 +180,40 @@ export function buildSessionsRoutes(
         const last = page[page.length - 1];
         const nextCursor = hasMore && last ? encodeSessionCursor(last.updatedAt, last.id) : null;
 
-        return { sessions: page.map(toSessionRow), nextCursor };
+        // known-issues.md #8: before handing back `status: "active"` rows,
+        // flip any that are actually orphaned (owning machine gone stale,
+        // no recent activity either) — lazy, on-read reconciliation, see
+        // `staleSessions.ts`.
+        const referencedMachineIds = [
+          ...new Set(
+            page
+              .filter((row) => row.status === "active" && row.machineId)
+              .map((row) => row.machineId as string),
+          ),
+        ];
+        const machineLastSeenById = new Map<string, Date | null>();
+        if (referencedMachineIds.length > 0) {
+          const machineRows = await db.query.machines.findMany({
+            where: and(
+              eq(machines.accountId, accountId),
+              inArray(machines.id, referencedMachineIds),
+            ),
+          });
+          for (const machine of machineRows) {
+            machineLastSeenById.set(machine.id, machine.lastSeenAt);
+          }
+        }
+        const reconciledPage = await reconcileStaleSessions(
+          db,
+          eventRouter,
+          pushDispatcher,
+          reply,
+          accountId,
+          page,
+          machineLastSeenById,
+        );
+
+        return { sessions: reconciledPage.map(toSessionRow), nextCursor };
       },
     );
   };

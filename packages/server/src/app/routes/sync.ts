@@ -4,7 +4,10 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { accounts, machines, sessions, unmanagedSessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
+import type { EventRouterPort } from "../events/eventRouter.js";
 import { computeMachinesNeedReauth } from "../machineReauth.js";
+import type { PushDispatcherPort } from "../push/types.js";
+import { reconcileStaleSessions } from "../staleSessions.js";
 import { toMachineRow, toSessionRow, toUnmanagedSessionRow } from "./mappers.js";
 
 const SyncQuerySchema = z.object({ since: z.coerce.number().int().nonnegative() });
@@ -27,7 +30,11 @@ const SyncResponseSchema = z.object({
  * optimization (would need a changelog table), not a correctness
  * requirement — the client always gets the true current state either way.
  */
-export function buildSyncRoutes(db: Database): FastifyPluginAsyncZod {
+export function buildSyncRoutes(
+  db: Database,
+  eventRouter: EventRouterPort,
+  pushDispatcher: PushDispatcherPort,
+): FastifyPluginAsyncZod {
   return async (app) => {
     app.get(
       "/v1/sync",
@@ -35,7 +42,7 @@ export function buildSyncRoutes(db: Database): FastifyPluginAsyncZod {
         preHandler: app.authenticate,
         schema: { querystring: SyncQuerySchema, response: { 200: SyncResponseSchema } },
       },
-      async (req) => {
+      async (req, reply) => {
         const accountId = req.accountId;
         const [account, sessionRows, machineRows, unmanagedRows] = await Promise.all([
           db.query.accounts.findFirst({ where: eq(accounts.id, accountId) }),
@@ -62,9 +69,23 @@ export function buildSyncRoutes(db: Database): FastifyPluginAsyncZod {
           machineRows.map((m) => m.id),
         );
 
+        // known-issues.md #8: this snapshot already fetched every machine
+        // for the account above, so reuse it for the reconciliation's
+        // staleness check instead of a second query — see `staleSessions.ts`.
+        const machineLastSeenById = new Map(machineRows.map((m) => [m.id, m.lastSeenAt]));
+        const reconciledSessions = await reconcileStaleSessions(
+          db,
+          eventRouter,
+          pushDispatcher,
+          reply,
+          accountId,
+          sessionRows,
+          machineLastSeenById,
+        );
+
         return {
           headerSeq: account.headerSeq,
-          sessions: sessionRows.map(toSessionRow),
+          sessions: reconciledSessions.map(toSessionRow),
           machines: machineRows.map((m) => toMachineRow(m, needsReauthByMachine.get(m.id))),
           unmanagedSessions: unmanagedRows.map(toUnmanagedSessionRow),
         };
