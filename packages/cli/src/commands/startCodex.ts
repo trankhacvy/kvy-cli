@@ -188,7 +188,11 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      headers: { authorization: `Bearer ${accessToken}` },
+      // issue #1 (docs/known-issues-cliweb-sync-test.md): same fix as start.ts's Outbox —
+      // pull a currently-valid token from the shared `TokenProvider` on every
+      // request/retry instead of the `accessToken` string captured once at preflight.
+      getAuthToken: () => tokenProvider.getAccessToken(),
+      onUnauthorized: () => tokenProvider.forceRefresh(),
       fetchImpl,
     }),
     homeDir: deps.homeDir,

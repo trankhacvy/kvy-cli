@@ -29,6 +29,20 @@ export interface TokenProviderDeps {
   /** Persist a rotated refresh token (e.g. back to `~/.falcon/access.key`). */
   onRotate: (refreshToken: string) => void | Promise<void>;
   logger: Logger;
+  /**
+   * Re-reads whatever refresh token is CURRENTLY persisted on disk (e.g.
+   * `~/.falcon/access.key`) — a last-chance mitigation for the same hazard
+   * `resolveAccessToken.ts`'s one-shot helper already documents: this refresh token may
+   * already be one rotation behind another long-lived process sharing the same home dir
+   * (the daemon's own `TokenProvider` vs. a `falcon claude` session's), since rotation
+   * is single-use with only a 60s grace window. On a 401, if the disk copy differs from
+   * the one that was just rejected, one retry is made with the disk copy before this
+   * instance is marked permanently `dead` — a sibling process may have already rotated
+   * in a newer token. Optional: omitted (e.g. in tests, or when there's genuinely
+   * nothing else to read) means a 401 is always treated as definitively dead, matching
+   * this module's previous behavior.
+   */
+  readCurrentRefreshToken?: () => string | null;
 }
 
 export interface TokenProvider {
@@ -55,7 +69,7 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
   let dead = false;
   let inFlight: Promise<string | null> | null = null;
 
-  async function doRefresh(): Promise<string | null> {
+  async function doRefresh(retriedStaleToken = false): Promise<string | null> {
     if (dead) return null;
 
     try {
@@ -66,6 +80,23 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
       });
 
       if (res.status === 401) {
+        // Stale-by-one mitigation (issue #2, docs/known-issues-cliweb-sync-test.md):
+        // before condemning this instance forever, check whether a sibling process
+        // (the daemon vs. a `falcon claude` session, both reading/writing the same
+        // `~/.falcon/access.key`) already rotated the single-use refresh token out from
+        // under us. Only retried once — if the disk copy is unchanged, or the retry
+        // itself 401s, the token really is dead.
+        if (!retriedStaleToken) {
+          const onDisk = deps.readCurrentRefreshToken?.() ?? null;
+          if (onDisk && onDisk !== refreshToken) {
+            deps.logger.warn(
+              "[token-provider] refresh token rejected but a newer one is on disk (likely rotated by a sibling process) — retrying once",
+            );
+            refreshToken = onDisk;
+            return doRefresh(true);
+          }
+        }
+
         dead = true;
         deps.logger.error(
           "[token-provider] refresh token rejected — re-authentication required, run `falcon auth login`",

@@ -89,6 +89,40 @@ describe("AskUserQuestionToolCard", () => {
     expect(children[1]).toBe(false);
   });
 
+  it("renders a web-answered free-text question with its real answer, and does not mark it as an Error/failed card, even though the wire-level tool result carries ok:false", () => {
+    // docs/known-issues-cliweb-sync-test.md issue #4: a free-text (or any web-turn)
+    // AskUserQuestion answer only reaches Claude via a denied tool call whose reason
+    // carries the real answer (`composeAskAnswerReason` in `pretoolPermissionBridge.ts`)
+    // — `item.ok` is `false` on the wire even though this is a normal, successful answer.
+    const shell = AskUserQuestionToolCard({
+      item: toolItem({
+        args: { questions: [{ question: "Pick a fruit", options: ["Apple", "Banana"] }] },
+        ok: false,
+        output:
+          "The user answered via the Falcon web UI:\n- Pick a fruit\n  → Mango\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
+      }),
+    });
+
+    expect(shell.type).toBe(ToolCardShell);
+    // Not "failed"/"Error" despite `item.ok === false` — the card's own status is
+    // decoupled from the underlying wire-protocol-level `is_error` marking.
+    expect((shell.props as { statusLabel?: string }).statusLabel).toBe("done");
+    expect((shell.props as { statusVariant?: string }).statusVariant).toBe("success");
+    expect((shell.props as { toolStateOverride?: string }).toolStateOverride).toBe(
+      "output-available",
+    );
+
+    const body = (shell.props as { children: ReactElement }).children;
+    const children = (body.props as { children: unknown[] }).children;
+    const questionRows = children[0] as ReactElement[];
+    const row = questionRows[0] as ReactElement;
+    const [, answerP] = (row.props as { children: ReactElement[] }).children;
+    expect(textOf(answerP as ReactElement)).toBe("Mango");
+
+    // The real answer was recognized, so no raw JsonBlock fallback either.
+    expect(children[1]).toBe(false);
+  });
+
   it("renders options for a top-level single-question arg shape", () => {
     const body = bodyOf(
       toolItem({

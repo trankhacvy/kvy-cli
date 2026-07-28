@@ -167,6 +167,15 @@ export interface RemotePermissionHookHandle {
    */
   waitForModeEcho: (timeoutMs: number) => Promise<PermissionMode | null>;
   /**
+   * Feeds an externally-confirmed mode (from `ptyClaudeSession.ts`'s raw-PTY-
+   * output `waitForModeStatus`, which can confirm a switch with no hook call
+   * involved at all) into the bridge's cache, so a subsequent `setMode`
+   * computes its Shift+Tab press count from the actual current mode instead
+   * of stale hook-only data. Forwards {@link
+   * PreToolPermissionBridge.notePermissionMode}.
+   */
+  notePermissionMode: (mode: PermissionMode) => void;
+  /**
    * True once `markWebTurnStart()` has fired and `markTurnEnd()`/
    * `markLocalActivity()` has not, AND the turn hasn't gone quiet past
    * `webTurnMaxMs` (the watchdog — plan-v2.md W1.2). Calling this refreshes
@@ -280,6 +289,7 @@ export async function installRemotePermissionHook(
     resolveLocalOutcome: (toolName, outcome) => bridge.resolveLocalOutcome(toolName, outcome),
     getCurrentPermissionMode: () => bridge.currentPermissionMode,
     waitForModeEcho: (timeoutMs) => bridge.waitForModeEcho(timeoutMs),
+    notePermissionMode: (mode) => bridge.notePermissionMode(mode),
     isWebTurnActive,
     markWebTurnStart,
     markTurnEnd,

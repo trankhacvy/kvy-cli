@@ -41,6 +41,11 @@ export function createTokenProviderForCredentials(
       writeCredentials({ ...credentials, refreshToken }, options.homeDir);
     },
     logger: options.logger ?? noopLogger,
+    // issue #2 (docs/known-issues-cliweb-sync-test.md): this long-lived provider can
+    // outlive many refresh-token rotations by sibling processes (the daemon's own
+    // `TokenProvider` in `daemon/machineIntegration.ts` chief among them) — re-read
+    // `~/.falcon/access.key` on a 401 before giving up permanently.
+    readCurrentRefreshToken: () => readCredentials(options.homeDir)?.refreshToken ?? null,
   });
 }
 

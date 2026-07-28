@@ -52,8 +52,13 @@
  * tailer's next `tool-end` envelope or a 120s failsafe — plan-v2.md W1.3).
  * `interrupt` sends the TUI's own Escape cancel gesture (plan-v2.md W1.5);
  * `setMode` sends the live TUI's own Shift+Tab mode-cycle keystroke, gated
- * idle+no-prompt and verified via the bridge's `permission_mode` hook echo
- * (plan-v2.md W4.3) — flag-gated behind `FALCON_PTY_SETMODE=1`
+ * idle+no-prompt and verified by racing TWO independent signals — the
+ * bridge's `permission_mode` hook echo AND `ptyClaudeSession.ts`'s
+ * raw-PTY-output status-bar detector (`waitForModeStatus`,
+ * `raceModeConfirmation` below) — plan-v2.md W4.3, extended after a
+ * live-reproduced bug where an idle session (no upcoming tool call to carry
+ * a hook echo) always reported a genuinely-successful switch as
+ * `{ok:false}`. Flag-gated behind `FALCON_PTY_SETMODE=1`
  * (`PTY_SET_MODE_ENV_VAR` below) until live-soaked, since it's the one
  * deliberately-keystroke, version-coupled feature on this path; unset, it
  * stays the prior honest `{ok:false}` ("the live TUI owns its own permission
@@ -701,7 +706,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      headers: { authorization: `Bearer ${accessToken}` },
+      // issue #1 (docs/known-issues-cliweb-sync-test.md): a captured `accessToken`
+      // string goes stale after ~15min and every retry hit a dead 401 forever. Pull a
+      // currently-valid token from the shared `TokenProvider` on every request/retry
+      // instead, and force a rotation on a 401 so the next retry isn't doomed either.
+      getAuthToken: () => tokenProvider.getAccessToken(),
+      onUnauthorized: () => tokenProvider.forceRefresh(),
       fetchImpl,
     }),
     homeDir: deps.homeDir,
@@ -710,7 +720,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const sessionMetadataUpdater = createSessionMetadataUpdater({
     sessionId: bootstrap.sessionId,
     serverUrl: backendUrl,
-    token: accessToken,
+    getAuthToken: () => tokenProvider.getAccessToken(),
     dek: bootstrap.dek,
     metadata: sessionMetadata,
     metadataVersion: 0,
@@ -746,6 +756,64 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         resolve(null);
       }, timeoutMs);
       modelWatchers.add(watcher);
+    });
+  }
+
+  /**
+   * `setMode`'s two independent confirmation signals, raced rather than
+   * chained (docs/known-issues.md issue #11's sibling bug — a live-reproduced
+   * "web reverted a mode switch the terminal genuinely made" report): the
+   * hook-echo path ({@link RemotePermissionHookHandle.waitForModeEcho}, the
+   * next `PreToolUse`/`PermissionRequest` hook call's own `permission_mode`
+   * — arriving only on the session's NEXT tool call, which may be never for
+   * a session switched while idle, the common case for a web-initiated mode
+   * change) and the raw-PTY-output status-bar detector
+   * (`ptySession.waitForModeStatus`, `ptyClaudeSession.ts`'s
+   * `MODE_STATUS_PATTERNS` — fires off the very next terminal repaint, no
+   * tool call required). Resolves `confirmed: true` the instant EITHER
+   * signal reports the target `mode`, without waiting for the other — that's
+   * the actual fix: an idle session no longer has to wait out a hook echo
+   * that may never come when the terminal's own status text already proves
+   * the switch landed. Only waits for BOTH to settle when neither confirms
+   * the target — the honest "didn't happen" case, whose `observedMode` needs
+   * the hook-echo path's answer (raw-output only ever knows "did it reach
+   * the ONE mode I was told to watch for", not "what mode is it in
+   * instead"). Both inputs are already bounded by the same `timeoutMs` the
+   * caller passed to each, so this never waits longer than that.
+   */
+  function raceModeConfirmation(
+    mode: PermissionMode,
+    hookEcho: Promise<PermissionMode | null>,
+    rawOutputConfirmed: Promise<boolean>,
+  ): Promise<{ confirmed: boolean; observedMode: PermissionMode | null }> {
+    return new Promise((resolve) => {
+      let settled = false;
+      let hookDone = false;
+      let rawDone = false;
+      let hookObserved: PermissionMode | null = null;
+
+      const confirm = (observedMode: PermissionMode | null): void => {
+        if (settled) return;
+        settled = true;
+        resolve({ confirmed: true, observedMode });
+      };
+      const maybeGiveUp = (): void => {
+        if (settled || !hookDone || !rawDone) return;
+        settled = true;
+        resolve({ confirmed: false, observedMode: hookObserved });
+      };
+
+      void hookEcho.then((observed) => {
+        hookDone = true;
+        hookObserved = observed;
+        if (observed === mode) confirm(observed);
+        else maybeGiveUp();
+      });
+      void rawOutputConfirmed.then((matched) => {
+        rawDone = true;
+        if (matched) confirm(mode);
+        else maybeGiveUp();
+      });
     });
   }
 
@@ -1067,11 +1135,16 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // authoritative state — there is no other channel to ask it) to the
       // requested mode, sends it gated idle+no-prompt via
       // `ptySession.sendModeCycle` (the same rule message injection uses),
-      // then verifies via the next hook input's own `permission_mode` echo
-      // before reporting success. Every early-out is an honest `{ok:false}`
-      // (optionally carrying the best `observedMode` available) rather than
-      // a faked success — same "never fake it" rule the old always-`false`
-      // handler followed.
+      // then races TWO independent confirmation signals
+      // (`raceModeConfirmation`, above — the hook's own `permission_mode`
+      // echo AND the terminal's own raw-output status-bar text) before
+      // reporting success, so a session sitting idle (no upcoming tool call
+      // to carry a hook echo) doesn't falsely report `{ok:false}` when the
+      // keystrokes actually landed — a live-reproduced bug where the web UI
+      // reverted a mode switch the terminal had genuinely made. Every
+      // early-out is an honest `{ok:false}` (optionally carrying the best
+      // `observedMode` available) rather than a faked success — same "never
+      // fake it" rule the old always-`false` handler followed.
       setMode: async ({ mode }) => {
         if (env[PTY_SET_MODE_ENV_VAR] !== "1") return { ok: false };
 
@@ -1094,14 +1167,28 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           return { ok: false, observedMode: current };
         }
 
-        const observed = (await permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS)) ?? null;
-        if (observed === mode) return { ok: true, observedMode: observed };
+        const { confirmed, observedMode } = await raceModeConfirmation(
+          mode,
+          permHook?.waitForModeEcho(PTY_SET_MODE_VERIFY_TIMEOUT_MS) ?? Promise.resolve(null),
+          ptySession.waitForModeStatus(mode, PTY_SET_MODE_VERIFY_TIMEOUT_MS),
+        );
+        if (confirmed) {
+          // Keep the bridge's own cache in sync even when confirmation came
+          // ONLY from the raw-output signal (no hook call occurred) — without
+          // this, `current` above would stay stale on the NEXT `setMode`
+          // call, computing that call's press count from the wrong starting
+          // mode (live-reproduced: Default→Plan confirmed via raw output
+          // alone, then Plan→AcceptEdits right after computed its presses
+          // from a still-cached "default" and landed back on "default").
+          permHook?.notePermissionMode(observedMode ?? mode);
+          return { ok: true, observedMode: observedMode ?? mode };
+        }
 
-        logger.warn("[start-claude] setMode: hook echo did not confirm the switch", {
-          requested: mode,
-          observed,
-        });
-        return { ok: false, observedMode: observed ?? current };
+        logger.warn(
+          "[start-claude] setMode: neither the hook echo nor the terminal's own status text confirmed the switch",
+          { requested: mode, observed: observedMode },
+        );
+        return { ok: false, observedMode: observedMode ?? current };
       },
       // Real PTY setModel (docs/known-issues.md issue #12), flag-gated
       // behind `FALCON_PTY_SETMODEL=1` — see `PTY_SET_MODEL_ENV_VAR`'s doc

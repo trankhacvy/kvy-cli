@@ -11,13 +11,12 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 |---|-------|--------|
 | 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked |
 | 2 | [Automatic per-session git worktree isolation — deliberately deferred follow-ups](#issue-2) | Deferred |
-| 5 | [Interactive prompts (permission / AskUserQuestion / plan approval) invisible to web when typed locally](#issue-5) | Open |
 | 6 | [`falcon claude`/`falcon codex` never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open |
 | 7 | ["Repo root" header button opens a mostly-fake duplicate side panel](#issue-7) | Open |
 | 8 | [A session never reconciles server-side if the machine dies without a clean exit](#issue-8) | Open |
 | 9 | ["Idle" status doesn't distinguish a brand-new session from a genuinely dormant one](#issue-9) | Open |
 | 10 | [Session card's relative timestamp reflects the wrong signal — not real chat activity](#issue-10) | Fixed |
-| 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is read-only by default](#issue-11) | Open |
+| 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
 | 13 | [ACP adapter binaries are never auto-installed — remote/web-spawned sessions can silently fail or hang](#issue-13) | Open |
 | 15 | [`falcon claude` self-recurses and dies silently when the shell shim is installed](#issue-15) | Open |
@@ -94,70 +93,6 @@ this pass, not bugs:
 **Status:** all four are scope decisions the feature's plan doc made explicitly, not defects
 in what landed — parking them here so the next planner finds them instead of rediscovering
 them from scratch.
-
-<a id="issue-5"></a>
-
-## 5. Interactive prompts (permission / AskUserQuestion / plan approval) are invisible to the web when the turn was typed locally
-
-**Where:** `packages/cli/src/claude/pretoolPermissionBridge.ts` (`handlePermissionRequest`,
-`handleAskUserQuestion`, `isWebTurnActive`), `packages/cli/src/commands/start.ts:815-817`
-(`markWebTurnStart`, only set inside `onInjected`).
-
-**What's open:** every interactive tool that needs a human decision — a plain tool permission
-prompt (Allow/Deny), `AskUserQuestion`, and `ExitPlanMode` (the plan-approve/reject prompt) —
-all funnel through the same `handlePermissionRequest`/`handleAskUserQuestion` logic, and all
-share the same gate: a live `perm-request` wire event is only emitted to the web when
-`isWebTurnActive()` is true, i.e. the turn was injected *from* the web UI. If a human is
-sitting at the real terminal and types directly (the common case), that flag is never set,
-so:
-
-- **Nothing is ever sent to the web while the prompt is pending.** Claude Code's own native
-  terminal widget (3-option permission prompt, question picker, or plan approve/reject) just
-  handles it locally, and the web session shows only a bare "Running" tool card with no
-  buttons at all until it's answered locally — this affects all three tool types identically,
-  confirmed for `ExitPlanMode` too (routed through the same generic path,
-  `pretoolPermissionBridge.ts:286-291`).
-- Push notifications for `kind:"perm"`/`"question"` DO still fire in this scenario
-  (`onPendingAttention` is unconditional) — so a user gets a phone push saying a decision is
-  needed, taps into the web session, and lands on that same dead-end running card with
-  nothing to act on.
-- **A real fix means changing the gate itself**, not just relaying more events: always emit
-  the live prompt to web regardless of turn origin, then race the two possible answers (a
-  keypress in the real terminal vs. a `perm.answer`/equivalent RPC from the web) — first one
-  wins, the other is discarded/ignored. That's a real behavior change to
-  `pretoolPermissionBridge.ts`'s decision logic, not a one-line fix.
-
-**Additional, separate bugs found specifically on the `AskUserQuestion` card** (these exist
-independently of the gating issue above — they're wrong even after an answer *is* recorded):
-
-- **"(no answer recorded)" shows even when a real answer was given.**
-  `AskUserQuestionToolCard.tsx:92` falls back to this literal whenever
-  `parseAskAnswers(item.output)` (`packages/web/src/lib/tool-args.ts:401-426`) fails to match
-  either of the two JSON shapes it guesses at — and its own doc comment admits neither shape
-  is a *verified* real Claude Code tool-result shape. The real local tool_result apparently
-  doesn't match either guess, so parsing silently returns `undefined` and the fallback fires
-  even though the real answer is present in the raw output.
-- **A raw, human-confusing internal string leaks into the UI**: "Your questions have been
-  answered: ... You can now continue with these answers in mind." This text does not exist
-  anywhere in Falcon's own code — it is Claude Code's own raw tool_result content, meant for
-  the *model* to read, not a person. Because parsing fails (bug above), the card falls
-  through to a generic JSON-dump component whose `stringify()` prints a plain string
-  unquoted/raw (`packages/web/src/components/timeline/JsonBlock.tsx:51-53`) instead of being
-  suppressed — so an internal, model-facing string ends up looking like part of the UI.
-- **No free-text "enter your own answer" or "chat about this" affordance on the web card** —
-  Claude Code's real terminal picker offers these alongside the fixed choices; the web
-  `AskUserQuestionToolCard` only ever supports the fixed option list, and only once
-  live-wired at all (see gating issue above). No existing plan/precedent for this in
-  `docs/features/` — would be new work, not a missing wire-up of something already designed.
-
-**What a real fix needs:** (1) the turn-origin-gating fix described above, shared across all
-three tool types; (2) confirm the real, current Claude Code `AskUserQuestion` tool_result
-shape (by capturing a live example) and fix `parseAskAnswers` to actually match it, removing
-the raw-string leak as a side effect; (3) as a follow-up, real free-text + "chat about this"
-support on the web card to match the terminal's own affordances.
-
-**Status:** open, not started — three real user-reported bugs (this session), one shared root
-cause plus two independent `AskUserQuestion`-card bugs and one scoped feature gap.
 
 <a id="issue-6"></a>
 
@@ -336,37 +271,53 @@ is confirmed by code and is real regardless of the exact reproduction.
 
 <a id="issue-11"></a>
 
-## 11. Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is read-only by default
+## 11. Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default
 
-**Where:** `packages/cli/src/claude/pretoolPermissionBridge.ts:484-517`
-(`cachePermissionMode`), `packages/web/src/components/timeline/mode-switch-state.ts`
-(`canMutateMode`), `packages/web/src/components/timeline/ComposerControls.tsx:98-117`,
+**Where:** `packages/cli/src/claude/pretoolPermissionBridge.ts` (`cachePermissionMode`,
+`notePermissionMode`), `packages/cli/src/claude/ptyClaudeSession.ts` (`MODE_STATUS_PATTERNS`,
+`waitForModeStatus`), `packages/cli/src/commands/start.ts` (`raceModeConfirmation`, `setMode`
+RPC handler), `packages/web/src/components/timeline/mode-switch-state.ts` (`canMutateMode`),
 `packages/web/src/lib/config.ts` (`PTY_SET_MODE_ENABLED`).
 
-**What's open:** two separate, stacking gaps between a local terminal's Shift+Tab
-permission-mode cycle (Default / Accept edits / Plan / ...) and the web's mode chip:
+**Fixed (2026-07-28):** the `setMode` RPC's own reliability. The original bug — `setMode`
+verified a switch ONLY by waiting for the next hook call's `permission_mode` field
+(`waitForModeEcho`), which never arrives for an idle session (no tool call in flight, the
+common case for a web-initiated mode change) — was live-reproduced: switching mode from web
+while idle made the real terminal switch correctly, but the web UI reported "Could not confirm
+the mode switch — reverted" and showed the wrong mode. Fixed by adding a second,
+hook-independent confirmation signal: `ptyClaudeSession.ts` now pattern-matches Claude Code's
+own live status-bar text (`⏸ manual mode on`, `⏵⏵ accept edits on`, `⏸ plan mode on` —
+live-verified against real Claude Code v2.1.220) directly out of the raw PTY output, and
+`start.ts`'s `raceModeConfirmation` resolves success the instant EITHER that signal or the hook
+echo confirms the target mode. A second, deeper bug surfaced during verification and was fixed
+alongside it: the raw-output confirmation alone left `pretoolPermissionBridge.ts`'s
+`currentPermissionMode` cache stale (since only a hook call ever updated it), so a SECOND mode
+switch typed right after the first computed its Shift+Tab press count from the wrong starting
+mode and landed on the wrong target — fixed by feeding the confirmed mode back into the cache
+via the new `notePermissionMode`. Live-verified: three consecutive idle mode switches from web
+(Default→Plan→Accept edits→Default), each correctly confirmed with no revert and terminal/web
+agreement every time.
 
-- **Detection latency.** `cachePermissionMode` was specifically built to catch a local
-  Shift+Tab and emit a live `permission-mode` wire event (per its own doc comment, referencing
-  `docs/bug-fix-plan.md §5`) — but it only observes the current mode opportunistically off
-  Claude Code's own tool-permission hook payload. That means a mode change is only detected
-  **the next time a tool call happens**, not the instant Shift+Tab is pressed. Cycling modes
-  without triggering a subsequent tool call leaves the web showing a stale mode indefinitely.
-- **Read-only selector by default.** Even once a mode change IS detected and reflected, the
-  web's mode control only becomes a real, interactive dropdown for a local/PTY session when
-  `NEXT_PUBLIC_FALCON_PTY_SETMODE=1` is set (`canMutateMode`) — off by default. Without it,
-  the web shows a correct label at best, as plain non-interactive text, with no way to change
-  the mode from the web side for a local session.
+**Still open — two separate, narrower gaps:**
+
+- **Local Shift+Tab → web display latency.** The *original* framing of this issue — a human
+  typing Shift+Tab directly in the terminal (no web RPC involved at all) — still only updates
+  the web's read-only mode label on the next tool call, since `cachePermissionMode` is still
+  only invoked from hook input handlers, not from the new raw-output detector. Wiring the raw-
+  output detector into that path too (an always-on watcher, not just a `setMode`-targeted one)
+  was scoped out of the 2026-07-28 fix as a larger, separate change.
+- **Read-only selector by default.** The web's mode control only becomes a real, interactive
+  dropdown for a local/PTY session when `NEXT_PUBLIC_FALCON_PTY_SETMODE=1` is set
+  (`canMutateMode`) — off by default, pending the still-unchecked `docs/plan-v2.md` U4.5
+  `[human]` live-soak task (20 real-world switches, no TUI corruption) — the 2026-07-28 fix
+  substantially de-risks that soak but doesn't substitute for it.
 
 (Bypass-permissions not appearing in a Shift+Tab cycle is genuine Claude Code CLI behavior —
-unrelated to Falcon, not a bug here.)
+live-reconfirmed during the 2026-07-28 fix (cycling past `plan` prints "auto mode unavailable
+for this model" and falls back to `default`) — unrelated to Falcon, not a bug here.)
 
-**What a real fix needs:** a detection path that doesn't wait on the next tool call (e.g. a
-dedicated hook/signal fired directly off the mode-cycle keystroke itself, if Claude Code
-exposes one), and a decision on whether/when to flip `PTY_SET_MODE_ENABLED` on by default now
-that the underlying `setMode`-via-PTY-injection mechanism exists.
-
-**Status:** open, not started — newly found, not previously documented anywhere.
+**Status:** partially fixed — the `setMode` RPC reliability half is done and live-verified; the
+local-Shift+Tab-detection-latency half and the default-off decision remain open.
 
 <a id="issue-12"></a>
 
