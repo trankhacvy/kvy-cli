@@ -70,6 +70,14 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   let triggerShutdown: (() => void) | undefined;
   let bootPromise: Promise<number> | undefined;
 
+  // Real pglite migration + a full Fastify app boot + a real crypto-backed
+  // account creation, all in one hook — reliably under vitest's default 10s
+  // hookTimeout locally, but CI runners are slower/more contended (this
+  // exact hook timed out at 10000ms in CI even though it passes locally
+  // every time). Same "bump the timeout for real, slow setup" precedent as
+  // `index.test.ts`'s cold node-pty load and `worker-handler.test.ts`'s
+  // PIN-migration case (both 15s) — this hook does strictly more work than
+  // either, so 20s.
   beforeAll(async () => {
     const created = await createTestDb();
     db = created.db;
@@ -83,7 +91,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     token = account.token;
     refreshToken = account.refreshToken;
     accountId = account.account.id;
-  });
+  }, 20_000);
 
   afterAll(async () => {
     await app.close();
