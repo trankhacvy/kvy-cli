@@ -6,7 +6,7 @@ import { getRandomBytes, open } from "@falcon/crypto";
 import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon/wire";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { Logger } from "../logger.js";
-import type { OutboxHttpClient, OutboxPostResult } from "./httpClient.js";
+import { createHttpClient, type OutboxHttpClient, type OutboxPostResult } from "./httpClient.js";
 import { DEFAULT_FLUSH_MS, DEFAULT_MAX_BATCH_SIZE, Outbox } from "./outbox.js";
 import { outboxQueuePath } from "./queue.js";
 
@@ -250,6 +250,52 @@ describe("Outbox", () => {
 
       expect(calls.length).toBe(4);
       expect(ob.queuedBatchCount).toBe(0);
+    });
+  });
+
+  describe("token refresh on 401 (issue #1: a captured static token used to retry a dead 401 forever)", () => {
+    it("recovers once the http client's auth source is refreshed, instead of retrying the stale token forever", async () => {
+      const dek = getRandomBytes(32);
+      // Simulates a `TokenProvider`: `getAccessToken()` returns whatever's currently
+      // cached; `forceRefresh()` (wired below to the http client's `onUnauthorized`)
+      // rotates in a fresh one, mirroring `tokenProvider.ts`'s real shape closely enough
+      // to exercise `createHttpClient`'s `getAuthToken`/`onUnauthorized` wiring.
+      let currentToken = "stale-token";
+      let refreshCount = 0;
+      const tokenProviderFake = {
+        getAccessToken: async () => currentToken,
+        forceRefresh: async () => {
+          refreshCount += 1;
+          currentToken = "fresh-token";
+          return currentToken;
+        },
+      };
+
+      const seenAuthHeaders: (string | undefined)[] = [];
+      const fetchImpl = (async (_url: string, init?: RequestInit) => {
+        const headers = init?.headers as Record<string, string>;
+        seenAuthHeaders.push(headers.authorization);
+        if (headers.authorization === "Bearer stale-token") {
+          return new Response(null, { status: 401 });
+        }
+        return new Response(null, { status: 200 });
+      }) as unknown as typeof fetch;
+
+      const http = createHttpClient({
+        serverUrl: "http://server.test",
+        getAuthToken: () => tokenProviderFake.getAccessToken(),
+        onUnauthorized: () => tokenProviderFake.forceRefresh(),
+        fetchImpl,
+      });
+
+      const ob = makeOutbox({ dek, http, maxBatchSize: 1, backoffMs: () => 5 });
+      ob.enqueue([textEnvelope("recovers after refresh")]);
+
+      await sleep(100);
+
+      expect(ob.queuedBatchCount).toBe(0); // eventually acked and dequeued
+      expect(refreshCount).toBe(1); // forced exactly once, not once per retry
+      expect(seenAuthHeaders).toEqual(["Bearer stale-token", "Bearer fresh-token"]);
     });
   });
 

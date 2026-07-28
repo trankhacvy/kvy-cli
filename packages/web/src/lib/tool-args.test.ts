@@ -437,6 +437,31 @@ describe("parseAskAnswers", () => {
     ).toEqual([{ question: "What is your favorite drink?", answer: "Hot chocolate" }]);
   });
 
+  // Falcon's own "deny-with-answer" reason text (`composeAskAnswerReason` in
+  // `packages/cli/src/claude/pretoolPermissionBridge.ts`) — the shape actually delivered
+  // for a web-answered question that couldn't be driven into a live terminal widget
+  // (docs/known-issues-cliweb-sync-test.md issue #4: a free-text answer, or any answer
+  // to a purely web-initiated turn). Distinct from the `"question"="answer"` shape above
+  // — no quotes, a `- question` / `  → answer` line pair instead.
+  it("parses Falcon's own deny-with-answer reason text (free-text web answer)", () => {
+    expect(
+      parseAskAnswers(
+        "The user answered via the Falcon web UI:\n- Pick a fruit\n  → Mango\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
+      ),
+    ).toEqual([{ question: "Pick a fruit", answer: "Mango" }]);
+  });
+
+  it("parses a multi-question deny-with-answer reason text, in order", () => {
+    expect(
+      parseAskAnswers(
+        "The user answered via the Falcon web UI:\n- Which color?\n  → Blue\n- Which size?\n  → Small\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
+      ),
+    ).toEqual([
+      { question: "Which color?", answer: "Blue" },
+      { question: "Which size?", answer: "Small" },
+    ]);
+  });
+
   it("does not mistake a real declined tool_result string for an answer", () => {
     // Claude Code's own synthetic decline text (verified live) — no
     // `"..."="..."` pair anywhere in it, so this must stay undefined and let

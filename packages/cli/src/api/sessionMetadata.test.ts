@@ -24,7 +24,7 @@ describe("createSessionMetadataUpdater", () => {
     const updater = createSessionMetadataUpdater({
       sessionId: "sess_1",
       serverUrl: "http://server.test",
-      token: "token_1",
+      getAuthToken: () => "token_1",
       dek,
       metadata: { title: "Project", path: "/work/project", model: null },
       metadataVersion: 0,
@@ -69,7 +69,7 @@ describe("createSessionMetadataUpdater", () => {
     const updater = createSessionMetadataUpdater({
       sessionId: "sess_1",
       serverUrl: "http://server.test",
-      token: "token_1",
+      getAuthToken: () => "token_1",
       dek,
       metadata: { title: "Project", path: "/work/project", model: null },
       metadataVersion: 0,
@@ -99,7 +99,7 @@ describe("createSessionMetadataUpdater", () => {
     const updater = createSessionMetadataUpdater({
       sessionId: "sess_1",
       serverUrl: "http://server.test",
-      token: "token_1",
+      getAuthToken: () => "token_1",
       dek,
       metadata: {
         title: "Project",
@@ -154,7 +154,7 @@ describe("createSessionMetadataUpdater", () => {
     const updater = createSessionMetadataUpdater({
       sessionId: "sess_1",
       serverUrl: "http://server.test",
-      token: "token_1",
+      getAuthToken: () => "token_1",
       dek,
       metadata: { title: "Project", path: "/work/project", model: null },
       metadataVersion: 0,

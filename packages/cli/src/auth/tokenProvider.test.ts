@@ -157,6 +157,92 @@ describe("createTokenProvider", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it("stale-by-one 401: retries once against a newer refresh token already on disk instead of dying permanently", async () => {
+    const accessToken = fakeAccessToken(3600);
+    const seenRefreshTokens: string[] = [];
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { refreshToken: string };
+      seenRefreshTokens.push(body.refreshToken);
+      if (body.refreshToken === "refresh-1") {
+        // Simulates another process (the daemon) having already rotated this token.
+        return { ok: false, status: 401, json: async () => ({}) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ accessToken, refreshToken: "refresh-3" }),
+      };
+    }) as unknown as typeof fetch;
+
+    const provider = createTokenProvider({
+      backendUrl: "http://localhost:3005",
+      refreshToken: "refresh-1",
+      fetchImpl,
+      now: () => Date.now(),
+      onRotate: () => {},
+      logger: silentLogger(),
+      // Another process already persisted a newer token than the one this instance
+      // started with.
+      readCurrentRefreshToken: () => "refresh-2",
+    });
+
+    const result = await provider.getAccessToken();
+
+    expect(result).toBe(accessToken);
+    expect(provider.isDead).toBe(false);
+    expect(seenRefreshTokens).toEqual(["refresh-1", "refresh-2"]);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("stale-by-one mitigation only retries once — a 401 on the retry itself is definitively dead", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+
+    const provider = createTokenProvider({
+      backendUrl: "http://localhost:3005",
+      refreshToken: "refresh-1",
+      fetchImpl,
+      now: () => Date.now(),
+      onRotate: () => {},
+      logger: silentLogger(),
+      readCurrentRefreshToken: () => "refresh-2",
+    });
+
+    const result = await provider.getAccessToken();
+
+    expect(result).toBeNull();
+    expect(provider.isDead).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(2); // one original attempt + one stale-retry, no more
+  });
+
+  it("a 401 with no newer token on disk (or no readCurrentRefreshToken at all) is still definitively dead", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({}),
+    })) as unknown as typeof fetch;
+
+    const provider = createTokenProvider({
+      backendUrl: "http://localhost:3005",
+      refreshToken: "refresh-1",
+      fetchImpl,
+      now: () => Date.now(),
+      onRotate: () => {},
+      logger: silentLogger(),
+      // Same token on disk as the one just rejected — genuinely dead, not stale-by-one.
+      readCurrentRefreshToken: () => "refresh-1",
+    });
+
+    const result = await provider.getAccessToken();
+
+    expect(result).toBeNull();
+    expect(provider.isDead).toBe(true);
+    expect(fetchImpl).toHaveBeenCalledTimes(1); // no pointless retry against the same token
+  });
+
   it("concurrent getAccessToken calls share one in-flight refresh", async () => {
     let inFlightCount = 0;
     const fetchImpl = vi.fn(async () => {

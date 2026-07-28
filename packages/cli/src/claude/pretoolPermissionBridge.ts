@@ -595,6 +595,26 @@ export class PreToolPermissionBridge {
    * (`deriveCurrentPermissionMode`) is exactly right until a real transition
    * happens.
    */
+  /**
+   * Publicly feeds an externally-confirmed mode into the same
+   * cache/watcher/emit pipeline {@link cachePermissionMode} drives off a
+   * hook input's own `permission_mode` field — used by `setMode`'s raw-PTY-
+   * output confirmation path (`ptyClaudeSession.ts`'s `waitForModeStatus`),
+   * which can confirm a switch WITHOUT any hook call ever occurring (the
+   * whole point of that fix: an idle session may never get a hook call at
+   * all). Without this, {@link currentPermissionMode} — read by `start.ts`'s
+   * `setMode` handler to compute the NEXT switch's own Shift+Tab press count
+   * — stays stale after a raw-output-only-confirmed switch, so a second
+   * switch typed right after the first (no intervening tool call) computes
+   * its press count from the wrong starting mode and lands on the wrong
+   * target. Live-reproduced: Default→Plan (raw-output-confirmed, no hook
+   * call) followed immediately by Plan→AcceptEdits computed its press count
+   * from a still-`"default"` cache and landed back on `"default"` instead.
+   */
+  notePermissionMode(mode: PermissionMode): void {
+    this.cachePermissionMode(mode);
+  }
+
   private cachePermissionMode(raw: string | undefined): void {
     if (raw === undefined) return;
     const mode = PERMISSION_MODE_CYCLE.find((m) => m === raw);

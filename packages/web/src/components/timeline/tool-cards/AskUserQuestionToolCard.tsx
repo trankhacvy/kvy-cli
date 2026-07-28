@@ -59,13 +59,25 @@ export function AskUserQuestionToolCard({ item }: { item: ToolItem }) {
   const declined = isDeclinedQuestion(item);
   const fallbackOutputText = readOutputText(item.output);
 
+  // docs/known-issues-cliweb-sync-test.md issue #4: a web-answered question (fixed-option
+  // or free-text) that couldn't be driven into a live terminal widget only reaches Claude
+  // by denying the underlying tool call with the answer baked into the deny reason
+  // (`composeAskAnswerReason` in `pretoolPermissionBridge.ts`) — Claude Code has no other
+  // channel to hand back a modified tool result to a still-pending `AskUserQuestion`.
+  // That means `item.ok` is `false` on the wire even though the exchange was a normal,
+  // successful answer, not a failure — don't let the card's status badge read
+  // "Error"/"failed" once a real answer was actually recovered from that reason text.
+  const answeredSuccessfully = !declined && answers !== undefined && answers.length > 0;
+
   return (
     <ToolCardShell
       item={item}
       icon={<HelpCircle className="size-4 text-muted-foreground" />}
-      statusLabel={declined ? "declined" : undefined}
-      statusVariant={declined ? "secondary" : undefined}
-      toolStateOverride={declined ? "output-available" : undefined}
+      statusLabel={declined ? "declined" : answeredSuccessfully ? "done" : undefined}
+      statusVariant={declined ? "secondary" : answeredSuccessfully ? "success" : undefined}
+      toolStateOverride={
+        declined ? "output-available" : answeredSuccessfully ? "output-available" : undefined
+      }
     >
       {pending ? (
         <p className="text-xs text-muted-foreground">Waiting for an answer…</p>

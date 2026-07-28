@@ -303,6 +303,12 @@ export async function startMachineIntegration(
       writeCredentials({ ...credentials, refreshToken }, deps.homeDir);
     },
     logger: deps.logger,
+    // issue #2 (docs/known-issues-cliweb-sync-test.md): this daemon-owned provider and
+    // a foreground `falcon claude`/`falcon codex` session's own provider
+    // (`resolveAccessToken.ts`) both rotate the same on-disk refresh token
+    // independently — re-read it on a 401 before giving up permanently, in case the
+    // other process already rotated in a newer one.
+    readCurrentRefreshToken: () => deps.readCredentials()?.refreshToken ?? null,
   });
 
   // issue-4-plan.md §6.1/§6.5: the daemon never runs interactively (no TTY, nobody to

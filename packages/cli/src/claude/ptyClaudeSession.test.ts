@@ -1219,6 +1219,143 @@ describe("startPtyClaudeSession", () => {
     });
   });
 
+  describe("waitForModeStatus (setMode's faster, hook-independent confirmation signal — text live-verified against real Claude Code v2.1.220)", () => {
+    /**
+     * Manual timers throughout, same reason as the `sendModelChange` dialog
+     * block above: `waitForModeStatus` schedules its own timeout via
+     * `setTimeoutImpl`, and `makeHarness()`'s default synchronous timer would
+     * fire it immediately — resolving `false` before any PTY data could ever
+     * arrive.
+     */
+    function setup() {
+      const h = makeHarness();
+      const timers = makeManualTimers();
+      h.deps.setTimeoutImpl = timers.setTimeoutImpl;
+      h.deps.clearTimeoutImpl = timers.clearTimeoutImpl;
+      return { h, timers };
+    }
+
+    it("resolves true the instant the live-verified 'default' status text (⏸ manual mode on) appears", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll(); // drain the readyDelay timer
+
+      const result = handle.waitForModeStatus("default", 5000);
+      // Live-captured shape: default never gets the "(shift+tab to cycle)"
+      // suffix the other two modes do — it ends "· ? for shortcuts" instead.
+      h.fakePty.emitData("\x1b[38;5;246m⏸ manual mode on · ? for shortcuts\x1b[39m");
+      await expect(result).resolves.toBe(true);
+
+      handle.stop();
+    });
+
+    it("resolves true the instant the live-verified 'acceptEdits' status text (⏵⏵ accept edits on) appears", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      const result = handle.waitForModeStatus("acceptEdits", 5000);
+      h.fakePty.emitData(
+        "\x1b[38;5;147m⏵⏵ accept edits on\x1b[22G\x1b[38;5;246m(shift+tab to cycle)\x1b[39m",
+      );
+      await expect(result).resolves.toBe(true);
+
+      handle.stop();
+    });
+
+    it("resolves true the instant the live-verified 'plan' status text (⏸ plan mode on) appears, even with the trailing hint split by a mid-string cursor jump", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      const result = handle.waitForModeStatus("plan", 5000);
+      // Live-captured shape: Claude Code's own renderer sometimes splits the
+      // "(shift+tab to cycle)" hint around a cursor-repositioning escape (a
+      // partial-redraw diff against the previous frame) — the glyph+phrase
+      // prefix `MODE_STATUS_PATTERNS` actually matches on is unaffected.
+      h.fakePty.emitData(
+        "\x1b[38;5;73m⏸ plan mode on\x1b[38;5;246m (shift+tab \x1b[30Go cycle)\x1b[39m",
+      );
+      await expect(result).resolves.toBe(true);
+
+      handle.stop();
+    });
+
+    it("recognizes the status text even split across multiple PTY data chunks", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      const result = handle.waitForModeStatus("plan", 5000);
+      h.fakePty.emitData("\x1b[38;5;73m⏸ plan mode");
+      h.fakePty.emitData(" on\x1b[38;5;246m (shift+tab to cycle)\x1b[39m");
+      await expect(result).resolves.toBe(true);
+
+      handle.stop();
+    });
+
+    it("does not match a different mode's status text — times out false instead of confirming the wrong mode", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      const result = handle.waitForModeStatus("plan", 5000);
+      h.fakePty.emitData(
+        "\x1b[38;5;147m⏵⏵ accept edits on\x1b[22G\x1b[38;5;246m(shift+tab to cycle)\x1b[39m",
+      );
+      timers.runAll(); // fire the watcher's own timeout — nothing matched "plan"
+      await expect(result).resolves.toBe(false);
+
+      handle.stop();
+    });
+
+    it("resolves false once timeoutMs elapses with no matching output at all", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      const result = handle.waitForModeStatus("plan", 5000);
+      timers.runAll();
+      await expect(result).resolves.toBe(false);
+
+      handle.stop();
+    });
+
+    it("resolves false immediately for bypassPermissions — live-verified unreachable via Shift+Tab, no status text to ever watch for", async () => {
+      const { h } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+
+      await expect(handle.waitForModeStatus("bypassPermissions", 5000)).resolves.toBe(false);
+
+      handle.stop();
+    });
+
+    it("a second call supersedes the first — the stale watcher resolves false immediately rather than waiting out its own timeout", async () => {
+      const { h, timers } = setup();
+      const handle = startPtyClaudeSession(baseOptions(), h.deps);
+      await tick();
+      timers.runAll();
+
+      const first = handle.waitForModeStatus("plan", 5000);
+      const second = handle.waitForModeStatus("acceptEdits", 5000);
+      h.fakePty.emitData(
+        "\x1b[38;5;147m⏵⏵ accept edits on\x1b[22G\x1b[38;5;246m(shift+tab to cycle)\x1b[39m",
+      );
+
+      await expect(first).resolves.toBe(false);
+      await expect(second).resolves.toBe(true);
+
+      handle.stop();
+    });
+  });
+
   describe("closeTurn (docs/user-flows.md fix-plan task 1 — proactive turn-end)", () => {
     it("force-closes the currently open turn, reusing the same tailer mapper state onEnvelopes is driven from", async () => {
       const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();

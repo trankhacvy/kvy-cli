@@ -154,6 +154,69 @@ const MODEL_SWITCH_CONFIRM_ARM_MS = 5000;
 /** Bounds the rolling raw-output buffer `MODEL_SWITCH_CONFIRM_PATTERN` is tested against. */
 const MODEL_SWITCH_CONFIRM_BUFFER_MAX = 500;
 
+/**
+ * Claude Code's own live status-bar text for the permission mode the TUI is
+ * CURRENTLY in — rendered at the bottom of the screen on every frame, never
+ * written to the JSONL transcript, same reasoning {@link
+ * MODEL_SWITCH_CONFIRM_PATTERN}'s doc comment gives for pattern-matching raw
+ * PTY output instead: this is the only other place in Falcon that does it.
+ *
+ * Exists for `setMode`'s own bug (`start.ts`'s RPC handler,
+ * `pretoolPermissionBridge.ts`'s "permission_mode cache + real PTY setMode"
+ * doc comment): the ONLY other confirmation channel — the next hook call's
+ * own `permission_mode` field — never arrives at all while the session sits
+ * idle, which is the COMMON case for a web-initiated mode switch (a user
+ * usually changes mode before their next message, not mid-tool-call), so
+ * hook-echo-only verification honestly-but-wrongly reported failure even
+ * though the keystrokes had already landed. This is a second, faster,
+ * hook-independent signal the caller races alongside the hook echo — see
+ * `waitForModeStatus`'s own doc comment.
+ *
+ * Live-verified against real Claude Code v2.1.220 by scripting an actual
+ * `claude` PTY session (via `node-pty`, not a guess from a captured
+ * terminal) and driving genuine Shift+Tab presses:
+ *  - `default`: `⏸ manual mode on` — NOT followed by `(shift+tab to
+ *    cycle)`; the idle/default status line always ends `· ? for shortcuts`
+ *    instead, unlike the other two modes below (live-verified: this is
+ *    consistent whether it's the session's very first render or a Shift+Tab
+ *    cycle landing back on default).
+ *  - `acceptEdits`: `⏵⏵ accept edits on`, followed by `(shift+tab to
+ *    cycle)`.
+ *  - `plan`: `⏸ plan mode on`, followed by `(shift+tab to cycle)`.
+ *  - `bypassPermissions` has NO entry: live-verified unreachable via the
+ *    Shift+Tab cycle in this environment at all (cycling past `plan`
+ *    produces `auto mode unavailable for this model` and falls back to
+ *    `default`, never rendering a `bypassPermissions` status line) — already
+ *    documented as genuine Claude Code behavior in docs/known-issues.md
+ *    issue #11, not a Falcon bug. There is no status text to ever match for
+ *    it, so {@link waitForModeStatus} resolves `false` immediately rather
+ *    than arming a watcher that could never fire.
+ *
+ * Each pattern anchors on the glyph immediately preceding its phrase
+ * (`⏸`/`⏵⏵`) — live-verified always written CONTIGUOUSLY with the phrase in
+ * one PTY write, unlike the trailing `(shift+tab to cycle)`/`· ? for
+ * shortcuts` hint text, which Claude Code's own renderer sometimes splits
+ * around a mid-string cursor-repositioning escape (a partial-redraw diff
+ * against the PREVIOUS frame — e.g. `"(shift+tab " + "\x1b[30G" + "o
+ * cycle)"` was captured live, the diff only rewriting the one byte that
+ * actually changed). That's a real frame-diffing behavior, not a PTY
+ * write-boundary split a rolling buffer can paper over — the bytes
+ * genuinely interrupting the phrase belong to the same logical frame — so
+ * the trailing hint text is deliberately NOT part of the match. Anchoring on
+ * glyph+phrase alone (rather than the bare phrase) still minimizes any
+ * chance of the model's own conversational output accidentally matching —
+ * the same false-positive concern {@link MODEL_SWITCH_CONFIRM_PATTERN}
+ * already accepts for "Switch model?", but a glyph+phrase pair reads far
+ * less like ordinary prose than a bare phrase would.
+ */
+const MODE_STATUS_PATTERNS: Partial<Record<PermissionMode, RegExp>> = {
+  default: /⏸ manual mode on/,
+  acceptEdits: /⏵⏵ accept edits on/,
+  plan: /⏸ plan mode on/,
+};
+/** Bounds the rolling raw-output buffer {@link MODE_STATUS_PATTERNS} is tested against — mirrors `MODEL_SWITCH_CONFIRM_BUFFER_MAX`. */
+const MODE_STATUS_BUFFER_MAX = 500;
+
 /** The minimal `IPty` surface this module drives — node-pty's `IPty` satisfies it structurally. */
 export interface PtyLike {
   readonly pid: number;
@@ -293,6 +356,29 @@ export interface PtyClaudeSessionHandle {
    * than pretending the switch happened.
    */
   sendModeCycle(presses: number): boolean;
+  /**
+   * Resolves `true` the instant Claude Code's own live status-bar text for
+   * `target` mode appears in raw PTY output (see {@link
+   * MODE_STATUS_PATTERNS}'s doc comment for the exact live-verified text per
+   * mode), or `false` once `timeoutMs` elapses with no match. A second,
+   * FASTER, hook-independent confirmation signal for `setMode` — this
+   * module has no visibility into the hook-echo path at all (it lives in
+   * `pretoolPermissionBridge.ts`'s `waitForModeEcho`); the caller
+   * (`start.ts`'s `setMode` RPC handler) races the two, resolving success as
+   * soon as EITHER confirms, so an idle session with no tool call imminent
+   * (the common case for a web-initiated mode switch, and the exact bug this
+   * closes) doesn't have to wait out a hook echo that may never arrive at
+   * all. Resolves `false` immediately, arming nothing, for
+   * `bypassPermissions` — live-verified unreachable via the Shift+Tab cycle,
+   * so there is no status text that could ever match.
+   *
+   * At most one watcher armed at a time (mirrors the `sendModelChange`
+   * confirm-dialog watcher just above) — a second call disarms the first's
+   * watcher (which then resolves `false`, same as an ordinary timeout) and
+   * takes over the shared rolling buffer. Fine in practice: `start.ts`'s
+   * `setMode` RPC handler only ever has one mode switch in flight.
+   */
+  waitForModeStatus(target: PermissionMode, timeoutMs: number): Promise<boolean>;
   /**
    * Answers a locally-typed turn's OPEN permission dialog from a web
    * `perm.answer` decision — real two-way remote control (the point of
@@ -617,6 +703,32 @@ export function startPtyClaudeSession(
   };
   cleanups.push(disarmModelSwitchConfirmWatcher);
 
+  // `waitForModeStatus`'s watcher — same arm/disarm shape as the model-switch
+  // confirm watcher just above, but for `MODE_STATUS_PATTERNS` (see that
+  // constant's doc comment). At most one armed at a time: settling an
+  // in-flight watcher early — a match, a second `waitForModeStatus` call
+  // superseding it, or the session stopping — always goes through this one
+  // function so `modeStatusResolve` is nulled out BEFORE the promise
+  // resolves, making a redundant second settle attempt (e.g. a match arriving
+  // in the same tick the arm-expiry timer already fired) a safe no-op instead
+  // of a double-resolve.
+  let modeStatusTarget: PermissionMode | null = null;
+  let modeStatusBuffer = "";
+  let modeStatusResolve: ((matched: boolean) => void) | null = null;
+  let modeStatusTimer: ReturnType<typeof setTimeout> | null = null;
+  const finishModeStatusWatcher = (matched: boolean): void => {
+    const resolve = modeStatusResolve;
+    modeStatusTarget = null;
+    modeStatusBuffer = "";
+    modeStatusResolve = null;
+    if (modeStatusTimer) {
+      clearTimeoutImpl(modeStatusTimer);
+      modeStatusTimer = null;
+    }
+    resolve?.(matched);
+  };
+  cleanups.push(() => finishModeStatusWatcher(false));
+
   // The transcript tailer, created asynchronously in `run()`. The provider
   // session id arrives from the caller's shared hook server via
   // `notifyProviderSessionId()` and is routed here; if it lands before the
@@ -824,6 +936,11 @@ export function startPtyClaudeSession(
             ptyProcess?.write(SUBMIT_KEY);
           }
         }
+        if (modeStatusTarget) {
+          modeStatusBuffer = (modeStatusBuffer + data).slice(-MODE_STATUS_BUFFER_MAX);
+          const pattern = MODE_STATUS_PATTERNS[modeStatusTarget];
+          if (pattern?.test(modeStatusBuffer)) finishModeStatusWatcher(true);
+        }
       });
       cleanups.push(() => dataSub.dispose());
 
@@ -922,6 +1039,24 @@ export function startPtyClaudeSession(
       if (!controller.canInjectNow) return false;
       for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
       return true;
+    },
+    waitForModeStatus: (target, timeoutMs) => {
+      const pattern = MODE_STATUS_PATTERNS[target];
+      // `bypassPermissions` (or any future mode Claude Code adds that this
+      // build doesn't recognize) has no live-verified status text — see
+      // `MODE_STATUS_PATTERNS`'s doc comment. Arming a watcher that could
+      // never match would just burn the caller's full `timeoutMs` for
+      // nothing, so fail fast instead.
+      if (!pattern) return Promise.resolve(false);
+      // At most one watcher in flight — settle any prior one as a plain
+      // `false` (not a leaked promise) before arming the new one.
+      finishModeStatusWatcher(false);
+      return new Promise<boolean>((resolve) => {
+        modeStatusTarget = target;
+        modeStatusBuffer = "";
+        modeStatusResolve = resolve;
+        modeStatusTimer = setTimeoutImpl(() => finishModeStatusWatcher(false), timeoutMs);
+      });
     },
     answerPermission: (decision, currentMode, toolName) => {
       if (!ptyProcess) return false;

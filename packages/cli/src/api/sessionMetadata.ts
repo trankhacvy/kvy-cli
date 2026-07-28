@@ -34,7 +34,14 @@ export interface SessionMetadataValue {
 export interface SessionMetadataUpdaterOptions {
   sessionId: string;
   serverUrl: string;
-  token: string;
+  /**
+   * Resolves the current bearer token immediately before every request (including every
+   * CAS-conflict retry inside `persistModel`) instead of a token captured once at
+   * construction — same fix, same reason, as `httpClient.ts`'s `getAuthToken`
+   * (docs/known-issues-cliweb-sync-test.md issue #1: a session can run far longer than
+   * one access token's ~15min TTL). Typically `TokenProvider.getAccessToken`.
+   */
+  getAuthToken: () => string | null | Promise<string | null>;
   dek: Uint8Array;
   metadata: SessionMetadataValue;
   metadataVersion: number;
@@ -102,14 +109,15 @@ export function createSessionMetadataUpdater(
         ...currentMetadata,
         model: normalizedModel,
       };
+      const token = await options.getAuthToken();
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      if (token) headers.authorization = `Bearer ${token}`;
+
       const response = await fetchImpl(
         `${serverUrl}/v1/sessions/${encodeURIComponent(options.sessionId)}/metadata`,
         {
           method: "PUT",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${options.token}`,
-          },
+          headers,
           body: JSON.stringify({
             expectedVersion: currentVersion,
             value: seal(nextMetadata, options.dek),

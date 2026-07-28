@@ -401,6 +401,30 @@ export interface AskAnswerEntry {
  */
 const ASK_ANSWER_PAIR_PATTERN = /"([^"]*)"="([^"]*)"/g;
 
+/**
+ * Matches Falcon's own "deny-with-answer" tool_result text — `composeAskAnswerReason()`
+ * in `packages/cli/src/claude/pretoolPermissionBridge.ts`, e.g.:
+ * ```
+ * The user answered via the Falcon web UI:
+ * - Pick a fruit
+ *   → Mango
+ * Proceed using these answers. Do not call AskUserQuestion again for these questions.
+ * ```
+ * Used whenever a web `perm.answer` decision for `AskUserQuestion` can't be driven into
+ * a live terminal widget — always true for a question raised on a web-initiated turn
+ * (there is no local dialog to drive at all), and also true for a free-text answer on a
+ * locally-typed turn (the widget's keystroke model can only select a listed option).
+ * Claude Code has no channel to hand a modified tool result back to a still-pending
+ * `AskUserQuestion` call, so this only reaches the model by denying the call with the
+ * answer baked into the deny reason (verified live) — which is why this shows up as an
+ * `is_error: true` tool_result (docs/known-issues-cliweb-sync-test.md issue #4) even
+ * though it's a normal, successful answer, not a failure. This regex recovers the real
+ * answer from that reason text so the card can display it instead of falling back to
+ * "(no answer recorded)"; `AskUserQuestionToolCard.tsx` separately keeps the card's own
+ * status badge from reading "Error" for this same case.
+ */
+const ASK_ANSWER_ARROW_PATTERN = /^- (.+)\n {2}→ (.+)$/gm;
+
 /** Reads a completed `AskUserQuestion` tool-end's answer, for the read-only
  * (locally-answered) ToolCard. Three tolerated shapes, tried in order:
  *
@@ -437,21 +461,32 @@ const ASK_ANSWER_PAIR_PATTERN = /"([^"]*)"="([^"]*)"/g;
  *    it naturally falls through to `undefined` here — `isDeclinedQuestion`
  *    in `AskUserQuestionToolCard.tsx` is what actually recognizes that case,
  *    entirely independently of this function.
- * 2. `{answers: {question: answer}}` (Falcon's own deny-with-answer
- *    convention, in case a future transport ever mirrors it back as a real
- *    tool-end).
- * 3. An array of `{question, answer}` entries.
+ * 2. Falcon's own "deny-with-answer" reason text ({@link ASK_ANSWER_ARROW_PATTERN} —
+ *    see its own doc comment) — the shape used for a web-answered question that
+ *    couldn't be driven into a live terminal widget (any web-turn answer, fixed-option
+ *    or free-text alike, plus a free-text answer on a locally-typed turn). Verified
+ *    live: this is what actually reaches the model (docs/known-issues-cliweb-sync-test.md
+ *    issue #4), even though it carries `is_error: true` on the wire.
+ * 3. `{answers: {question: answer}}` (Falcon's own deny-with-answer convention as a
+ *    structured value, in case a future transport ever mirrors it back that way instead
+ *    of as a string).
+ * 4. An array of `{question, answer}` entries.
  *
  * Degrades to `undefined` on any other shape (including a declined/rejected
- * tool_result string, which never contains a `"..."="..."` pair) so the card
- * falls back to a raw dump instead of hiding data.
+ * tool_result string, which never contains a `"..."="..."` pair or a `- .../  → ...`
+ * line) so the card falls back to a raw dump instead of hiding data.
  */
 export function parseAskAnswers(output: unknown): AskAnswerEntry[] | undefined {
   if (typeof output === "string") {
-    const entries = Array.from(output.matchAll(ASK_ANSWER_PAIR_PATTERN))
+    const quoted = Array.from(output.matchAll(ASK_ANSWER_PAIR_PATTERN))
       .map((match) => ({ question: match[1] ?? "", answer: match[2] ?? "" }))
       .filter((entry): entry is AskAnswerEntry => entry.question.length > 0);
-    return entries.length > 0 ? entries : undefined;
+    if (quoted.length > 0) return quoted;
+
+    const arrowed = Array.from(output.matchAll(ASK_ANSWER_ARROW_PATTERN))
+      .map((match) => ({ question: match[1] ?? "", answer: match[2] ?? "" }))
+      .filter((entry): entry is AskAnswerEntry => entry.question.length > 0);
+    return arrowed.length > 0 ? arrowed : undefined;
   }
 
   const r = asRecord(output);

@@ -97,6 +97,7 @@ function fakePtyHandle(overrides: Partial<PtyClaudeSessionHandle> = {}): PtyClau
     setPromptOpen: vi.fn(),
     sendInterrupt: vi.fn(() => true),
     sendModeCycle: vi.fn(() => true),
+    waitForModeStatus: vi.fn(async () => false),
     answerPermission: vi.fn(() => true),
     answerAskUserQuestion: vi.fn(() => true),
     sendModelChange: vi.fn(() => true),
@@ -133,6 +134,7 @@ function fakeRemotePermissionHook(
     resolveLocalOutcome: () => {},
     getCurrentPermissionMode: () => null,
     waitForModeEcho: async () => null,
+    notePermissionMode: () => {},
     isWebTurnActive: () => false,
     markWebTurnStart: () => {},
     markTurnEnd: () => {},
@@ -525,7 +527,15 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       }),
     );
 
-    expect(fetchCalls).toHaveLength(1);
+    // `sessionMetadataUpdater` now resolves its bearer token through
+    // `tokenProvider.getAccessToken()` on every request (issue #1,
+    // docs/known-issues-cliweb-sync-test.md) instead of a token captured once at
+    // preflight — an extra async hop before the metadata PUT fires, so this
+    // fire-and-forget `updateModel()` call is no longer guaranteed to have landed the
+    // instant `runStartClaudeCommand()` returns.
+    await vi.waitFor(() => {
+      expect(fetchCalls).toHaveLength(1);
+    });
     const body = readMetadataUpdateBody(fetchCalls[0]?.body);
     expect(body.expectedVersion).toBe(0);
     expect(open(body.value, dek)).toMatchObject({ model: "Opus" });
@@ -1154,10 +1164,16 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
         "default" | "acceptEdits" | "plan" | "bypassPermissions" | null
       >;
       sendModeCycle?: ReturnType<typeof vi.fn>;
+      /** Defaults to always resolving `false` — a test that wants the
+       * raw-output signal to be the one confirming the switch overrides it. */
+      waitForModeStatus?: ReturnType<typeof vi.fn>;
       env?: Record<string, string>;
     }) {
       const sendModeCycle = overrides.sendModeCycle ?? vi.fn(() => true);
-      const startPtyClaudeSession = vi.fn(() => fakePtyHandle({ sendModeCycle }));
+      const waitForModeStatus = overrides.waitForModeStatus ?? vi.fn(async () => false);
+      const startPtyClaudeSession = vi.fn(() =>
+        fakePtyHandle({ sendModeCycle, waitForModeStatus }),
+      );
       const installRemotePermissionHook = (async () =>
         fakeRemotePermissionHook({
           getCurrentPermissionMode: overrides.getCurrentPermissionMode ?? (() => null),
@@ -1182,6 +1198,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       return {
         handlers: capturedHandlers as unknown as SessionRpcHandlers,
         sendModeCycle,
+        waitForModeStatus,
       };
     }
 
@@ -1259,6 +1276,64 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
         ok: false,
         observedMode: "default",
+      });
+    });
+
+    describe("raw-output confirmation race (the live-reproduced bug: an idle session has no upcoming tool call to carry a hook echo)", () => {
+      it("reports success from the terminal's own status-bar text alone, even when the hook echo never arrives at all", async () => {
+        // A session sitting idle: no tool call is ever going to happen, so
+        // `waitForModeEcho` hangs forever — exactly the live-reproduced bug
+        // (web showed "Could not confirm the mode switch — reverted" while
+        // the terminal's own status bar had already flipped to Plan mode).
+        const waitForModeStatus = vi.fn(async () => true);
+        const { handlers, sendModeCycle } = await setup({
+          getCurrentPermissionMode: () => "default",
+          waitForModeEcho: () => new Promise(() => {}), // never resolves
+          waitForModeStatus,
+        });
+        await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+          ok: true,
+          observedMode: "plan",
+        });
+        expect(sendModeCycle).toHaveBeenCalledExactlyOnceWith(2);
+        expect(waitForModeStatus).toHaveBeenCalledExactlyOnceWith("plan", 5000);
+      });
+
+      it("reports success from the hook echo alone when the raw-output detector never matches", async () => {
+        const { handlers } = await setup({
+          getCurrentPermissionMode: () => "default",
+          waitForModeEcho: async () => "plan",
+          waitForModeStatus: vi.fn(async () => false),
+        });
+        await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+          ok: true,
+          observedMode: "plan",
+        });
+      });
+
+      it("is {ok:false} carrying the hook-observed mode when NEITHER signal confirms the target", async () => {
+        const { handlers } = await setup({
+          getCurrentPermissionMode: () => "default",
+          waitForModeEcho: async () => "acceptEdits", // not the requested "plan"
+          waitForModeStatus: vi.fn(async () => false),
+        });
+        await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+          ok: false,
+          observedMode: "acceptEdits",
+        });
+      });
+
+      it("does not send raw-output-detector keystrokes into a same-mode no-op — waitForModeStatus is never called", async () => {
+        const waitForModeStatus = vi.fn(async () => true);
+        const { handlers } = await setup({
+          getCurrentPermissionMode: () => "plan",
+          waitForModeStatus,
+        });
+        await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
+          ok: true,
+          observedMode: "plan",
+        });
+        expect(waitForModeStatus).not.toHaveBeenCalled();
       });
     });
   });
@@ -1835,7 +1910,12 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
       }),
     );
 
-    expect(fetchCalls).toHaveLength(1);
+    // See the terminal-flow equivalent test above for why this now needs
+    // `vi.waitFor`: `getAuthToken` adds a real async hop before the fire-and-forget
+    // metadata PUT fires.
+    await vi.waitFor(() => {
+      expect(fetchCalls).toHaveLength(1);
+    });
     const body = readMetadataUpdateBody(fetchCalls[0]?.body);
     expect(body.expectedVersion).toBe(0);
     expect(open(body.value, dek)).toMatchObject({ model: "Haiku 4.5" });
