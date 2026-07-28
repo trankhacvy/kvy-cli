@@ -3,7 +3,11 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { SessionCardActions } from "./session-card-actions";
-import { buildPinTogglePatch, isSessionStoppable } from "./session-card-actions-logic";
+import {
+  buildPinTogglePatch,
+  canOfferRemoveWorktree,
+  isSessionStoppable,
+} from "./session-card-actions-logic";
 
 function render(props: Partial<Parameters<typeof SessionCardActions>[0]> = {}) {
   const queryClient = new QueryClient();
@@ -19,6 +23,7 @@ function render(props: Partial<Parameters<typeof SessionCardActions>[0]> = {}) {
         machineId: null,
         machineOnline: false,
         machineName: null,
+        workspaceId: null,
         ...props,
       }),
     ),
@@ -64,6 +69,50 @@ describe("SessionCardActions", () => {
   it("renders without throwing whether pinned or not", () => {
     expect(() => render({ pinned: true })).not.toThrow();
     expect(() => render({ pinned: false })).not.toThrow();
+  });
+});
+
+describe("Remove worktree gating (Phase C, new-session-from-web redesign)", () => {
+  // `DropdownMenuContent` is portal-based and renders nothing while closed
+  // (this file's own "menu swap by status" section above notes the same
+  // constraint), so the menu item's own text can't be asserted on here —
+  // the real gating logic is `canOfferRemoveWorktree`, covered directly
+  // below with real assertions. These just confirm every combination
+  // renders without throwing, including the ones the dialog itself is
+  // conditionally mounted for.
+  it("renders without throwing for a repo-root session (no worktree to remove)", () => {
+    expect(() => render({ machineId: "m1", workspaceId: "/repo" })).not.toThrow();
+  });
+
+  it("renders without throwing for a .worktrees session with no owning machine", () => {
+    expect(() => render({ machineId: null, workspaceId: "/repo/.worktrees/wf/foo" })).not.toThrow();
+  });
+
+  it("renders without throwing for a .worktrees session with a known machine (Remove worktree eligible)", () => {
+    expect(() => render({ machineId: "m1", workspaceId: "/repo/.worktrees/wf/foo" })).not.toThrow();
+  });
+
+  it("does not render the remove-worktree dialog's content until it's opened", () => {
+    const html = render({ machineId: "m1", workspaceId: "/repo/.worktrees/wf/foo" });
+    expect(html).not.toContain("uncommitted or untracked changes");
+  });
+});
+
+describe("canOfferRemoveWorktree", () => {
+  it("is true only when both a machine and a .worktrees-shaped workspaceId are present", () => {
+    expect(canOfferRemoveWorktree("m1", "/repo/.worktrees/wf/foo")).toBe(true);
+  });
+
+  it("is false for a repo-root workspaceId even with a known machine", () => {
+    expect(canOfferRemoveWorktree("m1", "/repo")).toBe(false);
+  });
+
+  it("is false with no owning machine even for a .worktrees path", () => {
+    expect(canOfferRemoveWorktree(null, "/repo/.worktrees/wf/foo")).toBe(false);
+  });
+
+  it("is false for a null workspaceId", () => {
+    expect(canOfferRemoveWorktree("m1", null)).toBe(false);
   });
 });
 

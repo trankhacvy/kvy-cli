@@ -59,6 +59,27 @@ const SessionStartedBodySchema = z.object({
 
 const SessionStartedResponseSchema = z.object({ status: z.literal("ok") });
 
+/**
+ * A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+ * reason"): best-effort self-report of a startup failure, mirroring
+ * `/session-started`'s own "session process reports itself" shape but for
+ * the failure path. `start.ts`/`startCodex.ts` post here when
+ * `bootstrapSession()` (or any other pre-`/session-started` step) fails, so
+ * `spawnAwaiter.ts`'s `reject(pid, error)` can surface the REAL error (e.g.
+ * a 429 session-quota message) instead of the spawn RPC only ever seeing a
+ * generic timeout once the process exits. Never load-bearing the way
+ * `/session-started` is — a session that never posts here still gets caught
+ * by `spawnAwaiter`'s `watchExit`-driven fast-rejection (A3) or, failing
+ * that, the original flat timeout (A3's own doc comment covers the full
+ * fallback chain).
+ */
+const SessionStartFailedBodySchema = z.object({
+  /** This session process's own pid — the same correlation key `/session-started` uses. */
+  pid: z.number(),
+  error: z.string(),
+});
+const SessionStartFailedResponseSchema = z.object({ status: z.literal("ok") });
+
 const ListResponseSchema = z.object({
   sessions: z.array(
     z.object({
@@ -126,6 +147,14 @@ export interface ControlServerDeps {
     encryption?: SessionEncryptionData,
     pid?: number,
   ) => void;
+  /**
+   * Invoked when a spawned session self-reports a startup failure via
+   * `/session-start-failed` (A4). Optional: a caller that doesn't wire a
+   * `spawnAwaiter` (e.g. a test harness) can simply omit it — the route
+   * still accepts and acknowledges the POST either way, matching
+   * `/session-started`'s own tolerance for an absent daemon-side consumer.
+   */
+  onSessionStartFailed?: (pid: number, error: string) => void;
   logger?: Logger;
 }
 
@@ -141,6 +170,7 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
     spawnSession,
     requestShutdown,
     onSessionStarted,
+    onSessionStartFailed,
     reloadAuth,
     logger,
   } = deps;
@@ -160,6 +190,27 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
         const { sessionId, metadata, encryption, pid } = request.body;
         logger?.debug("[control-server] session-started", { sessionId, pid });
         onSessionStarted(sessionId, metadata, encryption, pid);
+        return { status: "ok" as const };
+      },
+    );
+
+    // A4: a session process's best-effort self-report that it failed to
+    // start (e.g. `bootstrapSession()` hit a 429 quota rejection) — lets
+    // `spawnAwaiter.reject(pid, error)` surface the real reason instead of
+    // the caller only ever learning about a generic timeout once the dead
+    // process's exit is (separately, more slowly) observed.
+    app.post(
+      "/session-start-failed",
+      {
+        schema: {
+          body: SessionStartFailedBodySchema,
+          response: { 200: SessionStartFailedResponseSchema },
+        },
+      },
+      async (request) => {
+        const { pid, error } = request.body;
+        logger?.debug("[control-server] session-start-failed", { pid, error });
+        onSessionStartFailed?.(pid, error);
         return { status: "ok" as const };
       },
     );

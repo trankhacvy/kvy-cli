@@ -69,3 +69,25 @@ export type SpawnSessionResult =
   | { type: "success"; sessionId: string }
   | { type: "requestToApproveDirectoryCreation"; directory: string }
   | { type: "error"; errorMessage: string };
+
+/**
+ * A launched process's terminal exit info (A3/A4, docs/known-issues.md —
+ * "generic 15s timeout masks the real failure reason"). `code`/`signal`
+ * mirror Node's own `child_process` `"exit"` event shape; a pid-poll-based
+ * watcher (no direct child handle — e.g. the tmux pane process,
+ * `processLauncher.ts`) can only ever observe "gone", so both fields are
+ * `null` in that case.
+ */
+export interface ProcessExitInfo {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+}
+
+/**
+ * Subscribes `onExit` to a launched process's eventual exit; returns an
+ * unsubscribe function. If the process has already exited by the time this
+ * is called, `onExit` still fires (asynchronously, so callers can always
+ * treat "subscribe" as safe regardless of timing) — a subscriber never
+ * silently misses an exit that raced its own subscription.
+ */
+export type ProcessExitWatcher = (onExit: (info: ProcessExitInfo) => void) => () => void;

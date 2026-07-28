@@ -54,6 +54,7 @@ import type {
   LaunchProcessOptions,
 } from "../../packages/cli/src/daemon/processLauncher.js";
 import { readDaemonState } from "../../packages/cli/src/daemon/state.js";
+import type { ProcessExitWatcher } from "../../packages/cli/src/daemon/types.js";
 import type { Logger } from "../../packages/cli/src/logger.js";
 import {
   bootstrapSession,
@@ -179,7 +180,15 @@ function buildFakeLaunchProcess(deps: {
       })();
     }, 20);
 
-    return { method: "detached", pid };
+    // This `pid` is a synthetic counter (`nextPid++` above), never a real
+    // process — there is nothing for a real exit watcher to observe, so a
+    // permanent no-op is the honest implementation (mirrors `spawnAwaiter.ts`'s
+    // own tolerance for an absent/no-op `watchExit`: it just means this fake
+    // launch can never fast-fail via A3's exit-detection path, which is
+    // correct here since it never actually exits).
+    const watchExit: ProcessExitWatcher = () => () => {};
+
+    return { method: "detached", pid, watchExit };
   };
 }
 

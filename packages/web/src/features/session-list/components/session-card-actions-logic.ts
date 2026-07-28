@@ -1,5 +1,6 @@
 import type { SessionRow } from "@falcon/wire";
 import type { SessionMetadataPatch } from "@/lib/use-session-metadata-write";
+import { looksLikeWorktreePath } from "../worktree-path";
 
 /**
  * Pure logic behind `SessionCardActions`' menu-item enable/disable states
@@ -23,4 +24,17 @@ export function isSessionStoppable(status: SessionRow["status"]): boolean {
  * re-reads at write time (title, model, path, providerSessionId, …). */
 export function buildPinTogglePatch(currentlyPinned: boolean): SessionMetadataPatch {
   return (current) => ({ ...current, pinned: !currentlyPinned });
+}
+
+/** "Remove worktree" menu item gate (Phase C, new-session-from-web
+ * redesign): needs both a known owning machine (the RPC is machine-scoped)
+ * AND a `workspaceId` that actually looks like a Falcon-managed
+ * `.worktrees/<branch>` directory (`worktree-path.ts`) — never offered for
+ * an ordinary repo-root session, where "removing the worktree" would be
+ * nonsensical (there isn't one) and, if it somehow reached the RPC, unsafe. */
+export function canOfferRemoveWorktree(
+  machineId: string | null,
+  workspaceId: string | null,
+): boolean {
+  return machineId !== null && looksLikeWorktreePath(workspaceId);
 }

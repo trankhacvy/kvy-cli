@@ -1,14 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMockNewSessionActions, useMockNewSessionMachines } from "../mock-source";
-
-describe("useMockNewSessionMachines", () => {
-  it("returns a non-empty list with at least one online and one offline machine", () => {
-    const machines = useMockNewSessionMachines();
-    expect(machines.length).toBeGreaterThan(0);
-    expect(machines.some((m) => m.online)).toBe(true);
-    expect(machines.some((m) => !m.online)).toBe(true);
-  });
-});
+import { createMockNewSessionActions } from "../mock-source";
 
 describe("createMockNewSessionActions", () => {
   it("browses the seeded fake filesystem, sorted alphabetically", async () => {

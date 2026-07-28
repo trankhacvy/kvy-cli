@@ -128,7 +128,11 @@ describe("runResumeCommand", () => {
     });
 
     it("calls resumeSession() and reports success for a persisted daemon-managed session", async () => {
-      const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+      const launchProcess = vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 555,
+        watchExit: () => () => {},
+      }));
       const registry = fakeRegistry({
         findResumable: vi.fn(() => ({
           sessionId: "sess_1",
@@ -147,6 +151,7 @@ describe("runResumeCommand", () => {
             awaiter: {
               waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })),
               resolve: vi.fn(),
+              reject: vi.fn(),
             },
             launchProcess,
             falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
@@ -166,7 +171,11 @@ describe("runResumeCommand", () => {
       await mkdir(sessionOwnDir, { recursive: true });
       const expectedCwd = await realpath(sessionOwnDir);
 
-      const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+      const launchProcess = vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 555,
+        watchExit: () => () => {},
+      }));
       const registry = fakeRegistry({
         findResumable: vi.fn(() => ({
           sessionId: "sess_1",
@@ -187,6 +196,7 @@ describe("runResumeCommand", () => {
             awaiter: {
               waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })),
               resolve: vi.fn(),
+              reject: vi.fn(),
             },
             launchProcess,
             falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
@@ -202,7 +212,11 @@ describe("runResumeCommand", () => {
     });
 
     it("fails cleanly (does not fall back to the CLI's cwd) when the persisted session has no directory recorded", async () => {
-      const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+      const launchProcess = vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 555,
+        watchExit: () => () => {},
+      }));
       const registry = fakeRegistry({
         findResumable: vi.fn(() => ({
           sessionId: "sess_1",
@@ -218,7 +232,7 @@ describe("runResumeCommand", () => {
         baseDeps({
           resumeSessionOverrides: {
             registry,
-            awaiter: { waitFor: vi.fn(), resolve: vi.fn() },
+            awaiter: { waitFor: vi.fn(), resolve: vi.fn(), reject: vi.fn() },
             launchProcess,
             falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
           },
@@ -288,7 +302,11 @@ describe("runResumeCommand", () => {
           directory: workspacePath,
         })),
       });
-      const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 555 }));
+      const launchProcess = vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 555,
+        watchExit: () => () => {},
+      }));
       const fetchImpl = vi.fn(
         async () => new Response(JSON.stringify({ sessions: [] }), { status: 200 }),
       );
@@ -303,6 +321,7 @@ describe("runResumeCommand", () => {
             awaiter: {
               waitFor: vi.fn(async (pid) => ({ sessionId: "sess_1", pid })),
               resolve: vi.fn(),
+              reject: vi.fn(),
             },
             launchProcess,
             falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],

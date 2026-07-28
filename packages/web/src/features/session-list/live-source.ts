@@ -402,11 +402,15 @@ export function buildSnapshot(
     provider: s.provider,
     status: s.status,
     updatedAt: s.updatedAt,
-    // Empty/`null` until this session's own message page has decrypted /
-    // an ephemeral has arrived — `deriveSessionStatus` still degrades
-    // honestly with these: `active` + no items yet reads as "idle", never a
-    // fabricated "working".
-    items: items.get(s.id) ?? [],
+    // `null` (not `[]`) until this session's own message page has actually
+    // decrypted this pass — `items.get` returns `undefined` for "no entry
+    // yet", coerced here to the explicit `null` `SessionListSession.items`
+    // documents. `deriveSessionStatus` treats that as "unknown" (degrades to
+    // "idle", never a fabricated "working" OR a fabricated "ready" — the
+    // latter was a real regression this exact line caused once "ready" was
+    // introduced for known-issues.md #9, since a `[]` fallback here made
+    // every session flash "ready" on load regardless of real history).
+    items: items.get(s.id) ?? null,
     attention: attention.get(s.id) ?? null,
   }));
 

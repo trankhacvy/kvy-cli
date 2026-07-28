@@ -208,13 +208,13 @@ export async function buildServer(
   );
   await app.register(pairRoutes);
   await app.register(buildKeyRequestRoutes(db, eventRouter));
-  await app.register(buildSessionsRoutes(db, eventRouter));
+  await app.register(buildSessionsRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildMessagesRoutes(db, eventRouter));
   await app.register(buildSessionCasRoutes(db, eventRouter));
   await app.register(buildSessionStatusRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildSessionArchiveRoutes(db, eventRouter));
   await app.register(buildSessionNotifyRoutes(db, eventRouter, pushDispatcher));
-  await app.register(buildSyncRoutes(db));
+  await app.register(buildSyncRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildMachinesRoutes(db, eventRouter));
   await app.register(buildUnmanagedSessionsRoutes(db, eventRouter));
   await app.register(buildPushRoutes(db));

@@ -17,6 +17,7 @@
  * (design §7.6), so nothing Codex-specific is needed on the permission path.
  */
 import path from "node:path";
+import { encodeBase64, wrapDek } from "@falcon/crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
 import { createHttpClient } from "../api/httpClient.js";
@@ -34,6 +35,11 @@ import {
   detectCodex as detectCodexDefault,
   type ProviderDetectionResult,
 } from "../codex/index.js";
+import {
+  createNotifyDaemonSessionStartedDeps,
+  notifyDaemonSessionStarted as notifyDaemonSessionStartedDefault,
+  reportSessionStartFailed as reportSessionStartFailedDefault,
+} from "../daemon/notify.js";
 import { reloadDaemonAuth as reloadDaemonAuthDefault } from "../daemon/reloadAuth.js";
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
@@ -68,6 +74,22 @@ export interface StartCodexCommandDeps {
   fetchImpl?: typeof fetch;
   detectCodex?: (options?: DetectCodexOptions) => Promise<ProviderDetectionResult>;
   bootstrapSession?: typeof bootstrapSessionDefault;
+  /**
+   * Injectable for tests; defaults to the real `notifyDaemonSessionStarted()`
+   * (`daemon/notify.ts` — best-effort, never throws). Mirrors `start.ts`'s
+   * self-report: without this, a daemon-initiated `spawn` RPC's
+   * `spawnAwaiter` (`daemon/spawnAwaiter.ts`) never learns this Codex session
+   * actually started and unconditionally times out after
+   * `DEFAULT_SPAWN_AWAITER_TIMEOUT_MS` (15s), regardless of whether Codex
+   * itself started fine.
+   */
+  notifyDaemonSessionStarted?: typeof notifyDaemonSessionStartedDefault;
+  /**
+   * Injectable for tests; defaults to the real `reportSessionStartFailed()`
+   * (A4, `daemon/notify.ts` — best-effort, never throws). Mirrors
+   * `start.ts`'s same self-report on a `bootstrapSession()` failure.
+   */
+  reportSessionStartFailed?: typeof reportSessionStartFailedDefault;
   startAcpRemote?: typeof startAcpRemoteDefault;
   startSessionClient?: typeof startSessionClientDefault;
   registerSessionRpcHandlers?: typeof registerSessionRpcHandlers;
@@ -113,6 +135,10 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   const fetchImpl = deps.fetchImpl ?? fetch;
   const detect = deps.detectCodex ?? detectCodexDefault;
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
+  const doNotifyDaemonSessionStarted =
+    deps.notifyDaemonSessionStarted ?? notifyDaemonSessionStartedDefault;
+  const doReportSessionStartFailed =
+    deps.reportSessionStartFailed ?? reportSessionStartFailedDefault;
   const startAcpRemote = deps.startAcpRemote ?? startAcpRemoteDefault;
   const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
@@ -152,6 +178,12 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   }
   const { contentKeyPair, machineId, tokenProvider, accessToken } = preflightResult.preflight;
 
+  const sessionMetadata = {
+    title: path.basename(deps.workingDirectory) || deps.workingDirectory,
+    path: deps.workingDirectory,
+    model: extractModelFlag(deps.codexArgs),
+  };
+
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {
     bootstrap = await doBootstrapSession(
@@ -167,19 +199,49 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
         nonce: createId(),
         provider: "codex",
         contentKeyPair,
-        metadata: {
-          title: path.basename(deps.workingDirectory) || deps.workingDirectory,
-          path: deps.workingDirectory,
-          model: extractModelFlag(deps.codexArgs),
-        },
+        metadata: sessionMetadata,
       },
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-codex] bootstrapSession failed", { message });
     writeError(`falcon codex: failed to start session — ${message}\n`);
+    // A4: same best-effort self-report as `start.ts` — lets a daemon-
+    // initiated spawn's `spawnAwaiter` reject with the real error instead
+    // of a generic timeout.
+    const reportResult = await doReportSessionStartFailed(
+      createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+      { error: message },
+    );
+    logger.debug("[start-codex] daemon self-report (start failed)", { reportResult });
     return 1;
   }
+
+  // A1 (docs/known-issues.md — Codex daemon-spawn timeout): mirror
+  // `start.ts`'s post-`bootstrapSession()` self-report to the daemon
+  // (`daemon/notify.ts` — best-effort, never throws, so an absent/unreachable
+  // daemon never blocks session startup). Without this, a daemon-initiated
+  // `spawn` RPC's `spawnAwaiter.waitFor()` has nothing to resolve it and
+  // unconditionally times out after `DEFAULT_SPAWN_AWAITER_TIMEOUT_MS`
+  // (15s) — every daemon-spawned Codex session used to fail this way
+  // regardless of whether Codex itself started successfully.
+  const notifyResult = await doNotifyDaemonSessionStarted(
+    createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+    {
+      sessionId: bootstrap.sessionId,
+      metadata: sessionMetadata,
+      encryption: {
+        encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
+        seq: 0,
+        metadataVersion: 0,
+        agentStateVersion: 0,
+      },
+    },
+  );
+  logger.debug("[start-codex] daemon self-report", {
+    sessionId: bootstrap.sessionId,
+    notifyResult,
+  });
 
   write(`falcon codex: starting session ${bootstrap.sessionId}\n${CODEX_NO_LOCAL_MODE_NOTE}\n`);
 

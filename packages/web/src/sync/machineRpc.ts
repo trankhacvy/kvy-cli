@@ -144,6 +144,8 @@ import {
   WorkspaceRegisterResultSchema,
   type WorkspaceUnregisterParams,
   WorkspaceUnregisterResultSchema,
+  type WorktreeRemoveParams,
+  WorktreeRemoveResultSchema,
 } from "@falcon/wire";
 import type { ZodType, z } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
@@ -178,6 +180,7 @@ export type {
   WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
   WorkspaceUnregisterParams,
+  WorktreeRemoveParams,
 };
 
 export type AdoptListParams = z.infer<typeof AdoptListParamsSchema>;
@@ -218,6 +221,7 @@ export interface MachineRpcParams {
   "run.stop": RunStopParams;
   "run.status": RunStatusParams;
   "run.setup": RunSetupParams;
+  "worktree.remove": WorktreeRemoveParams;
 }
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
@@ -253,6 +257,7 @@ export interface MachineRpcResults {
   "run.stop": import("@falcon/wire").RunStopResult;
   "run.status": import("@falcon/wire").RunStatusResult;
   "run.setup": import("@falcon/wire").RunSetupResult;
+  "worktree.remove": import("@falcon/wire").WorktreeRemoveResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -289,6 +294,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "run.stop": RunStopResultSchema,
   "run.status": RunStatusResultSchema,
   "run.setup": RunSetupResultSchema,
+  "worktree.remove": WorktreeRemoveResultSchema,
 };
 
 /**

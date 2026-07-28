@@ -76,7 +76,12 @@ describe("handleRunStart", () => {
     await registerWorkspace(workspaceRoot, {}, { homeDir });
     await setWorkspaceGitConfig(workspaceRoot, { runScript: "npm run dev" }, { homeDir });
 
-    const launched: LaunchedProcess = { method: "tmux", pid: 555, tmuxSessionName: "falcon-run-x" };
+    const launched: LaunchedProcess = {
+      method: "tmux",
+      pid: 555,
+      tmuxSessionName: "falcon-run-x",
+      watchExit: () => () => {},
+    };
     const launchProcess = vi.fn(async () => launched);
 
     const result = await handleRunStart(
@@ -103,7 +108,11 @@ describe("handleRunStart", () => {
     await registerWorkspace(workspaceRoot, {}, { homeDir });
     await setWorkspaceGitConfig(workspaceRoot, { runScript: "npm run dev" }, { homeDir });
 
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 1 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 1,
+      watchExit: () => () => {},
+    }));
     await handleRunStart(
       { idempotencyKey: "k1", worktree: workspaceRoot },
       baseDeps({ launchProcess, platform: "linux" }),
@@ -131,7 +140,11 @@ describe("handleRunStart", () => {
       },
     });
 
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 1234 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 1234,
+      watchExit: () => () => {},
+    }));
     const isAlive = vi.fn(() => true);
 
     const result = await handleRunStart(
@@ -162,7 +175,11 @@ describe("handleRunStart", () => {
       },
     });
 
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 2222 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 2222,
+      watchExit: () => () => {},
+    }));
     const isAlive = vi.fn(() => false);
 
     const result = await handleRunStart(
@@ -412,6 +429,7 @@ describe("daemon-restart durability (a fresh runStateStore read over the same ho
       method: "tmux" as const,
       pid: 321,
       tmuxSessionName: "falcon-run-y",
+      watchExit: () => () => {},
     }));
     await setWorkspaceGitConfig(workspaceRoot, { runScript: "npm run dev" }, { homeDir });
     await handleRunStart(

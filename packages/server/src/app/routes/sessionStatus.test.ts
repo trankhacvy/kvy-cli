@@ -205,6 +205,69 @@ describe("POST /v1/sessions/:id/status", () => {
     expect(updates).toHaveLength(0);
   });
 
+  // A5 (docs/known-issues.md — "orphaned active session rows when the
+  // process dies after DB-row creation, on an otherwise-healthy machine"):
+  // `failed` now has a second legitimate writer (the daemon's own
+  // best-effort fallback report, `machineIntegration.ts`'s
+  // `watchForUnreportedDeath`), which is deliberately imprecise about
+  // whether the session's own report already landed. This proves the guard
+  // that makes that safe: a `failed` report can never downgrade a session
+  // that already reported its own `ended` outcome.
+  it("does not downgrade an already-ended session to failed (guards the daemon's own best-effort fallback report)", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        tag: "status-session-no-downgrade",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    const endedSessionId = createResponse.json().id;
+
+    const endResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${endedSessionId}/status`,
+      headers: { authorization: authHeader },
+      payload: { status: "ended" },
+    });
+    expect(endResponse.json()).toEqual({ status: "ended" });
+
+    const updates: EmitUpdateParams[] = [];
+    const ephemerals: EmitEphemeralParams[] = [];
+    const unsubUpdate = eventRouter.onUpdate((e) => updates.push(e));
+    const unsubEphemeral = eventRouter.onEphemeral((e) => ephemerals.push(e));
+    pushDispatcher.calls.length = 0;
+
+    // Simulates the daemon's delayed, imprecise fallback report arriving
+    // after the CLI's own "ended" report already landed.
+    const lateFailedResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${endedSessionId}/status`,
+      headers: { authorization: authHeader },
+      payload: { status: "failed", error: "daemon observed the process exit" },
+    });
+    unsubUpdate();
+    unsubEphemeral();
+
+    // The route still 200s (an honest no-op response), but the underlying
+    // row must stay "ended" — no downgrade, no fan-out, no push.
+    expect(lateFailedResponse.statusCode).toBe(200);
+    expect(updates).toHaveLength(0);
+    expect(ephemerals).toHaveLength(0);
+    expect(pushDispatcher.calls).toHaveLength(0);
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+    });
+    const row = getResponse.json().sessions.find((s: { id: string }) => s.id === endedSessionId);
+    expect(row.status).toBe("ended");
+  });
+
   it("404s for a session that doesn't belong to the caller", async () => {
     const { authHeader: otherHeader } = await createTestAccount(db);
     const response = await app.inject({

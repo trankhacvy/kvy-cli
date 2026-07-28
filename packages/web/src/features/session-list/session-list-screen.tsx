@@ -44,6 +44,17 @@ import type { UseSessionListSnapshot } from "./types";
  * `/completed/` screen (`CompletedSessionsScreen`) instead. `group.ts` itself
  * stays filter-free so that screen can reuse the exact same
  * `groupSessionsByWorkspace` over the complementary (archived-only) subset.
+ *
+ * B5 (new-session-from-web redesign, see the task's own header comment): the
+ * old standalone "New session" wizard/route is retired — a session now
+ * always starts from the `+` on an existing `WorkspaceSection` row
+ * (`components/new-session-panel.tsx`), since a workspace only exists
+ * server-side once `falcon` has actually run there once. That leaves one
+ * genuine gap this screen still has to cover honestly: an account with
+ * machines but literally zero sessions ever run has no workspace row to put
+ * a `+` on yet. That "no sessions yet" branch below shows static
+ * CLI-pointing guidance (mirroring `FirstMachineOnboarding`'s tone) instead
+ * of a button, rather than keeping a dead link to a removed route alive.
  */
 export function SessionListScreen({
   useData = useLiveSessionListSnapshot,
@@ -93,11 +104,9 @@ export function SessionListScreen({
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
           Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on one of
-          your machines to start one — it shows up here automatically. Or start one remotely:
+          your machines to start one — it shows up here automatically, and you'll be able to start
+          more sessions in that same project right from here.
         </p>
-        <Button asChild>
-          <Link href="/dashboard/session/new/">New session</Link>
-        </Button>
       </div>
     );
   }
@@ -110,11 +119,6 @@ export function SessionListScreen({
           <Button asChild variant="outline" size="sm">
             <Link href="/dashboard/completed/">Completed</Link>
           </Button>
-          {hasMachines && (
-            <Button asChild size="sm">
-              <Link href="/dashboard/session/new/">New session</Link>
-            </Button>
-          )}
         </div>
       </div>
       {groups.map((group) => (

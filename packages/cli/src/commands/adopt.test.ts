@@ -175,6 +175,7 @@ describe("runAdoptCommand", () => {
         method: "tmux" as const,
         pid: 999,
         tmuxSessionName: "x",
+        watchExit: () => () => {},
       }));
       const code = await runAdoptCommand(
         { list: false, remote: true },

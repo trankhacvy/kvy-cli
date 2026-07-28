@@ -35,12 +35,13 @@ describe("spawnSession", () => {
   });
 
   function baseDeps(overrides: Partial<SpawnEngineDeps> = {}): SpawnEngineDeps {
-    const launched: LaunchedProcess = { method: "detached", pid: 4242 };
+    const launched: LaunchedProcess = { method: "detached", pid: 4242, watchExit: () => () => {} };
     return {
       resolveWorkspaceRoot: () => root,
       awaiter: {
         waitFor: vi.fn(async (pid: number) => ({ sessionId: "sess_new", pid })),
         resolve: vi.fn(() => true),
+        reject: vi.fn(() => true),
       },
       launchProcess: vi.fn(async () => launched),
       falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
@@ -71,7 +72,42 @@ describe("spawnSession", () => {
       }),
       undefined,
     );
-    expect(deps.awaiter.waitFor).toHaveBeenCalledExactlyOnceWith(4242);
+    // A3: `spawnEngine.ts` now hands the launched process's `watchExit`
+    // through to the awaiter so it can reject fast on a dead child.
+    expect(deps.awaiter.waitFor).toHaveBeenCalledExactlyOnceWith(4242, {
+      watchExit: expect.any(Function),
+    });
+  });
+
+  // A5: once a spawn's sessionId is known, `onSessionTracked` is called with
+  // that sessionId and the SAME launched process's `watchExit` — this is the
+  // hook `machineIntegration.ts`'s `watchForUnreportedDeath` uses to notice
+  // a later, unreported death.
+  it("calls onSessionTracked with the resolved sessionId and the launched process's watchExit, once resolved", async () => {
+    const onSessionTracked = vi.fn();
+    const deps = baseDeps({ onSessionTracked });
+
+    const result = await spawnSession(baseParams({ directory: root }), deps);
+
+    expect(result).toEqual({ sessionId: "sess_new" });
+    expect(onSessionTracked).toHaveBeenCalledExactlyOnceWith("sess_new", expect.any(Function));
+  });
+
+  it("does not call onSessionTracked when the spawn itself fails (awaiter rejects)", async () => {
+    const onSessionTracked = vi.fn();
+    const deps = baseDeps({
+      onSessionTracked,
+      awaiter: {
+        waitFor: vi.fn(async () => {
+          throw new Error("timed out");
+        }),
+        resolve: vi.fn(() => false),
+        reject: vi.fn(() => false),
+      },
+    });
+
+    await expect(spawnSession(baseParams({ directory: root }), deps)).rejects.toThrow();
+    expect(onSessionTracked).not.toHaveBeenCalled();
   });
 
   it("maps provider claude-code -> claude and codex -> codex in the built argv", async () => {
@@ -154,6 +190,7 @@ describe("spawnSession", () => {
           throw new Error("timed out");
         }),
         resolve: vi.fn(() => false),
+        reject: vi.fn(() => false),
       },
     });
     await expect(spawnSession(baseParams({ directory: root }), deps)).rejects.toThrow(

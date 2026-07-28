@@ -12,6 +12,7 @@ export type SessionListStatus =
   | "working"
   | "waiting-for-permission"
   | "waiting-for-input"
+  | "ready"
   | "idle"
   | "completed"
   | "ended"
@@ -22,7 +23,10 @@ export interface DeriveSessionStatusInput {
   status: SessionListSession["status"];
   /** `null` when the session isn't tied to a machine (no presence to check). */
   machineOnline: boolean | null;
-  items: RenderItem[];
+  /** `null` means this session's message page hasn't decrypted yet — see
+   * `SessionListSession.items`'s own doc comment. Treated as "unknown, not
+   * yet zero" so it degrades to `"idle"`, never a fabricated `"ready"`. */
+  items: RenderItem[] | null;
   attention: AttentionKind | null;
 }
 
@@ -71,10 +75,39 @@ function lastClosedTurnStatus(items: RenderItem[]): "completed" | "failed" | "ca
   return status;
 }
 
+/** Whether `items` contains a `turn-start` ANYWHERE in the session's history
+ * — distinct from `isTurnOpen`, which only tracks the *most recent* turn.
+ * A session that's had three turns and gone quiet has `isTurnOpen() ===
+ * false` but must still read as `"idle"`, not `"ready"`: only a session
+ * that has never once started a turn (`items: []`, or an items list that's
+ * simply never seen a `turn-start`) qualifies as brand-new. */
+function hasEverHadTurn(items: RenderItem[]): boolean {
+  return items.some((item) => item.kind === "turn-start");
+}
+
 /**
  * Derives the Home-screen status for one session. Priority (highest first):
  * terminal session row state → offline → pending permission → pending
- * question → actively working → last-turn outcome → idle.
+ * question → actively working → last-turn outcome → ready/idle.
+ *
+ * `"ready"` vs `"idle"` (docs/known-issues.md #9): both are "nothing is
+ * currently happening", but they mean different things to a user glancing at
+ * Home. A session with zero turns ever (`hasEverHadTurn(items) === false`) is
+ * a freshly started, healthy session that just hasn't been given a first
+ * message yet — `"ready"`. A session with real turn history that's simply
+ * quiet between turns is `"idle"`. Checked last, after `isTurnOpen` and the
+ * last-turn-outcome checks, so an open or just-finished turn always takes
+ * priority over "brand new" even on a session's very first turn.
+ *
+ * `items === null` (this session's message page hasn't decrypted/been
+ * fetched yet — `SessionListSession.items`'s doc comment) is deliberately
+ * NOT treated as "zero turns": every other check above runs against an
+ * empty stand-in so none of them fire, and the function falls through to
+ * `"idle"`, not `"ready"` — the safe, pre-existing default while the real
+ * answer is still unknown. Reporting "ready" here would flash a fabricated
+ * "brand new" badge on every session, with real history or not, for the
+ * span of its own decrypt — the same conflation known-issues.md #9 was
+ * filed to fix, just relocated rather than removed.
  *
  * `"ended"` (plan-v2.md W1.4+B15) is its own terminal row state, distinct
  * from `"completed"`: `completed` describes a *turn* outcome (or an
@@ -97,19 +130,25 @@ function lastClosedTurnStatus(items: RenderItem[]): "completed" | "failed" | "ca
  */
 export function deriveSessionStatus(input: DeriveSessionStatusInput): SessionListStatus {
   const { status, machineOnline, items, attention } = input;
+  // `items === null` (not yet decrypted) runs every check below against an
+  // empty stand-in — none of them can legitimately fire without real data —
+  // so it always falls through to the `items === null` branch at the end.
+  const knownItems = items ?? [];
 
   if (status === "failed") return "failed";
   if (status === "ended") return "ended";
   if (status === "archived" || status === "compacted") return "completed";
   if (machineOnline === false) return "offline";
 
-  if (hasPendingPermission(items)) return "waiting-for-permission";
+  if (hasPendingPermission(knownItems)) return "waiting-for-permission";
   if (attention === "question") return "waiting-for-input";
-  if (isTurnOpen(items)) return "working";
+  if (isTurnOpen(knownItems)) return "working";
 
-  const lastTurn = lastClosedTurnStatus(items);
+  const lastTurn = lastClosedTurnStatus(knownItems);
   if (lastTurn === "failed" || attention === "failed") return "failed";
   if (attention === "done") return "completed";
+  if (items === null) return "idle";
+  if (!hasEverHadTurn(items)) return "ready";
   return "idle";
 }
 
@@ -129,6 +168,11 @@ export const SESSION_STATUS_META: Record<SessionListStatus, SessionStatusMeta> =
     pulse: true,
   },
   "waiting-for-input": { label: "Needs input", dotClassName: "bg-amber-500", pulse: true },
+  // A brand-new session with no turns yet — deliberately a calmer, "alive"
+  // color distinct from both the muted `idle` grey (which would read as
+  // "possibly abandoned" on a session that was just created) and the amber
+  // "needs attention" family used by the two waiting-* states above.
+  ready: { label: "Ready", dotClassName: "bg-sky-500", pulse: false },
   idle: { label: "Idle", dotClassName: "bg-muted-foreground/50", pulse: false },
   completed: { label: "Completed", dotClassName: "bg-emerald-500", pulse: false },
   ended: { label: "Ended", dotClassName: "bg-slate-500", pulse: false },

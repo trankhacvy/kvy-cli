@@ -41,13 +41,28 @@ const SessionStatusResponseSchema = z.object({ status: z.enum(["failed", "ended"
  * transitions a session to one of these two terminal statuses, and takes no
  * `expectedVersion`.
  *
- * Rationale for skipping CAS here: this route exists for exactly one
- * caller shape — a CLI session process's best-effort exit/crash report,
- * fired from `start.ts`'s normal-exit path or a signal/uncaught-exception
- * handler that may itself be racing the process's own shutdown. A dropped/
- * duplicate retry of that POST must still succeed the same way (idempotent),
- * and there is no legitimate concurrent writer to lose a race against:
- * nothing else on `main` today transitions `sessions.status` at all.
+ * Rationale for skipping full optimistic-concurrency CAS here: this route
+ * exists for exactly one caller shape — a best-effort exit/crash report,
+ * fired from `start.ts`'s normal-exit path, a signal/uncaught-exception
+ * handler racing the process's own shutdown, OR (docs/known-issues.md —
+ * "orphaned active session rows when the process dies after DB-row
+ * creation, on an otherwise-healthy machine", the CLI-side fix is
+ * `daemon/machineIntegration.ts`'s `watchForUnreportedDeath`) the DAEMON's
+ * own best-effort fallback report when it observes a spawned process exit
+ * without ever seeing the session's own clean report land. A dropped/
+ * duplicate retry of that POST must still succeed the same way (idempotent).
+ *
+ * That second caller IS a second legitimate writer, though — unlike the
+ * original single-writer assumption, `failed` can now race a session's own
+ * `ended` report (deliberately imprecise on purpose: the daemon can't always
+ * tell whether the process's own exit was clean, so it reports on nearly any
+ * exit and lets the server decide whether it still matters). The one targeted
+ * guard below — `failed` only ever applies to a session still `active` — is
+ * what keeps that safe: a late/redundant daemon report can never downgrade an
+ * already-`ended` (or already-`failed`) session back to `failed`. `ended`
+ * itself stays unconditional (any status -> `ended`, unless already `ended`)
+ * since only the CLI's own authoritative graceful-exit report ever sends it.
+ *
  * Explicit archive (`POST .../archive`, design §6.2) and any richer status
  * lifecycle are separate, out-of-scope future work (plan.md §16 "1.4
  * Transcript pipeline").
@@ -90,10 +105,39 @@ export function buildSessionStatusRoutes(
           // exact status.
           if (session.status === status) return { outcome: "already-set" as const };
 
-          await tx
+          // `failed` now has a second legitimate writer (the daemon's own
+          // best-effort fallback report, `machineIntegration.ts`'s
+          // `watchForUnreportedDeath` — see this route's own doc comment).
+          // Guard it to only ever apply to a still-`active` session so a
+          // late/imprecise daemon report can never downgrade a session that
+          // already reported its own `ended`/`failed` outcome. `ended` stays
+          // unconditional — only the CLI's own authoritative graceful-exit
+          // report ever sends it, so there is still only one writer for it.
+          if (status === "failed" && session.status !== "active") {
+            return { outcome: "already-set" as const };
+          }
+
+          const updated = await tx
             .update(sessions)
             .set({ status, updatedAt: new Date() })
-            .where(and(eq(sessions.id, id), eq(sessions.accountId, accountId)));
+            .where(
+              and(
+                eq(sessions.id, id),
+                eq(sessions.accountId, accountId),
+                ...(status === "failed" ? [eq(sessions.status, "active")] : []),
+              ),
+            )
+            .returning();
+
+          // Re-check the affected-row count for the `failed` path — a
+          // concurrent writer (the CLI's own report, or a second daemon
+          // fallback call) could have moved the session off `active` between
+          // the read above and this statement (READ COMMITTED). Losing that
+          // race is a no-op, not an error — matches `staleSessions.ts`'s own
+          // `.returning()`-based CAS pattern.
+          if (status === "failed" && updated.length === 0) {
+            return { outcome: "already-set" as const };
+          }
 
           const headerSeq = await allocHeaderSeq(tx, accountId);
           return { outcome: "updated" as const, headerSeq };

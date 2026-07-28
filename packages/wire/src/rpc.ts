@@ -542,6 +542,52 @@ export type WorkspaceUnregisterParams = z.infer<typeof WorkspaceUnregisterParams
 export const WorkspaceUnregisterResultSchema = z.object({ ok: z.boolean() });
 export type WorkspaceUnregisterResult = z.infer<typeof WorkspaceUnregisterResultSchema>;
 
+// `worktree.remove` (Phase C, new-session-from-web redesign — see
+// `packages/web/src/features/session-list/inline-spawn.ts`'s own header
+// comment: every session from the workspace-row `+` flow now creates a
+// fresh `.worktrees/<branch>` directory, and this codebase has no cleanup
+// lifecycle at all — `.worktrees/` dirs and branches accumulate forever).
+// A manual "clean up this session's worktree" action, deliberately never
+// automatic (no cleanup-on-session-end: the user may still want to work in
+// that worktree after the session ends). `worktree` is the exact linked
+// worktree directory to remove — for a session spawned via this flow
+// that's the session's own `workspaceId` (`commands/start.ts` registers
+// the CHILD process's cwd, which for a worktree-mode spawn IS the worktree
+// itself, as its own workspace entry — distinct from its parent repo's
+// entry, which is what makes the worktree path independently resolvable
+// and safe to target here without needing a second, separate field).
+//
+// `force` mirrors `git worktree remove`'s own semantics honestly rather
+// than picking a default for the caller: a plain `git worktree remove`
+// refuses (leaving the worktree untouched) when it contains uncommitted or
+// untracked changes, and the daemon's handler (`worktreeRemove.ts`) surfaces
+// that refusal back as `requiresForce` rather than silently discarding the
+// work OR silently failing with a bare git error — the caller re-confirms
+// with the user and retries with `force: true` (same two-step shape as the
+// `create-directory`/`register-workspace` approval loops `spawn` already
+// uses). `deleteBranch` is a SEPARATE, additive destructive step — deleting
+// a branch is harder to reverse than removing a worktree directory, so it's
+// never implied by `force` alone; `branchDeleted` in the result reports
+// whether it actually happened (a branch-delete failure after a successful
+// worktree removal does not fail the whole call — the safe part already
+// succeeded).
+export const WorktreeRemoveParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  force: z.boolean().optional(),
+  deleteBranch: z.boolean().optional(),
+});
+export type WorktreeRemoveParams = z.infer<typeof WorktreeRemoveParamsSchema>;
+
+export const WorktreeRemoveResultSchema = z.object({
+  removed: z.boolean(),
+  /** `true` only when `removed` is `false` because `git worktree remove` refused over uncommitted/untracked changes — the caller should confirm with the user and retry with `force: true`. Any other failure throws instead (a genuinely unauthorized/not-a-worktree/git-error case), same as `spawn`'s `requiresApproval` vs. throw split. */
+  requiresForce: z.boolean().optional(),
+  /** Set (to `true` or `false`) only when `deleteBranch` was requested and the worktree was actually removed — omitted otherwise. */
+  branchDeleted: z.boolean().optional(),
+});
+export type WorktreeRemoveResult = z.infer<typeof WorktreeRemoveResultSchema>;
+
 export const AdoptListParamsSchema = z.object({
   idempotencyKey: z.string(),
   workspaceId: z.string(),

@@ -42,6 +42,7 @@ function fakeAwaiter(sessionId: string): SpawnAwaiter {
   return {
     waitFor: vi.fn(async (pid: number) => ({ sessionId, pid })),
     resolve: vi.fn(() => true),
+    reject: vi.fn(() => true),
   };
 }
 
@@ -151,7 +152,11 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
     const freshDaemon = createSessionRegistry({ homeDir });
     await freshDaemon.restore();
 
-    const launchProcess = vi.fn(async () => ({ method: "detached" as const, pid: 7777 }));
+    const launchProcess = vi.fn(async () => ({
+      method: "detached" as const,
+      pid: 7777,
+      watchExit: () => () => {},
+    }));
     const result = await resumeSession("sess_1", {
       registry: freshDaemon,
       awaiter: fakeAwaiter("sess_1"),
@@ -196,7 +201,11 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
       registry: restarted,
       awaiter: fakeAwaiter("sess_1"),
       resolveDirectory: () => "/tmp/proj",
-      launchProcess: vi.fn(async () => ({ method: "detached" as const, pid: 200 })),
+      launchProcess: vi.fn(async () => ({
+        method: "detached" as const,
+        pid: 200,
+        watchExit: () => () => {},
+      })),
       falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
     });
 

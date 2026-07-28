@@ -15,7 +15,10 @@ import type {
   installRemotePermissionHook as installRemotePermissionHookType,
   RemotePermissionHookHandle,
 } from "../claude/remotePermissionHook.js";
-import type { notifyDaemonSessionStarted as notifyDaemonSessionStartedType } from "../daemon/notify.js";
+import type {
+  notifyDaemonSessionStarted as notifyDaemonSessionStartedType,
+  reportSessionStartFailed as reportSessionStartFailedType,
+} from "../daemon/notify.js";
 import type { DaemonState } from "../daemon/state.js";
 import type { ClaudeCliLocation } from "../provider/claudeCliLocator.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
@@ -199,6 +202,9 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     notifyDaemonSessionStarted: vi.fn(async () => ({
       type: "no-daemon",
     })) as unknown as typeof notifyDaemonSessionStartedType,
+    reportSessionStartFailed: vi.fn(async () => ({
+      type: "no-daemon",
+    })) as unknown as typeof reportSessionStartFailedType,
     sleep: async () => {},
     now: () => 0,
     write: (text: string) => {
@@ -291,6 +297,45 @@ describe("runStartClaudeCommand — preflight", () => {
     expect(code).toBe(1);
     expect(stderr.join("")).toContain("failed to start session");
     expect(startPtyClaudeSession).not.toHaveBeenCalled();
+  });
+
+  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+  // reason"): a `bootstrapSession()` failure must also best-effort self-
+  // report the real error to the daemon (`/session-start-failed`) so a
+  // daemon-initiated spawn's `spawnAwaiter` can surface it, not just the
+  // stderr line a headless/daemon-spawned process has no one to read.
+  it("self-reports a bootstrapSession failure to the daemon via reportSessionStartFailed", async () => {
+    const reportSessionStartFailed = vi.fn(async () => ({ type: "ok" as const }));
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        bootstrapSession: vi.fn(async () => {
+          throw new Error("You've reached your limit of 3 running sessions.");
+        }) as unknown as typeof bootstrapSessionType,
+        reportSessionStartFailed:
+          reportSessionStartFailed as unknown as typeof reportSessionStartFailedType,
+      }),
+    );
+    expect(code).toBe(1);
+    expect(reportSessionStartFailed).toHaveBeenCalledOnce();
+    const [, params] = reportSessionStartFailed.mock.calls[0] as unknown as [
+      unknown,
+      { error: string },
+    ];
+    expect(params.error).toBe("You've reached your limit of 3 running sessions.");
+  });
+
+  it("still returns exit code 1 even when reportSessionStartFailed itself reports no daemon present (best-effort, never blocks the failure path)", async () => {
+    const reportSessionStartFailed = vi.fn(async () => ({ type: "no-daemon" as const }));
+    const code = await runStartClaudeCommand(
+      baseDeps({
+        bootstrapSession: vi.fn(async () => {
+          throw new Error("boom");
+        }) as unknown as typeof bootstrapSessionType,
+        reportSessionStartFailed:
+          reportSessionStartFailed as unknown as typeof reportSessionStartFailedType,
+      }),
+    );
+    expect(code).toBe(1);
   });
 });
 

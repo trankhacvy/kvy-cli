@@ -86,12 +86,47 @@ async function ensureRootPackageJson(homeDir: string): Promise<void> {
 }
 
 /**
+ * In-process de-dup for concurrent `installAdapter` calls targeting the same
+ * `(id, homeDir, force)`. `AcpConnection.connect()`'s A2 auto-install (see
+ * `acp/acpConnection.ts`) means this is no longer only ever reached by a
+ * single deliberate `falcon adapters install` invocation — two sessions
+ * spawned in quick succession on a machine that's never had an adapter
+ * installed can both hit `connect()` and both find `"not-installed"` before
+ * either has finished installing it. Without this, both would run a real
+ * `npm install` concurrently into the SAME `~/.falcon/adapters/` directory,
+ * which is a genuine "two writers, one node_modules" hazard (not just
+ * wasted work) — `runNpm`/`npm install` itself has no cross-invocation
+ * locking here. Keyed on `homeDir` (not just `id`) so this stays a pure
+ * production safety net and never collapses two genuinely-different test
+ * fixtures (each test uses its own temp `homeDir`) into one cached result;
+ * keyed on `force` too so a rare concurrent `falcon adapters upgrade`
+ * (`force: true`) never shares a promise with an unrelated auto-install.
+ */
+const inFlightInstalls = new Map<string, Promise<AdapterInstallOutcome>>();
+
+/**
  * Installs (or, with `force: true`, force-reinstalls) a single pinned
  * adapter. Idempotent by default: if the currently-installed package
  * already matches the manifest's version + integrity, this is a no-op that
  * reports `"already-satisfied"` without touching the network.
  */
 export async function installAdapter(
+  id: AdapterId,
+  deps: AdapterInstallDeps,
+  opts: { force?: boolean } = {},
+): Promise<AdapterInstallOutcome> {
+  const dedupeKey = `${id}::${deps.homeDir}::${opts.force ? "force" : "normal"}`;
+  const inFlight = inFlightInstalls.get(dedupeKey);
+  if (inFlight) return inFlight;
+
+  const promise = installAdapterUncached(id, deps, opts).finally(() => {
+    inFlightInstalls.delete(dedupeKey);
+  });
+  inFlightInstalls.set(dedupeKey, promise);
+  return promise;
+}
+
+async function installAdapterUncached(
   id: AdapterId,
   deps: AdapterInstallDeps,
   opts: { force?: boolean } = {},

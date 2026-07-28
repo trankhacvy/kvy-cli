@@ -68,8 +68,12 @@ import {
   type ResumeSessionResponse,
   type SessionNotification,
 } from "@agentclientprotocol/sdk";
-import type { AdapterId, ResolveAdapterSpawnResult } from "../adapters/index.js";
-import { resolveAdapterSpawn } from "../adapters/index.js";
+import type {
+  AdapterId,
+  AdapterInstallOutcome,
+  ResolveAdapterSpawnResult,
+} from "../adapters/index.js";
+import { installAdapter, resolveAdapterSpawn } from "../adapters/index.js";
 import type { Logger } from "../logger.js";
 
 /** Design: "initialize handshake declaring client capabilities (no fs, no terminal initially)". `fs` stays unset (no filesystem capability advertised at all); `terminal` is explicit `false` for clarity. */
@@ -108,6 +112,18 @@ export interface AcpConnectionDeps {
   spawn?: SpawnFn;
   /** Injectable for tests; defaults to `process.execPath`. */
   execPath?: string;
+  /**
+   * Injectable for tests; defaults to the real adapter-manager `installAdapter`
+   * (A2 — auto-install fallback, design §7.9). Only ever invoked when
+   * `resolveSpawn` reports `reason: "not-installed"` — see `connect()`'s doc
+   * comment for why the other verify-failure reasons are deliberately NOT
+   * auto-remediated here.
+   */
+  installAdapter?: (
+    id: AdapterId,
+    deps: { homeDir: string },
+    opts?: { force?: boolean },
+  ) => Promise<AdapterInstallOutcome>;
 }
 
 export type SessionUpdateListener = (notification: SessionNotification) => void;
@@ -291,7 +307,63 @@ export class AcpConnection {
 
     const resolveSpawn = this.deps.resolveSpawn ?? resolveAdapterSpawn;
     const execPath = this.deps.execPath ?? process.execPath;
-    const spawnResult = await resolveSpawn(this.options.adapterId, this.options.homeDir, execPath);
+    const logger = this.logger;
+    let spawnResult = await resolveSpawn(this.options.adapterId, this.options.homeDir, execPath);
+
+    // A2 (design §7.9): a daemon-initiated spawn used to report "started"
+    // (via the notify self-report `start.ts`/`startCodex.ts` fire right
+    // after `bootstrapSession()`) long before this connect() ever ran — the
+    // ACP connection only opens later inside `runRemoteLoop()`. If the
+    // adapter was simply never installed (the clean, common first-run case —
+    // `falcon adapters install` was never run and no prior spawn attempt
+    // installed it either), a web user would see a session that looked live
+    // and then silently broke. Auto-install once, here, so the first
+    // daemon-initiated spawn just works.
+    //
+    // Deliberately scoped to ONLY `reason === "not-installed"`. The other
+    // verify-failure reasons are left alone and still fail loudly:
+    //   - "version-mismatch": the manifest was bumped since the last
+    //     install. Silently reinstalling here would mask a real upgrade
+    //     event behind an opaque connect failure/retry; the explicit
+    //     `falcon adapters upgrade` path exists precisely so a version
+    //     change is a visible, intentional action, not something that
+    //     happens invisibly on a background daemon spawn.
+    //   - "integrity-mismatch": the installed bytes don't match the pinned
+    //     hash — this is exactly the "corrupted/tampered/downgraded
+    //     install" case `verify.ts`'s own doc comment calls out as real,
+    //     load-bearing verification. Auto-reinstalling over it would
+    //     silently paper over a signal that something on disk doesn't match
+    //     what Falcon shipped a hash for, which defeats the point of having
+    //     the check at all — this must surface to a human (or `falcon
+    //     doctor`), not be quietly "fixed".
+    //   - "entry-missing": lock says the right version+integrity is present
+    //     but the spawn entrypoint file itself is gone (e.g. a partially
+    //     deleted `node_modules`). This is arguably as safe to
+    //     auto-remediate as "not-installed", but it's a rare enough state
+    //     (and cheap enough to diagnose via `falcon doctor`/`adapters
+    //     install`) that treating it the same as a real mismatch — fail
+    //     loudly rather than silently reinstall — was chosen to keep this
+    //     auto-install path narrow and easy to reason about.
+    if (!spawnResult.ok && spawnResult.reason === "not-installed") {
+      logger.info(
+        `[acp-connection] adapter "${this.options.adapterId}" is not installed — auto-installing before spawn`,
+      );
+      const doInstallAdapter = this.deps.installAdapter ?? installAdapter;
+      const installOutcome = await doInstallAdapter(this.options.adapterId, {
+        homeDir: this.options.homeDir,
+      });
+      if (!installOutcome.ok) {
+        this.state = "closed";
+        throw new AcpConnectionError(
+          `ACP adapter "${this.options.adapterId}" is not installed and auto-install failed: ${installOutcome.error}`,
+        );
+      }
+      logger.info(
+        `[acp-connection] auto-installed adapter "${this.options.adapterId}" (${installOutcome.status}, v${installOutcome.version})`,
+      );
+      spawnResult = await resolveSpawn(this.options.adapterId, this.options.homeDir, execPath);
+    }
+
     if (!spawnResult.ok) {
       this.state = "closed";
       throw new AcpConnectionError(

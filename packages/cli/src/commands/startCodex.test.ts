@@ -8,6 +8,10 @@ import type { AcpRemoteHandle } from "../acp/acpRemote.js";
 import type { FalconCredentials } from "../auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { ProviderDetectionResult } from "../codex/index.js";
+import type {
+  notifyDaemonSessionStarted as notifyDaemonSessionStartedType,
+  reportSessionStartFailed as reportSessionStartFailedType,
+} from "../daemon/notify.js";
 import type { DaemonState } from "../daemon/state.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
@@ -103,6 +107,15 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
       tag: "tag-1",
       created: true,
     })) as unknown as typeof bootstrapSessionType,
+    // A1: never let a unit test hit a real daemon control server — default
+    // to the always-succeeding "no daemon" fake, same precedent as
+    // `start.test.ts`'s `baseDeps`.
+    notifyDaemonSessionStarted: vi.fn(async () => ({
+      type: "no-daemon" as const,
+    })) as unknown as typeof notifyDaemonSessionStartedType,
+    reportSessionStartFailed: vi.fn(async () => ({
+      type: "no-daemon" as const,
+    })) as unknown as typeof reportSessionStartFailedType,
     startAcpRemote: ((opts: { onTurnSettled?: typeof onTurnSettled }) => {
       onTurnSettled = opts.onTurnSettled;
       return handle;
@@ -145,6 +158,39 @@ describe("runStartCodexCommand", () => {
     expect(errors[0]).toContain("Codex CLI is not installed");
   });
 
+  it("surfaces a bootstrapSession failure as an honest error instead of throwing", async () => {
+    const { deps, errors } = baseDeps({
+      bootstrapSession: vi.fn(async () => {
+        throw new Error("server rejected session create");
+      }) as unknown as typeof bootstrapSessionType,
+    });
+    const code = await runStartCodexCommand(deps);
+    expect(code).toBe(1);
+    expect(errors.join("")).toContain("failed to start session");
+  });
+
+  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
+  // reason"): same self-report as `start.ts` on a `bootstrapSession()`
+  // failure, so a daemon-initiated Codex spawn surfaces the real error.
+  it("self-reports a bootstrapSession failure to the daemon via reportSessionStartFailed", async () => {
+    const reportSessionStartFailed = vi.fn(async () => ({ type: "ok" as const }));
+    const { deps } = baseDeps({
+      bootstrapSession: vi.fn(async () => {
+        throw new Error("You've reached your limit of 3 running sessions.");
+      }) as unknown as typeof bootstrapSessionType,
+      reportSessionStartFailed:
+        reportSessionStartFailed as unknown as typeof reportSessionStartFailedType,
+    });
+    const code = await runStartCodexCommand(deps);
+    expect(code).toBe(1);
+    expect(reportSessionStartFailed).toHaveBeenCalledOnce();
+    const [, params] = reportSessionStartFailed.mock.calls[0] as unknown as [
+      unknown,
+      { error: string },
+    ];
+    expect(params.error).toBe("You've reached your limit of 3 running sessions.");
+  });
+
   it("starts the codex-adapter AcpRemote, prints the no-local-mode note, and stops cleanly on exit", async () => {
     const startAcpRemote = vi.fn((opts: { adapterId?: string }) => {
       expect(opts.adapterId).toBe("codex");
@@ -161,6 +207,64 @@ describe("runStartCodexCommand", () => {
     expect(code).toBe(0);
     expect(startAcpRemote).toHaveBeenCalledOnce();
     expect(written.join("")).toContain("Codex has no local terminal mode");
+  });
+
+  // A1 (docs/known-issues.md — Codex daemon-spawn timeout): `start.ts` calls
+  // `notifyDaemonSessionStarted` right after `bootstrapSession()` succeeds so
+  // a daemon-initiated `spawn` RPC's `spawnAwaiter` can resolve instead of
+  // always timing out after 15s. `startCodex.ts` previously never called it
+  // at all.
+  it("self-reports to the daemon via notifyDaemonSessionStarted once bootstrapSession succeeds", async () => {
+    const notifyDaemonSessionStarted = vi.fn(async () => ({ type: "ok" as const }));
+    const { deps, releaseExit } = baseDeps({
+      notifyDaemonSessionStarted:
+        notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    expect(notifyDaemonSessionStarted).toHaveBeenCalledOnce();
+    const [, params] = notifyDaemonSessionStarted.mock.calls[0] as unknown as [
+      unknown,
+      { sessionId: string; encryption?: { encryptionKey: string } },
+    ];
+    expect(params.sessionId).toBe("sess_codex_1");
+    expect(params.encryption?.encryptionKey).toEqual(expect.any(String));
+  });
+
+  it("still starts the session successfully when notifyDaemonSessionStarted reports no daemon present (best-effort, never blocks startup)", async () => {
+    const notifyDaemonSessionStarted = vi.fn(async () => ({ type: "no-daemon" as const }));
+    const { deps, releaseExit, written } = baseDeps({
+      notifyDaemonSessionStarted:
+        notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    const code = await run;
+
+    expect(code).toBe(0);
+    expect(written.join("")).toContain("starting session sess_codex_1");
+  });
+
+  it("never blocks or fails session startup even if notifyDaemonSessionStarted itself throws unexpectedly", async () => {
+    // notifyDaemonSessionStarted's real implementation never throws (typed
+    // result), but this proves startCodex.ts doesn't newly depend on that —
+    // an unawaited/uncaught rejection here must not be able to crash the
+    // session start.
+    const notifyDaemonSessionStarted = vi.fn(async () => {
+      throw new Error("unexpected daemon failure");
+    });
+    const { deps, releaseExit } = baseDeps({
+      notifyDaemonSessionStarted:
+        notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await expect(run).rejects.toThrow("unexpected daemon failure");
   });
 
   it("extracts a --model override from codexArgs into the session metadata (plan-v2.md W4.2 header model chip)", async () => {

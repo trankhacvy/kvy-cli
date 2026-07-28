@@ -117,6 +117,67 @@ describe("installAdapter", () => {
   it("AdapterIntegrityError is exported for callers that want to distinguish the failure class", () => {
     expect(new AdapterIntegrityError("x")).toBeInstanceOf(Error);
   });
+
+  it("dedupes concurrent calls for the same (id, homeDir, force) — never runs npm install twice in parallel", async () => {
+    // A2's auto-install (`AcpConnection.connect()`) can trigger this from
+    // two sessions spawned in quick succession on a machine that's never
+    // had the adapter installed. Without de-duping, both would run a real
+    // `npm install` concurrently into the same `node_modules` — a genuine
+    // "two writers, one directory" hazard, not just wasted work.
+    let releaseNpm: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseNpm = resolve;
+    });
+    const realFake = fakeNpmInstall();
+    const runNpm = vi.fn(async (args: string[], cwd: string) => {
+      await gate;
+      return realFake(args, cwd);
+    });
+
+    const first = installAdapter("claude-code", { homeDir, runNpm });
+    const second = installAdapter("claude-code", { homeDir, runNpm });
+
+    // Both calls do real fs work (`ensureRootPackageJson`, `verifyAdapterInstall`)
+    // before reaching `runNpm`, so wait for the call rather than assuming a
+    // fixed microtask-tick count — the actual assertion is "only ONE call
+    // ever happens, no matter how many concurrent callers are waiting on it".
+    await vi.waitFor(() => {
+      expect(runNpm).toHaveBeenCalledTimes(1);
+    });
+    // Give the second (deduped) caller's own fs work a chance to run too —
+    // if de-duping weren't working, it would have started its own `runNpm`
+    // call by now instead of just awaiting the first's shared promise.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(runNpm).toHaveBeenCalledTimes(1);
+
+    releaseNpm?.();
+    const [firstOutcome, secondOutcome] = await Promise.all([first, second]);
+    expect(firstOutcome).toEqual(secondOutcome);
+    expect(firstOutcome.ok).toBe(true);
+    // The real underlying install work (the wrapped `fakeNpmInstall`) still
+    // only ran once — the second caller got the first's shared result.
+    expect(realFake).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT dedupe calls for different homeDirs — concurrent installs for different test fixtures (or, in production, this never happens since one daemon process only ever has one homeDir) stay independent", async () => {
+    const otherHomeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-install-other-"));
+    try {
+      const runNpmA = fakeNpmInstall();
+      const runNpmB = fakeNpmInstall();
+
+      const [a, b] = await Promise.all([
+        installAdapter("claude-code", { homeDir, runNpm: runNpmA }),
+        installAdapter("claude-code", { homeDir: otherHomeDir, runNpm: runNpmB }),
+      ]);
+
+      expect(runNpmA).toHaveBeenCalledTimes(1);
+      expect(runNpmB).toHaveBeenCalledTimes(1);
+      expect(a.ok).toBe(true);
+      expect(b.ok).toBe(true);
+    } finally {
+      await rm(otherHomeDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("installAllAdapters", () => {
