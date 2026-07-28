@@ -9,7 +9,6 @@ import type { EphemeralSource } from "@/features/session-control";
 import { getSessionMessages } from "@/lib/api";
 import { getToken } from "@/lib/session";
 import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
-import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { apiSocket, decryptMessageBatches, type MessagesQueryData, messagesQueryKey } from "@/sync";
 import { type RenderItem, reduceEnvelopes } from "@/sync/reducer";
 import type {
@@ -20,12 +19,14 @@ import type {
   SessionListWorkspace,
   UseSessionListSnapshot,
 } from "./types";
+import type { DecryptedTitles } from "./use-decrypted-titles";
 import {
   deriveMachineOnline,
   deriveMachineStatus,
   type MachinePresence,
   useMachinePresence,
 } from "./use-machine-presence";
+import { useWorkspaceIndexContext } from "./workspace-index-context";
 
 /**
  * The Home screen's real `UseSessionListSnapshot` (falcon-system-design.md
@@ -84,11 +85,6 @@ import {
  * open session at a time.
  */
 
-const UNTITLED_SESSION = "(untitled session)";
-const UNNAMED_MACHINE = "(unnamed machine)";
-const EMPTY_SESSIONS: SessionRow[] = [];
-const EMPTY_MACHINES: MachineRow[] = [];
-
 /** `session.workspaceId` (when set) *is* a workspace's registered real
  * absolute path — there's no separate workspace-name lookup on the server
  * (the `workspaces` table exists in `schema.ts` but no route ever
@@ -101,117 +97,6 @@ function workspaceNameFromId(workspaceId: string): string {
   const trimmed = workspaceId.replace(/[/\\]+$/, "");
   const base = trimmed.split(/[/\\]/).pop();
   return base && base.length > 0 ? base : workspaceId;
-}
-
-/** A session's decrypted title plus its Pin flag (docs/features/
- * session-lifecycle-actions.md Phase 4) — both live in the same encrypted
- * metadata blob, so one `open()` call resolves both at once. */
-interface DecryptedSessionMeta {
-  title: string;
-  pinned: boolean;
-}
-
-interface DecryptedTitles {
-  sessions: Map<string, DecryptedSessionMeta>;
-  machines: Map<string, string>;
-}
-
-const EMPTY_TITLES: DecryptedTitles = { sessions: new Map(), machines: new Map() };
-
-async function decryptSessionMeta(
-  bridge: CryptoBridgeClient,
-  session: SessionRow,
-): Promise<DecryptedSessionMeta> {
-  try {
-    const ok = await bridge.setSessionKey(decodeBase64(session.dek));
-    if (!ok) return { title: UNTITLED_SESSION, pinned: false };
-    const opened = await bridge.open<{ title?: unknown; pinned?: unknown }>(session.metadata.value);
-    const title =
-      opened && typeof opened.title === "string" && opened.title.length > 0
-        ? opened.title
-        : UNTITLED_SESSION;
-    const pinned = opened?.pinned === true;
-    return { title, pinned };
-  } catch (err) {
-    console.error(`live-source: failed to decrypt session ${session.id}'s metadata`, err);
-    return { title: UNTITLED_SESSION, pinned: false };
-  }
-}
-
-async function decryptMachineName(
-  bridge: CryptoBridgeClient,
-  machine: MachineRow,
-): Promise<string> {
-  try {
-    const ok = await bridge.setSessionKey(decodeBase64(machine.dek));
-    if (!ok) return UNNAMED_MACHINE;
-    const opened = await bridge.open<{ host?: unknown }>(machine.metadata.value);
-    if (opened && typeof opened.host === "string" && opened.host.length > 0) {
-      return opened.host;
-    }
-    return UNNAMED_MACHINE;
-  } catch (err) {
-    console.error(`live-source: failed to decrypt machine ${machine.id}'s metadata`, err);
-    return UNNAMED_MACHINE;
-  }
-}
-
-/**
- * Decrypts every session/machine title in `sessions`/`machines`, re-running
- * only for rows this hook hasn't already decrypted at their current
- * `metadata.version` (a version bump — e.g. a title rename — is the only
- * thing that invalidates a cached title; unrelated row changes like a status
- * flip reuse the cached value instead of re-hitting the crypto worker on
- * every sync-engine patch).
- */
-function useDecryptedTitles(
-  sessions: SessionRow[],
-  machines: MachineRow[],
-  bridge: CryptoBridgeClient | null,
-): DecryptedTitles {
-  const [titles, setTitles] = useState<DecryptedTitles>(EMPTY_TITLES);
-  const [versions] = useState(() => new Map<string, number>());
-
-  useEffect(() => {
-    if (!bridge) return;
-    const sessionsToDecrypt = sessions.filter(
-      (s) => versions.get(`s:${s.id}`) !== s.metadata.version,
-    );
-    const machinesToDecrypt = machines.filter(
-      (m) => versions.get(`m:${m.id}`) !== m.metadata.version,
-    );
-    if (sessionsToDecrypt.length === 0 && machinesToDecrypt.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      const nextSessionTitles = new Map<string, DecryptedSessionMeta>();
-      for (const session of sessionsToDecrypt) {
-        if (cancelled) return;
-        nextSessionTitles.set(session.id, await decryptSessionMeta(bridge, session));
-        versions.set(`s:${session.id}`, session.metadata.version);
-      }
-      const nextMachineNames = new Map<string, string>();
-      for (const machine of machinesToDecrypt) {
-        if (cancelled) return;
-        nextMachineNames.set(machine.id, await decryptMachineName(bridge, machine));
-        versions.set(`m:${machine.id}`, machine.metadata.version);
-      }
-      if (cancelled) return;
-      setTitles((prev) => ({
-        sessions: new Map([...prev.sessions, ...nextSessionTitles]),
-        machines: new Map([...prev.machines, ...nextMachineNames]),
-      }));
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-    // `versions` is a stable Map ref (useState initializer) used as a mutable
-    // cache — listing it satisfies useExhaustiveDependencies and never
-    // triggers a re-run, since the reference itself never changes.
-  }, [bridge, sessions, machines, versions]);
-
-  return titles;
 }
 
 /** The newest cached message's `seq` for a fetched page, or `0` for a
@@ -422,16 +307,12 @@ export function buildSnapshot(
  * crypto bridge is ready: a live source has to tolerate "no data yet" at
  * every layer rather than assume a fixture's always-present rows. */
 export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
-  const titlesBridge = useDedicatedCryptoBridge();
-  // Its own worker, deliberately not shared with `titlesBridge` — see the
-  // module doc comment: two independent effects racing `setSessionKey`
-  // calls against one shared worker can decrypt under the wrong key.
+  const { sessionRows, machineRows, titles, isLoading } = useWorkspaceIndexContext();
+  // Its own worker, deliberately not shared with the context's titles bridge
+  // — see the module doc comment: two independent effects racing
+  // `setSessionKey` calls against one shared worker can decrypt under the
+  // wrong key.
   const itemsBridge = useDedicatedCryptoBridge();
-  const query = useSyncSnapshotQuery();
-
-  const sessionRows = query.data?.sessions ?? EMPTY_SESSIONS;
-  const machineRows = query.data?.machines ?? EMPTY_MACHINES;
-  const titles = useDecryptedTitles(sessionRows, machineRows, titlesBridge);
   const presence = useMachinePresence();
   const attention = useLiveAttention();
 
@@ -442,8 +323,8 @@ export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
   return useMemo(
     () => ({
       ...buildSnapshot(sessionRows, machineRows, titles, presence, items, attention),
-      isLoading: query.isLoading,
+      isLoading,
     }),
-    [sessionRows, machineRows, titles, presence, items, attention, query.isLoading],
+    [sessionRows, machineRows, titles, presence, items, attention, isLoading],
   );
 };

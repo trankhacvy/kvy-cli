@@ -1,6 +1,6 @@
 "use client";
 
-import { HomeIcon, type LucideIcon } from "lucide-react";
+import { HomeIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FalconMark } from "@/components/falcon-mark";
@@ -11,7 +11,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
@@ -20,41 +19,18 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import { WorkspaceNav } from "@/components/workspace-nav";
 
-type NavItem = { href: string; label: string; icon: LucideIcon };
-
-// B5 (new-session-from-web redesign, see the task's own header comment):
-// the standalone "New session" nav item/header button that used to link to
-// `/dashboard/session/new/` are retired along with that route — there is no
-// longer a context-free "start a session" entry point. A session now always
-// starts from the `+` on an existing workspace row on Home
-// (`features/session-list/components/new-session-panel.tsx`), so the only
-// nav entry left is Home itself.
-const workspaceNav: NavItem[] = [{ href: "/dashboard/", label: "Sessions", icon: HomeIcon }];
-
-function isActive(pathname: string, href: string): boolean {
-  if (href === "/dashboard/") return pathname === "/dashboard/";
-  return pathname.startsWith(href);
-}
+const HOME_HREF = "/dashboard/";
 
 /**
  * Any route that's "inside" a session (timeline, its git panel, or an
- * unmanaged session) — as opposed to the session list. Collapsing the nav on
- * these routes fully hides it (see `sidebarCollapsible` below) rather than
- * shrinking to an icon rail, so the session content gets the full width
- * (competitive-notes-omnara.md #20).
+ * unmanaged session) — as opposed to the session list. Used below to decide
+ * whether the content area gets full-width, scroll-managed-internally
+ * treatment.
  */
 export function isSessionRoute(pathname: string): boolean {
   return pathname.startsWith("/dashboard/session/");
-}
-
-/**
- * `"offcanvas"` fully removes the sidebar (width 0) when collapsed, giving a
- * genuinely full-width view; `"icon"` (the default everywhere else) leaves a
- * narrow icon-only rail so the rest of the app keeps quick nav access.
- */
-export function sidebarCollapsible(pathname: string): "icon" | "offcanvas" {
-  return isSessionRoute(pathname) ? "offcanvas" : "icon";
 }
 
 function pageTitle(pathname: string): string {
@@ -65,51 +41,15 @@ function pageTitle(pathname: string): string {
   return "Falcon";
 }
 
-function NavigationGroup({
-  label,
-  items,
-  pathname,
-}: {
-  label: string;
-  items: NavItem[];
-  pathname: string;
-}) {
-  return (
-    <SidebarGroup>
-      <SidebarGroupLabel>{label}</SidebarGroupLabel>
-      <SidebarGroupContent>
-        <SidebarMenu>
-          {items.map((item) => (
-            <SidebarMenuItem key={item.href}>
-              <SidebarMenuButton
-                asChild
-                isActive={isActive(pathname, item.href)}
-                tooltip={item.label}
-              >
-                <Link
-                  href={item.href}
-                  aria-current={isActive(pathname, item.href) ? "page" : undefined}
-                >
-                  <item.icon aria-hidden="true" />
-                  <span>{item.label}</span>
-                </Link>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ))}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
-  );
-}
-
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const title = pageTitle(pathname);
+  const isHome = pathname === HOME_HREF;
   const isSessionDetailRoute = isSessionRoute(pathname) && !pathname.includes("/git/");
 
   return (
     <SidebarProvider className="h-svh overflow-hidden">
-      <Sidebar collapsible={sidebarCollapsible(pathname)}>
+      <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -133,7 +73,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <NavigationGroup label="Workspace" items={workspaceNav} pathname={pathname} />
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isHome} tooltip="Home">
+                    <Link href={HOME_HREF} aria-current={isHome ? "page" : undefined}>
+                      <HomeIcon aria-hidden="true" />
+                      <span>Home</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+          <WorkspaceNav />
         </SidebarContent>
         <SidebarFooter>
           <NavUser />

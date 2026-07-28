@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   UnmanagedSection,
@@ -10,12 +10,23 @@ import {
   useLiveUnmanagedSessions,
   useMockUnmanagedActions,
 } from "@/features/unmanaged-sessions";
+import { useDebouncedOrder } from "@/hooks/use-debounced-order";
 import { FirstMachineOnboarding } from "./components/first-machine-onboarding";
 import { SessionListSkeleton } from "./components/session-list-skeleton";
 import { WorkspaceSection } from "./components/workspace-section";
-import { groupSessionsByWorkspace } from "./group";
+import { groupPagedSessions, type WorkspaceGroup } from "./group";
 import { useLiveSessionListSnapshot } from "./live-source";
 import type { UseSessionListSnapshot } from "./types";
+
+const PAGE_SIZE = 10;
+// Shorter than the sidebar's — this is a page you're actively viewing, so
+// some liveliness in ordering is expected (docs/workspace-nav-redesign-plan.md
+// decision #6).
+const REORDER_DEBOUNCE_MS = 1500;
+
+function workspaceKey(group: WorkspaceGroup): string {
+  return group.workspace.id;
+}
 
 /**
  * The Home screen (falcon-system-design.md §9.2 "Home" row; falcon-prd.md
@@ -67,11 +78,36 @@ export function SessionListScreen({
 }) {
   const snapshot = useData();
   const activeSnapshot = useMemo(
-    () => ({ ...snapshot, sessions: snapshot.sessions.filter((s) => s.status !== "archived") }),
+    () => ({
+      ...snapshot,
+      sessions: snapshot.sessions.filter((s) => s.status !== "archived"),
+    }),
     [snapshot],
   );
-  const groups = useMemo(() => groupSessionsByWorkspace(activeSnapshot), [activeSnapshot]);
-  const machinesById = useMemo(() => new Map(snapshot.machines.map((m) => [m.id, m])), [snapshot]);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const pagedSessions = useMemo(
+    () =>
+      [...activeSnapshot.sessions]
+        .sort((a, b) => b.updatedAt - a.updatedAt)
+        .slice(0, visibleCount),
+    [activeSnapshot.sessions, visibleCount],
+  );
+  const groups = useMemo(
+    () => groupPagedSessions(pagedSessions, activeSnapshot.workspaces),
+    [pagedSessions, activeSnapshot.workspaces],
+  );
+  const [paused, setPaused] = useState(false);
+  const stableGroups = useDebouncedOrder(
+    groups,
+    workspaceKey,
+    REORDER_DEBOUNCE_MS,
+    paused,
+  );
+  const hasMore = activeSnapshot.sessions.length > visibleCount;
+  const machinesById = useMemo(
+    () => new Map(snapshot.machines.map((m) => [m.id, m])),
+    [snapshot],
+  );
   const hasMachines = snapshot.machines.length > 0;
   const unmanagedSnapshot = useUnmanagedSnapshot();
 
@@ -80,7 +116,11 @@ export function SessionListScreen({
   // later refetch (gap-invalidation, reconnect) never re-shows this; it just
   // keeps whatever was already on screen (plan-v2.md W4.2 "skeletons for
   // Home … initial loads").
-  if (snapshot.isLoading && groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
+  if (
+    snapshot.isLoading &&
+    groups.length === 0 &&
+    unmanagedSnapshot.sessions.length === 0
+  ) {
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
         <div className="flex items-center justify-between">
@@ -103,9 +143,10 @@ export function SessionListScreen({
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on one of
-          your machines to start one — it shows up here automatically, and you'll be able to start
-          more sessions in that same project right from here.
+          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from
+          a project on one of your machines to start one — it shows up here
+          automatically, and you'll be able to start more sessions in that same
+          project right from here.
         </p>
       </div>
     );
@@ -121,9 +162,30 @@ export function SessionListScreen({
           </Button>
         </div>
       </div>
-      {groups.map((group) => (
-        <WorkspaceSection key={group.workspace.id} group={group} machinesById={machinesById} />
-      ))}
+      <div
+        className="flex flex-col gap-6"
+        onPointerEnter={() => setPaused(true)}
+        onPointerLeave={() => setPaused(false)}
+      >
+        {stableGroups.map((group) => (
+          <WorkspaceSection
+            key={group.workspace.id}
+            group={group}
+            machinesById={machinesById}
+          />
+        ))}
+      </div>
+      {hasMore && (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="self-center"
+          onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+        >
+          Load 10 more
+        </Button>
+      )}
       <UnmanagedSection
         useSnapshot={useUnmanagedSnapshot}
         useActions={useUnmanagedActions}

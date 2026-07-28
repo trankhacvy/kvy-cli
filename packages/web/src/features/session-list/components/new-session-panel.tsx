@@ -6,12 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   BaseBranchPicker,
   type BranchItem,
@@ -37,14 +45,12 @@ import { ContinueSessionPicker } from "./continue-session-picker";
 import { InlineSpawnStatus } from "./inline-spawn-status";
 
 /**
- * The `+` "start a new session here" trigger + inline creation panel for one
- * workspace row (B2, new-session-from-web redesign — see the task's own
- * header comment). Rendered by `WorkspaceSection` next to its `<h2>`.
- * Deliberately an inline collapsible section in the row, not a route
- * navigation and not a full-screen modal — the panel expands directly below
- * the row's header and pushes the session cards down, same "stay in
- * context" shape `BaseBranchPicker`'s own inline dropdown already uses one
- * level down.
+ * The `+` "start a new session here" trigger for one workspace row (B2,
+ * new-session-from-web redesign — see the task's own header comment).
+ * Rendered by `WorkspaceSection` next to its `<h2>`, and by the sidebar's
+ * `WorkspaceNav` next to its own workspace row — a `Dialog` rather than an
+ * inline expansion is what lets both call sites share it unmodified, since
+ * the sidebar rail is too narrow for an inline form.
  */
 export function NewSessionTrigger({
   group,
@@ -54,37 +60,38 @@ export function NewSessionTrigger({
 }: {
   group: WorkspaceGroup;
   machinesById: Map<string, SessionListMachine>;
-  /** Test-only escape hatch — lets a render test assert the panel's open
+  /** Test-only escape hatch — lets a render test assert the dialog's open
    * state without simulating a click (this package has no jsdom/RTL). */
   defaultOpen?: boolean;
   defaultAdvancedOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const label = `Start a new session in ${group.workspace.name}`;
 
   return (
-    <>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        className="size-7"
-        aria-label={
-          open ? `Close new session panel` : `Start a new session in ${group.workspace.name}`
-        }
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <Plus className="size-3.5" />
-      </Button>
-      {open && (
-        <InlineNewSessionPanel
+    <Dialog open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={label}>
+              <Plus className="size-3.5" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>New session in {group.workspace.name}</DialogTitle>
+        </DialogHeader>
+        <NewSessionForm
           group={group}
           machinesById={machinesById}
           defaultAdvancedOpen={defaultAdvancedOpen}
           onClose={() => setOpen(false)}
         />
-      )}
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -100,7 +107,7 @@ function initialForm(): InlineSpawnForm {
   };
 }
 
-export function InlineNewSessionPanel({
+export function NewSessionForm({
   group,
   machinesById,
   defaultAdvancedOpen = false,
@@ -182,7 +189,7 @@ export function InlineNewSessionPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-3">
+    <div className="flex flex-col gap-3">
       {needsChoice && (
         <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="new-session-machine">
           Machine

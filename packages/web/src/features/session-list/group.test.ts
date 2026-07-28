@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID } from "./group";
-import type { SessionListSession, SessionListSnapshot } from "./types";
+import { groupPagedSessions, groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID } from "./group";
+import type { SessionListSession, SessionListSnapshot, SessionListWorkspace } from "./types";
 
 function session(overrides: Partial<SessionListSession>): SessionListSession {
   return {
@@ -137,5 +137,47 @@ describe("groupSessionsByWorkspace", () => {
     };
     const groups = groupSessionsByWorkspace(snapshot);
     expect(groups.map((g) => g.workspace.id)).toEqual(["w1"]);
+  });
+});
+
+describe("groupPagedSessions", () => {
+  const workspaces: SessionListWorkspace[] = [
+    { id: "a", name: "workspace-a" },
+    { id: "b", name: "workspace-b" },
+  ];
+
+  it("preserves first-appearance order rather than re-deriving group recency", () => {
+    // "b" appears first in the already-recency-ordered input even though
+    // "a" has a session with a higher updatedAt further down the list — a
+    // paged slice must not silently re-sort back to whole-group recency.
+    const sessions = [
+      session({ id: "b1", workspaceId: "b", updatedAt: 90 }),
+      session({ id: "a1", workspaceId: "a", updatedAt: 100 }),
+      session({ id: "a2", workspaceId: "a", updatedAt: 80 }),
+    ];
+    const groups = groupPagedSessions(sessions, workspaces);
+    expect(groups.map((g) => g.workspace.id)).toEqual(["b", "a"]);
+  });
+
+  it("sorts sessions within each group pinned-first then newest-first", () => {
+    const sessions = [
+      session({ id: "a-unpinned-new", workspaceId: "a", updatedAt: 100, pinned: false }),
+      session({ id: "a-pinned-old", workspaceId: "a", updatedAt: 1, pinned: true }),
+    ];
+    const groups = groupPagedSessions(sessions, workspaces);
+    expect(groups[0]?.sessions.map((s) => s.id)).toEqual(["a-pinned-old", "a-unpinned-new"]);
+  });
+
+  it("buckets unresolvable workspaces into a trailing 'Other sessions' group", () => {
+    const sessions = [
+      session({ id: "placed", workspaceId: "a", updatedAt: 10 }),
+      session({ id: "orphan", workspaceId: null, updatedAt: 5 }),
+    ];
+    const groups = groupPagedSessions(sessions, workspaces);
+    expect(groups.map((g) => g.workspace.id)).toEqual(["a", UNGROUPED_WORKSPACE_ID]);
+  });
+
+  it("returns an empty array for an empty input", () => {
+    expect(groupPagedSessions([], workspaces)).toEqual([]);
   });
 });

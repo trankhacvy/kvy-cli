@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import type { SessionListSession, SessionListSnapshot } from "../types";
 import { CompletedSessionsScreen } from "./completed-sessions-screen";
 
@@ -27,7 +28,11 @@ function render(snapshot: SessionListSnapshot) {
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(CompletedSessionsScreen, { useData: () => snapshot }),
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(CompletedSessionsScreen, { useData: () => snapshot }),
+      ),
     ),
   );
 }
