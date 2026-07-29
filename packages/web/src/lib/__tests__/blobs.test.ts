@@ -20,6 +20,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
   return {
     init: notImplemented,
     setSessionKey: notImplemented,
+    createDek: notImplemented,
     seal: notImplemented,
     open: notImplemented,
     sealBlob: async (data) => new Uint8Array([0xff, ...data]), // trivial "encryption" marker

@@ -36,6 +36,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
   return {
     init: async () => undefined,
     setSessionKey: notImplemented,
+    createDek: notImplemented,
     seal: notImplemented,
     open: notImplemented,
     sealBlob: notImplemented,

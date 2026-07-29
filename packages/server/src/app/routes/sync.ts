@@ -1,14 +1,19 @@
-import { MachineRowSchema, SessionRowSchema, UnmanagedSessionRowSchema } from "@falcon/wire";
+import {
+  MachineRowSchema,
+  SessionRowSchema,
+  UnmanagedSessionRowSchema,
+  WorkspaceRowSchema,
+} from "@falcon/wire";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { accounts, machines, sessions, unmanagedSessions } from "../../db/schema.js";
+import { accounts, machines, sessions, unmanagedSessions, workspaces } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
 import { computeMachinesNeedReauth } from "../machineReauth.js";
 import type { PushDispatcherPort } from "../push/types.js";
 import { reconcileStaleSessions } from "../staleSessions.js";
-import { toMachineRow, toSessionRow, toUnmanagedSessionRow } from "./mappers.js";
+import { toMachineRow, toSessionRow, toUnmanagedSessionRow, toWorkspaceRow } from "./mappers.js";
 
 const SyncQuerySchema = z.object({ since: z.coerce.number().int().nonnegative() });
 
@@ -17,6 +22,7 @@ const SyncResponseSchema = z.object({
   sessions: z.array(SessionRowSchema),
   machines: z.array(MachineRowSchema),
   unmanagedSessions: z.array(UnmanagedSessionRowSchema),
+  workspaces: z.array(WorkspaceRowSchema),
 });
 
 /**
@@ -44,14 +50,17 @@ export function buildSyncRoutes(
       },
       async (req, reply) => {
         const accountId = req.accountId;
-        const [account, sessionRows, machineRows, unmanagedRows] = await Promise.all([
-          db.query.accounts.findFirst({ where: eq(accounts.id, accountId) }),
-          db.query.sessions.findMany({ where: eq(sessions.accountId, accountId) }),
-          db.query.machines.findMany({ where: eq(machines.accountId, accountId) }),
-          db.query.unmanagedSessions.findMany({
-            where: eq(unmanagedSessions.accountId, accountId),
-          }),
-        ]);
+        const [account, sessionRows, machineRows, unmanagedRows, workspaceRows] = await Promise.all(
+          [
+            db.query.accounts.findFirst({ where: eq(accounts.id, accountId) }),
+            db.query.sessions.findMany({ where: eq(sessions.accountId, accountId) }),
+            db.query.machines.findMany({ where: eq(machines.accountId, accountId) }),
+            db.query.unmanagedSessions.findMany({
+              where: eq(unmanagedSessions.accountId, accountId),
+            }),
+            db.query.workspaces.findMany({ where: eq(workspaces.accountId, accountId) }),
+          ],
+        );
 
         if (!account) {
           // A valid bearer token decoded to an accountId with no accounts
@@ -88,6 +97,7 @@ export function buildSyncRoutes(
           sessions: reconciledSessions.map(toSessionRow),
           machines: machineRows.map((m) => toMachineRow(m, needsReauthByMachine.get(m.id))),
           unmanagedSessions: unmanagedRows.map(toUnmanagedSessionRow),
+          workspaces: workspaceRows.map(toWorkspaceRow),
         };
       },
     );

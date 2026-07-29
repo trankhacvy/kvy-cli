@@ -77,6 +77,31 @@ describe("createCryptoWorkerHandler", () => {
     expect(openRes).toEqual({ id: "4", ok: true, result: payload });
   });
 
+  it("createDek fails before any key is initialized", async () => {
+    const res = await handler.handle(req("1", { type: "createDek", data: { hello: "world" } }));
+    expect(res).toEqual({ id: "1", ok: false, error: "needs-keys" });
+  });
+
+  it("createDek mints a DEK wrapped to this device's own content key, and its box opens under that DEK", async () => {
+    await init("1");
+    const payload = { baseBranch: "main", remote: "origin" };
+    const res = await handler.handle(req("2", { type: "createDek", data: payload }));
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error("unreachable");
+    const { wrappedDek: mintedWrappedDek, box } = res.result as {
+      wrappedDek: string;
+      box: EncryptedBox;
+    };
+
+    const setKeyRes = await handler.handle(
+      req("3", { type: "setSessionKey", wrappedDek: decodeBase64(mintedWrappedDek) }),
+    );
+    expect(setKeyRes).toEqual({ id: "3", ok: true, result: true });
+
+    const openRes = await handler.handle(req("4", { type: "open", box }));
+    expect(openRes).toEqual({ id: "4", ok: true, result: payload });
+  });
+
   it("setSessionKey resolves false (never throws) for a DEK wrapped to a different key tree", async () => {
     await init("1");
     const foreign = wrapDek(dek, deriveKeyTree(getRandomBytes(32)).content.publicKey);

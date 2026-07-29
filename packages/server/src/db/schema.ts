@@ -142,19 +142,28 @@ export const machines = pgTable(
   (t) => [index().on(t.accountId)],
 );
 
-export const workspaces = pgTable("workspaces", {
-  id: text("id").primaryKey().$defaultFn(createId),
-  accountId: text("account_id")
-    .notNull()
-    .references(() => accounts.id, { onDelete: "cascade" }),
-  metadata: bytea("metadata").notNull(), // enc: name, paths, baseRef, remote
-  metadataVersion: integer("metadata_version").notNull().default(0),
-  dek: bytea("dek").notNull(),
-  keyEpoch: integer("key_epoch").notNull().default(1), // the account key epoch `dek` was wrapped under (§3.4)
-  // ---- deferred sandbox hooks (unused at MVP) ----
-  syncEnabled: boolean("sync_enabled").notNull().default(false),
-  sandboxConfig: bytea("sandbox_config"),
-});
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: text("id").primaryKey().$defaultFn(createId),
+    accountId: text("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    // Plaintext, client-minted (mirrors `sessions.tag`) — the absolute
+    // workspace directory path, already sent in the clear elsewhere
+    // (`SessionRow.workspaceId`), so no confidentiality is lost by using it
+    // as this table's create-or-get idempotency key.
+    path: text("path").notNull(),
+    metadata: bytea("metadata").notNull(), // enc: baseBranch, remote
+    metadataVersion: integer("metadata_version").notNull().default(0),
+    dek: bytea("dek").notNull(),
+    keyEpoch: integer("key_epoch").notNull().default(1), // the account key epoch `dek` was wrapped under (§3.4)
+    // ---- deferred sandbox hooks (unused at MVP) ----
+    syncEnabled: boolean("sync_enabled").notNull().default(false),
+    sandboxConfig: bytea("sandbox_config"),
+  },
+  (t) => [uniqueIndex().on(t.accountId, t.path), index().on(t.accountId)],
+);
 
 export const sessions = pgTable(
   "sessions",

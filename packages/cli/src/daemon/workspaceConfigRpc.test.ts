@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { registerWorkspace } from "../workspace/registry.js";
 import { setWorkspaceGitConfig } from "../workspaceConfig.js";
 import { RunProcessError } from "./runProcess.js";
-import { handleWorkspaceGetConfig } from "./workspaceConfigRpc.js";
+import { handleWorkspaceGetConfig, handleWorkspaceSetConfig } from "./workspaceConfigRpc.js";
 
 let homeDir: string;
 let workspaceRoot: string;
@@ -72,5 +72,57 @@ describe("handleWorkspaceGetConfig", () => {
     const params = { idempotencyKey: "k1", worktree: workspaceRoot };
     expect(Object.keys(params).sort()).toEqual(["idempotencyKey", "worktree"]);
     await handleWorkspaceGetConfig(params, { homeDir });
+  });
+});
+
+describe("handleWorkspaceSetConfig", () => {
+  it("throws RunProcessError for an unregistered worktree", async () => {
+    await expect(
+      handleWorkspaceSetConfig(
+        { idempotencyKey: "k1", worktree: workspaceRoot, baseRef: "main" },
+        { homeDir },
+      ),
+    ).rejects.toThrow(RunProcessError);
+  });
+
+  it("writes baseRef/remote and returns the updated subset", async () => {
+    await registerWorkspace(workspaceRoot, {}, { homeDir });
+    const result = await handleWorkspaceSetConfig(
+      { idempotencyKey: "k1", worktree: workspaceRoot, baseRef: "main", remote: "origin" },
+      { homeDir },
+    );
+    expect(result).toEqual({ baseRef: "main", remote: "origin" });
+
+    const readBack = await handleWorkspaceGetConfig(
+      { idempotencyKey: "k1", worktree: workspaceRoot },
+      { homeDir },
+    );
+    expect(readBack).toEqual({
+      baseRef: "main",
+      remote: "origin",
+      setupScript: undefined,
+      runScript: undefined,
+    });
+  });
+
+  it("merges a partial patch, leaving unspecified fields untouched", async () => {
+    await registerWorkspace(workspaceRoot, {}, { homeDir });
+    await setWorkspaceGitConfig(workspaceRoot, { baseRef: "main", remote: "origin" }, { homeDir });
+
+    const result = await handleWorkspaceSetConfig(
+      { idempotencyKey: "k1", worktree: workspaceRoot, remote: "upstream" },
+      { homeDir },
+    );
+    expect(result).toEqual({ baseRef: "main", remote: "upstream" });
+  });
+
+  it("never accepts a script string — WorkspaceSetConfigParams has exactly idempotencyKey/worktree/baseRef/remote", async () => {
+    const params = {
+      idempotencyKey: "k1",
+      worktree: workspaceRoot,
+      baseRef: "main",
+      remote: "origin",
+    };
+    expect(Object.keys(params).sort()).toEqual(["baseRef", "idempotencyKey", "remote", "worktree"]);
   });
 });

@@ -11,6 +11,7 @@ import type {
   EncryptedBox,
   PushSubscribeBody,
   SessionRow,
+  WorkspaceRow,
 } from "@falcon/wire";
 import type { MessagesPage, SyncSnapshot } from "@/sync";
 import { API_URL } from "./config.js";
@@ -386,6 +387,62 @@ export async function putSessionMetadataCas(
     bodyText.length > 0
       ? `session metadata update failed with ${response.status}: ${bodyText}`
       : `session metadata update failed with ${response.status}`,
+    response.status,
+  );
+}
+
+/** `POST /v1/workspaces` — create-or-get a workspace row by its absolute
+ * path (design conversation: server-synced `baseBranch`/`remote` config).
+ * Idempotent, same shape as `POST /v1/sessions`. */
+export function createWorkspace(
+  token: string,
+  body: { path: string; metadata: EncryptedBox; dek: string },
+): Promise<WorkspaceRow> {
+  return postJson("/v1/workspaces", body, token);
+}
+
+export type PutWorkspaceMetadataCasResult =
+  | { ok: true; version: number }
+  | { ok: false; current: { value: EncryptedBox; version: number } };
+
+/** `PUT /v1/workspaces/:id/metadata` — CAS update of a workspace's encrypted
+ * `baseBranch`/`remote` config, same shape as `putSessionMetadataCas`. */
+export async function putWorkspaceMetadataCas(
+  token: string,
+  workspaceId: string,
+  body: { expectedVersion: number; value: EncryptedBox },
+): Promise<PutWorkspaceMetadataCasResult> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}/v1/workspaces/${workspaceId}/metadata`, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+  }
+
+  if (response.ok) {
+    const parsed = (await response.json()) as { version: number };
+    return { ok: true, version: parsed.version };
+  }
+
+  if (response.status === 409) {
+    const parsed = (await response.json()) as {
+      current: { value: EncryptedBox; version: number };
+    };
+    return { ok: false, current: parsed.current };
+  }
+
+  const bodyText = await response.text().catch(() => "");
+  throw new ApiError(
+    bodyText.length > 0
+      ? `workspace metadata update failed with ${response.status}: ${bodyText}`
+      : `workspace metadata update failed with ${response.status}`,
     response.status,
   );
 }

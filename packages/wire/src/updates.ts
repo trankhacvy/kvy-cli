@@ -6,6 +6,7 @@ import {
   SessionRowSchema,
   SessionStatusSchema,
   UnmanagedSessionRowSchema,
+  WorkspaceRowSchema,
 } from "./rows";
 
 /**
@@ -61,6 +62,14 @@ export const UpdateBodySchema = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("account-update"),
     settings: EncryptedBoxSchema,
+  }),
+  z.object({
+    t: z.literal("workspace-new"),
+    workspace: WorkspaceRowSchema,
+  }),
+  z.object({
+    t: z.literal("workspace-update"),
+    workspace: WorkspaceRowSchema,
   }),
 ]);
 export type UpdateBody = z.infer<typeof UpdateBodySchema>;

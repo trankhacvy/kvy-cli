@@ -1,4 +1,10 @@
-import type { EncryptedBox, MachineRow, SessionRow, UnmanagedSessionRow } from "@falcon/wire";
+import type {
+  EncryptedBox,
+  MachineRow,
+  SessionRow,
+  UnmanagedSessionRow,
+  WorkspaceRow,
+} from "@falcon/wire";
 
 /**
  * One row from `GET /v1/sessions/:id/messages` (mirrors `MessageItemSchema`
@@ -41,4 +47,5 @@ export interface SyncSnapshot {
   sessions: SessionRow[];
   machines: MachineRow[];
   unmanagedSessions: UnmanagedSessionRow[];
+  workspaces: WorkspaceRow[];
 }

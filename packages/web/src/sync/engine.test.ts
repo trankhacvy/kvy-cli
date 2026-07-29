@@ -37,6 +37,7 @@ function makeSnapshot(overrides: Partial<SyncSnapshot> = {}): SyncSnapshot {
     sessions: [makeSession("sess-1")],
     machines: [],
     unmanagedSessions: [],
+    workspaces: [],
     ...overrides,
   };
 }
@@ -268,7 +269,10 @@ describe("createSyncEngine", () => {
     });
 
     it("upserts unmanaged-new and unmanaged-update items by id", () => {
-      queryClient.setQueryData(syncQueryKey, makeSnapshot({ headerSeq: 5, unmanagedSessions: [] }));
+      queryClient.setQueryData(
+        syncQueryKey,
+        makeSnapshot({ headerSeq: 5, unmanagedSessions: [], workspaces: [] }),
+      );
       const { source, emitUpdate } = createFakeSyncSocket();
       createSyncEngine(queryClient, source);
 

@@ -53,8 +53,5 @@ export function useDebouncedOrder<T>(
   const keys = useMemo(() => items.map(keyOf), [items, keyOf]);
   const debouncedKeys = useDebouncedValue(keys, delayMs, paused);
 
-  return useMemo(
-    () => applyKeyOrder(items, debouncedKeys, keyOf),
-    [items, debouncedKeys, keyOf],
-  );
+  return useMemo(() => applyKeyOrder(items, debouncedKeys, keyOf), [items, debouncedKeys, keyOf]);
 }

@@ -33,7 +33,14 @@
  * `setQueryData`/`invalidateQueries`, never `fetchQuery`.
  */
 
-import type { MachineRow, SessionRow, UnmanagedSessionRow, Update, UpdateBody } from "@falcon/wire";
+import type {
+  MachineRow,
+  SessionRow,
+  UnmanagedSessionRow,
+  Update,
+  UpdateBody,
+  WorkspaceRow,
+} from "@falcon/wire";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   isSyncQueryKey,
@@ -162,6 +169,9 @@ export function createSyncEngine(queryClient: QueryClient, socket: SyncSocketSou
             ...next,
             unmanagedSessions: upsertById<UnmanagedSessionRow>(next.unmanagedSessions, body.item),
           };
+        case "workspace-new":
+        case "workspace-update":
+          return { ...next, workspaces: upsertById<WorkspaceRow>(next.workspaces, body.workspace) };
         case "account-update":
           // No `settings` field on the sync snapshot yet (server's
           // `SyncResponseSchema` doesn't carry one) — nothing to patch.

@@ -189,6 +189,10 @@ import {
   GitPushParamsSchema,
   type GitPushResult,
   GitPushResultSchema,
+  type GitRemotesParams,
+  GitRemotesParamsSchema,
+  type GitRemotesResult,
+  GitRemotesResultSchema,
   type GitRenameBranchParams,
   GitRenameBranchParamsSchema,
   type GitRenameBranchResult,
@@ -257,6 +261,10 @@ import {
   WorkspaceRegisterParamsSchema,
   type WorkspaceRegisterResult,
   WorkspaceRegisterResultSchema,
+  type WorkspaceSetConfigParams,
+  WorkspaceSetConfigParamsSchema,
+  type WorkspaceSetConfigResult,
+  WorkspaceSetConfigResultSchema,
   type WorkspaceUnregisterParams,
   WorkspaceUnregisterParamsSchema,
   type WorkspaceUnregisterResult,
@@ -280,6 +288,7 @@ import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
 import { getGitFiles as getGitFilesDefault } from "./gitFiles.js";
 import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
 import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
+import { getGitRemotes as getGitRemotesDefault } from "./gitRemotes.js";
 import { handleGitRenameBranch as handleGitRenameBranchDefault } from "./gitRenameBranch.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import { getProviderAccountInfo as getProviderAccountInfoDefault } from "./providerAccountInfo.js";
@@ -290,7 +299,10 @@ import {
   handleRunStop as handleRunStopDefault,
 } from "./runProcess.js";
 import { listSlashCommands as listSlashCommandsDefault } from "./slashCommands.js";
-import { handleWorkspaceGetConfig as handleWorkspaceGetConfigDefault } from "./workspaceConfigRpc.js";
+import {
+  handleWorkspaceGetConfig as handleWorkspaceGetConfigDefault,
+  handleWorkspaceSetConfig as handleWorkspaceSetConfigDefault,
+} from "./workspaceConfigRpc.js";
 import { WorkspaceValidationError } from "./workspacePath.js";
 import {
   registerWorkspace as registerWorkspaceDefault,
@@ -308,6 +320,7 @@ export const MACHINE_RPC_METHODS = [
   "git.status",
   "git.diff",
   "git.branches",
+  "git.remotes",
   "git.commit",
   "git.push",
   "git.renameBranch",
@@ -325,6 +338,7 @@ export const MACHINE_RPC_METHODS = [
   "preview.open",
   "preview.close",
   "workspace.getConfig",
+  "workspace.setConfig",
   "run.start",
   "run.stop",
   "run.status",
@@ -356,6 +370,8 @@ export interface MachineRpcDeps {
   getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
   /** Backs the `git.branches` RPC (New Session wizard's existing-branch worktree picker, docs/features/worktree-isolation.md). Injectable for tests; defaults to `gitBranches.ts`'s real `git for-each-ref` parse. Throws on failure. */
   getGitBranches?: (params: GitBranchesParams) => Promise<GitBranchesResult>;
+  /** Backs the `git.remotes` RPC (Workspace Settings Git tab's remote-name autofill). Injectable for tests; defaults to `gitRemotes.ts`'s real `git remote -v` parse. Throws on failure. */
+  getGitRemotes?: (params: GitRemotesParams) => Promise<GitRemotesResult>;
   /** Backs the `git.commit` RPC (docs/features/git-write-actions.md — the first *mutating* git RPC). Injectable for tests; defaults to `gitCommit.ts`'s real `git add`/`git commit`, gated on the registered-workspace authorizer. Throws on failure. */
   gitCommit?: (params: GitCommitParams) => Promise<GitCommitResult>;
   /** Backs the `git.push` RPC (docs/features/git-write-actions.md). Injectable for tests; defaults to `gitPush.ts`'s real `git push` (`force` maps to `--force-with-lease` only), gated on the registered-workspace authorizer. Throws on failure. */
@@ -396,6 +412,8 @@ export interface MachineRpcDeps {
   previewClose: (params: PreviewCloseParams) => Promise<PreviewCloseResult>;
   /** Backs the `workspace.getConfig` RPC (docs/features/setup-run-scripts.md). Injectable for tests; defaults to `workspaceConfigRpc.ts`'s real read, gated on the registered-workspace authorizer. Throws on an unauthorized worktree. */
   getWorkspaceConfig?: (params: WorkspaceGetConfigParams) => Promise<WorkspaceGetConfigResult>;
+  /** Backs the `workspace.setConfig` RPC (Workspace Settings Git tab's save action) — `baseRef`/`remote` only, see `workspaceConfigRpc.ts`'s doc comment for why scripts never reach this. Injectable for tests; defaults to `workspaceConfigRpc.ts`'s real write, gated on the registered-workspace authorizer. Throws on an unauthorized worktree. */
+  setWorkspaceConfig?: (params: WorkspaceSetConfigParams) => Promise<WorkspaceSetConfigResult>;
   /** Backs the `run.start` RPC (docs/features/setup-run-scripts.md). Injectable for tests; defaults to `runProcess.ts`'s real handler (tmux-preferred launch, gated on the registered-workspace authorizer). Throws on an unauthorized worktree or an unconfigured `runScript`. */
   runStart?: (params: RunStartParams) => Promise<RunStartResult>;
   /** Backs the `run.stop` RPC. Injectable for tests; defaults to `runProcess.ts`'s real handler. Throws on an unauthorized worktree. */
@@ -576,6 +594,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitStatus = deps.getGitStatus ?? getGitStatusDefault;
   const getGitDiff = deps.getGitDiff ?? getGitDiffDefault;
   const getGitBranches = deps.getGitBranches ?? getGitBranchesDefault;
+  const getGitRemotes = deps.getGitRemotes ?? getGitRemotesDefault;
   const listSlashCommands = deps.listSlashCommands ?? listSlashCommandsDefault;
   const getGithubChecks = deps.getGithubChecks ?? getGithubChecksDefault;
   const getGitFiles = deps.getGitFiles ?? getGitFilesDefault;
@@ -600,6 +619,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   // same two-layer shape as `adopt.take`'s `cachedAdoptTake` above.
   const cachedPreviewOpen = withIdempotencyCache(withPortGuard(deps.previewOpen));
   const getWorkspaceConfig = deps.getWorkspaceConfig ?? handleWorkspaceGetConfigDefault;
+  const setWorkspaceConfig = deps.setWorkspaceConfig ?? handleWorkspaceSetConfigDefault;
   // `run.start`/`run.stop`/`run.setup` (docs/features/setup-run-scripts.md
   // Phase 4) join `git.commit`/`git.push`/`git.renameBranch` as mutating
   // RPCs that DO need idempotency-key replay caching. `run.start` ALSO gets
@@ -711,6 +731,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       resultSchema: GitBranchesResultSchema,
       handle: getGitBranches as (params: unknown) => Promise<unknown>,
     },
+    "git.remotes": {
+      paramsSchema: GitRemotesParamsSchema,
+      resultSchema: GitRemotesResultSchema,
+      handle: getGitRemotes as (params: unknown) => Promise<unknown>,
+    },
     "git.files": {
       paramsSchema: GitFilesParamsSchema,
       resultSchema: GitFilesResultSchema,
@@ -795,6 +820,11 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: WorkspaceGetConfigParamsSchema,
       resultSchema: WorkspaceGetConfigResultSchema,
       handle: getWorkspaceConfig as (params: unknown) => Promise<unknown>,
+    },
+    "workspace.setConfig": {
+      paramsSchema: WorkspaceSetConfigParamsSchema,
+      resultSchema: WorkspaceSetConfigResultSchema,
+      handle: setWorkspaceConfig as (params: unknown) => Promise<unknown>,
     },
     "run.start": {
       paramsSchema: RunStartParamsSchema,

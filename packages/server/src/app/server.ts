@@ -54,6 +54,7 @@ import { buildSessionsAdminRoutes } from "./routes/sessionsAdmin.js";
 import { buildSyncRoutes } from "./routes/sync.js";
 import { buildTelegramLinkRoutes } from "./routes/telegramLink.js";
 import { buildUnmanagedSessionsRoutes } from "./routes/unmanagedSessions.js";
+import { buildWorkspacesRoutes } from "./routes/workspaces.js";
 import { buildCorsOriginValidator } from "./security/cors.js";
 import { startSocket } from "./socket.js";
 
@@ -217,6 +218,7 @@ export async function buildServer(
   await app.register(buildSyncRoutes(db, eventRouter, pushDispatcher));
   await app.register(buildMachinesRoutes(db, eventRouter));
   await app.register(buildUnmanagedSessionsRoutes(db, eventRouter));
+  await app.register(buildWorkspacesRoutes(db, eventRouter));
   await app.register(buildPushRoutes(db));
   await app.register(
     buildBlobsRoutes(db, blobStorage, {

@@ -13,6 +13,7 @@ import type { EncryptedBox } from "@falcon/crypto/web";
 import type { KeyProtection } from "./key-protection.js";
 import type {
   BindKeysProofResult,
+  CreateDekResult,
   CryptoWorkerRequest,
   CryptoWorkerRequestPayload,
   CryptoWorkerResponse,
@@ -58,6 +59,9 @@ export interface CryptoBridgeClient {
   migrateFromPin(pin: string, protection: KeyProtection): Promise<boolean>;
   /** Unwrap a per-session DEK and hold it as the active session key. Resolves `false` on a bad/foreign DEK. */
   setSessionKey(wrappedDek: Uint8Array): Promise<boolean>;
+  /** Mint a fresh DEK, wrap it to this device's own content public key, and seal `data`
+   * under it — for a web-originated encrypted entity rather than one relayed from the CLI. */
+  createDek(data: unknown): Promise<CreateDekResult>;
   /** Seal `data` under the active session key. */
   seal(data: unknown): Promise<EncryptedBox>;
   /** Open `box` with the active session key. Resolves `null` on any decryption failure. */
@@ -187,6 +191,7 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     migrateFromPin: (pin, protection) =>
       call<boolean>({ type: "migrateFromPin", pin, ...protection }),
     setSessionKey: (wrappedDek) => call<boolean>({ type: "setSessionKey", wrappedDek }),
+    createDek: (data) => call<CreateDekResult>({ type: "createDek", data }),
     seal: (data) => call<EncryptedBox>({ type: "seal", data }),
     open: <T>(box: EncryptedBox) => call<T | null>({ type: "open", box }),
     sealBlob: (data) => call<Uint8Array>({ type: "sealBlob", data }),

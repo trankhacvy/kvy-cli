@@ -33,9 +33,9 @@ function createFakeClient(migrationCount: string, lockedAlways = true): postgres
 const migrationsFolder = path.resolve(process.cwd(), "drizzle");
 
 describe("journalEntryCount", () => {
-  it("reads the real shipped drizzle/meta/_journal.json and returns 8", async () => {
+  it("reads the real shipped drizzle/meta/_journal.json and returns 9", async () => {
     const { journalEntryCount } = await import("./migrate.js");
-    await expect(journalEntryCount(migrationsFolder)).resolves.toBe(8);
+    await expect(journalEntryCount(migrationsFolder)).resolves.toBe(9);
   });
 });
 
@@ -50,7 +50,7 @@ describe("acquireLock", () => {
 
   it("returns false, not throw, not hang, when pg_try_advisory_lock keeps answering false", async () => {
     const { acquireLock } = await import("./migrate.js");
-    const client = createFakeClient("8", false);
+    const client = createFakeClient("9", false);
 
     const result = acquireLock(client);
     await vi.runAllTimersAsync();
@@ -60,7 +60,7 @@ describe("acquireLock", () => {
 
   it("returns true immediately when the lock is free", async () => {
     const { acquireLock } = await import("./migrate.js");
-    const client = createFakeClient("8", true);
+    const client = createFakeClient("9", true);
 
     await expect(acquireLock(client)).resolves.toBe(true);
   });
@@ -78,11 +78,11 @@ describe("runMigrations", () => {
     postgresMock.mockReturnValue(createFakeClient("6"));
     const { runMigrations } = await import("./migrate.js");
 
-    await expect(runMigrations()).rejects.toThrow(/expected 8 applied migrations, found 6/);
+    await expect(runMigrations()).rejects.toThrow(/expected 9 applied migrations, found 6/);
   });
 
   it("resolves when the post-migrate applied count matches the journal count", async () => {
-    postgresMock.mockReturnValue(createFakeClient("8"));
+    postgresMock.mockReturnValue(createFakeClient("9"));
     const { runMigrations } = await import("./migrate.js");
 
     await expect(runMigrations()).resolves.toBeUndefined();
