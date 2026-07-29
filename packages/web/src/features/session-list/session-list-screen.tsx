@@ -87,9 +87,7 @@ export function SessionListScreen({
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const pagedSessions = useMemo(
     () =>
-      [...activeSnapshot.sessions]
-        .sort((a, b) => b.updatedAt - a.updatedAt)
-        .slice(0, visibleCount),
+      [...activeSnapshot.sessions].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, visibleCount),
     [activeSnapshot.sessions, visibleCount],
   );
   const groups = useMemo(
@@ -97,17 +95,9 @@ export function SessionListScreen({
     [pagedSessions, activeSnapshot.workspaces],
   );
   const [paused, setPaused] = useState(false);
-  const stableGroups = useDebouncedOrder(
-    groups,
-    workspaceKey,
-    REORDER_DEBOUNCE_MS,
-    paused,
-  );
+  const stableGroups = useDebouncedOrder(groups, workspaceKey, REORDER_DEBOUNCE_MS, paused);
   const hasMore = activeSnapshot.sessions.length > visibleCount;
-  const machinesById = useMemo(
-    () => new Map(snapshot.machines.map((m) => [m.id, m])),
-    [snapshot],
-  );
+  const machinesById = useMemo(() => new Map(snapshot.machines.map((m) => [m.id, m])), [snapshot]);
   const hasMachines = snapshot.machines.length > 0;
   const unmanagedSnapshot = useUnmanagedSnapshot();
 
@@ -116,11 +106,7 @@ export function SessionListScreen({
   // later refetch (gap-invalidation, reconnect) never re-shows this; it just
   // keeps whatever was already on screen (plan-v2.md W4.2 "skeletons for
   // Home … initial loads").
-  if (
-    snapshot.isLoading &&
-    groups.length === 0 &&
-    unmanagedSnapshot.sessions.length === 0
-  ) {
+  if (snapshot.isLoading && groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
         <div className="flex items-center justify-between">
@@ -143,10 +129,9 @@ export function SessionListScreen({
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from
-          a project on one of your machines to start one — it shows up here
-          automatically, and you'll be able to start more sessions in that same
-          project right from here.
+          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on one of
+          your machines to start one — it shows up here automatically, and you'll be able to start
+          more sessions in that same project right from here.
         </p>
       </div>
     );
@@ -168,11 +153,7 @@ export function SessionListScreen({
         onPointerLeave={() => setPaused(false)}
       >
         {stableGroups.map((group) => (
-          <WorkspaceSection
-            key={group.workspace.id}
-            group={group}
-            machinesById={machinesById}
-          />
+          <WorkspaceSection key={group.workspace.id} group={group} machinesById={machinesById} />
         ))}
       </div>
       {hasMore && (

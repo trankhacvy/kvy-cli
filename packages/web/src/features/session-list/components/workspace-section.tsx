@@ -25,23 +25,15 @@ export function WorkspaceSection({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-1 px-1">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          {group.workspace.name}
-        </h2>
-        {isRealWorkspace && (
-          <NewSessionTrigger group={group} machinesById={machinesById} />
-        )}
+        <h2 className="text-sm font-medium text-muted-foreground">{group.workspace.name}</h2>
+        {isRealWorkspace && <NewSessionTrigger group={group} machinesById={machinesById} />}
       </div>
       <div className="flex flex-col gap-2">
         {group.sessions.map((session) => (
           <SessionCard
             key={session.id}
             session={session}
-            machine={
-              session.machineId
-                ? (machinesById.get(session.machineId) ?? null)
-                : null
-            }
+            machine={session.machineId ? (machinesById.get(session.machineId) ?? null) : null}
           />
         ))}
       </div>
