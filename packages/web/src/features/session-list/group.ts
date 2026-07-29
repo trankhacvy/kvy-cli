@@ -1,4 +1,5 @@
 import type { SessionListSession, SessionListSnapshot, SessionListWorkspace } from "./types";
+import { parentWorktreePath } from "./worktree-path";
 
 /** One workspace's sessions, newest activity first (design §9.2 "Home" row:
  * "`SessionList` grouped by workspace"). */
@@ -36,6 +37,22 @@ function mostRecentUpdatedAt(sessions: readonly SessionListSession[]): number {
 }
 
 /**
+ * Resolves the bucket key a session's `workspaceId` groups under — a
+ * worktree child re-parents onto its parent repo (known-issues.md #15) only
+ * when that parent is itself a known, registered workspace; otherwise it
+ * stays its own top-level group rather than inventing one for an
+ * unregistered parent.
+ */
+function resolveBucketKey(
+  workspaceId: string | null,
+  workspaceById: Map<string, SessionListWorkspace>,
+): string {
+  if (workspaceId === null || !workspaceById.has(workspaceId)) return UNGROUPED_WORKSPACE_ID;
+  const parentId = parentWorktreePath(workspaceId);
+  return parentId && workspaceById.has(parentId) ? parentId : workspaceId;
+}
+
+/**
  * Groups sessions by workspace and sorts each group's sessions pinned-first,
  * then by most recently updated. Group order: workspaces with at least one
  * session, most-recently-active session first, then the ungrouped bucket
@@ -46,10 +63,7 @@ export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): Workspa
   const buckets = new Map<string, SessionListSession[]>();
 
   for (const session of snapshot.sessions) {
-    const key =
-      session.workspaceId !== null && workspaceById.has(session.workspaceId)
-        ? session.workspaceId
-        : UNGROUPED_WORKSPACE_ID;
+    const key = resolveBucketKey(session.workspaceId, workspaceById);
     const bucket = buckets.get(key);
     if (bucket) bucket.push(session);
     else buckets.set(key, [session]);
@@ -93,10 +107,7 @@ export function groupPagedSessions(
   const buckets = new Map<string, SessionListSession[]>();
 
   for (const session of sessions) {
-    const key =
-      session.workspaceId !== null && workspaceById.has(session.workspaceId)
-        ? session.workspaceId
-        : UNGROUPED_WORKSPACE_ID;
+    const key = resolveBucketKey(session.workspaceId, workspaceById);
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = [];

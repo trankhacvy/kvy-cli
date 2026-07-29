@@ -339,6 +339,9 @@ function SessionTimelineBody({
         worktree={workspacePath ?? undefined}
         openFile={openFile}
         onOpenFile={setOpenFile}
+        onSendAgentPrompt={send}
+        isSendingAgentPrompt={isSending}
+        actionsDisabled={isDisabled}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { buildDiffFetchOptions } from "./git-diff-query";
 import type { GitDiffActions } from "./types";
 
@@ -75,6 +75,25 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
     void queryClient.invalidateQueries({ queryKey: ["git-diff", worktree] });
   }
 
+  // `actions` starts out as a permanently-rejecting stub until this
+  // machine's crypto key finishes unwrapping (`useLiveGitDiffActions`). The
+  // very first fetch attempt, made against that stub, can settle into a
+  // state TanStack Query never automatically retries — nothing re-runs it
+  // once `actions` is swapped for the real client, so the panel can get
+  // stuck showing "Could not load git status" even after the machine key is
+  // ready. Force a refetch the moment `actions`'s identity changes after
+  // mount — that's exactly when the stub gets replaced by the real one.
+  const isFirstActionsRender = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed only on `actions` — this effect exists purely to notice the stub→real swap, not to re-run for every `worktree`/`queryClient` change (those are already handled by the queries' own `queryKey`s).
+  useEffect(() => {
+    if (isFirstActionsRender.current) {
+      isFirstActionsRender.current = false;
+      return;
+    }
+    invalidateStatusAndDiff();
+    void queryClient.invalidateQueries({ queryKey: ["git-branches", worktree] });
+  }, [actions]);
+
   const commitMutation = useMutation({
     mutationFn: ({ message, stageAll }: { message: string; stageAll?: boolean }) =>
       actions.commit(worktree, message, { stageAll }),
@@ -86,6 +105,20 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
       actions.push(worktree, options),
     onSuccess: invalidateStatusAndDiff,
   });
+
+  const commitAndPush = useCallback(
+    async (params: { message: string; stageAll?: boolean }) => {
+      const result = await commitMutation.mutateAsync(params);
+      if (result.nothingToCommit) return { ...result, pushed: false as const };
+      // If this throws, the caller sees a rejected promise — `committed: true`
+      // already happened and stays true; the UI must show "committed, but push
+      // failed" (via `pushMutation.error`, already exposed), never silently
+      // re-attempt the commit or claim the combined action fully succeeded.
+      await pushMutation.mutateAsync({});
+      return { ...result, pushed: true as const };
+    },
+    [commitMutation, pushMutation],
+  );
 
   const renameBranchMutation = useMutation({
     mutationFn: (to: string) => actions.renameBranch(worktree, to),
@@ -131,6 +164,9 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
     push: pushMutation.mutate,
     isPushPending: pushMutation.isPending,
     pushError: pushMutation.error instanceof Error ? pushMutation.error.message : null,
+
+    commitAndPush,
+    isCommitAndPushPending: commitMutation.isPending || pushMutation.isPending,
 
     renameBranch: renameBranchMutation.mutate,
     isRenameBranchPending: renameBranchMutation.isPending,

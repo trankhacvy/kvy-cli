@@ -1,8 +1,9 @@
 "use client";
 
-import type { PullRequestInfo } from "@falcon/wire";
-import { ExternalLink } from "lucide-react";
+import type { CheckRun, PullRequestInfo } from "@falcon/wire";
+import { ExternalLink, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { GithubChecksSnapshot, UseGithubChecksActions } from "../types";
 import { DaemonUnsupportedError } from "../types";
 import { useChecksPanel } from "../use-checks-panel";
@@ -51,10 +52,12 @@ export function ChecksBody({
   isLoading,
   error,
   checks,
+  onFixWithAgent,
 }: {
   isLoading: boolean;
   error: Error | null;
   checks: GithubChecksSnapshot | undefined;
+  onFixWithAgent?: (check: CheckRun) => void;
 }) {
   if (isLoading) {
     return <EmptyState>Loading checks…</EmptyState>;
@@ -104,8 +107,12 @@ export function ChecksBody({
           {checks.checks && checks.checks.length > 0 ? (
             <ul className="flex flex-col gap-2">
               {checks.checks.map((check, index) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: `check.name` alone isn't a stable unique key — GitHub's check-runs list for one commit commonly contains multiple runs with the same name (a re-run creates a new entry rather than replacing the old one) — and the CheckRun wire shape carries no id; the list is replaced wholesale on every poll rather than reordered in place, same reasoning as UnifiedDiffViewer's/DiffView's own index-key precedent.
-                <CheckRunRow key={`${check.name}-${index}`} check={check} />
+                <CheckRunRow
+                  // biome-ignore lint/suspicious/noArrayIndexKey: `check.name` alone isn't a stable unique key — GitHub's check-runs list for one commit commonly contains multiple runs with the same name (a re-run creates a new entry rather than replacing the old one) — and the CheckRun wire shape carries no id; the list is replaced wholesale on every poll rather than reordered in place, same reasoning as UnifiedDiffViewer's/DiffView's own index-key precedent.
+                  key={`${check.name}-${index}`}
+                  check={check}
+                  onFixWithAgent={onFixWithAgent}
+                />
               ))}
             </ul>
           ) : (
@@ -131,13 +138,38 @@ export function ChecksBody({
 export function ChecksPanel({
   machineId,
   worktree,
+  onFixWithAgent,
   useActions = useLiveGithubChecksActions,
 }: {
   machineId: string;
   worktree: string;
+  /** Wired to the same lifted `onSend`/`ComposerState.send` every other
+   * session-panel-workflow action goes through — omitted entirely by
+   * `SessionChecksScreen.tsx`'s other, non-panel usage of this component. */
+  onFixWithAgent?: (check: CheckRun) => void;
   useActions?: UseGithubChecksActions;
 }) {
   const actions = useActions(machineId);
-  const { checks, error, isLoading } = useChecksPanel(actions, worktree);
-  return <ChecksBody isLoading={isLoading} error={error} checks={checks} />;
+  const { checks, error, isLoading, refetch } = useChecksPanel(actions, worktree);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex justify-end">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-xs text-muted-foreground"
+          onClick={() => void refetch()}
+        >
+          <RefreshCw className="size-3.5" />
+          Refresh
+        </Button>
+      </div>
+      <ChecksBody
+        isLoading={isLoading}
+        error={error}
+        checks={checks}
+        onFixWithAgent={onFixWithAgent}
+      />
+    </div>
+  );
 }

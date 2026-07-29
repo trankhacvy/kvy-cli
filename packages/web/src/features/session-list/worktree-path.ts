@@ -17,3 +17,22 @@ export function looksLikeWorktreePath(workspaceId: string | null): boolean {
   if (workspaceId === null) return false;
   return workspaceId.split(/[/\\]/).includes(".worktrees");
 }
+
+/**
+ * The parent workspace path a Falcon-managed worktree directory nests under
+ * (`gitWorktree.ts`'s own `<repoDirectory>/.worktrees/<branch>` convention),
+ * or `null` if `workspaceId` isn't a worktree path at all
+ * (`looksLikeWorktreePath` above).
+ *
+ * Matches the FIRST `.worktrees` segment, not the last, so a worktree
+ * spawned from inside another worktree's directory re-parents onto the
+ * outermost repo root rather than the intermediate worktree — not a flow
+ * this codebase creates today, but kept defensively correct for it.
+ *
+ * Preserves whichever path separator `workspaceId` actually uses (`/` or
+ * `\`) rather than normalizing.
+ */
+export function parentWorktreePath(workspaceId: string): string | null {
+  const match = /^(.*?)[/\\]\.worktrees[/\\]/.exec(workspaceId);
+  return match ? (match[1] as string) : null;
+}

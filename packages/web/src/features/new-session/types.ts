@@ -1,4 +1,4 @@
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode, WorkspaceGetConfigResult } from "@falcon/wire";
 
 /**
  * Shared RPC/view-model types for spawning a session against a machine
@@ -129,6 +129,8 @@ export interface NewSessionActions {
   listImportCandidates(directory: string): Promise<ImportCandidate[]>;
   /** Lists local branches at `directory` (the daemon's `git.branches` RPC, docs/features/worktree-isolation.md — `directory` doubles as the RPC's `worktree` param, same "a workspaceId/worktree IS a directory path" convention as `spawn`/`listImportCandidates` above) — the existing-branch worktree picker's data source. Throws on failure (unreachable machine, not a git repo, ...); an empty array means "no local branches", not an error. */
   listBranches(directory: string): Promise<BranchItem[]>;
+  /** Reads `directory`'s per-workspace config (the daemon's `workspace.getConfig` RPC) — used here only for `baseRef`, the base-branch picker's preferred default (`inline-spawn.ts`'s `deriveDefaultBaseBranch`). Throws on failure (unreachable machine, ...); an object with every field `undefined` means "nothing configured yet", not an error. */
+  getConfig(directory: string): Promise<WorkspaceGetConfigResult>;
 }
 
 /** One machine RPC actions client per chosen machine — mirrors `UseSessionControl = (sessionId) => SessionControlActions`. */

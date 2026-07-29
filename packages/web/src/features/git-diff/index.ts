@@ -1,13 +1,16 @@
 export { ChangedFilesList } from "./components/ChangedFilesList";
 export { CompareAgainstSelect } from "./components/CompareAgainstSelect";
+export { CreatePrButton } from "./components/CreatePrButton";
 export { FileStatusBadge } from "./components/FileStatusBadge";
 export { GitDiffPanel } from "./components/GitDiffPanel";
+export { ChecklistRow, GitStatusChecklist, PrChecklistRow } from "./components/GitStatusChecklist";
 export { GitStatusError } from "./components/GitStatusError";
 export { GitToolbar } from "./components/GitToolbar";
 export { SessionGitScreen } from "./components/SessionGitScreen";
 export { UnifiedDiffViewer } from "./components/UnifiedDiffViewer";
 export { buildDiffFetchOptions } from "./git-diff-query";
 export { machineRpcToGitDiffActions } from "./live-actions";
+export { manualCompareUrl } from "./manual-pr-url";
 export { createMockGitDiffActions, useMockGitDiffActions } from "./mock-source";
 export type {
   GitBranchInfo,

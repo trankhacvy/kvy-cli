@@ -126,6 +126,54 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups.map((g) => g.workspace.id)).toEqual(["a", "b"]);
   });
 
+  it("re-parents a worktree child onto its registered parent repo (known-issues.md #15)", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [
+        { id: "/repo", name: "repo" },
+        { id: "/repo/.worktrees/wf/a", name: "wf/a" },
+      ],
+      machines: [],
+      sessions: [
+        session({ id: "main", workspaceId: "/repo", updatedAt: 1 }),
+        session({ id: "worktree-child", workspaceId: "/repo/.worktrees/wf/a", updatedAt: 2 }),
+      ],
+    };
+    const groups = groupSessionsByWorkspace(snapshot);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.workspace.id).toBe("/repo");
+    expect(groups[0]?.sessions.map((s) => s.id).sort()).toEqual(["main", "worktree-child"]);
+  });
+
+  it("leaves a worktree child top-level when its parent isn't a registered workspace", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [{ id: "/repo/.worktrees/wf/a", name: "wf/a" }],
+      machines: [],
+      sessions: [session({ id: "orphan-worktree", workspaceId: "/repo/.worktrees/wf/a" })],
+    };
+    const groups = groupSessionsByWorkspace(snapshot);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.workspace.id).toBe("/repo/.worktrees/wf/a");
+  });
+
+  it("groups two sibling worktrees under the same registered parent", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [
+        { id: "/repo", name: "repo" },
+        { id: "/repo/.worktrees/wf/a", name: "wf/a" },
+        { id: "/repo/.worktrees/wf/b", name: "wf/b" },
+      ],
+      machines: [],
+      sessions: [
+        session({ id: "sib-a", workspaceId: "/repo/.worktrees/wf/a" }),
+        session({ id: "sib-b", workspaceId: "/repo/.worktrees/wf/b" }),
+      ],
+    };
+    const groups = groupSessionsByWorkspace(snapshot);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.workspace.id).toBe("/repo");
+    expect(groups[0]?.sessions.map((s) => s.id).sort()).toEqual(["sib-a", "sib-b"]);
+  });
+
   it("omits a workspace that has no sessions", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
@@ -179,5 +227,44 @@ describe("groupPagedSessions", () => {
 
   it("returns an empty array for an empty input", () => {
     expect(groupPagedSessions([], workspaces)).toEqual([]);
+  });
+
+  it("re-parents a worktree child onto its registered parent repo", () => {
+    const withWorktree: SessionListWorkspace[] = [
+      ...workspaces,
+      { id: "a/.worktrees/wf/x", name: "wf/x" },
+    ];
+    const sessions = [
+      session({ id: "child", workspaceId: "a/.worktrees/wf/x", updatedAt: 10 }),
+      session({ id: "main", workspaceId: "a", updatedAt: 5 }),
+    ];
+    const groups = groupPagedSessions(sessions, withWorktree);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.workspace.id).toBe("a");
+    expect(groups[0]?.sessions.map((s) => s.id).sort()).toEqual(["child", "main"]);
+  });
+
+  it("leaves a worktree child top-level when its parent isn't registered", () => {
+    const worktreeWorkspaces: SessionListWorkspace[] = [
+      { id: "unregistered/.worktrees/wf/x", name: "wf/x" },
+    ];
+    const sessions = [session({ id: "orphan", workspaceId: "unregistered/.worktrees/wf/x" })];
+    const groups = groupPagedSessions(sessions, worktreeWorkspaces);
+    expect(groups.map((g) => g.workspace.id)).toEqual(["unregistered/.worktrees/wf/x"]);
+  });
+
+  it("groups two sibling worktrees under the same registered parent", () => {
+    const withWorktrees: SessionListWorkspace[] = [
+      ...workspaces,
+      { id: "a/.worktrees/wf/a", name: "wf/a" },
+      { id: "a/.worktrees/wf/b", name: "wf/b" },
+    ];
+    const sessions = [
+      session({ id: "sib-a", workspaceId: "a/.worktrees/wf/a" }),
+      session({ id: "sib-b", workspaceId: "a/.worktrees/wf/b" }),
+    ];
+    const groups = groupPagedSessions(sessions, withWorktrees);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.workspace.id).toBe("a");
   });
 });

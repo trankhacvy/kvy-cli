@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { MOCK_GITHUB_CHECKS_FIXTURES } from "../mock-source";
 import type { UseGithubChecksActions } from "../types";
 import { DaemonUnsupportedError } from "../types";
@@ -87,6 +87,39 @@ describe("ChecksBody", () => {
     expect(html).toContain("test");
     expect(html).toContain("lint");
   });
+
+  it("offers 'Fix with agent' only for the failed/timed-out completed check, when onFixWithAgent is provided", () => {
+    const onFixWithAgent = vi.fn();
+    const html = renderBody({
+      isLoading: false,
+      error: null,
+      checks: MOCK_GITHUB_CHECKS_FIXTURES.ok,
+      onFixWithAgent,
+    });
+    // one "Fix with agent" for the failed "typecheck" run only — not for the
+    // succeeded "build", the in-progress "test", or the queued "lint".
+    expect(html.match(/Fix with agent/g)).toHaveLength(1);
+  });
+
+  it("shows no 'Fix with agent' controls at all when onFixWithAgent is omitted", () => {
+    const html = renderBody({
+      isLoading: false,
+      error: null,
+      checks: MOCK_GITHUB_CHECKS_FIXTURES.ok,
+    });
+    expect(html).not.toContain("Fix with agent");
+  });
+
+  it("never calls onFixWithAgent merely by rendering", () => {
+    const onFixWithAgent = vi.fn();
+    renderBody({
+      isLoading: false,
+      error: null,
+      checks: MOCK_GITHUB_CHECKS_FIXTURES.ok,
+      onFixWithAgent,
+    });
+    expect(onFixWithAgent).not.toHaveBeenCalled();
+  });
 });
 
 describe("ChecksPanel (integration via a mock actions source)", () => {
@@ -108,5 +141,25 @@ describe("ChecksPanel (integration via a mock actions source)", () => {
     );
 
     expect(html).toContain("Add the Checks tab");
+  });
+
+  it("renders a manual Refresh control (session-panel-workflow-plan.md Phase 2: seeing a new PR sooner than the 60s poll floor)", async () => {
+    const { ChecksPanel } = await import("./ChecksPanel");
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(["github-checks", "/repo"], MOCK_GITHUB_CHECKS_FIXTURES.ok);
+
+    const useActions: UseGithubChecksActions = () => ({
+      fetchChecks: () => new Promise(() => {}),
+    });
+
+    const html = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client: queryClient },
+        createElement(ChecksPanel, { machineId: "mach-1", worktree: "/repo", useActions }),
+      ),
+    );
+
+    expect(html).toContain("Refresh");
   });
 });

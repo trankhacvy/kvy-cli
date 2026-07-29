@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { buildFileTree } from "./file-tree-logic";
 import type { RepoFilesActions } from "./types";
 
@@ -14,6 +14,7 @@ import type { RepoFilesActions } from "./types";
  * RPC snapshot the user refreshes by re-selecting or explicit re-fetch.
  */
 export function useRepoFiles(actions: RepoFilesActions, worktree: string) {
+  const queryClient = useQueryClient();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const filesQuery = useQuery({
@@ -28,6 +29,23 @@ export function useRepoFiles(actions: RepoFilesActions, worktree: string) {
     // `use-git-panel.ts`'s "avoid a race with the file list" enabled guard.
     enabled: selectedPath !== null,
   });
+
+  // `actions` starts out as a permanently-rejecting stub until this
+  // machine's crypto key finishes unwrapping (`useLiveRepoFilesActions`) —
+  // a fetch raced against that stub can get stuck in a state nothing
+  // retries once `actions` is swapped for the real client. Force a refetch
+  // the moment `actions`'s identity changes after mount, the same fix
+  // `use-git-panel.ts` applies.
+  const isFirstActionsRender = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed only on `actions` — see use-git-panel.ts's identical effect.
+  useEffect(() => {
+    if (isFirstActionsRender.current) {
+      isFirstActionsRender.current = false;
+      return;
+    }
+    void queryClient.invalidateQueries({ queryKey: ["repo-files", worktree] });
+    void queryClient.invalidateQueries({ queryKey: ["repo-file-content", worktree] });
+  }, [actions]);
 
   const tree = filesQuery.data ? buildFileTree(filesQuery.data) : [];
 
