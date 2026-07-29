@@ -107,6 +107,8 @@ import {
   GithubChecksResultSchema,
   type GitPushParams,
   GitPushResultSchema,
+  type GitRemotesParams,
+  GitRemotesResultSchema,
   type GitRenameBranchParams,
   GitRenameBranchResultSchema,
   type GitStatusParams,
@@ -142,6 +144,8 @@ import {
   WorkspaceGetConfigResultSchema,
   type WorkspaceRegisterParams,
   WorkspaceRegisterResultSchema,
+  type WorkspaceSetConfigParams,
+  WorkspaceSetConfigResultSchema,
   type WorkspaceUnregisterParams,
   WorkspaceUnregisterResultSchema,
   type WorktreeRemoveParams,
@@ -162,6 +166,7 @@ export type {
   GitFilesParams,
   GithubChecksParams,
   GitPushParams,
+  GitRemotesParams,
   GitRenameBranchParams,
   GitStatusParams,
   PreviewCloseParams,
@@ -179,6 +184,7 @@ export type {
   SpawnParams,
   WorkspaceGetConfigParams,
   WorkspaceRegisterParams,
+  WorkspaceSetConfigParams,
   WorkspaceUnregisterParams,
   WorktreeRemoveParams,
 };
@@ -201,6 +207,7 @@ export interface MachineRpcParams {
   "git.status": GitStatusParams;
   "git.diff": GitDiffParams;
   "git.branches": GitBranchesParams;
+  "git.remotes": GitRemotesParams;
   "git.commit": GitCommitParams;
   "git.push": GitPushParams;
   "git.renameBranch": GitRenameBranchParams;
@@ -217,6 +224,7 @@ export interface MachineRpcParams {
   "sleepInhibit.get": SleepInhibitGetParams;
   "sleepInhibit.set": SleepInhibitSetParams;
   "workspace.getConfig": WorkspaceGetConfigParams;
+  "workspace.setConfig": WorkspaceSetConfigParams;
   "run.start": RunStartParams;
   "run.stop": RunStopParams;
   "run.status": RunStatusParams;
@@ -237,6 +245,7 @@ export interface MachineRpcResults {
   "git.status": import("@falcon/wire").GitStatusResult;
   "git.diff": import("@falcon/wire").GitDiffResult;
   "git.branches": import("@falcon/wire").GitBranchesResult;
+  "git.remotes": import("@falcon/wire").GitRemotesResult;
   "git.commit": import("@falcon/wire").GitCommitResult;
   "git.push": import("@falcon/wire").GitPushResult;
   "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
@@ -253,6 +262,7 @@ export interface MachineRpcResults {
   "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
   "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
   "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
+  "workspace.setConfig": import("@falcon/wire").WorkspaceSetConfigResult;
   "run.start": import("@falcon/wire").RunStartResult;
   "run.stop": import("@falcon/wire").RunStopResult;
   "run.status": import("@falcon/wire").RunStatusResult;
@@ -274,6 +284,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.status": GitStatusResultSchema,
   "git.diff": GitDiffResultSchema,
   "git.branches": GitBranchesResultSchema,
+  "git.remotes": GitRemotesResultSchema,
   "git.commit": GitCommitResultSchema,
   "git.push": GitPushResultSchema,
   "git.renameBranch": GitRenameBranchResultSchema,
@@ -290,6 +301,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "sleepInhibit.get": SleepInhibitStateSchema,
   "sleepInhibit.set": SleepInhibitStateSchema,
   "workspace.getConfig": WorkspaceGetConfigResultSchema,
+  "workspace.setConfig": WorkspaceSetConfigResultSchema,
   "run.start": RunStartResultSchema,
   "run.stop": RunStopResultSchema,
   "run.status": RunStatusResultSchema,

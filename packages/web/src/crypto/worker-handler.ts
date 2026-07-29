@@ -25,6 +25,7 @@ import {
   encodeBase64,
   encryptBlob,
   generateEphemeralKeyPair,
+  getRandomBytes,
   libsodiumDecryptWithSecretKey,
   libsodiumEncryptForPublicKey,
   open,
@@ -34,6 +35,7 @@ import {
   signDetached,
   unwrapDek,
   unwrapWithPin,
+  wrapDek,
 } from "@falcon/crypto/web";
 import { API_URL } from "@/lib/config.js";
 import { createWrapKey, unwrapBytes, wrapBytes } from "./device-key.js";
@@ -49,6 +51,7 @@ import type { SessionStorage } from "./session-storage.js";
 
 const X25519_PUBLIC_KEY_BYTES = 32;
 const MASTER_SECRET_BYTES = 32;
+const DEK_LENGTH_BYTES = 32;
 
 /** `[0x01 | masterSecret | refreshToken]` — CLI pairing (issue-4-plan.md §6.3). */
 const PAIR_PAYLOAD_VERSION = 0x01;
@@ -311,6 +314,21 @@ export function createCryptoWorkerHandler(
           const dek = unwrapDek(request.wrappedDek, keyTree.content.secretKey);
           activeDek = dek;
           return { id: request.id, ok: true, result: dek !== null };
+        }
+
+        case "createDek": {
+          if (!(await ensureLoaded()) || !keyTree) {
+            return { id: request.id, ok: false, error: "needs-keys" };
+          }
+          await ready;
+          const dek = getRandomBytes(DEK_LENGTH_BYTES);
+          const wrappedDek = wrapDek(dek, keyTree.content.publicKey);
+          const box = await seal(request.data, dek);
+          return {
+            id: request.id,
+            ok: true,
+            result: { wrappedDek: encodeBase64(wrappedDek), box },
+          };
         }
 
         case "seal": {

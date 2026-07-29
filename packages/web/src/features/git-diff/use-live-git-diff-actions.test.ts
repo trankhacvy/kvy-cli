@@ -18,6 +18,7 @@ function renderActions(machineId: string) {
     sessions: [],
     machines: [],
     unmanagedSessions: [],
+    workspaces: [],
   } satisfies SyncSnapshot);
   let captured: ReturnType<typeof useLiveGitDiffActions> | undefined;
   function Harness() {

@@ -44,6 +44,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
       identity = { signPubKey: "sign-pub", contentPubKey: "content-pub" };
     },
     setSessionKey: notImplemented,
+    createDek: notImplemented,
     seal: notImplemented,
     open: notImplemented,
     sealBlob: notImplemented,

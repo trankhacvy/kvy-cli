@@ -38,6 +38,7 @@ function renderCrypto(machineId: string, machines: MachineRow[]) {
     sessions: [],
     machines,
     unmanagedSessions: [],
+    workspaces: [],
   } satisfies SyncSnapshot);
   let captured: ReturnType<typeof useMachineCrypto> | undefined;
   function Harness() {

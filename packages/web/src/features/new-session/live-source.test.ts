@@ -48,7 +48,7 @@ function renderWithSnapshot<T>(hook: () => T, snapshot: SyncSnapshot): T {
 }
 
 function snapshotWithMachines(machines: MachineRow[]): SyncSnapshot {
-  return { headerSeq: 1, sessions: [], machines, unmanagedSessions: [] };
+  return { headerSeq: 1, sessions: [], machines, unmanagedSessions: [], workspaces: [] };
 }
 
 describe("useLiveNewSessionActions", () => {

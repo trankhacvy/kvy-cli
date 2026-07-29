@@ -185,6 +185,25 @@ export const GitBranchesResultSchema = z.object({
 });
 export type GitBranchesResult = z.infer<typeof GitBranchesResultSchema>;
 
+// `git.remotes` machine RPC: lists configured git remotes, for the workspace
+// settings Git tab's remote-name autofill. Structural clone of `git.branches`.
+export const GitRemotesParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GitRemotesParams = z.infer<typeof GitRemotesParamsSchema>;
+
+export const GitRemoteInfoSchema = z.object({
+  name: z.string(),
+  url: z.string(),
+});
+export type GitRemoteInfo = z.infer<typeof GitRemoteInfoSchema>;
+
+export const GitRemotesResultSchema = z.object({
+  remotes: z.array(GitRemoteInfoSchema),
+});
+export type GitRemotesResult = z.infer<typeof GitRemotesResultSchema>;
+
 // `provider.account` machine RPC (docs/competitive-notes-omnara.md #9
 // "Provider account inspection + usage metering"): Settings → Providers'
 // per-machine, per-provider account snapshot — read straight off the local
@@ -851,6 +870,27 @@ export const WorkspaceGetConfigResultSchema = z.object({
   runScript: z.string().optional(),
 });
 export type WorkspaceGetConfigResult = z.infer<typeof WorkspaceGetConfigResultSchema>;
+
+// `workspace.setConfig`: the web Workspace Settings UI's write path for
+// `baseRef`/`remote` only — `setupScript`/`runScript` stay outside this
+// schema entirely, preserving design §12's local-consent boundary (no
+// script string ever crosses the RPC wire in either direction). `baseRef`/
+// `remote` carry no execution risk, so unlike scripts they're safe to set
+// remotely; an empty string clears the field, matching
+// `setWorkspaceGitConfig`'s clear-on-empty-string semantics.
+export const WorkspaceSetConfigParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  baseRef: z.string().optional(),
+  remote: z.string().optional(),
+});
+export type WorkspaceSetConfigParams = z.infer<typeof WorkspaceSetConfigParamsSchema>;
+
+export const WorkspaceSetConfigResultSchema = z.object({
+  baseRef: z.string().optional(),
+  remote: z.string().optional(),
+});
+export type WorkspaceSetConfigResult = z.infer<typeof WorkspaceSetConfigResultSchema>;
 
 // `run.start`/`run.stop`/`run.status`/`run.setup` (docs/features/
 // setup-run-scripts.md Phase 3): the daemon's long-lived run-process

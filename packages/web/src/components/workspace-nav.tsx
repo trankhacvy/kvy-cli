@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { SessionListMachine, WorkspaceGroup } from "@/features/session-list";
 import { NewSessionTrigger } from "@/features/session-list/components/new-session-panel";
 import { useWorkspaceNavGroups } from "@/features/session-list/use-workspace-nav";
+import { WorkspaceSettingsDialog } from "@/features/workspace-settings";
 import { useDebouncedOrder } from "@/hooks/use-debounced-order";
 import { getExpandedWorkspaces, setWorkspaceExpanded } from "./workspace-nav-expand-state";
 
@@ -34,6 +35,15 @@ const SKELETON_ROW_IDS = ["skeleton-1", "skeleton-2", "skeleton-3"];
 
 function workspaceKey(group: WorkspaceGroup): string {
   return group.workspace.id;
+}
+
+/** The machine to target for this workspace's daemon RPCs (settings dialog,
+ * new-session picker) — the most recent session's machine, if any. A
+ * workspace with no sessions yet (or whose sessions are all unmanaged/
+ * machine-less) has none, which the settings dialog treats as "no machine
+ * associated yet" rather than erroring. */
+function resolveGroupMachineId(group: WorkspaceGroup): string | null {
+  return group.sessions.find((session) => session.machineId !== null)?.machineId ?? null;
 }
 
 export function WorkspaceNav() {
@@ -88,6 +98,9 @@ function WorkspaceNavItem({
   const pathname = usePathname();
   const [expanded, setExpanded] = useState(() => getExpandedWorkspaces().has(group.workspace.id));
   const [showAll, setShowAll] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const machineId = resolveGroupMachineId(group);
+  const machine = machineId ? (machinesById.get(machineId) ?? null) : null;
 
   function handleOpenChange(next: boolean) {
     setExpanded(next);
@@ -112,9 +125,20 @@ function WorkspaceNavItem({
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100">
-          <WorkspaceSettingsButton workspaceName={group.workspace.name} />
+          <WorkspaceSettingsButton
+            workspaceName={group.workspace.name}
+            onClick={() => setSettingsOpen(true)}
+          />
           <NewSessionTrigger group={group} machinesById={machinesById} />
         </div>
+        <WorkspaceSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          workspacePath={group.workspace.id}
+          workspaceName={group.workspace.name}
+          machineId={machineId}
+          machine={machine}
+        />
         {hasSessions && (
           <CollapsibleContent>
             <SidebarMenuSub>
@@ -149,9 +173,14 @@ function WorkspaceNavItem({
   );
 }
 
-/** Stub trigger for a not-yet-built workspace settings surface — present so
- * the affordance exists, but clicking it does nothing yet. */
-function WorkspaceSettingsButton({ workspaceName }: { workspaceName: string }) {
+/** Opens `WorkspaceSettingsDialog` for this workspace (General/Git config). */
+function WorkspaceSettingsButton({
+  workspaceName,
+  onClick,
+}: {
+  workspaceName: string;
+  onClick: () => void;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -161,6 +190,7 @@ function WorkspaceSettingsButton({ workspaceName }: { workspaceName: string }) {
           variant="ghost"
           className="size-7"
           aria-label={`${workspaceName} settings`}
+          onClick={onClick}
         >
           <Settings className="size-3.5" />
         </Button>

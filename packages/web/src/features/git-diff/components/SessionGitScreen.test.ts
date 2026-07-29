@@ -58,7 +58,7 @@ function makeSession(overrides: Partial<SessionRow> = {}): SessionRow {
 }
 
 function makeSnapshot(sessions: SessionRow[]): SyncSnapshot {
-  return { headerSeq: 1, sessions, machines: [], unmanagedSessions: [] };
+  return { headerSeq: 1, sessions, machines: [], unmanagedSessions: [], workspaces: [] };
 }
 
 async function renderScreen(sessionId: string, snapshot: SyncSnapshot | undefined) {

@@ -1,7 +1,13 @@
 import { encodeBase64 } from "@falcon/crypto";
-import type { MachineRow, SessionRow, SessionStatus, UnmanagedSessionRow } from "@falcon/wire";
+import type {
+  MachineRow,
+  SessionRow,
+  SessionStatus,
+  UnmanagedSessionRow,
+  WorkspaceRow,
+} from "@falcon/wire";
 import { decodeBox } from "../../db/box.js";
-import type { machines, sessions, unmanagedSessions } from "../../db/schema.js";
+import type { machines, sessions, unmanagedSessions, workspaces } from "../../db/schema.js";
 
 /** DB row → wire row for `SessionRowSchema` (design §6.1/§4.3). */
 export function toSessionRow(row: typeof sessions.$inferSelect): SessionRow {
@@ -46,6 +52,17 @@ export function toMachineRow(row: typeof machines.$inferSelect, needsReauth = fa
     dek: encodeBase64(row.dek),
     lastSeenAt: row.lastSeenAt ? row.lastSeenAt.getTime() : null,
     needsReauth,
+  };
+}
+
+/** DB row → wire row for `WorkspaceRowSchema`. */
+export function toWorkspaceRow(row: typeof workspaces.$inferSelect): WorkspaceRow {
+  return {
+    id: row.id,
+    accountId: row.accountId,
+    path: row.path,
+    metadata: { value: decodeBox(row.metadata), version: row.metadataVersion },
+    dek: encodeBase64(row.dek),
   };
 }
 

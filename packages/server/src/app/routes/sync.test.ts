@@ -51,6 +51,7 @@ describe("GET /v1/sync", () => {
       sessions: [],
       machines: [],
       unmanagedSessions: [],
+      workspaces: [],
     });
   });
 

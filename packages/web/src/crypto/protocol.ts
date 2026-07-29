@@ -64,6 +64,19 @@ export interface SetSessionKeyRequest {
   wrappedDek: Uint8Array;
 }
 
+/**
+ * Mint a fresh DEK, wrap it to this device's own content public key (the
+ * same `wrapDek(dek, keyTree.content.publicKey)` the CLI uses when it mints
+ * a session/machine DEK — `session/bootstrap.ts`), and seal `data` under it
+ * — for a web-originated encrypted entity (e.g. a workspace row created
+ * from the Workspace Settings dialog) rather than one relayed from the CLI.
+ */
+export interface CreateDekRequest {
+  id: string;
+  type: "createDek";
+  data: unknown;
+}
+
 export interface SealRequest {
   id: string;
   type: "seal";
@@ -200,6 +213,7 @@ export interface SealKeysForPeerRequest {
 export type CryptoWorkerRequest =
   | InitRequest
   | SetSessionKeyRequest
+  | CreateDekRequest
   | SealRequest
   | OpenRequest
   | SealBlobRequest
@@ -251,9 +265,16 @@ export type RefreshOutcome =
   /** The request failed or answered something unusable. Keep the session; retry. */
   | { kind: "unreachable" };
 
+export interface CreateDekResult {
+  /** Base64, ready to send as `WorkspaceRow.dek`/`SessionRow.dek`-shaped wire fields. */
+  wrappedDek: string;
+  box: EncryptedBox;
+}
+
 export interface CryptoWorkerResults {
   init: null;
   setSessionKey: boolean;
+  createDek: CreateDekResult;
   seal: EncryptedBox;
   open: unknown;
   sealBlob: Uint8Array;

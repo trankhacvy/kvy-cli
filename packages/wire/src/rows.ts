@@ -49,6 +49,15 @@ export const MachineRowSchema = z.object({
 });
 export type MachineRow = z.infer<typeof MachineRowSchema>;
 
+export const WorkspaceRowSchema = z.object({
+  id: z.string(),
+  accountId: z.string(),
+  path: z.string(),
+  metadata: VersionedSchema(EncryptedBoxSchema), // enc: baseBranch, remote
+  dek: z.string(),
+});
+export type WorkspaceRow = z.infer<typeof WorkspaceRowSchema>;
+
 export const UnmanagedSessionRowSchema = z.object({
   id: z.string(),
   accountId: z.string(),

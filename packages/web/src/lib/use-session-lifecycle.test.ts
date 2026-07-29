@@ -52,6 +52,7 @@ function seedSnapshot(queryClient: QueryClient, sessions: SessionRow[]): void {
     sessions,
     machines: [],
     unmanagedSessions: [],
+    workspaces: [],
   } satisfies SyncSnapshot);
 }
 

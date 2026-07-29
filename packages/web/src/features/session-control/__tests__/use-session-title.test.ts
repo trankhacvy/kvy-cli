@@ -42,6 +42,7 @@ function renderTitle(sessionId: string, sessions: SessionRow[]) {
     sessions,
     machines: [],
     unmanagedSessions: [],
+    workspaces: [],
   } satisfies SyncSnapshot);
   let captured: string | null | undefined;
   function Harness() {

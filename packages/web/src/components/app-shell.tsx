@@ -34,7 +34,7 @@ export function isSessionRoute(pathname: string): boolean {
 }
 
 function pageTitle(pathname: string): string {
-  if (pathname === "/dashboard/") return "Sessions";
+  if (pathname === "/dashboard/") return "Home";
   if (pathname.includes("/git/")) return "Files changed";
   if (pathname.includes("/files/")) return "Repo files";
   if (pathname.startsWith("/dashboard/session/")) return "Session";
