@@ -7,6 +7,7 @@ export { WorkspaceSection } from "./components/workspace-section";
 export { formatRelativeTime } from "./format-relative-time";
 export { groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID, type WorkspaceGroup } from "./group";
 export { useLiveSessionListSnapshot } from "./live-source";
+export { buildReviewSpawnRequest } from "./review-spawn";
 export { SessionListScreen } from "./session-list-screen";
 export {
   type DeriveSessionStatusInput,
@@ -32,4 +33,10 @@ export {
   type MachineStatus,
   useMachinePresence,
 } from "./use-machine-presence";
+export {
+  type ReviewSpawnController,
+  type ReviewSpawnState,
+  useReviewSpawn,
+} from "./use-review-spawn";
 export { useWorkspaceNavGroups } from "./use-workspace-nav";
+export { looksLikeWorktreePath, parentWorktreePath } from "./worktree-path";

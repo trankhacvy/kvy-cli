@@ -84,5 +84,12 @@ export function machineRpcToActions(rpc: MachineRpcClient): NewSessionActions {
       });
       return result.branches;
     },
+
+    async getConfig(directory) {
+      return rpc.call("workspace.getConfig", {
+        idempotencyKey: crypto.randomUUID(),
+        worktree: directory,
+      });
+    },
   };
 }

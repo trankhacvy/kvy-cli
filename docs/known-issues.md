@@ -16,7 +16,10 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
 | 13 | [New Session from web: daemon-initiated spawn reproducibly fails in ~1s, with no diagnostic trail](#issue-13) | Open |
 | 14 | [ACP adapter auto-install can genuinely fail/be slow — pinned adapter requires Node ≥22, this machine (and likely others) runs Node 20](#issue-14) | Open |
-| 15 | [A workspace's `+` spawn registers the new worktree as its own separate top-level workspace, not nested under the parent](#issue-15) | Open (needs product decision) |
+| 15 | [An adopted/unmanaged session's title can leak the raw Conductor `<system_instruction>` wrapper text](#issue-15) | Open |
+| 16 | [Session side panel's base-branch-default fix (Phase 0.3) landed but was never live-reverified](#issue-16) | Open (needs verification) |
+| 17 | [Daemon-spawned session processes survive a crashed/interrupted run and never get reaped — causes account-wide refresh-token rotation churn](#issue-17) | Open |
+| 18 | [Re-pairing an already-registered machine to a different account silently leaves it owned by the original account](#issue-18) | Open |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -399,37 +402,151 @@ diverging).
 
 <a id="issue-15"></a>
 
-## 15. A workspace's `+` spawn registers the new worktree as its own separate top-level workspace, not nested under the parent
+## 15. An adopted/unmanaged session's title can leak the raw Conductor `<system_instruction>` wrapper text
 
-**Where:** `packages/cli/src/workspace/registry.ts` (`registerWorkspace`, called by
-`start.ts`/`startCodex.ts` against `process.cwd()` with no ancestor-directory resolution —
-already documented as a deliberate design choice elsewhere in this codebase),
-`packages/web/src/features/session-list/group.ts` (`WorkspaceGroup`, groups purely by
-`workspaceId`, which is one-per-registered-directory). Found via live manual QA.
+**Where:** `packages/cli/src/daemon/transcriptIndexer.ts:206-217` (`parseTranscript`'s title
+preference: Claude Code's own `{"type":"summary"}` entry if one exists, else `firstUserText` —
+the raw text of the FIRST `type: "user"` transcript entry, truncated via `truncateTitle`, no
+other filtering), consumed by `packages/cli/src/adopt/listSessions.ts:65` and surfaced to the
+web's "Unmanaged sessions" list on Home.
 
-**What's open:** clicking "project-a"'s `+` and starting a session created a new worktree at
-`project-a/.worktrees/wf/20260728-bb09` — but on the Home screen, that session did not appear
-nested under the "project-a" workspace group the user clicked `+` from. It appeared as a
-**separate, top-level workspace group** named "20260728-bb09" (the worktree directory's own
-basename), sitting alongside "project-a" rather than under it. This is a direct, mechanical
-consequence of two already-existing, individually-reasonable design choices — each worktree
-gets registered as its own workspace (no ancestor-directory resolution), and the Home screen
-groups purely by `workspaceId` — but the *combined* effect at the exact moment this session's
-redesign asks a user to click `+` on a specific, named workspace is a visibly surprising one:
-the thing you clicked "+" on is not where the result shows up.
+**What's open:** when a session is started inside an environment (Conductor, or any other
+wrapper) that injects its own instructional preamble as the transcript's first `user` message
+— e.g. a literal `<system_instruction> You are working inside Conductor, a Mac app that
+lets...` block — and Claude Code hasn't yet generated its own `{"type":"summary"}` entry for
+that session (a short/new session, the common case for something still showing up as
+"unmanaged"), `firstUserText` falls back to that raw injected block verbatim. Observed live on
+Home's "Unmanaged sessions" list during session-panel-workflow-plan.md's E2E test pass
+(2026-07-29): several entries showed `<system_instruction> You are working inside Conductor, a
+Mac app that lets...` as their displayed title instead of anything resembling the actual task.
 
-**What a real fix needs:** a product decision, not obviously a bug fix. Options worth
-considering: (a) have the Home screen group by the worktree's *parent* repo/workspace instead
-of by the exact registered `workspaceId` when the two differ only by a `.worktrees/<branch>`
-suffix (a client-side display grouping change, no server/schema change needed); (b) don't
-register a worktree as its own independent workspace entry at all, and instead associate its
-sessions with the parent workspace's existing `workspaceId` directly; (c) accept the current
-behavior as correct/intentional (parallel worktrees really are semi-independent working
-directories) and instead make the `+` flow's own post-submit UX clearer about where the new
-session will land, so it's not a surprise.
+**What a real fix needs:** `parseTranscript`'s `firstUserText` fallback should recognize and
+skip a leading `<system_instruction>...</system_instruction>` (or similarly-wrapped
+environment-preamble) block when picking the first *genuine* human-authored line, rather than
+treating the transcript's first `user`-role entry as automatically representative — the same
+"don't trust the first line blindly" problem multi-agent harnesses in general run into.
 
-**Status:** open, not started — newly found via live end-to-end testing 2026-07-28. Not
-blocking (the session is fully functional and reachable, just grouped differently than a user
-would expect), but worth resolving since it directly affects the discoverability the `+`-per-
-workspace redesign was meant to improve.
+**Status:** open, not started — found via live E2E testing, not yet fixed. Purely cosmetic (a
+confusing/ugly title, not a data-integrity or security issue), but worth fixing since it's the
+first thing a user sees for exactly the sessions they're least sure about (unmanaged/adopted
+ones).
+
+<a id="issue-16"></a>
+
+## 16. Session side panel's base-branch-default fix (Phase 0.3) landed but was never live-reverified
+
+**Where:** `packages/web/src/features/session-list/components/new-session-panel.tsx` (the
+`useEffect` re-running `actions.listBranches`/`actions.getConfig` on `actions` identity change,
+added alongside issue #17's neighboring race-condition fix), `packages/web/src/features/session-list/inline-spawn.ts`'s
+`deriveDefaultBaseBranch` (prefers a configured `baseRef` over the current-checked-out branch).
+
+**What's open:** an earlier E2E pass found the `+` spawn panel's base-branch picker ignoring a
+workspace's configured `baseRef` (`falcon workspace config --base-ref main`) and always
+falling back to the current-checked-out branch instead — isolated with a differentiating test
+(checked out a throwaway branch, confirmed the picker followed it, not the configured `main`).
+The most likely cause was the same "`actions` starts as a permanently-rejecting stub until this
+machine's crypto key unwraps, and nothing ever retried once it did" bug documented for
+`git.status`/`fs.list`/`github.checks` (session-panel-workflow-plan.md's Phase-1 fix) —
+`workspace.getConfig` is a machine RPC gated the same way, and `new-session-panel.tsx`'s
+prefetch effect got the same fix (a second effect keyed on `actions`, re-running the
+`listBranches`/`getConfig` prefetch the moment the stub is swapped for the real client). That
+fix was verified live for the Changes/Checks/All Files tabs (2026-07-29) but the base-branch
+picker specifically was never re-opened and re-checked afterward.
+
+**What a real fix needs:** open a workspace's `+` spawn panel against a workspace with a
+configured `baseRef` that differs from its current-checked-out branch, and confirm the "From"
+field actually defaults to the configured ref. If it still doesn't, this is a distinct bug from
+the one already fixed, not just an unverified case of it.
+
+**Status:** open pending verification — likely already fixed as a side effect of a neighboring
+change, but nobody has confirmed it live yet. Don't assume it's resolved.
+
+<a id="issue-17"></a>
+
+## 17. Daemon-spawned session processes survive a crashed/interrupted run and never get reaped — causes account-wide refresh-token rotation churn
+
+**Where:** `packages/cli/src/daemon/sessionRegistry.ts` (re-adopts a still-live orphaned
+process's pid on daemon restart — confirmed via daemon log lines
+`"[session-registry] re-adopted live orphaned session after restart"` — rather than
+terminating it), whatever issues/refreshes the machine/session refresh token (daemon log
+lines: `"[token-provider] refresh token rejected but a newer one is on disk (likely rotated by
+a sibling process) — retrying once"`). Exact token-rotation code path not traced line-by-line;
+this entry documents the confirmed symptom and repro, not the internals.
+
+**What's open:** during session-panel-workflow-plan.md's E2E test pass (2026-07-29), an
+interrupted/restarted test-agent run repeatedly left the previous run's `falcon claude`
+processes (and their ACP adapter subprocesses) alive rather than terminated. On daemon
+restart, `sessionRegistry.ts` re-adopts these as live tracked sessions instead of reaping them.
+With several such orphaned processes accumulating under one account, the daemon log showed
+constant `[session-client]`/`[machine-client]` disconnect→reconnect churn every ~20-90
+seconds, each cycle logging a `"refresh token rejected but a newer one is on disk (likely
+rotated by a sibling process) — retrying once"` warning — multiple live processes racing to
+refresh the same account's token, each rotation invalidating the token another sibling process
+was mid-flight on. Confirmed via direct process inspection (`ps`, matching each process's `cwd`
+against directories that had already been removed) that several of the accumulated processes
+were genuine zombies with no reachable working directory at all. Killing the orphaned
+processes stopped the churn immediately and completely (confirmed via clean logs afterward).
+
+This was reproduced via *this session's own* repeated interrupted test runs, not a single
+crash — but a daemon restart after ANY ungraceful process death (a machine sleep/crash, a
+`kill -9`, a power loss) would leave the same kind of orphan behind, and this account only had
+a handful of them; a real user's machine restarting after a crash with several sessions running
+could plausibly hit the same churn.
+
+**What a real fix needs:** on daemon restart, distinguish "orphaned process I should keep
+tracking because the user might still want it" from "orphaned process that's actually dead
+weight" more actively than pid liveness alone — e.g. a staleness check, or a bounded number of
+concurrent refresh-token holders, or making the rotation itself tolerant of multiple
+legitimately-live siblings without each retry cycle producing visible churn. At minimum, some
+operator-facing way to see "N orphaned sessions from a previous run are still live" and clean
+them up, rather than relying on `ps`-and-`kill` by hand.
+
+**Status:** open, not started — found via live E2E testing, workaround (manually kill the
+orphaned processes) confirmed effective but not a fix.
+
+<a id="issue-18"></a>
+
+## 18. Re-pairing an already-registered machine to a different account silently leaves it owned by the original account
+
+**Where:** `packages/server/src/app/routes/machines.ts` — the `if (machineId)` branch's lookup
+(`where: and(eq(machines.id, machineId), eq(machines.accountId, accountId))`, ~line 133/192)
+scopes an existing-machine registration to the CALLER's own `accountId`; the `!machineId`
+branch (line 79-113) is the only path that inserts a fresh row under a new `accountId`. Root
+cause not fully isolated — see below.
+
+**What's open:** ran `falcon auth login` a second time against a daemon whose
+`daemon.state.json` already carried a `machineId` from an earlier pairing to Account A, while
+approving from a browser signed into a different Account B. The CLI reported `"auth login:
+succeeded"`, the browser's approval screen showed "Connected," and the daemon's own
+`machine-client` connected without error — every visible signal said success. But
+`machines.account_id` in Postgres still pointed at Account A (confirmed via direct query), and
+Account B's synced snapshot (`/v1/sync`) reported zero machines — silently; nothing in the CLI,
+the daemon logs, or the web UI surfaced any mismatch. The practical effect: every machine-RPC
+action in Account B's web UI (git status, files, checks — the whole session side panel) was
+stuck indefinitely on "machine key isn't unwrapped yet," because the account genuinely has no
+machine to unwrap a key for, and there was no error message pointing at why.
+
+Given `machines.ts`'s own `if (machineId)` lookup is scoped to `eq(machines.accountId,
+accountId)`, the most likely mechanism: whatever daemon-side call re-registers/reconnects an
+existing `machineId` after a successful pairing handshake sent the OLD `machineId` under the
+NEW account's auth context, that lookup found nothing (machine belongs to a different
+account), and whatever happened next (a 404? a silent no-op?) wasn't surfaced anywhere a user
+would see it. Not confirmed by tracing that exact call site — flagging the mechanism as the
+most likely one, not a verified root cause.
+
+**What a real fix needs:** (1) root-cause which call actually re-registers the machine after
+`falcon auth login` succeeds, and what it does when the existing `machineId` doesn't belong to
+the authenticating account; (2) either make cross-account re-pairing of an existing machine
+identity work (transfer ownership, with whatever confirmation that deserves) or make it fail
+loudly (`auth login` itself should error, not report success) — the current silent-mismatch
+outcome is the worst of both; (3) the web side has its own gap worth fixing independently: an
+account with zero machines but a session that references a `machineId` shows the same generic
+"machine key isn't unwrapped yet — try again in a moment" as an ordinary transient race,
+indefinitely, with no way to tell the two apart.
+
+**Status:** open, not started. A fairly obscure trigger (re-pairing one daemon across two
+different accounts isn't a normal user flow), found by accident while re-establishing test
+infrastructure, not while testing this specific path on purpose — but the silent-failure shape
+(everything reports success, the actual state is just wrong) is the kind of thing worth fixing
+regardless of how rare the trigger is.
 

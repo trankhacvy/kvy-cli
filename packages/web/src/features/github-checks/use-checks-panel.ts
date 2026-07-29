@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 import type { GithubChecksActions } from "./types";
 
 /**
@@ -28,6 +29,22 @@ export function useChecksPanel(actions: GithubChecksActions, worktree: string) {
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
   });
+
+  // `actions` starts out as a permanently-rejecting stub until this
+  // machine's crypto key finishes unwrapping (`useLiveGithubChecksActions`)
+  // — a fetch raced against that stub can get stuck in a state nothing
+  // retries until the next `refetchInterval` tick, which itself only fires
+  // for a foreground tab. Force a refetch the moment `actions`'s identity
+  // changes after mount, the same fix `use-git-panel.ts` applies.
+  const isFirstActionsRender = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed only on `actions` — see use-git-panel.ts's identical effect.
+  useEffect(() => {
+    if (isFirstActionsRender.current) {
+      isFirstActionsRender.current = false;
+      return;
+    }
+    void query.refetch();
+  }, [actions]);
 
   return {
     checks: query.data,

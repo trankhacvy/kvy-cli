@@ -28,21 +28,24 @@ export interface InlineSpawnForm {
 }
 
 /**
- * Resolves the base-branch picker's initial selection from a `git.branches`
- * result: the workspace's "configured base ref" doesn't exist as a distinct
- * concept anywhere in this codebase today (no `workspaces` table column, no
- * per-workspace config field — grepped `WorkspaceGetConfigResult` and
- * `schema.ts`) — the closest resolvable stand-in is whichever local branch
- * `git.branches` reports as `isCurrent` for the workspace's own repo root.
- * Falls back to the literal `"main"` when branches haven't loaded yet or
- * none is marked current (a bare/detached-HEAD repo, or the list is still
- * `null` because the picker hasn't been opened/fetched yet) — the spec's own
- * documented fallback, and a safe one: `branchOptionFromForm`-equivalent
- * spawn-request building always sends this through as `from`, and the
- * daemon's `gitWorktree.ts` only consults `from` on the branch-doesn't-exist
- * path, ignoring it entirely once a real base is picked from the picker.
+ * Resolves the base-branch picker's initial selection: prefers the
+ * workspace's configured base ref (`workspace.getConfig`'s
+ * `WorkspaceGitConfig.baseRef`, set via `falcon workspace config
+ * --base-ref <ref>`) when one's been set; otherwise falls back to whichever
+ * local branch `git.branches` reports as `isCurrent` for the workspace's own
+ * repo root, and finally to the literal `"main"` when branches haven't
+ * loaded yet or none is marked current (a bare/detached-HEAD repo, or the
+ * list is still `null` because the picker hasn't been opened/fetched yet).
+ * `branchOptionFromForm`-equivalent spawn-request building always sends
+ * this through as `from`, and the daemon's `gitWorktree.ts` only consults
+ * `from` on the branch-doesn't-exist path, ignoring it entirely once a real
+ * base is picked from the picker.
  */
-export function deriveDefaultBaseBranch(branches: BranchItem[] | null): string {
+export function deriveDefaultBaseBranch(
+  branches: BranchItem[] | null,
+  configuredBaseRef?: string,
+): string {
+  if (configuredBaseRef && configuredBaseRef.trim() !== "") return configuredBaseRef;
   const current = branches?.find((b) => b.isCurrent)?.name;
   return current ?? "main";
 }

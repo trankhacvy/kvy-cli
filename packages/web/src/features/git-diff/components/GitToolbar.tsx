@@ -56,6 +56,21 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
     setMessage("");
   }
 
+  function handleCommitAndPush() {
+    const params = resolveCommitSubmit(message, stageAll);
+    if (params === null) return;
+    setMessage("");
+    void panel.commitAndPush(params);
+  }
+
+  // Any one of these three mutations running a `git` process against this
+  // worktree must block the other two — `commitAndPush`'s own push phase
+  // runs after `isCommitPending` has already dropped back to false, so
+  // gating each button on only its own mutation's pending flag lets a click
+  // during that window start a second, concurrent `git` invocation.
+  const gitOperationPending =
+    panel.isCommitPending || panel.isPushPending || panel.isCommitAndPushPending;
+
   return (
     <div className="flex flex-col gap-3 border-b border-border px-1 pb-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -98,6 +113,7 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
 
       <div className="flex flex-col gap-1.5">
         <Textarea
+          id="git-toolbar-commit-message"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Commit message"
@@ -106,10 +122,18 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
         <div className="flex flex-wrap items-center gap-2">
           <Button
             size="sm"
-            disabled={message.trim() === "" || panel.isCommitPending}
+            disabled={message.trim() === "" || gitOperationPending}
             onClick={handleCommit}
           >
             {panel.isCommitPending ? "Committing…" : "Commit"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={message.trim() === "" || gitOperationPending}
+            onClick={handleCommitAndPush}
+          >
+            {panel.isCommitAndPushPending ? "Committing & pushing…" : "Commit & Push"}
           </Button>
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <input
@@ -122,7 +146,7 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
           <Button
             size="sm"
             variant="outline"
-            disabled={panel.isPushPending}
+            disabled={gitOperationPending}
             onClick={() => panel.push({})}
           >
             {panel.isPushPending ? "Pushing…" : "Push"}
@@ -130,7 +154,7 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
           <Button
             size="sm"
             variant="destructive"
-            disabled={panel.isPushPending}
+            disabled={gitOperationPending}
             onClick={() => setForcePushOpen(true)}
           >
             Force Push
@@ -140,7 +164,13 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
           <span className="text-xs text-muted-foreground">Nothing to commit.</span>
         )}
         {panel.commitError && <span className="text-xs text-destructive">{panel.commitError}</span>}
-        {panel.pushError && <span className="text-xs text-destructive">{panel.pushError}</span>}
+        {panel.pushError && (
+          <span className="text-xs text-destructive">
+            {panel.commitResult?.committed
+              ? `Committed, but push failed: ${panel.pushError}`
+              : panel.pushError}
+          </span>
+        )}
       </div>
 
       <Dialog open={forcePushOpen} onOpenChange={setForcePushOpen}>

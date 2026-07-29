@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight, Plus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -127,6 +127,7 @@ export function NewSessionForm({
   const [form, setForm] = useState<InlineSpawnForm>(initialForm);
   const [advancedOpen, setAdvancedOpen] = useState(defaultAdvancedOpen);
   const [branches, setBranches] = useState<BranchItem[] | null>(null);
+  const [configuredBaseRef, setConfiguredBaseRef] = useState<string | undefined>(undefined);
   const [baseBranchTouched, setBaseBranchTouched] = useState(false);
 
   const actions = useLiveNewSessionActions(machineId ?? "");
@@ -164,10 +165,56 @@ export function NewSessionForm({
         // failure once the user opens it; this prefetch silently falls back
         // to the "main" default instead of surfacing a duplicate error.
       });
+    actions
+      .getConfig(group.workspace.id)
+      .then((result) => {
+        if (cancelled) return;
+        setConfiguredBaseRef(result.baseRef);
+      })
+      .catch(() => {
+        // Best-effort only, same reasoning as the `listBranches` fetch above —
+        // silently falls back to `deriveDefaultBaseBranch`'s next fallback.
+      });
     return () => {
       cancelled = true;
     };
   }, [machineId, group.workspace.id]);
+
+  // `actions` starts out as a permanently-rejecting stub until the chosen
+  // machine's crypto key finishes unwrapping (`useLiveNewSessionActions`) —
+  // the prefetch above can race that and settle before the real client is
+  // ready, then never retry once it is. Re-run the same prefetch the moment
+  // `actions`'s identity changes after mount (exactly when the stub is
+  // swapped for the real client) — kept as its own effect, deliberately not
+  // folded into the one above, since that one's narrower dependency list is
+  // there on purpose (re-fetch on machine/workspace change only).
+  const isFirstActionsRender = useRef(true);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed only on `actions` — see use-git-panel.ts's identical effect.
+  useEffect(() => {
+    if (isFirstActionsRender.current) {
+      isFirstActionsRender.current = false;
+      return;
+    }
+    if (!machineId) return;
+    let cancelled = false;
+    actions
+      .listBranches(group.workspace.id)
+      .then((result) => {
+        if (cancelled) return;
+        setBranches(result);
+      })
+      .catch(() => {});
+    actions
+      .getConfig(group.workspace.id)
+      .then((result) => {
+        if (cancelled) return;
+        setConfiguredBaseRef(result.baseRef);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [actions]);
 
   // Only ever seeds the default once branches first load — not a dependency
   // loop, since `baseBranchTouched` flips true the moment the user picks
@@ -177,8 +224,11 @@ export function NewSessionForm({
   // needs `branches`/`baseBranchTouched` in its dependency list.
   useEffect(() => {
     if (baseBranchTouched || branches === null) return;
-    setForm((prev) => ({ ...prev, baseBranch: deriveDefaultBaseBranch(branches) }));
-  }, [branches, baseBranchTouched]);
+    setForm((prev) => ({
+      ...prev,
+      baseBranch: deriveDefaultBaseBranch(branches, configuredBaseRef),
+    }));
+  }, [branches, configuredBaseRef, baseBranchTouched]);
 
   const spawning = spawn.state.phase === "spawning";
   const canStart = machineId !== null && canStartInlineSpawn(form) && !spawning;

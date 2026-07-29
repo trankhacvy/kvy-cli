@@ -133,8 +133,13 @@ function MessageGroupView({
           compact && "gap-2 text-[13px]",
         )}
       >
-        {group.items.map((item) => (
-          <MessageGroupPart key={`${item.id}:${item.kind}`} item={item} compact={compact} />
+        {group.items.map((item, index) => (
+          <MessageGroupPart
+            // biome-ignore lint/suspicious/noArrayIndexKey: `${item.id}:${item.kind}` alone isn't a stable unique key — the optimistic pending copy of a just-sent message (`optimistic-composer.ts`'s `pendingToRenderItem`) and its real, landed counterpart briefly coexist with the same id (reconcile only drops the pending one a render tick later, in a separate effect) — the index disambiguates that one-frame collision, same reasoning as `CheckRunRow`'s own index-suffixed key. `group.items` is append-only within one message group (`canAppendToMessageGroup`), never reordered, so the usual index-key reordering hazard doesn't apply here.
+            key={`${item.id}:${item.kind}:${index}`}
+            item={item}
+            compact={compact}
+          />
         ))}
       </MessageContent>
       {copyText.length > 0 && (
@@ -195,17 +200,21 @@ export function RenderItemGroups({
 
   return (
     <div className={cn("flex flex-col gap-5", compact && "gap-3")}>
-      {groups.map((group) => {
+      {groups.map((group, index) => {
+        // Same one-frame pending/landed collision risk as `MessageGroupPart`'s
+        // own key above — `group.id` is built from the same `${id}:${kind}`
+        // shape, so it needs the same index disambiguation.
+        const key = `${group.id}:${index}`;
         if (group.kind === "message") {
-          return <MessageGroupView key={group.id} group={group} compact={compact} />;
+          return <MessageGroupView key={key} group={group} compact={compact} />;
         }
         if (group.item.kind === "service") {
-          return <ServiceLine key={group.id} label={group.item.text} tone="muted" />;
+          return <ServiceLine key={key} label={group.item.text} tone="muted" />;
         }
         subagentOrdinal += 1;
         return (
           <SubagentGroup
-            key={group.id}
+            key={key}
             label={`Subagent ${subagentOrdinal}`}
             items={group.item.items}
             compact={compact}

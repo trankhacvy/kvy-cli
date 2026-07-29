@@ -41,6 +41,26 @@ describe("deriveDefaultBaseBranch", () => {
   it('falls back to "main" for an empty branch list', () => {
     expect(deriveDefaultBaseBranch([])).toBe("main");
   });
+
+  it("prefers a configured baseRef over the isCurrent branch", () => {
+    const branches: BranchItem[] = [{ name: "develop", isCurrent: true }];
+    expect(deriveDefaultBaseBranch(branches, "release")).toBe("release");
+  });
+
+  it("ignores a blank/whitespace-only configured baseRef and falls through to isCurrent", () => {
+    const branches: BranchItem[] = [{ name: "develop", isCurrent: true }];
+    expect(deriveDefaultBaseBranch(branches, "   ")).toBe("develop");
+  });
+
+  it('falls through configured baseRef -> isCurrent -> "main" in priority order', () => {
+    expect(deriveDefaultBaseBranch(null, undefined)).toBe("main");
+    expect(deriveDefaultBaseBranch([{ name: "develop", isCurrent: true }], undefined)).toBe(
+      "develop",
+    );
+    expect(deriveDefaultBaseBranch([{ name: "develop", isCurrent: true }], "release")).toBe(
+      "release",
+    );
+  });
 });
 
 describe("buildInlineSpawnRequest", () => {

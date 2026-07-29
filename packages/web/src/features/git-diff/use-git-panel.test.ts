@@ -104,6 +104,54 @@ describe("useGitPanel", () => {
     });
   });
 
+  it("commitAndPush runs commit then push and reports pushed:true on the clean path", async () => {
+    const actions = fakeActions();
+    const { panel } = renderPanel(actions, "/repo");
+
+    const result = await panel.commitAndPush({ message: "fix bug", stageAll: true });
+
+    expect(actions.commit).toHaveBeenCalledExactlyOnceWith("/repo", "fix bug", {
+      stageAll: true,
+    });
+    expect(actions.push).toHaveBeenCalledExactlyOnceWith("/repo", {});
+    expect(result).toEqual({ committed: true, commitSha: "abc1234", pushed: true });
+  });
+
+  it("commitAndPush short-circuits on nothingToCommit and never calls push", async () => {
+    const actions = fakeActions({
+      commit: vi.fn(async () => ({ committed: false, nothingToCommit: true })),
+    });
+    const { panel } = renderPanel(actions, "/repo");
+
+    const result = await panel.commitAndPush({ message: "fix bug" });
+
+    expect(actions.commit).toHaveBeenCalledOnce();
+    expect(actions.push).not.toHaveBeenCalled();
+    expect(result).toEqual({ committed: false, nothingToCommit: true, pushed: false });
+  });
+
+  it("commitAndPush surfaces a partial failure (commit succeeds, push fails) as a rejection, never as overall success", async () => {
+    const actions = fakeActions({
+      push: vi.fn(async () => {
+        throw new Error("fatal: could not read from remote repository");
+      }),
+    });
+    const { panel, queryClient } = renderPanel(actions, "/repo");
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    await expect(panel.commitAndPush({ message: "fix bug" })).rejects.toThrow(
+      "fatal: could not read from remote repository",
+    );
+    expect(actions.commit).toHaveBeenCalledOnce();
+    expect(actions.push).toHaveBeenCalledOnce();
+    // The commit itself still succeeded and must still be reflected/invalidated —
+    // only the push leg failed, so `git-status`/`git-diff` were invalidated once
+    // (by the successful commit's own `onSuccess`), not skipped outright.
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: ["git-status", "/repo"] }),
+    );
+  });
+
   it("a successful renameBranch invalidates git-status, git-diff, AND git-branches", async () => {
     const actions = fakeActions();
     const { panel, queryClient } = renderPanel(actions, "/repo");

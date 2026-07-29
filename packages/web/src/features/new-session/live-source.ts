@@ -45,6 +45,7 @@ function pendingNewSessionActions(): NewSessionActions {
     spawn: notReady,
     listImportCandidates: notReady,
     listBranches: notReady,
+    getConfig: notReady,
   };
 }
 

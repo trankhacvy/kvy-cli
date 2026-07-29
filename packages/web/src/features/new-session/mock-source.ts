@@ -1,3 +1,4 @@
+import type { WorkspaceGetConfigResult } from "@falcon/wire";
 import { useMemo } from "react";
 import type {
   BranchItem,
@@ -91,6 +92,11 @@ const MOCK_BRANCHES: Map<string, BranchItem[]> = new Map([
   ],
 ]);
 
+/** `directory` → simulated `workspace.getConfig` result — only `/Users/vy/projects/falcon` has a configured `baseRef`, so `deriveDefaultBaseBranch`'s "configured ref wins over `isCurrent`" precedence is exercisable against the mock too. */
+const MOCK_WORKSPACE_CONFIG: Map<string, WorkspaceGetConfigResult> = new Map([
+  ["/Users/vy/projects/falcon", { baseRef: "main" }],
+]);
+
 function parentOf(path: string): string | null {
   if (path === "/") return null;
   const trimmed = path.endsWith("/") ? path.slice(0, -1) : path;
@@ -166,6 +172,12 @@ export function createMockNewSessionActions(_machineId: string): NewSessionActio
     async listBranches(directory) {
       await delay(LATENCY_MS);
       return MOCK_BRANCHES.get(directory) ?? [];
+    },
+
+    async getConfig(directory) {
+      await delay(LATENCY_MS);
+      const result: WorkspaceGetConfigResult = MOCK_WORKSPACE_CONFIG.get(directory) ?? {};
+      return result;
     },
   };
 }

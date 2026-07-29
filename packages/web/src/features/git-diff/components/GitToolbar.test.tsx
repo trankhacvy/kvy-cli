@@ -42,6 +42,9 @@ function fakePanel(overrides: Partial<GitPanelState> = {}): GitPanelState {
     isPushPending: false,
     pushError: null,
 
+    commitAndPush: vi.fn(),
+    isCommitAndPushPending: false,
+
     renameBranch: vi.fn(),
     isRenameBranchPending: false,
     renameBranchError: null,
@@ -65,6 +68,28 @@ describe("GitToolbar", () => {
     expect(html).toContain("Commit");
     expect(html).toContain("Include untracked");
     expect(html).toContain('checked=""');
+  });
+
+  it("gives the commit textarea a stable id so the Changes-tab checklist can focus it (session-panel-workflow-plan.md Phase 1.2)", () => {
+    const panel = fakePanel();
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(html).toContain('id="git-toolbar-commit-message"');
+  });
+
+  it("renders a Commit & Push button", () => {
+    const panel = fakePanel();
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(html).toContain("Commit &amp; Push");
+  });
+
+  it("shows 'Committed, but push failed' when a commit succeeded and pushError is set", () => {
+    const panel = fakePanel({
+      commitResult: { committed: true, commitSha: "abc1234" },
+      pushError: "fatal: could not read Username",
+    });
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(html).toContain("Committed, but push failed");
+    expect(html).toContain("fatal: could not read Username");
   });
 
   it("renders Push and Force Push trigger buttons", () => {
@@ -92,11 +117,12 @@ describe("GitToolbar", () => {
     expect(html).toContain("fatal: could not read Username");
   });
 
-  it("never calls commit/push/renameBranch merely by rendering", () => {
+  it("never calls commit/push/commitAndPush/renameBranch merely by rendering", () => {
     const panel = fakePanel();
     renderToStaticMarkup(createElement(GitToolbar, { panel }));
     expect(panel.commit).not.toHaveBeenCalled();
     expect(panel.push).not.toHaveBeenCalled();
+    expect(panel.commitAndPush).not.toHaveBeenCalled();
     expect(panel.renameBranch).not.toHaveBeenCalled();
   });
 
@@ -104,5 +130,38 @@ describe("GitToolbar", () => {
     const panel = fakePanel({ status: undefined });
     const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
     expect(html).toBe("");
+  });
+
+  // Push/Force Push are the only buttons whose `disabled` isn't already
+  // masked by the (untestable without jsdom) empty-commit-message gate, so
+  // they're what these regression cases assert on: each of the three git
+  // mutations must block the other two, not just its own button.
+  function buttonTag(html: string, text: string): string | undefined {
+    const suffix = `>${text}</button>`;
+    const end = html.indexOf(suffix);
+    if (end === -1) return undefined;
+    const start = html.lastIndexOf("<button", end);
+    return html.slice(start, end + suffix.length);
+  }
+
+  it("disables Push and Force Push while commitAndPush is in flight", () => {
+    const panel = fakePanel({ isCommitAndPushPending: true });
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(buttonTag(html, "Push")).toContain("disabled=");
+    expect(buttonTag(html, "Force Push")).toContain("disabled=");
+  });
+
+  it("disables Push and Force Push while a standalone commit is pending", () => {
+    const panel = fakePanel({ isCommitPending: true });
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(buttonTag(html, "Push")).toContain("disabled=");
+    expect(buttonTag(html, "Force Push")).toContain("disabled=");
+  });
+
+  it("disables Commit and Commit & Push while a standalone push is pending", () => {
+    const panel = fakePanel({ isPushPending: true });
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(buttonTag(html, "Commit")).toContain("disabled=");
+    expect(buttonTag(html, "Commit &amp; Push")).toContain("disabled=");
   });
 });
