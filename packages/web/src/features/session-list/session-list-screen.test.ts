@@ -98,6 +98,32 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
     expect(html).not.toContain("all-archived");
   });
 
+  // Feature 4 (docs/web-ux-improvements-plan.md): the "no sessions yet"
+  // empty state now offers a real "New project" entry point rather than
+  // only static CLI-pointing copy.
+  it("renders the New project trigger in the zero-sessions empty state", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
+      sessions: [],
+    };
+
+    const html = render(snapshot);
+    expect(html).toContain("No sessions yet");
+    expect(html).toContain("New project");
+  });
+
+  it("still renders FirstMachineOnboarding, unchanged, for a zero-machine account", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [],
+      machines: [],
+      sessions: [],
+    };
+
+    const html = render(snapshot);
+    expect(html).not.toContain("New project");
+  });
+
   it("still renders unmanaged sessions even with no managed data", () => {
     const html = renderToStaticMarkup(
       createElement(

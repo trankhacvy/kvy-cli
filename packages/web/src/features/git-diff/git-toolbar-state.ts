@@ -34,3 +34,20 @@ export function resolveCommitSubmit(
   if (trimmed === "") return null;
   return { message: trimmed, stageAll };
 }
+
+/**
+ * Normalizes the Add-remote dialog's two fields (Feature 1, docs/
+ * web-ux-improvements-plan.md) into `setRemote` params, or `null` when the
+ * URL is blank (nothing to submit). Trims both; an empty name falls back to
+ * `undefined` so the daemon applies its own `"origin"` default rather than
+ * this UI hard-coding it in two places.
+ */
+export function resolveSetRemoteSubmit(
+  url: string,
+  name: string,
+): { url: string; name?: string } | null {
+  const trimmedUrl = url.trim();
+  if (trimmedUrl === "") return null;
+  const trimmedName = name.trim();
+  return trimmedName === "" ? { url: trimmedUrl } : { url: trimmedUrl, name: trimmedName };
+}

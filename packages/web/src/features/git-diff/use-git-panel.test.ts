@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { GitDiffActions } from "./types";
-import { useGitPanel } from "./use-git-panel";
+import { translateInitRepoError, useGitPanel } from "./use-git-panel";
 
 /**
  * `useGitPanel` mixes `useQuery`/`useMutation` — this package's vitest
@@ -29,6 +29,9 @@ function fakeActions(overrides: Partial<GitDiffActions> = {}): GitDiffActions {
     renameBranch: vi.fn(async () => ({ branch: "renamed", hadUpstream: false })),
     listBranches: vi.fn(async () => []),
     unregisterWorkspace: vi.fn(async () => ({ ok: true })),
+    initRepo: vi.fn(async () => ({ state: "initialized" as const, branch: "main" })),
+    listRemotes: vi.fn(async () => []),
+    setRemote: vi.fn(async () => ({ ok: true as const, name: "origin", url: "x", created: true })),
     ...overrides,
   };
 }
@@ -167,5 +170,86 @@ describe("useGitPanel", () => {
         expect.objectContaining({ queryKey: ["git-branches", "/repo"] }),
       );
     });
+  });
+
+  // Feature 1 (docs/web-ux-improvements-plan.md): a successful `git.init`
+  // must flip the panel straight from the error state to a live repo with
+  // no manual refresh (CLAUDE.md rule #6).
+  it("a successful initRepo (state: initialized) invalidates status/diff/branches/remotes", async () => {
+    const actions = fakeActions();
+    const { panel, queryClient } = renderPanel(actions, "/repo");
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    panel.initRepo();
+
+    await vi.waitFor(() => {
+      expect(actions.initRepo).toHaveBeenCalledExactlyOnceWith("/repo");
+    });
+    await vi.waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["git-status", "/repo"] }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["git-diff", "/repo"] }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["git-branches", "/repo"] }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["git-remotes", "/repo"] }),
+      );
+    });
+  });
+
+  it("an initRepo result of inside-existing-repo invalidates NOTHING — nothing changed daemon-side", async () => {
+    const actions = fakeActions({
+      initRepo: vi.fn(async () => ({
+        state: "inside-existing-repo" as const,
+        existingRoot: "/repo",
+      })),
+    });
+    const { panel, queryClient } = renderPanel(actions, "/repo/sub");
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    panel.initRepo();
+
+    await vi.waitFor(() => {
+      expect(actions.initRepo).toHaveBeenCalledOnce();
+    });
+    expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+
+  it("a successful setRemote invalidates git-remotes and git-status", async () => {
+    const actions = fakeActions();
+    const { panel, queryClient } = renderPanel(actions, "/repo");
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+    panel.setRemote({ url: "git@github.com:a/b.git" });
+
+    await vi.waitFor(() => {
+      expect(actions.setRemote).toHaveBeenCalledExactlyOnceWith(
+        "/repo",
+        "git@github.com:a/b.git",
+        undefined,
+      );
+    });
+    await vi.waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["git-remotes", "/repo"] }),
+      );
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["git-status", "/repo"] }),
+      );
+    });
+  });
+});
+
+describe("translateInitRepoError (§1.7 rollout note)", () => {
+  it("translates a literal 'unknown-method' into a version-skew hint", () => {
+    expect(translateInitRepoError("unknown-method")).toMatch(/older version of Falcon/i);
+  });
+
+  it("passes any other message through unchanged", () => {
+    expect(translateInitRepoError("fatal: permission denied")).toBe("fatal: permission denied");
   });
 });

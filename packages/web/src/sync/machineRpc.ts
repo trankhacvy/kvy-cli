@@ -105,12 +105,16 @@ import {
   GitFilesResultSchema,
   type GithubChecksParams,
   GithubChecksResultSchema,
+  type GitInitParams,
+  GitInitResultSchema,
   type GitPushParams,
   GitPushResultSchema,
   type GitRemotesParams,
   GitRemotesResultSchema,
   type GitRenameBranchParams,
   GitRenameBranchResultSchema,
+  type GitSetRemoteParams,
+  GitSetRemoteResultSchema,
   type GitStatusParams,
   GitStatusResultSchema,
   type PreviewCloseParams,
@@ -165,9 +169,11 @@ export type {
   GitDiffParams,
   GitFilesParams,
   GithubChecksParams,
+  GitInitParams,
   GitPushParams,
   GitRemotesParams,
   GitRenameBranchParams,
+  GitSetRemoteParams,
   GitStatusParams,
   PreviewCloseParams,
   PreviewOpenParams,
@@ -211,6 +217,8 @@ export interface MachineRpcParams {
   "git.commit": GitCommitParams;
   "git.push": GitPushParams;
   "git.renameBranch": GitRenameBranchParams;
+  "git.init": GitInitParams;
+  "git.setRemote": GitSetRemoteParams;
   "github.checks": GithubChecksParams;
   "commands.list": SlashCommandsListParams;
   "git.files": GitFilesParams;
@@ -249,6 +257,8 @@ export interface MachineRpcResults {
   "git.commit": import("@falcon/wire").GitCommitResult;
   "git.push": import("@falcon/wire").GitPushResult;
   "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
+  "git.init": import("@falcon/wire").GitInitResult;
+  "git.setRemote": import("@falcon/wire").GitSetRemoteResult;
   "github.checks": import("@falcon/wire").GithubChecksResult;
   "commands.list": import("@falcon/wire").SlashCommandsListResult;
   "git.files": import("@falcon/wire").GitFilesResult;
@@ -288,6 +298,8 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.commit": GitCommitResultSchema,
   "git.push": GitPushResultSchema,
   "git.renameBranch": GitRenameBranchResultSchema,
+  "git.init": GitInitResultSchema,
+  "git.setRemote": GitSetRemoteResultSchema,
   "github.checks": GithubChecksResultSchema,
   "commands.list": SlashCommandsListResultSchema,
   "git.files": GitFilesResultSchema,

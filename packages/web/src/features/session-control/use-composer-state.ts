@@ -13,6 +13,7 @@ import {
   type PendingMessage,
   reconcileByStatus,
   reconcilePending,
+  translateSendError,
 } from "./optimistic-composer";
 import { useSessionControl } from "./session-control-context";
 import { useSessionCrypto } from "./use-session-crypto";
@@ -59,7 +60,7 @@ export interface ComposerState {
  * source of truth rather than re-deriving anything.
  */
 export function useComposerState(items: RenderItem[]): ComposerState {
-  const { actions, sessionId } = useSessionControl();
+  const { actions, sessionId, machineOffline } = useSessionControl();
   const cryptoBridge = useSessionCrypto(sessionId);
   const [pending, setPending] = useState<PendingMessage[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
@@ -69,11 +70,19 @@ export function useComposerState(items: RenderItem[]): ComposerState {
     setPending((prev) => reconcilePending(prev, items));
   }, [items]);
 
+  // Feature 2 (docs/web-ux-improvements-plan.md §2.2d): the composer never
+  // hard-blocks on `machineOffline` — we don't queue, so a non-blocking
+  // heads-up is set BEFORE the mutation fires rather than after a failure,
+  // giving the user the honest expectation up front. A real failure still
+  // gets its own translated message below.
+  const machineOfflineNotice =
+    "That machine is offline right now — the message may not go through.";
+
   const mutation = useMutation({
     mutationFn: async (text: string) => {
       const envelope = buildMessageEnvelope(text);
       const localId = envelope.id;
-      setNotice(null);
+      setNotice(machineOffline ? machineOfflineNotice : null);
       setPending((prev) => [
         ...prev,
         { kind: "text", localId, text, sentAt: envelope.time, queued: false },
@@ -81,11 +90,12 @@ export function useComposerState(items: RenderItem[]): ComposerState {
       try {
         const result = await actions.sendMessage(envelope);
         setPending((prev) => reconcileByStatus(prev, localId, result));
-        setNotice(deliveryNotice(result));
+        setNotice(deliveryNotice(result) ?? (machineOffline ? machineOfflineNotice : null));
         return result;
       } catch (error) {
         setPending((prev) => prev.filter((p) => p.localId !== localId));
-        throw error;
+        const raw = error instanceof Error ? error.message : String(error);
+        throw new Error(translateSendError(raw, machineOffline));
       }
     },
   });
@@ -119,7 +129,8 @@ export function useComposerState(items: RenderItem[]): ComposerState {
         return result;
       } catch (error) {
         setPending((prev) => prev.filter((p) => p.localId !== localId));
-        throw error;
+        const raw = error instanceof Error ? error.message : String(error);
+        throw new Error(translateSendError(raw, machineOffline));
       }
     },
   });

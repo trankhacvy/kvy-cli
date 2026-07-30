@@ -12,6 +12,7 @@ import {
 } from "@/features/unmanaged-sessions";
 import { useDebouncedOrder } from "@/hooks/use-debounced-order";
 import { FirstMachineOnboarding } from "./components/first-machine-onboarding";
+import { NewWorkspaceTrigger } from "./components/new-workspace-panel";
 import { SessionListSkeleton } from "./components/session-list-skeleton";
 import { WorkspaceSection } from "./components/workspace-section";
 import { groupPagedSessions, type WorkspaceGroup } from "./group";
@@ -60,12 +61,15 @@ function workspaceKey(group: WorkspaceGroup): string {
  * old standalone "New session" wizard/route is retired — a session now
  * always starts from the `+` on an existing `WorkspaceSection` row
  * (`components/new-session-panel.tsx`), since a workspace only exists
- * server-side once `falcon` has actually run there once. That leaves one
- * genuine gap this screen still has to cover honestly: an account with
- * machines but literally zero sessions ever run has no workspace row to put
- * a `+` on yet. That "no sessions yet" branch below shows static
- * CLI-pointing guidance (mirroring `FirstMachineOnboarding`'s tone) instead
- * of a button, rather than keeping a dead link to a removed route alive.
+ * server-side once `falcon` has actually run there once. That used to leave
+ * one genuine gap: an account with machines but literally zero sessions
+ * ever run had no workspace row to put a `+` on yet. Feature 4 (docs/
+ * web-ux-improvements-plan.md) closes it — `NewWorkspaceTrigger`
+ * (`components/new-workspace-panel.tsx`) creates a brand-new folder on a
+ * machine, registers it, and spawns the first session there, with no
+ * terminal required (CLAUDE.md auth/UX rule #1: never print "run X" when
+ * you can run X). It's offered both in the "no sessions yet" empty state and
+ * in the header once sessions already exist.
  */
 export function SessionListScreen({
   useData = useLiveSessionListSnapshot,
@@ -129,10 +133,12 @@ export function SessionListScreen({
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from a project on one of
-          your machines to start one — it shows up here automatically, and you'll be able to start
-          more sessions in that same project right from here.
+          Create a new project below, or run{" "}
+          <code className="rounded bg-muted px-1 py-0.5">falcon</code> from an existing project on
+          one of your machines — it shows up here automatically, and you'll be able to start more
+          sessions in that same project right from here.
         </p>
+        <NewWorkspaceTrigger machines={snapshot.machines} />
       </div>
     );
   }
@@ -142,6 +148,7 @@ export function SessionListScreen({
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-tight">Sessions</h1>
         <div className="flex items-center gap-2">
+          <NewWorkspaceTrigger machines={snapshot.machines} />
           <Button asChild variant="outline" size="sm">
             <Link href="/dashboard/completed/">Completed</Link>
           </Button>

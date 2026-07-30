@@ -185,6 +185,10 @@ import {
   GithubChecksParamsSchema,
   type GithubChecksResult,
   GithubChecksResultSchema,
+  type GitInitParams,
+  GitInitParamsSchema,
+  type GitInitResult,
+  GitInitResultSchema,
   type GitPushParams,
   GitPushParamsSchema,
   type GitPushResult,
@@ -197,6 +201,10 @@ import {
   GitRenameBranchParamsSchema,
   type GitRenameBranchResult,
   GitRenameBranchResultSchema,
+  type GitSetRemoteParams,
+  GitSetRemoteParamsSchema,
+  type GitSetRemoteResult,
+  GitSetRemoteResultSchema,
   type GitStatusParams,
   GitStatusParamsSchema,
   type GitStatusResult,
@@ -287,9 +295,11 @@ import { handleGitCommit as handleGitCommitDefault } from "./gitCommit.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
 import { getGitFiles as getGitFilesDefault } from "./gitFiles.js";
 import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
+import { handleGitInit as handleGitInitDefault } from "./gitInit.js";
 import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
 import { getGitRemotes as getGitRemotesDefault } from "./gitRemotes.js";
 import { handleGitRenameBranch as handleGitRenameBranchDefault } from "./gitRenameBranch.js";
+import { handleGitSetRemote as handleGitSetRemoteDefault } from "./gitSetRemote.js";
 import { getGitStatus as getGitStatusDefault } from "./gitStatus.js";
 import { getProviderAccountInfo as getProviderAccountInfoDefault } from "./providerAccountInfo.js";
 import {
@@ -324,6 +334,8 @@ export const MACHINE_RPC_METHODS = [
   "git.commit",
   "git.push",
   "git.renameBranch",
+  "git.init",
+  "git.setRemote",
   "github.checks",
   "commands.list",
   "git.files",
@@ -378,6 +390,10 @@ export interface MachineRpcDeps {
   gitPush?: (params: GitPushParams) => Promise<GitPushResult>;
   /** Backs the `git.renameBranch` RPC (docs/features/git-write-actions.md). Injectable for tests; defaults to `gitRenameBranch.ts`'s real `git branch -m`, gated on the registered-workspace authorizer. Throws on failure. */
   gitRenameBranch?: (params: GitRenameBranchParams) => Promise<GitRenameBranchResult>;
+  /** Backs the `git.init` RPC (docs/web-ux-improvements-plan.md Feature 1). Injectable for tests; defaults to `gitInit.ts`'s real `git init`, gated on the registered-workspace authorizer. Throws on failure; an already-initialized/nested directory resolves as a result `state`, not a throw. */
+  gitInit?: (params: GitInitParams) => Promise<GitInitResult>;
+  /** Backs the `git.setRemote` RPC (docs/web-ux-improvements-plan.md Feature 1). Injectable for tests; defaults to `gitSetRemote.ts`'s real `git remote add`/`set-url`, gated on the registered-workspace authorizer. Throws on failure. */
+  gitSetRemote?: (params: GitSetRemoteParams) => Promise<GitSetRemoteResult>;
   /** Backs the `github.checks` RPC (Checks tab, docs/features/github-pr-ci.md). Injectable for tests; defaults to `githubChecks.ts`'s real PR/CI resolution against a machine-local GitHub token. Throws on an unexpected failure (a handled "nothing to show yet" case is a `GithubChecksResult.state`, not a throw). */
   getGithubChecks?: (params: GithubChecksParams) => Promise<GithubChecksResult>;
   /** Backs the `commands.list` RPC ("/" slash-command autocomplete, docs/competitive-notes-omnara.md #18). Injectable for tests; defaults to `slashCommands.ts`'s real `.claude/commands/` walk. Never throws — see that module's own doc comment. */
@@ -614,6 +630,17 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const cachedGitRenameBranch = withIdempotencyCache(
     deps.gitRenameBranch ?? handleGitRenameBranchDefault,
   );
+  // `git.init`/`git.setRemote` (docs/web-ux-improvements-plan.md Feature 1)
+  // join `git.commit`/`git.push`/`git.renameBranch` as mutating git RPCs
+  // that need idempotency-key replay: a lost-ack retry must replay the prior
+  // result rather than re-run the effect. `git.init` also takes the
+  // worktree-keyed resource guard (generalized from `run.start`'s own,
+  // `withResourceGuard` above) so two devices clicking "Initialize git" at
+  // once collapse into a single `git init` attempt for that directory.
+  const cachedGitInit = withIdempotencyCache(
+    withResourceGuard(deps.gitInit ?? handleGitInitDefault, (params) => params.worktree),
+  );
+  const cachedGitSetRemote = withIdempotencyCache(deps.gitSetRemote ?? handleGitSetRemoteDefault);
   // `preview.open`'s whole point is a side effect (spawning a `cloudflared`
   // child) — idempotency-key replay PLUS the port-keyed concurrency guard,
   // same two-layer shape as `adopt.take`'s `cachedAdoptTake` above.
@@ -765,6 +792,16 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GitRenameBranchParamsSchema,
       resultSchema: GitRenameBranchResultSchema,
       handle: cachedGitRenameBranch as (params: unknown) => Promise<unknown>,
+    },
+    "git.init": {
+      paramsSchema: GitInitParamsSchema,
+      resultSchema: GitInitResultSchema,
+      handle: cachedGitInit as (params: unknown) => Promise<unknown>,
+    },
+    "git.setRemote": {
+      paramsSchema: GitSetRemoteParamsSchema,
+      resultSchema: GitSetRemoteResultSchema,
+      handle: cachedGitSetRemote as (params: unknown) => Promise<unknown>,
     },
     "github.checks": {
       paramsSchema: GithubChecksParamsSchema,

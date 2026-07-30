@@ -23,8 +23,12 @@ export type RepoFileContent = FsReadResult;
 export interface RepoFilesActions {
   /** Fetches the flat, worktree-relative file list for `worktree` (`git.files` — tracked + untracked-but-not-ignored). Throws on failure (not a git repo, unreachable machine, ...). */
   fetchFileList(worktree: string): Promise<string[]>;
-  /** Fetches one file's content (`fs.read`), `path` relative to `worktree`. Throws on failure (missing/escaping/binary/directory target, unreachable machine, ...). */
-  fetchFileContent(worktree: string, path: string): Promise<RepoFileContent>;
+  /** Fetches one file's content (`fs.read`), `path` relative to `worktree`. `range` is a byte-offset `[start, end)` slice — the daemon already implements it (`fsRead.ts`) and clamps it to its own inline budget, so a caller can page a large file instead of re-serving the same truncated prefix forever (Feature 3 Phase 5, docs/web-ux-improvements-plan.md). Throws on failure (missing/escaping/binary/directory target, unreachable machine, ...). */
+  fetchFileContent(
+    worktree: string,
+    path: string,
+    range?: { start: number; end: number },
+  ): Promise<RepoFileContent>;
 }
 
 /** One Repo Files-panel actions client per chosen machine — mirrors `UseGitDiffActions = (machineId) => GitDiffActions`. */

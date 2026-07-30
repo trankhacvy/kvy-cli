@@ -13,6 +13,14 @@ export { getDefaultBranchMode, setDefaultBranchMode } from "./git-defaults";
 export { machineRpcToActions } from "./live-actions";
 export { useLiveNewSessionActions } from "./live-source";
 export { createMockNewSessionActions, useMockNewSessionActions } from "./mock-source";
+export {
+  buildWorkspacePath,
+  displayWorkspacePath,
+  validateWorkspaceName,
+  WORKSPACE_BASE_DIR,
+  WORKSPACE_NAME_ERROR_COPY,
+  type WorkspaceNameError,
+} from "./new-workspace";
 export { runSpawnFlow, SpawnFlowError, type SpawnFlowResult } from "./spawn-flow";
 export type {
   BranchItem,
@@ -26,6 +34,7 @@ export type {
   SpawnRequest,
   UseNewSessionActions,
 } from "./types";
+export { type NewWorkspaceState, useNewWorkspace } from "./use-new-workspace";
 export {
   buildSpawnRequest,
   canAdvance,

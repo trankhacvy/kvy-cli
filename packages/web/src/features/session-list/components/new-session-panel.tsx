@@ -2,6 +2,7 @@
 
 import { ChevronRight, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -30,6 +31,7 @@ import {
 } from "@/features/new-session";
 import { generateBranchName } from "@/features/new-session/auto-branch";
 import { applyFavoriteDefaults, getFavoriteModel } from "@/features/new-session/favorites";
+import { UNAVAILABLE_COPY } from "@/lib/use-machine-online";
 import { cn } from "@/lib/utils";
 import type { WorkspaceGroup } from "../group";
 import {
@@ -231,7 +233,14 @@ export function NewSessionForm({
   }, [branches, configuredBaseRef, baseBranchTouched]);
 
   const spawning = spawn.state.phase === "spawning";
-  const canStart = machineId !== null && canStartInlineSpawn(form) && !spawning;
+  const selectedMachine = machineId ? machinesById.get(machineId) : undefined;
+  // Feature 2 (docs/web-ux-improvements-plan.md §2.4 "Spawn path"): unlike
+  // every other machine-RPC surface, this one IS safe to hard-disable — the
+  // picker already renders a live online dot per machine (below), so a
+  // disabled Start button here is legible rather than mysterious.
+  const machineUnavailable = selectedMachine !== undefined && selectedMachine.status !== "online";
+  const canStart =
+    machineId !== null && canStartInlineSpawn(form) && !spawning && !machineUnavailable;
 
   function handleStart() {
     if (machineId === null) return;
@@ -333,6 +342,17 @@ export function NewSessionForm({
           />
         </CollapsibleContent>
       </Collapsible>
+
+      {selectedMachine && (
+        <MachineOfflineNotice
+          state={{
+            availability: selectedMachine.status,
+            isKnownUnavailable: machineUnavailable,
+            reason:
+              selectedMachine.status === "online" ? null : UNAVAILABLE_COPY[selectedMachine.status],
+          }}
+        />
+      )}
 
       <InlineSpawnStatus state={spawn.state} elapsedSeconds={elapsedSeconds} />
 

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { open, seal } from "@falcon/crypto";
@@ -170,6 +170,14 @@ describe("registerMachineRpcHandlers", () => {
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
       payload: { target: "m:mach_1:git.renameBranch" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:git.init" },
+    });
+    expect(socket.emitted).toContainEqual({
+      event: "rpc-register",
+      payload: { target: "m:mach_1:git.setRemote" },
     });
     expect(socket.emitted).toContainEqual({
       event: "rpc-register",
@@ -1015,6 +1023,267 @@ describe("registerMachineRpcHandlers", () => {
 
       expect(gitRenameBranch).toHaveBeenCalledOnce();
       expect(open(first, DEK)).toEqual(open(second, DEK));
+    });
+  });
+
+  describe("git.init", () => {
+    it("decrypts params, calls gitInit, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const gitInit = vi.fn(async () => ({ state: "initialized" as const, branch: "main" }));
+      register(socket, { gitInit });
+
+      const params = { idempotencyKey: "idem_git_init_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "git.init", seal(params, DEK));
+
+      expect(gitInit).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ state: "initialized", branch: "main" });
+    });
+
+    it("replies with a sealed error when gitInit throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        gitInit: vi.fn(async () => {
+          throw new Error("fatal: permission denied");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.init",
+        seal({ idempotencyKey: "idem_git_init_2", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: permission denied" });
+    });
+
+    it("replies with a sealed invalid-params error when worktree is missing", async () => {
+      const socket = new FakeSocket();
+      register(socket, { gitInit: vi.fn() });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.init",
+        seal({ idempotencyKey: "idem_git_init_3" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of initializing again", async () => {
+      const socket = new FakeSocket();
+      const gitInit = vi.fn(async () => ({ state: "initialized" as const, branch: "main" }));
+      register(socket, { gitInit });
+
+      const params = { idempotencyKey: "idem_git_init_4", worktree: "/repo" };
+      const first = await callAndAwaitAck(socket, "git.init", seal(params, DEK));
+      const second = await callAndAwaitAck(socket, "git.init", seal(params, DEK));
+
+      expect(gitInit).toHaveBeenCalledOnce();
+      expect(open(first, DEK)).toEqual(open(second, DEK));
+    });
+
+    it("does NOT cache a rejected attempt — a retry re-runs gitInit", async () => {
+      const socket = new FakeSocket();
+      const gitInit = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("fatal: permission denied"))
+        .mockResolvedValueOnce({ state: "initialized" as const, branch: "main" });
+      register(socket, { gitInit });
+
+      const params = { idempotencyKey: "idem_git_init_5", worktree: "/repo" };
+      const first = await callAndAwaitAck(socket, "git.init", seal(params, DEK));
+      expect(open(first, DEK)).toEqual({ ok: false, error: "fatal: permission denied" });
+
+      const second = await callAndAwaitAck(socket, "git.init", seal(params, DEK));
+      expect(gitInit).toHaveBeenCalledTimes(2);
+      expect(open(second, DEK)).toEqual({ state: "initialized", branch: "main" });
+    });
+
+    it("collapses two concurrent calls with DIFFERENT idempotencyKeys for the SAME worktree into a single init attempt", async () => {
+      const socket = new FakeSocket();
+      let resolveGitInit!: (value: { state: "initialized"; branch: string }) => void;
+      const gitInit = vi.fn(
+        () =>
+          new Promise<{ state: "initialized"; branch: string }>((resolve) => {
+            resolveGitInit = resolve;
+          }),
+      );
+      register(socket, { gitInit });
+
+      const fromDeviceA = { idempotencyKey: "idem_git_init_device_a", worktree: "/repo" };
+      const fromDeviceB = { idempotencyKey: "idem_git_init_device_b", worktree: "/repo" };
+
+      const responseA = callAndAwaitAck(socket, "git.init", seal(fromDeviceA, DEK));
+      const responseB = callAndAwaitAck(socket, "git.init", seal(fromDeviceB, DEK));
+
+      expect(gitInit).toHaveBeenCalledTimes(1);
+      expect(gitInit).toHaveBeenCalledWith(fromDeviceA);
+
+      resolveGitInit({ state: "initialized", branch: "main" });
+      const [resultA, resultB] = await Promise.all([responseA, responseB]);
+
+      expect(open(resultA, DEK)).toEqual({ state: "initialized", branch: "main" });
+      expect(open(resultB, DEK)).toEqual({ state: "initialized", branch: "main" });
+      expect(gitInit).toHaveBeenCalledTimes(1);
+    });
+
+    describe("with the real default (no mocked-away side effect)", () => {
+      let homeDir: string;
+      let previousFalconHomeDir: string | undefined;
+
+      beforeEach(async () => {
+        homeDir = await mkdtemp(path.join(tmpdir(), "falcon-git-init-rpc-"));
+        previousFalconHomeDir = process.env.FALCON_HOME_DIR;
+        process.env.FALCON_HOME_DIR = homeDir;
+      });
+
+      afterEach(async () => {
+        if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
+        else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+        await rm(homeDir, { recursive: true, force: true });
+      });
+
+      it("actually creates a real .git directory via the real handleGitInit, for a registered workspace", async () => {
+        const socket = new FakeSocket();
+        register(socket); // no gitInit/registerWorkspace override — exercises the real defaults
+
+        const target = path.join(homeDir, "project");
+        await mkdir(target, { recursive: true });
+
+        const registerResponse = await callAndAwaitAck(
+          socket,
+          "workspace.register",
+          seal({ idempotencyKey: "idem_git_init_live_register", directory: target }, DEK),
+        );
+        expect(open(registerResponse, DEK)).toEqual({ ok: true });
+
+        const response = await callAndAwaitAck(
+          socket,
+          "git.init",
+          seal({ idempotencyKey: "idem_git_init_live_1", worktree: target }, DEK),
+        );
+        expect(open(response, DEK)).toMatchObject({ state: "initialized" });
+
+        const gitDirStat = await stat(path.join(target, ".git"));
+        expect(gitDirStat.isDirectory()).toBe(true);
+      });
+    });
+  });
+
+  describe("git.setRemote", () => {
+    it("decrypts params, calls gitSetRemote, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const gitSetRemote = vi.fn(async () => ({
+        ok: true as const,
+        name: "origin",
+        url: "git@github.com:a/b.git",
+        created: true,
+      }));
+      register(socket, { gitSetRemote });
+
+      const params = {
+        idempotencyKey: "idem_git_set_remote_1",
+        worktree: "/repo",
+        url: "git@github.com:a/b.git",
+      };
+      const response = await callAndAwaitAck(socket, "git.setRemote", seal(params, DEK));
+
+      expect(gitSetRemote).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        ok: true,
+        name: "origin",
+        url: "git@github.com:a/b.git",
+        created: true,
+      });
+    });
+
+    it("replies with a sealed error when gitSetRemote throws", async () => {
+      const socket = new FakeSocket();
+      register(socket, {
+        gitSetRemote: vi.fn(async () => {
+          throw new Error("unsafe remote url: --upload-pack=evil");
+        }),
+      });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.setRemote",
+        seal(
+          {
+            idempotencyKey: "idem_git_set_remote_2",
+            worktree: "/repo",
+            url: "--upload-pack=evil",
+          },
+          DEK,
+        ),
+      );
+      expect(open(response, DEK)).toEqual({
+        ok: false,
+        error: "unsafe remote url: --upload-pack=evil",
+      });
+    });
+
+    it("replies with a sealed invalid-params error when url is missing", async () => {
+      const socket = new FakeSocket();
+      register(socket, { gitSetRemote: vi.fn() });
+
+      const response = await callAndAwaitAck(
+        socket,
+        "git.setRemote",
+        seal({ idempotencyKey: "idem_git_set_remote_3", worktree: "/repo" }, DEK),
+      );
+      expect(open(response, DEK)).toEqual({ ok: false, error: "invalid-params" });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of setting the remote again", async () => {
+      const socket = new FakeSocket();
+      const gitSetRemote = vi.fn(async () => ({
+        ok: true as const,
+        name: "origin",
+        url: "git@github.com:a/b.git",
+        created: true,
+      }));
+      register(socket, { gitSetRemote });
+
+      const params = {
+        idempotencyKey: "idem_git_set_remote_4",
+        worktree: "/repo",
+        url: "git@github.com:a/b.git",
+      };
+      const first = await callAndAwaitAck(socket, "git.setRemote", seal(params, DEK));
+      const second = await callAndAwaitAck(socket, "git.setRemote", seal(params, DEK));
+
+      expect(gitSetRemote).toHaveBeenCalledOnce();
+      expect(open(first, DEK)).toEqual(open(second, DEK));
+    });
+
+    it("does NOT cache a rejected attempt — a retry re-runs gitSetRemote", async () => {
+      const socket = new FakeSocket();
+      const gitSetRemote = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("fatal: unable to access remote"))
+        .mockResolvedValueOnce({
+          ok: true as const,
+          name: "origin",
+          url: "git@github.com:a/b.git",
+          created: true,
+        });
+      register(socket, { gitSetRemote });
+
+      const params = {
+        idempotencyKey: "idem_git_set_remote_5",
+        worktree: "/repo",
+        url: "git@github.com:a/b.git",
+      };
+      const first = await callAndAwaitAck(socket, "git.setRemote", seal(params, DEK));
+      expect(open(first, DEK)).toEqual({ ok: false, error: "fatal: unable to access remote" });
+
+      const second = await callAndAwaitAck(socket, "git.setRemote", seal(params, DEK));
+      expect(gitSetRemote).toHaveBeenCalledTimes(2);
+      expect(open(second, DEK)).toEqual({
+        ok: true,
+        name: "origin",
+        url: "git@github.com:a/b.git",
+        created: true,
+      });
     });
   });
 

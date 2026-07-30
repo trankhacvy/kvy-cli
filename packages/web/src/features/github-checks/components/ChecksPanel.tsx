@@ -2,8 +2,10 @@
 
 import type { CheckRun, PullRequestInfo } from "@falcon/wire";
 import { ExternalLink, RefreshCw } from "lucide-react";
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useMachineOnline } from "@/lib/use-machine-online";
 import type { GithubChecksSnapshot, UseGithubChecksActions } from "../types";
 import { DaemonUnsupportedError } from "../types";
 import { useChecksPanel } from "../use-checks-panel";
@@ -150,14 +152,21 @@ export function ChecksPanel({
   useActions?: UseGithubChecksActions;
 }) {
   const actions = useActions(machineId);
-  const { checks, error, isLoading, refetch } = useChecksPanel(actions, worktree);
+  const machine = useMachineOnline(machineId);
+  const { checks, error, isLoading, refetch } = useChecksPanel(
+    actions,
+    worktree,
+    !machine.isKnownUnavailable,
+  );
   return (
     <div className="flex flex-col gap-2">
+      <MachineOfflineNotice state={machine} />
       <div className="flex justify-end">
         <Button
           size="sm"
           variant="ghost"
           className="h-6 px-2 text-xs text-muted-foreground"
+          disabled={machine.isKnownUnavailable}
           onClick={() => void refetch()}
         >
           <RefreshCw className="size-3.5" />

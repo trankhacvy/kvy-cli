@@ -49,6 +49,13 @@ function fakePanel(overrides: Partial<GitPanelState> = {}): GitPanelState {
     isRenameBranchPending: false,
     renameBranchError: null,
     renameBranchResult: undefined,
+
+    remotes: undefined,
+    pushReadiness: "ready" as const,
+
+    setRemote: vi.fn(),
+    isSetRemotePending: false,
+    setRemoteError: null,
   };
   return { ...base, ...overrides } as unknown as GitPanelState;
 }
@@ -163,5 +170,60 @@ describe("GitToolbar", () => {
     const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
     expect(buttonTag(html, "Commit")).toContain("disabled=");
     expect(buttonTag(html, "Commit &amp; Push")).toContain("disabled=");
+  });
+
+  // Feature 2 (docs/web-ux-improvements-plan.md): a confidently-offline
+  // machine disables every write action here, not just the ones already
+  // gated on their own pending flags.
+  it("disables Push and Force Push when machineUnavailable is true, even with nothing else pending", () => {
+    const panel = fakePanel();
+    const html = renderToStaticMarkup(
+      createElement(GitToolbar, { panel, machineUnavailable: true }),
+    );
+    expect(buttonTag(html, "Push")).toContain("disabled=");
+    expect(buttonTag(html, "Force Push")).toContain("disabled=");
+  });
+
+  it("does not disable Push/Force Push when machineUnavailable is omitted (defaults false)", () => {
+    const panel = fakePanel();
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(buttonTag(html, "Push")).not.toContain("disabled=");
+    expect(buttonTag(html, "Force Push")).not.toContain("disabled=");
+  });
+
+  // Feature 1 (docs/web-ux-improvements-plan.md): pushReadiness "no-remote"
+  // disables the three push-shaped buttons before the click and offers an
+  // inline "Add a remote" affordance instead of letting git's stderr teach
+  // the user.
+  it("disables Push/Commit & Push/Force Push and shows 'Add a remote' when pushReadiness is no-remote", () => {
+    const panel = fakePanel({ pushReadiness: "no-remote" });
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(buttonTag(html, "Push")).toContain("disabled=");
+    expect(buttonTag(html, "Force Push")).toContain("disabled=");
+    expect(html).toContain("nowhere to push");
+    expect(html).toContain("Add a remote");
+  });
+
+  it("disables the push-shaped buttons for a detached HEAD, with no 'Add a remote' offer", () => {
+    const panel = fakePanel({ pushReadiness: "detached" });
+    const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(buttonTag(html, "Push")).toContain("disabled=");
+    expect(html).toContain("nothing to push");
+    expect(html).not.toContain("Add a remote");
+  });
+
+  it("does not block Push for pushReadiness 'ready' or 'unknown', and shows no blocked copy", () => {
+    for (const readiness of ["ready", "unknown"] as const) {
+      const panel = fakePanel({ pushReadiness: readiness });
+      const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
+      expect(buttonTag(html, "Push")).not.toContain("disabled=");
+      expect(html).not.toContain("Add a remote");
+    }
+  });
+
+  it("never calls setRemote merely by rendering, even with pushReadiness 'no-remote'", () => {
+    const panel = fakePanel({ pushReadiness: "no-remote" });
+    renderToStaticMarkup(createElement(GitToolbar, { panel }));
+    expect(panel.setRemote).not.toHaveBeenCalled();
   });
 });

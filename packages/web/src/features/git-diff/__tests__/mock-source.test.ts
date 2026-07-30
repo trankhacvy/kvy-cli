@@ -75,4 +75,57 @@ describe("createMockGitDiffActions", () => {
     expect(branches.length).toBeGreaterThanOrEqual(2);
     expect(branches.some((b) => b.name === status.branch && b.isCurrent)).toBe(true);
   });
+
+  it("initRepo resolves already-repo (Feature 1) — this mock's fetchStatus always already succeeds", async () => {
+    const actions = createMockGitDiffActions("mach-1");
+    const result = await actions.initRepo("/repo");
+    expect(result.state).toBe("already-repo");
+  });
+
+  it("listRemotes returns a non-empty seed list", async () => {
+    const actions = createMockGitDiffActions("mach-1");
+    const remotes = await actions.listRemotes("/repo");
+    expect(remotes.length).toBeGreaterThan(0);
+    expect(remotes[0]).toMatchObject({ name: "origin" });
+  });
+
+  it("setRemote adds a brand-new remote name (created:true) without disturbing the existing one", async () => {
+    const actions = createMockGitDiffActions("mach-1");
+    const before = await actions.listRemotes("/repo");
+
+    const result = await actions.setRemote("/repo", "git@github.com:x/y.git", "upstream");
+    expect(result).toEqual({
+      ok: true,
+      name: "upstream",
+      url: "git@github.com:x/y.git",
+      created: true,
+    });
+
+    const after = await actions.listRemotes("/repo");
+    expect(after.length).toBe(before.length + 1);
+    expect(after.find((r) => r.name === "origin")).toEqual(before.find((r) => r.name === "origin"));
+  });
+
+  it("setRemote updates an existing remote's URL in place (created:false)", async () => {
+    const actions = createMockGitDiffActions("mach-1");
+    const before = await actions.listRemotes("/repo");
+
+    const result = await actions.setRemote("/repo", "https://example.com/new.git", "origin");
+    expect(result).toEqual({
+      ok: true,
+      name: "origin",
+      url: "https://example.com/new.git",
+      created: false,
+    });
+
+    const after = await actions.listRemotes("/repo");
+    expect(after.length).toBe(before.length);
+    expect(after.find((r) => r.name === "origin")?.url).toBe("https://example.com/new.git");
+  });
+
+  it("setRemote with no explicit name defaults to origin", async () => {
+    const actions = createMockGitDiffActions("mach-1");
+    const result = await actions.setRemote("/repo", "https://example.com/new.git");
+    expect(result.name).toBe("origin");
+  });
 });

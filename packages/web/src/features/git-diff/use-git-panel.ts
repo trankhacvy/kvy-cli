@@ -2,7 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
 import { buildDiffFetchOptions } from "./git-diff-query";
+import { derivePushReadiness } from "./push-readiness";
 import type { GitDiffActions } from "./types";
 
 /**
@@ -46,7 +48,22 @@ function handlerErrorCode(error: unknown): string | undefined {
   return undefined;
 }
 
-export function useGitPanel(actions: GitDiffActions, worktree: string) {
+/**
+ * Feature 1 rollout note (docs/web-ux-improvements-plan.md §1.7): a web
+ * build that knows `git.init` talking to an older daemon gets back the
+ * literal `"unknown-method"` (`machineRpc.ts`'s uniform unknown-method
+ * error box) — translated here into copy that reads like a version-skew
+ * hint rather than a bug, same precedent as `inline-spawn.ts`'s
+ * `translateSpawnError`. Every other message passes through unchanged.
+ */
+export function translateInitRepoError(raw: string): string {
+  if (raw === "unknown-method") {
+    return "This machine is running an older version of Falcon — update it there and try again.";
+  }
+  return raw;
+}
+
+export function useGitPanel(actions: GitDiffActions, worktree: string, machineOnline = true) {
   const queryClient = useQueryClient();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [compareRef, setCompareRef] = useState<string | null>(null);
@@ -67,6 +84,12 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
   const branchesQuery = useQuery({
     queryKey: ["git-branches", worktree],
     queryFn: () => actions.listBranches(worktree),
+    enabled: statusQuery.isSuccess,
+  });
+
+  const remotesQuery = useQuery({
+    queryKey: ["git-remotes", worktree],
+    queryFn: () => actions.listRemotes(worktree),
     enabled: statusQuery.isSuccess,
   });
 
@@ -92,7 +115,14 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
     }
     invalidateStatusAndDiff();
     void queryClient.invalidateQueries({ queryKey: ["git-branches", worktree] });
+    void queryClient.invalidateQueries({ queryKey: ["git-remotes", worktree] });
   }, [actions]);
+
+  useRefetchOnMachineRecovery(machineOnline, () => {
+    invalidateStatusAndDiff();
+    void queryClient.invalidateQueries({ queryKey: ["git-branches", worktree] });
+    void queryClient.invalidateQueries({ queryKey: ["git-remotes", worktree] });
+  });
 
   const commitMutation = useMutation({
     mutationFn: ({ message, stageAll }: { message: string; stageAll?: boolean }) =>
@@ -135,6 +165,32 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
     mutationFn: () => actions.unregisterWorkspace(worktree),
   });
 
+  // Feature 1 (docs/web-ux-improvements-plan.md): offered when
+  // `statusErrorCode` is "workspace-not-a-repo" — a real folder that was
+  // simply never `git init`ed. Invalidates status/diff/branches/remotes on
+  // success so the panel flips straight from the error state to a live repo
+  // with no manual refresh (CLAUDE.md rule #6); a refused
+  // "inside-existing-repo" result changed nothing daemon-side, so nothing
+  // is invalidated for it.
+  const initRepoMutation = useMutation({
+    mutationFn: () => actions.initRepo(worktree),
+    onSuccess: (result) => {
+      if (result.state === "inside-existing-repo") return;
+      invalidateStatusAndDiff();
+      void queryClient.invalidateQueries({ queryKey: ["git-branches", worktree] });
+      void queryClient.invalidateQueries({ queryKey: ["git-remotes", worktree] });
+    },
+  });
+
+  const setRemoteMutation = useMutation({
+    mutationFn: ({ url, name }: { url: string; name?: string }) =>
+      actions.setRemote(worktree, url, name),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["git-remotes", worktree] });
+      void queryClient.invalidateQueries({ queryKey: ["git-status", worktree] });
+    },
+  });
+
   return {
     status: statusQuery.data,
     statusError: statusQuery.error instanceof Error ? statusQuery.error.message : null,
@@ -155,6 +211,26 @@ export function useGitPanel(actions: GitDiffActions, worktree: string) {
     setCompareRef,
     branches: branchesQuery.data ?? [],
     isBranchesLoading: branchesQuery.isLoading,
+
+    remotes: remotesQuery.data,
+    pushReadiness: derivePushReadiness(
+      statusQuery.data,
+      remotesQuery.data,
+      branchesQuery.data ?? [],
+    ),
+
+    initRepo: initRepoMutation.mutate,
+    isInitRepoPending: initRepoMutation.isPending,
+    initRepoError:
+      initRepoMutation.error instanceof Error
+        ? translateInitRepoError(initRepoMutation.error.message)
+        : null,
+    initRepoResult: initRepoMutation.data,
+
+    setRemote: setRemoteMutation.mutate,
+    isSetRemotePending: setRemoteMutation.isPending,
+    setRemoteError:
+      setRemoteMutation.error instanceof Error ? setRemoteMutation.error.message : null,
 
     commit: commitMutation.mutate,
     isCommitPending: commitMutation.isPending,

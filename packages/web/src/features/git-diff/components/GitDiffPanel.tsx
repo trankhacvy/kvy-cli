@@ -1,5 +1,7 @@
 "use client";
 
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
+import { useMachineOnline } from "@/lib/use-machine-online";
 import type { UseGitDiffActions } from "../types";
 import { useGitPanel } from "../use-git-panel";
 import { useLiveGitDiffActions } from "../use-live-git-diff-actions";
@@ -40,7 +42,8 @@ export function GitDiffPanel({
   useActions?: UseGitDiffActions;
 }) {
   const actions = useActions(machineId);
-  const panel = useGitPanel(actions, worktree);
+  const machine = useMachineOnline(machineId);
+  const panel = useGitPanel(actions, worktree, !machine.isKnownUnavailable);
   const {
     status,
     statusError,
@@ -61,12 +64,18 @@ export function GitDiffPanel({
   }
 
   if (statusError || !status) {
-    return <GitStatusError panel={panel} />;
+    return (
+      <>
+        <MachineOfflineNotice state={machine} />
+        <GitStatusError panel={panel} />
+      </>
+    );
   }
 
   return (
     <div className="flex h-full flex-col gap-3">
-      <GitToolbar panel={panel} />
+      <MachineOfflineNotice state={machine} />
+      <GitToolbar panel={panel} machineUnavailable={machine.isKnownUnavailable} />
       <div className="flex items-center justify-end px-1">
         <CompareAgainstSelect
           compareRef={compareRef}
@@ -87,7 +96,7 @@ export function GitDiffPanel({
                 `Could not load diff: ${diffError}`}
             </p>
           ) : diff ? (
-            <UnifiedDiffViewer diff={diff} />
+            <UnifiedDiffViewer diff={diff} onNarrowToFile={selectFile} />
           ) : null}
         </section>
       </div>

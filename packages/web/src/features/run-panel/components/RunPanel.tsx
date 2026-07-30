@@ -1,8 +1,10 @@
 "use client";
 
 import { Play, RefreshCw, Square } from "lucide-react";
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useMachineOnline } from "@/lib/use-machine-online";
 import type { RunConfig, RunStatusSnapshot, UseRunPanelActions } from "../types";
 import { useLiveRunPanelActions } from "../use-live-run-panel-actions";
 import { useRunPanel } from "../use-run-panel";
@@ -59,6 +61,8 @@ export interface RunPanelBodyProps {
   onSetup: () => void;
   isSetupPending: boolean;
   setupError: string | null;
+  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once the owning machine is confidently offline/needs-reauth — `||`d into every button's existing disabled expression. */
+  machineUnavailable?: boolean;
 }
 
 /**
@@ -84,6 +88,7 @@ export function RunPanelBody({
   onSetup,
   isSetupPending,
   setupError,
+  machineUnavailable = false,
 }: RunPanelBodyProps) {
   if (isConfigLoading || isStatusLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading run panel…</p>;
@@ -110,7 +115,12 @@ export function RunPanelBody({
             <Badge variant={runBadge.variant}>{runBadge.label}</Badge>
           </div>
           {isRunning ? (
-            <Button size="sm" variant="outline" onClick={onStop} disabled={isStopPending}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onStop}
+              disabled={isStopPending || machineUnavailable}
+            >
               <Square className="size-3.5" />
               Stop
             </Button>
@@ -118,7 +128,7 @@ export function RunPanelBody({
             <Button
               size="sm"
               onClick={onStart}
-              disabled={!hasRunScript || isStartPending}
+              disabled={!hasRunScript || isStartPending || machineUnavailable}
               title={
                 hasRunScript
                   ? undefined
@@ -158,7 +168,12 @@ export function RunPanelBody({
             size="sm"
             variant="outline"
             onClick={onSetup}
-            disabled={!hasSetupScript || isSetupPending || status?.setup.state === "running"}
+            disabled={
+              !hasSetupScript ||
+              isSetupPending ||
+              status?.setup.state === "running" ||
+              machineUnavailable
+            }
             title={
               hasSetupScript
                 ? undefined
@@ -205,24 +220,29 @@ export function RunPanel({
   useActions?: UseRunPanelActions;
 }) {
   const actions = useActions(machineId);
-  const panel = useRunPanel(actions, worktree);
+  const machine = useMachineOnline(machineId);
+  const panel = useRunPanel(actions, worktree, !machine.isKnownUnavailable);
 
   return (
-    <RunPanelBody
-      config={panel.config}
-      isConfigLoading={panel.isConfigLoading}
-      status={panel.status}
-      isStatusLoading={panel.isStatusLoading}
-      statusError={panel.statusError}
-      onStart={panel.start}
-      isStartPending={panel.isStartPending}
-      startError={panel.startError}
-      onStop={panel.stop}
-      isStopPending={panel.isStopPending}
-      stopError={panel.stopError}
-      onSetup={panel.setup}
-      isSetupPending={panel.isSetupPending}
-      setupError={panel.setupError}
-    />
+    <>
+      <MachineOfflineNotice state={machine} />
+      <RunPanelBody
+        config={panel.config}
+        isConfigLoading={panel.isConfigLoading}
+        status={panel.status}
+        isStatusLoading={panel.isStatusLoading}
+        statusError={panel.statusError}
+        onStart={panel.start}
+        isStartPending={panel.isStartPending}
+        startError={panel.startError}
+        onStop={panel.stop}
+        isStopPending={panel.isStopPending}
+        stopError={panel.stopError}
+        onSetup={panel.setup}
+        isSetupPending={panel.isSetupPending}
+        setupError={panel.setupError}
+        machineUnavailable={machine.isKnownUnavailable}
+      />
+    </>
   );
 }

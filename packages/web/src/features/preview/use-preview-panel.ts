@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
 import type { PreviewActions, PreviewPortsSnapshot } from "./types";
 
 /** Pure derivation, extracted for a direct render-free test — mirrors `git-diff-query.ts`'s `buildDiffFetchOptions` precedent (`use-git-panel.test.ts`'s own doc comment on why: no jsdom re-render wired up in this package's vitest config). `undefined` (query hasn't resolved yet) means "don't know yet", not "missing" — showing the banner before the first successful fetch would be a false positive. */
@@ -28,7 +29,7 @@ export function deriveCloudflaredMissing(ports: PreviewPortsSnapshot | undefined
  * switches the Preview tab between two machines without a full remount see
  * one machine's stale ports/tunnels cached under the other's.
  */
-export function usePreviewPanel(actions: PreviewActions, machineId: string) {
+export function usePreviewPanel(actions: PreviewActions, machineId: string, machineOnline = true) {
   const queryClient = useQueryClient();
   const portsQueryKey = ["preview-ports", machineId];
   const tunnelsQueryKey = ["preview-tunnels", machineId];
@@ -49,6 +50,8 @@ export function usePreviewPanel(actions: PreviewActions, machineId: string) {
     void queryClient.invalidateQueries({ queryKey: portsQueryKey });
     void queryClient.invalidateQueries({ queryKey: tunnelsQueryKey });
   }
+
+  useRefetchOnMachineRecovery(machineOnline, invalidateAll);
 
   const openMutation = useMutation({
     mutationFn: (port: number) => actions.openTunnel(port),

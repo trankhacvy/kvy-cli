@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
+import { useMachineOnline } from "@/lib/use-machine-online";
 import type { UsePreviewActions } from "../types";
 import { useLivePreviewActions } from "../use-live-preview-actions";
 import { usePreviewPanel } from "../use-preview-panel";
@@ -31,13 +33,15 @@ export function PreviewPanel({
   useActions?: UsePreviewActions;
 }) {
   const actions = useActions(machineId);
-  const panel = usePreviewPanel(actions, machineId);
+  const machine = useMachineOnline(machineId);
+  const panel = usePreviewPanel(actions, machineId, !machine.isKnownUnavailable);
   const [confirmPort, setConfirmPort] = useState<number | null>(null);
   const [selectedTunnelId, setSelectedTunnelId] = useState<string | null>(null);
   const selectedTunnel = panel.tunnels.find((t) => t.tunnelId === selectedTunnelId) ?? null;
 
   return (
     <div className="flex h-full flex-col gap-3 p-3">
+      <MachineOfflineNotice state={machine} />
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-medium">
           {panel.ports.length} ports detected · {panel.tunnels.length} tunnels active
@@ -76,6 +80,7 @@ export function PreviewPanel({
             panel.closeTunnel(tunnelId);
           }}
           isClosePending={panel.isClosePending}
+          disabled={machine.isKnownUnavailable}
           onPreviewClick={(tunnelId) =>
             setSelectedTunnelId((current) => (current === tunnelId ? null : tunnelId))
           }

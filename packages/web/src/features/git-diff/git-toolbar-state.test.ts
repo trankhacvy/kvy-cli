@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveBranchRenameSubmit, resolveCommitSubmit } from "./git-toolbar-state";
+import {
+  resolveBranchRenameSubmit,
+  resolveCommitSubmit,
+  resolveSetRemoteSubmit,
+} from "./git-toolbar-state";
 
 describe("resolveBranchRenameSubmit", () => {
   it("returns null (no-op) for an empty/whitespace-only draft", () => {
@@ -28,6 +32,26 @@ describe("resolveCommitSubmit", () => {
     expect(resolveCommitSubmit("  fix bug  ", false)).toEqual({
       message: "fix bug",
       stageAll: false,
+    });
+  });
+});
+
+describe("resolveSetRemoteSubmit (Feature 1, docs/web-ux-improvements-plan.md)", () => {
+  it("returns null for a blank/whitespace-only URL", () => {
+    expect(resolveSetRemoteSubmit("", "origin")).toBeNull();
+    expect(resolveSetRemoteSubmit("   ", "origin")).toBeNull();
+  });
+
+  it("trims the URL and omits name entirely when blank (not name: '')", () => {
+    const result = resolveSetRemoteSubmit("  git@github.com:a/b.git  ", "");
+    expect(result).toEqual({ url: "git@github.com:a/b.git" });
+    expect(result).not.toHaveProperty("name");
+  });
+
+  it("trims and includes an explicit name when given", () => {
+    expect(resolveSetRemoteSubmit("git@github.com:a/b.git", "  upstream  ")).toEqual({
+      url: "git@github.com:a/b.git",
+      name: "upstream",
     });
   });
 });

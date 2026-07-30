@@ -3,6 +3,7 @@
 import type { CheckRun } from "@falcon/wire";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -21,6 +22,7 @@ import { FileTree, useLiveRepoFilesActions, useRepoFiles } from "@/features/repo
 import { saveDraft } from "@/features/session-control";
 import { looksLikeWorktreePath, useReviewSpawn } from "@/features/session-list";
 import { buildFixCiPrompt, CREATE_PR_PROMPT, REVIEW_PROMPT } from "@/lib/agent-prompts";
+import { useMachineOnline } from "@/lib/use-machine-online";
 
 type PanelTab = "changes" | "files" | "checks";
 
@@ -134,24 +136,31 @@ function ChangesTab({
   isSendingAgentPrompt: boolean;
   actionsDisabled: boolean;
 }) {
+  const machine = useMachineOnline(machineId);
   const actions = useLiveGitDiffActions(machineId);
-  const panel = useGitPanel(actions, worktree);
+  const panel = useGitPanel(actions, worktree, !machine.isKnownUnavailable);
   const checksActions = useLiveGithubChecksActions(machineId);
-  const { checks } = useChecksPanel(checksActions, worktree);
+  const { checks } = useChecksPanel(checksActions, worktree, !machine.isKnownUnavailable);
 
   if (panel.isStatusLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading changed files…</p>;
   }
 
   if (panel.statusError || !panel.status) {
-    return <GitStatusError panel={panel} />;
+    return (
+      <>
+        <MachineOfflineNotice state={machine} />
+        <GitStatusError panel={panel} />
+      </>
+    );
   }
 
   const canUseWorkspaceActions = looksLikeWorktreePath(worktree) && !actionsDisabled;
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <GitToolbar panel={panel} />
+      <MachineOfflineNotice state={machine} />
+      <GitToolbar panel={panel} machineUnavailable={machine.isKnownUnavailable} />
       {canUseWorkspaceActions && (
         <div className="flex flex-col gap-2 px-1">
           <GitStatusChecklist
@@ -202,8 +211,13 @@ function AllFilesTab({
   openPath: string | null;
   onOpenFile: (file: OpenFile) => void;
 }) {
+  const machine = useMachineOnline(machineId);
   const actions = useLiveRepoFilesActions(machineId);
-  const { tree, filesError, isFilesLoading } = useRepoFiles(actions, worktree);
+  const { tree, filesError, isFilesLoading } = useRepoFiles(
+    actions,
+    worktree,
+    !machine.isKnownUnavailable,
+  );
 
   if (isFilesLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>;
@@ -215,6 +229,7 @@ function AllFilesTab({
 
   return (
     <div className="p-3">
+      <MachineOfflineNotice state={machine} />
       <FileTree
         tree={tree}
         selectedPath={openPath}

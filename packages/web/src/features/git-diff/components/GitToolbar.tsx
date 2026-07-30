@@ -14,7 +14,9 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveBranchRenameSubmit, resolveCommitSubmit } from "../git-toolbar-state";
+import { PUSH_READINESS_COPY } from "../push-readiness";
 import type { GitPanelState } from "../use-git-panel";
+import { AddRemoteDialog } from "./AddRemoteDialog";
 
 /**
  * The Git panel's write-action toolbar (docs/features/git-write-actions.md
@@ -27,13 +29,21 @@ import type { GitPanelState } from "../use-git-panel";
  * git-write-actions.md: "push auth is the machine's ambient git credential
  * helper/SSH agent").
  */
-export function GitToolbar({ panel }: { panel: GitPanelState }) {
+export function GitToolbar({
+  panel,
+  machineUnavailable = false,
+}: {
+  panel: GitPanelState;
+  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once the owning machine is confidently offline/needs-reauth — `||`d into every button's existing disabled expression rather than adding a second disabled-state machinery. */
+  machineUnavailable?: boolean;
+}) {
   const { status } = panel;
   const [editingBranch, setEditingBranch] = useState(false);
   const [branchDraft, setBranchDraft] = useState("");
   const [message, setMessage] = useState("");
   const [stageAll, setStageAll] = useState(true);
   const [forcePushOpen, setForcePushOpen] = useState(false);
+  const [addRemoteOpen, setAddRemoteOpen] = useState(false);
 
   if (!status) return null;
 
@@ -69,7 +79,21 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
   // gating each button on only its own mutation's pending flag lets a click
   // during that window start a second, concurrent `git` invocation.
   const gitOperationPending =
-    panel.isCommitPending || panel.isPushPending || panel.isCommitAndPushPending;
+    panel.isCommitPending ||
+    panel.isPushPending ||
+    panel.isCommitAndPushPending ||
+    machineUnavailable;
+
+  // Feature 1 (docs/web-ux-improvements-plan.md): a repo with no remote at
+  // all, or a detached HEAD, is knowable BEFORE the click — disable the
+  // three push-shaped buttons and offer derived copy instead of letting
+  // git's own stderr teach the user. A branch with no upstream still
+  // pushes fine — it just needs `-u`, passed automatically rather than
+  // surfacing git's "has no upstream branch" hint and making the user
+  // re-click.
+  const pushBlocked = panel.pushReadiness === "no-remote" || panel.pushReadiness === "detached";
+  const blockedCopy = PUSH_READINESS_COPY[panel.pushReadiness];
+  const pushOptions = panel.pushReadiness === "no-upstream" ? { setUpstream: true } : {};
 
   return (
     <div className="flex flex-col gap-3 border-b border-border px-1 pb-3">
@@ -130,7 +154,7 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
           <Button
             size="sm"
             variant="outline"
-            disabled={message.trim() === "" || gitOperationPending}
+            disabled={message.trim() === "" || gitOperationPending || pushBlocked}
             onClick={handleCommitAndPush}
           >
             {panel.isCommitAndPushPending ? "Committing & pushing…" : "Commit & Push"}
@@ -146,20 +170,30 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
           <Button
             size="sm"
             variant="outline"
-            disabled={gitOperationPending}
-            onClick={() => panel.push({})}
+            disabled={gitOperationPending || pushBlocked}
+            onClick={() => panel.push(pushOptions)}
           >
             {panel.isPushPending ? "Pushing…" : "Push"}
           </Button>
           <Button
             size="sm"
             variant="destructive"
-            disabled={gitOperationPending}
+            disabled={gitOperationPending || pushBlocked}
             onClick={() => setForcePushOpen(true)}
           >
             Force Push
           </Button>
         </div>
+        {blockedCopy && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">{blockedCopy}</span>
+            {panel.pushReadiness === "no-remote" && (
+              <Button size="sm" variant="outline" onClick={() => setAddRemoteOpen(true)}>
+                Add a remote
+              </Button>
+            )}
+          </div>
+        )}
         {panel.commitResult?.nothingToCommit && (
           <span className="text-xs text-muted-foreground">Nothing to commit.</span>
         )}
@@ -198,6 +232,16 @@ export function GitToolbar({ panel }: { panel: GitPanelState }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AddRemoteDialog
+        open={addRemoteOpen}
+        onOpenChange={setAddRemoteOpen}
+        onSubmit={(params) => {
+          panel.setRemote(params, { onSuccess: () => setAddRemoteOpen(false) });
+        }}
+        isPending={panel.isSetRemotePending}
+        error={panel.setRemoteError}
+      />
     </div>
   );
 }

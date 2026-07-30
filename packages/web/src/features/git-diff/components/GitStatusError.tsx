@@ -35,27 +35,59 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
     removeWorkspace,
     isRemoveWorkspacePending,
     removeWorkspaceDone,
+    initRepo,
+    isInitRepoPending,
+    initRepoError,
+    initRepoResult,
   } = panel;
   const workspaceProblem = statusErrorCode && WORKSPACE_ERROR_COPY[statusErrorCode];
 
   if (workspaceProblem) {
+    // "Set up git here" is only ever offered for `workspace-not-a-repo`:
+    // for `workspace-missing` the folder itself is gone, and `git init`
+    // would be both impossible (the daemon's registry authorizer refuses a
+    // path that doesn't resolve) and wrong (it can't recreate the user's
+    // files).
+    const canInitialize = statusErrorCode === "workspace-not-a-repo";
+
     return (
       <div className="flex flex-col items-start gap-3 p-4 text-sm">
         <p className="text-muted-foreground">{workspaceProblem}</p>
+
+        {canInitialize && initRepoResult?.state === "inside-existing-repo" && (
+          <p className="text-muted-foreground">
+            This folder is already part of the project at{" "}
+            <code className="rounded bg-muted px-1 py-0.5">{initRepoResult.existingRoot}</code> —
+            open that project instead of starting a new one here.
+          </p>
+        )}
+        {canInitialize && initRepoError && <p className="text-destructive">{initRepoError}</p>}
+
+        {canInitialize && initRepoResult?.state !== "inside-existing-repo" && (
+          <Button size="sm" disabled={isInitRepoPending} onClick={() => initRepo()}>
+            {isInitRepoPending ? "Setting up…" : "Set up git here"}
+          </Button>
+        )}
+
+        {/* Destructive action stays a link, never a button next to a safe
+            one (CLAUDE.md auth/UX rule #5 — same shape as
+            components/auth/start-over-link.tsx), and states its consequence. */}
         {removeWorkspaceDone ? (
           <p className="text-muted-foreground">
             Removed. You can add it again from a new session's folder picker once it's back in
             place.
           </p>
         ) : (
-          <Button
-            variant="outline"
-            size="sm"
+          <button
+            type="button"
             disabled={isRemoveWorkspacePending}
             onClick={() => removeWorkspace()}
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
           >
-            {isRemoveWorkspacePending ? "Removing…" : "Remove this workspace"}
-          </Button>
+            {isRemoveWorkspacePending
+              ? "Removing…"
+              : "Forget this project — Falcon stops tracking the folder, nothing on disk changes"}
+          </button>
         )}
       </div>
     );

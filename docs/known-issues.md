@@ -20,6 +20,7 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 16 | [Session side panel's base-branch-default fix (Phase 0.3) landed but was never live-reverified](#issue-16) | Open (needs verification) |
 | 17 | [Daemon-spawned session processes survive a crashed/interrupted run and never get reaped — causes account-wide refresh-token rotation churn](#issue-17) | Open |
 | 18 | [Re-pairing an already-registered machine to a different account silently leaves it owned by the original account](#issue-18) | Open |
+| 19 | [A browser that connects after the daemon does can show a false "offline" state indefinitely — blocks the Git/Repo-Files panels and the new Create-workspace button](#issue-19) | Open |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -348,6 +349,14 @@ even be identified with confidence; (2) once real output is captured, root-cause
 actual ~1s failure itself — this issue only captures the confirmed symptom, not yet the
 underlying cause.
 
+**Update (re-reproduced 2026-07-30):** hit again via the new "Create new workspace" flow
+(`docs/web-ux-improvements-plan.md`'s feature 4) — spawning a session into a freshly-created,
+never-before-used empty folder failed with the identical error shape, `"exited before it
+reported starting"`. Same symptom as the original repro above (an existing worktree branch),
+just against a brand-new empty directory instead — rules out "something specific to worktree
+branches" as the cause, narrowing it toward the daemon's generic tmux-spawn path itself. Still
+not root-caused; the `remain-on-exit`/diagnostic-trail fix above is still the needed first step.
+
 **Status:** open, not started — newly found via live end-to-end testing 2026-07-28, not
 caught by any existing test (the daemon-spawn unit tests mock the child process entirely; the
 one e2e harness fakes away the same thing). This is the core "New Session from web" flow the
@@ -549,4 +558,60 @@ different accounts isn't a normal user flow), found by accident while re-establi
 infrastructure, not while testing this specific path on purpose — but the silent-failure shape
 (everything reports success, the actual state is just wrong) is the kind of thing worth fixing
 regardless of how rare the trigger is.
+
+<a id="issue-19"></a>
+
+## 19. A browser that connects after the daemon does can show a false "offline" state indefinitely — blocks the Git/Repo-Files panels and the new Create-workspace button
+
+**Where:** `packages/web/src/features/session-list/use-machine-presence.ts:68-84`
+(`MACHINE_ONLINE_WINDOW_MS = 3 * 60_000`, `isMachineOnlineHeuristic`, `deriveMachineOnline`/
+`deriveMachineStatus` — falls back to this heuristic whenever no live presence event exists yet
+for the machine), `packages/web/src/lib/use-sync-snapshot.ts:46` (`staleTime:
+Number.POSITIVE_INFINITY` on the `['sync']` query), `packages/web/src/sync/engine.ts:124-227`
+(the only two places the `['sync']` cache is ever refreshed: a header-seq gap or a full WS
+reconnect — never a timer), `packages/web/src/lib/use-machine-online.ts:31-37`
+(`useMachineOnline`'s own doc comment already names the mechanism: "`machine-presence` is only
+emitted on a machine socket's own connect/disconnect — there is no periodic sweep and no
+retroactive snapshot for a web client that connects later"), `packages/web/src/features/
+session-list/components/new-workspace-panel.tsx:107-109` (`canCreate` requires
+`!machine.isKnownUnavailable`, so this bug also disables the new-workspace Create button).
+
+**What's open:** found via live E2E testing (2026-07-30) of the new-workspace-creation and
+daemon-offline-gating features. Two mechanisms combine into a real, reproducible false-offline
+state, not a one-off flake:
+
+1. The live `machine-presence` ephemeral fires only at the instant a machine's daemon socket
+   connects or disconnects. A browser tab already open when the daemon connects — or one that
+   connects to the server after the daemon already has — never receives that event, and so has
+   no entry in its local presence map for that machine at all, until the daemon's socket
+   disconnects and reconnects again.
+2. Without a live presence entry, `deriveMachineStatus` falls back to `machine.lastSeenAt` from
+   the `['sync']` snapshot, requiring it to be within `MACHINE_ONLINE_WINDOW_MS` (3 minutes) of
+   "now." But that `['sync']` query is fetched with `staleTime: Number.POSITIVE_INFINITY` and is
+   only ever refreshed by `sync/engine.ts` on a header-seq gap or a full WS reconnect — never on
+   a timer. A machine's own periodic `lastSeenAt` write-behind is server-side only and does not
+   appear to bump `accounts.headerSeq` or push a `machine-update`, so the client's cached
+   `lastSeenAt` simply stops advancing once the snapshot is first fetched.
+
+Net effect: once more than 3 minutes pass since a browser's last `['sync']` fetch, with no live
+presence event ever having arrived for that machine, a genuinely healthy, fully-connected
+machine reads as `"offline"` client-side. Confirmed live: the daemon and server both showed a
+healthy connection throughout, but the web UI's Git panel showed "Could not load git status." /
+"No files found." and the new-workspace flow's Create button stayed disabled via `canCreate`'s
+`!machine.isKnownUnavailable` check — both symptoms cleared the moment something else happened
+to trigger a `['sync']` resync (e.g. reloading the page).
+
+**What a real fix needs:** (1) the simplest fix is likely a bounded periodic refetch of the
+`['sync']` snapshot (or at minimum re-deriving `isKnownUnavailable` against wall-clock time on
+an interval, not just on cache updates), so a stale-but-still-accurate `lastSeenAt` can't
+silently outlive the 3-minute window; (2) more directly, consider having the server proactively
+push a `machine-update` (or a fresh presence ephemeral) to a newly-connecting `user`-scoped
+socket for every machine that's currently connected, rather than only at the instant of the
+machine's own connect/disconnect — closing the "browser connects after daemon" gap at the
+source instead of working around it client-side.
+
+**Status:** open, not started — newly found via live E2E testing 2026-07-30, root cause
+confirmed via direct code read (not just the observed symptom): the `staleTime: Infinity` +
+connect/disconnect-only presence model has no path to ever refresh a stale-but-online machine's
+status without an unrelated structural event happening to trigger a resync first.
 

@@ -6,6 +6,14 @@ import type { SessionControlActions, UseSessionControl } from "./types";
 interface SessionControlContextValue {
   sessionId: string;
   actions: SessionControlActions;
+  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once this session's
+   * owning machine is confidently offline/needs-reauth (`useMachineOnline`'s
+   * `isKnownUnavailable`, computed one component above this provider —
+   * `SessionTimelineScreen.tsx` already resolves `machineId` there). A
+   * *distinct* signal from the session's own lifecycle status
+   * (`isSessionControlDisabled`): the composer never hard-blocks on it (see
+   * `use-composer-state.ts`), it's consumed as a non-blocking notice only. */
+  machineOffline: boolean;
 }
 
 const SessionControlContext = createContext<SessionControlContextValue | null>(null);
@@ -21,14 +29,19 @@ const SessionControlContext = createContext<SessionControlContextValue | null>(n
 export function SessionControlProvider({
   sessionId,
   useControl,
+  machineOffline = false,
   children,
 }: {
   sessionId: string;
   useControl: UseSessionControl;
+  machineOffline?: boolean;
   children: ReactNode;
 }) {
   const actions = useControl(sessionId);
-  const value = useMemo(() => ({ sessionId, actions }), [sessionId, actions]);
+  const value = useMemo(
+    () => ({ sessionId, actions, machineOffline }),
+    [sessionId, actions, machineOffline],
+  );
 
   return <SessionControlContext.Provider value={value}>{children}</SessionControlContext.Provider>;
 }

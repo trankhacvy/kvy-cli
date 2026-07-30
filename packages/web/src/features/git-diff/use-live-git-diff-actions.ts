@@ -21,6 +21,9 @@ function pendingGitDiffActions(): GitDiffActions {
     renameBranch: notReady,
     listBranches: notReady,
     unregisterWorkspace: notReady,
+    initRepo: notReady,
+    listRemotes: notReady,
+    setRemote: notReady,
   };
 }
 
