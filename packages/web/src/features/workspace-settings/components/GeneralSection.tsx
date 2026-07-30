@@ -57,7 +57,7 @@ export function GeneralSection({
           </div>
         ) : (
           <p className="text-sm text-muted-foreground">
-            No machine associated with this workspace yet — start a session here first.
+            No machine associated with this workspace yet. Start a session here first.
           </p>
         )}
       </div>

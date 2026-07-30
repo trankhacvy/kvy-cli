@@ -125,12 +125,12 @@ function isCompiledBinary(): boolean {
   return typeof __FALCON_CLI_VERSION__ !== "undefined";
 }
 
-const HELP_TEXT = `falcon — wrapper CLI for Claude Code / Codex agent sessions
+const HELP_TEXT = `falcon: wrapper CLI for Claude Code / Codex agent sessions
 
 Usage:
   falcon                            Start a session with the default provider
   falcon claude [args...]           Start a Claude Code session (flags pass through)
-  falcon codex [args...]            Start a Codex session (beta, no local TUI — flags pass through)
+  falcon codex [args...]            Start a Codex session (beta, no local TUI, flags pass through)
   falcon -b <branch>                Start a session on a new git worktree/branch
   falcon auth login|logout|status   Manage Falcon account auth
   falcon daemon start [--no-wait] | start-sync | stop | status
@@ -609,7 +609,7 @@ function handleUnexpectedError(error: unknown): number {
   }
   const message = error instanceof Error ? error.message : String(error);
   logger.error("unhandled error", { message });
-  process.stderr.write("falcon: unexpected error — see ~/.falcon/logs for details\n");
+  process.stderr.write("falcon: unexpected error. See ~/.falcon/logs for details\n");
   return 1;
 }
 

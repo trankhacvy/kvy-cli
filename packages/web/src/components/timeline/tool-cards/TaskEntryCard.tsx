@@ -78,7 +78,7 @@ export function TaskEntryCard({ item }: { item: ToolItem }) {
             <p className="text-xs whitespace-pre-wrap text-muted-foreground">{description}</p>
           )}
           <span className="text-xs text-muted-foreground">
-            {isCreate ? "New task" : `${taskId ? `Task #${taskId} — ` : ""}${statusLabel(status)}`}
+            {isCreate ? "New task" : `${taskId ? `Task #${taskId}: ` : ""}${statusLabel(status)}`}
           </span>
         </div>
       </div>

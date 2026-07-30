@@ -36,7 +36,7 @@ import type { ProviderSessionResolver } from "./providerSessionResolver.js";
 
 const DEFAULT_GRACEFUL_TIMEOUT_MS = 5000;
 const MID_TURN_WARNING =
-  "the original session was still running and may have been mid-turn — that step was interrupted by takeover";
+  "the original session was still running and may have been mid-turn. That step was interrupted by takeover";
 
 const noopLogger: Logger = {
   debug: () => {},

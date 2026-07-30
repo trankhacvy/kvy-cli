@@ -12,13 +12,13 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * The "stop tracking this folder" control — shared by `GitStatusError.tsx`
+ * The "stop tracking this folder" control - shared by `GitStatusError.tsx`
  * (offered when a workspace's folder is gone) and Workspace Settings' General
  * tab (offered any time, as a deliberate action). A confirm dialog, not an
  * instant click or an inline link: this is a destructive-sounding action, so
- * it states its actual (much smaller) blast radius up front — deregisters
+ * it states its actual (much smaller) blast radius up front - deregisters
  * the workspace from the daemon's local registry only, no files touched, no
- * session history lost — and requires an explicit second click before
+ * session history lost - and requires an explicit second click before
  * running. Closes itself once `done` flips true.
  */
 export function RemoveWorkspaceControl({
@@ -54,7 +54,7 @@ export function RemoveWorkspaceControl({
           <DialogHeader>
             <DialogTitle>Remove this workspace?</DialogTitle>
             <DialogDescription>
-              Falcon stops tracking this folder — nothing on disk changes, and every session's
+              Falcon stops tracking this folder. Nothing on disk changes, and every session's
               history stays exactly as readable as it is now. Add it again anytime from a new
               session's folder picker.
             </DialogDescription>

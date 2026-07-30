@@ -15,9 +15,9 @@ export function computeTabTitle(
   attention: AttentionState,
   working: boolean,
 ): string {
-  if (attention) return `${ATTENTION_META[attention].glyph} ${baseTitle} — Falcon`;
-  if (working) return `● ${baseTitle} — Falcon`;
-  return `${baseTitle} — Falcon`;
+  if (attention) return `${ATTENTION_META[attention].glyph} ${baseTitle} · Falcon`;
+  if (working) return `● ${baseTitle} · Falcon`;
+  return `${baseTitle} · Falcon`;
 }
 
 /** Color for the favicon dot — same mapping `computeTabTitle` uses for its

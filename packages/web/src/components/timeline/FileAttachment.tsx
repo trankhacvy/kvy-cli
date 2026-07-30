@@ -129,7 +129,7 @@ export function FileAttachment({ item, compact = false }: { item: FileItem; comp
           {formatBytes(item.size)}
           {item.image ? ` · ${item.image.w}×${item.image.h}` : ""}
           {state === "downloading" && " · Downloading…"}
-          {state === "error" && " · Download failed — try again"}
+          {state === "error" && " · Download failed, try again"}
         </p>
       </div>
       <Download className="ml-auto size-3.5 shrink-0 text-muted-foreground" />

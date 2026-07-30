@@ -525,12 +525,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         const { existing } = lockResult;
         writeError(
           `falcon claude: a Falcon session is already running in this directory ` +
-            `(${existing.sessionId ?? "unknown session id"}, pid ${existing.pid}) — ` +
+            `(${existing.sessionId ?? "unknown session id"}, pid ${existing.pid}), ` +
             "attach from the web, or run in another directory. Pass --force-new-session to start a second one anyway.\n",
         );
       } else {
         writeError(
-          "falcon claude: could not acquire the per-directory session lock (contended) — try again\n",
+          "falcon claude: could not acquire the per-directory session lock (contended), try again\n",
         );
       }
       return 1;
@@ -580,7 +580,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-claude] bootstrapSession failed", { message });
-    writeError(`falcon claude: failed to start session — ${message}\n`);
+    writeError(`falcon claude: failed to start session: ${message}\n`);
     // A4: best-effort self-report to the daemon (never throws, absent/
     // unreachable daemon is a silent no-op) so a daemon-initiated spawn's
     // `spawnAwaiter` can reject with THIS real message instead of only ever

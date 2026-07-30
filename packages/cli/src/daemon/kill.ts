@@ -212,7 +212,7 @@ export async function killGraceful(
   return targets.map((target) => {
     const outcome = outcomeByPid.get(target.pid);
     if (!outcome) {
-      throw new Error(`kill.ts: missing outcome for pid ${target.pid} — this is a bug`);
+      throw new Error(`kill.ts: missing outcome for pid ${target.pid}, this is a bug`);
     }
     return outcome;
   });
@@ -265,7 +265,7 @@ export function describeKillSummary(target: KillTarget, summary: KillSummary): s
   const succeeded = summary.outcomes.filter((o) => o.error === undefined).length;
   const lines = summary.outcomes.map((o) => {
     const status = o.error !== undefined ? `FAILED (${o.error})` : o.signal;
-    return `  pid ${o.pid} [${o.kind}] ${status} — ${o.command}`;
+    return `  pid ${o.pid} [${o.kind}] ${status} - ${o.command}`;
   });
   return `falcon kill ${target}: ${succeeded}/${summary.targeted.length} process(es) terminated\n${lines.join("\n")}\n`;
 }

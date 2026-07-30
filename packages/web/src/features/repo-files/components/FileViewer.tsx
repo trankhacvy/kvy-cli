@@ -112,7 +112,7 @@ export function FileViewer({
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
           {onLoadMore ? (
             <>
-              <span>Large file — showing the first {shownKb} KB.</span>
+              <span>Large file: showing the first {shownKb} KB.</span>
               <Button
                 size="sm"
                 variant="outline"
@@ -124,7 +124,7 @@ export function FileViewer({
               </Button>
             </>
           ) : (
-            <span>This file was truncated — it exceeded the size Falcon inlines directly.</span>
+            <span>This file was truncated. It exceeded the size Falcon inlines directly.</span>
           )}
         </div>
       )}

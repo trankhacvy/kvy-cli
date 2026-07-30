@@ -67,7 +67,7 @@ export function useRestartSession(machineId: string, sessionId: string): Restart
     pending: crypto === null,
     restart: async () => {
       if (!crypto) {
-        throw new Error("Machine key isn't unwrapped yet — try again in a moment.");
+        throw new Error("Machine key isn't unwrapped yet. Try again in a moment.");
       }
       return createMachineRpcClient({ socket: apiSocket, crypto, machineId }).call(
         "resumeSession",

@@ -123,7 +123,6 @@ export class FakeSessionProcess {
   private readonly logger: Logger;
 
   private controlMode: "local" | "remote" = "local";
-  private permissionMode: PermissionMode = "default";
   private activeAbort: AbortController | undefined;
   private toolCounter = 0;
 
@@ -147,9 +146,6 @@ export class FakeSessionProcess {
 
     this.permissionHandler = new AcpPermissionHandler({
       emitEnvelope: (envelope) => this.outbox.enqueue([envelope]),
-      onModeChange: (mode) => {
-        this.permissionMode = mode;
-      },
       logger: this.logger,
     });
 
@@ -166,14 +162,11 @@ export class FakeSessionProcess {
         interrupt: () => this.handleInterrupt(),
         takeControl: () => this.handleTakeControl(),
         // Under ACP the CLI has no permission-mode auto-rule engine to
-        // retune (it lives agent-side); the harness just records the mode
-        // the RPC round-tripped, mirroring `commands/start.ts`'s honest
-        // "no live session in this state" only inverted — here there IS a
-        // (fake) session, so it succeeds.
-        setMode: (params) => {
-          this.permissionMode = params.mode;
-          return { ok: true };
-        },
+        // retune (it lives agent-side); the harness just acks the RPC,
+        // mirroring `commands/start.ts`'s honest "no live session in this
+        // state" only inverted — here there IS a (fake) session, so it
+        // succeeds.
+        setMode: () => ({ ok: true }),
         // docs/known-issues.md issue #12's web model selector has no
         // scripted scenario in this harness yet either — same "honest
         // {ok:true} ack, no invented behavior" precedent as `stop` below.

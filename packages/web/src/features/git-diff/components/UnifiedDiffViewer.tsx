@@ -21,7 +21,7 @@ function FileDiff({ file, mode }: { file: UnifiedDiffFile; mode: DiffModeEnum })
           : file.path}
       </div>
       {file.binary ? (
-        <p className="px-3 py-2 text-xs text-muted-foreground">Binary file — no diff to show.</p>
+        <p className="px-3 py-2 text-xs text-muted-foreground">Binary file: no diff to show.</p>
       ) : (
         <DiffView
           data={{
@@ -86,7 +86,7 @@ export function UnifiedDiffViewer({
     <div className="flex flex-col gap-3 p-3">
       {diff.truncated && (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-500">
-          <span>This diff was truncated — it exceeded the size Falcon inlines directly.</span>
+          <span>This diff was truncated. It exceeded the size Falcon inlines directly.</span>
           {onNarrowToFile && firstFile && (
             <Button
               size="sm"

@@ -59,7 +59,7 @@ function handlerErrorCode(error: unknown): string | undefined {
  */
 export function translateInitRepoError(raw: string): string {
   if (raw === "unknown-method") {
-    return "This machine is running an older version of Falcon — update it there and try again.";
+    return "This machine is running an older version of Falcon. Update it there and try again.";
   }
   return raw;
 }

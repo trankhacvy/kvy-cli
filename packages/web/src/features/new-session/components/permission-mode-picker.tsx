@@ -77,7 +77,7 @@ export function PermissionModePicker({
         <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
           <Badge variant="warning">Needs attention</Badge>
           <p className="text-muted-foreground">
-            Every tool call is auto-approved — nothing pauses for your confirmation, including edits
+            Every tool call is auto-approved: nothing pauses for your confirmation, including edits
             and shell commands.
           </p>
         </div>

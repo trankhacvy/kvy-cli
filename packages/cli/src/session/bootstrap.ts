@@ -181,7 +181,7 @@ function reattachSession(
     );
     throw new Error(
       `bootstrapSession: FALCON_RECONNECT_SESSION_ID=${params.sessionId} set without ` +
-        "FALCON_RECONNECT_ENCRYPTION_KEY — cannot re-attach without the wrapped DEK",
+        "FALCON_RECONNECT_ENCRYPTION_KEY, cannot re-attach without the wrapped DEK",
     );
   }
 
@@ -191,7 +191,7 @@ function reattachSession(
       sessionId: params.sessionId,
     });
     throw new Error(
-      `bootstrapSession: could not unwrap the reconnect DEK for session ${params.sessionId} — ` +
+      `bootstrapSession: could not unwrap the reconnect DEK for session ${params.sessionId}: ` +
         "wrong key, or corrupted/foreign wrap",
     );
   }
@@ -304,7 +304,7 @@ export async function bootstrapSession(
     });
     throw new Error(
       `bootstrapSession: could not unwrap existing session ${row.id}'s DEK with the ` +
-        "provided content key — wrong key, or corrupted/foreign wrap",
+        "provided content key: wrong key, or corrupted/foreign wrap",
     );
   }
 

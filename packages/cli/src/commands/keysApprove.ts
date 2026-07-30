@@ -138,7 +138,7 @@ export async function runKeysApproveCommand(deps: KeysApproveDeps = {}): Promise
 
     const sealed = sealKeysForPeer(masterSecret, request.ephPub);
     if (!sealed) {
-      writeError("\n  That request looks malformed — nothing was sent.\n");
+      writeError("\n  That request looks malformed, nothing was sent.\n");
       continue;
     }
 

@@ -561,7 +561,7 @@ export class AcpConnection {
 
   private requireReady(): ClientConnection {
     if (this.state !== "ready" || !this.connection) {
-      throw new Error("ACP connection is not ready — call connect() first");
+      throw new Error("ACP connection is not ready, call connect() first");
     }
     return this.connection;
   }

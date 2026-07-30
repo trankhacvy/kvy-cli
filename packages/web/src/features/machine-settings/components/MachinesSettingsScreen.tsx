@@ -40,14 +40,14 @@ export function MachinesSettingsScreen({
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-muted-foreground">
-        Per-machine settings — sleep inhibit keeps a Mac from sleeping mid-session.
+        Per-machine settings: sleep inhibit keeps a Mac from sleeping mid-session.
       </p>
 
       {snapshot.isLoading ? (
         <p className="text-sm text-muted-foreground">Loading machines…</p>
       ) : snapshot.machines.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No machines registered yet — start a session from a machine to see its settings here.
+          No machines registered yet. Start a session from a machine to see its settings here.
         </p>
       ) : (
         <div className="flex flex-col gap-8">

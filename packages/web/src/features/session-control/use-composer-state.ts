@@ -75,8 +75,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
   // heads-up is set BEFORE the mutation fires rather than after a failure,
   // giving the user the honest expectation up front. A real failure still
   // gets its own translated message below.
-  const machineOfflineNotice =
-    "That machine is offline right now — the message may not go through.";
+  const machineOfflineNotice = "That machine is offline right now. The message may not go through.";
 
   const mutation = useMutation({
     mutationFn: async (text: string) => {
@@ -111,7 +110,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
       ]);
       try {
         if (!cryptoBridge) {
-          throw new Error("Session key isn't unwrapped yet — try again in a moment.");
+          throw new Error("Session key isn't unwrapped yet. Try again in a moment.");
         }
         const token = getToken();
         if (!token) {

@@ -393,8 +393,8 @@ export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["
       )}
     >
       {sessionStatus === "failed"
-        ? "Session failed — this session can no longer be controlled from the web."
-        : "Session ended — this session can no longer be controlled from the web."}
+        ? "Session failed. This session can no longer be controlled from the web."
+        : "Session ended. This session can no longer be controlled from the web."}
     </div>
   );
 }

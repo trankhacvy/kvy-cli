@@ -205,7 +205,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-codex] bootstrapSession failed", { message });
-    writeError(`falcon codex: failed to start session — ${message}\n`);
+    writeError(`falcon codex: failed to start session: ${message}\n`);
     // A4: same best-effort self-report as `start.ts` — lets a daemon-
     // initiated spawn's `spawnAwaiter` reject with the real error instead
     // of a generic timeout.

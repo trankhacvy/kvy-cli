@@ -81,6 +81,6 @@ describe("runUpdateCommand", () => {
       applyUpdateImpl,
     });
     expect(result.code).toBe(1);
-    expect(result.message).toContain("update failed — checksum mismatch");
+    expect(result.message).toContain("update failed: checksum mismatch");
   });
 });

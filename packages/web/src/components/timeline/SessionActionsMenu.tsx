@@ -221,7 +221,7 @@ export function SessionActionsMenu({
           <DialogHeader>
             <DialogTitle>End this session?</DialogTitle>
             <DialogDescription>
-              Ends the CLI process on the machine — the terminal user will see Claude exit.
+              Ends the CLI process on the machine. The terminal user will see Claude exit.
             </DialogDescription>
           </DialogHeader>
           {stopState.phase === "error" && (

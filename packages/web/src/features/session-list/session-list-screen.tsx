@@ -122,7 +122,7 @@ export function SessionListScreen({
         <p className="max-w-sm text-sm text-muted-foreground">
           Create a new project below, or run{" "}
           <code className="rounded bg-muted px-1 py-0.5">falcon</code> from an existing project on
-          one of your machines — it shows up here automatically, and you'll be able to start more
+          one of your machines. It shows up here automatically, and you'll be able to start more
           sessions in that same project right from here.
         </p>
         <NewWorkspaceTrigger machines={snapshot.machines} />

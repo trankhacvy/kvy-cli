@@ -7,6 +7,7 @@ import { AuthArtPanel } from "@/components/auth/auth-art-panel";
 import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
 import { InlineCodeText } from "@/components/auth/inline-code-text";
 import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { SIGNIN_PATH } from "@/features/auth";
@@ -17,6 +18,21 @@ import { getAccountId, getToken, isSignedIn, silentRefresh } from "@/lib/session
 import { useCryptoBridgeStatus } from "@/lib/use-crypto-bridge-status";
 import { type Gate, nextGate, type PairDetails } from "./pair-gate";
 import { parseEphPubFromHash } from "./parse-eph-pub";
+
+/** How long the `approved` gate sits on its success card before auto-navigating to the
+ *  dashboard — long enough to read "Connected", short enough not to feel stuck. */
+const APPROVED_REDIRECT_MS = 3000;
+
+/** Splits a path so its last segment (the folder name itself) can be pinned non-shrinking
+ *  while the rest truncates with an ellipsis — an end-truncated `~/code/very-long-monorepo-name`
+ *  hides the one thing (`very-long-monorepo-name`) the user actually needs to recognize. */
+function splitPathTail(path: string): { head: string; tail: string } {
+  const trimmed = path.replace(/\/+$/, "");
+  const idx = trimmed.lastIndexOf("/");
+  return idx === -1
+    ? { head: "", tail: trimmed }
+    : { head: trimmed.slice(0, idx + 1), tail: trimmed.slice(idx + 1) };
+}
 
 function formatRelative(iso: string | null): string {
   if (!iso) return "just now";
@@ -100,6 +116,15 @@ export default function PairPage() {
   useEffect(() => {
     setGate((current) => nextGate(current, bridgeStatus.kind, pairDetails));
   }, [bridgeStatus, pairDetails]);
+
+  // 5. Once approved, the CLI is already unblocked (it picked up the sealed box the moment
+  // `approvePairing` settled) — this browser has nothing further to do here, so send it on
+  // to the dashboard rather than leaving it stranded on a static success card.
+  useEffect(() => {
+    if (gate.kind !== "approved") return;
+    const timer = setTimeout(() => router.replace("/dashboard/"), APPROVED_REDIRECT_MS);
+    return () => clearTimeout(timer);
+  }, [gate.kind, router]);
 
   async function approve(ephPub: string, label: string | null): Promise<void> {
     if (bridgeStatus.kind !== "ready") return;
@@ -207,8 +232,11 @@ export default function PairPage() {
                   <dl className="mt-4 space-y-2 border-border/60 border-t pt-4 text-sm">
                     {gate.cwd && (
                       <div className="flex items-center justify-between gap-4">
-                        <dt className="text-muted-foreground">Folder</dt>
-                        <dd className="truncate font-mono text-xs">{gate.cwd}</dd>
+                        <dt className="shrink-0 text-muted-foreground">Folder</dt>
+                        <dd className="flex min-w-0 font-mono text-xs">
+                          <span className="truncate">{splitPathTail(gate.cwd).head}</span>
+                          <span className="shrink-0">{splitPathTail(gate.cwd).tail}</span>
+                        </dd>
                       </div>
                     )}
                     <div className="flex items-center justify-between gap-4">
@@ -218,9 +246,15 @@ export default function PairPage() {
                   </dl>
                 </div>
 
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-amber-700 text-sm dark:text-amber-400">
-                  <InlineCodeText text={copy.pair.approveWarning} />
-                </div>
+                <Alert className="border-amber-500/30 bg-amber-500/10">
+                  <AlertTriangle
+                    className="size-4 text-amber-600 dark:text-amber-400"
+                    aria-hidden="true"
+                  />
+                  <AlertDescription className="text-amber-700 dark:text-amber-400">
+                    <InlineCodeText text={copy.pair.approveWarning} />
+                  </AlertDescription>
+                </Alert>
 
                 <div className="flex gap-3">
                   <Button
@@ -257,6 +291,9 @@ export default function PairPage() {
                   <h1 className="font-semibold text-2xl tracking-tight">{copy.pair.doneTitle}</h1>
                   <p className="text-sm leading-6 text-muted-foreground">
                     {copy.pair.doneBody(gate.label ?? copy.pair.unknownMachine)}
+                  </p>
+                  <p className="text-xs text-muted-foreground" aria-live="polite">
+                    {copy.pair.doneRedirectHint}
                   </p>
                 </div>
                 <Button

@@ -35,8 +35,8 @@ export interface ServiceInstallOptions {
 export class UnsupportedPlatformError extends Error {
   constructor(platform: string) {
     super(
-      `falcon daemon service install/uninstall/status is not supported on "${platform}" — ` +
-        "only macOS (launchd) and Linux (systemd --user) are supported today. " +
+      `falcon daemon service install/uninstall/status is not supported on "${platform}". ` +
+        "Only macOS (launchd) and Linux (systemd --user) are supported today. " +
         "Windows support is a documented fast-follow (falcon-prd.md FR-1.1).",
     );
     this.name = "UnsupportedPlatformError";

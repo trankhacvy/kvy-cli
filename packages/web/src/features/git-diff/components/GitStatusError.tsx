@@ -58,8 +58,8 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
         {canInitialize && initRepoResult?.state === "inside-existing-repo" && (
           <p className="text-muted-foreground">
             This folder is already part of the project at{" "}
-            <code className="rounded bg-muted px-1 py-0.5">{initRepoResult.existingRoot}</code> —
-            open that project instead of starting a new one here.
+            <code className="rounded bg-muted px-1 py-0.5">{initRepoResult.existingRoot}</code>.
+            Open that project instead of starting a new one here.
           </p>
         )}
         {canInitialize && initRepoError && <p className="text-destructive">{initRepoError}</p>}
@@ -70,7 +70,7 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
           </Button>
         )}
 
-        {/* Remove-workspace only makes sense for `workspace-missing` — the
+        {/* Remove-workspace only makes sense for `workspace-missing` - the
             folder is genuinely gone, so there's nothing else to offer.
             `workspace-not-a-repo`'s real fix is "Set up git here" above;
             offering to delete the workspace registration for a folder that's

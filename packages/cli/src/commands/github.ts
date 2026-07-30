@@ -126,7 +126,7 @@ export async function runGithubLogin(
       "Paste a GitHub personal access token (repo, read:checks scopes): ",
     );
     if (!token) {
-      write("falcon github login: no token entered — nothing saved.\n");
+      write("falcon github login: no token entered, nothing saved.\n");
       return 1;
     }
     writeGithubToken({ token, createdAt: now(), method: "pat" }, deps.homeDir);
@@ -193,7 +193,7 @@ export async function runGithubStatus(deps: GithubCommandDeps = {}): Promise<num
 
   if (!response.ok) {
     write(
-      "falcon github status: invalid token — GitHub rejected it. Run `falcon github login` again.\n",
+      "falcon github status: invalid token. GitHub rejected it. Run `falcon github login` again.\n",
     );
     return 1;
   }

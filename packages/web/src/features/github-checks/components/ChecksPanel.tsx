@@ -68,7 +68,7 @@ export function ChecksBody({
   if (error instanceof DaemonUnsupportedError) {
     return (
       <EmptyState>
-        This machine&apos;s falcon daemon doesn&apos;t support CI checks yet — update falcon and
+        This machine&apos;s falcon daemon doesn&apos;t support CI checks yet. Update falcon and
         restart the daemon.
       </EmptyState>
     );
@@ -86,7 +86,7 @@ export function ChecksBody({
     case "no-token":
       return (
         <EmptyState>
-          GitHub is not connected on this machine — run <code>falcon github login</code> in a
+          GitHub is not connected on this machine. Run <code>falcon github login</code> in a
           terminal on it.
         </EmptyState>
       );
@@ -99,7 +99,7 @@ export function ChecksBody({
     case "no-pr":
       return (
         <EmptyState>
-          No open pull request for {checks.branch ?? "this branch"} — create a PR to see CI checks.
+          No open pull request for {checks.branch ?? "this branch"}. Create a PR to see CI checks.
         </EmptyState>
       );
     case "ok":

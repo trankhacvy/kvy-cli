@@ -120,7 +120,7 @@ export function NewWorkspaceForm({
     return (
       <div className="flex flex-col gap-3">
         <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-          Project created — session started.
+          Project created. Session started.
         </p>
         <Button
           type="button"

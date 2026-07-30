@@ -31,7 +31,7 @@ export interface WorkspaceRegistryCommandDeps {
 
 function describeEntry(entry: RegisteredWorkspaceEntry): string {
   const name = entry.displayName ? ` "${entry.displayName}"` : "";
-  return `${entry.path}${name} — registered ${entry.registeredAt}`;
+  return `${entry.path}${name} (registered ${entry.registeredAt})`;
 }
 
 /** Runs `falcon workspace register`. Always returns 0 — registering an already-registered directory just updates its display name (or is a no-op). */

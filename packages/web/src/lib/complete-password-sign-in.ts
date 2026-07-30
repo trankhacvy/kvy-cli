@@ -196,7 +196,7 @@ export async function rotateKeyEpoch(
       return {
         kind: "other-devices-online",
         message:
-          "Another device is still signed in — pair this browser from that device instead of rotating keys blind.",
+          "Another device is still signed in. Pair this browser from that device instead of rotating keys blind.",
       };
     }
     const message = err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.";
@@ -268,7 +268,7 @@ export async function rotateKeyEpochOAuth(
       return {
         kind: "other-devices-online",
         message:
-          "Another device is still signed in — pair this browser from that device instead of rotating keys blind.",
+          "Another device is still signed in. Pair this browser from that device instead of rotating keys blind.",
       };
     }
     const message = err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.";

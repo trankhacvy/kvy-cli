@@ -36,7 +36,7 @@ export function InlineSpawnStatus({
         <span>
           Starting session… {elapsedSeconds ?? 0}s
           {(elapsedSeconds ?? 0) >= SLOW_HINT_THRESHOLD_SECONDS &&
-            " — setting up a new worktree can take a little longer than usual."}
+            ". Setting up a new worktree can take a little longer than usual."}
         </span>
       </div>
     );

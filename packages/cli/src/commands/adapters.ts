@@ -22,7 +22,7 @@ export interface AdaptersCommandDeps {
 }
 
 function describeOutcome(outcome: AdapterInstallOutcome): string {
-  if (!outcome.ok) return `  ${outcome.id}: FAILED — ${outcome.error}`;
+  if (!outcome.ok) return `  ${outcome.id}: FAILED: ${outcome.error}`;
   const statusLabel =
     outcome.status === "already-satisfied"
       ? "already up to date"

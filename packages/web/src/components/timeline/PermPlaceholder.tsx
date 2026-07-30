@@ -26,7 +26,7 @@ export function PermPlaceholder({ item }: { item: PermPlaceholderItem }) {
   return (
     <div className="max-w-[85%] rounded-lg border border-dashed border-amber-500/40 bg-amber-500/5 px-3 py-2 text-sm">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-medium">Permission requested — {item.name}</span>
+        <span className="font-medium">Permission requested: {item.name}</span>
         <PermissionBadge permission={item.permission} />
       </div>
       {item.args !== undefined && <JsonBlock value={item.args} className="mt-1.5" />}

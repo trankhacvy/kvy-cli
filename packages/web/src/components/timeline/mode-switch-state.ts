@@ -52,6 +52,6 @@ export function nextModeAfterSetMode(
   if (result.ok) return { mode: target, error: null };
   return {
     mode: result.observedMode ?? previous,
-    error: "Could not confirm the mode switch — reverted.",
+    error: "Could not confirm the mode switch. Reverted.",
   };
 }

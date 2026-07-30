@@ -137,10 +137,10 @@ export async function runSessionsListCommand(deps: SessionsListCommandDeps): Pro
   write("\nRemote sessions (this account, all machines):\n");
   switch (remote.type) {
     case "not-logged-in":
-      write("  not logged in — run `falcon auth login` to see sessions from other machines\n");
+      write("  not logged in. Run `falcon auth login` to see sessions from other machines\n");
       break;
     case "error":
-      write(`  could not reach the Falcon server — ${remote.message}\n`);
+      write(`  could not reach the Falcon server: ${remote.message}\n`);
       break;
     case "ok":
       write(formatRemote(remote.sessions));

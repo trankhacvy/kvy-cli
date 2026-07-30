@@ -91,7 +91,7 @@ export function KeyProtectionChoice({
         <span>
           <span className="block text-sm font-medium">Stay signed in</span>
           <span className="block text-sm text-muted-foreground">
-            No prompt, ever. Only choose this on a computer only you can use — anyone who can use it
+            No prompt, ever. Only choose this on a computer only you can use: anyone who can use it
             can read your sessions.
           </span>
         </span>

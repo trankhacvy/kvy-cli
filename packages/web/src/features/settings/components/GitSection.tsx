@@ -55,8 +55,8 @@ export function GitSection() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        This only sets the New Session wizard's starting choice — it's always changeable per
-        session, and is per-device, not synced across your other devices.
+        This only sets the New Session wizard's starting choice. It's always changeable per session,
+        and is per-device, not synced across your other devices.
       </p>
 
       {/*

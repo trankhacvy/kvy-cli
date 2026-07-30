@@ -61,7 +61,7 @@ export async function handleGitPush(
   if (branch === undefined) {
     const current = (await git(["rev-parse", "--abbrev-ref", "HEAD"], params.worktree)).trim();
     if (current === "HEAD") {
-      throw new GitExecError("cannot push: HEAD is detached — no branch to push");
+      throw new GitExecError("cannot push: HEAD is detached, no branch to push");
     }
     branch = current;
   }
