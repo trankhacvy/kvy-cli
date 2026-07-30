@@ -18,10 +18,14 @@ import {
   GitCommitResultSchema,
   GitDiffParamsSchema,
   GitDiffResultSchema,
+  GitInitParamsSchema,
+  GitInitResultSchema,
   GitPushParamsSchema,
   GitPushResultSchema,
   GitRenameBranchParamsSchema,
   GitRenameBranchResultSchema,
+  GitSetRemoteParamsSchema,
+  GitSetRemoteResultSchema,
   GitStatusParamsSchema,
   GitStatusResultSchema,
   MessageRpcResultSchema,
@@ -159,6 +163,23 @@ describe("idempotencyKey on caller-retriable machine RPCs", () => {
     expect(
       AdoptMirrorParamsSchema.safeParse({ idempotencyKey: "idem-7", providerSessionId: "p1" })
         .success,
+    ).toBe(true);
+
+    expect(GitInitParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      GitInitParamsSchema.safeParse({ idempotencyKey: "idem-12", worktree: "/repo" }).success,
+    ).toBe(true);
+
+    expect(
+      GitSetRemoteParamsSchema.safeParse({ worktree: "/repo", url: "git@github.com:a/b.git" })
+        .success,
+    ).toBe(false);
+    expect(
+      GitSetRemoteParamsSchema.safeParse({
+        idempotencyKey: "idem-13",
+        worktree: "/repo",
+        url: "git@github.com:a/b.git",
+      }).success,
     ).toBe(true);
   });
 });
@@ -351,6 +372,75 @@ describe("git.commit / git.push / git.renameBranch (write RPCs)", () => {
         .success,
     ).toBe(true);
     expect(GitRenameBranchResultSchema.safeParse({ ok: true, branch: "renamed" }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("git.init / git.setRemote (Feature 1, docs/web-ux-improvements-plan.md)", () => {
+  it("GitInitParamsSchema requires idempotencyKey/worktree; initialBranch stays optional", () => {
+    expect(GitInitParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
+    expect(
+      GitInitParamsSchema.safeParse({ idempotencyKey: "idem-12", worktree: "/repo" }).success,
+    ).toBe(true);
+    expect(
+      GitInitParamsSchema.safeParse({
+        idempotencyKey: "idem-12",
+        worktree: "/repo",
+        initialBranch: "trunk",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("GitInitResultSchema requires `state` from its fixed enum; branch/existingRoot stay optional", () => {
+    expect(GitInitResultSchema.safeParse({ state: "initialized", branch: "main" }).success).toBe(
+      true,
+    );
+    expect(GitInitResultSchema.safeParse({ state: "already-repo" }).success).toBe(true);
+    expect(
+      GitInitResultSchema.safeParse({ state: "inside-existing-repo", existingRoot: "/repo" })
+        .success,
+    ).toBe(true);
+    expect(GitInitResultSchema.safeParse({ state: "bogus" }).success).toBe(false);
+    expect(GitInitResultSchema.safeParse({}).success).toBe(false);
+  });
+
+  it("GitSetRemoteParamsSchema requires idempotencyKey/worktree/url; name stays optional", () => {
+    expect(
+      GitSetRemoteParamsSchema.safeParse({ worktree: "/repo", url: "https://example.com/a.git" })
+        .success,
+    ).toBe(false);
+    expect(
+      GitSetRemoteParamsSchema.safeParse({
+        idempotencyKey: "idem-13",
+        worktree: "/repo",
+        url: "https://example.com/a.git",
+      }).success,
+    ).toBe(true);
+    expect(
+      GitSetRemoteParamsSchema.safeParse({
+        idempotencyKey: "idem-13",
+        worktree: "/repo",
+        name: "upstream",
+        url: "https://example.com/a.git",
+      }).success,
+    ).toBe(true);
+  });
+
+  it("GitSetRemoteResultSchema requires ok:true/name/url/created", () => {
+    expect(
+      GitSetRemoteResultSchema.safeParse({
+        ok: true,
+        name: "origin",
+        url: "https://example.com/a.git",
+        created: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      GitSetRemoteResultSchema.safeParse({ ok: false, name: "origin", url: "x", created: true })
+        .success,
+    ).toBe(false);
+    expect(GitSetRemoteResultSchema.safeParse({ ok: true, name: "origin", url: "x" }).success).toBe(
       false,
     );
   });

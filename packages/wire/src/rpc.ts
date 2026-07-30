@@ -388,6 +388,79 @@ export const GitRenameBranchResultSchema = z.object({
 });
 export type GitRenameBranchResult = z.infer<typeof GitRenameBranchResultSchema>;
 
+// `git.init` machine RPC (docs/web-ux-improvements-plan.md Feature 1): the
+// recovery action behind the Git panel's `workspace-not-a-repo` state
+// (`workspacePath.ts`'s `WorkspaceValidationErrorCode`) — a registered
+// workspace whose folder is real but was never `git init`ed. Joins
+// `git.commit`/`git.push`/`git.renameBranch` as a *mutating* git RPC and is
+// gated on the same registered-workspace authorizer, but is deliberately
+// non-destructive: `git init` on an existing repository is refused (see
+// `state` below), never allowed to re-init or clobber anything.
+//
+// `initialBranch` maps to `git init --initial-branch=<name>`; omitted, git's
+// own `init.defaultBranch` config wins. Validated with the same
+// `assertSafeBranchName` guard `git.renameBranch` uses — this value becomes
+// an argv element next to a `--`-prefixed flag.
+export const GitInitParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  initialBranch: z.string().optional(),
+});
+export type GitInitParams = z.infer<typeof GitInitParamsSchema>;
+
+// Modelled on `GithubChecksResultSchema.state` (below): every outcome the
+// panel's copy derives from is its own enumerated value, so no caller ever
+// has to string-match an error message.
+//   - "initialized":         a real `git init` ran; `branch` is the new HEAD.
+//   - "already-repo":        `<worktree>/.git` already exists — a no-op, not
+//                            an error (idempotent from the caller's view, the
+//                            same contract `fs.mkdir`/`workspace.register`
+//                            already have).
+//   - "inside-existing-repo": the directory has no `.git` of its own but IS
+//                            inside another repository's worktree
+//                            (`git rev-parse --show-toplevel` succeeded).
+//                            `git init` here would create a nested repo, which
+//                            is almost never what the user meant — refused,
+//                            with `existingRoot` so the UI can say where the
+//                            real repo root is.
+export const GitInitResultSchema = z.object({
+  state: z.enum(["initialized", "already-repo", "inside-existing-repo"]),
+  /** The checked-out branch after a successful `initialized` (or the existing repo's current branch for `already-repo`); absent when it can't be resolved. */
+  branch: z.string().optional(),
+  /** Absolute toplevel of the repository this directory already belongs to — set only for `"inside-existing-repo"`. */
+  existingRoot: z.string().optional(),
+});
+export type GitInitResult = z.infer<typeof GitInitResultSchema>;
+
+// `git.setRemote` machine RPC (docs/web-ux-improvements-plan.md Feature 1):
+// configures a remote URL for a repository that has none, so the Git panel's
+// Push button has somewhere to push. Additive and non-destructive by
+// construction — `git remote add` when `name` is new, `git remote set-url`
+// when it already exists; there is deliberately NO remove/rename path over
+// the wire — a caller that wants one uses a terminal.
+//
+// `url` is passed as its own argv element and is validated only for the
+// argv-injection hazard (a leading `-`), NOT for reachability: Falcon manages
+// no git credentials (see `GitPushParamsSchema`'s own note), so whether the
+// URL actually works is git's business at push time, not this RPC's.
+export const GitSetRemoteParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  /** Remote name; omitted means `"origin"`, matching `git.push`'s own default. */
+  name: z.string().optional(),
+  url: z.string(),
+});
+export type GitSetRemoteParams = z.infer<typeof GitSetRemoteParamsSchema>;
+
+export const GitSetRemoteResultSchema = z.object({
+  ok: z.literal(true),
+  name: z.string(),
+  url: z.string(),
+  /** `true` when the remote did not exist and was added; `false` when an existing remote's URL was updated in place. */
+  created: z.boolean(),
+});
+export type GitSetRemoteResult = z.infer<typeof GitSetRemoteResultSchema>;
+
 // `github.checks` machine RPC (design §4.4; docs/features/github-pr-ci.md
 // "GitHub PR/CI integration", docs/competitive-notes-omnara.md #4).
 // Structural clone of `git.status`/`git.branches`'s params shape above —
