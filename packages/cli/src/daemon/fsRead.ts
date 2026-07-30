@@ -124,7 +124,7 @@ export async function readFile(params: FsReadParams, deps: FsReadDeps = {}): Pro
   }
 
   if (looksBinary(buffer)) {
-    throw new FsReadError(`${params.path} looks like a binary file — no text preview available`);
+    throw new FsReadError(`${params.path} looks like a binary file, no text preview available`);
   }
 
   if (params.range) {

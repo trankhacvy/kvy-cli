@@ -82,7 +82,7 @@ export function MirrorViewScreen({
               // biome-ignore lint/suspicious/noArrayIndexKey: transcript lines have no stable id and are only ever appended/replaced wholesale on each poll, never reordered
               <div key={i} className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-muted-foreground">
-                  {line.kind === "user" ? "User" : line.kind === "agent" ? "Assistant" : "—"}
+                  {line.kind === "user" ? "User" : line.kind === "agent" ? "Assistant" : "Other"}
                 </span>
                 <p
                   className={cn(

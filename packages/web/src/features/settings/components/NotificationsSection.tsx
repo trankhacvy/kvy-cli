@@ -210,7 +210,7 @@ export function NotificationsSection() {
   return (
     <div className="flex flex-col gap-8">
       <p className="text-sm text-muted-foreground">
-        Get a push when a session needs your permission, asks a question, finishes, or fails —
+        Get a push when a session needs your permission, asks a question, finishes, or fails,
         nothing else. Falcon never pushes on every message.
       </p>
 
@@ -251,7 +251,7 @@ export function NotificationsSection() {
         <div>
           <h3 className="text-sm font-medium">Fallback channels</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Web Push is unreliable on iOS. Link Telegram or ntfy as a backup — same events, same
+            Web Push is unreliable on iOS. Link Telegram or ntfy as a backup: same events, same
             rules, no session content.
           </p>
         </div>

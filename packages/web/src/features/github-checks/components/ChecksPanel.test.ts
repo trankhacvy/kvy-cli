@@ -25,7 +25,7 @@ describe("ChecksBody", () => {
       checks: undefined,
     });
     expect(html).toContain("doesn&#x27;t support CI checks yet");
-    expect(html).toContain("update falcon and restart");
+    expect(html).toContain("Update falcon and restart");
   });
 
   it("shows a generic error message for any other error", () => {

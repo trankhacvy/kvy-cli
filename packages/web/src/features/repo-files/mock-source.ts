@@ -46,7 +46,7 @@ const MOCK_CONTENTS: Record<string, string> = {
 };
 
 function defaultContentFor(path: string): string {
-  return `// ${path}\n// (mock content — a live machine RPC hasn't been wired into this screen yet)\n`;
+  return `// ${path}\n// (mock content: a live machine RPC hasn't been wired into this screen yet)\n`;
 }
 
 export function createMockRepoFilesActions(_machineId: string): RepoFilesActions {

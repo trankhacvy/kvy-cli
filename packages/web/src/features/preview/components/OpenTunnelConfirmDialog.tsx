@@ -38,7 +38,7 @@ export function OpenTunnelConfirmDialog({
           <DialogTitle>Make port {port} publicly reachable?</DialogTitle>
           <DialogDescription>
             Opening a tunnel gives ANYONE with the link access to this dev server over the public
-            internet — the URL is unauthenticated. Unlike every other Falcon action, this traffic is
+            internet: the URL is unauthenticated. Unlike every other Falcon action, this traffic is
             plain HTTP(S), not end-to-end encrypted. The tunnel stays open until you close it or the
             daemon stops.
           </DialogDescription>

@@ -664,7 +664,7 @@ export async function runDaemonStatus(deps: DaemonCommandDeps): Promise<DaemonCo
   if (!reachable) {
     return {
       code: 1,
-      message: `falcon daemon: not running (pid ${state.pid} is alive but its control server on port ${state.port} is unreachable — stale state)\n`,
+      message: `falcon daemon: not running (pid ${state.pid} is alive but its control server on port ${state.port} is unreachable, stale state)\n`,
     };
   }
 

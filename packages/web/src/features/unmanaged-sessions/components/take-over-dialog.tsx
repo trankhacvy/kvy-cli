@@ -87,7 +87,7 @@ export function TakeOverDialog({
               </DialogTitle>
               <DialogDescription>
                 {state.mode === "takeover"
-                  ? "Falcon is now driving this session — the terminal process was stopped."
+                  ? "Falcon is now driving this session. The terminal process was stopped."
                   : "A new managed session was started from this transcript. The original terminal session is untouched."}
               </DialogDescription>
             </DialogHeader>
@@ -107,7 +107,7 @@ export function TakeOverDialog({
             <DialogHeader>
               <DialogTitle>This session looks like it&apos;s still running</DialogTitle>
               <DialogDescription>
-                Taking over will interrupt the current turn on the terminal — any in-progress tool
+                Taking over will interrupt the current turn on the terminal: any in-progress tool
                 call there is stopped. Fork instead to leave it running and start a separate session
                 from the same history.
               </DialogDescription>

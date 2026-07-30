@@ -93,7 +93,7 @@ export function AskUserQuestionCard({
           </div>
         ))}
         <p className="text-xs text-muted-foreground">
-          Waiting for a response at the terminal — this can't be answered from the web.
+          Waiting for a response at the terminal. This can't be answered from the web.
         </p>
       </div>
     );

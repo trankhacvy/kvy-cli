@@ -110,7 +110,7 @@ describe("GitStatusError", () => {
     expect(html).toContain("Forget this project");
     expect(html).toContain("nothing on disk changes");
     const suffix =
-      ">Forget this project — Falcon stops tracking the folder, nothing on disk changes</button>";
+      ">Forget this project: Falcon stops tracking the folder, nothing on disk changes</button>";
     const end = html.indexOf(suffix);
     const start = html.lastIndexOf("<button", end);
     const forgetTag = html.slice(start, end + suffix.length);

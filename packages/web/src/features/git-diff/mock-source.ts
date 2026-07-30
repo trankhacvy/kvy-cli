@@ -85,7 +85,7 @@ function defaultDiffFor(path: string): string {
     `+++ b/${path}`,
     "@@ -1,2 +1,2 @@",
     "-// before",
-    "+// after (mock diff — a live machine RPC hasn't been wired into this screen yet)",
+    "+// after (mock diff: a live machine RPC hasn't been wired into this screen yet)",
     " // unchanged context line",
     "",
   ].join("\n");

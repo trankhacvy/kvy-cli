@@ -200,7 +200,7 @@ async function runRemoteAdopt(
       `falcon adopt --remote: launched detached session (pid ${launched.pid}, ${launched.method}) continuing from ${target.providerSessionId}\n`,
     );
     deps.write(
-      "falcon adopt --remote: lineage recording for the new session id isn't wired for detached starts yet — it lands once managed-session registration does\n",
+      "falcon adopt --remote: lineage recording for the new session id isn't wired for detached starts yet. It lands once managed-session registration does\n",
     );
     return 0;
   } catch (error) {
@@ -208,7 +208,7 @@ async function runRemoteAdopt(
       message: error instanceof Error ? error.message : String(error),
     });
     deps.write(
-      `falcon adopt --remote: failed to launch — ${error instanceof Error ? error.message : String(error)}\n`,
+      `falcon adopt --remote: failed to launch: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     return 1;
   }
@@ -245,7 +245,7 @@ export async function runAdoptCommand(
     write(`falcon adopt: no plain Claude Code sessions found for ${deps.workingDirectory}\n`);
     return 0;
   }
-  const runningNote = target.running ? " — currently running" : "";
+  const runningNote = target.running ? " (currently running)" : "";
   write(
     `falcon adopt: adopting "${target.title ?? target.providerSessionId}" (${target.providerSessionId})${runningNote}\n`,
   );

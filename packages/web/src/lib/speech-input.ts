@@ -106,11 +106,11 @@ export function describeSpeechError(error: string): string {
   switch (error) {
     case "not-allowed":
     case "service-not-allowed":
-      return "Voice input needs microphone permission — check your browser's site settings.";
+      return "Voice input needs microphone permission. Check your browser's site settings.";
     case "audio-capture":
       return "No microphone found.";
     case "network":
-      return "Voice input lost its connection — try again.";
+      return "Voice input lost its connection. Try again.";
     case "language-not-supported":
       return "Voice input doesn't support this language.";
     default:

@@ -264,7 +264,7 @@ export function SessionCardActions({
           <DialogHeader>
             <DialogTitle>Stop "{title}"?</DialogTitle>
             <DialogDescription>
-              Ends the CLI process on its machine — the terminal user will see Claude exit.
+              Ends the CLI process on its machine. The terminal user will see Claude exit.
             </DialogDescription>
           </DialogHeader>
           {stopState.phase === "error" && (
@@ -319,7 +319,7 @@ function CardStopConfirmButton({
 
   function handleConfirm() {
     if (!crypto) {
-      onError(new Error("Crypto bridge isn't ready yet — try again in a moment."));
+      onError(new Error("Crypto bridge isn't ready yet. Try again in a moment."));
       return;
     }
     onStopping();

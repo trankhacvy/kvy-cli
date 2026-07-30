@@ -23,7 +23,8 @@
       "!omnara",
       "!.claude",
       "!.vscode",
-      "!.idea"
+      "!.idea",
+      "!packages/web/public/crypto-worker.js"
     ]
   },
   "formatter": {

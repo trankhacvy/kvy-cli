@@ -86,7 +86,7 @@ export async function patchSessionMetadataCas(
     }
     current = { value: result.current.value, version: result.current.version };
   }
-  throw new Error("Could not save — too many conflicting writes. Try again.");
+  throw new Error("Could not save: too many conflicting writes. Try again.");
 }
 
 /**
@@ -108,7 +108,7 @@ export function useSessionMetadataPatchMutation(sessionId: string) {
     mutationFn: async (patch: SessionMetadataPatch): Promise<SessionMetadataWriteResult> => {
       const token = getToken();
       if (!token) throw new Error("Not signed in");
-      if (!bridge) throw new Error("Crypto bridge isn't ready yet — try again in a moment.");
+      if (!bridge) throw new Error("Crypto bridge isn't ready yet. Try again in a moment.");
 
       const snapshot = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
       const session = snapshot?.sessions.find((s) => s.id === sessionId);

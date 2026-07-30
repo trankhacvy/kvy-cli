@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { SITE_URL, THEME_COLOR } from "./config";
 
 export const LANDING_DESCRIPTION =
-  "Run coding agents on your machine. Approve permissions, steer mid-session, and review diffs from any browser — end-to-end encrypted.";
+  "Claude Code, Codex, and more, running on your own machine. Approve permissions, steer mid-session, and review diffs from any browser, end-to-end encrypted.";
 
-export const LANDING_TITLE = "Falcon — Remote control for Claude Code & Codex";
+export const LANDING_TITLE = "Falcon · Run coding agents from anywhere";
 
 export const NO_INDEX_ROBOTS = {
   index: false,

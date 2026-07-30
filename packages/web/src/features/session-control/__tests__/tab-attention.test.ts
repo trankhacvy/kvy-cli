@@ -5,22 +5,22 @@ import { computeTabTitle, faviconColor, faviconDataUri } from "../tab-attention.
 describe("computeTabTitle", () => {
   it("prefixes with the attention glyph when attention is outstanding", () => {
     expect(computeTabTitle("My session", "perm", false)).toBe(
-      `${ATTENTION_META.perm.glyph} My session — Falcon`,
+      `${ATTENTION_META.perm.glyph} My session · Falcon`,
     );
   });
 
   it("prefixes with a working marker when working and no attention", () => {
-    expect(computeTabTitle("My session", null, true)).toBe("● My session — Falcon");
+    expect(computeTabTitle("My session", null, true)).toBe("● My session · Falcon");
   });
 
   it("attention takes priority over working", () => {
     expect(computeTabTitle("My session", "done", true)).toBe(
-      `${ATTENTION_META.done.glyph} My session — Falcon`,
+      `${ATTENTION_META.done.glyph} My session · Falcon`,
     );
   });
 
   it("plain title when neither attention nor working", () => {
-    expect(computeTabTitle("My session", null, false)).toBe("My session — Falcon");
+    expect(computeTabTitle("My session", null, false)).toBe("My session · Falcon");
   });
 });
 

@@ -44,7 +44,7 @@ export function ProvidersSettingsScreen({
   return (
     <div className="flex flex-col gap-6">
       <p className="text-sm text-muted-foreground">
-        Account status and usage for each provider, per machine — read straight from that machine's
+        Account status and usage for each provider, per machine. Read straight from that machine's
         own local CLI config, refreshed on demand.
       </p>
 
@@ -52,7 +52,7 @@ export function ProvidersSettingsScreen({
         <p className="text-sm text-muted-foreground">Loading machines…</p>
       ) : snapshot.machines.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No machines registered yet — start a session from a machine to see its provider accounts
+          No machines registered yet. Start a session from a machine to see its provider accounts
           here.
         </p>
       ) : (

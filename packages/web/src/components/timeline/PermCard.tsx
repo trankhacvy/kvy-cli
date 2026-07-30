@@ -179,13 +179,13 @@ export function PermCard({
       >
         {showHeader && (
           <div className="flex items-center justify-between gap-2">
-            <span className="font-medium">Permission requested — {name}</span>
+            <span className="font-medium">Permission requested: {name}</span>
             <Badge variant="secondary">Waiting at the terminal</Badge>
           </div>
         )}
         {showPreview && <PermCardPreview name={name} args={args} />}
         <p className="text-xs text-muted-foreground">
-          Waiting for a response at the terminal — this can't be answered from the web.
+          Waiting for a response at the terminal. This can't be answered from the web.
         </p>
       </div>
     );
@@ -233,7 +233,7 @@ export function PermCard({
     >
       {showHeader && (
         <div className="flex items-center justify-between gap-2">
-          <span className="font-medium">Permission requested — {name}</span>
+          <span className="font-medium">Permission requested: {name}</span>
           <Badge variant="warning">Pending</Badge>
         </div>
       )}

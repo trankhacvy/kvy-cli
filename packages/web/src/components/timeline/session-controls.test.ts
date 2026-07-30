@@ -76,14 +76,14 @@ describe("nextModeAfterSetMode (W4.3 — revert an unconfirmed PTY mode switch)"
       nextModeAfterSetMode("plan", "default", { ok: false, observedMode: "acceptEdits" }),
     ).toEqual({
       mode: "acceptEdits",
-      error: "Could not confirm the mode switch — reverted.",
+      error: "Could not confirm the mode switch. Reverted.",
     });
   });
 
   it("falls back to the prior selection on {ok:false} with no observedMode (verification timeout)", () => {
     expect(nextModeAfterSetMode("plan", "default", { ok: false })).toEqual({
       mode: "default",
-      error: "Could not confirm the mode switch — reverted.",
+      error: "Could not confirm the mode switch. Reverted.",
     });
   });
 });
@@ -113,10 +113,10 @@ describe("nextModelAfterSetModel (issue #12 — model switch error surfacing)", 
 
   it("surfaces an error on {ok:false}, regardless of any observedModel — it's free text, not a selectable value", () => {
     expect(nextModelAfterSetModel({ ok: false })).toEqual({
-      error: "Could not confirm the model switch — reverted.",
+      error: "Could not confirm the model switch. Reverted.",
     });
     expect(nextModelAfterSetModel({ ok: false, observedModel: "Sonnet 5" })).toEqual({
-      error: "Could not confirm the model switch — reverted.",
+      error: "Could not confirm the model switch. Reverted.",
     });
   });
 });

@@ -103,7 +103,7 @@ export function translateSpawnError(raw: string): string {
   // `spawnAwaiter.ts`: the flat 15s timeout — the process is still apparently
   // running but never reported back.
   if (/did not report back via \/session-started/i.test(raw)) {
-    return "Timed out waiting for the session to start. The machine may be slow, asleep, or unreachable right now — try again in a moment.";
+    return "Timed out waiting for the session to start. The machine may be slow, asleep, or unreachable right now. Try again in a moment.";
   }
 
   // `spawnAwaiter.ts`'s exit-watcher (A3): the child process was observed to
@@ -122,7 +122,7 @@ export function translateSpawnError(raw: string): string {
       return "This account has hit its session limit on that machine. Stop another session there first, or wait a bit and try again.";
     }
     if (/adapter/i.test(detail) || /not[- ]installed/i.test(detail)) {
-      return "That machine needed to install a provider adapter first and it didn't finish in time — try again in a moment, or run `falcon adapters install` there directly if it keeps failing.";
+      return "That machine needed to install a provider adapter first and it didn't finish in time. Try again in a moment, or run `falcon adapters install` there directly if it keeps failing.";
     }
     return `The session failed to start: ${detail}`;
   }
@@ -144,7 +144,7 @@ export function translateSpawnError(raw: string): string {
   // translated honestly rather than left as a raw internal reason code if it
   // somehow is reached.
   if (/workspace path rejected/i.test(raw)) {
-    return "That workspace's directory couldn't be validated on the target machine — it may have been moved, renamed, or deleted.";
+    return "That workspace's directory couldn't be validated on the target machine. It may have been moved, renamed, or deleted.";
   }
 
   // Unrecognized shape — pass the message through, but scrub any raw pid or

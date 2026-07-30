@@ -28,7 +28,7 @@ export function useRemoveWorktree(machineId: string, worktree: string): RemoveWo
     pending: crypto === null,
     removeWorktree: async (options = {}) => {
       if (!crypto) {
-        throw new Error("Machine key isn't unwrapped yet — try again in a moment.");
+        throw new Error("Machine key isn't unwrapped yet. Try again in a moment.");
       }
       return createMachineRpcClient({ socket: apiSocket, crypto, machineId }).call(
         "worktree.remove",

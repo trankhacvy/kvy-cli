@@ -54,7 +54,7 @@ async function applyStandaloneBinaryUpdate(
     return {
       applied: false,
       reason:
-        "no standalone binary published for this platform/architecture — run 'npm install -g falcon' instead",
+        "no standalone binary published for this platform/architecture. Run 'npm install -g falcon' instead",
     };
   }
 
@@ -87,7 +87,7 @@ export async function applyUpdate(options: ApplyUpdateOptions): Promise<ApplyUpd
     case "dev":
       return {
         applied: false,
-        reason: "running from source (dev mode) — update via 'git pull' / 'pnpm install' instead",
+        reason: "running from source (dev mode). Update via 'git pull' / 'pnpm install' instead",
       };
   }
 }

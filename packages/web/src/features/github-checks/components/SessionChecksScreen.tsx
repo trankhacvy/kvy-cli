@@ -21,7 +21,7 @@ export function SessionChecksScreen({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <p className="text-sm font-medium">Session {sessionId} — Checks</p>
+        <p className="text-sm font-medium">Session {sessionId} · Checks</p>
         <Button asChild variant="outline" size="sm">
           <Link href={`/dashboard/session/${sessionId}/`}>Back to session</Link>
         </Button>
@@ -31,11 +31,11 @@ export function SessionChecksScreen({ sessionId }: { sessionId: string }) {
           <p className="p-4 text-sm text-muted-foreground">Loading session…</p>
         ) : !session ? (
           <p className="p-4 text-sm text-destructive">
-            Could not find session {sessionId} — it may not have synced to this device yet.
+            Could not find session {sessionId}. It may not have synced to this device yet.
           </p>
         ) : !session.machineId || !session.workspaceId ? (
           <p className="p-4 text-sm text-destructive">
-            This session has no machine/workspace recorded yet — the Checks tab needs both to know
+            This session has no machine/workspace recorded yet. The Checks tab needs both to know
             where to run.
           </p>
         ) : (

@@ -170,7 +170,7 @@ function pushStderrLines(ring: string[], chunk: string): void {
 }
 
 function stderrTailSuffix(ring: string[]): string {
-  return ring.length > 0 ? ` — cloudflared stderr tail:\n${ring.join("\n")}` : "";
+  return ring.length > 0 ? ` (cloudflared stderr tail:\n${ring.join("\n")})` : "";
 }
 
 /**

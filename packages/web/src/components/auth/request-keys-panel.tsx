@@ -1,8 +1,8 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StartOverLink } from "@/components/auth/start-over-link";
+import { Spinner } from "@/components/ui/spinner";
 import { provisionKeyProtection } from "@/crypto";
 import { claimKeyRequest, createKeyRequest, listDeviceSessions } from "@/lib/api";
 import { copy } from "@/lib/copy";
@@ -121,7 +121,7 @@ export function RequestKeysPanel({
 
       {phase.kind === "starting" && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          <Spinner className="size-4" />
           {copy.keys.needKeysStarting}
         </div>
       )}
@@ -151,7 +151,7 @@ export function RequestKeysPanel({
           </ul>
 
           <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-            <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            <Spinner className="size-4" />
             {copy.keys.waitingBody}
           </div>
         </>

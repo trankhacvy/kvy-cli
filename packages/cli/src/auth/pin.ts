@@ -47,7 +47,7 @@ export async function promptAndUnwrapWithPin(
     const pin = (await prompt("Enter your PIN: ")).trim();
     const secret = await unwrapWithPin(wrapped, pin);
     if (secret) return secret;
-    if (attempt < MAX_UNLOCK_ATTEMPTS) write("Wrong PIN — try again.\n");
+    if (attempt < MAX_UNLOCK_ATTEMPTS) write("Wrong PIN. Try again.\n");
   }
   return null;
 }

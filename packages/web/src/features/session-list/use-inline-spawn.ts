@@ -86,7 +86,7 @@ export function useInlineSpawn(machineId: string): InlineSpawnController {
           setState({
             phase: "error",
             message:
-              "This workspace couldn't be confirmed on that machine — it may have been removed or its folder deleted. Try running falcon there again.",
+              "This workspace couldn't be confirmed on that machine. It may have been removed or its folder deleted. Try running falcon there again.",
           });
         })
         .catch((err: unknown) => {

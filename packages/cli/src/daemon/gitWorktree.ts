@@ -139,7 +139,7 @@ async function assertNotCheckedOutElsewhere(
   const checkedOutAt = await findCheckedOutWorktree(git, repoDirectory, branchName);
   if (checkedOutAt !== undefined && checkedOutAt !== targetDir) {
     throw new GitWorktreeError(
-      `branch "${branchName}" is already checked out at ${checkedOutAt} — a branch can only be checked out in one worktree`,
+      `branch "${branchName}" is already checked out at ${checkedOutAt}: a branch can only be checked out in one worktree`,
     );
   }
 }

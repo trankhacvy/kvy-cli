@@ -190,7 +190,7 @@ export function describeDoctorReport(report: DoctorReport): string {
     lines.push(`falcon-owned processes (${report.processes.length}):`);
     for (const p of report.processes) {
       const marker = p.spawnedByDaemon ? " [daemon-spawned]" : "";
-      lines.push(`  pid ${p.pid} [${p.kind}]${marker} — ${p.command}`);
+      lines.push(`  pid ${p.pid} [${p.kind}]${marker} - ${p.command}`);
     }
   }
 
@@ -198,7 +198,7 @@ export function describeDoctorReport(report: DoctorReport): string {
   lines.push("ACP adapters:");
   for (const a of report.adapters) {
     const detail = a.detail ? ` (${a.detail})` : "";
-    lines.push(`  ${a.id} — ${a.packageName}@${a.pinnedVersion}: ${a.status}${detail}`);
+    lines.push(`  ${a.id} - ${a.packageName}@${a.pinnedVersion}: ${a.status}${detail}`);
   }
 
   lines.push("");
@@ -217,7 +217,7 @@ export function describeDoctorReport(report: DoctorReport): string {
   } else {
     for (const tunnel of tunnels) {
       lines.push(
-        `  pid ${tunnel.pid} port ${tunnel.port} [${tunnel.alive ? "alive" : "dead"}] — journaled at ${new Date(tunnel.startedAt).toISOString()}`,
+        `  pid ${tunnel.pid} port ${tunnel.port} [${tunnel.alive ? "alive" : "dead"}] - journaled at ${new Date(tunnel.startedAt).toISOString()}`,
       );
     }
   }
@@ -270,7 +270,7 @@ export function describeDoctorCleanSummary(summary: DoctorCleanSummary): string 
   const succeeded = summary.outcomes.filter((o) => o.error === undefined).length;
   const lines = summary.outcomes.map((o) => {
     const status = o.error !== undefined ? `FAILED (${o.error})` : o.signal;
-    return `  pid ${o.pid} [${o.kind}] ${status} — ${o.command}`;
+    return `  pid ${o.pid} [${o.kind}] ${status} - ${o.command}`;
   });
   return `falcon doctor clean: ${succeeded}/${summary.targeted.length} runaway process(es) terminated\n${lines.join("\n")}\n`;
 }
