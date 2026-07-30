@@ -13,7 +13,7 @@ const FREE_FEATURES = [
 
 const SELF_HOST_FEATURES = [
   "Single Docker container",
-  "Embedded database — zero dependencies",
+  "Embedded database · zero dependencies",
   "Same codebase as production",
   "Your keys never touch our infrastructure",
 ];

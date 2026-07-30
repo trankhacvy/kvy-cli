@@ -384,7 +384,7 @@ export function Composer({
     <div className="shrink-0 flex flex-col gap-1.5 px-4 py-3">
       {isQueued && (
         <Badge variant="warning" className="w-fit">
-          Queued — the agent is finishing its current turn
+          Queued: the agent is finishing its current turn
         </Badge>
       )}
       {previews.length > 0 && (
@@ -471,7 +471,7 @@ export function Composer({
                 tooltip={
                   cryptoReady
                     ? "Attach a file"
-                    : "Session key isn't ready yet — try again in a moment."
+                    : "Session key isn't ready yet. Try again in a moment."
                 }
                 onClick={() => fileInputRef.current?.click()}
                 aria-label="Attach a file"

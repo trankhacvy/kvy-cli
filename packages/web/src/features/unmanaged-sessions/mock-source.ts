@@ -60,7 +60,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * cursor-following logic is exercised against the mock too. */
 const MOCK_TRANSCRIPT_LINES = [
   { type: "user", message: { content: "Can you look at the flaky test in push.test.ts?" } },
-  { type: "assistant", message: { content: "Sure — reading the test file now." } },
+  { type: "assistant", message: { content: "Sure, reading the test file now." } },
   { type: "assistant", message: { content: "Found it: a race on the mock timer. Fixing." } },
 ];
 
@@ -93,7 +93,7 @@ function createMockActions(providerRefs: Set<string>): UnmanagedActions {
       const session = sessions.find((s) => s.providerRef === providerSessionId);
       const outcome: AdoptTakeOutcome = { sessionId: `mock-adopted-${providerSessionId}` };
       if (mode === "takeover" && session?.running) {
-        outcome.warning = "The original session was mid-turn — it was interrupted.";
+        outcome.warning = "The original session was mid-turn. It was interrupted.";
       }
       return outcome;
     },

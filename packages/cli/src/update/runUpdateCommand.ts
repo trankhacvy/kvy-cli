@@ -51,7 +51,7 @@ export async function runUpdateCommand(
   });
 
   if (installKind === "dev") {
-    const message = "falcon: running from source (dev mode) — nothing to self-update\n";
+    const message = "falcon: running from source (dev mode), nothing to self-update\n";
     deps.logger.debug("update: skipped (dev mode)");
     return { code: 0, message: say(message) };
   }
@@ -77,7 +77,7 @@ export async function runUpdateCommand(
     deps.logger.warn("update: could not reach the update endpoint", { repo });
     return {
       code: silent ? 0 : 1,
-      message: say(`falcon: could not check for updates (repo: ${repo}) — try again later\n`),
+      message: say(`falcon: could not check for updates (repo: ${repo}). Try again later\n`),
     };
   }
 
@@ -114,12 +114,12 @@ export async function runUpdateCommand(
     return {
       code: 0,
       message: say(
-        `falcon: updated ${deps.currentVersion} -> ${latestVersion} — restart falcon to use the new version\n`,
+        `falcon: updated ${deps.currentVersion} -> ${latestVersion}. Restart falcon to use the new version\n`,
       ),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     deps.logger.error("update: apply failed", { message });
-    return { code: silent ? 0 : 1, message: say(`falcon: update failed — ${message}\n`) };
+    return { code: silent ? 0 : 1, message: say(`falcon: update failed: ${message}\n`) };
   }
 }

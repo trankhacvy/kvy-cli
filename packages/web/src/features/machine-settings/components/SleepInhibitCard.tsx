@@ -58,7 +58,7 @@ export function SleepInhibitCard({
           </div>
         ) : error ? (
           <p className="text-sm text-muted-foreground">
-            Machine unreachable — settings live on the machine itself. ({error})
+            Machine unreachable. Settings live on the machine itself. ({error})
           </p>
         ) : !state ? null : (
           <>
@@ -86,7 +86,7 @@ export function SleepInhibitCard({
             ) : state.mode !== "off" && !state.active ? (
               <p className="flex items-center gap-1.5 text-sm text-destructive">
                 <TriangleAlertIcon className="size-3.5 shrink-0" />
-                Not currently holding the assertion — caffeinate may have failed to start.
+                Not currently holding the assertion. Caffeinate may have failed to start.
               </p>
             ) : null}
 

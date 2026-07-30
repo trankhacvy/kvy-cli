@@ -205,7 +205,7 @@ export function reconcileByStatus(
  */
 export function deliveryNotice(result: MessageRpcResult): string | null {
   if (result.status !== "outcome-unknown") return null;
-  return "Couldn't confirm this message was delivered — reconciling from the transcript.";
+  return "Couldn't confirm this message was delivered. Reconciling from the transcript.";
 }
 
 const RELAY_UNREACHABLE_ERRORS = new Set(["RPC target not available", "RPC target disconnected"]);

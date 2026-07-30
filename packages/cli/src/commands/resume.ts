@@ -101,7 +101,7 @@ async function runLocalResume(
     });
     child.once("error", (error: Error) => {
       logger.error("[resume] failed to launch claude --resume", { message: error.message });
-      deps.write(`falcon resume: failed to launch claude — ${error.message}\n`);
+      deps.write(`falcon resume: failed to launch claude: ${error.message}\n`);
       resolve(1);
     });
     child.once("close", (code: number | null) => resolve(code ?? 0));
@@ -156,7 +156,7 @@ async function runDaemonManagedResume(
   const liveElsewhere = await isLiveOnRunningDaemon(sessionId, deps.homeDir, isAlive, fetchImpl);
   if (liveElsewhere) {
     deps.write(
-      `falcon resume: session ${sessionId} is currently live-managed by the running daemon — attaching to an already-live daemon session isn't supported yet (see \`falcon daemon status\`/\`falcon kill sessions\`)\n`,
+      `falcon resume: session ${sessionId} is currently live-managed by the running daemon. Attaching to an already-live daemon session isn't supported yet (see \`falcon daemon status\`/\`falcon kill sessions\`)\n`,
     );
     return 1;
   }

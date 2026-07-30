@@ -44,7 +44,7 @@ export const REDUCED_CUSTODY =
   "Connect it again from a device that has your keys.\n";
 
 export const MACHINE_NOT_REGISTERED =
-  "falcon: this machine hasn't finished connecting yet — try again in a few seconds.\n";
+  "falcon: this machine hasn't finished connecting yet. Try again in a few seconds.\n";
 
 export const NETWORK_UNREACHABLE =
   "falcon: couldn't reach the Falcon server. Check your connection and try again.\n";

@@ -186,7 +186,7 @@ export const RemoteModeDisplay: React.FC<RemoteModeDisplayProps> = ({
       >
         <Box flexDirection="column" marginBottom={1}>
           <Text color="gray" bold>
-            📡 Remote Mode — controlled from web
+            📡 Remote Mode: controlled from web
           </Text>
           <Text color="gray" dimColor>
             {"─".repeat(Math.min(terminalWidth - 4, 60))}

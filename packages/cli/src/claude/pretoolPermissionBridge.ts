@@ -743,7 +743,7 @@ export class PreToolPermissionBridge {
       });
       this.deps.onPromptLikely?.();
       return Promise.resolve(
-        output("ask", "Locally-initiated turn — answer the widget at the terminal."),
+        output("ask", "Locally-initiated turn. Answer the widget at the terminal."),
       );
     }
 
@@ -888,7 +888,7 @@ export class PreToolPermissionBridge {
         this.permRequestPending.delete(reqId);
         const decision: PermDecision = {
           kind: "deny",
-          message: `No response from the web within ${Math.round(this.answerTimeoutMs / 1000)}s — denied.`,
+          message: `No response from the web within ${Math.round(this.answerTimeoutMs / 1000)}s. Denied.`,
         };
         this.finishRequest(reqId, decision, "denied");
         this.deps.logger?.warn("[pretool-bridge] request timed out — denying", { reqId, toolName });

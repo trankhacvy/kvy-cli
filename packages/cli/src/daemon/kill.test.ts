@@ -198,6 +198,6 @@ describe("describeKillSummary", () => {
       ],
     });
     expect(text).toContain("falcon kill daemon: 1/1 process(es) terminated");
-    expect(text).toContain("pid 100 [daemon] SIGTERM — falcon daemon start-sync");
+    expect(text).toContain("pid 100 [daemon] SIGTERM - falcon daemon start-sync");
   });
 });

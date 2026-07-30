@@ -200,9 +200,9 @@ describe("describeDoctorReport", () => {
 
     expect(text).toContain("daemon: running (pid 100, port 4242, version 0.1.0)");
     expect(text).toContain("resumable sessions (sessions.json): 2");
-    expect(text).toContain("pid 200 [session] [daemon-spawned] — falcon claude");
-    expect(text).toContain("claude-code — @agentclientprotocol/claude-agent-acp@0.59.0: ok");
-    expect(text).toContain("codex — @agentclientprotocol/codex-acp@1.1.4: not-installed");
+    expect(text).toContain("pid 200 [session] [daemon-spawned] - falcon claude");
+    expect(text).toContain("claude-code - @agentclientprotocol/claude-agent-acp@0.59.0: ok");
+    expect(text).toContain("codex - @agentclientprotocol/codex-acp@1.1.4: not-installed");
     expect(text).toContain("claude: installed (version 2.1.0)");
     expect(text).toContain("codex: not installed");
     expect(text).toContain("cloudflared: installed (version 2024.6.1)");
@@ -331,6 +331,6 @@ describe("describeDoctorCleanSummary", () => {
     });
 
     expect(text).toContain("falcon doctor clean: 1/1 runaway process(es) terminated");
-    expect(text).toContain("pid 100 [daemon] SIGTERM — falcon daemon start-sync");
+    expect(text).toContain("pid 100 [daemon] SIGTERM - falcon daemon start-sync");
   });
 });

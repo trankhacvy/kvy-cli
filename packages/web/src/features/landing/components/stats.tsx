@@ -9,7 +9,7 @@ import { Reveal } from "./reveal";
 const STATS = [
   { value: "< 5 min", label: "Install to first remote-controlled session" },
   { value: "~1 s", label: "Permission answer to agent continuing" },
-  { value: "2", label: "Providers — Claude Code + Codex" },
+  { value: "2", label: "Providers · Claude Code + Codex" },
   { value: "0", label: "Plaintext bytes stored server-side" },
 ] as const;
 

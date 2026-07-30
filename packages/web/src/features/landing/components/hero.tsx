@@ -22,7 +22,7 @@ export function Hero() {
         </Reveal>
         <Reveal immediate delay={0.08}>
           <p className="mt-5 max-w-xl text-base text-muted-foreground leading-relaxed sm:text-lg">
-            Run Claude Code or Codex on your own machine — approve permissions, steer mid-session,
+            Run Claude Code or Codex on your own machine: approve permissions, steer mid-session,
             and review diffs from any browser.
           </p>
         </Reveal>

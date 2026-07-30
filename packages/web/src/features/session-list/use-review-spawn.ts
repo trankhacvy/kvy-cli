@@ -40,7 +40,7 @@ export function useReviewSpawn(
       if (!request) {
         setState({
           phase: "error",
-          message: "This session isn't in an isolated worktree — nothing to review from.",
+          message: "This session isn't in an isolated worktree. Nothing to review from.",
         });
         return;
       }
@@ -64,7 +64,7 @@ export function useReviewSpawn(
           }
           setState({
             phase: "error",
-            message: "Could not start the review session — try again in a moment.",
+            message: "Could not start the review session. Try again in a moment.",
           });
         })
         .catch((err: unknown) => {

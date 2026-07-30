@@ -370,7 +370,7 @@ describe("translateSendError (Feature 2, docs/web-ux-improvements-plan.md)", () 
 
   it("passes an unrelated error message through unchanged", () => {
     expect(
-      translateSendError("Session key isn't unwrapped yet — try again in a moment.", true),
-    ).toBe("Session key isn't unwrapped yet — try again in a moment.");
+      translateSendError("Session key isn't unwrapped yet. Try again in a moment.", true),
+    ).toBe("Session key isn't unwrapped yet. Try again in a moment.");
   });
 });

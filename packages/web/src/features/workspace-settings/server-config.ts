@@ -65,5 +65,5 @@ export async function saveWorkspaceServerConfig(
     }
     current = result.current;
   }
-  throw new Error("Could not save — too many conflicting writes. Try again.");
+  throw new Error("Could not save: too many conflicting writes. Try again.");
 }

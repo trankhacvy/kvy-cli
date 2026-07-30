@@ -57,8 +57,8 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
         {canInitialize && initRepoResult?.state === "inside-existing-repo" && (
           <p className="text-muted-foreground">
             This folder is already part of the project at{" "}
-            <code className="rounded bg-muted px-1 py-0.5">{initRepoResult.existingRoot}</code> —
-            open that project instead of starting a new one here.
+            <code className="rounded bg-muted px-1 py-0.5">{initRepoResult.existingRoot}</code>.
+            Open that project instead of starting a new one here.
           </p>
         )}
         {canInitialize && initRepoError && <p className="text-destructive">{initRepoError}</p>}
@@ -86,7 +86,7 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
           >
             {isRemoveWorkspacePending
               ? "Removing…"
-              : "Forget this project — Falcon stops tracking the folder, nothing on disk changes"}
+              : "Forget this project: Falcon stops tracking the folder, nothing on disk changes"}
           </button>
         )}
       </div>

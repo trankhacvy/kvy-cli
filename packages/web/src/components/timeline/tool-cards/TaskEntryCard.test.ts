@@ -72,7 +72,7 @@ describe("TaskEntryCard — TaskUpdate", () => {
   it("renders the task id and status transition for a real TaskUpdate call", () => {
     const body = cardBody(toolItem("TaskUpdate", { taskId: "1", status: "in_progress" }));
     const texts = textsIn(body);
-    expect(texts).toContain("Task #1 — In progress");
+    expect(texts).toContain("Task #1: In progress");
   });
 
   it("renders a completed status with strikethrough styling on the heading", () => {
@@ -95,12 +95,12 @@ describe("TaskEntryCard — TaskUpdate", () => {
     );
     const texts = textsIn(body);
     expect(texts).toContain("Merged to main as f9c3ba9.");
-    expect(texts).toContain("Task #2 — Updated");
+    expect(texts).toContain("Task #2: Updated");
   });
 
   it("also reads the older task_id spelling", () => {
     const body = cardBody(toolItem("TaskUpdate", { task_id: "3", status: "completed" }));
-    expect(textsIn(body)).toContain("Task #3 — Completed");
+    expect(textsIn(body)).toContain("Task #3: Completed");
   });
 
   it("does not crash on malformed (non-object) args", () => {

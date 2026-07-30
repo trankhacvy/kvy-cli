@@ -50,7 +50,7 @@ export function PreviewPanel({
 
       {panel.cloudflaredMissing && (
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          <code>cloudflared</code> isn&apos;t installed on this machine —{" "}
+          <code>cloudflared</code> isn&apos;t installed on this machine.{" "}
           <code>brew install cloudflared</code> (or see{" "}
           <a
             href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"

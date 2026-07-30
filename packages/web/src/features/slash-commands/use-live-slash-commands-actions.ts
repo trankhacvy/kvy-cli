@@ -6,7 +6,7 @@ import { apiSocket, createMachineRpcClient } from "@/sync";
 import { machineRpcToSlashCommandsActions } from "./live-actions";
 import type { SlashCommandsActions, UseSlashCommandsActions } from "./types";
 
-const NOT_READY_MESSAGE = "Machine key isn't unwrapped yet — try again in a moment.";
+const NOT_READY_MESSAGE = "Machine key isn't unwrapped yet. Try again in a moment.";
 
 /** Rejects with the same message until `useMachineCrypto` resolves.
  * Structurally satisfies `SlashCommandsActions`, mirroring

@@ -66,7 +66,7 @@ export function HeroPreview() {
             <span className="font-normal text-muted-foreground">· just now</span>
           </div>
           <p className="mt-1.5 font-mono text-muted-foreground text-xs">
-            Bash — pnpm install && pnpm build
+            Bash: pnpm install && pnpm build
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button size="sm" tabIndex={-1}>

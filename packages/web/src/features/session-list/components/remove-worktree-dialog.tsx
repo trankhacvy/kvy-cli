@@ -69,7 +69,7 @@ export function RemoveWorktreeDialog({
           <DialogTitle>Remove this worktree?</DialogTitle>
           <DialogDescription>
             Deletes the on-disk worktree directory for "{sessionTitle}". The session's transcript
-            and history in Falcon are unaffected — this only cleans up the machine's checkout.
+            and history in Falcon are unaffected. This only cleans up the machine's checkout.
           </DialogDescription>
         </DialogHeader>
         {open && (
@@ -123,7 +123,7 @@ function RemoveWorktreeBody({
           {deleteBranch &&
             (state.branchDeleted
               ? " The branch was also deleted."
-              : " The branch could not be deleted — you may need to remove it manually.")}
+              : " The branch could not be deleted. You may need to remove it manually.")}
         </p>
         <DialogFooter>
           <Button onClick={onDone}>Done</Button>
@@ -170,7 +170,7 @@ function RemoveWorktreeBody({
             Also delete the branch
           </span>
           <span className="text-xs text-muted-foreground">
-            Harder to undo than removing the worktree alone — only the reflog would let you recover
+            Harder to undo than removing the worktree alone: only the reflog would let you recover
             it afterward.
           </span>
         </span>

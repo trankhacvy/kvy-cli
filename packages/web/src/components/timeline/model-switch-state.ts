@@ -38,5 +38,5 @@ export interface ModelSwitchOutcome {
 
 export function nextModelAfterSetModel(result: SetModelResult): ModelSwitchOutcome {
   if (result.ok) return { error: null };
-  return { error: "Could not confirm the model switch — reverted." };
+  return { error: "Could not confirm the model switch. Reverted." };
 }

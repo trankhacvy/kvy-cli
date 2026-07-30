@@ -16,26 +16,26 @@ const FEATURES: Feature[] = [
     icon: Radio,
     title: "Mirror every session, live",
     description:
-      "A structured timeline, not a terminal dump — tool-call cards, collapsible thinking, inline diffs, and attention badges across all your machines.",
+      "A structured timeline, not a terminal dump: tool-call cards, collapsible thinking, inline diffs, and attention badges across all your machines.",
     wide: true,
   },
   {
     icon: ShieldCheck,
     title: "Approve from anywhere",
     description:
-      "A push notification when the agent needs you. Tap Allow, Deny, or Allow-for-session — it keeps going in about a second.",
+      "A push notification when the agent needs you. Tap Allow, Deny, or Allow-for-session. It keeps going in about a second.",
   },
   {
     icon: SquareTerminal,
     title: "Steer and spawn",
     description:
-      "Send follow-ups, interrupt, or take control from any browser. Start new sessions on any machine — fresh branch or worktree included.",
+      "Send follow-ups, interrupt, or take control from any browser. Start new sessions on any machine: fresh branch or worktree included.",
   },
   {
     icon: LockKeyhole,
     title: "Zero-knowledge by design",
     description:
-      "Keys are generated on your devices and content is encrypted before it leaves — the relay stores only ciphertext. Self-host the whole stack in one container.",
+      "Keys are generated on your devices and content is encrypted before it leaves. The relay stores only ciphertext. Self-host the whole stack in one container.",
     wide: true,
   },
 ];

@@ -6,7 +6,7 @@ import { apiSocket, createMachineRpcClient } from "@/sync";
 import { machineRpcToWorkspaceSettingsActions } from "./live-actions.js";
 import type { UseWorkspaceSettingsActions, WorkspaceSettingsActions } from "./types.js";
 
-const NOT_READY_MESSAGE = "Machine key isn't unwrapped yet — try again in a moment.";
+const NOT_READY_MESSAGE = "Machine key isn't unwrapped yet. Try again in a moment.";
 
 /** Every method rejects with the same message until `useMachineCrypto`
  * resolves. Structurally satisfies `WorkspaceSettingsActions`, mirroring

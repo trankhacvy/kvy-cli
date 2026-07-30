@@ -21,7 +21,7 @@ export function QrCodeSvg({ value, className }: { value: string; className?: str
     <svg
       viewBox={`0 0 ${viewSize} ${viewSize}`}
       role="img"
-      aria-label="QR code — scan to continue this session on mobile"
+      aria-label="QR code: scan to continue this session on mobile"
       className={className}
     >
       <rect width={viewSize} height={viewSize} fill="#fff" />

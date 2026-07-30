@@ -52,9 +52,9 @@ export function validateWorkspaceName(raw: string): WorkspaceNameError | null {
 /** Plain-language message per error — no internal vocabulary (CLAUDE.md auth/UX rule #4). */
 export const WORKSPACE_NAME_ERROR_COPY: Record<WorkspaceNameError, string> = {
   empty: "Give the project a name.",
-  "has-separator": "Use just a name — no slashes.",
+  "has-separator": "Use just a name, no slashes.",
   traversal: "That name isn't allowed. Try something simpler.",
-  hidden: "Names starting with a dot are hidden — pick another.",
+  hidden: "Names starting with a dot are hidden. Pick another.",
   "too-long": "That name is too long.",
   "invalid-char": "That name has characters a folder can't use.",
 };

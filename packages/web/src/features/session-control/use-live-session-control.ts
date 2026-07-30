@@ -6,7 +6,7 @@ import { sessionRpcToActions } from "./live-actions";
 import type { SessionControlActions } from "./types";
 import { useSessionCrypto } from "./use-session-crypto";
 
-const NOT_READY_MESSAGE = "Session key isn't unwrapped yet — try again in a moment.";
+const NOT_READY_MESSAGE = "Session key isn't unwrapped yet. Try again in a moment.";
 
 /** Every method rejects with the same message until `useSessionCrypto`
  * resolves — never hangs, never throws synchronously during render (design

@@ -67,7 +67,7 @@ export function TunnelFrame({ tunnel }: { tunnel: PreviewTunnel }) {
 
       {refused ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted-foreground">
-          <p>This app refused to be embedded — open it in a new tab instead.</p>
+          <p>This app refused to be embedded. Open it in a new tab instead.</p>
           <Button asChild size="sm" variant="outline">
             <a href={tunnel.url} target="_blank" rel="noreferrer">
               <ExternalLink className="size-3.5" />

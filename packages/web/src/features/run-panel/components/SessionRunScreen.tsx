@@ -22,7 +22,7 @@ export function SessionRunScreen({ sessionId }: { sessionId: string }) {
   return (
     <div className="flex h-dvh flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <p className="text-sm font-medium">Session {sessionId} — Setup / Run</p>
+        <p className="text-sm font-medium">Session {sessionId} · Setup / Run</p>
         <Button asChild variant="outline" size="sm">
           <Link href={`/dashboard/session/${sessionId}/`}>Back to session</Link>
         </Button>
@@ -32,11 +32,11 @@ export function SessionRunScreen({ sessionId }: { sessionId: string }) {
           <p className="p-4 text-sm text-muted-foreground">Loading session…</p>
         ) : !session ? (
           <p className="p-4 text-sm text-destructive">
-            Could not find session {sessionId} — it may not have synced to this device yet.
+            Could not find session {sessionId}. It may not have synced to this device yet.
           </p>
         ) : !session.machineId || !session.workspaceId ? (
           <p className="p-4 text-sm text-destructive">
-            This session has no machine/workspace recorded yet — the Setup/Run tab needs both to
+            This session has no machine/workspace recorded yet. The Setup/Run tab needs both to
             know where to run.
           </p>
         ) : (

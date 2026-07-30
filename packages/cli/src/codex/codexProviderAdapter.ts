@@ -49,7 +49,7 @@ export const CODEX_NOT_INSTALLED_MESSAGE = [
  * note."
  */
 export const CODEX_NO_LOCAL_MODE_NOTE =
-  "Codex has no local terminal mode — `codex app-server` only supports the programmatic path, so this session is driven remotely from the start (Ctrl-T take-back doesn't apply here).";
+  "Codex has no local terminal mode: `codex app-server` only supports the programmatic path, so this session is driven remotely from the start (Ctrl-T take-back doesn't apply here).";
 
 export interface DetectCodexOptions {
   /** Overrides `codex --version`. Defaults to a real `execFileSync` call — injectable so tests never shell out to a real `codex` install. */
