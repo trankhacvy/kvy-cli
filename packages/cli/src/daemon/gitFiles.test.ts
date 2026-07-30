@@ -40,7 +40,9 @@ describe("getGitFiles", () => {
 
   it("falls back to a plain directory listing when worktree isn't a git repository", async () => {
     const git = vi.fn(async () => {
-      throw new GitExecError("fatal: not a git repository (or any of the parent directories): .git");
+      throw new GitExecError(
+        "fatal: not a git repository (or any of the parent directories): .git",
+      );
     });
     const listPlainFiles = vi.fn(async () => ["b.ts", "a.ts"]);
     const result = await getGitFiles(PARAMS, { git, listPlainFiles });

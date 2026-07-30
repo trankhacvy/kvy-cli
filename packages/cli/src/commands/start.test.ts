@@ -380,9 +380,7 @@ describe("runStartClaudeCommand — startup banners", () => {
         write: (text) => written.push(text),
       }),
     );
-    expect(written.join("")).toContain(
-      "https://app.falcon.invalid/dashboard/session/sess_web_1/",
-    );
+    expect(written.join("")).toContain("https://app.falcon.invalid/dashboard/session/sess_web_1/");
   });
 
   it("renders a QR code for the session URL only when stdin is a TTY", async () => {

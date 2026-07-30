@@ -19,7 +19,7 @@
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import type { GitFilesParams, GitFilesResult } from "@falcon/wire";
-import { GitExecError, type GitExec, runGit } from "./gitExec.js";
+import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 
 const NOT_A_GIT_REPOSITORY_RE = /not a git repository/i;
 
@@ -71,10 +71,7 @@ export async function getGitFiles(
 
   let output: string;
   try {
-    output = await git(
-      ["ls-files", "--cached", "--others", "--exclude-standard"],
-      params.worktree,
-    );
+    output = await git(["ls-files", "--cached", "--others", "--exclude-standard"], params.worktree);
   } catch (error) {
     if (error instanceof GitExecError && NOT_A_GIT_REPOSITORY_RE.test(error.message)) {
       return { files: (await listPlainFiles(params.worktree)).sort() };

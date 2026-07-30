@@ -56,9 +56,7 @@ function SectionContent({
   machine: SessionListMachine | null;
 }) {
   if (activeId === "general") {
-    return (
-      <GeneralSection workspacePath={workspacePath} machineId={machineId} machine={machine} />
-    );
+    return <GeneralSection workspacePath={workspacePath} machineId={machineId} machine={machine} />;
   }
   return <WorkspaceGitSection workspacePath={workspacePath} machineId={machineId} />;
 }

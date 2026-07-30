@@ -20,8 +20,8 @@ import {
   OPENING_BROWSER,
   STARTING_SESSION,
   WAITING_FOR_APPROVAL,
-  webUrlLine,
   WELCOME_FIRST_RUN,
+  webUrlLine,
 } from "../ui/messages.js";
 import { openBrowser } from "./browser.js";
 import { resolveBackendUrl, resolveFrontendUrl } from "./config.js";

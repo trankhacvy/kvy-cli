@@ -30,9 +30,7 @@ export function SessionCard({
   });
   const meta = SESSION_STATUS_META[status];
   const fallbackTitle =
-    session.title === UNTITLED_SESSION
-      ? deriveFallbackTitle(session.items ?? [])
-      : null;
+    session.title === UNTITLED_SESSION ? deriveFallbackTitle(session.items ?? []) : null;
   const displayTitle = fallbackTitle ?? session.title;
 
   return (
@@ -45,11 +43,7 @@ export function SessionCard({
         <Card className="transition-colors hover:bg-accent/50">
           <CardHeader className="flex flex-row items-baseline gap-2 pr-10!">
             <CardTitle className="min-w-0 flex-1 line-clamp-2">
-              {session.title === null ? (
-                <Skeleton className="h-4 w-32" />
-              ) : (
-                displayTitle
-              )}
+              {session.title === null ? <Skeleton className="h-4 w-32" /> : displayTitle}
             </CardTitle>
           </CardHeader>
           <CardContent className="w-full flex items-center gap-2">

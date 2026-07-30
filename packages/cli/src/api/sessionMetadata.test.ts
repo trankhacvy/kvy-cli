@@ -174,7 +174,7 @@ describe("createSessionMetadataUpdater", () => {
     });
   });
 
-  it("updateTitle writes a fresh auto title and marks it `titleSource: \"auto\"`", async () => {
+  it('updateTitle writes a fresh auto title and marks it `titleSource: "auto"`', async () => {
     const dek = getRandomBytes(32);
     const calls: RequestInit[] = [];
     const fetchImpl: typeof fetch = async (_input, init) => {
