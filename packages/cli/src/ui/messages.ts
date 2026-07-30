@@ -10,11 +10,16 @@ export const WELCOME_FIRST_RUN =
 
 export const OPENING_BROWSER = "  Opening your browser…\n";
 
-export function pairingUrlFallback(url: string): string {
-  return `  If it didn't open, go to:\n  ${url}\n\n`;
+export function webUrlLine(url: string): string {
+  return `  Web:  ${url}\n\n`;
 }
 
 export const WAITING_FOR_APPROVAL = "  Waiting for approval…  (Ctrl-C to cancel)\n";
+
+export const NOT_A_GIT_REPOSITORY_WARNING =
+  "\n  Warning: not a git repository — git-based features (diffs, Create PR, Checks) won't work here.\n";
+
+export const SCAN_SESSION_QR_LABEL = "\n  Scan to open this session on your phone:\n\n";
 
 export function connectedAs(email: string | null): string {
   return email ? `\n  ✓ Connected as ${email}\n` : "\n  ✓ Connected\n";

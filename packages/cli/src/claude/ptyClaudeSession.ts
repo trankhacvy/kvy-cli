@@ -283,6 +283,12 @@ export interface PtyClaudeSessionOptions {
   settingsEnv?: Record<string, string>;
   /** Every envelope the tailer maps off the transcript. Forward to the outbox. */
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
+  /** Fires with Claude Code's own auto-generated one-line summary
+   * (`{"type":"summary","summary":"..."}` transcript entry) the moment it
+   * appears — `mapClaudeToEnvelopes` discards this entry type entirely
+   * (it's not conversation content), so it has to be read here, straight off
+   * the raw scanner output, before that mapping call. */
+  onSummaryTitle?: (title: string) => void;
   /** Fires once a web-injected message has actually been submitted — the §7.10 send-claim completion hook. */
   onInjected?: (id: string) => void;
   /**
@@ -842,6 +848,7 @@ export function startPtyClaudeSession(
         workingDirectory: opts.workingDirectory,
         onMessage: (raw) => {
           entriesProcessedCount++;
+          if (raw.type === "summary") opts.onSummaryTitle?.(raw.summary);
           const envelopes = mapClaudeToEnvelopes(raw, state);
           if (envelopes.length > 0) opts.onEnvelopes(envelopes);
         },

@@ -3,13 +3,13 @@
 import type { CheckRun } from "@falcon/wire";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChangedFilesList,
   CompareAgainstSelect,
   CreatePrButton,
+  type GitPanelState,
   GitStatusChecklist,
   GitStatusError,
   GitToolbar,
@@ -17,12 +17,27 @@ import {
   useGitPanel,
   useLiveGitDiffActions,
 } from "@/features/git-diff";
-import { ChecksPanel, useChecksPanel, useLiveGithubChecksActions } from "@/features/github-checks";
-import { FileTree, useLiveRepoFilesActions, useRepoFiles } from "@/features/repo-files";
+import {
+  ChecksPanel,
+  useChecksPanel,
+  useLiveGithubChecksActions,
+} from "@/features/github-checks";
+import {
+  FileTree,
+  useLiveRepoFilesActions,
+  useRepoFiles,
+} from "@/features/repo-files";
 import { saveDraft } from "@/features/session-control";
 import { looksLikeWorktreePath, useReviewSpawn } from "@/features/session-list";
-import { buildFixCiPrompt, CREATE_PR_PROMPT, REVIEW_PROMPT } from "@/lib/agent-prompts";
-import { useMachineOnline } from "@/lib/use-machine-online";
+import {
+  buildFixCiPrompt,
+  CREATE_PR_PROMPT,
+  REVIEW_PROMPT,
+} from "@/lib/agent-prompts";
+import {
+  type MachineOnlineState,
+  useMachineOnline,
+} from "@/lib/use-machine-online";
 
 type PanelTab = "changes" | "files" | "checks";
 
@@ -84,12 +99,17 @@ function WorkspaceActionsRow({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => window.open(compareUrl, "_blank", "noopener,noreferrer")}
+            onClick={() =>
+              window.open(compareUrl, "_blank", "noopener,noreferrer")
+            }
           >
             Open PR on GitHub
           </Button>
         )}
-        <CreatePrButton onSend={onSendAgentPrompt} disabled={isSendingAgentPrompt} />
+        <CreatePrButton
+          onSend={onSendAgentPrompt}
+          disabled={isSendingAgentPrompt}
+        />
         <Button
           size="sm"
           variant="outline"
@@ -100,7 +120,9 @@ function WorkspaceActionsRow({
         </Button>
       </div>
       {reviewSpawn.state.phase === "error" && (
-        <span className="text-xs text-destructive">{reviewSpawn.state.message}</span>
+        <span className="text-xs text-destructive">
+          {reviewSpawn.state.message}
+        </span>
       )}
     </div>
   );
@@ -114,14 +136,18 @@ function WorkspaceActionsRow({
  * It calls `onOpenFile` instead; the diff itself now renders in the main
  * column (`FileViewerColumn.tsx`).
  *
- * Mounts its own `useChecksPanel` (rather than sharing one lifted from
- * `SessionSidePanel`) — Radix `TabsContent` unmounts an inactive tab by
- * default, so this and the Checks tab's own `ChecksPanel` are never both
- * mounted at once; there's no concurrent-poll cost to avoid.
+ * `machine`/`panel` are lifted from `SessionSidePanel` (which already gates
+ * this tab's very existence on the workspace being reachable and healthy) —
+ * this component no longer needs its own loading/error branches for them.
+ * `checks` stays a local `useChecksPanel` call — unrelated to that gate, and
+ * Radix `TabsContent` unmounts an inactive tab by default, so this and the
+ * Checks tab's own `ChecksPanel` are never both mounted at once.
  */
 function ChangesTab({
   machineId,
   worktree,
+  machine,
+  panel,
   openPath,
   onOpenFile,
   onSendAgentPrompt,
@@ -130,43 +156,40 @@ function ChangesTab({
 }: {
   machineId: string;
   worktree: string;
+  machine: MachineOnlineState;
+  panel: GitPanelState;
   openPath: string | null;
   onOpenFile: (file: OpenFile) => void;
   onSendAgentPrompt: (text: string) => void;
   isSendingAgentPrompt: boolean;
   actionsDisabled: boolean;
 }) {
-  const machine = useMachineOnline(machineId);
-  const actions = useLiveGitDiffActions(machineId);
-  const panel = useGitPanel(actions, worktree, !machine.isKnownUnavailable);
   const checksActions = useLiveGithubChecksActions(machineId);
-  const { checks } = useChecksPanel(checksActions, worktree, !machine.isKnownUnavailable);
+  const { checks } = useChecksPanel(
+    checksActions,
+    worktree,
+    !machine.isKnownUnavailable,
+  );
 
-  if (panel.isStatusLoading) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading changed files…</p>;
-  }
+  if (!panel.status) return null;
 
-  if (panel.statusError || !panel.status) {
-    return (
-      <>
-        <MachineOfflineNotice state={machine} />
-        <GitStatusError panel={panel} />
-      </>
-    );
-  }
-
-  const canUseWorkspaceActions = looksLikeWorktreePath(worktree) && !actionsDisabled;
+  const canUseWorkspaceActions =
+    looksLikeWorktreePath(worktree) && !actionsDisabled;
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <MachineOfflineNotice state={machine} />
-      <GitToolbar panel={panel} machineUnavailable={machine.isKnownUnavailable} />
+      <GitToolbar
+        panel={panel}
+        machineUnavailable={machine.isKnownUnavailable}
+      />
       {canUseWorkspaceActions && (
         <div className="flex flex-col gap-2 px-1">
           <GitStatusChecklist
             uncommittedCount={panel.status.files.length}
             checks={checks}
-            onCommitAndPush={() => document.getElementById("git-toolbar-commit-message")?.focus()}
+            onCommitAndPush={() =>
+              document.getElementById("git-toolbar-commit-message")?.focus()
+            }
             onCreatePr={() => onSendAgentPrompt(CREATE_PR_PROMPT)}
           />
           <WorkspaceActionsRow
@@ -189,7 +212,9 @@ function ChangesTab({
       <ChangedFilesList
         status={panel.status}
         selectedPath={openPath}
-        onSelect={(path) => onOpenFile({ kind: "diff", path, compareRef: panel.compareRef })}
+        onSelect={(path) =>
+          onOpenFile({ kind: "diff", path, compareRef: panel.compareRef })
+        }
       />
     </div>
   );
@@ -198,20 +223,23 @@ function ChangesTab({
 /**
  * All Files tab: just the repo file tree now — picking a file calls
  * `onOpenFile` instead of rendering its content inline (see `ChangesTab`'s
- * own doc comment for why).
+ * own doc comment for why). `machine` is lifted from `SessionSidePanel`,
+ * which already gates this tab's existence on the machine being reachable —
+ * no need for its own `MachineOfflineNotice` render here.
  */
 function AllFilesTab({
   machineId,
   worktree,
+  machine,
   openPath,
   onOpenFile,
 }: {
   machineId: string;
   worktree: string;
+  machine: MachineOnlineState;
   openPath: string | null;
   onOpenFile: (file: OpenFile) => void;
 }) {
-  const machine = useMachineOnline(machineId);
   const actions = useLiveRepoFilesActions(machineId);
   const { tree, filesError, isFilesLoading } = useRepoFiles(
     actions,
@@ -220,20 +248,27 @@ function AllFilesTab({
   );
 
   if (isFilesLoading) {
-    return <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>;
+    return (
+      <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>
+    );
   }
 
   if (filesError) {
-    return <p className="p-4 text-sm text-destructive">Could not load repo files: {filesError}</p>;
+    return (
+      <p className="p-4 text-sm text-destructive">
+        Could not load repo files: {filesError}
+      </p>
+    );
   }
 
   return (
     <div className="p-3">
-      <MachineOfflineNotice state={machine} />
       <FileTree
         tree={tree}
         selectedPath={openPath}
-        onSelect={(path) => onOpenFile({ kind: "content", path, compareRef: null })}
+        onSelect={(path) =>
+          onOpenFile({ kind: "content", path, compareRef: null })
+        }
       />
     </div>
   );
@@ -288,63 +323,125 @@ export function SessionSidePanel({
   const [tab, setTab] = useState<PanelTab>(defaultTab);
   const ready = machineId !== undefined && worktree !== undefined;
 
+  // Hoisted above the three tabs (rather than each tab independently
+  // fetching `git.status` and rendering its own error copy), checked in the
+  // order each fact becomes knowable. `machineUnavailable` comes first: the
+  // workspace query itself is disabled while the machine is unreachable (see
+  // `useGitPanel`'s `enabled` arg below), so we genuinely don't know yet
+  // whether the workspace is fine, missing, or not-a-repo — showing tabs (or
+  // a workspace-specific message) would be guessing. It also matches
+  // `useChecksPanel`'s own query, which has no `enabled` gate at all and
+  // would otherwise fire a doomed RPC and eat the ~17s reconnect-grace
+  // timeout (`use-machine-online.ts`'s docblock) every time this renders.
+  // Once the machine answers, `workspaceGone` (folder missing, or any other
+  // unclassified git failure) has literally nothing any of the three tabs
+  // could show — All Files' own fs fallback can't list a folder that doesn't
+  // exist either — so it replaces the WHOLE tab bar with one message.
+  // `notARepo` (folder exists, just never `git init`ed) is different: All
+  // Files still works fine there (`gitFiles.ts`'s plain-fs-walk fallback), so
+  // only Changes/Checks — which genuinely need git — swap their content for
+  // the same "set up git here" message; the tab bar and All Files stay live.
+  const machine = useMachineOnline(machineId);
+  const machineUnavailable = ready && machine.isKnownUnavailable;
+  const gitActions = useLiveGitDiffActions(machineId ?? "");
+  const panel = useGitPanel(
+    gitActions,
+    worktree ?? "",
+    ready && !machineUnavailable,
+  );
+  const workspaceLoading = ready && !machineUnavailable && panel.isStatusLoading;
+  const notARepo =
+    ready &&
+    !machineUnavailable &&
+    panel.statusErrorCode === "workspace-not-a-repo";
+  const workspaceGone =
+    ready &&
+    !machineUnavailable &&
+    !workspaceLoading &&
+    !notARepo &&
+    (Boolean(panel.statusError) || !panel.status);
+
   return (
     <aside className="hidden h-full w-[380px] shrink-0 flex-col border-l border-border lg:flex">
-      <Tabs
-        value={tab}
-        onValueChange={(value) => setTab(value as PanelTab)}
-        className="flex h-full min-h-0 flex-col gap-0"
-      >
-        <div className="border-b border-border px-2 py-2">
-          <TabsList variant="line">
-            {TABS.map((t) => (
-              <TabsTrigger key={t.id} value={t.id}>
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </div>
+      {!ready ? (
+        <p className="p-4 text-sm text-muted-foreground">
+          This session has no machine/workspace recorded yet.
+        </p>
+      ) : machineUnavailable ? (
+        <p className="p-4 text-sm text-muted-foreground">{machine.reason}</p>
+      ) : workspaceGone ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {!ready ? (
-            <p className="p-4 text-sm text-muted-foreground">
-              This session has no machine/workspace recorded yet.
-            </p>
-          ) : (
-            <>
-              <TabsContent value="changes" className="h-full">
+          <GitStatusError panel={panel} />
+        </div>
+      ) : (
+        <Tabs
+          value={tab}
+          onValueChange={(value) => setTab(value as PanelTab)}
+          className="flex h-full min-h-0 flex-col gap-0"
+        >
+          <div className="border-b border-border px-2 py-2">
+            <TabsList variant="line">
+              {TABS.map((t) => (
+                <TabsTrigger key={t.id} value={t.id}>
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <TabsContent value="changes" className="h-full">
+              {workspaceLoading ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  Loading changed files…
+                </p>
+              ) : notARepo ? (
+                <GitStatusError panel={panel} />
+              ) : (
                 <ChangesTab
                   machineId={machineId}
                   worktree={worktree}
+                  machine={machine}
+                  panel={panel}
                   openPath={openFile?.kind === "diff" ? openFile.path : null}
                   onOpenFile={onOpenFile}
                   onSendAgentPrompt={onSendAgentPrompt}
                   isSendingAgentPrompt={isSendingAgentPrompt}
                   actionsDisabled={actionsDisabled}
                 />
-              </TabsContent>
-              <TabsContent value="files" className="h-full">
-                <AllFilesTab
-                  machineId={machineId}
-                  worktree={worktree}
-                  openPath={openFile?.kind === "content" ? openFile.path : null}
-                  onOpenFile={onOpenFile}
-                />
-              </TabsContent>
-              <TabsContent value="checks" className="h-full p-3">
+              )}
+            </TabsContent>
+            <TabsContent value="files" className="h-full">
+              <AllFilesTab
+                machineId={machineId}
+                worktree={worktree}
+                machine={machine}
+                openPath={openFile?.kind === "content" ? openFile.path : null}
+                onOpenFile={onOpenFile}
+              />
+            </TabsContent>
+            <TabsContent value="checks" className="h-full p-3">
+              {workspaceLoading ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  Loading checks…
+                </p>
+              ) : notARepo ? (
+                <GitStatusError panel={panel} />
+              ) : (
                 <ChecksPanel
                   machineId={machineId}
                   worktree={worktree}
                   onFixWithAgent={
                     looksLikeWorktreePath(worktree) && !actionsDisabled
-                      ? (check: CheckRun) => onSendAgentPrompt(buildFixCiPrompt(check))
+                      ? (check: CheckRun) =>
+                          onSendAgentPrompt(buildFixCiPrompt(check))
                       : undefined
                   }
                 />
-              </TabsContent>
-            </>
-          )}
-        </div>
-      </Tabs>
+              )}
+            </TabsContent>
+          </div>
+        </Tabs>
+      )}
     </aside>
   );
 }

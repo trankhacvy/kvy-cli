@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { GitStatusError, useGitPanel, useLiveGitDiffActions } from "@/features/git-diff";
 import { useLiveWorkspaceSettingsActions } from "../use-live-workspace-settings-actions.js";
 import { useWorkspaceSettings } from "../use-workspace-settings.js";
 
@@ -43,6 +44,16 @@ export function WorkspaceGitSection({
   const { config, isConfigLoading, configError, branches, remotes, save, isSavePending } =
     useWorkspaceSettings(actions, workspacePath);
 
+  // Same "is this even a git repository" check the session panel's Changes
+  // tab already runs (`SessionSidePanel.tsx`) — `git.branches`/`git.remotes`
+  // fail on a non-repo folder just as hard as `git.status` does, but with no
+  // classified error code of their own, so this reuses `git.status`'s
+  // `statusErrorCode` as the one source of truth instead of duplicating it.
+  const gitActions = useLiveGitDiffActions(machineId ?? "");
+  const gitPanel = useGitPanel(gitActions, workspacePath, machineId !== null);
+  const workspaceBroken =
+    !gitPanel.isStatusLoading && (Boolean(gitPanel.statusError) || !gitPanel.status);
+
   const [baseBranch, setBaseBranch] = useState("");
   const [remote, setRemote] = useState("");
 
@@ -67,13 +78,17 @@ export function WorkspaceGitSection({
     );
   }
 
-  if (isConfigLoading) {
+  if (isConfigLoading || gitPanel.isStatusLoading) {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-9 w-full" />
         <Skeleton className="h-9 w-full" />
       </div>
     );
+  }
+
+  if (workspaceBroken) {
+    return <GitStatusError panel={gitPanel} />;
   }
 
   if (configError) {

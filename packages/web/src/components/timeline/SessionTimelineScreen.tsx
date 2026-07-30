@@ -23,8 +23,14 @@ import {
   useSessionTitle,
   useTabAttention,
 } from "@/features/session-control";
-import { deriveMachineOnline, useMachinePresence } from "@/features/session-list";
-import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
+import {
+  deriveMachineOnline,
+  useMachinePresence,
+} from "@/features/session-list";
+import {
+  useLiveSlashCommandsActions,
+  useSlashCommands,
+} from "@/features/slash-commands";
 import { useMachineOnline } from "@/lib/use-machine-online";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { cn } from "@/lib/utils";
@@ -84,7 +90,9 @@ export function SessionTimelineScreen({
   // until the snapshot has loaded or this session id isn't (yet) present in
   // it; treated the same as `"active"` below (the default a fresh session
   // row is created with) — never as "ended"/"failed" by absence alone.
-  const session = useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId);
+  const session = useSyncSnapshotQuery().data?.sessions.find(
+    (s) => s.id === sessionId,
+  );
   const sessionStatus: SessionRow["status"] = session?.status ?? "active";
   // `workspaceId` (when set) *is* the workspace's real absolute directory
   // path — same plaintext-on-the-row convention `SessionGitScreen` already
@@ -106,7 +114,9 @@ export function SessionTimelineScreen({
   // `machine-presence` ephemeral, falling back to the `lastSeenAt`
   // heuristic) `features/session-list`'s Home screen already uses.
   const machinePresence = useMachinePresence();
-  const machineRow = useSyncSnapshotQuery().data?.machines.find((m) => m.id === machineId);
+  const machineRow = useSyncSnapshotQuery().data?.machines.find(
+    (m) => m.id === machineId,
+  );
   const machineOnline = machineRow
     ? deriveMachineOnline(machineRow, machinePresence, Date.now())
     : false;
@@ -133,7 +143,8 @@ export function SessionTimelineScreen({
   // must never show "Working…" once the transcript itself says the turn is
   // closed). `ephemeralWorking` only ever contributes before this session has
   // any turn history at all.
-  const { working: ephemeralWorking, attentionKind } = useSessionEphemerals(sessionId);
+  const { working: ephemeralWorking, attentionKind } =
+    useSessionEphemerals(sessionId);
   const working = deriveWorking(items, ephemeralWorking);
   // Recomputed every render rather than `useMemo`d: `items` is a small,
   // cheap-to-walk array (design principle #3: derived, never stored/cached
@@ -240,8 +251,16 @@ function SessionTimelineBody({
    * machine-row-derived value passed down here. */
   machineOnline: boolean;
 }) {
-  const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
-    useComposerState(items);
+  const {
+    mergedItems,
+    send,
+    sendAttachment,
+    isSending,
+    isQueued,
+    cryptoReady,
+    error,
+    notice,
+  } = useComposerState(items);
   const { actions } = useSessionControl();
   // The file/diff currently open in place of Timeline+Composer (conductor.
   // build-style picker-in-sidebar/viewer-in-main-column split,
@@ -268,15 +287,21 @@ function SessionTimelineBody({
       <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl min-w-0 flex-col overflow-hidden">
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="flex min-w-0 items-center gap-2">
-            <p className="min-w-0 truncate text-base font-semibold">{title ?? sessionId}</p>
+            <p className="min-w-0 truncate text-base font-semibold">
+              {title ?? sessionId}
+            </p>
             {workspacePath && <WorkingDirectoryChip path={workspacePath} />}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={`/dashboard/session/${sessionId}/preview/`}>Preview</Link>
+              <Link href={`/dashboard/session/${sessionId}/preview/`}>
+                Preview
+              </Link>
             </Button>
             <Button asChild variant="outline" size="sm">
-              <Link href={`/dashboard/session/${sessionId}/run/`}>Setup / Run</Link>
+              <Link href={`/dashboard/session/${sessionId}/run/`}>
+                Setup / Run
+              </Link>
             </Button>
             <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu
@@ -301,7 +326,12 @@ function SessionTimelineBody({
             {decryptError && (
               <div className="flex items-center justify-between gap-3 border-b border-border bg-destructive/10 px-4 py-2">
                 <p className="text-sm text-destructive">{decryptError}</p>
-                <Button type="button" variant="outline" size="sm" onClick={onRetryDecrypt}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onRetryDecrypt}
+                >
                   Retry
                 </Button>
               </div>
@@ -374,13 +404,19 @@ function SessionTimelineBody({
  * `react-dom/server`'s `renderToStaticMarkup` — same no-jsdom style as
  * `lib/markdown.test.ts`) without needing to stand up this screen's full
  * live sync/crypto hook graph. */
-export function isSessionControlDisabled(status: SessionRow["status"]): boolean {
+export function isSessionControlDisabled(
+  status: SessionRow["status"],
+): boolean {
   return status === "ended" || status === "failed";
 }
 
 /** The ended/failed banner shown above the control bar (plan-v2.md
  * W1.4+B15). Renders nothing for every other status. */
-export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["status"] }) {
+export function LifecycleBanner({
+  sessionStatus,
+}: {
+  sessionStatus: SessionRow["status"];
+}) {
   if (!isSessionControlDisabled(sessionStatus)) return null;
   return (
     <div

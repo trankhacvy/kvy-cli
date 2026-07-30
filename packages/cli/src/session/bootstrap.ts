@@ -236,6 +236,13 @@ export async function bootstrapSession(
       path: params.metadata.path,
       providerSessionId: params.metadata.providerSessionId ?? null,
       model: params.metadata.model ?? null,
+      // Marks this title as machine-set (currently the working directory's
+      // basename) so a later provider-summary auto-title
+      // (`sessionMetadata.ts`'s `updateTitle`) knows it's still safe to
+      // overwrite — flips to `"manual"` the moment a human renames the
+      // session (`rename-session-dialog.tsx`), which then locks the title
+      // forever after.
+      titleSource: "auto",
     },
     dek,
   );

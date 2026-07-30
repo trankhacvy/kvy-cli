@@ -173,4 +173,100 @@ describe("createSessionMetadataUpdater", () => {
       pinned: true,
     });
   });
+
+  it("updateTitle writes a fresh auto title and marks it `titleSource: \"auto\"`", async () => {
+    const dek = getRandomBytes(32);
+    const calls: RequestInit[] = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      calls.push(init ?? {});
+      return new Response(JSON.stringify({ version: 1 }), { status: 200 });
+    };
+    const updater = createSessionMetadataUpdater({
+      sessionId: "sess_1",
+      serverUrl: "http://server.test",
+      getAuthToken: () => "token_1",
+      dek,
+      metadata: { title: "project", path: "/work/project", model: null, titleSource: "auto" },
+      metadataVersion: 0,
+      fetchImpl,
+    });
+
+    await updater.updateTitle("Fix the login redirect bug");
+
+    expect(calls).toHaveLength(1);
+    const body = readRequestBody(calls[0]?.body);
+    expect(open(body.value, dek)).toEqual({
+      title: "Fix the login redirect bug",
+      path: "/work/project",
+      providerSessionId: null,
+      model: null,
+      titleSource: "auto",
+    });
+  });
+
+  it("updateTitle never overwrites a manually-renamed title", async () => {
+    const dek = getRandomBytes(32);
+    const calls: RequestInit[] = [];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      calls.push(init ?? {});
+      return new Response(JSON.stringify({ version: 1 }), { status: 200 });
+    };
+    const updater = createSessionMetadataUpdater({
+      sessionId: "sess_1",
+      serverUrl: "http://server.test",
+      getAuthToken: () => "token_1",
+      dek,
+      metadata: {
+        title: "My renamed session",
+        path: "/work/project",
+        model: null,
+        titleSource: "manual",
+      },
+      metadataVersion: 0,
+      fetchImpl,
+    });
+
+    await updater.updateTitle("Fix the login redirect bug");
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it("updateTitle is a no-op once a 409 reload reveals the title is now manual", async () => {
+    const dek = getRandomBytes(32);
+    // Simulates a concurrent web rename landing between this updater's
+    // in-memory snapshot and its write attempt.
+    const currentBox = seal(
+      {
+        title: "Renamed while we were mid-flight",
+        path: "/work/project",
+        providerSessionId: "prov_1",
+        model: null,
+        titleSource: "manual",
+      },
+      dek,
+    );
+    const calls: RequestInit[] = [];
+    const responses = [
+      new Response(JSON.stringify({ current: { value: currentBox, version: 2 } }), { status: 409 }),
+    ];
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      calls.push(init ?? {});
+      const response = responses.shift();
+      if (!response) throw new Error("unexpected extra fetch call");
+      return response;
+    };
+    const updater = createSessionMetadataUpdater({
+      sessionId: "sess_1",
+      serverUrl: "http://server.test",
+      getAuthToken: () => "token_1",
+      dek,
+      metadata: { title: "project", path: "/work/project", model: null, titleSource: "auto" },
+      metadataVersion: 0,
+      fetchImpl,
+    });
+
+    await updater.updateTitle("Fix the login redirect bug");
+
+    expect(calls).toHaveLength(1);
+  });
 });

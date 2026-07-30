@@ -20,7 +20,8 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 16 | [Session side panel's base-branch-default fix (Phase 0.3) landed but was never live-reverified](#issue-16) | Open (needs verification) |
 | 17 | [Daemon-spawned session processes survive a crashed/interrupted run and never get reaped — causes account-wide refresh-token rotation churn](#issue-17) | Open |
 | 18 | [Re-pairing an already-registered machine to a different account silently leaves it owned by the original account](#issue-18) | Open |
-| 19 | [A browser that connects after the daemon does can show a false "offline" state indefinitely — blocks the Git/Repo-Files panels and the new Create-workspace button](#issue-19) | Open |
+| 19 | [A browser that connects after the daemon does can show a false "offline" state indefinitely — blocks the Git/Repo-Files panels and the new Create-workspace button](#issue-19) | Landed (needs live re-verification) |
+| 20 | [`falcon daemon stop` + `daemon start` while a `falcon claude` session is still running can trigger a false "needs re-authentication" — refresh-token rotation race, not a real security event](#issue-20) | Open (not live-confirmed) |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -614,4 +615,78 @@ source instead of working around it client-side.
 confirmed via direct code read (not just the observed symptom): the `staleTime: Infinity` +
 connect/disconnect-only presence model has no path to ever refresh a stale-but-online machine's
 status without an unrelated structural event happening to trigger a resync first.
+
+**Update (2026-07-30):** fixed. `packages/server/src/app/socket.ts`'s machine-scoped
+`machine-alive` heartbeat handler now re-emits the `machine-presence` ephemeral on every
+heartbeat (not just at connect), closing gap 2 for a browser that was already connected when
+the daemon came online; a new initial-snapshot block in the same connection handler queries
+`EventRouter.isMachineOnline` (`packages/server/src/app/events/eventRouter.ts`) for every
+machine on the account and emits a one-time `machine-presence` snapshot to a freshly-connecting
+`user-scoped` web socket, closing gap 1 for a browser that connects after the daemon already
+has. Both covered by new integration tests in `packages/server/src/app/socket.test.ts`
+("re-broadcasts machine-presence online on every machine-alive heartbeat, not just connect",
+"sends an initial machine-presence snapshot to a freshly-connected web client..."). Not yet
+live-reverified end-to-end in a real browser — remove this issue once someone confirms the
+original repro (reload the web UI against an already-online machine, confirm no false
+"offline") no longer reproduces.
+
+<a id="issue-20"></a>
+
+## 20. `falcon daemon stop` + `daemon start` while a `falcon claude` session is still running can trigger a false "needs re-authentication" — refresh-token rotation race, not a real security event
+
+**Where:** `packages/cli/src/auth/tokenProvider.ts:32-44` (the `readCurrentRefreshToken` doc
+comment already names the exact hazard: "this refresh token may already be one rotation behind
+another long-lived process sharing the same home dir (the daemon's own `TokenProvider` vs. a
+`falcon claude` session's)"), `:82-98` (`doRefresh`'s one-shot stale-by-one retry, which only
+covers a 401 discovered on the FIRST attempt), `packages/server/src/app/routes/refresh.ts:66-96`
+(the previous-hash replay/theft-detection branch — `GRACE_MS = 60_000`; outside that window it
+revokes the entire `familyId`, not just the one stale token), `packages/server/src/app/
+machineReauth.ts` (`computeMachineNeedsReauth`, the sole consumer of `revokedAt` that produces
+the "needs re-authentication" status), `packages/server/src/app/socket.ts` (machine-scoped
+disconnect handler calling `computeMachineNeedsReauth`, and the `/v1/sync` bootstrap path via
+`computeMachinesNeedReauth`).
+
+**What's open:** `falcon claude` runs two long-lived sibling processes against the same
+account — the background daemon (`machineClient.ts`'s own `TokenProvider`) and the foreground
+interactive session (`sessionClient.ts`'s own, separate `TokenProvider`) — both reading/writing
+the SAME single-use rotating refresh token file (`~/.falcon/access.key`). Running
+`falcon daemon stop` then `falcon daemon start` while the foreground session keeps running spins
+up a brand-new daemon process with a brand-new, empty-cache `TokenProvider`, so its very first
+`getAccessToken()` call hits `/v1/auth/refresh` immediately. If the still-running session
+process's own refresh timer rotates the shared token at a moment that races the new daemon's own
+refresh attempt, one of the two presents an already-rotated (stale) hash to the server. The
+client-side one-retry mitigation only helps when the FIRST attempt gets a clean 401; it does
+nothing to stop the server's own replay/theft check (`refresh.ts`'s branch (2)) from firing if
+the stale presentation lands outside the 60-second grace window — and when it does, the server
+revokes the whole token family, which `computeMachineNeedsReauth` then reports as
+`needsReauth: true`, surfacing "This project's machine needs to sign in again. Run
+`falcon auth login` there." on the web even though nothing was actually compromised and the user
+did nothing but restart the daemon.
+
+**Not live-reproduced in this pass.** This is a code-read-derived root cause from a 2026-07-30
+conversation (traced `tokenProvider.ts`'s own hazard comment through `refresh.ts`'s
+replay-detection branch to `machineReauth.ts`'s consumer), not yet confirmed via captured
+logs/DB state from an actual repro. Closely related to issue #17 (same shared single-use
+rotating token, same warning log line — `"refresh token rejected but a newer one is on disk
+(likely rotated by a sibling process) — retrying once"`) but a distinct and more severe
+consequence: issue #17's churn is a retry-and-recover loop caused by ACCUMULATED zombie
+processes; this is a full account lockout (forced re-login) from an entirely ordinary
+two-process setup (one daemon, one live session, no zombies required).
+
+**What a real fix needs:** the underlying design gap is the same one issue #17 already flags —
+multiple legitimate sibling processes sharing one single-use rotating credential with no
+coordination between them. Real options: (1) give sibling processes on the same machine a way to
+coordinate refreshes (e.g. a file lock around rotation, or one process designated the sole
+refresher with others reading its result), so concurrent rotation never happens at all; (2)
+widen the server's grace window specifically for same-family concurrent rotation, since a
+same-device race is categorically different from a cross-device replay and shouldn't be judged
+by the same 60s theft heuristic; (3) at minimum, don't let a benign same-device race escalate to
+full-family revocation — a softer "this looks like our own sibling, not theft" response would
+avoid demanding re-login for something the user did nothing wrong to cause.
+
+**Status:** open, not started — found via a code-reading deep-dive prompted by a user-reported
+symptom (2026-07-30: "I run `falcon daemon stop` then `start` again and the web UI shows
+'needs re-authentication'"), not yet independently live-reproduced or confirmed via logs. Needs
+an actual repro (stop/start the daemon while a session stays live, capture server logs and the
+`device_sessions.revoked_at`/`family_id` state) before this can move past "likely mechanism."
 

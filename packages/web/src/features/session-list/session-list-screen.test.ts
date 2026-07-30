@@ -3,7 +3,6 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { useMockUnmanagedSessions } from "@/features/unmanaged-sessions";
 import { SessionListScreen } from "./session-list-screen";
 import type { SessionListSession, SessionListSnapshot } from "./types";
 
@@ -34,7 +33,6 @@ function render(snapshot: SessionListSnapshot) {
         null,
         createElement(SessionListScreen, {
           useData: () => snapshot,
-          useUnmanagedSnapshot: () => ({ machines: [], sessions: [] }),
         }),
       ),
     ),
@@ -124,18 +122,15 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
     expect(html).not.toContain("New project");
   });
 
-  it("still renders unmanaged sessions even with no managed data", () => {
-    const html = renderToStaticMarkup(
-      createElement(
-        QueryClientProvider,
-        { client: new QueryClient() },
-        createElement(SessionListScreen, {
-          useData: () => ({ workspaces: [], machines: [], sessions: [] }),
-          useUnmanagedSnapshot: useMockUnmanagedSessions,
-        }),
-      ),
-    );
-    expect(html).not.toContain("No sessions yet");
+  it("never renders the Unmanaged sessions section (hidden pending the duplicate-card fix)", () => {
+    const snapshot: SessionListSnapshot = {
+      workspaces: [{ id: "w1", name: "falcon" }],
+      machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
+      sessions: [session({ id: "active-sess", status: "active" })],
+    };
+
+    const html = render(snapshot);
+    expect(html).not.toContain("Unmanaged sessions");
   });
 });
 

@@ -3,13 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  UnmanagedSection,
-  type UseUnmanagedActions,
-  type UseUnmanagedSessionsSnapshot,
-  useLiveUnmanagedSessions,
-  useMockUnmanagedActions,
-} from "@/features/unmanaged-sessions";
 import { useDebouncedOrder } from "@/hooks/use-debounced-order";
 import { FirstMachineOnboarding } from "./components/first-machine-onboarding";
 import { NewWorkspaceTrigger } from "./components/new-workspace-panel";
@@ -32,25 +25,24 @@ function workspaceKey(group: WorkspaceGroup): string {
 /**
  * The Home screen (falcon-system-design.md §9.2 "Home" row; falcon-prd.md
  * FR-7.1): every session across machines, grouped by workspace, each with a
- * derived status dot and its machine's online/offline badge, plus the
- * unmanaged-session section (`UnmanagedSection`, falcon-prd.md §5.9/UC9)
- * underneath — plain claude/codex sessions the daemon's transcript indexer
- * found but Falcon never spawned.
+ * derived status dot and its machine's online/offline badge.
  *
  * `useData` defaults to the real sync-engine-backed `useLiveSessionListSnapshot`
  * (`live-source.ts`), mirroring `SessionTimelineScreen`'s own `useControl`
  * default. `useData` stays an injectable prop so a test can still pass a
  * fixture snapshot without touching `WorkspaceSection`/`SessionCard`.
  *
- * `useUnmanagedSnapshot` defaults to the real `useLiveUnmanagedSessions`
- * (`features/unmanaged-sessions/live-source.ts`) — same `['sync']` snapshot,
- * live rows. `useUnmanagedActions` stays mock-backed: the `adopt.mirror`/
- * `adopt.take` RPCs need a live per-machine crypto client this screen
- * doesn't have yet (plan.md §16 W3.10's own scope note), so `actionsDisabled`
- * is passed alongside it to grey out `UnmanagedSection`'s "View"/"Take over"
- * entry points instead of letting them silently pretend to succeed against a
- * real row.
+ * The `features/unmanaged-sessions` section (plain claude/codex sessions the
+ * daemon's transcript indexer found but Falcon never spawned) is
+ * intentionally NOT rendered here right now — a `falcon claude` session can
+ * itself show up as a false-positive "unmanaged" duplicate of its own
+ * managed card when the daemon's "this one's already mine" self-report lands
+ * late or is missing for a given launch path (open gap for the
+ * `runRemoteLoop` path). Hidden rather than deleted: the feature code under
+ * `features/unmanaged-sessions/` and its route are untouched, just not wired
+ * into this screen or reachable, pending a fix.
  *
+
  * Archived ("Mark done") sessions are excluded here (docs/features/
  * session-lifecycle-actions.md Phase 5) — they live on the dedicated
  * `/completed/` screen (`CompletedSessionsScreen`) instead. `group.ts` itself
@@ -73,12 +65,8 @@ function workspaceKey(group: WorkspaceGroup): string {
  */
 export function SessionListScreen({
   useData = useLiveSessionListSnapshot,
-  useUnmanagedSnapshot = useLiveUnmanagedSessions,
-  useUnmanagedActions = useMockUnmanagedActions,
 }: {
   useData?: UseSessionListSnapshot;
-  useUnmanagedSnapshot?: UseUnmanagedSessionsSnapshot;
-  useUnmanagedActions?: UseUnmanagedActions;
 }) {
   const snapshot = useData();
   const activeSnapshot = useMemo(
@@ -103,14 +91,13 @@ export function SessionListScreen({
   const hasMore = activeSnapshot.sessions.length > visibleCount;
   const machinesById = useMemo(() => new Map(snapshot.machines.map((m) => [m.id, m])), [snapshot]);
   const hasMachines = snapshot.machines.length > 0;
-  const unmanagedSnapshot = useUnmanagedSnapshot();
 
   // Skeleton only for the true first-load window: the initial account fetch
-  // is in flight and nothing — session or unmanaged — has rendered yet. A
-  // later refetch (gap-invalidation, reconnect) never re-shows this; it just
-  // keeps whatever was already on screen (plan-v2.md W4.2 "skeletons for
-  // Home … initial loads").
-  if (snapshot.isLoading && groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
+  // is in flight and nothing has rendered yet. A later refetch
+  // (gap-invalidation, reconnect) never re-shows this; it just keeps
+  // whatever was already on screen (plan-v2.md W4.2 "skeletons for Home …
+  // initial loads").
+  if (snapshot.isLoading && groups.length === 0) {
     return (
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 sm:p-6">
         <div className="flex items-center justify-between">
@@ -124,11 +111,11 @@ export function SessionListScreen({
   // No machines at all is a DIFFERENT state from "machines, but no sessions": the old
   // copy pointed at a "paired machine" the user did not have, and offered a button that
   // needs one.
-  if (!hasMachines && unmanagedSnapshot.sessions.length === 0) {
+  if (!hasMachines) {
     return <FirstMachineOnboarding />;
   }
 
-  if (groups.length === 0 && unmanagedSnapshot.sessions.length === 0) {
+  if (groups.length === 0) {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
         <p className="text-sm font-medium">No sessions yet</p>
@@ -174,16 +161,6 @@ export function SessionListScreen({
           Load 10 more
         </Button>
       )}
-      <UnmanagedSection
-        useSnapshot={useUnmanagedSnapshot}
-        useActions={useUnmanagedActions}
-        // `adopt.mirror`/`adopt.take` have no live per-machine crypto client
-        // wired into this screen yet (see this component's own doc comment)
-        // — hardcoded true, not a prop, since it tracks this call site's
-        // actual capability rather than being something a caller should
-        // toggle independently of which `useUnmanagedActions` is plugged in.
-        actionsDisabled
-      />
     </main>
   );
 }

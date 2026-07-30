@@ -14,7 +14,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     ensureInstallListeners();
-    void registerServiceWorker();
+    // The SW caches JS/CSS/static assets and serves them stale-first, which
+    // makes `next dev` iteration look like the browser "won't pick up" code
+    // changes. Only register it in production builds.
+    if (process.env.NODE_ENV === "production") {
+      void registerServiceWorker();
+    }
   }, []);
 
   return (

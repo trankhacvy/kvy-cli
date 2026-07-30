@@ -37,7 +37,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionCrypto } from "@/features/session-control/use-session-crypto";
-import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
+import {
+  isRestartEnabled,
+  restartDisabledReason,
+} from "@/lib/use-restart-session";
 import {
   useArchiveSessionMutation,
   useDeleteSessionMutation,
@@ -102,7 +105,9 @@ export function SessionCardActions({
   const [stopOpen, setStopOpen] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
   const [removeWorktreeOpen, setRemoveWorktreeOpen] = useState(false);
-  const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
+  const [stopState, setStopState] = useState<StopSessionDialogState>(
+    initialStopSessionDialogState,
+  );
   const archiveMutation = useArchiveSessionMutation();
   const restoreMutation = useRestoreSessionMutation();
   const deleteMutation = useDeleteSessionMutation();
@@ -110,7 +115,11 @@ export function SessionCardActions({
   const archived = status === "archived";
   const stoppable = isSessionStoppable(status);
   const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
-  const restartReason = restartDisabledReason({ machineId, machineOnline, status });
+  const restartReason = restartDisabledReason({
+    machineId,
+    machineOnline,
+    status,
+  });
   const canRemoveWorktree = canOfferRemoveWorktree(machineId, workspaceId);
 
   function handleStopOpenChange(open: boolean) {
@@ -124,12 +133,11 @@ export function SessionCardActions({
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            size="icon"
             variant="ghost"
-            className="size-7"
+            size="icon-sm"
             aria-label="Session actions"
           >
-            <MoreHorizontal className="size-3.5" />
+            <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -141,13 +149,21 @@ export function SessionCardActions({
             disabled={pinMutation.isPending}
             onSelect={() => pinMutation.mutate(buildPinTogglePatch(pinned))}
           >
-            {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            {pinned ? (
+              <PinOff className="size-4" />
+            ) : (
+              <Pin className="size-4" />
+            )}
             {pinned ? "Unpin" : "Pin"}
           </DropdownMenuItem>
           {!archived && (
             <DropdownMenuItem
               disabled={!stoppable}
-              title={stoppable ? undefined : "This session's process has already ended"}
+              title={
+                stoppable
+                  ? undefined
+                  : "This session's process has already ended"
+              }
               onSelect={() => setStopOpen(true)}
             >
               <CircleStop className="size-4" />
@@ -189,7 +205,10 @@ export function SessionCardActions({
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive" onSelect={() => setDeleteOpen(true)}>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => setDeleteOpen(true)}
+          >
             <Trash2 className="size-4" />
             Delete
           </DropdownMenuItem>
@@ -228,7 +247,8 @@ export function SessionCardActions({
           <DialogHeader>
             <DialogTitle>Delete "{title}"?</DialogTitle>
             <DialogDescription>
-              Permanently deletes this session and its transcript. This can't be undone.
+              Permanently deletes this session and its transcript. This can't be
+              undone.
             </DialogDescription>
           </DialogHeader>
           {deleteMutation.isError && (
@@ -250,7 +270,9 @@ export function SessionCardActions({
               variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={() =>
-                deleteMutation.mutate(sessionId, { onSuccess: () => setDeleteOpen(false) })
+                deleteMutation.mutate(sessionId, {
+                  onSuccess: () => setDeleteOpen(false),
+                })
               }
             >
               {deleteMutation.isPending ? "Deleting…" : "Delete"}
@@ -264,7 +286,8 @@ export function SessionCardActions({
           <DialogHeader>
             <DialogTitle>Stop "{title}"?</DialogTitle>
             <DialogDescription>
-              Ends the CLI process on its machine — the terminal user will see Claude exit.
+              Ends the CLI process on its machine — the terminal user will see
+              Claude exit.
             </DialogDescription>
           </DialogHeader>
           {stopState.phase === "error" && (
@@ -319,7 +342,9 @@ function CardStopConfirmButton({
 
   function handleConfirm() {
     if (!crypto) {
-      onError(new Error("Crypto bridge isn't ready yet — try again in a moment."));
+      onError(
+        new Error("Crypto bridge isn't ready yet — try again in a moment."),
+      );
       return;
     }
     onStopping();
@@ -329,7 +354,11 @@ function CardStopConfirmButton({
   }
 
   return (
-    <Button variant="destructive" disabled={stopping || !crypto} onClick={handleConfirm}>
+    <Button
+      variant="destructive"
+      disabled={stopping || !crypto}
+      onClick={handleConfirm}
+    >
       {stopping ? "Stopping…" : "Stop"}
     </Button>
   );

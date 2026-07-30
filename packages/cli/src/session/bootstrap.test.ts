@@ -155,12 +155,14 @@ describe("bootstrapSession", () => {
       path: string;
       providerSessionId: string | null;
       model: string | null;
+      titleSource: string;
     }>(sentBody.metadata as EncryptedBox, result.dek);
     expect(opened).toEqual({
       title: "my session",
       path: "/home/user/project",
       providerSessionId: null,
       model: null,
+      titleSource: "auto",
     });
   });
 

@@ -163,6 +163,9 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     workingDirectory: "/fake/workdir",
     claudeArgs: [],
     launcherPath: "/fake/launcher.cjs",
+    frontendUrl: "https://app.falcon.invalid",
+    hasGitDir: async () => true,
+    displayQrCode: vi.fn(),
     readCredentials: () => fakeCredentials(),
     fetchImpl: defaultFetchImpl as unknown as typeof fetch,
     readDaemonState: async () => fakeDaemonState(),
@@ -336,6 +339,76 @@ describe("runStartClaudeCommand — preflight", () => {
       }),
     );
     expect(code).toBe(1);
+  });
+});
+
+describe("runStartClaudeCommand — startup banners", () => {
+  it("warns when the working directory isn't a git repository", async () => {
+    const written: string[] = [];
+    await runStartClaudeCommand(
+      baseDeps({
+        hasGitDir: async () => false,
+        write: (text) => written.push(text),
+      }),
+    );
+    expect(written.join("")).toContain("not a git repository");
+  });
+
+  it("does not warn when the working directory is a git repository", async () => {
+    const written: string[] = [];
+    await runStartClaudeCommand(
+      baseDeps({
+        hasGitDir: async () => true,
+        write: (text) => written.push(text),
+      }),
+    );
+    expect(written.join("")).not.toContain("not a git repository");
+  });
+
+  it("prints the session's web URL using the resolved frontend URL", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_web_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const written: string[] = [];
+    await runStartClaudeCommand(
+      baseDeps({
+        bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+        frontendUrl: "https://app.falcon.invalid",
+        write: (text) => written.push(text),
+      }),
+    );
+    expect(written.join("")).toContain(
+      "https://app.falcon.invalid/dashboard/session/sess_web_1/",
+    );
+  });
+
+  it("renders a QR code for the session URL only when stdin is a TTY", async () => {
+    const stdin = process.stdin as unknown as { isTTY: boolean | undefined };
+    const original = stdin.isTTY;
+    stdin.isTTY = true;
+    const displayQrCode = vi.fn();
+    try {
+      await runStartClaudeCommand(baseDeps({ displayQrCode }));
+    } finally {
+      stdin.isTTY = original;
+    }
+    expect(displayQrCode).toHaveBeenCalledOnce();
+  });
+
+  it("skips the QR code render when stdin is not a TTY", async () => {
+    const stdin = process.stdin as unknown as { isTTY: boolean | undefined };
+    const original = stdin.isTTY;
+    stdin.isTTY = false;
+    const displayQrCode = vi.fn();
+    try {
+      await runStartClaudeCommand(baseDeps({ displayQrCode }));
+    } finally {
+      stdin.isTTY = original;
+    }
+    expect(displayQrCode).not.toHaveBeenCalled();
   });
 });
 

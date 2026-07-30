@@ -4,6 +4,7 @@ import { HomeIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FalconMark } from "@/components/falcon-mark";
+import { MachineSwitcher } from "@/components/machine-switcher";
 import { NavUser } from "@/components/nav-user";
 import {
   Sidebar,
@@ -71,6 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
+          <MachineSwitcher />
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>

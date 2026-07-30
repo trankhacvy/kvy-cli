@@ -1,5 +1,6 @@
 "use client";
 
+import { RemoveWorkspaceControl } from "@/components/remove-workspace-control";
 import { Button } from "@/components/ui/button";
 import type { GitPanelState } from "../use-git-panel";
 
@@ -69,25 +70,18 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
           </Button>
         )}
 
-        {/* Destructive action stays a link, never a button next to a safe
-            one (CLAUDE.md auth/UX rule #5 — same shape as
-            components/auth/start-over-link.tsx), and states its consequence. */}
-        {removeWorkspaceDone ? (
-          <p className="text-muted-foreground">
-            Removed. You can add it again from a new session's folder picker once it's back in
-            place.
-          </p>
-        ) : (
-          <button
-            type="button"
-            disabled={isRemoveWorkspacePending}
-            onClick={() => removeWorkspace()}
-            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
-          >
-            {isRemoveWorkspacePending
-              ? "Removing…"
-              : "Forget this project — Falcon stops tracking the folder, nothing on disk changes"}
-          </button>
+        {/* Remove-workspace only makes sense for `workspace-missing` — the
+            folder is genuinely gone, so there's nothing else to offer.
+            `workspace-not-a-repo`'s real fix is "Set up git here" above;
+            offering to delete the workspace registration for a folder that's
+            sitting right there, just not yet a repo, is a confusing,
+            unnecessary extra option. */}
+        {!canInitialize && (
+          <RemoveWorkspaceControl
+            onRemove={() => removeWorkspace()}
+            isPending={isRemoveWorkspacePending}
+            done={removeWorkspaceDone}
+          />
         )}
       </div>
     );

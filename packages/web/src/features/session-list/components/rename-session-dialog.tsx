@@ -55,7 +55,10 @@ export function RenameSessionDialog({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (trimmed.length === 0 || unchanged) return;
-    mutation.mutate((current) => ({ ...current, title: trimmed }), {
+    // `titleSource: "manual"` — the CLI's provider-summary auto-title
+    // (`sessionMetadata.ts`'s `updateTitle`) checks this and refuses to
+    // overwrite a title the user set by hand.
+    mutation.mutate((current) => ({ ...current, title: trimmed, titleSource: "manual" }), {
       onSuccess: () => handleOpenChange(false),
     });
   }
