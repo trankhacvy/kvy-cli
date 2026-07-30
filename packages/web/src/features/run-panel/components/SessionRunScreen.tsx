@@ -36,8 +36,8 @@ export function SessionRunScreen({ sessionId }: { sessionId: string }) {
           </p>
         ) : !session.machineId || !session.workspaceId ? (
           <p className="p-4 text-sm text-destructive">
-            This session has no machine/workspace recorded yet. The Setup/Run tab needs both to
-            know where to run.
+            This session has no machine/workspace recorded yet. The Setup/Run tab needs both to know
+            where to run.
           </p>
         ) : (
           <RunPanel machineId={session.machineId} worktree={session.workspaceId} />

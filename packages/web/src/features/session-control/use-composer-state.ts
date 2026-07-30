@@ -75,8 +75,7 @@ export function useComposerState(items: RenderItem[]): ComposerState {
   // heads-up is set BEFORE the mutation fires rather than after a failure,
   // giving the user the honest expectation up front. A real failure still
   // gets its own translated message below.
-  const machineOfflineNotice =
-    "That machine is offline right now. The message may not go through.";
+  const machineOfflineNotice = "That machine is offline right now. The message may not go through.";
 
   const mutation = useMutation({
     mutationFn: async (text: string) => {
