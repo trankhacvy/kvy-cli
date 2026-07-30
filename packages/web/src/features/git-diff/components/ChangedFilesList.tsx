@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { GitStatusSnapshot } from "../types";
-import { FileStatusBadge } from "./FileStatusBadge";
+import { FileStatChange, FileStatusBadge } from "./FileStatusBadge";
 
 /**
  * The changed-files list (falcon-prd.md FR-7.7 "file-level diff list vs
@@ -54,7 +54,8 @@ export function ChangedFilesList({
                 )}
               >
                 <FileStatusBadge status={file.status} />
-                <span className="truncate font-mono text-xs">{file.path}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-xs">{file.path}</span>
+                <FileStatChange insertions={file.insertions} deletions={file.deletions} />
               </button>
             </li>
           ))}

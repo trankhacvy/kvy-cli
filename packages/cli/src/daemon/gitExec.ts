@@ -68,3 +68,48 @@ export const runGit: GitExec = (args, cwd) =>
       },
     );
   });
+
+/**
+ * Like `runGit`, but for `git diff --no-index` invocations specifically
+ * (`gitDiff.ts`/`gitStatus.ts`'s untracked-file handling — an untracked file
+ * has no committed content on either side of a normal `git diff <ref>`, so
+ * it's diffed against `/dev/null` instead, which is what `--no-index`
+ * allows outside a real repo comparison). Unlike every other `git diff`
+ * invocation in this codebase (which always exits 0, differences or not),
+ * `--no-index` exits 1 the moment the two sides differ — the normal,
+ * successful case here (there's always a difference: the "old" side is
+ * always `/dev/null`), never a failure by itself. But exit 1 is NOT
+ * unambiguous on its own: git also uses it for a real error (verified
+ * against the real binary — `Could not access '<path>'` for a path that
+ * vanished between the untracked-file scan and this diff also exits 1). The
+ * real signal is where the output landed: a genuine diff writes to stdout
+ * with an empty stderr; an error writes to stderr with an empty stdout. So
+ * exit 1 only resolves when stderr is empty — any stderr output, or any
+ * other exit code/spawn failure, is treated as a real error.
+ */
+export const runGitDiffNoIndex: GitExec = (args, cwd) =>
+  new Promise((resolve, reject) => {
+    execFile(
+      "git",
+      args,
+      {
+        cwd,
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: GIT_EXEC_TIMEOUT_MS,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      },
+      (error, stdout, stderr) => {
+        if (error && error.code === 1 && stderr.toString().trim() === "") {
+          resolve(stdout.toString());
+          return;
+        }
+        if (error) {
+          reject(
+            new GitExecError(stderr.toString().trim() || stdout.toString().trim() || error.message),
+          );
+          return;
+        }
+        resolve(stdout.toString());
+      },
+    );
+  });

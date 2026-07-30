@@ -154,6 +154,7 @@ import { displayQrCode as displayQrCodeDefault } from "../auth/qrcode.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
+import { deriveTitleFromFirstUserMessage } from "../claude/firstMessageTitle.js";
 import {
   type ClaudeMode,
   type LoopDeps,
@@ -904,6 +905,25 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
   };
 
+  // The summary line above is provider/version-dependent and in practice may
+  // never arrive for a given session — the first genuine human-typed message
+  // is what actually replaces the folder-name title for most sessions. Fires
+  // at most once (`firstUserTitleSent`); a later summary still overwrites it
+  // since both go through `updateTitle` with `titleSource: "auto"`.
+  let firstUserTitleSent = false;
+  const handleFirstUserMessageTitle = (envelopes: readonly SessionEnvelope[]): void => {
+    if (firstUserTitleSent) return;
+    const title = deriveTitleFromFirstUserMessage(envelopes);
+    if (!title) return;
+    firstUserTitleSent = true;
+    void sessionMetadataUpdater.updateTitle(title).catch((error) => {
+      logger.warn("[start-claude] failed to persist first-message title", {
+        title,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
+
   // Fix 7 (auth-ux-overhaul-fix-plan.md): a key request raised on another device while
   // this session runs must reach the person at THIS terminal, not just a log file nobody
   // tails. `undefined` means "none seen"; once set, the exit path below runs the review.
@@ -1148,6 +1168,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
             }
           }
           handlePossibleModelChange(envelopes);
+          handleFirstUserMessageTitle(envelopes);
           outbox.enqueue(envelopes);
         },
         onSummaryTitle: handleSummaryTitle,

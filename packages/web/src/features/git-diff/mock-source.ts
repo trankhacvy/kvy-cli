@@ -19,12 +19,17 @@ const MOCK_STATUS: GitStatusSnapshot = {
   ahead: 3,
   behind: 1,
   files: [
-    { path: "packages/web/src/features/git-diff/types.ts", status: "added" },
-    { path: "packages/web/src/features/git-diff/live-actions.ts", status: "added" },
-    { path: "packages/cli/src/daemon/gitDiff.ts", status: "added" },
-    { path: "packages/wire/src/rpc.ts", status: "modified" },
-    { path: "packages/cli/src/daemon/machineRpc.ts", status: "modified" },
-    { path: "packages/cli/src/daemon/gitWorktree.test.ts", status: "deleted" },
+    { path: "packages/web/src/features/git-diff/types.ts", status: "added", insertions: 42 },
+    { path: "packages/web/src/features/git-diff/live-actions.ts", status: "added", insertions: 58 },
+    { path: "packages/cli/src/daemon/gitDiff.ts", status: "added", insertions: 76 },
+    { path: "packages/wire/src/rpc.ts", status: "modified", insertions: 12, deletions: 3 },
+    {
+      path: "packages/cli/src/daemon/machineRpc.ts",
+      status: "modified",
+      insertions: 5,
+      deletions: 2,
+    },
+    { path: "packages/cli/src/daemon/gitWorktree.test.ts", status: "deleted", deletions: 30 },
   ],
 };
 

@@ -1,7 +1,7 @@
 export { ChangedFilesList } from "./components/ChangedFilesList";
 export { CompareAgainstSelect } from "./components/CompareAgainstSelect";
 export { CreatePrButton } from "./components/CreatePrButton";
-export { FileStatusBadge } from "./components/FileStatusBadge";
+export { FileStatChange, FileStatusBadge } from "./components/FileStatusBadge";
 export { GitDiffPanel } from "./components/GitDiffPanel";
 export { ChecklistRow, GitStatusChecklist, PrChecklistRow } from "./components/GitStatusChecklist";
 export { GitStatusError } from "./components/GitStatusError";

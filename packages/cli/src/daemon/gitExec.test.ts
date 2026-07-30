@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { GitExecError, runGit } from "./gitExec.js";
+import { GitExecError, runGit, runGitDiffNoIndex } from "./gitExec.js";
 
 /**
  * Unlike every other `daemon/git*.test.ts` suite (which fakes `GitExec` and
@@ -50,5 +50,33 @@ describe("runGit (real git binary)", () => {
     await expect(runGit(["commit", "-m", "no-op"], repo)).rejects.toThrow(
       /nothing to commit|working tree clean/,
     );
+  });
+});
+
+describe("runGitDiffNoIndex (real git binary)", () => {
+  let repo: string;
+
+  beforeEach(async () => {
+    repo = await mkdtemp(path.join(tmpdir(), "falcon-git-exec-noindex-"));
+  });
+
+  afterEach(async () => {
+    await rm(repo, { recursive: true, force: true });
+  });
+
+  it("resolves with the diff even though git exits 1 when the two sides differ", async () => {
+    await writeFile(path.join(repo, "new.txt"), "hello\n");
+    const output = await runGitDiffNoIndex(
+      ["diff", "--no-index", "--", "/dev/null", "new.txt"],
+      repo,
+    );
+    expect(output).toContain("+hello");
+    expect(output).toContain("new.txt");
+  });
+
+  it("rejects on a real error (e.g. a nonexistent path on both sides)", async () => {
+    await expect(
+      runGitDiffNoIndex(["diff", "--no-index", "--", "/dev/null", "does-not-exist.txt"], repo),
+    ).rejects.toThrow(GitExecError);
   });
 });

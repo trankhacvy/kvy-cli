@@ -125,6 +125,9 @@ export type GitStatusParams = z.infer<typeof GitStatusParamsSchema>;
 export const FileStatusSchema = z.object({
   path: z.string(),
   status: z.enum(["added", "modified", "deleted", "renamed", "untracked"]),
+  /** Lines added/removed vs the comparison ref (`git diff --numstat`) — absent for an untracked file (never diffed, no ref-relative content to count) or a binary file (`git` reports `-`/`-` for those, not a real count). */
+  insertions: z.number().optional(),
+  deletions: z.number().optional(),
 });
 export type FileStatus = z.infer<typeof FileStatusSchema>;
 

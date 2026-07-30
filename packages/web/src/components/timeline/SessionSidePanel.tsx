@@ -1,9 +1,11 @@
 "use client";
 
 import type { CheckRun } from "@falcon/wire";
+import { EllipsisVertical, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ChangedFilesList,
@@ -17,27 +19,12 @@ import {
   useGitPanel,
   useLiveGitDiffActions,
 } from "@/features/git-diff";
-import {
-  ChecksPanel,
-  useChecksPanel,
-  useLiveGithubChecksActions,
-} from "@/features/github-checks";
-import {
-  FileTree,
-  useLiveRepoFilesActions,
-  useRepoFiles,
-} from "@/features/repo-files";
+import { ChecksPanel, useChecksPanel, useLiveGithubChecksActions } from "@/features/github-checks";
+import { FileTree, useLiveRepoFilesActions, useRepoFiles } from "@/features/repo-files";
 import { saveDraft } from "@/features/session-control";
 import { looksLikeWorktreePath, useReviewSpawn } from "@/features/session-list";
-import {
-  buildFixCiPrompt,
-  CREATE_PR_PROMPT,
-  REVIEW_PROMPT,
-} from "@/lib/agent-prompts";
-import {
-  type MachineOnlineState,
-  useMachineOnline,
-} from "@/lib/use-machine-online";
+import { buildFixCiPrompt, CREATE_PR_PROMPT, REVIEW_PROMPT } from "@/lib/agent-prompts";
+import { type MachineOnlineState, useMachineOnline } from "@/lib/use-machine-online";
 
 type PanelTab = "changes" | "files" | "checks";
 
@@ -62,79 +49,162 @@ const TABS: { id: PanelTab; label: string }[] = [
 ];
 
 /**
- * The Create PR / Review action row (session-panel-workflow-plan.md Phases
- * 2-3) — only ever rendered once `canUseWorkspaceActions` is true (the
- * session is in a Falcon-managed worktree and still controllable): every
- * action here is either unsafe or meaningless outside a worktree (Create PR
- * still "works" at the repo root, but Review — a sibling worktree off the
- * SAME repo root — has nothing to be a sibling of).
+ * The one write-adjacent action that stays visible outside the overflow
+ * dialog (conductor.build-style: a single "Review" button next to the tab
+ * bar, everything else tucked away) — spawns a sibling worktree session off
+ * this one to review its changes. Only ever rendered once
+ * `canUseWorkspaceActions` is true (the session is in a Falcon-managed
+ * worktree and still controllable): a worktree off a worktree has nothing
+ * to be a sibling of.
  */
-function WorkspaceActionsRow({
+function ReviewButton({
   machineId,
   worktree,
   codingBranch,
-  checks,
-  onSendAgentPrompt,
-  isSendingAgentPrompt,
 }: {
   machineId: string;
   worktree: string;
   codingBranch: string;
-  checks: ReturnType<typeof useChecksPanel>["checks"];
-  onSendAgentPrompt: (text: string) => void;
-  isSendingAgentPrompt: boolean;
 }) {
   const router = useRouter();
   const reviewSpawn = useReviewSpawn(machineId, (sessionId) => {
     saveDraft(sessionId, REVIEW_PROMPT);
     router.push(`/dashboard/session/${sessionId}/`);
   });
-  const compareUrl = manualCompareUrl(checks);
   const reviewSpawning = reviewSpawn.state.phase === "spawning";
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        {compareUrl && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              window.open(compareUrl, "_blank", "noopener,noreferrer")
-            }
-          >
-            Open PR on GitHub
-          </Button>
-        )}
-        <CreatePrButton
-          onSend={onSendAgentPrompt}
-          disabled={isSendingAgentPrompt}
-        />
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={reviewSpawning}
-          onClick={() => reviewSpawn.start(worktree, codingBranch)}
-        >
-          {reviewSpawning ? "Starting review…" : "Review"}
-        </Button>
-      </div>
+    <div className="flex flex-col items-end gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={reviewSpawning}
+        onClick={() => reviewSpawn.start(worktree, codingBranch)}
+      >
+        <Eye className="size-3.5" />
+        {reviewSpawning ? "Starting…" : "Review"}
+      </Button>
       {reviewSpawn.state.phase === "error" && (
-        <span className="text-xs text-destructive">
-          {reviewSpawn.state.message}
-        </span>
+        <span className="text-xs text-destructive">{reviewSpawn.state.message}</span>
       )}
     </div>
   );
 }
 
 /**
- * Changes tab: branch/write-toolbar + status checklist + Create PR/Review
- * actions + "Compare against" + the changed-files list — picking a row no
- * longer renders a diff inline here (that made the panel unusably cramped,
- * a two-column layout built for a full page squeezed into a narrow rail).
- * It calls `onOpenFile` instead; the diff itself now renders in the main
- * column (`FileViewerColumn.tsx`).
+ * The Create PR row (session-panel-workflow-plan.md Phases 2-3) — rendered
+ * inside the Changes tab's overflow dialog (`GitActionsDialog` below), not
+ * inline: Create PR still "works" at the repo root even outside a worktree,
+ * but this row is only ever shown alongside worktree-only write actions, so
+ * it shares their `canUseWorkspaceActions` gate for one consistent "is this
+ * session steerable" story rather than two slightly different ones.
+ */
+function CreatePrRow({
+  checks,
+  onSendAgentPrompt,
+  isSendingAgentPrompt,
+}: {
+  checks: ReturnType<typeof useChecksPanel>["checks"];
+  onSendAgentPrompt: (text: string) => void;
+  isSendingAgentPrompt: boolean;
+}) {
+  const compareUrl = manualCompareUrl(checks);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {compareUrl && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => window.open(compareUrl, "_blank", "noopener,noreferrer")}
+        >
+          Open PR on GitHub
+        </Button>
+      )}
+      <CreatePrButton onSend={onSendAgentPrompt} disabled={isSendingAgentPrompt} />
+    </div>
+  );
+}
+
+/**
+ * Everything in the Changes tab that *mutates* the repo (session-panel-
+ * workflow-plan.md), folded behind one overflow dialog so the tab itself
+ * can just be a list (known-issues.md follow-up: the old always-visible
+ * commit/push toolbar + status checklist + Create PR row made the tab do
+ * too many things at once — conductor.build's own Changes tab is just a
+ * file list plus a Review button and this overflow). Commit/push/branch-
+ * rename/remote (`GitToolbar`) always show; the PR checklist row/Create PR
+ * row/"Compare against" only show once `canUseWorkspaceActions` (same gate
+ * `ChangesTab` already applies to the same content today).
+ */
+function GitActionsDialog({
+  open,
+  onOpenChange,
+  machine,
+  panel,
+  checks,
+  canUseWorkspaceActions,
+  onSendAgentPrompt,
+  isSendingAgentPrompt,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  machine: MachineOnlineState;
+  panel: GitPanelState;
+  checks: ReturnType<typeof useChecksPanel>["checks"];
+  canUseWorkspaceActions: boolean;
+  onSendAgentPrompt: (text: string) => void;
+  isSendingAgentPrompt: boolean;
+}) {
+  if (!panel.status) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Git actions</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <GitToolbar panel={panel} machineUnavailable={machine.isKnownUnavailable} />
+          {canUseWorkspaceActions && (
+            <div className="flex flex-col gap-2">
+              <GitStatusChecklist
+                uncommittedCount={panel.status.files.length}
+                checks={checks}
+                onCommitAndPush={() =>
+                  document.getElementById("git-toolbar-commit-message")?.focus()
+                }
+                onCreatePr={() => onSendAgentPrompt(CREATE_PR_PROMPT)}
+              />
+              <CreatePrRow
+                checks={checks}
+                onSendAgentPrompt={onSendAgentPrompt}
+                isSendingAgentPrompt={isSendingAgentPrompt}
+              />
+            </div>
+          )}
+          <CompareAgainstSelect
+            compareRef={panel.compareRef}
+            onChange={panel.setCompareRef}
+            branches={panel.branches}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Changes tab (conductor.build-style): just the changed-files list, plus a
+ * header with the file count, a Review button, and one overflow icon for
+ * everything that mutates the repo (`GitActionsDialog` — commit/push/
+ * branch-rename/remote, the PR status checklist, Create PR, "Compare
+ * against"). Previously all of that lived always-visible above the list,
+ * which made the tab do too many things at once for a 380px rail — picking
+ * a file row itself has already been decoupled from rendering a diff inline
+ * here (it calls `onOpenFile`; the diff renders in the main column,
+ * `FileViewerColumn.tsx`) for the same "this rail is for picking, not
+ * doing" reason.
  *
  * `machine`/`panel` are lifted from `SessionSidePanel` (which already gates
  * this tab's very existence on the workspace being reachable and healthy) —
@@ -165,56 +235,52 @@ function ChangesTab({
   actionsDisabled: boolean;
 }) {
   const checksActions = useLiveGithubChecksActions(machineId);
-  const { checks } = useChecksPanel(
-    checksActions,
-    worktree,
-    !machine.isKnownUnavailable,
-  );
+  const { checks } = useChecksPanel(checksActions, worktree, !machine.isKnownUnavailable);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   if (!panel.status) return null;
 
-  const canUseWorkspaceActions =
-    looksLikeWorktreePath(worktree) && !actionsDisabled;
+  const canUseWorkspaceActions = looksLikeWorktreePath(worktree) && !actionsDisabled;
 
   return (
     <div className="flex flex-col gap-3 p-3">
-      <GitToolbar
-        panel={panel}
-        machineUnavailable={machine.isKnownUnavailable}
-      />
-      {canUseWorkspaceActions && (
-        <div className="flex flex-col gap-2 px-1">
-          <GitStatusChecklist
-            uncommittedCount={panel.status.files.length}
-            checks={checks}
-            onCommitAndPush={() =>
-              document.getElementById("git-toolbar-commit-message")?.focus()
-            }
-            onCreatePr={() => onSendAgentPrompt(CREATE_PR_PROMPT)}
-          />
-          <WorkspaceActionsRow
-            machineId={machineId}
-            worktree={worktree}
-            codingBranch={panel.status.branch}
-            checks={checks}
-            onSendAgentPrompt={onSendAgentPrompt}
-            isSendingAgentPrompt={isSendingAgentPrompt}
-          />
+      <div className="flex items-center justify-between gap-2 px-1">
+        <span className="text-sm">
+          <span className="font-medium">{panel.status.branch}</span>
+          <span className="text-muted-foreground"> · {panel.status.files.length} changed</span>
+        </span>
+        <div className="flex items-center gap-1">
+          {canUseWorkspaceActions && (
+            <ReviewButton
+              machineId={machineId}
+              worktree={worktree}
+              codingBranch={panel.status.branch}
+            />
+          )}
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Git actions"
+            onClick={() => setActionsOpen(true)}
+          >
+            <EllipsisVertical className="size-4" />
+          </Button>
         </div>
-      )}
-      <div className="flex items-center justify-end px-1">
-        <CompareAgainstSelect
-          compareRef={panel.compareRef}
-          onChange={panel.setCompareRef}
-          branches={panel.branches}
-        />
       </div>
       <ChangedFilesList
         status={panel.status}
         selectedPath={openPath}
-        onSelect={(path) =>
-          onOpenFile({ kind: "diff", path, compareRef: panel.compareRef })
-        }
+        onSelect={(path) => onOpenFile({ kind: "diff", path, compareRef: panel.compareRef })}
+      />
+      <GitActionsDialog
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+        machine={machine}
+        panel={panel}
+        checks={checks}
+        canUseWorkspaceActions={canUseWorkspaceActions}
+        onSendAgentPrompt={onSendAgentPrompt}
+        isSendingAgentPrompt={isSendingAgentPrompt}
       />
     </div>
   );
@@ -231,12 +297,14 @@ function AllFilesTab({
   machineId,
   worktree,
   machine,
+  working,
   openPath,
   onOpenFile,
 }: {
   machineId: string;
   worktree: string;
   machine: MachineOnlineState;
+  working: boolean;
   openPath: string | null;
   onOpenFile: (file: OpenFile) => void;
 }) {
@@ -245,20 +313,15 @@ function AllFilesTab({
     actions,
     worktree,
     !machine.isKnownUnavailable,
+    working,
   );
 
   if (isFilesLoading) {
-    return (
-      <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>
-    );
+    return <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>;
   }
 
   if (filesError) {
-    return (
-      <p className="p-4 text-sm text-destructive">
-        Could not load repo files: {filesError}
-      </p>
-    );
+    return <p className="p-4 text-sm text-destructive">Could not load repo files: {filesError}</p>;
   }
 
   return (
@@ -266,9 +329,7 @@ function AllFilesTab({
       <FileTree
         tree={tree}
         selectedPath={openPath}
-        onSelect={(path) =>
-          onOpenFile({ kind: "content", path, compareRef: null })
-        }
+        onSelect={(path) => onOpenFile({ kind: "content", path, compareRef: null })}
       />
     </div>
   );
@@ -300,6 +361,7 @@ export function SessionSidePanel({
   defaultTab = "changes",
   machineId,
   worktree,
+  working,
   openFile,
   onOpenFile,
   onSendAgentPrompt,
@@ -311,6 +373,8 @@ export function SessionSidePanel({
   machineId?: string;
   /** The session's workspace path (`SessionRow.workspaceId`). */
   worktree?: string;
+  /** `deriveWorking(items, ephemeralWorking)` (`SessionTimelineScreen.tsx`) — the agent's own file-writing tool calls never invalidate the Changes/All Files queries themselves (no push channel of their own, `use-git-panel.ts`'s doc comment), so this panel refetches both on the true -> false ("turn just ended") edge instead (`use-refetch-on-turn-end.ts`). Defaults to `false` for callers that don't track it (no refetch-on-turn-end, today's behavior). */
+  working?: boolean;
   /** The file/diff currently open in the main column, or `null` — used only to highlight the active row in whichever list produced it. */
   openFile: OpenFile | null;
   onOpenFile: (file: OpenFile) => void;
@@ -344,16 +408,9 @@ export function SessionSidePanel({
   const machine = useMachineOnline(machineId);
   const machineUnavailable = ready && machine.isKnownUnavailable;
   const gitActions = useLiveGitDiffActions(machineId ?? "");
-  const panel = useGitPanel(
-    gitActions,
-    worktree ?? "",
-    ready && !machineUnavailable,
-  );
+  const panel = useGitPanel(gitActions, worktree ?? "", ready && !machineUnavailable, working);
   const workspaceLoading = ready && !machineUnavailable && panel.isStatusLoading;
-  const notARepo =
-    ready &&
-    !machineUnavailable &&
-    panel.statusErrorCode === "workspace-not-a-repo";
+  const notARepo = ready && !machineUnavailable && panel.statusErrorCode === "workspace-not-a-repo";
   const workspaceGone =
     ready &&
     !machineUnavailable &&
@@ -391,9 +448,7 @@ export function SessionSidePanel({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <TabsContent value="changes" className="h-full">
               {workspaceLoading ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  Loading changed files…
-                </p>
+                <p className="p-4 text-sm text-muted-foreground">Loading changed files…</p>
               ) : notARepo ? (
                 <GitStatusError panel={panel} />
               ) : (
@@ -415,15 +470,14 @@ export function SessionSidePanel({
                 machineId={machineId}
                 worktree={worktree}
                 machine={machine}
+                working={working ?? false}
                 openPath={openFile?.kind === "content" ? openFile.path : null}
                 onOpenFile={onOpenFile}
               />
             </TabsContent>
             <TabsContent value="checks" className="h-full p-3">
               {workspaceLoading ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  Loading checks…
-                </p>
+                <p className="p-4 text-sm text-muted-foreground">Loading checks…</p>
               ) : notARepo ? (
                 <GitStatusError panel={panel} />
               ) : (
@@ -432,8 +486,7 @@ export function SessionSidePanel({
                   worktree={worktree}
                   onFixWithAgent={
                     looksLikeWorktreePath(worktree) && !actionsDisabled
-                      ? (check: CheckRun) =>
-                          onSendAgentPrompt(buildFixCiPrompt(check))
+                      ? (check: CheckRun) => onSendAgentPrompt(buildFixCiPrompt(check))
                       : undefined
                   }
                 />
