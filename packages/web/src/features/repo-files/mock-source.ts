@@ -56,10 +56,15 @@ export function createMockRepoFilesActions(_machineId: string): RepoFilesActions
       return MOCK_FILES;
     },
 
-    async fetchFileContent(_worktree, path): Promise<RepoFileContent> {
+    async fetchFileContent(_worktree, path, range): Promise<RepoFileContent> {
       await delay(LATENCY_MS);
-      const inline = MOCK_CONTENTS[path] ?? defaultContentFor(path);
-      return { inline, truncated: false };
+      const full = MOCK_CONTENTS[path] ?? defaultContentFor(path);
+      if (!range) return { inline: full, truncated: false };
+      // The mock never truncates on its own, so an explicit `range` request
+      // (the Feature 3 "Load more" flow) just slices what's already there —
+      // real pagination end-to-end is exercised against a live daemon, not
+      // this fixed fixture.
+      return { inline: full.slice(range.start, range.end), truncated: range.end < full.length };
     },
   };
 }

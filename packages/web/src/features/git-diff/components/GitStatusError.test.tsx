@@ -22,6 +22,11 @@ function fakePanel(overrides: Partial<GitPanelState> = {}): GitPanelState {
     isRemoveWorkspacePending: false,
     removeWorkspaceDone: false,
 
+    initRepo: vi.fn(),
+    isInitRepoPending: false,
+    initRepoError: null,
+    initRepoResult: undefined,
+
     compareRef: null,
     setCompareRef: vi.fn(),
     branches: [],
@@ -68,22 +73,62 @@ describe("GitStatusError", () => {
     expect(html).not.toContain("text-destructive");
   });
 
-  it("offers a 'Remove this workspace' button for a recognized workspace problem", () => {
+  it("offers 'Set up git here' when statusErrorCode is workspace-not-a-repo (Feature 1)", () => {
     const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo" });
     const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
-    expect(html).toContain("Remove this workspace");
+    expect(html).toContain("Set up git here");
   });
 
-  it("swaps the button for a confirmation once the workspace has been removed", () => {
+  it("does NOT offer 'Set up git here' for workspace-missing — there is nothing safe to init on a gone folder", () => {
+    const panel = fakePanel({ statusErrorCode: "workspace-missing" });
+    const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
+    expect(html).not.toContain("Set up git here");
+  });
+
+  it("shows the existingRoot note and hides the init button when initRepo resolved inside-existing-repo", () => {
+    const panel = fakePanel({
+      statusErrorCode: "workspace-not-a-repo",
+      initRepoResult: { state: "inside-existing-repo", existingRoot: "/repo" },
+    });
+    const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
+    expect(html).toContain("/repo");
+    expect(html).not.toContain("Set up git here");
+  });
+
+  it("shows initRepoError in destructive text when set", () => {
+    const panel = fakePanel({
+      statusErrorCode: "workspace-not-a-repo",
+      initRepoError: "unknown-method",
+    });
+    const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
+    expect(html).toContain("unknown-method");
+  });
+
+  it("offers the forget-this-project affordance as an unstyled <button>, not a primary Button — the destructive action stays a link (CLAUDE.md auth/UX rule #5)", () => {
+    const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo" });
+    const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
+    expect(html).toContain("Forget this project");
+    expect(html).toContain("nothing on disk changes");
+    const suffix =
+      ">Forget this project — Falcon stops tracking the folder, nothing on disk changes</button>";
+    const end = html.indexOf(suffix);
+    const start = html.lastIndexOf("<button", end);
+    const forgetTag = html.slice(start, end + suffix.length);
+    expect(forgetTag).not.toContain('data-slot="button"');
+    expect(forgetTag).toContain("underline");
+  });
+
+  it("swaps the forget-this-project affordance for a confirmation once the workspace has been removed", () => {
     const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo", removeWorkspaceDone: true });
     const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
-    expect(html).not.toContain("Remove this workspace");
+    expect(html).not.toContain("Forget this project");
     expect(html).toContain("Removed.");
   });
 
-  it("never calls removeWorkspace merely by rendering", () => {
+  it("never calls removeWorkspace or initRepo merely by rendering", () => {
     const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo" });
     renderToStaticMarkup(createElement(GitStatusError, { panel }));
     expect(panel.removeWorkspace).not.toHaveBeenCalled();
+    expect(panel.initRepo).not.toHaveBeenCalled();
   });
 });

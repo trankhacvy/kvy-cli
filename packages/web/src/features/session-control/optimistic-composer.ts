@@ -207,3 +207,23 @@ export function deliveryNotice(result: MessageRpcResult): string | null {
   if (result.status !== "outcome-unknown") return null;
   return "Couldn't confirm this message was delivered — reconciling from the transcript.";
 }
+
+const RELAY_UNREACHABLE_ERRORS = new Set(["RPC target not available", "RPC target disconnected"]);
+
+/**
+ * Feature 2 (docs/web-ux-improvements-plan.md): the composer never blocks on
+ * `machineOffline`, but a genuinely failed send should read like a machine
+ * problem, not a raw transport string. `rpcHandler.ts` produces exactly
+ * these two literal messages for "the daemon isn't in this RPC target's
+ * room" — translated regardless of what `machineOffline` currently says,
+ * because the relay's own failure is authoritative about reachability even
+ * when client-side presence still thinks the machine is online (stale
+ * `lastSeenAt`, clock skew, or a presence event that hasn't arrived yet).
+ * Every other error passes through unchanged.
+ */
+export function translateSendError(raw: string, _machineOffline: boolean): string {
+  if (RELAY_UNREACHABLE_ERRORS.has(raw)) {
+    return "That machine is offline right now.";
+  }
+  return raw;
+}

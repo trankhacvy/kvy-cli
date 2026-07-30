@@ -25,6 +25,7 @@ import {
 } from "@/features/session-control";
 import { deriveMachineOnline, useMachinePresence } from "@/features/session-list";
 import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
+import { useMachineOnline } from "@/lib/use-machine-online";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { cn } from "@/lib/utils";
 import { messagesQueryKey } from "@/sync";
@@ -109,6 +110,14 @@ export function SessionTimelineScreen({
   const machineOnline = machineRow
     ? deriveMachineOnline(machineRow, machinePresence, Date.now())
     : false;
+  // Feature 2 (docs/web-ux-improvements-plan.md §2.4d): a SEPARATE signal from
+  // `machineOnline` above — that one feeds Restart's hard enable/disable gate
+  // (docs/features/session-lifecycle-actions.md Phase 6), which must stay
+  // conservative (no owning machine yet = not restartable). The composer's
+  // notice, by contrast, must never treat "we haven't heard from this machine
+  // yet" as "offline" (`useMachineOnline`'s own "unknown must never look like
+  // offline" rule) — so it uses `isKnownUnavailable`, not the plain boolean.
+  const machineAvailability = useMachineOnline(machineId);
 
   // Viewing the screen counts as "seen" for this device (falcon-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
@@ -143,7 +152,11 @@ export function SessionTimelineScreen({
   useTabAttention(title ?? `Session ${sessionId}`, attention, working);
 
   return (
-    <SessionControlProvider sessionId={sessionId} useControl={useControl}>
+    <SessionControlProvider
+      sessionId={sessionId}
+      useControl={useControl}
+      machineOffline={machineAvailability.isKnownUnavailable}
+    >
       <SessionTimelineBody
         sessionId={sessionId}
         title={title}

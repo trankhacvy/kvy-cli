@@ -185,4 +185,85 @@ describe("machineRpcToGitDiffActions", () => {
       expect.objectContaining({ directory: "/repo" }),
     );
   });
+
+  it("initRepo calls git.init with the worktree and returns the result as-is (Feature 1)", async () => {
+    const call = vi.fn(async () => ({ state: "initialized" as const, branch: "main" }));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
+
+    const result = await actions.initRepo("/repo");
+
+    expect(result).toEqual({ state: "initialized", branch: "main" });
+    expect(call).toHaveBeenCalledWith("git.init", expect.objectContaining({ worktree: "/repo" }));
+  });
+
+  it("listRemotes calls git.remotes and unwraps result.remotes (Feature 1)", async () => {
+    const call = vi.fn(async () => ({
+      remotes: [{ name: "origin", url: "git@github.com:a/b.git" }],
+    }));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
+
+    const result = await actions.listRemotes("/repo");
+
+    expect(result).toEqual([{ name: "origin", url: "git@github.com:a/b.git" }]);
+    expect(call).toHaveBeenCalledWith(
+      "git.remotes",
+      expect.objectContaining({ worktree: "/repo" }),
+    );
+  });
+
+  it("setRemote forwards url/name to git.setRemote and returns the result as-is (Feature 1)", async () => {
+    const call = vi.fn(async () => ({
+      ok: true as const,
+      name: "upstream",
+      url: "git@github.com:a/b.git",
+      created: true,
+    }));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
+
+    const result = await actions.setRemote("/repo", "git@github.com:a/b.git", "upstream");
+
+    expect(result).toEqual({
+      ok: true,
+      name: "upstream",
+      url: "git@github.com:a/b.git",
+      created: true,
+    });
+    expect(call).toHaveBeenCalledWith(
+      "git.setRemote",
+      expect.objectContaining({
+        worktree: "/repo",
+        url: "git@github.com:a/b.git",
+        name: "upstream",
+      }),
+    );
+  });
+
+  it("setRemote omits name when the caller doesn't give one (daemon applies its own origin default)", async () => {
+    const call = vi.fn(async () => ({
+      ok: true as const,
+      name: "origin",
+      url: "git@github.com:a/b.git",
+      created: true,
+    }));
+    const actions = machineRpcToGitDiffActions(
+      fakeRpc(call as unknown as MachineRpcClient["call"]),
+    );
+
+    await actions.setRemote("/repo", "git@github.com:a/b.git");
+
+    expect(call).toHaveBeenCalledWith(
+      "git.setRemote",
+      expect.objectContaining({
+        worktree: "/repo",
+        url: "git@github.com:a/b.git",
+        name: undefined,
+      }),
+    );
+  });
 });

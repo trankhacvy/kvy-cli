@@ -21,6 +21,7 @@ export function PortsList({
   isClosePending,
   onPreviewClick,
   selectedTunnelId,
+  disabled = false,
 }: {
   ports: PreviewPort[];
   tunnels: PreviewTunnel[];
@@ -30,6 +31,8 @@ export function PortsList({
   /** Optional (droppable Phase 6) — omit to hide the inline "Preview" toggle entirely, e.g. before the embedded-frame CSP allowance has landed. */
   onPreviewClick?: (tunnelId: string) => void;
   selectedTunnelId?: string | null;
+  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once the owning machine is confidently offline/needs-reauth — disables Open/Close, since both are `preview.*` machine RPCs. */
+  disabled?: boolean;
 }) {
   if (ports.length === 0) {
     return <p className="p-4 text-sm text-muted-foreground">No listening ports detected.</p>;
@@ -79,14 +82,19 @@ export function PortsList({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={isClosePending}
+                  disabled={isClosePending || disabled}
                   onClick={() => onClose(tunnel.tunnelId)}
                 >
                   Close
                 </Button>
               </div>
             ) : (
-              <Button size="sm" variant="outline" onClick={() => onOpenClick(port.port)}>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={disabled}
+                onClick={() => onOpenClick(port.port)}
+              >
                 Open
               </Button>
             )}

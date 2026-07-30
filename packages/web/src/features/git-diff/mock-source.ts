@@ -1,4 +1,4 @@
-import type { GitBranchInfo } from "@falcon/wire";
+import type { GitBranchInfo, GitRemoteInfo } from "@falcon/wire";
 import { useMemo } from "react";
 import type { GitDiffActions, GitDiffContent, GitStatusSnapshot, UseGitDiffActions } from "./types";
 
@@ -75,6 +75,8 @@ const MOCK_BRANCHES: GitBranchInfo[] = [
   { name: "wf/other-task", isCurrent: false },
 ];
 
+const MOCK_REMOTES: GitRemoteInfo[] = [{ name: "origin", url: "git@github.com:falcon/falcon.git" }];
+
 function defaultDiffFor(path: string): string {
   return [
     `diff --git a/${path} b/${path}`,
@@ -90,6 +92,12 @@ function defaultDiffFor(path: string): string {
 }
 
 export function createMockGitDiffActions(_machineId: string): GitDiffActions {
+  // Mutable, per-instance copy so `setRemote` demos its add/update behavior
+  // without touching the shared `MOCK_REMOTES` fixture — mirrors
+  // `features/new-session/mock-source.ts`'s `createDirectory` mutating its
+  // own in-memory tree rather than a shared one.
+  const remotes: GitRemoteInfo[] = MOCK_REMOTES.map((r) => ({ ...r }));
+
   return {
     async fetchStatus(_worktree) {
       await delay(LATENCY_MS);
@@ -128,6 +136,31 @@ export function createMockGitDiffActions(_machineId: string): GitDiffActions {
     async unregisterWorkspace(_worktree) {
       await delay(LATENCY_MS);
       return { ok: true };
+    },
+
+    async initRepo(_worktree) {
+      await delay(LATENCY_MS);
+      // The mock's `fetchStatus` always succeeds — there's no "not a repo"
+      // state to simulate flipping out of, so the honest mock answer is the
+      // idempotent no-op state a real already-initialized repo would report.
+      return { state: "already-repo", branch: MOCK_STATUS.branch };
+    },
+
+    async listRemotes(_worktree) {
+      await delay(LATENCY_MS);
+      return remotes.map((r) => ({ ...r }));
+    },
+
+    async setRemote(_worktree, url, name) {
+      await delay(LATENCY_MS);
+      const remoteName = name ?? "origin";
+      const existing = remotes.find((r) => r.name === remoteName);
+      if (existing) {
+        existing.url = url;
+        return { ok: true, name: remoteName, url, created: false };
+      }
+      remotes.push({ name: remoteName, url });
+      return { ok: true, name: remoteName, url, created: true };
     },
   };
 }

@@ -20,11 +20,12 @@ export function machineRpcToRepoFilesActions(rpc: MachineRpcClient): RepoFilesAc
       return result.files;
     },
 
-    async fetchFileContent(worktree, path): Promise<RepoFileContent> {
+    async fetchFileContent(worktree, path, range): Promise<RepoFileContent> {
       const result = await rpc.call("fs.read", {
         idempotencyKey: crypto.randomUUID(),
         worktree,
         path,
+        range,
       });
       return { inline: result.inline, blobRef: result.blobRef, truncated: result.truncated };
     },

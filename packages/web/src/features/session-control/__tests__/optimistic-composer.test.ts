@@ -10,6 +10,7 @@ import {
   pendingToRenderItem,
   reconcileByStatus,
   reconcilePending,
+  translateSendError,
 } from "../optimistic-composer.js";
 
 describe("buildMessageEnvelope", () => {
@@ -342,5 +343,34 @@ describe("deliveryNotice (tri-state message RPC reply, design §7.10)", () => {
     expect(deliveryNotice({ queued: true, status: "queued" })).toBeNull();
     expect(deliveryNotice({ queued: false, status: "duplicate" })).toBeNull();
     expect(deliveryNotice({ queued: true })).toBeNull();
+  });
+});
+
+describe("translateSendError (Feature 2, docs/web-ux-improvements-plan.md)", () => {
+  it("translates the relay's 'RPC target not available' into plain machine-offline copy", () => {
+    expect(translateSendError("RPC target not available", true)).toBe(
+      "That machine is offline right now.",
+    );
+  });
+
+  it("translates the relay's 'RPC target disconnected' into the same copy", () => {
+    expect(translateSendError("RPC target disconnected", true)).toBe(
+      "That machine is offline right now.",
+    );
+  });
+
+  it("still translates both relay strings even when machineOffline is false — the relay is authoritative about reachability, presence is only a hint", () => {
+    expect(translateSendError("RPC target not available", false)).toBe(
+      "That machine is offline right now.",
+    );
+    expect(translateSendError("RPC target disconnected", false)).toBe(
+      "That machine is offline right now.",
+    );
+  });
+
+  it("passes an unrelated error message through unchanged", () => {
+    expect(
+      translateSendError("Session key isn't unwrapped yet — try again in a moment.", true),
+    ).toBe("Session key isn't unwrapped yet — try again in a moment.");
   });
 });

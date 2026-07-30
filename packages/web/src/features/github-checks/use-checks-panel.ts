@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
+import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
 import type { GithubChecksActions } from "./types";
 
 /**
@@ -22,7 +23,11 @@ import type { GithubChecksActions } from "./types";
  * deferred — they slot into `daemon/githubChecks.ts` later without any wire
  * change, per that same doc's note.
  */
-export function useChecksPanel(actions: GithubChecksActions, worktree: string) {
+export function useChecksPanel(
+  actions: GithubChecksActions,
+  worktree: string,
+  machineOnline = true,
+) {
   const query = useQuery({
     queryKey: ["github-checks", worktree],
     queryFn: () => actions.fetchChecks(worktree),
@@ -45,6 +50,10 @@ export function useChecksPanel(actions: GithubChecksActions, worktree: string) {
     }
     void query.refetch();
   }, [actions]);
+
+  useRefetchOnMachineRecovery(machineOnline, () => {
+    void query.refetch();
+  });
 
   return {
     checks: query.data,

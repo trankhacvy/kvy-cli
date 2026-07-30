@@ -1,4 +1,11 @@
-import type { FileStatus, GitBranchInfo, GitStatusResult } from "@falcon/wire";
+import type {
+  FileStatus,
+  GitBranchInfo,
+  GitInitResult,
+  GitRemoteInfo,
+  GitSetRemoteResult,
+  GitStatusResult,
+} from "@falcon/wire";
 
 /**
  * View-model types for the Git panel (falcon-system-design.md §4.4
@@ -58,6 +65,12 @@ export interface GitDiffActions {
   listBranches(worktree: string): Promise<GitBranchInfo[]>;
   /** Removes `worktree`'s workspace registration (known-issues.md #3 — the "Remove this workspace" action offered once `fetchStatus`/`fetchDiff` report the folder is gone/no longer a git repo). Idempotent: safe to call even if the entry is already gone. Throws only on a transport/registry-write failure. */
   unregisterWorkspace(worktree: string): Promise<{ ok: boolean }>;
+  /** Runs `git init` in `worktree` (the daemon's `git.init` RPC) — the recovery action offered when `fetchStatus` reports `workspace-not-a-repo`. Refusals are result states, not throws: `"already-repo"` (someone else got there first) and `"inside-existing-repo"` (this folder is a subdirectory of another repo; `existingRoot` says which). Throws only on a real failure (unauthorized worktree, git error, unreachable machine). */
+  initRepo(worktree: string): Promise<GitInitResult>;
+  /** Lists `worktree`'s configured remotes (`git.remotes` — already served by the daemon since the Workspace Settings Git tab landed, just never called from this panel). Backs `push-readiness.ts`'s `"no-remote"` derivation. Throws on failure; an empty array means "no remotes", not an error. */
+  listRemotes(worktree: string): Promise<GitRemoteInfo[]>;
+  /** Adds (or updates) a remote URL in `worktree` (`git.setRemote`). `name` defaults to `"origin"`. Never removes a remote. Throws on failure. */
+  setRemote(worktree: string, url: string, name?: string): Promise<GitSetRemoteResult>;
 }
 
 /** One Git-panel actions client per chosen machine — mirrors `UseNewSessionActions = (machineId) => NewSessionActions`. */

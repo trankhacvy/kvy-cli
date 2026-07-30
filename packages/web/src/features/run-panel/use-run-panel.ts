@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
 import type { RunPanelActions, RunStatusSnapshot } from "./types";
 
 /**
@@ -20,7 +21,7 @@ function isActive(status: RunStatusSnapshot | undefined): boolean {
   return status?.run.state === "running" || status?.setup.state === "running";
 }
 
-export function useRunPanel(actions: RunPanelActions, worktree: string) {
+export function useRunPanel(actions: RunPanelActions, worktree: string, machineOnline = true) {
   const queryClient = useQueryClient();
 
   const configQuery = useQuery({
@@ -37,6 +38,11 @@ export function useRunPanel(actions: RunPanelActions, worktree: string) {
   function invalidateStatus(): void {
     void queryClient.invalidateQueries({ queryKey: ["run-status", worktree] });
   }
+
+  useRefetchOnMachineRecovery(machineOnline, () => {
+    invalidateStatus();
+    void queryClient.invalidateQueries({ queryKey: ["run-config", worktree] });
+  });
 
   const startMutation = useMutation({
     mutationFn: () => actions.start(worktree),

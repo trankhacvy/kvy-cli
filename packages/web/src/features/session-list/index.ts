@@ -6,6 +6,7 @@ export { SessionStatusDot } from "./components/status-dot";
 export { WorkspaceSection } from "./components/workspace-section";
 export { formatRelativeTime } from "./format-relative-time";
 export { groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID, type WorkspaceGroup } from "./group";
+export { translateSpawnError } from "./inline-spawn";
 export { useLiveSessionListSnapshot } from "./live-source";
 export { buildReviewSpawnRequest } from "./review-spawn";
 export { SessionListScreen } from "./session-list-screen";

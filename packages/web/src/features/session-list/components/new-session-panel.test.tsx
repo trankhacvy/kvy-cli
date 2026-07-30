@@ -190,4 +190,43 @@ describe("NewSessionForm", () => {
     expect(html).toContain("Start session");
     expect(html).not.toMatch(/Start session[\s\S]*disabled=""/);
   });
+
+  function startButtonTag(html: string): string | undefined {
+    const suffix = ">Start session</button>";
+    const end = html.indexOf(suffix);
+    if (end === -1) return undefined;
+    const start = html.lastIndexOf("<button", end);
+    return html.slice(start, end + suffix.length);
+  }
+
+  // Feature 2 (docs/web-ux-improvements-plan.md §2.4 "Spawn path"): unlike
+  // every other machine-RPC surface, this one is safe to hard-disable — the
+  // picker already renders a live online dot per machine.
+  it("disables Start session and shows the offline notice when the selected machine is offline", () => {
+    const html = render(
+      <NewSessionForm
+        group={singleMachineGroup()}
+        machinesById={machinesById([
+          { id: "m1", name: "laptop", online: false, status: "offline" },
+        ])}
+        onClose={() => {}}
+      />,
+    );
+    expect(startButtonTag(html)).toContain("disabled=");
+    expect(html).toContain("offline right now");
+  });
+
+  it("disables Start session with the distinct needs-reauth notice when the selected machine needs reauth", () => {
+    const html = render(
+      <NewSessionForm
+        group={singleMachineGroup()}
+        machinesById={machinesById([
+          { id: "m1", name: "laptop", online: false, status: "needs-reauth" },
+        ])}
+        onClose={() => {}}
+      />,
+    );
+    expect(startButtonTag(html)).toContain("disabled=");
+    expect(html).toContain("sign in again");
+  });
 });

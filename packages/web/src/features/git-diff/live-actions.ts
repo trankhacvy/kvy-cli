@@ -75,5 +75,26 @@ export function machineRpcToGitDiffActions(rpc: MachineRpcClient): GitDiffAction
         directory: worktree,
       });
     },
+
+    async initRepo(worktree) {
+      return rpc.call("git.init", { idempotencyKey: crypto.randomUUID(), worktree });
+    },
+
+    async listRemotes(worktree) {
+      const result = await rpc.call("git.remotes", {
+        idempotencyKey: crypto.randomUUID(),
+        worktree,
+      });
+      return result.remotes;
+    },
+
+    async setRemote(worktree, url, name) {
+      return rpc.call("git.setRemote", {
+        idempotencyKey: crypto.randomUUID(),
+        worktree,
+        url,
+        name,
+      });
+    },
   };
 }

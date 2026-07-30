@@ -1,5 +1,7 @@
 "use client";
 
+import { MachineOfflineNotice } from "@/components/machine-offline-notice";
+import { useMachineOnline } from "@/lib/use-machine-online";
 import type { UseRepoFilesActions } from "../types";
 import { useLiveRepoFilesActions } from "../use-live-repo-files-actions";
 import { useRepoFiles } from "../use-repo-files";
@@ -31,6 +33,7 @@ export function RepoFilesPanel({
   useActions?: UseRepoFilesActions;
 }) {
   const actions = useActions(machineId);
+  const machine = useMachineOnline(machineId);
   const {
     tree,
     filesError,
@@ -40,7 +43,9 @@ export function RepoFilesPanel({
     content,
     contentError,
     isContentLoading,
-  } = useRepoFiles(actions, worktree);
+    loadMoreContent,
+    isLoadingMoreContent,
+  } = useRepoFiles(actions, worktree, !machine.isKnownUnavailable);
 
   if (isFilesLoading) {
     return <p className="p-4 text-sm text-muted-foreground">Loading repo files…</p>;
@@ -52,6 +57,9 @@ export function RepoFilesPanel({
 
   return (
     <div className="grid h-full grid-cols-1 gap-4 md:grid-cols-[18rem_1fr]">
+      <div className="md:col-span-2">
+        <MachineOfflineNotice state={machine} />
+      </div>
       <aside className="overflow-y-auto border-border md:border-r md:pr-3">
         <FileTree tree={tree} selectedPath={selectedPath} onSelect={selectFile} />
       </aside>
@@ -63,7 +71,12 @@ export function RepoFilesPanel({
         ) : contentError ? (
           <p className="p-4 text-sm text-destructive">Could not load file: {contentError}</p>
         ) : content ? (
-          <FileViewer path={selectedPath} content={content} />
+          <FileViewer
+            path={selectedPath}
+            content={content}
+            onLoadMore={loadMoreContent}
+            isLoadingMore={isLoadingMoreContent}
+          />
         ) : null}
       </section>
     </div>
