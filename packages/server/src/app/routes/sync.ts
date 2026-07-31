@@ -19,6 +19,11 @@ const SyncQuerySchema = z.object({ since: z.coerce.number().int().nonnegative() 
 
 const SyncResponseSchema = z.object({
   headerSeq: z.number(),
+  // The account's current key epoch (`accounts.key_epoch`) — lets the client tell a
+  // session's own `keyEpoch` (`SessionRowSchema`) apart as "older than what I have now",
+  // i.e. encrypted under a key that was thrown away by a reset-keys rotation, rather than
+  // guessing from a raw decrypt failure.
+  accountKeyEpoch: z.number(),
   sessions: z.array(SessionRowSchema),
   machines: z.array(MachineRowSchema),
   unmanagedSessions: z.array(UnmanagedSessionRowSchema),
@@ -94,6 +99,7 @@ export function buildSyncRoutes(
 
         return {
           headerSeq: account.headerSeq,
+          accountKeyEpoch: account.keyEpoch,
           sessions: reconciledSessions.map(toSessionRow),
           machines: machineRows.map((m) => toMachineRow(m, needsReauthByMachine.get(m.id))),
           unmanagedSessions: unmanagedRows.map(toUnmanagedSessionRow),

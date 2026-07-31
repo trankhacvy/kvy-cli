@@ -25,6 +25,7 @@ export function toSessionRow(row: typeof sessions.$inferSelect): SessionRow {
       ? { value: decodeBox(row.agentState), version: row.agentStateVersion }
       : null,
     dek: encodeBase64(row.dek),
+    keyEpoch: row.keyEpoch,
     msgSeq: row.msgSeq,
     notificationsMuted: row.notificationsMuted,
     createdAt: row.createdAt.getTime(),

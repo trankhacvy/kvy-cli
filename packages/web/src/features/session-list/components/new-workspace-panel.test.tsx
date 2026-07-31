@@ -45,6 +45,7 @@ function render(node: React.ReactElement, machines: MachineRow[] = []): string {
   const queryClient = new QueryClient();
   queryClient.setQueryData(syncQueryKey, {
     headerSeq: 1,
+    accountKeyEpoch: 1,
     sessions: [],
     machines,
     unmanagedSessions: [],

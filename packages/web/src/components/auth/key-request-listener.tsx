@@ -2,6 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { approveKeyRequest, listKeyRequests } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import { getToken } from "@/lib/session";
@@ -64,73 +72,85 @@ export function KeyRequestListener() {
     });
   }, []);
 
-  if (abuse) {
-    return (
-      <div className="fixed inset-x-0 bottom-4 z-50 mx-auto w-[min(24rem,calc(100%-2rem))] rounded-xl border border-destructive/50 bg-card p-4 shadow-lg">
-        <p className="text-sm font-medium text-destructive">{copy.keys.abuseTitle}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{copy.keys.abuseBody}</p>
-      </div>
-    );
+  function dismiss(): void {
+    if (!card) return;
+    dismissed.current.add(card.ephPub);
+    setCard(null);
   }
-
-  if (!card || !bridge) return null;
-  const current = card;
 
   async function approve(): Promise<void> {
     const token = getToken();
-    if (!token || !bridge) return;
+    if (!token || !bridge || !card) return;
     setPending(true);
     try {
-      const sealed = await bridge.sealKeysForPeer(current.ephPub);
-      await approveKeyRequest(token, { ephPub: current.ephPub, response: sealed });
+      const sealed = await bridge.sealKeysForPeer(card.ephPub);
+      await approveKeyRequest(token, { ephPub: card.ephPub, response: sealed });
       setCard(null);
     } finally {
       setPending(false);
     }
   }
 
-  function dismiss(): void {
-    dismissed.current.add(current.ephPub);
-    setCard(null);
-  }
-
   return (
-    <div className="fixed inset-x-0 bottom-4 z-50 mx-auto w-[min(24rem,calc(100%-2rem))] rounded-xl border bg-card p-4 shadow-lg">
-      <p className="text-sm font-medium">{copy.keys.approveTitle}</p>
-      <p className="mt-1 text-sm text-muted-foreground">{copy.keys.approveBody}</p>
+    <>
+      {/* A real dialog (not the old fixed bottom-sheet card) — this is the most
+       *  security-sensitive prompt in the product, so it gets focus-trapped modal
+       *  treatment like every other confirm-before-you-grant-access surface, rather than
+       *  a passively-scrollable banner easy to miss or misclick past. Closing it any way
+       *  (X, overlay click, Escape) is the same as "Not now" below — the request just
+       *  stays pending server-side either way. */}
+      <Dialog open={card !== null} onOpenChange={(open) => !open && dismiss()}>
+        <DialogContent>
+          {card && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{copy.keys.approveTitle}</DialogTitle>
+                <DialogDescription>{copy.keys.approveBody}</DialogDescription>
+              </DialogHeader>
 
-      <dl className="mt-3 space-y-1 rounded-md bg-muted/40 p-3 text-xs">
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Signed in as</dt>
-          <dd>{current.requesterClientKind ?? "unknown"}</dd>
+              <dl className="space-y-1 rounded-md bg-muted/40 p-3 text-xs">
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Signed in as</dt>
+                  <dd>{card.requesterClientKind ?? "unknown"}</dd>
+                </div>
+                <div className="flex justify-between gap-3">
+                  <dt className="text-muted-foreground">Says it is</dt>
+                  <dd className="truncate">{card.label ?? "unnamed"}</dd>
+                </div>
+              </dl>
+
+              <div className="rounded-md border p-3 text-center">
+                <p className="text-xs text-muted-foreground">{copy.keys.codeIntroApprover}</p>
+                <p className="mt-1 font-mono text-2xl tracking-[0.2em]">
+                  {formatVerificationCode(card.code)}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">{copy.keys.codeMismatch}</p>
+
+              <DialogFooter>
+                <Button size="sm" variant="ghost" onClick={dismiss}>
+                  {copy.keys.denyCta}
+                </Button>
+                {/* `!bridge` is defensive, not reachable today — `open={card !== null}`
+                 *  above already keeps this dialog closed until the bridge exists — but
+                 *  the button must never be able to look clickable while it can't do
+                 *  anything (auth-ux-overhaul-fix-plan.md Fix 11), and a future change to
+                 *  that gate should not silently reopen this. */}
+                <Button size="sm" disabled={pending || !bridge} onClick={() => void approve()}>
+                  {pending ? copy.keys.sendingLabel : copy.keys.sendCta}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {abuse && (
+        <div className="fixed inset-x-0 bottom-4 z-50 mx-auto w-[min(24rem,calc(100%-2rem))] rounded-xl border border-destructive/50 bg-card p-4 shadow-lg">
+          <p className="text-sm font-medium text-destructive">{copy.keys.abuseTitle}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{copy.keys.abuseBody}</p>
         </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted-foreground">Says it is</dt>
-          <dd className="truncate">{current.label ?? "unnamed"}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-3 rounded-md border p-3 text-center">
-        <p className="text-xs text-muted-foreground">{copy.keys.codeIntroApprover}</p>
-        <p className="mt-1 font-mono text-2xl tracking-[0.2em]">
-          {formatVerificationCode(current.code)}
-        </p>
-      </div>
-      <p className="mt-2 text-xs text-muted-foreground">{copy.keys.codeMismatch}</p>
-
-      <div className="mt-3 flex gap-2">
-        {/* `!bridge` is defensive, not reachable today — the outer `if (!card || !bridge)
-         *  return null;` above already keeps this whole card unmounted until the bridge
-         *  exists — but the button must never be able to look clickable while it can't
-         *  do anything (auth-ux-overhaul-fix-plan.md Fix 11), and a future change to
-         *  that gate should not silently reopen this. */}
-        <Button size="sm" disabled={pending || !bridge} onClick={() => void approve()}>
-          {pending ? copy.keys.sendingLabel : copy.keys.sendCta}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={dismiss}>
-          {copy.keys.denyCta}
-        </Button>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

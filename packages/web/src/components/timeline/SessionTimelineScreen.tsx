@@ -24,6 +24,7 @@ import {
   useTabAttention,
 } from "@/features/session-control";
 import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
+import { copy } from "@/lib/copy";
 import { useMachineOnline } from "@/lib/use-machine-online";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { cn } from "@/lib/utils";
@@ -83,7 +84,17 @@ export function SessionTimelineScreen({
   // until the snapshot has loaded or this session id isn't (yet) present in
   // it; treated the same as `"active"` below (the default a fresh session
   // row is created with) — never as "ended"/"failed" by absence alone.
-  const session = useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId);
+  const syncSnapshot = useSyncSnapshotQuery().data;
+  const session = syncSnapshot?.sessions.find((s) => s.id === sessionId);
+  // A reset-keys rotation (`/reset-keys/`) throws away the old key entirely — a session
+  // whose own `keyEpoch` (mirrors `sessions.key_epoch`) is older than the account's current
+  // one (`accountKeyEpoch`) can never be decrypted again, by design. Checked BEFORE trying
+  // to render anything decrypt-dependent below, rather than letting `useLiveRenderItems`
+  // fail and surfacing a raw decrypt error — see `LockedOldKeySessionScreen`.
+  const isLockedOldKey =
+    session?.keyEpoch !== undefined &&
+    syncSnapshot?.accountKeyEpoch !== undefined &&
+    session.keyEpoch < syncSnapshot.accountKeyEpoch;
   const sessionStatus: SessionRow["status"] = session?.status ?? "active";
   const provider = session?.provider ?? "";
   // `workspaceId` (when set) *is* the workspace's real absolute directory
@@ -137,6 +148,10 @@ export function SessionTimelineScreen({
   });
 
   useTabAttention(title ?? `Session ${sessionId}`, attention, working);
+
+  if (isLockedOldKey) {
+    return <LockedOldKeySessionScreen sessionId={sessionId} />;
+  }
 
   return (
     <SessionControlProvider
@@ -342,6 +357,22 @@ function SessionTimelineBody({
         isSendingAgentPrompt={isSending}
         actionsDisabled={isDisabled}
       />
+    </div>
+  );
+}
+
+/** Shown instead of the whole composer/timeline tree for a session whose `keyEpoch` is
+ *  older than the account's current one (a reset-keys rotation threw away the only key
+ *  that could ever decrypt it) — a plain, hook-free component with its own render test,
+ *  same precedent as `isSessionControlDisabled`/`LifecycleBanner` below. Deliberately
+ *  never attempts a decrypt (no `Timeline`/`Composer` mounted at all) rather than letting
+ *  one fail and surfacing a raw "failed to decrypt" error the user can't act on. */
+export function LockedOldKeySessionScreen({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+      <p className="text-sm font-medium">{copy.lockedSession.title}</p>
+      <p className="max-w-sm text-sm text-muted-foreground">{copy.lockedSession.body}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{sessionId}</p>
     </div>
   );
 }

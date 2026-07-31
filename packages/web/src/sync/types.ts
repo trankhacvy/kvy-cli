@@ -44,6 +44,9 @@ export interface MessagesQueryData {
  * (`packages/server/src/app/routes/sync.ts`). */
 export interface SyncSnapshot {
   headerSeq: number;
+  /** The account's current key epoch — compare against a `SessionRow.keyEpoch` to tell
+   *  whether that session was encrypted under a key thrown away by a reset-keys rotation. */
+  accountKeyEpoch: number;
   sessions: SessionRow[];
   machines: MachineRow[];
   unmanagedSessions: UnmanagedSessionRow[];

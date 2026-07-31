@@ -35,6 +35,7 @@ function renderCrypto(machineId: string, machines: MachineRow[]) {
   const queryClient = new QueryClient();
   queryClient.setQueryData(syncQueryKey, {
     headerSeq: 1,
+    accountKeyEpoch: 1,
     sessions: [],
     machines,
     unmanagedSessions: [],

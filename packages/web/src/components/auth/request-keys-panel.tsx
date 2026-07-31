@@ -145,7 +145,7 @@ export function RequestKeysPanel({
             ))}
             {phase.devices.length === 0 && (
               <li className="px-4 py-3 text-sm text-muted-foreground">
-                {copy.keys.noOtherDevices} {copy.keys.noOtherDevicesHint("falcon keys approve")}
+                {copy.keys.noOtherDevices}
               </li>
             )}
           </ul>
@@ -154,6 +154,12 @@ export function RequestKeysPanel({
             <Spinner className="size-4" />
             {copy.keys.waitingBody}
           </div>
+
+          {/* Always shown, not just when the device list is empty — a listed web device
+           *  doesn't mean the CLI isn't faster/easier to reach right now. */}
+          <p className="text-xs text-muted-foreground">
+            {copy.keys.noOtherDevicesHint("falcon keys approve")}
+          </p>
         </>
       )}
 

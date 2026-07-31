@@ -48,6 +48,7 @@ describe("GET /v1/sync", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       headerSeq: 0,
+      accountKeyEpoch: 0,
       sessions: [],
       machines: [],
       unmanagedSessions: [],

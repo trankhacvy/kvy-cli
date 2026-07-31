@@ -139,6 +139,14 @@ export const copy = {
     signedOutMidFlow: "You've been signed out. Please start over.",
     signedOutTitle: "You've been signed out",
     backToSigninCta: "Back to sign in",
+    /** Shown when `keys/bind`'s "other devices online" 409 fires — the only self-serve way
+     *  out when the user genuinely can't reach any of those other devices. */
+    otherDevicesCta: "Log out all other devices",
+  },
+
+  lockedSession: {
+    title: "From before a key reset",
+    body: "This session was encrypted with a key you no longer have. It can't be opened, but it stays in your history.",
   },
 
   onboarding: {

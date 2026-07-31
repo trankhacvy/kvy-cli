@@ -44,6 +44,7 @@ function makeSession(overrides: Partial<SessionRow> = {}): SessionRow {
 function seedSnapshot(queryClient: QueryClient, sessions: SessionRow[]): void {
   queryClient.setQueryData(syncQueryKey, {
     headerSeq: 1,
+    accountKeyEpoch: 1,
     sessions,
     machines: [],
     unmanagedSessions: [],

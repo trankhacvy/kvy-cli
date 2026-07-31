@@ -23,6 +23,12 @@ export const SessionRowSchema = z.object({
   metadata: VersionedSchema(EncryptedBoxSchema),
   agentState: VersionedSchema(EncryptedBoxSchema).nullable(),
   dek: z.string(), // opaque sealed-box wrap; server can route it but not open it
+  // The account key epoch `dek` was wrapped under (mirrors `sessions.key_epoch` in the DB
+  // schema). Optional/additive so an old client that doesn't know this field yet just
+  // ignores it (design §5.3 additive-only) — same precedent as `MachineRow.needsReauth`.
+  // Lets the client tell "encrypted under a key I no longer have, after a reset" apart
+  // from a genuine decrypt failure, instead of just failing to decrypt and guessing.
+  keyEpoch: z.number().optional(),
   msgSeq: z.number(),
   // Per-session "mute" quiet control (PRD FR-8.3, plan.md §10). Plaintext —
   // not part of `metadata` — because the server's push dispatcher reads it
