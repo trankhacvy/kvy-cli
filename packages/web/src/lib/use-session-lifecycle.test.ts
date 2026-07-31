@@ -14,16 +14,11 @@ import type { SyncSnapshot } from "@/sync/types";
 vi.mock("@/lib/session", () => ({ getToken: () => "tok-1" }));
 
 const archiveSessionMock = vi.fn();
-const deleteSessionMock = vi.fn();
-const unarchiveSessionMock = vi.fn();
 vi.mock("@/lib/api", () => ({
   archiveSession: (...args: unknown[]) => archiveSessionMock(...args),
-  deleteSession: (...args: unknown[]) => deleteSessionMock(...args),
-  unarchiveSession: (...args: unknown[]) => unarchiveSessionMock(...args),
 }));
 
-const { useArchiveSessionMutation, useDeleteSessionMutation, useRestoreSessionMutation } =
-  await import("./use-session-lifecycle");
+const { useArchiveSessionMutation } = await import("./use-session-lifecycle");
 
 function makeSession(overrides: Partial<SessionRow> = {}): SessionRow {
   return {
@@ -130,88 +125,5 @@ describe("useArchiveSessionMutation", () => {
 
     await mutation.mutateAsync("sess-1");
     expect(archiveSessionMock).toHaveBeenCalledWith("tok-1", "sess-1");
-  });
-});
-
-describe("useDeleteSessionMutation", () => {
-  it("optimistically removes the session from the snapshot before the request resolves", async () => {
-    deleteSessionMock.mockReturnValue(new Promise(() => {})); // never resolves
-    const queryClient = new QueryClient();
-    seedSnapshot(queryClient, [makeSession({ id: "sess-1" }), makeSession({ id: "sess-2" })]);
-    const mutation = renderMutation(queryClient, useDeleteSessionMutation);
-
-    mutation.mutate("sess-1");
-    await Promise.resolve();
-    const snapshot = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
-    expect(snapshot?.sessions.map((s) => s.id)).toEqual(["sess-2"]);
-  });
-
-  it("restores the deleted row on rollback when the request fails", async () => {
-    deleteSessionMock.mockRejectedValue(new Error("not found"));
-    const queryClient = new QueryClient();
-    seedSnapshot(queryClient, [makeSession({ id: "sess-1" })]);
-    const mutation = renderMutation(queryClient, useDeleteSessionMutation);
-
-    await expect(mutation.mutateAsync("sess-1")).rejects.toThrow("not found");
-    const snapshot = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
-    expect(snapshot?.sessions.map((s) => s.id)).toEqual(["sess-1"]);
-  });
-
-  it("is a no-op against the cache when no snapshot has been synced yet", async () => {
-    deleteSessionMock.mockResolvedValue({});
-    const queryClient = new QueryClient();
-    const mutation = renderMutation(queryClient, useDeleteSessionMutation);
-
-    await mutation.mutateAsync("sess-1");
-    expect(queryClient.getQueryData(syncQueryKey)).toBeUndefined();
-  });
-});
-
-describe("useRestoreSessionMutation", () => {
-  it("optimistically flips the session's status back to active before the request resolves", async () => {
-    unarchiveSessionMock.mockReturnValue(new Promise(() => {})); // never resolves
-    const queryClient = new QueryClient();
-    seedSnapshot(queryClient, [makeSession({ id: "sess-1", status: "archived" })]);
-    const mutation = renderMutation(queryClient, useRestoreSessionMutation);
-
-    mutation.mutate("sess-1");
-    await Promise.resolve();
-    const snapshot = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
-    expect(snapshot?.sessions[0]?.status).toBe("active");
-  });
-
-  it("leaves other sessions in the snapshot untouched", async () => {
-    unarchiveSessionMock.mockResolvedValue({ status: "active" });
-    const queryClient = new QueryClient();
-    seedSnapshot(queryClient, [
-      makeSession({ id: "sess-1", status: "archived" }),
-      makeSession({ id: "sess-2", status: "archived" }),
-    ]);
-    const mutation = renderMutation(queryClient, useRestoreSessionMutation);
-
-    await mutation.mutateAsync("sess-1");
-    const snapshot = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
-    expect(snapshot?.sessions.find((s) => s.id === "sess-2")?.status).toBe("archived");
-  });
-
-  it("rolls back to the pre-mutation snapshot when the request fails", async () => {
-    unarchiveSessionMock.mockRejectedValue(new Error("server exploded"));
-    const queryClient = new QueryClient();
-    seedSnapshot(queryClient, [makeSession({ id: "sess-1", status: "archived" })]);
-    const mutation = renderMutation(queryClient, useRestoreSessionMutation);
-
-    await expect(mutation.mutateAsync("sess-1")).rejects.toThrow("server exploded");
-    const snapshot = queryClient.getQueryData<SyncSnapshot>(syncQueryKey);
-    expect(snapshot?.sessions[0]?.status).toBe("archived");
-  });
-
-  it("passes the bearer token and sessionId through to unarchiveSession", async () => {
-    unarchiveSessionMock.mockResolvedValue({ status: "active" });
-    const queryClient = new QueryClient();
-    seedSnapshot(queryClient, [makeSession({ id: "sess-1", status: "archived" })]);
-    const mutation = renderMutation(queryClient, useRestoreSessionMutation);
-
-    await mutation.mutateAsync("sess-1");
-    expect(unarchiveSessionMock).toHaveBeenCalledWith("tok-1", "sess-1");
   });
 });

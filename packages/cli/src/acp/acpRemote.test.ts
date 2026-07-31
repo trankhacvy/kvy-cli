@@ -27,6 +27,10 @@ class FakeConnection implements AcpRemoteConnection {
   cancelled: string[] = [];
   modeCalls: { sessionId: string; modeId: string }[] = [];
   loadSessionCalls: { sessionId: string; cwd: string }[] = [];
+  /** Every `loadSession` invocation, success or throw — unlike
+   * `loadSessionCalls` (successes only), this lets a test assert the call
+   * was actually attempted even when `failLoadSession` makes it throw. */
+  loadSessionAttempts: { sessionId: string; cwd: string }[] = [];
   disconnected = false;
   permissionHandler?: PermissionRequestHandler;
   sessionId = "uuid-session-1";
@@ -74,6 +78,7 @@ class FakeConnection implements AcpRemoteConnection {
   }
 
   async loadSession(sessionId: string, cwd: string): Promise<unknown> {
+    this.loadSessionAttempts.push({ sessionId, cwd });
     if (this.failLoadSession) throw this.failLoadSession;
     this.loadSessionCalls.push({ sessionId, cwd });
     return {};
@@ -200,6 +205,8 @@ describe("session startup", () => {
     h.handle.send("hi");
     await flushMicrotasks();
 
+    // It really was attempted (and threw) — not just skipped outright.
+    expect(h.connection.loadSessionAttempts).toEqual([{ sessionId: "gone-uuid", cwd: "/tmp/ws" }]);
     expect(h.connection.loadSessionCalls).toEqual([]);
     // Falls through to the real createSession path and gets a fresh id.
     expect(h.providerIds).toEqual(["uuid-session-1"]);

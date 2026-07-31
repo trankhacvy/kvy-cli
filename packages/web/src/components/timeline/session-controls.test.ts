@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canMutateMode, nextModeAfterSetMode, shouldShowTakeControl } from "./mode-switch-state";
 import { canMutateModel, nextModelAfterSetModel } from "./model-switch-state";
-import {
-  initialStopSessionDialogState,
-  resetStopSessionDialogState,
-  toStopError,
-  toStopping,
-} from "./stop-session-state";
 
 describe("shouldShowTakeControl (W2.4 — hide Take-control in PTY mode)", () => {
   it("hides Take control for a PTY/local session — its takeControl RPC is a permanent no-op", () => {
@@ -41,28 +35,6 @@ describe("canMutateMode (W2.4 — hide mode mutation until U4.5)", () => {
   it("stays disallowed regardless of controlMode/flag when the provider doesn't support live mode switching at all", () => {
     expect(canMutateMode("remote", false)).toBe(false);
     expect(canMutateMode("local", false, true)).toBe(false);
-  });
-});
-
-describe("End-session confirm dialog phase machine (W2.3 — dialog flow ordering)", () => {
-  it("starts (and resets) at the 'confirm' phase — opening/re-opening never skips confirmation", () => {
-    expect(initialStopSessionDialogState).toEqual({ phase: "confirm" });
-    expect(resetStopSessionDialogState()).toEqual({ phase: "confirm" });
-  });
-
-  it("moves to 'stopping' only once the confirm button is actually pressed", () => {
-    expect(toStopping()).toEqual({ phase: "stopping" });
-  });
-
-  it("a failed stop RPC carries its message and leaves the confirm step reachable again (retry, not stuck)", () => {
-    expect(toStopError(new Error("machine offline"))).toEqual({
-      phase: "error",
-      message: "machine offline",
-    });
-  });
-
-  it("falls back to String() for a non-Error throw", () => {
-    expect(toStopError("boom")).toEqual({ phase: "error", message: "boom" });
   });
 });
 

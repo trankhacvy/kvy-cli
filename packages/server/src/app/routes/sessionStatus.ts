@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { sessions } from "../../db/schema.js";
@@ -59,13 +59,16 @@ const SessionStatusResponseSchema = z.object({ status: z.enum(["failed", "ended"
  * exit and lets the server decide whether it still matters). The one targeted
  * guard below — `failed` only ever applies to a session still `active` — is
  * what keeps that safe: a late/redundant daemon report can never downgrade an
- * already-`ended` (or already-`failed`) session back to `failed`. `ended`
- * itself stays unconditional (any status -> `ended`, unless already `ended`)
- * since only the CLI's own authoritative graceful-exit report ever sends it.
+ * already-`ended` (or already-`failed`) session back to `failed`.
  *
- * Explicit archive (`POST .../archive`, design §6.2) and any richer status
- * lifecycle are separate, out-of-scope future work (plan.md §16 "1.4
- * Transcript pipeline").
+ * `ended` has a second legitimate writer too now: the web's Archive action
+ * (`sessionArchive.ts`) stops a still-live process (via the session `stop`
+ * RPC) before marking the row `archived` — the CLI's own graceful-exit
+ * report for that same signal can land either before or after the archive
+ * PATCH. Mirroring the `failed` guard, `ended` never applies to a session
+ * that's already `archived`: archive is the stronger, user-initiated
+ * terminal state, and a stray graceful-exit report racing in afterward must
+ * not downgrade it back to a merely-ended-looking row.
  */
 export function buildSessionStatusRoutes(
   db: Database,
@@ -110,10 +113,14 @@ export function buildSessionStatusRoutes(
           // `watchForUnreportedDeath` — see this route's own doc comment).
           // Guard it to only ever apply to a still-`active` session so a
           // late/imprecise daemon report can never downgrade a session that
-          // already reported its own `ended`/`failed` outcome. `ended` stays
-          // unconditional — only the CLI's own authoritative graceful-exit
-          // report ever sends it, so there is still only one writer for it.
+          // already reported its own `ended`/`failed` outcome. `ended` has
+          // its own second writer (the web's Archive action, see this
+          // route's own doc comment) — guarded the same way, just against
+          // `archived` specifically rather than requiring `active`.
           if (status === "failed" && session.status !== "active") {
+            return { outcome: "already-set" as const };
+          }
+          if (status === "ended" && session.status === "archived") {
             return { outcome: "already-set" as const };
           }
 
@@ -125,17 +132,19 @@ export function buildSessionStatusRoutes(
                 eq(sessions.id, id),
                 eq(sessions.accountId, accountId),
                 ...(status === "failed" ? [eq(sessions.status, "active")] : []),
+                ...(status === "ended" ? [ne(sessions.status, "archived")] : []),
               ),
             )
             .returning();
 
-          // Re-check the affected-row count for the `failed` path — a
-          // concurrent writer (the CLI's own report, or a second daemon
-          // fallback call) could have moved the session off `active` between
-          // the read above and this statement (READ COMMITTED). Losing that
-          // race is a no-op, not an error — matches `staleSessions.ts`'s own
+          // Re-check the affected-row count — a concurrent writer (the CLI's
+          // own report racing the daemon's fallback report for `failed`, or
+          // racing the web's Archive action for `ended`) could have moved the
+          // session off the required current-status between the read above
+          // and this statement (READ COMMITTED). Losing that race is a
+          // no-op, not an error — matches `staleSessions.ts`'s own
           // `.returning()`-based CAS pattern.
-          if (status === "failed" && updated.length === 0) {
+          if ((status === "failed" || status === "ended") && updated.length === 0) {
             return { outcome: "already-set" as const };
           }
 

@@ -43,8 +43,7 @@ function workspaceKey(group: WorkspaceGroup): string {
  * into this screen or reachable, pending a fix.
  *
 
- * Archived ("Mark done") sessions are excluded here (docs/features/
- * session-lifecycle-actions.md Phase 5) — they live on the dedicated
+ * Archived sessions are excluded here — they live on the dedicated
  * `/completed/` screen (`CompletedSessionsScreen`) instead. `group.ts` itself
  * stays filter-free so that screen can reuse the exact same
  * `groupSessionsByWorkspace` over the complementary (archived-only) subset.

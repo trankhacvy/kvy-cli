@@ -1,19 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
   initialArchiveSessionState,
+  resetArchiveSessionState,
   toArchiveError,
   toArchiving,
+  toChecking,
   toStateAfterWorktreeRemove,
+  toStopping,
 } from "./archive-session-state";
 
-describe("initialArchiveSessionState", () => {
-  it("starts at checking", () => {
-    expect(initialArchiveSessionState).toEqual({ phase: "checking" });
+describe("initialArchiveSessionState / resetArchiveSessionState", () => {
+  it("starts (and resets) at 'confirm' — opening/re-opening never skips confirmation", () => {
+    expect(initialArchiveSessionState).toEqual({ phase: "confirm" });
+    expect(resetArchiveSessionState()).toEqual({ phase: "confirm" });
   });
 });
 
-describe("toArchiving", () => {
-  it("enters the in-flight phase with no message", () => {
+describe("toStopping / toChecking / toArchiving", () => {
+  it("each enters its in-flight phase with no message", () => {
+    expect(toStopping()).toEqual({ phase: "stopping" });
+    expect(toChecking()).toEqual({ phase: "checking" });
     expect(toArchiving()).toEqual({ phase: "archiving" });
   });
 });
