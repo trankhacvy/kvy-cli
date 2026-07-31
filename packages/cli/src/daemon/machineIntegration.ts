@@ -128,6 +128,7 @@ import type { Socket } from "socket.io-client";
 import { reportSessionStatus } from "../api/sessionStatus.js";
 import type { FalconCredentials } from "../auth/credentials.js";
 import { writeCredentials } from "../auth/credentials.js";
+import { withCredentialsLock } from "../auth/credentialsLock.js";
 import { resolveKeyMaterial } from "../auth/keyMaterial.js";
 import { createTokenProvider, type TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -310,6 +311,9 @@ export async function startMachineIntegration(
     // independently — re-read it on a 401 before giving up permanently, in case the
     // other process already rotated in a newer one.
     readCurrentRefreshToken: () => deps.readCredentials()?.refreshToken ?? null,
+    // known-issues.md #20: serialize actual refresh attempts against a foreground
+    // session's own provider instead of racing on the same on-disk refresh token.
+    withCredentialsLock: (fn) => withCredentialsLock(deps.homeDir, fn),
   });
 
   // issue-4-plan.md §6.1/§6.5: the daemon never runs interactively (no TTY, nobody to

@@ -21,8 +21,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionControl } from "@/features/session-control";
+import { ArchiveSessionRunner } from "@/features/session-list/components/archive-session-runner";
 import { RenameSessionDialog } from "@/features/session-list/components/rename-session-dialog";
 import { RestartSessionDialog } from "@/features/session-list/components/restart-session-dialog";
+import { looksLikeWorktreePath } from "@/features/session-list/worktree-path";
 import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
 import {
   useArchiveSessionMutation,
@@ -55,6 +57,7 @@ export function SessionActionsMenu({
   status,
   machineId,
   machineOnline,
+  workspaceId,
   disabled = false,
 }: {
   sessionId: string;
@@ -70,6 +73,12 @@ export function SessionActionsMenu({
    * or there's no owning machine. */
   machineId: string | null;
   machineOnline: boolean;
+  /** This session's `workspaceId` — gates Archive's worktree cleanup the
+   * same way `SessionCardActions`' `canOfferRemoveWorktree` does: only a
+   * Falcon-managed `.worktrees/<branch>` directory gets the "remove the
+   * worktree first" treatment. `null` mirrors `SessionRow.workspaceId`'s own
+   * nullability. */
+  workspaceId: string | null;
   disabled?: boolean;
 }) {
   const router = useRouter();
@@ -78,6 +87,7 @@ export function SessionActionsMenu({
   const [renameOpen, setRenameOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
+  const [archiveRunnerOpen, setArchiveRunnerOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const restoreMutation = useRestoreSessionMutation();
@@ -86,6 +96,7 @@ export function SessionActionsMenu({
   const archived = status === "archived";
   const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
   const restartReason = restartDisabledReason({ machineId, machineOnline, status });
+  const canRemoveWorktree = machineId !== null && looksLikeWorktreePath(workspaceId);
 
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
@@ -98,6 +109,14 @@ export function SessionActionsMenu({
       () => setStopOpen(false),
       (error) => setStopState(toStopError(error)),
     );
+  }
+
+  function handleArchiveSelect() {
+    if (canRemoveWorktree) {
+      setArchiveRunnerOpen(true);
+      return;
+    }
+    archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/dashboard/") });
   }
 
   return (
@@ -132,10 +151,8 @@ export function SessionActionsMenu({
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
-              disabled={archiveMutation.isPending}
-              onSelect={() =>
-                archiveMutation.mutate(sessionId, { onSuccess: () => router.push("/dashboard/") })
-              }
+              disabled={archiveMutation.isPending || archiveRunnerOpen}
+              onSelect={handleArchiveSelect}
             >
               <Archive className="size-4" />
               Archive
@@ -177,6 +194,17 @@ export function SessionActionsMenu({
           machineName={null}
           open={restartOpen}
           onOpenChange={setRestartOpen}
+        />
+      )}
+
+      {archiveRunnerOpen && machineId !== null && workspaceId !== null && (
+        <ArchiveSessionRunner
+          sessionId={sessionId}
+          machineId={machineId}
+          workspaceId={workspaceId}
+          title={title}
+          onArchived={() => router.push("/dashboard/")}
+          onClose={() => setArchiveRunnerOpen(false)}
         />
       )}
 

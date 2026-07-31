@@ -173,13 +173,15 @@ export type GitBranchesParams = z.infer<typeof GitBranchesParamsSchema>;
 // `checkedOutAt` is the absolute worktree path currently holding this branch
 // (git forbids the same branch in two worktrees — callers should disable
 // such rows). `lastCommitAt` is unix seconds from `%(committerdate:unix)`.
-// Local `refs/heads` only for MVP — no remote-tracking branches.
+// `refs/heads` always; `refs/remotes` too (each entry marked `remote: true`)
+// when the repo has at least one configured remote.
 export const GitBranchInfoSchema = z.object({
   name: z.string(),
   isCurrent: z.boolean(),
   checkedOutAt: z.string().optional(),
   upstream: z.string().optional(),
   lastCommitAt: z.number().optional(),
+  remote: z.boolean().optional(),
 });
 export type GitBranchInfo = z.infer<typeof GitBranchInfoSchema>;
 

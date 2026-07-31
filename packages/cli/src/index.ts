@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ArgParseError, type FalconCommand, parseArgs } from "./args.js";
@@ -38,6 +39,7 @@ import {
   createEnsureDaemonRunningDeps,
   ensureDaemonRunning,
 } from "./daemon/ensureDaemonRunning.js";
+import { ensureBranchWorkspace, GitWorktreeError } from "./daemon/gitWorktree.js";
 import {
   describeKillSummary,
   type KillTarget,
@@ -316,6 +318,35 @@ async function runUpdate(): Promise<number> {
 }
 
 /**
+ * Resolves `falcon -b <branch>`'s local-mode target directory
+ * (known-issues.md #2 first bullet — local `-b` used to be parsed and then
+ * silently dropped, only remote `spawn` ever created a worktree). Mirrors
+ * `spawnEngine.ts`'s own `ensureBranchWorkspace` call: always
+ * `createWorktree: true`, no `from` (a bare `-b` forks off whatever's
+ * currently checked out at the repo, same as the old in-place-checkout
+ * behavior this flag had before worktree isolation existed). No `branch`
+ * means the current working directory, unchanged.
+ */
+export async function resolveStartWorkingDirectory(
+  branch: string | undefined,
+): Promise<{ ok: true; directory: string } | { ok: false; message: string }> {
+  if (branch === undefined) {
+    return { ok: true, directory: process.cwd() };
+  }
+  try {
+    const repoDirectory = await realpath(process.cwd());
+    const { directory } = await ensureBranchWorkspace({
+      repoDirectory,
+      branch: { name: branch, createWorktree: true },
+    });
+    return { ok: true, directory };
+  } catch (error) {
+    const message = error instanceof GitWorktreeError ? error.message : String(error);
+    return { ok: false, message: `falcon -b ${branch}: ${message}` };
+  }
+}
+
+/**
  * `falcon` / `falcon claude` / `falcon codex` — the primary agent-invoking
  * entrypoint. `claude` spawns a real local session (`./commands/start.js`,
  * wiring `session/bootstrap.ts` + `api/outbox.ts` + `claude/loop.ts` — every
@@ -352,10 +383,17 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
     process.stderr.write(daemon.message);
     return 1;
   }
+
+  const workingDirectory = await resolveStartWorkingDirectory(command.branch);
+  if (!workingDirectory.ok) {
+    process.stderr.write(`${workingDirectory.message}\n`);
+    return 1;
+  }
+
   if (command.provider === "claude") {
     return runStartClaudeCommand({
       homeDir: resolveHomeDir(),
-      workingDirectory: process.cwd(),
+      workingDirectory: workingDirectory.directory,
       claudeArgs: command.providerArgs,
       launcherPath: resolveClaudeLauncherPath(),
       logger,
@@ -363,7 +401,7 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
   }
   return runStartCodexCommand({
     homeDir: resolveHomeDir(),
-    workingDirectory: process.cwd(),
+    workingDirectory: workingDirectory.directory,
     codexArgs: command.providerArgs,
     logger,
   });

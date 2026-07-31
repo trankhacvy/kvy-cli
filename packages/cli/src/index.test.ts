@@ -1,7 +1,9 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtemp, realpath, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runGit } from "./daemon/gitExec.js";
 
 // index.ts reads FALCON_HOME_DIR (via the module-scope logger) at import
 // time, so give it an isolated, disposable home directory before the first
@@ -776,3 +778,79 @@ describe("main()", () => {
     });
   });
 }, 15_000);
+
+// Real `git` binary, no mocks (same rationale as `daemon/gitExec.test.ts`):
+// this is the local `falcon -b <branch>` parity fix for known-issues.md #2's
+// first bullet — `ensureBranchWorkspace` itself is already covered against a
+// fake `GitExec` in `daemon/gitWorktree.test.ts`, so this only needs to prove
+// the thin composition in `index.ts` actually reaches it and surfaces a real
+// `.worktrees/<branch>` directory, not that worktree creation itself works.
+describe("resolveStartWorkingDirectory", () => {
+  let repo: string;
+
+  beforeEach(async () => {
+    repo = await mkdtemp(path.join(tmpdir(), "falcon-start-workdir-"));
+    await runGit(["init"], repo);
+    await runGit(["config", "user.email", "test@example.com"], repo);
+    await runGit(["config", "user.name", "Test"], repo);
+    await runGit(["commit", "--allow-empty", "-m", "initial"], repo);
+  });
+
+  afterEach(async () => {
+    await rm(repo, { recursive: true, force: true });
+  });
+
+  it("returns cwd unchanged when no branch is given", async () => {
+    const { resolveStartWorkingDirectory } = await import("./index.js");
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(repo);
+
+    const result = await resolveStartWorkingDirectory(undefined);
+
+    expect(result).toEqual({ ok: true, directory: repo });
+    cwdSpy.mockRestore();
+  });
+
+  it("creates a real .worktrees/<branch> directory for a new branch", async () => {
+    const { resolveStartWorkingDirectory } = await import("./index.js");
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(repo);
+
+    const result = await resolveStartWorkingDirectory("feature/local-worktree");
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    const expectedDir = path.join(repo, ".worktrees", "feature/local-worktree");
+    expect(await stat(expectedDir).then((s) => s.isDirectory())).toBe(true);
+    expect(result.directory).toBe(await realpath(expectedDir));
+    cwdSpy.mockRestore();
+  });
+
+  it("returns ok:false with an unsafe-branch-name message instead of throwing", async () => {
+    const { resolveStartWorkingDirectory } = await import("./index.js");
+    const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(repo);
+
+    const result = await resolveStartWorkingDirectory("-x");
+
+    expect(result).toEqual({
+      ok: false,
+      message: "falcon -b -x: unsafe branch name: -x",
+    });
+    cwdSpy.mockRestore();
+  });
+
+  it("returns ok:false when cwd is not a git repository", async () => {
+    const notARepo = await mkdtemp(path.join(tmpdir(), "falcon-start-workdir-norepo-"));
+    try {
+      const { resolveStartWorkingDirectory } = await import("./index.js");
+      const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(notARepo);
+
+      const result = await resolveStartWorkingDirectory("feature/x");
+
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error("unreachable");
+      expect(result.message).toContain("falcon -b feature/x:");
+      cwdSpy.mockRestore();
+    } finally {
+      await rm(notARepo, { recursive: true, force: true });
+    }
+  });
+});

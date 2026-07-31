@@ -10,7 +10,6 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | # | Issue | Status |
 |---|-------|--------|
 | 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked (draft exists) |
-| 2 | [Automatic per-session git worktree isolation — deliberately deferred follow-ups](#issue-2) | Deferred |
 | 6 | [`falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open (codex-only; `falcon claude` fixed) |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
@@ -21,7 +20,6 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 17 | [Daemon-spawned session processes survive a crashed/interrupted run and never get reaped — causes account-wide refresh-token rotation churn](#issue-17) | Open |
 | 18 | [Re-pairing an already-registered machine to a different account silently leaves it owned by the original account](#issue-18) | Open |
 | 19 | [A browser that connects after the daemon does can show a false "offline" state indefinitely — blocks the Git/Repo-Files panels and the new Create-workspace button](#issue-19) | Landed (needs live re-verification) |
-| 20 | [`falcon daemon stop` + `daemon start` while a `falcon claude` session is still running can trigger a false "needs re-authentication" — refresh-token rotation race, not a real security event](#issue-20) | Open (not live-confirmed) |
 
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
@@ -65,55 +63,6 @@ it just isn't approved yet. Still true as of this doc's own re-audit:
 
 **Status:** open, waiting on human approval of the now-existing draft design doc. Not
 something an automated workflow can produce or check off.
-
-<a id="issue-2"></a>
-
-## 2. Automatic per-session git worktree isolation — deliberately deferred follow-ups
-
-**Where:** `docs/features/worktree-isolation.md` (all 6 phases landed).
-
-**What's open:** four items the feature's own plan flagged as consciously out of scope for
-this pass, not bugs:
-
-- **Local `falcon -b <branch>` parity.** `args.ts:159-166` (`parseDefaultStart`) still
-  parses `-b`/`--branch` into `FalconCommand.branch`, but `index.ts`'s `runStart`
-  (lines 341-367) never reads `command.branch` at all — local-mode sessions don't create a
-  worktree at all today (only remote `spawn` does, via `gitWorktree.ts`). `index.ts`'s own
-  help text advertises the flag, so this is a real CLI/remote parity gap, not just an
-  omission. A real fix would call `ensureBranchWorkspace` before launching the local TUI,
-  the same way `spawnEngine.ts` does for a remote spawn. Re-verified 2026-07-28: still true.
-- **Worktree cleanup: now manual, still not automatic.** Fixed partially by the
-  new-session-from-web redesign's Phase C: `worktree.remove` (`packages/cli/src/daemon/worktreeRemove.ts`,
-  wired through `machineRpc.ts` and a web action in `session-list/components/remove-worktree-dialog.tsx`)
-  lets a user manually clean up a session's worktree — plain removal first, an explicit
-  second confirm for `--force` if the worktree has uncommitted/untracked changes, branch
-  deletion offered as a separate, off-by-default, more-destructive choice. Nothing still
-  runs this automatically on session end (deliberately out of scope — what if the user wants
-  to keep working in that worktree after the session ends? — a real design question, not an
-  oversight) — `.worktrees/<branch>` directories still accumulate forever unless a user
-  remembers to clean them up by hand.
-- **`git.branches` is local-only.** The RPC lists `refs/heads` only — no remote-tracking
-  branches. Fine for the MVP existing-branch picker (you can only worktree a branch that
-  already exists locally on that machine anyway), but worth revisiting if a "check out a
-  remote branch" flow is ever wanted.
-- **Global default (`repo-root` vs `new-branch`) is now moot for the primary flow, and the
-  Settings control that used to drive it is orphaned.** The new-session-from-web redesign's
-  workspace-row `+` entry point (which replaced the old free-form wizard) no longer offers a
-  repo-root/existing-branch choice at all — every session from there always gets a fresh
-  worktree + fresh branch, unconditionally (two parallel sessions sharing a `repo-root`
-  working directory was a real correctness risk, not just a preference). But
-  `packages/web/src/features/settings/components/GitSection.tsx`'s "default branch mode"
-  toggle (`git-defaults.ts`'s `getDefaultBranchMode`/`setDefaultBranchMode`) is still there
-  and still functional as a control — it's just that nothing reads its value anymore
-  (confirmed via `grep -rl getDefaultBranchMode packages/web/src` — only `GitSection.tsx`
-  and its own module/test reference it). A user can still change this setting and see no
-  effect anywhere. Worth a product decision: remove the now-meaningless control, or
-  repurpose it for something the new flow actually reads.
-
-**Status:** the first bullet is now partially resolved (manual cleanup exists); the other
-three are scope decisions/consequences of the broader redesign, not defects in what
-landed — parking them here so the next planner finds them instead of rediscovering
-them from scratch.
 
 <a id="issue-6"></a>
 
@@ -629,64 +578,3 @@ has. Both covered by new integration tests in `packages/server/src/app/socket.te
 live-reverified end-to-end in a real browser — remove this issue once someone confirms the
 original repro (reload the web UI against an already-online machine, confirm no false
 "offline") no longer reproduces.
-
-<a id="issue-20"></a>
-
-## 20. `falcon daemon stop` + `daemon start` while a `falcon claude` session is still running can trigger a false "needs re-authentication" — refresh-token rotation race, not a real security event
-
-**Where:** `packages/cli/src/auth/tokenProvider.ts:32-44` (the `readCurrentRefreshToken` doc
-comment already names the exact hazard: "this refresh token may already be one rotation behind
-another long-lived process sharing the same home dir (the daemon's own `TokenProvider` vs. a
-`falcon claude` session's)"), `:82-98` (`doRefresh`'s one-shot stale-by-one retry, which only
-covers a 401 discovered on the FIRST attempt), `packages/server/src/app/routes/refresh.ts:66-96`
-(the previous-hash replay/theft-detection branch — `GRACE_MS = 60_000`; outside that window it
-revokes the entire `familyId`, not just the one stale token), `packages/server/src/app/
-machineReauth.ts` (`computeMachineNeedsReauth`, the sole consumer of `revokedAt` that produces
-the "needs re-authentication" status), `packages/server/src/app/socket.ts` (machine-scoped
-disconnect handler calling `computeMachineNeedsReauth`, and the `/v1/sync` bootstrap path via
-`computeMachinesNeedReauth`).
-
-**What's open:** `falcon claude` runs two long-lived sibling processes against the same
-account — the background daemon (`machineClient.ts`'s own `TokenProvider`) and the foreground
-interactive session (`sessionClient.ts`'s own, separate `TokenProvider`) — both reading/writing
-the SAME single-use rotating refresh token file (`~/.falcon/access.key`). Running
-`falcon daemon stop` then `falcon daemon start` while the foreground session keeps running spins
-up a brand-new daemon process with a brand-new, empty-cache `TokenProvider`, so its very first
-`getAccessToken()` call hits `/v1/auth/refresh` immediately. If the still-running session
-process's own refresh timer rotates the shared token at a moment that races the new daemon's own
-refresh attempt, one of the two presents an already-rotated (stale) hash to the server. The
-client-side one-retry mitigation only helps when the FIRST attempt gets a clean 401; it does
-nothing to stop the server's own replay/theft check (`refresh.ts`'s branch (2)) from firing if
-the stale presentation lands outside the 60-second grace window — and when it does, the server
-revokes the whole token family, which `computeMachineNeedsReauth` then reports as
-`needsReauth: true`, surfacing "This project's machine needs to sign in again. Run
-`falcon auth login` there." on the web even though nothing was actually compromised and the user
-did nothing but restart the daemon.
-
-**Not live-reproduced in this pass.** This is a code-read-derived root cause from a 2026-07-30
-conversation (traced `tokenProvider.ts`'s own hazard comment through `refresh.ts`'s
-replay-detection branch to `machineReauth.ts`'s consumer), not yet confirmed via captured
-logs/DB state from an actual repro. Closely related to issue #17 (same shared single-use
-rotating token, same warning log line — `"refresh token rejected but a newer one is on disk
-(likely rotated by a sibling process) — retrying once"`) but a distinct and more severe
-consequence: issue #17's churn is a retry-and-recover loop caused by ACCUMULATED zombie
-processes; this is a full account lockout (forced re-login) from an entirely ordinary
-two-process setup (one daemon, one live session, no zombies required).
-
-**What a real fix needs:** the underlying design gap is the same one issue #17 already flags —
-multiple legitimate sibling processes sharing one single-use rotating credential with no
-coordination between them. Real options: (1) give sibling processes on the same machine a way to
-coordinate refreshes (e.g. a file lock around rotation, or one process designated the sole
-refresher with others reading its result), so concurrent rotation never happens at all; (2)
-widen the server's grace window specifically for same-family concurrent rotation, since a
-same-device race is categorically different from a cross-device replay and shouldn't be judged
-by the same 60s theft heuristic; (3) at minimum, don't let a benign same-device race escalate to
-full-family revocation — a softer "this looks like our own sibling, not theft" response would
-avoid demanding re-login for something the user did nothing wrong to cause.
-
-**Status:** open, not started — found via a code-reading deep-dive prompted by a user-reported
-symptom (2026-07-30: "I run `falcon daemon stop` then `start` again and the web UI shows
-'needs re-authentication'"), not yet independently live-reproduced or confirmed via logs. Needs
-an actual repro (stop/start the daemon while a session stays live, capture server logs and the
-`device_sessions.revoked_at`/`family_id` state) before this can move past "likely mechanism."
-

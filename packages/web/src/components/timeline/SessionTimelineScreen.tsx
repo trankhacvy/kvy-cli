@@ -285,6 +285,7 @@ function SessionTimelineBody({
               status={sessionStatus}
               machineId={machineId}
               machineOnline={machineOnline}
+              workspaceId={workspacePath}
               disabled={isDisabled}
             />
           </div>

@@ -34,6 +34,23 @@ async function defaultFetchImpl(): Promise<Response> {
   );
 }
 
+/**
+ * Preflight now does real filesystem I/O (the credentials lock, known-issues.md
+ * #20) before registering session RPC handlers, so it no longer reliably settles
+ * within a single `setTimeout(r, 0)` tick — poll instead. Fake-timer-aware:
+ * `vi.waitFor` advances fake timers itself when they're active, same as the
+ * "stop RPC with force" test below already relies on.
+ */
+async function waitForHandlers(
+  getHandlers: () => SessionRpcHandlers | null,
+): Promise<SessionRpcHandlers> {
+  return vi.waitFor(() => {
+    const handlers = getHandlers();
+    if (!handlers) throw new Error("handlers not registered yet");
+    return handlers;
+  });
+}
+
 function fakeDaemonState(overrides: Partial<DaemonState> = {}): DaemonState {
   return {
     pid: 1,
@@ -328,9 +345,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      // Let startup settle so handlers are registered.
-      await new Promise((r) => setTimeout(r, 0));
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const envelope = createEnvelope("user", { t: "text", md: "hello codex" });
       const first = await h.message({ envelope });
@@ -377,8 +392,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      await new Promise((r) => setTimeout(r, 0));
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const result = await h.stop({});
       expect(result).toEqual({ ok: true });
@@ -411,8 +425,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      await vi.advanceTimersByTimeAsync(0);
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const result = await h.stop({ force: true });
       expect(result).toEqual({ ok: true });
@@ -445,8 +458,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      await new Promise((r) => setTimeout(r, 0));
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const envelope = createEnvelope("user", { t: "text", md: "run a task" });
       await h.message({ envelope });

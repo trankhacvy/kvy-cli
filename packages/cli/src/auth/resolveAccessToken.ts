@@ -8,7 +8,9 @@
  * `~/.falcon/access.key`.
  */
 
+import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";
+import { withCredentialsLock } from "./credentialsLock.js";
 import { type FalconCredentials, readCredentials, writeCredentials } from "./credentials.js";
 import { createTokenProvider, type TokenProvider } from "./tokenProvider.js";
 
@@ -32,20 +34,25 @@ export function createTokenProviderForCredentials(
   credentials: FalconCredentials,
   options: ResolveAccessTokenOptions,
 ): TokenProvider {
+  const homeDir = options.homeDir ?? resolveHomeDir();
   return createTokenProvider({
     backendUrl: options.backendUrl,
     refreshToken: credentials.refreshToken,
     fetchImpl: options.fetchImpl ?? fetch,
     now: () => Date.now(),
     onRotate: (refreshToken) => {
-      writeCredentials({ ...credentials, refreshToken }, options.homeDir);
+      writeCredentials({ ...credentials, refreshToken }, homeDir);
     },
     logger: options.logger ?? noopLogger,
     // issue #2 (docs/known-issues-cliweb-sync-test.md): this long-lived provider can
     // outlive many refresh-token rotations by sibling processes (the daemon's own
     // `TokenProvider` in `daemon/machineIntegration.ts` chief among them) — re-read
     // `~/.falcon/access.key` on a 401 before giving up permanently.
-    readCurrentRefreshToken: () => readCredentials(options.homeDir)?.refreshToken ?? null,
+    readCurrentRefreshToken: () => readCredentials(homeDir)?.refreshToken ?? null,
+    // known-issues.md #20: this session-owned provider and the daemon's own
+    // (`daemon/machineIntegration.ts`) both rotate the same on-disk refresh token —
+    // serialize actual refresh attempts against each other instead of racing.
+    withCredentialsLock: (fn) => withCredentialsLock(homeDir, fn),
   });
 }
 

@@ -45,6 +45,7 @@ import {
 } from "@/lib/use-session-lifecycle";
 import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 import { apiSocket, createSessionRpcClient } from "@/sync";
+import { ArchiveSessionRunner } from "./archive-session-runner";
 import { RemoveWorktreeDialog } from "./remove-worktree-dialog";
 import { RenameSessionDialog } from "./rename-session-dialog";
 import { RestartSessionDialog } from "./restart-session-dialog";
@@ -102,6 +103,7 @@ export function SessionCardActions({
   const [stopOpen, setStopOpen] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
   const [removeWorktreeOpen, setRemoveWorktreeOpen] = useState(false);
+  const [archiveRunnerOpen, setArchiveRunnerOpen] = useState(false);
   const [stopState, setStopState] = useState<StopSessionDialogState>(initialStopSessionDialogState);
   const archiveMutation = useArchiveSessionMutation();
   const restoreMutation = useRestoreSessionMutation();
@@ -120,6 +122,14 @@ export function SessionCardActions({
   function handleStopOpenChange(open: boolean) {
     if (!open) setStopState(resetStopSessionDialogState());
     setStopOpen(open);
+  }
+
+  function handleArchiveSelect() {
+    if (canRemoveWorktree) {
+      setArchiveRunnerOpen(true);
+      return;
+    }
+    archiveMutation.mutate(sessionId);
   }
 
   return (
@@ -179,8 +189,8 @@ export function SessionCardActions({
             </DropdownMenuItem>
           ) : (
             <DropdownMenuItem
-              disabled={archiveMutation.isPending}
-              onSelect={() => archiveMutation.mutate(sessionId)}
+              disabled={archiveMutation.isPending || archiveRunnerOpen}
+              onSelect={handleArchiveSelect}
             >
               <Archive className="size-4" />
               Mark done
@@ -218,6 +228,17 @@ export function SessionCardActions({
           sessionTitle={title}
           open={removeWorktreeOpen}
           onOpenChange={setRemoveWorktreeOpen}
+        />
+      )}
+
+      {archiveRunnerOpen && machineId !== null && workspaceId !== null && (
+        <ArchiveSessionRunner
+          sessionId={sessionId}
+          machineId={machineId}
+          workspaceId={workspaceId}
+          title={title}
+          onArchived={() => {}}
+          onClose={() => setArchiveRunnerOpen(false)}
         />
       )}
 
