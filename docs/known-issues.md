@@ -12,7 +12,7 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked (draft exists) |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
 | 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off); UI simplified to read-only chip only |
-| 13 | [New Session from web: daemon-initiated spawn reproducibly fails in ~1s, with no diagnostic trail](#issue-13) | Open |
+| 13 | [New Session from web: daemon-initiated spawn reproducibly fails in ~1s, with no diagnostic trail](#issue-13) | Likely fixed (side effect of issue #20's fix, `865e9ca3`); 0/4 repro 2026-07-31 |
 | 14 | [ACP adapter auto-install can genuinely fail/be slow — pinned adapter requires Node ≥22, this machine (and likely others) runs Node 20](#issue-14) | Open |
 | 15 | [An adopted/unmanaged session's title can leak the raw Conductor `<system_instruction>` wrapper text](#issue-15) | Open |
 | 16 | [Session side panel's base-branch-default fix (Phase 0.3) landed but was never live-reverified](#issue-16) | Open (needs verification) |
@@ -285,10 +285,60 @@ just against a brand-new empty directory instead — rules out "something specif
 branches" as the cause, narrowing it toward the daemon's generic tmux-spawn path itself. Still
 not root-caused; the `remain-on-exit`/diagnostic-trail fix above is still the needed first step.
 
-**Status:** open, not started — newly found via live end-to-end testing 2026-07-28, not
-caught by any existing test (the daemon-spawn unit tests mock the child process entirely; the
-one e2e harness fakes away the same thing). This is the core "New Session from web" flow the
-whole redesign exists for — treat as highest priority among currently-open issues.
+**Update (2026-07-31) — root cause identified: this was issue #20's auth-token race, not a
+tmux/spawn-path bug at all.** `runPreflight` (`commands/startPreflight.ts`) is the *first* thing
+any `falcon claude` process does, daemon-spawned or not — before touching the ACP adapter,
+before the session bootstrap, before anything that could ever report `/session-started`, it
+calls `createTokenProviderForCredentials(...).getAccessToken()`, which POSTs to
+`/v1/auth/refresh` using the shared, single-use, rotating refresh token in
+`~/.falcon/access.key`. That file is shared with the daemon's own long-lived `TokenProvider`
+(`daemon/machineIntegration.ts`). Per issue #20 (found via code-read 2026-07-30, in the SAME
+file this issue's own doc comment already flagged as a hazard): if the daemon's token provider
+rotates that shared token at nearly the same moment a sibling process presents it, the server's
+replay/theft check (`server/src/app/routes/refresh.ts`'s `GRACE_MS = 60_000` branch) can't tell
+a benign same-machine race from actual token theft, and revokes the whole device family. A
+freshly daemon-spawned session is exactly such a sibling: it starts with an empty token cache, so
+its very *first* action is that same refresh call — and spawning a new session is itself a
+daemon RPC, i.e. exactly the moment the daemon's own token provider is also active. A
+preflight failure here throws before the process ever reaches the point of reporting back,
+which is precisely this issue's symptom: a crash within ~1s, with tmux (no `remain-on-exit`)
+discarding whatever error message was printed. Nothing here was captured with a smoking-gun log
+line *at the time* — issue #13's whole premise is that no such trail existed — so this is a
+mechanism-and-timing match, not a caught-red-handed proof.
+
+Issue #20 was fixed the same day (commit `865e9ca3`, 2026-07-31, landed *before* this
+re-verification pass): `auth/credentialsLock.ts` (new) serializes refresh attempts across sibling
+processes so the daemon and a new session can never rotate the shared token concurrently, and
+`tokenProvider.ts` now proactively re-syncs from disk before refreshing and only persists a
+rotation when the token actually changed (previously the server's echo-back-unchanged response
+on a benign race was itself misread as a rotation worth persisting).
+
+Live re-verification against a real local stack (fresh account, paired daemon, `packages/web` +
+`packages/server` dev servers), reran *after* that fix, reproduced the *exact* original
+scenario — existing git repo, spawn into a new branch/worktree via the web's "New Session"
+dialog — **3 times in a row, all 3 succeeded**: `[spawn-engine] launched provider process` →
+tmux pid alive → `[session-client] connected` within ~1-2s each time, dialog showed "Session
+started.", all three processes still running minutes later (`falcon doctor`). A 4th attempt
+(plain repo-root spawn, no branch) also succeeded. Zero reproductions in 4/4 tries.
+
+Separately, the **"re-reproduced 2026-07-30" update above was likely a different, unrelated
+error, not this bug**: retrying that same "spawn into a freshly-created, never-before-used empty
+folder" scenario today produces a distinct, honest error — `"Couldn't set up the branch/worktree:
+fatal: not a git repository (or any of the parent directories): .git"` — thrown by
+`ensureBranchWorkspace` *before* `launchProviderProcess` is ever called, never the generic
+"exited before it reported starting" message this issue is about. A fresh `New project` folder
+isn't `git init`'d, so requesting a branch/worktree in it was always going to fail this way; the
+2026-07-30 note likely mistook that (correct, if unhelpfully-worded) validation failure for a
+recurrence of the crash, since both surface through the same dialog.
+
+**Status:** likely fixed as a side effect of issue #20's fix (`865e9ca3`) — root cause identified
+with high confidence (mechanism + timing both match) and live re-verification came back clean
+(0/4 repro), but not caught in the act with a direct log line, so treat as "very likely resolved"
+rather than certain. `processLauncher.ts`'s `trySpawnViaTmux` still doesn't set
+`remain-on-exit` — the diagnostic-trail gap `runProcess.ts`'s `wrapWithLogRedirect` pattern could
+fix is still open, so if a *new*, unrelated fast-crash ever surfaces here, it will be just as
+undebuggable as this one was. Worth doing as cheap insurance even though this specific bug looks
+resolved.
 
 <a id="issue-14"></a>
 
