@@ -128,6 +128,39 @@ describe("startSocket (/v1/stream handshake)", () => {
     });
   });
 
+  // Without this, `MachineRow.lastSeenAt` in the web's `['sync']` snapshot
+  // (fetched once, `staleTime: Infinity`) never advances for a machine that
+  // was already connected when the web client loaded — the client's
+  // `deriveMachineOnline` heuristic then always reports it offline exactly
+  // `MACHINE_ONLINE_WINDOW_MS` after that stale snapshot, regardless of how
+  // often the daemon actually heartbeats.
+  it("re-broadcasts machine-presence online on every machine-alive heartbeat, not just connect", async () => {
+    const token = await mintToken("acct_heartbeat_presence");
+    const userClient = connect({ token });
+    await new Promise<void>((resolve) => userClient.once("connect", () => resolve()));
+
+    const onlineEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    const machineClient = connect({
+      token,
+      clientType: "machine-scoped",
+      machineId: "mach_heartbeat",
+    });
+    await new Promise<void>((resolve) => machineClient.once("connect", () => resolve()));
+    expect(await onlineEvent).toEqual({
+      t: "machine-presence",
+      machineId: "mach_heartbeat",
+      online: true,
+    });
+
+    const heartbeatEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    machineClient.volatile.emit("machine-alive", { machineId: "mach_heartbeat", time: Date.now() });
+    expect(await heartbeatEvent).toEqual({
+      t: "machine-presence",
+      machineId: "mach_heartbeat",
+      online: true,
+    });
+  });
+
   it("does not broadcast machine-presence to the machine's own connection", async () => {
     const token = await mintToken("acct_3");
     const machineClient = connect({ token, clientType: "machine-scoped", machineId: "mach_2" });
@@ -138,6 +171,51 @@ describe("startSocket (/v1/stream handshake)", () => {
     await new Promise<void>((resolve) => machineClient.once("connect", () => resolve()));
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(gotEcho).toBe(false);
+  });
+
+  it("sends an initial machine-presence snapshot to a freshly-connected web client for machines already online", async () => {
+    const accountId = "acct_snapshot";
+    const token = await mintToken(accountId);
+    const [machine] = await db
+      .insert(machines)
+      .values({ accountId, metadata: encodeBox(fakeBox()), dek: getRandomBytes(32) })
+      .returning();
+    if (!machine) throw new Error("insert returned no row");
+
+    const machineClient = connect({ token, clientType: "machine-scoped", machineId: machine.id });
+    await new Promise<void>((resolve) => machineClient.once("connect", () => resolve()));
+
+    // A SECOND, later-connecting user-scoped client — never saw the
+    // machine's own connect-time broadcast above, so without the initial
+    // snapshot it would have no live signal for this machine at all until
+    // the next heartbeat.
+    const userClient = connect({ token });
+    const snapshotEvent = new Promise((resolve) => userClient.once("ephemeral", resolve));
+    await new Promise<void>((resolve) => userClient.once("connect", () => resolve()));
+
+    expect(await snapshotEvent).toEqual({
+      t: "machine-presence",
+      machineId: machine.id,
+      online: true,
+    });
+  });
+
+  it("does not send a snapshot entry for a machine that is registered but not currently connected", async () => {
+    const accountId = "acct_snapshot_offline";
+    const token = await mintToken(accountId);
+    await db
+      .insert(machines)
+      .values({ accountId, metadata: encodeBox(fakeBox()), dek: getRandomBytes(32) })
+      .returning();
+
+    const userClient = connect({ token });
+    let gotSnapshot = false;
+    userClient.on("ephemeral", () => {
+      gotSnapshot = true;
+    });
+    await new Promise<void>((resolve) => userClient.once("connect", () => resolve()));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(gotSnapshot).toBe(false);
   });
 
   // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): a daemon whose

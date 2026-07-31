@@ -110,7 +110,11 @@ export function SessionCardActions({
   const archived = status === "archived";
   const stoppable = isSessionStoppable(status);
   const restartEnabled = isRestartEnabled({ machineId, machineOnline, status });
-  const restartReason = restartDisabledReason({ machineId, machineOnline, status });
+  const restartReason = restartDisabledReason({
+    machineId,
+    machineOnline,
+    status,
+  });
   const canRemoveWorktree = canOfferRemoveWorktree(machineId, workspaceId);
 
   function handleStopOpenChange(open: boolean) {
@@ -122,14 +126,8 @@ export function SessionCardActions({
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            aria-label="Session actions"
-          >
-            <MoreHorizontal className="size-3.5" />
+          <Button type="button" variant="ghost" size="icon-sm" aria-label="Session actions">
+            <MoreHorizontal />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -250,7 +248,9 @@ export function SessionCardActions({
               variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={() =>
-                deleteMutation.mutate(sessionId, { onSuccess: () => setDeleteOpen(false) })
+                deleteMutation.mutate(sessionId, {
+                  onSuccess: () => setDeleteOpen(false),
+                })
               }
             >
               {deleteMutation.isPending ? "Deleting…" : "Delete"}

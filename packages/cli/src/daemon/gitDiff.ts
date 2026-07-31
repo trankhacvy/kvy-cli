@@ -5,14 +5,15 @@
  * plan.md §16 "4.1 Git panel"). Backs the web unified diff viewer.
  *
  * **Base ref resolution** (falcon-prd.md line 148, `falcon workspace
- * config --base-ref`): an explicit `params.baseRef` always wins (a one-off
- * override, e.g. comparing against a different branch than the workspace's
- * configured default); otherwise falls back to the workspace's configured
- * base ref (`workspaceConfig.ts`, injectable here as
- * `deps.resolveConfiguredBaseRef` so tests don't need a real
- * `~/.falcon/settings.json`); with neither set, diffs against `HEAD`
- * (uncommitted changes only) — a repo with no configured base ref and no
- * override still gets a useful diff instead of an error.
+ * config --base-ref`) is shared with `gitStatus.ts` via `gitBaseRef.ts`:
+ * an explicit `params.baseRef` always wins (a one-off override, e.g.
+ * comparing against a different branch than the workspace's configured
+ * default); otherwise the workspace's configured base ref
+ * (`workspaceConfig.ts`); otherwise a local `main`/`master` branch, whichever
+ * exists (no remote lookup needed); otherwise `HEAD` — or, for a repo with
+ * no commits at all yet, git's empty-tree hash, since `HEAD` doesn't resolve
+ * to anything there (`fatal: bad revision 'HEAD'` was the crash before this
+ * fallback existed).
  *
  * `git diff <ref>` (two-dot, not three-dot `<ref>...HEAD`) is deliberate:
  * it compares the working tree directly against `<ref>`'s tree, so the
@@ -20,6 +21,18 @@
  * in-progress uncommitted edits — exactly what a live agent session's
  * "everything I've changed so far" panel wants, not just what's already
  * committed.
+ *
+ * **Untracked files are a special case** (`gitUntracked.ts`'s own doc
+ * comment): `git diff <ref>` can never see one, tracked-or-not — verified
+ * against the real binary. A `params.path` that's currently untracked is
+ * instead diffed against `/dev/null` (`gitExec.ts`'s `runGitDiffNoIndex`),
+ * which shows the whole file as newly added rather than the misleading
+ * empty diff `git diff <ref> -- <path>` would otherwise return. The
+ * no-`path` "every changed file" combined diff appends each untracked
+ * file's own `/dev/null` diff after the regular ref-diff, for the same
+ * reason — otherwise a session whose only change so far is one brand-new
+ * untracked file would show "no differences" there despite the Changes
+ * tab's own file list correctly listing it.
  *
  * **Truncation, plus a best-effort blob upload:** a diff that would blow
  * the 64KB RPC control-plane budget (design §4.4 "payload size rule") is
@@ -37,8 +50,9 @@
  * subsystem existed.
  */
 import type { GitDiffParams, GitDiffResult } from "@falcon/wire";
-import { readWorkspaceGitConfig } from "../workspaceConfig.js";
-import { type GitExec, GitExecError, runGit } from "./gitExec.js";
+import { resolveDiffBaseline, resolveEffectiveBaseRef } from "./gitBaseRef.js";
+import { type GitExec, GitExecError, runGit, runGitDiffNoIndex } from "./gitExec.js";
+import { listUntrackedFiles } from "./gitUntracked.js";
 import { assertWorkspaceStillValid } from "./workspacePath.js";
 
 /** Stays well under the 64KB RPC control-plane cap (design §4.4) after JSON envelope + encryption overhead. */
@@ -47,6 +61,8 @@ const MAX_INLINE_BYTES = 60_000;
 export interface GitDiffDeps {
   /** Injectable for tests; defaults to the real `git` binary. */
   git?: GitExec;
+  /** Injectable for tests; defaults to `gitExec.ts`'s real `runGitDiffNoIndex` (an untracked file's own diff against `/dev/null`). */
+  noIndexDiff?: GitExec;
   /** Looks up the workspace's configured base ref for `worktree`; defaults to `workspaceConfig.ts`'s real `~/.falcon/settings.json`-backed lookup. Returns `undefined` when none is configured. */
   resolveConfiguredBaseRef?: (worktree: string) => Promise<string | undefined>;
   maxInlineBytes?: number;
@@ -56,9 +72,9 @@ export interface GitDiffDeps {
   assertWorkspaceValid?: (directory: string) => Promise<void>;
 }
 
-async function defaultResolveConfiguredBaseRef(worktree: string): Promise<string | undefined> {
-  const config = await readWorkspaceGitConfig(worktree);
-  return config?.baseRef;
+/** A single untracked path's diff against `/dev/null` — shows the whole file as newly added. */
+function diffUntrackedPath(noIndexDiff: GitExec, worktree: string, path: string): Promise<string> {
+  return noIndexDiff(["diff", "--no-index", "--", "/dev/null", path], worktree);
 }
 
 /** Truncates `text` to fit `maxBytes` (UTF-8), backing off to the last full line so the result stays readable, and appends an explicit marker. */
@@ -98,18 +114,38 @@ export async function getGitDiff(
   const assertWorkspaceValid = deps.assertWorkspaceValid ?? assertWorkspaceStillValid;
   await assertWorkspaceValid(params.worktree);
   const git = deps.git ?? runGit;
-  const resolveConfiguredBaseRef = deps.resolveConfiguredBaseRef ?? defaultResolveConfiguredBaseRef;
+  const noIndexDiff = deps.noIndexDiff ?? runGitDiffNoIndex;
   const maxInlineBytes = deps.maxInlineBytes ?? MAX_INLINE_BYTES;
 
-  const baseRef = params.baseRef ?? (await resolveConfiguredBaseRef(params.worktree));
-  if (baseRef !== undefined && !isSafeRevision(baseRef)) {
+  const resolvedBaseRef = await resolveEffectiveBaseRef(params.worktree, params.baseRef, {
+    git,
+    resolveConfiguredBaseRef: deps.resolveConfiguredBaseRef,
+  });
+  const baseRef = resolvedBaseRef ?? (await resolveDiffBaseline(params.worktree, git));
+  if (!isSafeRevision(baseRef)) {
     throw new GitExecError(`unsafe base ref: ${baseRef}`);
   }
 
-  const args = baseRef ? ["diff", baseRef] : ["diff", "HEAD"];
-  if (params.path) args.push("--", params.path);
+  const untrackedPaths = await listUntrackedFiles(params.worktree, git);
 
-  const output = await git(args, params.worktree);
+  let output: string;
+  if (params.path && untrackedPaths.includes(params.path)) {
+    output = await diffUntrackedPath(noIndexDiff, params.worktree, params.path);
+  } else {
+    const args = ["diff", baseRef];
+    if (params.path) args.push("--", params.path);
+    const trackedOutput = await git(args, params.worktree);
+
+    if (params.path) {
+      output = trackedOutput;
+    } else {
+      const untrackedOutputs = await Promise.all(
+        untrackedPaths.map((path) => diffUntrackedPath(noIndexDiff, params.worktree, path)),
+      );
+      output = [trackedOutput, ...untrackedOutputs].filter((part) => part.trim() !== "").join("\n");
+    }
+  }
+
   const { text, truncated } = truncateToByteBudget(output, maxInlineBytes);
 
   let blobRef: string | undefined;

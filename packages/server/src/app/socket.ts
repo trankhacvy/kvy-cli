@@ -158,6 +158,31 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
       });
     }
 
+    // Initial machine-presence snapshot: a web client connecting NOW has missed every
+    // connect-time broadcast for a machine that was already online before it got here —
+    // `useMachinePresence`'s map starts empty, so without this it falls back to the
+    // `lastSeenAt` heuristic until that machine's next heartbeat. Sent only to THIS
+    // socket (every other already-connected tab already knows), reusing the exact same
+    // `machine-presence` ephemeral shape a live connect event would send, so the client
+    // needs no new handling at all.
+    if (connection.connectionType === "user-scoped") {
+      db.query.machines
+        .findMany({ where: eq(machines.accountId, accountId), columns: { id: true } })
+        .then((rows) => {
+          for (const { id: candidateId } of rows) {
+            if (eventRouter.isMachineOnline(accountId, candidateId)) {
+              socket.emit("ephemeral", buildMachinePresenceEphemeral(candidateId, true));
+            }
+          }
+        })
+        .catch((error: unknown) => {
+          app.log.warn(
+            { module: "websocket", error },
+            "failed to build initial machine-presence snapshot",
+          );
+        });
+    }
+
     socket.on("app-state", (data: { state?: string }) => {
       socket.data.appState = data?.state === "active" ? "active" : "background";
     });
@@ -237,6 +262,21 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
     // connection, never the payload, same non-spoofable pattern as the
     // session-scoped `alive` handler above. Update failures are logged, not
     // thrown — a missed heartbeat write should never take down the socket.
+    //
+    // Also re-emits the `machine-presence` ephemeral (the same payload the
+    // connect handler above sends once) on every heartbeat: `['sync']`'s
+    // `MachineRow.lastSeenAt` is fetched once and never polled
+    // (`use-sync-snapshot.ts`: `staleTime: Infinity`, "kept current by the
+    // sync engine's WS `update` stream, not polling") — the DB write above
+    // alone never reaches an already-connected web client. Without this, a
+    // web client that connected while the machine was already online (so it
+    // never saw the connect-time presence event either) has no live signal
+    // at all and falls back to the `lastSeenAt` recency heuristic against
+    // that one frozen snapshot value — which necessarily goes stale and
+    // reports the machine offline exactly `MACHINE_ONLINE_WINDOW_MS` (3
+    // minutes) after the page loaded, even though the daemon never stopped
+    // heartbeating. Re-sending presence here keeps that live map fresh for
+    // the machine's whole connected lifetime, not just its connect instant.
     if (connection.connectionType === "machine-scoped") {
       const machineConnection = connection;
       socket.on("machine-alive", () => {
@@ -251,6 +291,11 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
               "failed to persist machine-alive heartbeat",
             );
           });
+        eventRouter.emitEphemeral({
+          accountId,
+          payload: buildMachinePresenceEphemeral(machineConnection.machineId, true),
+          recipientFilter: { type: "user-scoped-only" },
+        });
       });
     }
 

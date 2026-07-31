@@ -26,3 +26,26 @@ export function FileStatusBadge({ status }: { status: GitFileStatus["status"] })
     </Badge>
   );
 }
+
+/**
+ * `+12 -3`-style line-count stat (`git diff --numstat`, `daemon/gitStatus.ts`)
+ * — `undefined` for an untracked file (never diffed) or a binary file (git
+ * reports `-`/`-` there, not a real count), in which case this renders
+ * nothing rather than a misleading `+0 -0`. Zero-only sides are omitted too
+ * (a pure deletion shows just `-3`, not `+0 -3`).
+ */
+export function FileStatChange({
+  insertions,
+  deletions,
+}: {
+  insertions?: number;
+  deletions?: number;
+}) {
+  if (insertions === undefined && deletions === undefined) return null;
+  return (
+    <span className="flex shrink-0 items-center gap-1 font-mono text-xs tabular-nums">
+      {Boolean(insertions) && <span className="text-emerald-500">+{insertions}</span>}
+      {Boolean(deletions) && <span className="text-destructive">-{deletions}</span>}
+    </span>
+  );
+}

@@ -40,4 +40,5 @@ export {
   useReviewSpawn,
 } from "./use-review-spawn";
 export { useWorkspaceNavGroups } from "./use-workspace-nav";
+export { useWorkspaceIndexContext, WorkspaceIndexProvider } from "./workspace-index-context";
 export { looksLikeWorktreePath, parentWorktreePath } from "./worktree-path";

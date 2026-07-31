@@ -4,6 +4,7 @@ import { decodeBase64 } from "@falcon/crypto/web";
 import type { Ephemeral, MachineRow, SessionRow } from "@falcon/wire";
 import { useQueries } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
+import { resolveSelectedMachine } from "@/components/machine-switcher-state";
 import type { CryptoBridgeClient } from "@/crypto";
 import type { EphemeralSource } from "@/features/session-control";
 import { getSessionMessages } from "@/lib/api";
@@ -307,7 +308,8 @@ export function buildSnapshot(
  * crypto bridge is ready: a live source has to tolerate "no data yet" at
  * every layer rather than assume a fixture's always-present rows. */
 export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
-  const { sessionRows, machineRows, titles, isLoading } = useWorkspaceIndexContext();
+  const { sessionRows, machineRows, titles, isLoading, selectedMachineId } =
+    useWorkspaceIndexContext();
   // Its own worker, deliberately not shared with the context's titles bridge
   // — see the module doc comment: two independent effects racing
   // `setSessionKey` calls against one shared worker can decrypt under the
@@ -320,11 +322,19 @@ export const useLiveSessionListSnapshot: UseSessionListSnapshot = () => {
   const pageResults = useSessionMessagePages(sessionIds);
   const items = useDecryptedItems(sessionRows, pageResults, itemsBridge);
 
-  return useMemo(
-    () => ({
-      ...buildSnapshot(sessionRows, machineRows, titles, presence, items, attention),
-      isLoading,
-    }),
-    [sessionRows, machineRows, titles, presence, items, attention, isLoading],
-  );
+  return useMemo(() => {
+    const snapshot = buildSnapshot(sessionRows, machineRows, titles, presence, items, attention);
+    // Scoped to the sidebar `MachineSwitcher`'s current pick (same
+    // `resolveSelectedMachine` fallback it displays, so what's highlighted
+    // there always matches what's listed here) — `machines`/`workspaces`
+    // stay the full account-wide lists (`hasMachines`, `NewWorkspaceTrigger`
+    // need every machine, not just the selected one); only `sessions` is
+    // scoped down, and `group.ts` only ever forms a group for a workspace
+    // that still has a session left after this filter.
+    const currentMachine = resolveSelectedMachine(snapshot.machines, selectedMachineId);
+    const sessions = currentMachine
+      ? snapshot.sessions.filter((s) => s.machineId === currentMachine.id)
+      : snapshot.sessions;
+    return { ...snapshot, sessions, isLoading };
+  }, [sessionRows, machineRows, titles, presence, items, attention, isLoading, selectedMachineId]);
 };

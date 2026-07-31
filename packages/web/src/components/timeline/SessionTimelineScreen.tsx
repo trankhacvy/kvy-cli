@@ -350,6 +350,7 @@ function SessionTimelineBody({
       <SessionSidePanel
         machineId={machineId ?? undefined}
         worktree={workspacePath ?? undefined}
+        working={working}
         openFile={openFile}
         onOpenFile={setOpenFile}
         onSendAgentPrompt={send}

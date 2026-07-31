@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { resolveSelectedMachine } from "@/components/machine-switcher-state";
 import type { RenderItem } from "@/sync/reducer";
 import { groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID, type WorkspaceGroup } from "./group";
 import { buildSnapshot } from "./live-source";
@@ -17,7 +18,8 @@ export function useWorkspaceNavGroups(): {
   machinesById: Map<string, SessionListMachine>;
   isLoading: boolean;
 } {
-  const { sessionRows, machineRows, titles, isLoading } = useWorkspaceIndexContext();
+  const { sessionRows, machineRows, titles, isLoading, selectedMachineId } =
+    useWorkspaceIndexContext();
 
   const snapshot = useMemo(
     () =>
@@ -25,9 +27,20 @@ export function useWorkspaceNavGroups(): {
     [sessionRows, machineRows, titles],
   );
 
+  // Same current-machine resolution the sidebar `MachineSwitcher` displays
+  // (`resolveSelectedMachine`) — keeps this nav scoped to whichever machine
+  // is highlighted there, mirroring `live-source.ts`'s Home-screen filter.
+  const currentMachine = useMemo(
+    () => resolveSelectedMachine(snapshot.machines, selectedMachineId),
+    [snapshot.machines, selectedMachineId],
+  );
+
   const activeSessions = useMemo(
-    () => snapshot.sessions.filter((s) => s.status !== "archived"),
-    [snapshot],
+    () =>
+      snapshot.sessions.filter(
+        (s) => s.status !== "archived" && (!currentMachine || s.machineId === currentMachine.id),
+      ),
+    [snapshot, currentMachine],
   );
 
   const groups = useMemo(

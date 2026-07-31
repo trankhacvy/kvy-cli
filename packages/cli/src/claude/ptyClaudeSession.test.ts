@@ -372,6 +372,26 @@ describe("startPtyClaudeSession", () => {
     handle.stop();
   });
 
+  it("forwards Claude Code's own transcript summary line to onSummaryTitle, without also emitting it as an envelope", async () => {
+    const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
+    const onSummaryTitle = vi.fn<(title: string) => void>();
+    const h = makeHarness();
+    const handle = startPtyClaudeSession(baseOptions({ onEnvelopes, onSummaryTitle }), h.deps);
+    await tick();
+
+    const onMessage = h.getScannerOnMessage();
+    onMessage?.({
+      type: "summary",
+      summary: "Fix the login redirect bug",
+      leafUuid: "leaf-1",
+    } as unknown as RawJSONLines);
+
+    expect(onSummaryTitle).toHaveBeenCalledExactlyOnceWith("Fix the login redirect bug");
+    expect(onEnvelopes).not.toHaveBeenCalled();
+
+    handle.stop();
+  });
+
   it("routes a notified provider session id (from the caller's shared hook server) to the tailer", async () => {
     const h = makeHarness();
     const handle = startPtyClaudeSession(baseOptions(), h.deps);

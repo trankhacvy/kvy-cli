@@ -18,10 +18,10 @@ import {
   connectedAs,
   NO_TTY_CANNOT_SIGN_IN,
   OPENING_BROWSER,
-  pairingUrlFallback,
   STARTING_SESSION,
   WAITING_FOR_APPROVAL,
   WELCOME_FIRST_RUN,
+  webUrlLine,
 } from "../ui/messages.js";
 import { openBrowser } from "./browser.js";
 import { resolveBackendUrl, resolveFrontendUrl } from "./config.js";
@@ -33,7 +33,7 @@ import {
 } from "./credentials.js";
 import { wrapNewKeyMaterial } from "./keyMaterial.js";
 import { type PairFailureReason, pairDevice } from "./pair.js";
-import { displayPairingQrCode } from "./qrcode.js";
+import { displayQrCode } from "./qrcode.js";
 import { resolveAccessToken } from "./resolveAccessToken.js";
 
 const SessionsResponseSchema = z.object({ email: z.string().nullable() });
@@ -147,9 +147,9 @@ export async function runAuthLogin(
       cwd: process.cwd(),
       onPairingUrlReady: async (url) => {
         process.stdout.write(OPENING_BROWSER);
-        const opened = await openBrowser(url);
-        if (!opened) process.stdout.write(pairingUrlFallback(url));
-        displayPairingQrCode(url);
+        await openBrowser(url);
+        process.stdout.write(webUrlLine(url));
+        displayQrCode(url);
         process.stdout.write(WAITING_FOR_APPROVAL);
       },
     });

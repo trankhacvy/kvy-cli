@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
+import { useRefetchOnTurnEnd } from "@/lib/use-refetch-on-turn-end";
 import { buildDiffFetchOptions } from "./git-diff-query";
 import { derivePushReadiness } from "./push-readiness";
 import type { GitDiffActions } from "./types";
@@ -63,7 +64,25 @@ export function translateInitRepoError(raw: string): string {
   return raw;
 }
 
-export function useGitPanel(actions: GitDiffActions, worktree: string, machineOnline = true) {
+// A file changed outside the agent entirely — the user editing in their own
+// terminal/editor — has no signal this panel can react to at all (unlike
+// `useRefetchOnTurnEnd`, which only ever fires off the AGENT's own turns).
+// Polling is the deliberately simple fallback for that gap (see the design
+// discussion this constant's PR resolves): a real filesystem watcher pushed
+// through the daemon/server relay is "more correct" but a lot of new
+// plumbing (watcher lifecycle per workspace, debouncing, `.gitignore`-aware
+// exclusion) for what's actually a narrow case — most file changes come from
+// the agent and are already covered live. Only polls while the machine is
+// online; an offline machine's RPC would just fail every interval for
+// nothing.
+const LIVE_REFRESH_POLL_INTERVAL_MS = 7_000;
+
+export function useGitPanel(
+  actions: GitDiffActions,
+  worktree: string,
+  machineOnline = true,
+  working = false,
+) {
   const queryClient = useQueryClient();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [compareRef, setCompareRef] = useState<string | null>(null);
@@ -71,6 +90,7 @@ export function useGitPanel(actions: GitDiffActions, worktree: string, machineOn
   const statusQuery = useQuery({
     queryKey: ["git-status", worktree],
     queryFn: () => actions.fetchStatus(worktree),
+    refetchInterval: machineOnline ? LIVE_REFRESH_POLL_INTERVAL_MS : false,
   });
 
   const diffQuery = useQuery({
@@ -79,6 +99,7 @@ export function useGitPanel(actions: GitDiffActions, worktree: string, machineOn
     // Nothing to diff until the file list has actually loaded — avoids an
     // "all files" fetch racing ahead of `git.status` on first mount.
     enabled: statusQuery.isSuccess,
+    refetchInterval: machineOnline ? LIVE_REFRESH_POLL_INTERVAL_MS : false,
   });
 
   const branchesQuery = useQuery({
@@ -123,6 +144,12 @@ export function useGitPanel(actions: GitDiffActions, worktree: string, machineOn
     void queryClient.invalidateQueries({ queryKey: ["git-branches", worktree] });
     void queryClient.invalidateQueries({ queryKey: ["git-remotes", worktree] });
   });
+
+  // The agent's own Write/Edit/Bash tool calls change files on disk without
+  // ever touching these queries — only a manual git action did before this.
+  // Refetching once each turn ends is the cheapest honest "something might
+  // have changed" signal available (`use-refetch-on-turn-end.ts`).
+  useRefetchOnTurnEnd(working, invalidateStatusAndDiff);
 
   const commitMutation = useMutation({
     mutationFn: ({ message, stageAll }: { message: string; stageAll?: boolean }) =>

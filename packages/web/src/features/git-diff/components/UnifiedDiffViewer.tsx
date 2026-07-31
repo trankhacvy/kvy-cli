@@ -9,7 +9,7 @@ import { parseUnifiedDiff, type UnifiedDiffFile } from "@/lib/unifiedDiff";
 import { buildDiffViewHunks } from "../git-diff-view-adapter";
 import type { GitDiffContent } from "../types";
 
-function FileDiff({ file }: { file: UnifiedDiffFile }) {
+function FileDiff({ file, mode }: { file: UnifiedDiffFile; mode: DiffModeEnum }) {
   const lang = languageForPath(file.path);
   const hunks = useMemo(() => buildDiffViewHunks(file), [file]);
 
@@ -29,7 +29,7 @@ function FileDiff({ file }: { file: UnifiedDiffFile }) {
             newFile: { fileName: file.newPath ?? file.path, fileLang: lang },
             hunks,
           }}
-          diffViewMode={DiffModeEnum.Unified}
+          diffViewMode={mode}
           diffViewTheme="dark"
           diffViewFontSize={12}
           diffViewHighlight
@@ -48,16 +48,22 @@ function FileDiff({ file }: { file: UnifiedDiffFile }) {
  * `<span>` walk — it consumes raw unified-diff hunk text directly
  * (`git-diff-view-adapter.ts`'s `buildDiffViewHunks`, built from
  * `lib/unifiedDiff.ts`'s already-parsed structure — that module and its
- * tests are unchanged, this only replaced the renderer), handles
- * split/unified toggle and renames natively, and virtualizes long diffs
- * internally. `lib/unifiedDiff.ts`'s own `parseUnifiedDiff` is still what
- * splits a multi-file `git diff` blob into one `DiffView` per file.
+ * tests are unchanged, this only replaced the renderer), handles renames
+ * and virtualizes long diffs internally. `lib/unifiedDiff.ts`'s own
+ * `parseUnifiedDiff` is still what splits a multi-file `git diff` blob
+ * into one `DiffView` per file. `DiffView` also supports a split-vs-unified
+ * mode natively — driven here by the `mode` prop (`FileViewerColumn.tsx`'s
+ * toggle) rather than `DiffView`'s own internal toggle UI, so it matches
+ * this app's own header chrome instead of introducing a second one.
  */
 export function UnifiedDiffViewer({
   diff,
+  mode = DiffModeEnum.Unified,
   onNarrowToFile,
 }: {
   diff: GitDiffContent;
+  /** `DiffModeEnum.Unified` (default, one column) or `.Split` (side-by-side) — `FileViewerColumn.tsx`'s Split/Unified toggle. */
+  mode?: DiffModeEnum;
   /** Feature 3 Phase 5 (docs/web-ux-improvements-plan.md): called with a file's path when the truncation notice's "View this file" action is used — the caller re-fetches `git.diff` scoped to just that file, which the daemon's own 60KB inline budget applies per-file rather than across the whole multi-file diff. */
   onNarrowToFile?: (path: string) => void;
 }) {
@@ -94,7 +100,7 @@ export function UnifiedDiffViewer({
         </div>
       )}
       {parsed.files.map((file) => (
-        <FileDiff key={file.path} file={file} />
+        <FileDiff key={file.path} file={file} mode={mode} />
       ))}
     </div>
   );

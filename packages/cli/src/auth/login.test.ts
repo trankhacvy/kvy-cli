@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const pairDeviceMock = vi.fn();
 const openBrowserMock = vi.fn();
-const displayPairingQrCodeMock = vi.fn();
+const displayQrCodeMock = vi.fn();
 const writeCredentialsMock = vi.fn();
 const readCredentialsMock = vi.fn();
 const clearCredentialsMock = vi.fn();
@@ -10,7 +10,7 @@ const wrapWithDeviceKeyMock = vi.fn();
 
 vi.mock("./pair.js", () => ({ pairDevice: pairDeviceMock }));
 vi.mock("./browser.js", () => ({ openBrowser: openBrowserMock }));
-vi.mock("./qrcode.js", () => ({ displayPairingQrCode: displayPairingQrCodeMock }));
+vi.mock("./qrcode.js", () => ({ displayQrCode: displayQrCodeMock }));
 vi.mock("./credentials.js", () => ({
   writeCredentials: writeCredentialsMock,
   readCredentials: readCredentialsMock,
@@ -45,7 +45,7 @@ function joinedOutput(stdout: { mock: { calls: unknown[][] } }): string {
 beforeEach(() => {
   pairDeviceMock.mockReset();
   openBrowserMock.mockReset().mockResolvedValue(false);
-  displayPairingQrCodeMock.mockReset();
+  displayQrCodeMock.mockReset();
   writeCredentialsMock.mockReset();
   readCredentialsMock.mockReset().mockReturnValue(null);
   clearCredentialsMock.mockReset();
@@ -79,13 +79,13 @@ describe("runAuthLogin", () => {
     expect(written.refreshToken).toBe("refresh-token-1");
     expect(written.keyMaterial).toEqual({ mode: "device", wrapped: { v: 1, nonce: "n", ct: "c" } });
     expect(wrapWithDeviceKeyMock).toHaveBeenCalledWith(masterSecret, expect.any(String));
-    expect(displayPairingQrCodeMock).toHaveBeenCalledWith("http://web.invalid/pair#frag");
+    expect(displayQrCodeMock).toHaveBeenCalledWith("http://web.invalid/pair#frag");
     expect(logger.info).toHaveBeenCalledWith("auth login: succeeded");
     expect(joinedOutput(stdout)).toContain("✓ Connected");
     expect(joinedOutput(stdout)).toContain("Starting your session");
   });
 
-  it("only prints the URL fallback when the browser could not be opened (AX-1.10)", async () => {
+  it("prints the pairing URL even when the browser opened successfully", async () => {
     openBrowserMock.mockResolvedValue(true);
     pairDeviceMock.mockImplementation(
       async (options: { onPairingUrlReady: (u: string) => unknown }) => {
@@ -98,10 +98,10 @@ describe("runAuthLogin", () => {
     await runAuthLogin(fakeLogger());
 
     expect(joinedOutput(stdout)).toContain("Opening your browser");
-    expect(joinedOutput(stdout)).not.toContain("If it didn't open");
+    expect(joinedOutput(stdout)).toContain("http://web.invalid/pair#frag");
   });
 
-  it("prints the URL fallback when the browser could not be opened", async () => {
+  it("prints the pairing URL when the browser could not be opened", async () => {
     openBrowserMock.mockResolvedValue(false);
     pairDeviceMock.mockImplementation(
       async (options: { onPairingUrlReady: (u: string) => unknown }) => {
@@ -113,7 +113,6 @@ describe("runAuthLogin", () => {
 
     await runAuthLogin(fakeLogger());
 
-    expect(joinedOutput(stdout)).toContain("If it didn't open");
     expect(joinedOutput(stdout)).toContain("http://web.invalid/pair#frag");
   });
 

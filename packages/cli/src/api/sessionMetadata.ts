@@ -21,6 +21,14 @@ const SessionMetadataValueSchema = z.looseObject({
   path: z.string(),
   providerSessionId: z.string().nullable().optional(),
   model: z.string().nullable().optional(),
+  /** `"auto"` (machine-set — the working-directory basename, or a
+   * provider-generated summary) vs `"manual"` (a human renamed it, via
+   * `rename-session-dialog.tsx`). `updateTitle` below refuses to overwrite a
+   * `"manual"` title. Optional/absent is treated the same as `"auto"` — a
+   * pre-existing row sealed before this field existed has no marker at all,
+   * and defaulting that to "still safe to auto-title" is the same
+   * conservative choice `bootstrap.ts` makes for every fresh session. */
+  titleSource: z.enum(["auto", "manual"]).optional(),
 });
 
 export interface SessionMetadataValue {
@@ -28,6 +36,7 @@ export interface SessionMetadataValue {
   path: string;
   providerSessionId?: string | null;
   model?: string | null;
+  titleSource?: "auto" | "manual";
   [extra: string]: unknown;
 }
 
@@ -50,16 +59,21 @@ export interface SessionMetadataUpdaterOptions {
 
 export interface SessionMetadataUpdater {
   updateModel(model: string): Promise<void>;
+  /** Proposes an auto-title (e.g. the provider's own transcript summary
+   * line) — a no-op once the session has been manually renamed. See
+   * `SessionMetadataValueSchema`'s `titleSource` doc comment. */
+  updateTitle(title: string): Promise<void>;
 }
 
 type NormalizedMetadata = Required<
   Pick<SessionMetadataValue, "title" | "path" | "providerSessionId" | "model">
 > &
+  Pick<SessionMetadataValue, "titleSource"> &
   Record<string, unknown>;
 
 // Spreads ALL parsed keys (preserving unknown fields like the web's
-// `pinned`) and then overlays only the four fields this module actually
-// knows about, so a round-trip through here never drops a foreign key.
+// `pinned`) and then overlays only the fields this module actually knows
+// about, so a round-trip through here never drops a foreign key.
 function normalizeMetadata(metadata: SessionMetadataValue): NormalizedMetadata {
   return {
     ...metadata,
@@ -67,6 +81,7 @@ function normalizeMetadata(metadata: SessionMetadataValue): NormalizedMetadata {
     path: metadata.path,
     providerSessionId: metadata.providerSessionId ?? null,
     model: metadata.model ?? null,
+    titleSource: metadata.titleSource,
   };
 }
 
@@ -100,15 +115,21 @@ export function createSessionMetadataUpdater(
   let currentVersion = options.metadataVersion;
   let queue = Promise.resolve();
 
-  async function persistModel(nextModel: string): Promise<void> {
-    const normalizedModel = nextModel.trim();
-    if (normalizedModel.length === 0 || currentMetadata.model === normalizedModel) return;
-
+  /**
+   * Generic CAS-retry loop shared by `persistModel`/`persistTitle`:
+   * `computeNext` is re-run against the freshest known `currentMetadata` on
+   * every attempt (including after a 409 reload), so it doubles as the
+   * "already satisfied, nothing to write" check — returning `null` (no
+   * change needed, or a guard like `persistTitle`'s manual-title check
+   * blocked it) short-circuits without a network call.
+   */
+  async function persistPatch(
+    computeNext: (current: NormalizedMetadata) => NormalizedMetadata | null,
+  ): Promise<void> {
     for (;;) {
-      const nextMetadata: NormalizedMetadata = {
-        ...currentMetadata,
-        model: normalizedModel,
-      };
+      const nextMetadata = computeNext(currentMetadata);
+      if (nextMetadata === null) return;
+
       const token = await options.getAuthToken();
       const headers: Record<string, string> = { "content-type": "application/json" };
       if (token) headers.authorization = `Bearer ${token}`;
@@ -137,7 +158,6 @@ export function createSessionMetadataUpdater(
         currentVersion = parsed.current.version;
         if (parsed.current.value) {
           currentMetadata = readMetadataFromBox(parsed.current.value, options.dek);
-          if (currentMetadata.model === normalizedModel) return;
         }
         continue;
       }
@@ -147,9 +167,34 @@ export function createSessionMetadataUpdater(
     }
   }
 
+  function persistModel(nextModel: string): Promise<void> {
+    const normalizedModel = nextModel.trim();
+    if (normalizedModel.length === 0) return Promise.resolve();
+    return persistPatch((current) =>
+      current.model === normalizedModel ? null : { ...current, model: normalizedModel },
+    );
+  }
+
+  function persistTitle(nextTitle: string): Promise<void> {
+    const normalizedTitle = nextTitle.trim();
+    if (normalizedTitle.length === 0) return Promise.resolve();
+    return persistPatch((current) => {
+      // Never overwrite a title the user set by hand — this updater only
+      // ever proposes an *auto* title (provider summary line today).
+      if (current.titleSource === "manual") return null;
+      if (current.title === normalizedTitle && current.titleSource === "auto") return null;
+      return { ...current, title: normalizedTitle, titleSource: "auto" };
+    });
+  }
+
   return {
     async updateModel(model: string): Promise<void> {
       const nextTask = queue.catch(() => undefined).then(() => persistModel(model));
+      queue = nextTask;
+      return nextTask;
+    },
+    async updateTitle(title: string): Promise<void> {
+      const nextTask = queue.catch(() => undefined).then(() => persistTitle(title));
       queue = nextTask;
       return nextTask;
     },

@@ -185,6 +185,23 @@ class EventRouter {
   // === PRESENCE QUERIES ===
 
   /**
+   * Whether `machineId` currently has a live machine-scoped socket for this
+   * account — same room `addConnection` above already joins it to, just read
+   * back synchronously (single-process adapter, same precedent as
+   * `socketsInRooms` below). Used at `socket.ts`'s connection time to give a
+   * freshly-connecting web client an immediate, accurate snapshot of every
+   * already-online machine: without this, `useMachinePresence`'s map starts
+   * empty and only fills in from a live connect/disconnect/heartbeat AFTER
+   * this moment, so a machine that was already online before this tab
+   * connected shows via the `lastSeenAt` heuristic (up to ~3 minutes stale)
+   * instead of ground truth.
+   */
+  isMachineOnline(accountId: string, machineId: string): boolean {
+    const room = this.io.sockets.adapter.rooms.get(`user:${accountId}:machine:${machineId}`);
+    return Boolean(room && room.size > 0);
+  }
+
+  /**
    * Returns true if the account has any non-machine socket that hasn't reported
    * `app-state: background`. Clients that never sent `app-state` are treated as
    * active (connected = present).

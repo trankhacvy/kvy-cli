@@ -2110,6 +2110,20 @@
         "element": {
           "kind": "object",
           "fields": {
+            "deletions": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "number"
+              }
+            },
+            "insertions": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "number"
+              }
+            },
             "path": {
               "kind": "leaf",
               "type": "string"

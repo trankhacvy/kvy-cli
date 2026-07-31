@@ -62,15 +62,18 @@ describe("GitStatusError", () => {
     const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
     expect(html).toContain("set up as a git project");
     expect(html).not.toContain("workspace is no longer a git repository");
-    expect(html).not.toContain("text-destructive");
-    expect(html).toContain("text-muted-foreground");
+    // The message itself stays muted — the Remove-workspace button below it
+    // is a separate, deliberately destructive-styled action, not a signal
+    // that this whole state is alarming.
+    expect(html).toContain(
+      'class="text-muted-foreground">This folder isn&#x27;t set up as a git project.</p>',
+    );
   });
 
   it("shows plain-language copy, muted, for 'workspace-missing'", () => {
     const panel = fakePanel({ statusErrorCode: "workspace-missing" });
     const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
     expect(html).toContain("moved, renamed, or deleted");
-    expect(html).not.toContain("text-destructive");
   });
 
   it("offers 'Set up git here' when statusErrorCode is workspace-not-a-repo (Feature 1)", () => {
@@ -104,24 +107,22 @@ describe("GitStatusError", () => {
     expect(html).toContain("unknown-method");
   });
 
-  it("offers the forget-this-project affordance as an unstyled <button>, not a primary Button — the destructive action stays a link (CLAUDE.md auth/UX rule #5)", () => {
-    const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo" });
+  it("offers the remove-workspace control for workspace-missing — nothing else can fix a gone folder", () => {
+    const panel = fakePanel({ statusErrorCode: "workspace-missing" });
     const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
-    expect(html).toContain("Forget this project");
-    expect(html).toContain("nothing on disk changes");
-    const suffix =
-      ">Forget this project: Falcon stops tracking the folder, nothing on disk changes</button>";
-    const end = html.indexOf(suffix);
-    const start = html.lastIndexOf("<button", end);
-    const forgetTag = html.slice(start, end + suffix.length);
-    expect(forgetTag).not.toContain('data-slot="button"');
-    expect(forgetTag).toContain("underline");
+    expect(html).toContain("Remove workspace");
   });
 
-  it("swaps the forget-this-project affordance for a confirmation once the workspace has been removed", () => {
-    const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo", removeWorkspaceDone: true });
+  it("does NOT offer the remove-workspace control for workspace-not-a-repo — 'Set up git here' is the real fix, not deleting the workspace", () => {
+    const panel = fakePanel({ statusErrorCode: "workspace-not-a-repo" });
     const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
-    expect(html).not.toContain("Forget this project");
+    expect(html).not.toContain("Remove workspace");
+  });
+
+  it("swaps the remove-workspace control for a confirmation once the workspace has been removed", () => {
+    const panel = fakePanel({ statusErrorCode: "workspace-missing", removeWorkspaceDone: true });
+    const html = renderToStaticMarkup(createElement(GitStatusError, { panel }));
+    expect(html).not.toContain("Remove workspace");
     expect(html).toContain("Removed.");
   });
 

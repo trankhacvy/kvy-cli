@@ -128,6 +128,7 @@
  * code to 0 (SIGTERM) / 1 (SIGHUP/SIGINT) regardless of the child's own exit
  * code.
  */
+import { stat } from "node:fs/promises";
 import path from "node:path";
 import { encodeBase64, wrapDek } from "@falcon/crypto";
 import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
@@ -143,15 +144,17 @@ import {
   type ReportableSessionStatus,
   reportSessionStatus as reportSessionStatusDefault,
 } from "../api/sessionStatus.js";
-import { resolveBackendUrl } from "../auth/config.js";
+import { resolveBackendUrl, resolveFrontendUrl } from "../auth/config.js";
 import {
   type FalconCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
 import { ensureLoggedIn as ensureLoggedInDefault } from "../auth/login.js";
+import { displayQrCode as displayQrCodeDefault } from "../auth/qrcode.js";
 import { claimMessageSend, completeMessageSend } from "../claims/claimStore.js";
 import type { ClaudeLocalLauncherDeps } from "../claude/claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "../claude/claudeRemoteLauncher.js";
+import { deriveTitleFromFirstUserMessage } from "../claude/firstMessageTitle.js";
 import {
   type ClaudeMode,
   type LoopDeps,
@@ -200,7 +203,13 @@ import {
   acquireSessionLock as acquireSessionLockDefault,
   type SessionLockHandle,
 } from "../session/sessionLock.js";
-import { KEY_REQUEST_PENDING, NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
+import {
+  KEY_REQUEST_PENDING,
+  NO_TTY_CANNOT_SIGN_IN,
+  NOT_A_GIT_REPOSITORY_WARNING,
+  SCAN_SESSION_QR_LABEL,
+  webUrlLine,
+} from "../ui/messages.js";
 import { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
 import { runKeysApproveCommand as runKeysApproveCommandDefault } from "./keysApprove.js";
 import { runPreflightWithReauth } from "./startPreflight.js";
@@ -320,6 +329,11 @@ export interface StartClaudeCommandDeps {
    * session start, matching `notifyDaemonSessionStarted`'s precedent above.
    */
   registerWorkspace?: typeof registerWorkspaceDefault;
+  frontendUrl?: string;
+  /** Injectable for tests; defaults to a real `stat` of `<workingDirectory>/.git`. */
+  hasGitDir?: (directory: string) => Promise<boolean>;
+  /** Injectable for tests; defaults to the real terminal QR renderer (`auth/qrcode.ts`). */
+  displayQrCode?: (url: string) => void;
   /**
    * Injectable for tests; defaults to the real `ensureLoggedIn()`. Injected rather
    * than called directly because `ensureLoggedIn` reads credentials through the
@@ -389,6 +403,13 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function hasGitDirDefault(directory: string): Promise<boolean> {
+  return stat(path.join(directory, ".git")).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** Runs `falcon claude [args...]`. Returns the process exit code. */
 export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
@@ -414,6 +435,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const setTimeoutImpl = deps.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimeoutImpl = deps.clearTimeoutImpl ?? ((handle) => clearTimeout(handle));
   const doRunKeysApprove = deps.runKeysApproveCommand ?? runKeysApproveCommandDefault;
+  const checkHasGitDir = deps.hasGitDir ?? hasGitDirDefault;
+  const doDisplayQrCode = deps.displayQrCode ?? displayQrCodeDefault;
 
   // W4.4: `--force-new-session` is Falcon's own flag, never Claude Code's —
   // strip it out of the passthrough args before they ever reach the real
@@ -433,7 +456,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // `location` does not carry into the nested run* closures below.
   const claudeCliPath = location.path;
 
+  if (!(await checkHasGitDir(deps.workingDirectory))) {
+    write(NOT_A_GIT_REPOSITORY_WARNING);
+  }
+
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
+  const frontendUrl = deps.frontendUrl ?? resolveFrontendUrl(env);
 
   // 1. Resolve credentials, key material, machineId and an access token as ONE
   // restartable unit (AX-1.3/AX-1.5). A dead refresh token re-pairs inline and
@@ -465,6 +493,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,
     path: deps.workingDirectory,
     model: extractModelFlag(claudeArgs),
+    // See `bootstrap.ts`'s `titleSource` doc comment — this session's title
+    // starts out machine-set (the directory basename above), so a later
+    // provider-summary auto-title (`handleSummaryTitle`, below) is still
+    // allowed to replace it, right up until a human renames it.
+    titleSource: "auto" as const,
   };
 
   // W4.4 (same-directory duplicate session lock): before minting a fresh
@@ -626,6 +659,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   }
 
   write(`falcon claude: starting session ${bootstrap.sessionId}\n`);
+  const sessionUrl = `${frontendUrl}/dashboard/session/${bootstrap.sessionId}/`;
+  write(webUrlLine(sessionUrl));
+  if (process.stdin.isTTY === true) {
+    write(SCAN_SESSION_QR_LABEL);
+    doDisplayQrCode(sessionUrl);
+  }
 
   // Session lifecycle status (plan-v2.md W1.4+B15; PRD FR-3.7, design §7.5):
   // best-effort report the session's terminal status to the server exactly
@@ -848,6 +887,41 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       });
     });
     for (const watcher of [...modelWatchers]) watcher(nextModel);
+  };
+
+  // Claude Code writes its own one-line transcript summary once it has one
+  // (`ptyClaudeSession.ts`'s `onSummaryTitle`, sourced straight from the raw
+  // scanner output — `mapClaudeToEnvelopes` never sees this entry type).
+  // Proposing it as the session's title turns "manila" (every session in
+  // this project, indistinguishable) into something that actually describes
+  // the conversation — `updateTitle` itself is what refuses to clobber a
+  // title the user set by hand.
+  const handleSummaryTitle = (title: string): void => {
+    void sessionMetadataUpdater.updateTitle(title).catch((error) => {
+      logger.warn("[start-claude] failed to persist provider summary title", {
+        title,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  };
+
+  // The summary line above is provider/version-dependent and in practice may
+  // never arrive for a given session — the first genuine human-typed message
+  // is what actually replaces the folder-name title for most sessions. Fires
+  // at most once (`firstUserTitleSent`); a later summary still overwrites it
+  // since both go through `updateTitle` with `titleSource: "auto"`.
+  let firstUserTitleSent = false;
+  const handleFirstUserMessageTitle = (envelopes: readonly SessionEnvelope[]): void => {
+    if (firstUserTitleSent) return;
+    const title = deriveTitleFromFirstUserMessage(envelopes);
+    if (!title) return;
+    firstUserTitleSent = true;
+    void sessionMetadataUpdater.updateTitle(title).catch((error) => {
+      logger.warn("[start-claude] failed to persist first-message title", {
+        title,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   };
 
   // Fix 7 (auth-ux-overhaul-fix-plan.md): a key request raised on another device while
@@ -1094,8 +1168,10 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
             }
           }
           handlePossibleModelChange(envelopes);
+          handleFirstUserMessageTitle(envelopes);
           outbox.enqueue(envelopes);
         },
+        onSummaryTitle: handleSummaryTitle,
         // The send-claim completes the moment the message is actually typed +
         // submitted into the PTY — from there a retry is an honest duplicate.
         // That same submit is the "a web turn just began" signal: mark it so

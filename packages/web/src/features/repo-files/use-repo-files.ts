@@ -3,12 +3,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
+import { useRefetchOnTurnEnd } from "@/lib/use-refetch-on-turn-end";
 import { appendPage, type PagedFileContent } from "./file-content-paging";
 import { buildFileTree } from "./file-tree-logic";
 import type { RepoFilesActions } from "./types";
 
 /** Bytes requested per "Load more" page — matches `fsRead.ts`'s own `MAX_INLINE_BYTES` budget, so one click's worth of range request is exactly one more inline-sized page. */
 const PAGE_SIZE_BYTES = 60_000;
+
+/** Same gap/fix as `use-git-panel.ts`'s own constant of this name: a file changed outside the agent (the user editing in their own terminal) never invalidates this query on its own, so poll for it — see that file's doc comment for why polling over a real filesystem watcher. */
+const LIVE_REFRESH_POLL_INTERVAL_MS = 7_000;
 
 /**
  * The Repo Files panel's data-fetching state (docs/competitive-notes-
@@ -18,13 +22,19 @@ const PAGE_SIZE_BYTES = 60_000;
  * (not the sync engine's invalidate-on-update machinery), a point-in-time
  * RPC snapshot the user refreshes by re-selecting or explicit re-fetch.
  */
-export function useRepoFiles(actions: RepoFilesActions, worktree: string, machineOnline = true) {
+export function useRepoFiles(
+  actions: RepoFilesActions,
+  worktree: string,
+  machineOnline = true,
+  working = false,
+) {
   const queryClient = useQueryClient();
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const filesQuery = useQuery({
     queryKey: ["repo-files", worktree],
     queryFn: () => actions.fetchFileList(worktree),
+    refetchInterval: machineOnline ? LIVE_REFRESH_POLL_INTERVAL_MS : false,
   });
 
   const contentQuery = useQuery({
@@ -100,6 +110,14 @@ export function useRepoFiles(actions: RepoFilesActions, worktree: string, machin
   }, [actions]);
 
   useRefetchOnMachineRecovery(machineOnline, () => {
+    void queryClient.invalidateQueries({ queryKey: ["repo-files", worktree] });
+    void queryClient.invalidateQueries({ queryKey: ["repo-file-content", worktree] });
+  });
+
+  // Same gap `use-git-panel.ts` has, same fix: the agent's own Write/Edit/
+  // Bash tool calls never invalidate this query, so a newly created/changed
+  // file stayed invisible until an unrelated refetch happened to occur.
+  useRefetchOnTurnEnd(working, () => {
     void queryClient.invalidateQueries({ queryKey: ["repo-files", worktree] });
     void queryClient.invalidateQueries({ queryKey: ["repo-file-content", worktree] });
   });
