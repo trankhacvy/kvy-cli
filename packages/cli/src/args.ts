@@ -15,7 +15,9 @@
  *    forwarded verbatim as `providerArgs`.
  */
 
-export type Provider = "claude" | "codex";
+import { PROVIDER_REGISTRY } from "./provider/registry.js";
+
+export type Provider = string;
 
 export type FalconCommand =
   | { type: "help" }
@@ -61,7 +63,9 @@ export class ArgParseError extends Error {
 const HELP_FLAGS = new Set(["--help", "-h"]);
 const VERSION_FLAGS = new Set(["--version", "-v", "-V"]);
 const CONTINUE_FLAGS = new Set(["--continue"]);
-const PROVIDERS = new Set<Provider>(["claude", "codex"]);
+const PROVIDERS = new Set<Provider>(
+  Object.values(PROVIDER_REGISTRY).map((entry) => entry.falconSubcommand),
+);
 const KILL_TARGETS = new Set(["daemon", "sessions", "all", "all-force"]);
 
 export function parseArgs(argv: string[]): FalconCommand {

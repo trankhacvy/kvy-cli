@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { EncryptedBoxSchema } from "./box";
 import { PermDecisionSchema, PermissionModeSchema } from "./permissions";
+import { ProviderIdSchema } from "./providers";
 import { SessionEnvelopeSchema } from "./session";
 
 /**
@@ -31,7 +32,7 @@ export const SpawnParamsSchema = z.object({
   idempotencyKey: z.string(), // cuid2 minted by caller; daemon replays the prior result on retry
   workspaceId: z.string(),
   directory: z.string(),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   permissionMode: PermissionModeSchema,
   model: z.string().optional(),
   branch: z
@@ -104,7 +105,7 @@ export const ListSessionsParamsSchema = z.object({});
 export const LocalSessionInfoSchema = z.object({
   sessionId: z.string(),
   workspaceId: z.string(),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   controlMode: z.enum(["local", "remote"]),
   status: z.enum(["active", "failed", "stopped"]),
   pid: z.number().optional(),
@@ -221,7 +222,7 @@ export type GitRemotesResult = z.infer<typeof GitRemotesResultSchema>;
 // `git.status`/`git.branches`.
 export const ProviderAccountParamsSchema = z.object({
   idempotencyKey: z.string(),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
 });
 export type ProviderAccountParams = z.infer<typeof ProviderAccountParamsSchema>;
 
@@ -246,7 +247,7 @@ export type ProviderUsageMeter = z.infer<typeof ProviderUsageMeterSchema>;
 // absent for it, and an API-key-authenticated account has no email/org to
 // show.
 export const ProviderAccountResultSchema = z.object({
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   authenticated: z.boolean(),
   /** e.g. "oauth", "api-key", "chatgpt" — the local auth mechanism in use, read from the CLI's own config. */
   authType: z.string().optional(),

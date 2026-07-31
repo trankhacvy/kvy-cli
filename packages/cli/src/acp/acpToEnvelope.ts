@@ -28,7 +28,12 @@
  *  - `user_message_chunk`       -> intentionally dropped, no log. The prompt
  *    text is already emitted synchronously by whatever calls `session/prompt`
  *    (`acpRemote.ts`'s `send()`) — mapping it here too would duplicate it.
- *  - everything else (`plan`/`plan_update`/`plan_removed`,
+ *  - `plan`                     -> `plan` (the agent's task/todo list; each
+ *    update carries the full current list, not a diff — verified against the
+ *    installed `codex-acp`'s own `updatePlan()`). `plan_update`/`plan_removed`
+ *    are a separate, still-experimental multi-plan-by-id extension nothing
+ *    installed emits yet — still dropped below.
+ *  - everything else (`plan_update`/`plan_removed`,
  *    `current_mode_update`, `available_commands_update`, `session_info_
  *    update`, `usage_update`, `config_option_update`, and any future/unknown
  *    kind) -> logged and dropped. None of these has a `SessionEventSchema`
@@ -145,6 +150,8 @@ export interface AcpSessionUpdate {
   rawOutput?: unknown;
   /** Adapter-stamped per-assistant-message id on message/thought chunks (see "Text-chunk coalescing" in the file header). */
   messageId?: unknown;
+  /** `sessionUpdate: "plan"`'s entries (ACP's stable `zPlan.entries` — verified against the installed `codex-acp`'s own `updatePlan()`). */
+  entries?: unknown;
   _meta?: unknown;
 }
 
@@ -342,6 +349,25 @@ function pickContentText(content: unknown): string | undefined {
   if (!isRecord(content)) return undefined;
   if (content.type !== "text") return undefined;
   return typeof content.text === "string" ? content.text : undefined;
+}
+
+type PlanStepStatus = "pending" | "in_progress" | "completed";
+
+function isPlanStepStatus(value: unknown): value is PlanStepStatus {
+  return value === "pending" || value === "in_progress" || value === "completed";
+}
+
+/** ACP's `zPlanEntry[]` (`{content, status, priority}`) -> the wire `plan` event's `steps`. Entries with no usable `content`/`status` are skipped rather than dropping the whole update. */
+function pickPlanSteps(entries: unknown): Array<{ text: string; status: PlanStepStatus }> {
+  if (!Array.isArray(entries)) return [];
+  const steps: Array<{ text: string; status: PlanStepStatus }> = [];
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue;
+    const text = pickString(entry.content);
+    if (!text || !isPlanStepStatus(entry.status)) continue;
+    steps.push({ text, status: entry.status });
+  }
+  return steps;
 }
 
 /**
@@ -546,6 +572,29 @@ function handleTextChunk(
   return envelopes;
 }
 
+/**
+ * `sessionUpdate: "plan"` — the agent's task/todo list (ACP's stable `zPlan`,
+ * verified against the installed `codex-acp`'s `updatePlan()`). Each update
+ * carries the FULL current list, not a diff, so this is a stateless one-shot
+ * mapping, same as `usage`'s own "one snapshot replaces the last one" shape.
+ */
+function handlePlan(
+  update: AcpSessionUpdate,
+  state: AcpEnvelopeMapperState,
+  logger: Logger | undefined,
+): SessionEnvelope[] {
+  const turn = state.currentTurnId;
+  if (!turn) {
+    logger?.warn("acp_session_update_dropped_no_active_turn", {
+      sessionUpdate: update.sessionUpdate,
+    });
+    return [];
+  }
+  const subagent = resolveEnvelopeSubagent(update, state);
+  const steps = pickPlanSteps(update.entries);
+  return [createEnvelope("agent", { t: "plan", steps }, { turn, subagent })];
+}
+
 function hasArgs(args: Record<string, unknown>): boolean {
   return Object.keys(args).length > 0;
 }
@@ -695,7 +744,6 @@ function handleToolCallUpdate(
  * still warn below.
  */
 const KNOWN_UNMAPPED_KINDS = new Set([
-  "plan",
   "plan_update",
   "plan_removed",
   "current_mode_update",
@@ -719,6 +767,8 @@ export function mapAcpUpdateToEnvelopes(
       return handleToolCall(update, state, logger);
     case "tool_call_update":
       return handleToolCallUpdate(update, state, logger);
+    case "plan":
+      return handlePlan(update, state, logger);
     case "user_message_chunk":
       // Intentionally not mapped — see file header. Not logged: this is an
       // expected, known kind, not an unrecognized one.

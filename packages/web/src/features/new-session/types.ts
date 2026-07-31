@@ -1,4 +1,4 @@
-import type { PermissionMode, WorkspaceGetConfigResult } from "@falcon/wire";
+import type { PermissionMode, ProviderId, WorkspaceGetConfigResult } from "@falcon/wire";
 
 /**
  * Shared RPC/view-model types for spawning a session against a machine
@@ -29,7 +29,7 @@ export interface DirectoryListing {
   entries: DirectoryEntry[];
 }
 
-export type NewSessionProvider = "claude-code" | "codex";
+export type NewSessionProvider = ProviderId;
 
 export interface BranchOption {
   name: string;

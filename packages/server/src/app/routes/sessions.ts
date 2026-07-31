@@ -1,5 +1,5 @@
 import { decodeBase64 } from "@falcon/crypto";
-import { EncryptedBoxSchema, SessionRowSchema } from "@falcon/wire";
+import { EncryptedBoxSchema, ProviderIdSchema, SessionRowSchema } from "@falcon/wire";
 import { and, count, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -16,7 +16,7 @@ import { decodeSessionCursor, encodeSessionCursor } from "./shared.js";
 
 const CreateSessionBodySchema = z.object({
   tag: z.string().min(1),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   workspaceId: z.string().min(1).nullable().optional(),
   machineId: z.string().min(1).nullable().optional(),
   executionTarget: z.string().min(1).optional(),

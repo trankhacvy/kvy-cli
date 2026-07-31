@@ -74,6 +74,7 @@ export function SessionCard({
           machineOnline={machine?.online ?? false}
           machineName={machine?.name ?? null}
           workspaceId={session.workspaceId}
+          provider={session.provider}
         />
       </div>
     </div>

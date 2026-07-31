@@ -3,6 +3,7 @@ import { FileAttachment } from "./FileAttachment";
 import { MessageText } from "./MessageText";
 import { OrphanToolEnd } from "./OrphanToolEnd";
 import { PermPlaceholder } from "./PermPlaceholder";
+import { PlanChecklist } from "./PlanChecklist";
 import { ServiceLine } from "./ServiceLine";
 import { SubagentGroup } from "./SubagentGroup";
 import { ToolCard } from "./tool-cards/registry";
@@ -52,6 +53,9 @@ export function TimelineRow({ item }: { item: RenderItem }) {
 
     case "usage":
       return <UsageChip item={item} />;
+
+    case "plan":
+      return <PlanChecklist item={item} />;
 
     case "perm-placeholder":
       return <PermPlaceholder item={item} />;

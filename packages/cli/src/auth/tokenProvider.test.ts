@@ -362,7 +362,11 @@ describe("createTokenProvider", () => {
       if (body.refreshToken === "refresh-1") {
         return { ok: false, status: 401, json: async () => ({}) };
       }
-      return { ok: true, status: 200, json: async () => ({ accessToken, refreshToken: "refresh-3" }) };
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ accessToken, refreshToken: "refresh-3" }),
+      };
     }) as unknown as typeof fetch;
 
     let lockCalls = 0;

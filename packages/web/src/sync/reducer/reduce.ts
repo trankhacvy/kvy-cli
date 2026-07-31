@@ -169,6 +169,10 @@ function reduceScope(envs: SessionEnvelope[]): RenderItem[] {
         });
         break;
 
+      case "plan":
+        items.push({ ...base, kind: "plan", steps: ev.steps });
+        break;
+
       case "perm-request": {
         const info: PermissionInfo = {
           reqId: ev.reqId,

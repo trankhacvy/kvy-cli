@@ -65,10 +65,7 @@ async function readLockPayload(lockPath: string): Promise<CredentialsLockPayload
   }
 }
 
-async function writeTempPayload(
-  homeDir: string,
-  payload: CredentialsLockPayload,
-): Promise<string> {
+async function writeTempPayload(homeDir: string, payload: CredentialsLockPayload): Promise<string> {
   const tmpPath = path.join(
     homeDir,
     `.${LOCK_FILE_NAME}.${process.pid}.${randomBytes(6).toString("hex")}.tmp`,

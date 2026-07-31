@@ -26,7 +26,7 @@
  * (§7.2/§7.3/§7.4, separate plan bullets).
  */
 
-import { PermissionModeSchema, StopSessionParamsSchema } from "@falcon/wire";
+import { PermissionModeSchema, ProviderIdSchema, StopSessionParamsSchema } from "@falcon/wire";
 import fastify from "fastify";
 import {
   serializerCompiler,
@@ -99,7 +99,7 @@ const StopSessionResponseSchema = z.object({ success: z.boolean() });
 const SpawnSessionBodySchema = z.object({
   directory: z.string(),
   sessionId: z.string().optional(),
-  provider: z.enum(["claude-code", "codex"]).optional(),
+  provider: ProviderIdSchema.optional(),
   permissionMode: PermissionModeSchema.optional(),
   model: z.string().optional(),
   environmentVariables: z.record(z.string(), z.string()).optional(),

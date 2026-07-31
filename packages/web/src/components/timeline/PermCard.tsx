@@ -13,6 +13,7 @@ import {
   type PermCardPhase,
   useSessionControl,
 } from "@/features/session-control";
+import { getProviderMeta } from "@/lib/providers";
 import { parseEditArgs } from "@/lib/tool-args";
 import type { PermissionInfo } from "@/sync/reducer";
 import { DiffView } from "./DiffView";
@@ -128,7 +129,7 @@ export function PermCard({
   showPreview?: boolean;
   showHeader?: boolean;
 }) {
-  const { actions } = useSessionControl();
+  const { actions, provider } = useSessionControl();
   const [phase, setPhase] = useState<PermCardPhase>({ kind: "idle" });
   const [note, setNote] = useState("");
 
@@ -246,7 +247,7 @@ export function PermCard({
         value={note}
         onChange={(e) => setNote(e.target.value)}
         disabled={submitting}
-        placeholder="Optionally tell Claude what to do next (sent after Allow)…"
+        placeholder={`Optionally tell ${getProviderMeta(provider).label} what to do next (sent after Allow)…`}
         className="h-8 text-sm"
       />
 

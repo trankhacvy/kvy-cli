@@ -37,10 +37,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import type { ProviderAccountResult, ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@falcon/wire";
 
 export interface ProviderAccountInfoParams {
-  provider: "claude-code" | "codex";
+  provider: ProviderId;
 }
 
 export interface ProviderAccountInfoDeps {

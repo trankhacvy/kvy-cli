@@ -3,7 +3,7 @@
  * cross a network boundary, they're the shape of the daemon's own in-memory
  * bookkeeping). Adapted from happy-cli/src/daemon/types.ts (MIT).
  */
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode, ProviderId } from "@falcon/wire";
 
 /**
  * Encryption material a spawned session reports back to the daemon via the
@@ -29,7 +29,7 @@ export interface TrackedSession {
   /** `"daemon"` for RPC-spawned sessions, else a free-form description (e.g. `"terminal"`). */
   startedBy: "daemon" | string;
   sessionId?: string;
-  provider?: "claude-code" | "codex";
+  provider?: ProviderId;
   permissionMode?: PermissionMode;
   metadata?: unknown;
   encryption?: SessionEncryptionData;
@@ -59,7 +59,7 @@ export interface TrackedSession {
 export interface SpawnSessionOptions {
   directory: string;
   sessionId?: string;
-  provider?: "claude-code" | "codex";
+  provider?: ProviderId;
   permissionMode?: string;
   model?: string;
   environmentVariables?: Record<string, string>;

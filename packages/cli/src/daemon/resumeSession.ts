@@ -34,6 +34,7 @@
 import { realpath } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import type { Logger } from "../logger.js";
+import { PROVIDER_REGISTRY } from "../provider/registry.js";
 import {
   type LaunchProcessDeps,
   launchProviderProcess as launchProviderProcessDefault,
@@ -48,11 +49,6 @@ export class ResumeSessionError extends Error {
     this.name = "ResumeSessionError";
   }
 }
-
-const PROVIDER_CLI_NAME: Record<"claude-code" | "codex", string> = {
-  "claude-code": "claude",
-  codex: "codex",
-};
 
 export interface ResumeSessionRegistry {
   findResumable(sessionId: string): PersistedSession | null;
@@ -256,7 +252,7 @@ export async function resumeSession(
   // itself — this module has no provider session id to offer (persisted
   // sessions only carry the opaque `metadata` blob), so it doesn't set that
   // one.
-  const providerCliName = PROVIDER_CLI_NAME[persisted.provider ?? "claude-code"];
+  const providerCliName = PROVIDER_REGISTRY[persisted.provider ?? "claude-code"].falconSubcommand;
   const args = [
     ...prefixArgs,
     providerCliName,

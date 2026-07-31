@@ -200,6 +200,88 @@ describe("text chunks (coalesced — one envelope per run, not per delta)", () =
   });
 });
 
+describe("plan (agent task/todo list, verified against the installed codex-acp's own updatePlan())", () => {
+  it("maps a plan update's entries to steps, scoped to the open turn", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+    const turnId = state.currentTurnId;
+
+    const [envelope] = evs(
+      {
+        sessionUpdate: "plan",
+        entries: [
+          { content: "List files", status: "completed", priority: "medium" },
+          { content: "Write hello.txt", status: "in_progress", priority: "medium" },
+          { content: "Verify it exists", status: "pending", priority: "medium" },
+        ],
+      },
+      state,
+    );
+
+    expect(envelope?.turn).toBe(turnId);
+    expect(envelope?.ev).toEqual({
+      t: "plan",
+      steps: [
+        { text: "List files", status: "completed" },
+        { text: "Write hello.txt", status: "in_progress" },
+        { text: "Verify it exists", status: "pending" },
+      ],
+    });
+  });
+
+  it("a later plan update fully replaces the steps list (each update carries the full plan, not a diff)", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+
+    evs({ sessionUpdate: "plan", entries: [{ content: "Step 1", status: "in_progress" }] }, state);
+    const [second] = evs(
+      { sessionUpdate: "plan", entries: [{ content: "Step 1", status: "completed" }] },
+      state,
+    );
+
+    expect(second?.ev).toEqual({ t: "plan", steps: [{ text: "Step 1", status: "completed" }] });
+  });
+
+  it("skips entries missing usable content or an unrecognized status, without dropping the whole update", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+
+    const [envelope] = evs(
+      {
+        sessionUpdate: "plan",
+        entries: [
+          { content: "Good step", status: "pending" },
+          { content: "", status: "pending" },
+          { content: "Bad status", status: "unknown_status" },
+          { status: "pending" },
+        ],
+      },
+      state,
+    );
+
+    expect(envelope?.ev).toEqual({ t: "plan", steps: [{ text: "Good step", status: "pending" }] });
+  });
+
+  it("tolerates a missing/malformed entries field as an empty plan, never throws", () => {
+    const state = createAcpEnvelopeMapperState();
+    startAcpTurn(state);
+
+    expect(() => evs({ sessionUpdate: "plan" }, state)).not.toThrow();
+    const [envelope] = evs({ sessionUpdate: "plan", entries: "not-an-array" }, state);
+    expect(envelope?.ev).toEqual({ t: "plan", steps: [] });
+  });
+
+  it("drops a plan update with no active turn instead of minting one implicitly", () => {
+    const state = createAcpEnvelopeMapperState();
+    const logger = fakeLogger();
+    expect(evs({ sessionUpdate: "plan", entries: [] }, state, logger)).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "acp_session_update_dropped_no_active_turn",
+      expect.objectContaining({ sessionUpdate: "plan" }),
+    );
+  });
+});
+
 describe("unknown update kinds", () => {
   it("warns and drops genuinely unrecognized sessionUpdate kinds, never throws", () => {
     const state = createAcpEnvelopeMapperState();

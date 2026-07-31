@@ -74,6 +74,7 @@
 import { fileURLToPath } from "node:url";
 import type { SpawnParams, SpawnResult } from "@falcon/wire";
 import type { Logger } from "../logger.js";
+import { PROVIDER_REGISTRY } from "../provider/registry.js";
 import { expandEnvVars } from "./envExpand.js";
 import { ensureBranchWorkspace, type GitWorktreeDeps } from "./gitWorktree.js";
 import {
@@ -91,11 +92,6 @@ export class SpawnError extends Error {
     this.name = "SpawnError";
   }
 }
-
-const PROVIDER_CLI_NAME: Record<SpawnParams["provider"], string> = {
-  "claude-code": "claude",
-  codex: "codex",
-};
 
 export interface SpawnEngineDeps {
   /** Resolves a workspace's registered root directory; `null`/`undefined` rejects the spawn (design §12). */
@@ -203,7 +199,7 @@ function defaultFalconEntrypoint(): string[] {
 }
 
 function buildProviderArgs(params: SpawnParams): string[] {
-  const providerCliName = PROVIDER_CLI_NAME[params.provider];
+  const providerCliName = PROVIDER_REGISTRY[params.provider].falconSubcommand;
   const args = [providerCliName, "--starting-mode", "remote", "--started-by", "daemon"];
   args.push("--permission-mode", params.permissionMode);
   if (params.model) args.push("--model", params.model);

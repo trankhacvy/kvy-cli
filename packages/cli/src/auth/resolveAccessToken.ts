@@ -10,8 +10,8 @@
 
 import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";
-import { withCredentialsLock } from "./credentialsLock.js";
 import { type FalconCredentials, readCredentials, writeCredentials } from "./credentials.js";
+import { withCredentialsLock } from "./credentialsLock.js";
 import { createTokenProvider, type TokenProvider } from "./tokenProvider.js";
 
 export interface ResolveAccessTokenOptions {

@@ -19,6 +19,7 @@
  */
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { PROVIDER_IDS, type ProviderId } from "@falcon/wire";
 import type { SessionEncryptionData } from "./types.js";
 
 /**
@@ -39,7 +40,7 @@ export const SESSIONS_SCHEMA_VERSION = 3;
  */
 export interface PersistedSession {
   sessionId: string;
-  provider?: "claude-code" | "codex";
+  provider?: ProviderId;
   metadata?: unknown;
   encryption: SessionEncryptionData;
   /** `Date.now()` at the time this record was last written — drives expiry below. */
@@ -98,7 +99,7 @@ function isPersistedSession(value: unknown): value is PersistedSession {
   const c = value as Record<string, unknown>;
   if (typeof c.sessionId !== "string") return false;
   if (typeof c.savedAt !== "number") return false;
-  if (c.provider !== undefined && c.provider !== "claude-code" && c.provider !== "codex") {
+  if (c.provider !== undefined && !PROVIDER_IDS.includes(c.provider as ProviderId)) {
     return false;
   }
   if (c.directory !== undefined && typeof c.directory !== "string") return false;

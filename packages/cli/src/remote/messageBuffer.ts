@@ -107,6 +107,10 @@ export function summarizeEnvelope(
       // Token accounting (plan-v2.md W4.6) — a web-only chip, not worth a
       // line in this already-terse remote-mode terminal display.
       return null;
+    case "plan":
+      // Same reasoning as "usage" — the plan/todo list is a web-only
+      // checklist widget, not worth a line here.
+      return null;
   }
 }
 

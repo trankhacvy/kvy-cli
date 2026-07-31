@@ -10,9 +10,8 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | # | Issue | Status |
 |---|-------|--------|
 | 1 | [Flow 4 ("pair with a teammate") is blocked on a human design review — `FL4.1`](#issue-1) | Blocked (draft exists) |
-| 6 | [`falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels](#issue-6) | Open (codex-only; `falcon claude` fixed) |
 | 11 | [Local Shift+Tab permission-mode changes only reach the web on the next tool call, and the web selector is off by default](#issue-11) | Partially fixed |
-| 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off) |
+| 12 | [No model selector on the web — CLI→web model sync is one-way and only fires on a detected transcript change](#issue-12) | Landed (flag off); UI simplified to read-only chip only |
 | 13 | [New Session from web: daemon-initiated spawn reproducibly fails in ~1s, with no diagnostic trail](#issue-13) | Open |
 | 14 | [ACP adapter auto-install can genuinely fail/be slow — pinned adapter requires Node ≥22, this machine (and likely others) runs Node 20](#issue-14) | Open |
 | 15 | [An adopted/unmanaged session's title can leak the raw Conductor `<system_instruction>` wrapper text](#issue-15) | Open |
@@ -63,43 +62,6 @@ it just isn't approved yet. Still true as of this doc's own re-audit:
 
 **Status:** open, waiting on human approval of the now-existing draft design doc. Not
 something an automated workflow can produce or check off.
-
-<a id="issue-6"></a>
-
-## 6. `falcon codex` (plain terminal run) never records a `workspaceId` — breaks 4 web panels
-
-**Where:** `packages/cli/src/commands/startCodex.ts:155-176` (the `doBootstrapSession(...)`
-call), `packages/cli/src/session/bootstrap.ts:246` (`workspaceId: params.workspaceId ?? null`),
-`packages/server/src/app/routes/sessions.ts` (`CreateSessionBodySchema`, `workspaceId ?? null`
-insert), `packages/cli/src/workspace/registry.ts:211` (`registerWorkspace`, the fix pattern
-below already reuses).
-
-**Fixed for `falcon claude` (commit `898baa4`, "record workspaceId on falcon claude, rebuild
-session side panel").** `packages/cli/src/commands/start.ts:496-534` now has an explicit
-step ("3.5. Register (or resolve) this directory as a workspace") that calls
-`doRegisterWorkspace(deps.workingDirectory)` (default: real `registerWorkspace`) and threads
-the resulting `workspaceId` into `doBootstrapSession(...)`'s params (failure is caught,
-logged, and falls back to the old `null` behavior rather than blocking start). `start.ts`'s
-own doc comment at this call site explicitly references closing this issue.
-
-**Still open for `falcon codex`.** `packages/cli/src/commands/startCodex.ts:155-176` has no
-`registerWorkspace` call anywhere in the file — its `doBootstrapSession(...)` params object
-has no `workspaceId` key at all, so `bootstrap.ts:246`'s `params.workspaceId ?? null`
-fallback fires every time, identical to the original bug, just narrower in scope now.
-`machineId` is unaffected (both provider commands hard-fail without it).
-
-**Blast radius (still real for codex sessions):** every web panel that gates on
-`session.machineId`/`session.workspaceId` both being present shows "This session has no
-machine/workspace recorded yet" — re-confirmed still gating on both fields: git-diff
-(`SessionGitScreen.tsx:40`), Repo files (`SessionFilesScreen.tsx:40`), Checks
-(`SessionChecksScreen.tsx:36`), and the timeline's file-open path
-(`SessionTimelineScreen.tsx:250,279`).
-
-**What a real fix needs:** apply the same register-or-resolve call in `startCodex.ts` that
-`start.ts` already has for the Claude path.
-
-**Status:** open, codex-only — the `falcon claude` half of this issue is resolved and
-verified; re-scope any future work to `startCodex.ts` specifically.
 
 <a id="issue-11"></a>
 
@@ -244,6 +206,22 @@ reversible sibling still needed that pass, this one needs it more, not less.
 soak" to "has specific, fixable correctness bugs (false-positive on blocked switches, no
 observed-model equality check, unguarded confirm-dialog race) that should be fixed before any
 soak is even worth running." Both flags confirmed still off by default.
+
+**UI simplified (2026-07-31):** rather than leave a mutating "Change model" selector in the
+DOM behind a permanently-off flag (confusing on its own — it looks interactive, isn't, and
+invites someone to just flip the flag without knowing about the bugs above),
+`ComposerControls.tsx` no longer renders the selector at all — the model is now always a
+plain read-only chip, for every provider. Separately, the chip itself now hides entirely
+(instead of showing "Model unknown") when the model is unknown for a provider with no live
+model-switch capability at all (`!capabilities.supportsLiveModelSwitch`, i.e. Codex today) —
+for Codex, "unknown" can never later resolve into a real value (no transcript-detection path
+exists), so a permanent "Model unknown" chip reads as broken rather than pending. For Claude
+Code, "unknown" is still shown, since it's transient there — the CLI's own transcript reports
+the real model shortly after start. `canMutateModel`/`nextModelAfterSetModel`
+(`model-switch-state.ts`) and `PTY_SET_MODEL_ENABLED` (`lib/config.ts`) were intentionally
+left in place, unused by the UI but still covered by their own tests — dormant scaffolding to
+re-wire once the correctness bugs above are actually fixed, not deleted along with the
+rendering.
 
 <a id="issue-13"></a>
 

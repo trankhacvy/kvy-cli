@@ -95,6 +95,15 @@ export interface UsageItem extends RenderItemBase {
   costUsd?: number;
 }
 
+/** The agent's task/todo list (ACP's `plan` session/update — codex-acp's own
+ * plan/todo tool). Each `plan` wire event carries the full current list, so
+ * this item is a snapshot replaced wholesale by the next one, same as
+ * `UsageItem`. */
+export interface PlanItem extends RenderItemBase {
+  kind: "plan";
+  steps: Array<{ text: string; status: "pending" | "in_progress" | "completed" }>;
+}
+
 /** Live state of a permission request, shared by reference between whatever
  * item currently represents it (a placeholder or the tool it matched) so a
  * later `perm-resolve` updates the right place regardless of match order. */
@@ -170,6 +179,7 @@ export type RenderItem =
   | SubStartItem
   | SubStopItem
   | UsageItem
+  | PlanItem
   | PermPlaceholderItem
   | ToolItem
   | OrphanToolEndItem

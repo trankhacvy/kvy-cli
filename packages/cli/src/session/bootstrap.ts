@@ -49,13 +49,11 @@ import {
   unwrapDek,
   wrapDek,
 } from "@falcon/crypto";
-import { SessionRowSchema } from "@falcon/wire";
+import { type ProviderId, SessionRowSchema } from "@falcon/wire";
 import type { Logger } from "../logger.js";
 
 const DEK_LENGTH_BYTES = 32;
 const DEFAULT_SERVER_URL = "http://127.0.0.1:3005";
-
-export type SessionProvider = "claude-code" | "codex";
 
 export interface SessionMetadataInput {
   title: string;
@@ -83,7 +81,7 @@ export interface BootstrapSessionParams {
    * the session row — stays the same).
    */
   nonce: string;
-  provider: SessionProvider;
+  provider: ProviderId;
   /** Account's X25519 content keypair (design §5.1). The public half wraps
    * the DEK; the secret half recovers the original DEK on an idempotent
    * replay, when the server hands back an existing row instead of ours. */

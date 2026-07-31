@@ -13,8 +13,6 @@ import { runKeysApproveCommand } from "./commands/keysApprove.js";
 import { runResumeCommand } from "./commands/resume.js";
 import { runDaemonServiceCommand } from "./commands/serviceInstall.js";
 import { runSessionsListCommand } from "./commands/sessionsList.js";
-import { runStartClaudeCommand } from "./commands/start.js";
-import { runStartCodexCommand } from "./commands/startCodex.js";
 import { runWorkspaceConfigCommand } from "./commands/workspaceConfig.js";
 import {
   runWorkspaceListCommand,
@@ -50,6 +48,8 @@ import {
 } from "./daemon/kill.js";
 import { resolveHomeDir } from "./home.js";
 import { createLogger } from "./logger.js";
+import { runStart as dispatchStart } from "./provider/dispatch.js";
+import { providerIdForSubcommand } from "./provider/registry.js";
 import { maybeTriggerAutoUpdate } from "./update/autoUpdateTrigger.js";
 import { runUpdateCommand } from "./update/runUpdateCommand.js";
 
@@ -390,20 +390,18 @@ async function runStart(command: Extract<FalconCommand, { type: "start" }>): Pro
     return 1;
   }
 
-  if (command.provider === "claude") {
-    return runStartClaudeCommand({
-      homeDir: resolveHomeDir(),
-      workingDirectory: workingDirectory.directory,
-      claudeArgs: command.providerArgs,
-      launcherPath: resolveClaudeLauncherPath(),
-      logger,
-    });
+  const providerId = providerIdForSubcommand(command.provider);
+  if (!providerId) {
+    process.stderr.write(`falcon: unknown provider "${command.provider}"\n`);
+    return 1;
   }
-  return runStartCodexCommand({
+
+  return dispatchStart(providerId, {
     homeDir: resolveHomeDir(),
     workingDirectory: workingDirectory.directory,
-    codexArgs: command.providerArgs,
+    providerArgs: command.providerArgs,
     logger,
+    launcherPath: providerId === "claude-code" ? resolveClaudeLauncherPath() : undefined,
   });
 }
 

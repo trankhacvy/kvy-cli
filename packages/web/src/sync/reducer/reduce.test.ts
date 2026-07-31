@@ -372,3 +372,49 @@ describe("reduceEnvelopes — usage (W4.6)", () => {
     expect(items[0]).toMatchObject({ kind: "usage", costUsd: 0.0021 });
   });
 });
+
+describe("reduceEnvelopes — plan (agent task/todo list)", () => {
+  it("maps a plan envelope's steps straight through", () => {
+    const env = createEnvelope(
+      "agent",
+      {
+        t: "plan",
+        steps: [
+          { text: "List files", status: "completed" },
+          { text: "Write hello.txt", status: "in_progress" },
+        ],
+      },
+      { id: "p1", time: 1, turn: "t1" },
+    );
+    const items = reduceEnvelopes([env]);
+    expect(items).toEqual([
+      {
+        id: "p1",
+        time: 1,
+        role: "agent",
+        turn: "t1",
+        kind: "plan",
+        steps: [
+          { text: "List files", status: "completed" },
+          { text: "Write hello.txt", status: "in_progress" },
+        ],
+      },
+    ]);
+  });
+
+  it("a later plan envelope's item fully replaces the earlier one's steps", () => {
+    const first = createEnvelope(
+      "agent",
+      { t: "plan", steps: [{ text: "Step 1", status: "in_progress" }] },
+      { id: "p1", time: 1 },
+    );
+    const second = createEnvelope(
+      "agent",
+      { t: "plan", steps: [{ text: "Step 1", status: "completed" }] },
+      { id: "p2", time: 2 },
+    );
+    const items = reduceEnvelopes([first, second]);
+    expect(items.map((item) => item.kind)).toEqual(["plan", "plan"]);
+    expect(items[1]).toMatchObject({ steps: [{ text: "Step 1", status: "completed" }] });
+  });
+});

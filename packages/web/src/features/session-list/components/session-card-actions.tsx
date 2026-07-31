@@ -37,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useSessionCrypto } from "@/features/session-control/use-session-crypto";
+import { getProviderMeta } from "@/lib/providers";
 import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
 import {
   useArchiveSessionMutation,
@@ -81,6 +82,7 @@ export function SessionCardActions({
   machineOnline,
   machineName,
   workspaceId,
+  provider,
 }: {
   sessionId: string;
   title: string;
@@ -97,6 +99,7 @@ export function SessionCardActions({
    * session. `null` mirrors `SessionListSession.workspaceId`'s own
    * nullability. */
   workspaceId: string | null;
+  provider: string;
 }) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -285,7 +288,8 @@ export function SessionCardActions({
           <DialogHeader>
             <DialogTitle>Stop "{title}"?</DialogTitle>
             <DialogDescription>
-              Ends the CLI process on its machine. The terminal user will see Claude exit.
+              Ends the CLI process on its machine. The terminal user will see{" "}
+              {getProviderMeta(provider).label} exit.
             </DialogDescription>
           </DialogHeader>
           {stopState.phase === "error" && (

@@ -12,6 +12,7 @@ export * from "./blobs";
 export * from "./box";
 export * from "./permissions";
 export * from "./preview";
+export * from "./providers";
 export * from "./push";
 export * from "./reserved";
 export * from "./rows";

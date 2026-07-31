@@ -195,6 +195,7 @@ import {
 } from "../session/bootstrap.js";
 import { extractModelFlag } from "../session/modelFlag.js";
 import { extractPermissionModeFlag } from "../session/permissionModeFlag.js";
+import { registerSessionWorkspace } from "../session/registerSessionWorkspace.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
@@ -210,7 +211,7 @@ import {
   SCAN_SESSION_QR_LABEL,
   webUrlLine,
 } from "../ui/messages.js";
-import { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
+import type { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
 import { runKeysApproveCommand as runKeysApproveCommandDefault } from "./keysApprove.js";
 import { runPreflightWithReauth } from "./startPreflight.js";
 
@@ -421,7 +422,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const fetchImpl = deps.fetchImpl ?? fetch;
   const locate = deps.locateClaudeCli ?? findGlobalClaudeCliPathDefault;
   const doBootstrapSession = deps.bootstrapSession ?? bootstrapSessionDefault;
-  const doRegisterWorkspace = deps.registerWorkspace ?? registerWorkspaceDefault;
   const startSessionClient = deps.startSessionClient ?? startSessionClientDefault;
   const registerRpc = deps.registerSessionRpcHandlers ?? registerSessionRpcHandlers;
   const createOutbox = deps.createOutbox ?? ((options: OutboxOptions) => new Outbox(options));
@@ -538,23 +538,14 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     sessionLock = lockResult.handle;
   }
 
-  // 3.5. Register (or resolve) this directory as a workspace — the same
+  // 3.5. Register (or resolve) this directory as a workspace — shared with
+  // `startCodex.ts` via `registerSessionWorkspace()`, and the same
   // register-or-resolve `workspace/registry.ts` logic the daemon's `spawn`
-  // RPC already runs before launching (`spawnEngine.ts`), just reached from
-  // this, the other session-creation entry point. Best-effort: a registry
-  // write failure (e.g. lock contention) shouldn't block starting the
-  // session at all — it just leaves `workspaceId` unset, the same as
-  // today's behavior (known-issues.md #6).
-  let workspaceId: string | null = null;
-  try {
-    const workspaceEntry = await doRegisterWorkspace(deps.workingDirectory);
-    workspaceId = workspaceEntry.path;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.warn("[start-claude] registerWorkspace failed, continuing without workspaceId", {
-      message,
-    });
-  }
+  // RPC already runs before launching (`spawnEngine.ts`).
+  const workspaceId = await registerSessionWorkspace(deps.workingDirectory, {
+    registerWorkspace: deps.registerWorkspace,
+    logger,
+  });
 
   // 4. Bootstrap (create-or-get) the session row + its DEK.
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;

@@ -24,6 +24,7 @@ function render(props: Partial<Parameters<typeof SessionCardActions>[0]> = {}) {
         machineOnline: false,
         machineName: null,
         workspaceId: null,
+        provider: "claude-code",
         ...props,
       }),
     ),

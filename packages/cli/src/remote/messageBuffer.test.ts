@@ -94,6 +94,14 @@ describe("summarizeEnvelope", () => {
     expect(summarizeEnvelope(envelope)).toBeNull();
   });
 
+  it("returns null for plan (web-only checklist widget)", () => {
+    const envelope = createEnvelope("agent", {
+      t: "plan",
+      steps: [{ text: "List files", status: "completed" }],
+    });
+    expect(summarizeEnvelope(envelope)).toBeNull();
+  });
+
   it("pushEnvelopeToBuffer skips null summaries and appends the rest", () => {
     const buffer = new MessageBuffer();
     pushEnvelopeToBuffer(buffer, createEnvelope("agent", { t: "turn-start" }));

@@ -11,6 +11,7 @@ export type {
   OrphanToolEndItem,
   PermissionInfo,
   PermPlaceholderItem,
+  PlanItem,
   RenderItem,
   RenderItemBase,
   ServiceItem,

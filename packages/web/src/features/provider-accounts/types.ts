@@ -1,4 +1,4 @@
-import type { ProviderAccountResult, ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@falcon/wire";
 
 /**
  * View-model types for Settings → Providers (docs/competitive-notes-omnara.md
@@ -17,8 +17,7 @@ import type { ProviderAccountResult, ProviderUsageMeter } from "@falcon/wire";
 export type ProviderAccountSnapshot = ProviderAccountResult;
 export type { ProviderUsageMeter };
 
-/** The two providers this screen ever shows a card for — mirrors `NewSessionProvider` (`features/new-session/types.ts`) without importing across feature boundaries for one literal union. */
-export type ProviderAccountProvider = "claude-code" | "codex";
+export type ProviderAccountProvider = ProviderId;
 
 /**
  * The RPC surface this feature needs, seamed off from *how* the call

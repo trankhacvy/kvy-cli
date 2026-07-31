@@ -86,6 +86,7 @@ export function SessionTimelineScreen({
   // row is created with) — never as "ended"/"failed" by absence alone.
   const session = useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId);
   const sessionStatus: SessionRow["status"] = session?.status ?? "active";
+  const provider = session?.provider ?? "";
   // `workspaceId` (when set) *is* the workspace's real absolute directory
   // path — same plaintext-on-the-row convention `SessionGitScreen` already
   // relies on (design §5.3: the server is allowed to see this field, unlike
@@ -156,6 +157,7 @@ export function SessionTimelineScreen({
       sessionId={sessionId}
       useControl={useControl}
       machineOffline={machineAvailability.isKnownUnavailable}
+      provider={provider}
     >
       <SessionTimelineBody
         sessionId={sessionId}
@@ -175,6 +177,7 @@ export function SessionTimelineScreen({
         workspacePath={workspacePath}
         machineId={machineId}
         machineOnline={machineOnline}
+        provider={provider}
       />
     </SessionControlProvider>
   );
@@ -201,6 +204,7 @@ function SessionTimelineBody({
   workspacePath,
   machineId,
   machineOnline,
+  provider,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), or `null` until it's
@@ -239,6 +243,7 @@ function SessionTimelineBody({
    * `deriveMachineOnline`'d in the parent alongside every other
    * machine-row-derived value passed down here. */
   machineOnline: boolean;
+  provider: string;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
@@ -286,6 +291,7 @@ function SessionTimelineBody({
               machineId={machineId}
               machineOnline={machineOnline}
               workspaceId={workspacePath}
+              provider={provider}
               disabled={isDisabled}
             />
           </div>
@@ -341,6 +347,7 @@ function SessionTimelineBody({
                     controlMode={controlMode}
                     disabled={isDisabled}
                     modelChip={modelChip}
+                    provider={provider}
                   />
                 }
               />

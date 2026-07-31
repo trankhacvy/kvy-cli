@@ -25,6 +25,7 @@ import { ArchiveSessionRunner } from "@/features/session-list/components/archive
 import { RenameSessionDialog } from "@/features/session-list/components/rename-session-dialog";
 import { RestartSessionDialog } from "@/features/session-list/components/restart-session-dialog";
 import { looksLikeWorktreePath } from "@/features/session-list/worktree-path";
+import { getProviderMeta } from "@/lib/providers";
 import { isRestartEnabled, restartDisabledReason } from "@/lib/use-restart-session";
 import {
   useArchiveSessionMutation,
@@ -58,6 +59,7 @@ export function SessionActionsMenu({
   machineId,
   machineOnline,
   workspaceId,
+  provider,
   disabled = false,
 }: {
   sessionId: string;
@@ -79,6 +81,7 @@ export function SessionActionsMenu({
    * worktree first" treatment. `null` mirrors `SessionRow.workspaceId`'s own
    * nullability. */
   workspaceId: string | null;
+  provider: string;
   disabled?: boolean;
 }) {
   const router = useRouter();
@@ -249,7 +252,8 @@ export function SessionActionsMenu({
           <DialogHeader>
             <DialogTitle>End this session?</DialogTitle>
             <DialogDescription>
-              Ends the CLI process on the machine. The terminal user will see Claude exit.
+              Ends the CLI process on the machine. The terminal user will see{" "}
+              {getProviderMeta(provider).label} exit.
             </DialogDescription>
           </DialogHeader>
           {stopState.phase === "error" && (

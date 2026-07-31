@@ -24,7 +24,13 @@ function renderControls(props: Partial<React.ComponentProps<typeof ComposerContr
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <SessionControlProvider sessionId="sess_1" useControl={useMockSessionControl}>
-          <ComposerControls mode="default" controlMode="local" modelChip={null} {...props} />
+          <ComposerControls
+            mode="default"
+            controlMode="local"
+            modelChip={null}
+            provider="claude-code"
+            {...props}
+          />
         </SessionControlProvider>
       </TooltipProvider>
     </QueryClientProvider>,
@@ -60,19 +66,55 @@ describe("ComposerControls disabled wiring", () => {
     expect(count).toBeGreaterThanOrEqual(2);
   });
 
-  it("always shows the model chip, falling back to 'Model unknown' rather than disappearing (issue #12)", () => {
+  it("for a provider with live model-switch capability, falls back to 'Model unknown' rather than disappearing (issue #12) — the unknown state is transient there", () => {
     const html = renderControls({ modelChip: null });
     expect(html).not.toContain("claude");
     expect(html).toContain("Model unknown");
     expect(renderControls({ modelChip: "claude-sonnet-4" })).toContain("claude-sonnet-4");
   });
 
-  it("hides the mutating model selector by default (flag off) even on a local session — read-only chip only (issue #12)", () => {
+  it("never renders a mutating model selector, even with a known model on a local session — read-only chip only (issue #12: setModel has unfixed correctness bugs)", () => {
     const html = renderControls({ modelChip: "Sonnet 5" });
     expect(html).toContain("Sonnet 5");
     // No second combobox beyond none at all — the mode selector is also
     // read-only for a local session by default, so there should be zero.
     expect(html).not.toContain('role="combobox"');
     expect(html).not.toContain("Change model");
+  });
+});
+
+describe("ComposerControls per-provider capability gating (Codex: remote mode-switch, no take-control, no model-switch)", () => {
+  it("shows a mutating mode select for a remote codex session — its setMode is real over ACP", () => {
+    const html = renderControls({ controlMode: "remote", provider: "codex" });
+    expect(html).toContain('role="combobox"');
+  });
+
+  it("never shows Take control for codex, even on a remote session — no local mode to hand back to", () => {
+    const html = renderControls({ controlMode: "remote", provider: "codex" });
+    expect(html).not.toContain("Take control");
+  });
+
+  it("never shows a mutating model selector for codex — no ACP call for live model switch exists", () => {
+    const html = renderControls({
+      controlMode: "remote",
+      provider: "codex",
+      modelChip: "gpt-5.1-codex",
+    });
+    expect(html).not.toContain("Change model");
+  });
+
+  it("hides the model chip entirely for codex when the model is unknown — 'unknown' can never resolve later, so a permanent chip would look broken, not pending", () => {
+    const html = renderControls({ controlMode: "remote", provider: "codex", modelChip: null });
+    expect(html).not.toContain("Model unknown");
+    expect(html).not.toContain("Model");
+  });
+
+  it("still shows the model chip for codex once the model IS known (set at session start via --model)", () => {
+    const html = renderControls({
+      controlMode: "remote",
+      provider: "codex",
+      modelChip: "gpt-5.1-codex-mini",
+    });
+    expect(html).toContain("gpt-5.1-codex-mini");
   });
 });

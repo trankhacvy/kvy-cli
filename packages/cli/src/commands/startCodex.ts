@@ -44,16 +44,20 @@ import { reloadDaemonAuth as reloadDaemonAuthDefault } from "../daemon/reloadAut
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import { registerSessionRpcHandlers, type SessionRpcHandlers } from "../rpc/sessionRpc.js";
+import { announceRemoteControl } from "../session/announceRemoteControl.js";
 import {
   bootstrapSession as bootstrapSessionDefault,
   createBootstrapSessionDeps,
 } from "../session/bootstrap.js";
+import { extractContinueFromFlag } from "../session/continueFromFlag.js";
 import { extractModelFlag } from "../session/modelFlag.js";
+import { registerSessionWorkspace } from "../session/registerSessionWorkspace.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
 } from "../session/sessionClient.js";
 import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
+import type { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
 import { runPreflightWithReauth } from "./startPreflight.js";
 
 const noopLogger: Logger = {
@@ -74,6 +78,7 @@ export interface StartCodexCommandDeps {
   fetchImpl?: typeof fetch;
   detectCodex?: (options?: DetectCodexOptions) => Promise<ProviderDetectionResult>;
   bootstrapSession?: typeof bootstrapSessionDefault;
+  registerWorkspace?: typeof registerWorkspaceDefault;
   /**
    * Injectable for tests; defaults to the real `notifyDaemonSessionStarted()`
    * (`daemon/notify.ts` — best-effort, never throws). Mirrors `start.ts`'s
@@ -184,6 +189,11 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     model: extractModelFlag(deps.codexArgs),
   };
 
+  const workspaceId = await registerSessionWorkspace(deps.workingDirectory, {
+    registerWorkspace: deps.registerWorkspace,
+    logger,
+  });
+
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {
     bootstrap = await doBootstrapSession(
@@ -196,6 +206,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
       {
         machineId,
         workspacePath: deps.workingDirectory,
+        workspaceId,
         nonce: createId(),
         provider: "codex",
         contentKeyPair,
@@ -243,6 +254,34 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     notifyResult,
   });
 
+  // Re-notify the daemon once the real ACP provider session id is known
+  // (`startAcpRemote`'s `onProviderSessionId`, below) — mirrors `start.ts`'s
+  // `notifyDaemonProviderSessionId`. Without this, `providerSessionId` never
+  // reaches persisted session metadata, so a future `--continue-from` (§5.5)
+  // has nothing to resume: the id this session ran under would be lost the
+  // moment the process exits.
+  function notifyDaemonProviderSessionId(providerSessionId: string): void {
+    void doNotifyDaemonSessionStarted(
+      createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+      {
+        sessionId: bootstrap.sessionId,
+        metadata: { ...sessionMetadata, providerSessionId },
+        encryption: {
+          encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
+          seq: 0,
+          metadataVersion: 0,
+          agentStateVersion: 0,
+        },
+      },
+    ).then((result) => {
+      logger.debug("[start-codex] daemon self-report (provider session id)", {
+        sessionId: bootstrap.sessionId,
+        providerSessionId,
+        result,
+      });
+    });
+  }
+
   write(`falcon codex: starting session ${bootstrap.sessionId}\n${CODEX_NO_LOCAL_MODE_NOTE}\n`);
 
   const outbox = new Outbox({
@@ -285,9 +324,11 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   const remote = startAcpRemote({
     adapterId: "codex",
     workingDirectory: deps.workingDirectory,
+    resume: extractContinueFromFlag(deps.codexArgs),
     permissionMode: "default",
     homeDir: deps.homeDir,
     onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
+    onProviderSessionId: (providerSessionId) => notifyDaemonProviderSessionId(providerSessionId),
     onTurnSettled: ({ messageId, status }) => {
       if (!messageId) return;
       const claimId = openClaims.get(messageId);
@@ -308,6 +349,8 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     },
     logger,
   });
+
+  outbox.enqueue([announceRemoteControl()]);
 
   const rpcHandlers: SessionRpcHandlers = {
     message: async ({ envelope }) => {
