@@ -39,8 +39,7 @@
  *   - any other key cancels a pending confirmation.
  */
 import { Box, Text, useInput, useStdout } from "ink";
-import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import type { BufferedMessage, MessageBuffer } from "./messageBuffer.js";
 import {
   CONFIRMATION_TIMEOUT_MS,
