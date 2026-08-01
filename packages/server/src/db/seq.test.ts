@@ -57,6 +57,10 @@ async function insertSession(accountId: string) {
 }
 
 describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)", () => {
+  // 20s, not vitest's 5s default: this serializes N real round trips to a
+  // remote (Neon) Postgres instance shared with every other concurrently
+  // running test file, not an in-memory operation — observed timing out at
+  // 5s under normal contention from the rest of the suite.
   it("allocates a gapless, unique sequence for N concurrent callers on the same session", async () => {
     const account = await insertAccount();
     const session = await insertSession(account.id);
@@ -70,8 +74,9 @@ describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)"
     expect([...results].sort((a, b) => a - b)).toEqual(Array.from({ length: N }, (_, i) => i + 1)); // 1..N, no gaps
 
     await db.delete(accounts).where(sql`${accounts.id} = ${account.id}`);
-  });
+  }, 20_000);
 
+  // Same 20s reasoning as above.
   it("allocates a gapless, unique sequence for N concurrent callers on the same account (headerSeq)", async () => {
     const account = await insertAccount();
 
@@ -84,14 +89,21 @@ describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)"
     expect([...results].sort((a, b) => a - b)).toEqual(Array.from({ length: N }, (_, i) => i + 1));
 
     await db.delete(accounts).where(sql`${accounts.id} = ${account.id}`);
-  });
+  }, 20_000);
 
   it("does NOT contend across two different session rows (row-scoped lock, not table-scoped)", async () => {
     const account = await insertAccount();
     const sessionA = await insertSession(account.id);
     const sessionB = await insertSession(account.id);
 
-    const HOLD_MS = 400;
+    // HOLD_MS and the fast-path ceiling below are deliberately far apart (2s
+    // vs. 1.2s), not the tight margins this test originally shipped with
+    // (400ms vs. 350ms): a single round trip to a remote (Neon) Postgres
+    // instance can itself take several hundred ms, which ate almost the
+    // entire old margin and made this test flaky on nothing but ordinary
+    // network variance, not a real contention bug.
+    const HOLD_MS = 2000;
+    const UNCONTENDED_CEILING_MS = 1200;
     let heldTxFinished = false;
 
     // Open a transaction against session A and hold its row lock for HOLD_MS
@@ -114,7 +126,7 @@ describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)"
     // released — proof the lock is scoped to session A's row only.
     expect(seqB).toBe(1);
     expect(heldTxFinished).toBe(false);
-    expect(elapsedMs).toBeLessThan(HOLD_MS - 50);
+    expect(elapsedMs).toBeLessThan(UNCONTENDED_CEILING_MS);
 
     const seqA = await heldTx;
     expect(seqA).toBe(1);
