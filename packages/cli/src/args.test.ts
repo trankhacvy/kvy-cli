@@ -387,7 +387,7 @@ describe("parseArgs — notify", () => {
 });
 
 describe("parseArgs — stray leading `--` (pnpm script-arg passthrough)", () => {
-  // `pnpm --filter kvy-cli dev -- <args...>` (CLAUDE.md's documented dev
+  // `pnpm --filter @vibe-oss/kvy dev -- <args...>` (CLAUDE.md's documented dev
   // invocation) forwards a literal leading "--" into the script's argv,
   // unlike `npm run <script> -- <args...>`, which strips it. Kvy must
   // tolerate that stray token for every subcommand, not just claude/codex

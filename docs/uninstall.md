@@ -31,7 +31,7 @@ Finally, remove the `kvy` binary itself (whichever install method you
 used):
 
 ```bash
-npm uninstall -g kvy-cli      # npm install
+npm uninstall -g @vibe-oss/kvy      # npm install
 rm "$(which kvy)"             # curl | sh standalone binary
 ```
 

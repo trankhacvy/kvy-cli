@@ -29,7 +29,7 @@
  *
  * Standalone, billed, live — never part of `pnpm test`. Invoked only by
  * `.github/workflows/provider-contract.yml`'s daily cron (Claude installed +
- * authenticated). Local run: `pnpm --filter kvy-cli run contract:acp`.
+ * authenticated). Local run: `pnpm --filter @vibe-oss/kvy run contract:acp`.
  */
 
 import { execFileSync } from "node:child_process";

@@ -27,7 +27,7 @@ Kvy replicates Omnara's core loop with an MVP focused on the two things that cre
 
 > A user types `kvy` instead of `claude`, scans nothing, configures nothing extra, gets the exact Claude Code experience they know — then gets a push/web notification at lunch that the agent needs a permission approval, taps **Allow**, and watches the task finish from their phone browser.
 
-Time-to-magic-moment target: **< 5 minutes** from `npm install -g kvy-cli` (or curl installer) to controlling a session from a second device.
+Time-to-magic-moment target: **< 5 minutes** from `npm install -g @vibe-oss/kvy` (or curl installer) to controlling a session from a second device.
 
 ---
 
@@ -109,7 +109,7 @@ Requirements are labeled `[P0]` (MVP blocker), `[P1]` (MVP polish — ship withi
 
 ### 5.1 Installation & Onboarding
 
-- **[P0] FR-1.1** Single-command install: `npm install -g kvy-cli` **and** `curl -fsSL https://kvy.dev/install.sh | sh` (standalone binary; no Node required for the curl path). Support macOS (arm64/x64) and Linux (x64) at MVP; Windows `[P2]`.
+- **[P0] FR-1.1** Single-command install: `npm install -g @vibe-oss/kvy` **and** `curl -fsSL https://kvy.dev/install.sh | sh` (standalone binary; no Node required for the curl path). Support macOS (arm64/x64) and Linux (x64) at MVP; Windows `[P2]`.
 - **[P0] FR-1.2** First run of `kvy` triggers sign-in (see 5.2), machine registration, and daemon auto-start — no separate setup steps.
 - **[P0] FR-1.3** Kvy bundles/locates providers: detect an existing Claude Code installation and reuse its login; same for Codex. If a provider is missing, print a one-line install/auth instruction (`kvy-claude /login`-style passthrough, or `ANTHROPIC_API_KEY`).
 - **[P1] FR-1.4** `kvy doctor` prints a diagnostic: auth state, provider detection, daemon health, connectivity to backend, version.

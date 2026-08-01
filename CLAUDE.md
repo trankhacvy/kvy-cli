@@ -83,7 +83,7 @@ export KVY_BACKEND_URL=http://localhost:3005
 export KVY_FRONTEND_URL=http://localhost:3000
 # optional: isolate CLI state (token, daemon, sessions) from your real ~/.kvy
 export KVY_HOME_DIR=/tmp/kvy-e2e
-pnpm --filter kvy-cli dev -- claude --model haiku   # runs `kvy claude …` via tsx (no build needed)
+pnpm --filter @vibe-oss/kvy dev -- claude --model haiku   # runs `kvy claude …` via tsx (no build needed)
 ```
 
 `kvy` == `kvy claude [args…]`; flags pass straight through to Claude Code, so

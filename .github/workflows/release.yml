@@ -3,16 +3,18 @@ name: release
 # Native distribution (curl | sh, and eventually Homebrew) and npm
 # publishing are INDEPENDENT of each other — neither needs the other to
 # succeed:
-#   - `publish-npm` best-effort publishes `kvy-cli` via Changesets
+#   - `publish-npm` best-effort publishes `@vibe-oss/kvy` via Changesets
 #     (`continue-on-error: true` — nothing else in this workflow depends on
-#     it, so an npm-side failure, e.g. the registry's name-similarity
-#     filter rejecting a candidate name, never blocks a release). @kvy/wire
-#     and @kvy/crypto are internal-only (private, bundled straight into
-#     kvy-cli's own build output by pkgroll — see
-#     packages/cli/package.json's devDependencies) and @kvy/server /
-#     @kvy/web / @kvy/e2e are deployed, never versioned — all five are
-#     excluded via .changeset/config.json's `ignore`, so this only ever
-#     publishes `kvy-cli` itself.
+#     it, so any registry-side failure never blocks a release; this is also
+#     why the package is scoped under the vibe-oss org rather than
+#     unscoped — npm's name-similarity filter rejected every unscoped
+#     candidate name tried, e.g. `kvy`/`kvy-cli`, but scoped names aren't
+#     subject to that filter at all). @kvy/wire and @kvy/crypto are
+#     internal-only (private, bundled straight into @vibe-oss/kvy's own
+#     build output by pkgroll — see packages/cli/package.json's
+#     devDependencies) and @kvy/server / @kvy/web / @kvy/e2e are deployed,
+#     never versioned — all five are excluded via .changeset/config.json's
+#     `ignore`, so this only ever publishes `@vibe-oss/kvy` itself.
 #   - `resolve-native-release` mints a `vX.Y.Z` tag straight from
 #     `packages/cli/package.json`'s current version, whenever that version
 #     hasn't been tagged yet — no dependency on npm publishing at all. A
@@ -67,7 +69,7 @@ jobs:
       # dependencies) — both still need their own `dist/` built first so
       # pkgroll has something to resolve and inline.
       - name: Build kvy (bundles @kvy/wire + @kvy/crypto)
-        run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter kvy-cli build
+        run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter @vibe-oss/kvy build
 
       - name: Version or publish
         id: changesets
@@ -190,7 +192,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build kvy + its workspace dependencies
-        run: pnpm --filter kvy-cli... build
+        run: pnpm --filter @vibe-oss/kvy... build
 
       - name: Compile standalone binary (Node SEA)
         shell: bash

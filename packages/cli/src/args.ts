@@ -76,7 +76,7 @@ export function parseArgs(argv: string[]): KvyCommand {
   // Kvy subcommand, so it fell through to `parseDefaultStart`, which
   // forwards the *entire* original argv (including "auth"/"status"/etc. as
   // literal words) to `claude` as passthrough args — silently misrouting
-  // `pnpm --filter kvy-cli dev -- auth login` into starting a claude session
+  // `pnpm --filter @vibe-oss/kvy dev -- auth login` into starting a claude session
   // instead of running the intended `auth login` subcommand. Stripping a
   // single leading "--" here (once, not repeatedly — a real provider
   // passthrough could legitimately want its own "--") makes `pnpm --filter
