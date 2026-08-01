@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MODULE_PATH = path.join(__dirname, "../falcon_claude_launcher.cjs");
+const MODULE_PATH = path.join(__dirname, "../kvy_claude_launcher.cjs");
 
 type FetchModule = {
   getClaudeCliPath: () => string;
@@ -19,7 +19,7 @@ function loadLauncher(): FetchModule {
   return require(MODULE_PATH) as FetchModule;
 }
 
-describe("falcon_claude_launcher.cjs — fetch-patch fd3 signal", () => {
+describe("kvy_claude_launcher.cjs — fetch-patch fd3 signal", () => {
   let originalFetch: typeof global.fetch;
   let originalDisableAutoupdater: string | undefined;
   let originalClaudePathEnv: string | undefined;
@@ -27,7 +27,7 @@ describe("falcon_claude_launcher.cjs — fetch-patch fd3 signal", () => {
   beforeEach(() => {
     originalFetch = global.fetch;
     originalDisableAutoupdater = process.env.DISABLE_AUTOUPDATER;
-    originalClaudePathEnv = process.env.FALCON_CLAUDE_PATH;
+    originalClaudePathEnv = process.env.KVY_CLAUDE_PATH;
     delete require.cache[require.resolve(MODULE_PATH)];
   });
 
@@ -39,9 +39,9 @@ describe("falcon_claude_launcher.cjs — fetch-patch fd3 signal", () => {
       process.env.DISABLE_AUTOUPDATER = originalDisableAutoupdater;
     }
     if (originalClaudePathEnv === undefined) {
-      delete process.env.FALCON_CLAUDE_PATH;
+      delete process.env.KVY_CLAUDE_PATH;
     } else {
-      process.env.FALCON_CLAUDE_PATH = originalClaudePathEnv;
+      process.env.KVY_CLAUDE_PATH = originalClaudePathEnv;
     }
     delete require.cache[require.resolve(MODULE_PATH)];
     vi.restoreAllMocks();
@@ -219,11 +219,11 @@ describe("falcon_claude_launcher.cjs — fetch-patch fd3 signal", () => {
   });
 });
 
-describe("falcon_claude_launcher.cjs — PTY-mode fetch signal over a unix socket", () => {
+describe("kvy_claude_launcher.cjs — PTY-mode fetch signal over a unix socket", () => {
   let server: Server | null = null;
   const connections = new Set<Socket>();
   let socketPath = "";
-  const originalSignalPath = process.env.FALCON_FETCH_SIGNAL_PATH;
+  const originalSignalPath = process.env.KVY_FETCH_SIGNAL_PATH;
   let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
@@ -241,14 +241,14 @@ describe("falcon_claude_launcher.cjs — PTY-mode fetch signal over a unix socke
       await new Promise<void>((resolve) => server?.close(() => resolve()));
       server = null;
     }
-    if (originalSignalPath === undefined) delete process.env.FALCON_FETCH_SIGNAL_PATH;
-    else process.env.FALCON_FETCH_SIGNAL_PATH = originalSignalPath;
+    if (originalSignalPath === undefined) delete process.env.KVY_FETCH_SIGNAL_PATH;
+    else process.env.KVY_FETCH_SIGNAL_PATH = originalSignalPath;
     delete require.cache[require.resolve(MODULE_PATH)];
     vi.restoreAllMocks();
   });
 
-  it("writes fetch-start/fetch-end JSON lines to FALCON_FETCH_SIGNAL_PATH instead of fd 3", async () => {
-    socketPath = path.join(tmpdir(), `falcon-fetch-test-${process.pid}-${Date.now()}.sock`);
+  it("writes fetch-start/fetch-end JSON lines to KVY_FETCH_SIGNAL_PATH instead of fd 3", async () => {
+    socketPath = path.join(tmpdir(), `kvy-fetch-test-${process.pid}-${Date.now()}.sock`);
     const received: unknown[] = [];
     const gotTwoLines = new Promise<void>((resolve) => {
       server = createServer((connection) => {
@@ -271,7 +271,7 @@ describe("falcon_claude_launcher.cjs — PTY-mode fetch signal over a unix socke
     });
     await new Promise<void>((resolve) => server?.listen(socketPath, () => resolve()));
 
-    process.env.FALCON_FETCH_SIGNAL_PATH = socketPath;
+    process.env.KVY_FETCH_SIGNAL_PATH = socketPath;
     // fd 3 must NOT be used in PTY mode.
     const writeSyncSpy = vi.spyOn(fs, "writeSync").mockImplementation(() => 0);
 
@@ -291,26 +291,26 @@ describe("falcon_claude_launcher.cjs — PTY-mode fetch signal over a unix socke
   });
 });
 
-describe("falcon_claude_launcher.cjs — getClaudeCliPath stub", () => {
+describe("kvy_claude_launcher.cjs — getClaudeCliPath stub", () => {
   beforeEach(() => {
     delete require.cache[require.resolve(MODULE_PATH)];
   });
 
   it("defaults to the bare 'claude' command", () => {
-    delete process.env.FALCON_CLAUDE_PATH;
+    delete process.env.KVY_CLAUDE_PATH;
     const { getClaudeCliPath } = loadLauncher();
     expect(getClaudeCliPath()).toBe("claude");
   });
 
-  it("honors FALCON_CLAUDE_PATH when set", () => {
-    process.env.FALCON_CLAUDE_PATH = "/opt/custom/claude/cli.js";
+  it("honors KVY_CLAUDE_PATH when set", () => {
+    process.env.KVY_CLAUDE_PATH = "/opt/custom/claude/cli.js";
     const { getClaudeCliPath } = loadLauncher();
     expect(getClaudeCliPath()).toBe("/opt/custom/claude/cli.js");
-    delete process.env.FALCON_CLAUDE_PATH;
+    delete process.env.KVY_CLAUDE_PATH;
   });
 });
 
-describe("falcon_claude_launcher.cjs — runClaudeCli binary-spawn path", () => {
+describe("kvy_claude_launcher.cjs — runClaudeCli binary-spawn path", () => {
   let originalArgv: string[];
   let exitSpy: ReturnType<typeof vi.spyOn>;
   let killSpy: ReturnType<typeof vi.spyOn>;
@@ -318,7 +318,7 @@ describe("falcon_claude_launcher.cjs — runClaudeCli binary-spawn path", () => 
   beforeEach(() => {
     delete require.cache[require.resolve(MODULE_PATH)];
     originalArgv = process.argv;
-    process.argv = ["node", "falcon_claude_launcher.cjs", "--resume", "abc123"];
+    process.argv = ["node", "kvy_claude_launcher.cjs", "--resume", "abc123"];
     exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
   });

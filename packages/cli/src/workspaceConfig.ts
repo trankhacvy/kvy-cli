@@ -1,7 +1,7 @@
 /**
- * Per-workspace settings — `falcon workspace config [--base-ref <ref>]
+ * Per-workspace settings — `kvy workspace config [--base-ref <ref>]
  * [--remote <name>] [--setup-script <script>] [--run-script <script>]
- * [--directory <path>]` (falcon-prd.md line 148, plan.md §16 "4.1 Git
+ * [--directory <path>]` (kvy-prd.md line 148, plan.md §16 "4.1 Git
  * panel"; docs/features/setup-run-scripts.md "Per-workspace Setup/Run
  * scripts"). Backs both the CLI command (`commands/workspaceConfig.ts`) and
  * the daemon's `git.diff` RPC (`daemon/gitDiff.ts`'s
@@ -21,7 +21,7 @@
  * `workspacePath.ts`'s `realDirectory`) and a lookup from the CLI side
  * (`process.cwd()`, possibly through a symlink) land on the same key. A
  * directory that doesn't exist yet (or vanished) falls back to
- * `path.resolve` of the raw input — `falcon workspace config` should still
+ * `path.resolve` of the raw input — `kvy workspace config` should still
  * be usable to pre-configure a workspace, and a lookup miss just means
  * `git.diff` falls back to its own no-config default rather than throwing.
  *
@@ -33,7 +33,7 @@
  * gives every field — including the two new script fields — explicit
  * clear-on-empty-string semantics: a patch field set to `""` deletes that
  * key from the stored config entirely (rather than storing a meaningless
- * empty script), so `falcon workspace config --run-script ""` is how a user
+ * empty script), so `kvy workspace config --run-script ""` is how a user
  * un-configures a run script. A field simply omitted from the patch is left
  * untouched, same as today.
  */
@@ -75,13 +75,13 @@ const WORKSPACE_GIT_CONFIG_FIELDS = ["baseRef", "remote", "setupScript", "runScr
 /**
  * Merges `patch` into the stored config for `directory` (only the fields
  * present in `patch` are changed) and returns the resulting config.
- * `falcon workspace config` with neither `--base-ref`/`--remote`/
+ * `kvy workspace config` with neither `--base-ref`/`--remote`/
  * `--setup-script`/`--run-script` should just read the current config back —
  * pass an empty `patch` for that rather than special-casing it here.
  *
  * **Clear-on-empty-string:** a patch field set to the empty string `""`
  * DELETES that key from the stored config, rather than storing an empty
- * string — `falcon workspace config --run-script ""` is how a user
+ * string — `kvy workspace config --run-script ""` is how a user
  * un-configures a previously-set run script. A field simply absent from
  * `patch` is left untouched.
  */

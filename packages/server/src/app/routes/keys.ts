@@ -6,7 +6,7 @@
  * as part of login itself.
  */
 import { randomBytes } from "node:crypto";
-import { decodeBase64 } from "@falcon/crypto";
+import { decodeBase64 } from "@kvy/crypto";
 import { and, eq, gt, isNull, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import tweetnacl from "tweetnacl";

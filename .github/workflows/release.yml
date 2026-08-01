@@ -1,102 +1,227 @@
 name: release
 
-# Cuts a Falcon CLI release: standalone bun-compiled binaries (darwin-arm64/
-# x64, linux-x64) attached to a GitHub Release for scripts/install.sh to
-# fetch, plus the same build published to npm so `npm install -g falcon`
-# keeps working (falcon-system-design.md §3, plan.md §16 "4.3 Distribution
-# & self-host").
+# Changesets decides WHAT gets published, on every push to main:
+#   - pending changesets exist  -> open/update a "Version Packages" PR
+#     (see .changeset/README.md) — nothing published yet.
+#   - that PR was just merged  -> `pnpm changeset publish` runs for real,
+#     publishing whichever of @kvy/wire / @kvy/crypto / kvy were bumped.
+#     (@kvy/server / @kvy/web / @kvy/e2e are excluded — see
+#     .changeset/config.json — they're deployed, never versioned.)
 #
-# Trigger: push a `vX.Y.Z` tag matching packages/cli/package.json's
-# "version" field, or run manually via workflow_dispatch.
+# Only when `kvy` itself is among the published packages does the rest of
+# this workflow run at all: a real per-OS matrix compiles standalone Node
+# SEA binaries (packages/cli/scripts/native/, kvy-system-design.md §3) and
+# attaches them to a `vX.Y.Z` GitHub Release for scripts/install.sh to fetch.
 on:
   push:
-    tags:
-      - "v*.*.*"
-  workflow_dispatch: {}
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
-  build-binaries:
+  release:
+    name: version or publish (changesets)
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      published_packages: ${{ steps.changesets.outputs.publishedPackages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # changesets diffs against main to find pending changesets — needs
+          # real history, not a shallow clone (confirmed the hard way: fails
+          # with "Failed to find where HEAD diverged from main" otherwise).
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build every publishable package
+        run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter kvy build
+
+      - name: Version or publish
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          publish: pnpm changeset publish
+          version: pnpm changeset version
+          commit: "ci: version packages"
+          title: "ci: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  resolve-native-release:
+    name: resolve kvy's release tag
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      should_build: ${{ steps.resolve.outputs.should_build }}
+      tag: ${{ steps.resolve.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      # `changeset publish` already tagged whatever it published as
+      # `<name>@<version>` (e.g. `kvy@0.2.0`) and pushed that — but
+      # scripts/install.sh, the GitHub Release, and the `cli-latest` rolling
+      # pointer all expect a plain `vX.Y.Z` tag. Mint that as a second alias
+      # on the same commit, only when `kvy` itself was actually published
+      # (a wire/crypto-only release publishes neither a binary nor this tag).
+      - name: Resolve whether kvy was published, mint its vX.Y.Z tag
+        id: resolve
+        env:
+          PUBLISHED_PACKAGES: ${{ needs.release.outputs.published_packages }}
+        run: |
+          VERSION=$(node -e "
+            const pkgs = JSON.parse(process.env.PUBLISHED_PACKAGES || '[]');
+            const kvy = pkgs.find((p) => p.name === 'kvy');
+            if (kvy) process.stdout.write(kvy.version);
+          ")
+          if [ -z "$VERSION" ]; then
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TAG="v$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "should_build=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  build-native-binaries:
+    name: build (${{ matrix.suffix }})
+    needs: resolve-native-release
+    if: needs.resolve-native-release.outputs.should_build == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Proven end-to-end on this exact target: real compiled binary,
+          # real pty session (spawn, resize, keyring auth, clean exit) — see
+          # docs/git-guide.md.
+          - os: macos-14
+            suffix: darwin-arm64
+          # Structurally identical to the target above, but UNVERIFIED —
+          # this matrix is the first real test of each. Node SEA has no
+          # cross-compilation, so there is no way to test these except on
+          # real hardware/runners of that exact platform; expect follow-up
+          # fixes, especially for Windows, which doesn't use node-pty's
+          # POSIX pty path at all (ConPTY instead — a genuinely different
+          # code path, never exercised).
+          - os: macos-13
+            suffix: darwin-x64
+          - os: ubuntu-latest
+            suffix: linux-x64
+          - os: ubuntu-24.04-arm
+            suffix: linux-arm64
+          - os: windows-latest
+            suffix: win32-x64
+          - os: windows-11-arm
+            suffix: win32-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-native-release.outputs.tag }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
 
-      - name: install workspace deps
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: build falcon + its workspace dependencies
-        run: pnpm --filter falcon... build
+      - name: Build kvy + its workspace dependencies
+        run: pnpm --filter kvy... build
 
-      - uses: oven-sh/setup-bun@v2
-
-      - name: compile standalone binaries (darwin-arm64/x64, linux-x64)
+      - name: Compile standalone binary (Node SEA)
+        shell: bash
         run: bash scripts/build-binaries.sh
 
       - uses: actions/upload-artifact@v4
         with:
-          name: falcon-binaries
+          name: kvy-binaries-${{ matrix.suffix }}
           path: dist-binaries/*
           if-no-files-found: error
 
   github-release:
-    needs: build-binaries
+    needs: [resolve-native-release, build-native-binaries]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: falcon-binaries
+          pattern: kvy-binaries-*
           path: dist-binaries
+          merge-multiple: true
 
       - name: publish GitHub Release with binaries attached
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.resolve-native-release.outputs.tag }}
           files: dist-binaries/*
           generate_release_notes: true
           fail_on_unmatched_files: true
 
   publish-cli-latest:
-    # The rolling self-update pointer (`falcon update` / auto-update-on-start,
+    # The rolling self-update pointer (`kvy update` / auto-update-on-start,
     # plan.md §16 "4.3 Distribution & self-host"): re-publishes this run's
     # binaries + VERSION file under a fixed `cli-latest` tag, on every real
-    # release, so `packages/cli/src/update/` can always find "the current
-    # version" and its assets at one stable URL
+    # kvy release, so `packages/cli/src/update/` can always find "the
+    # current version" and its assets at one stable URL
     # (github.com/<repo>/releases/download/cli-latest/...) without needing
     # to know the exact vX.Y.Z tag ahead of time. Independent of
-    # `github-release`/`publish-npm` (needs only `build-binaries`) so a
-    # failure in either doesn't block this rolling pointer from updating.
-    needs: build-binaries
+    # `github-release` (needs only `build-native-binaries`) so a failure in
+    # one doesn't block the other.
+    needs: [resolve-native-release, build-native-binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: falcon-binaries
+          pattern: kvy-binaries-*
           path: dist-binaries
+          merge-multiple: true
 
       # Deliberately delete-then-create rather than relying on
       # softprops/action-gh-release's own upsert/asset-overwrite behavior
       # for a tag that already has a release. That behavior exists and is
       # documented, but this repo has no way to exercise a second real run
-      # against a fixed tag in CI/sandbox to confirm it end-to-end (see
-      # task-summary's "Known limitations"), so this step removes the
-      # dependency on it entirely: `gh release delete` is the documented,
-      # first-party way to clear a tag's release, making every run of this
-      # job start from the same "no existing cli-latest release" state
-      # regardless of what any previous run left behind. The `|| echo ...`
-      # fallback is needed because the very first release ever cut has no
-      # prior `cli-latest` release to delete, and `gh release delete`
-      # exits non-zero in that case. `--cleanup-tag` also removes the git
-      # tag itself so the very next `softprops/action-gh-release` step is
-      # always creating a fresh tag + release, never editing one.
+      # against a fixed tag in CI/sandbox to confirm it end-to-end, so this
+      # step removes the dependency on it entirely: `gh release delete` is
+      # the documented, first-party way to clear a tag's release, making
+      # every run of this job start from the same "no existing cli-latest
+      # release" state regardless of what any previous run left behind. The
+      # `|| echo ...` fallback is needed because the very first release
+      # ever cut has no prior `cli-latest` release to delete, and
+      # `gh release delete` exits non-zero in that case. `--cleanup-tag`
+      # also removes the git tag itself so the very next
+      # `softprops/action-gh-release` step is always creating a fresh tag +
+      # release, never editing one.
       - name: delete previous cli-latest release/tag, if any
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,33 +237,6 @@ jobs:
         with:
           tag_name: cli-latest
           name: "cli-latest (rolling self-update pointer)"
-          body: "Rolling pointer to the most recently released falcon CLI — consumed by `falcon update` / auto-update-on-start, not meant for direct human download. See the versioned release for changelog/notes."
+          body: "Rolling pointer to the most recently released kvy CLI — consumed by `kvy update` / auto-update-on-start, not meant for direct human download. See the versioned release for changelog/notes."
           files: dist-binaries/*
           fail_on_unmatched_files: true
-
-  publish-npm:
-    needs: build-binaries
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          registry-url: https://registry.npmjs.org
-
-      - name: install workspace deps
-        run: pnpm install --frozen-lockfile
-
-      - name: build falcon + its workspace dependencies
-        run: pnpm --filter falcon... build
-
-      # Regular `npm install -g falcon` runs on Node (bin/falcon.mjs →
-      # dist/index.mjs) — no compiled binary needed in this package, so the
-      # tsc/pkgroll build above is all `npm publish` ships.
-      - name: publish falcon to npm
-        run: pnpm --filter falcon publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,12 +1,12 @@
 /**
- * Shared "is a plain (non-Falcon) `claude` process live for this workspace,
+ * Shared "is a plain (non-Kvy) `claude` process live for this workspace,
  * and which transcript does it own" check (design §7.8/§8, plan.md §16
- * "3.3 Session adoption (UC9)") — used both by `falcon adopt`'s local
+ * "3.3 Session adoption (UC9)") — used both by `kvy adopt`'s local
  * listing (`adopt/listSessions.ts`) and the daemon's `adopt.take` RPC
  * (`daemon/adoptTake.ts`, to find the pid to signal on takeover).
  *
  * Mirrors `daemon/transcriptIndexer.ts`'s private `isPlainClaudeCommand` +
- * `computeRunning` (same heuristic: a live, non-Falcon `claude` process
+ * `computeRunning` (same heuristic: a live, non-Kvy `claude` process
  * whose cwd resolves to the workspace path, paired with whichever
  * transcript in that project dir was most recently modified — the file
  * that process is presumed to own). Reimplemented here rather than
@@ -17,7 +17,7 @@
  */
 import { readdir, stat } from "node:fs/promises";
 import path, { resolve as resolvePath } from "node:path";
-import { classifyFalconCommand } from "../daemon/markers.js";
+import { classifyKvyCommand } from "../daemon/markers.js";
 import {
   listProcesses as listProcessesDefault,
   type ProcessEntry,
@@ -39,9 +39,9 @@ export function createLivenessDeps(overrides: Partial<LivenessDeps> = {}): Liven
   };
 }
 
-/** True for a bare `claude` invocation's command line — false for anything Falcon itself launched (`falcon claude ...`). */
+/** True for a bare `claude` invocation's command line — false for anything Kvy itself launched (`kvy claude ...`). */
 export function isPlainClaudeCommand(command: string): boolean {
-  if (classifyFalconCommand(command)) return false;
+  if (classifyKvyCommand(command)) return false;
   const tokens = command
     .trim()
     .split(/\s+/)
@@ -58,7 +58,7 @@ export interface OwningProcess {
 }
 
 /**
- * Finds the live, non-Falcon `claude` process rooted at `workspacePath`
+ * Finds the live, non-Kvy `claude` process rooted at `workspacePath`
  * (if any) and the transcript it's presumed to own — the
  * most-recently-modified `.jsonl` file in `projectDir`. Returns `null` if
  * no live process matches, or the project dir can't be read.

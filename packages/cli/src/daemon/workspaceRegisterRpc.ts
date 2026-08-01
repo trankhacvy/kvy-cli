@@ -1,6 +1,6 @@
 /**
  * Backs the daemon's `workspace.register` machine RPC (plan.md §16 "Flow 3
- * — spawn-fresh-folder-register (Piece A)", `@falcon/wire`'s
+ * — spawn-fresh-folder-register (Piece A)", `@kvy/wire`'s
  * `WorkspaceRegisterParams`/`Result`).
  *
  * Thin wrapper around the already-real, already-idempotent
@@ -21,7 +21,7 @@ import type {
   WorkspaceRegisterResult,
   WorkspaceUnregisterParams,
   WorkspaceUnregisterResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import {
   registerWorkspace as registerWorkspaceCore,
   unregisterWorkspace as unregisterWorkspaceCore,

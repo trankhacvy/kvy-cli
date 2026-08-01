@@ -2,7 +2,7 @@
  * `cloudflared` binary detection (docs/features/dev-server-preview.md):
  * `cloudflared` is a Go binary, not an npm package, so the pinned-manifest
  * npm-install adapter manager (`packages/cli/src/adapters/`) doesn't apply
- * here — Falcon never installs it, only detects it on `PATH`, mirroring how
+ * here — Kvy never installs it, only detects it on `PATH`, mirroring how
  * `ProviderAdapter.detect()` detects the `claude`/`codex` CLIs.
  *
  * This is the single detection point reused by the `preview.ports` RPC

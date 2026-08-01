@@ -26,8 +26,8 @@ const MOCK_FILES: string[] = [
 ];
 
 const MOCK_CONTENTS: Record<string, string> = {
-  "README.md": "# Falcon\n\nRemote control for your coding agent sessions.\n",
-  "package.json": '{\n  "name": "falcon",\n  "private": true\n}\n',
+  "README.md": "# Kvy\n\nRemote control for your coding agent sessions.\n",
+  "package.json": '{\n  "name": "kvy",\n  "private": true\n}\n',
   "packages/web/src/features/repo-files/types.ts": [
     "export interface RepoFilesActions {",
     "  fetchFileList(worktree: string): Promise<string[]>;",

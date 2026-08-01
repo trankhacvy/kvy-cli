@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { open, seal } from "@falcon/crypto";
+import { open, seal } from "@kvy/crypto";
 import type {
   AdoptMirrorResult,
   AdoptTakeResult,
@@ -16,7 +16,7 @@ import type {
   SpawnResult,
   WorkspaceRegisterResult,
   WorkspaceUnregisterResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   MACHINE_RPC_METHODS,
@@ -589,22 +589,22 @@ describe("registerMachineRpcHandlers", () => {
       // `registerWorkspace` in `register(...)` — it exercises
       // `machineRpc.ts`'s real, dependency-free default
       // (`workspaceRegisterRpc.ts`, wrapping `workspace/registry.ts`'s real
-      // `registerWorkspace`), pointed at a temp `~/.falcon`-equivalent via
-      // `FALCON_HOME_DIR`, and asserts the actual `workspaces.json` file the
+      // `registerWorkspace`), pointed at a temp `~/.kvy`-equivalent via
+      // `KVY_HOME_DIR`, and asserts the actual `workspaces.json` file the
       // real registry writes — proving the RPC really performs the durable
       // side effect, not just that some function got called.
       let homeDir: string;
-      let previousFalconHomeDir: string | undefined;
+      let previousKvyHomeDir: string | undefined;
 
       beforeEach(async () => {
-        homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-register-rpc-"));
-        previousFalconHomeDir = process.env.FALCON_HOME_DIR;
-        process.env.FALCON_HOME_DIR = homeDir;
+        homeDir = await mkdtemp(path.join(tmpdir(), "kvy-workspace-register-rpc-"));
+        previousKvyHomeDir = process.env.KVY_HOME_DIR;
+        process.env.KVY_HOME_DIR = homeDir;
       });
 
       afterEach(async () => {
-        if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
-        else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+        if (previousKvyHomeDir === undefined) delete process.env.KVY_HOME_DIR;
+        else process.env.KVY_HOME_DIR = previousKvyHomeDir;
         await rm(homeDir, { recursive: true, force: true });
       });
 
@@ -655,17 +655,17 @@ describe("registerMachineRpcHandlers", () => {
 
     describe("with the real default (no mocked-away side effect)", () => {
       let homeDir: string;
-      let previousFalconHomeDir: string | undefined;
+      let previousKvyHomeDir: string | undefined;
 
       beforeEach(async () => {
-        homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-unregister-rpc-"));
-        previousFalconHomeDir = process.env.FALCON_HOME_DIR;
-        process.env.FALCON_HOME_DIR = homeDir;
+        homeDir = await mkdtemp(path.join(tmpdir(), "kvy-workspace-unregister-rpc-"));
+        previousKvyHomeDir = process.env.KVY_HOME_DIR;
+        process.env.KVY_HOME_DIR = homeDir;
       });
 
       afterEach(async () => {
-        if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
-        else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+        if (previousKvyHomeDir === undefined) delete process.env.KVY_HOME_DIR;
+        else process.env.KVY_HOME_DIR = previousKvyHomeDir;
         await rm(homeDir, { recursive: true, force: true });
       });
 
@@ -1127,17 +1127,17 @@ describe("registerMachineRpcHandlers", () => {
 
     describe("with the real default (no mocked-away side effect)", () => {
       let homeDir: string;
-      let previousFalconHomeDir: string | undefined;
+      let previousKvyHomeDir: string | undefined;
 
       beforeEach(async () => {
-        homeDir = await mkdtemp(path.join(tmpdir(), "falcon-git-init-rpc-"));
-        previousFalconHomeDir = process.env.FALCON_HOME_DIR;
-        process.env.FALCON_HOME_DIR = homeDir;
+        homeDir = await mkdtemp(path.join(tmpdir(), "kvy-git-init-rpc-"));
+        previousKvyHomeDir = process.env.KVY_HOME_DIR;
+        process.env.KVY_HOME_DIR = homeDir;
       });
 
       afterEach(async () => {
-        if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
-        else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+        if (previousKvyHomeDir === undefined) delete process.env.KVY_HOME_DIR;
+        else process.env.KVY_HOME_DIR = previousKvyHomeDir;
         await rm(homeDir, { recursive: true, force: true });
       });
 

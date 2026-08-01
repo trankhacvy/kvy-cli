@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * ACP adapter contract test (falcon-system-design.md §13.2 v0.3, plan.md §17
+ * ACP adapter contract test (kvy-system-design.md §13.2 v0.3, plan.md §17
  * Phase 2.4). The v2 sibling of `provider-contract-test.ts`: instead of the
- * local Claude Code transcript/hook/resume contract, this exercises Falcon's
+ * local Claude Code transcript/hook/resume contract, this exercises Kvy's
  * REAL ACP stack (`src/acp/acpConnection.ts` + `acpToEnvelope.ts` +
  * `acpPermissionHandler.ts`) against the official `claude-agent-acp` adapter,
- * asserting the ACP-side behaviors Falcon's mapper depends on but does not
+ * asserting the ACP-side behaviors Kvy's mapper depends on but does not
  * control:
  *
  *  1. **Handshake** — `initialize` returns an `agentInfo`, and `session/new`
- *     returns a UUID-shaped `sessionId` (the id Falcon reuses for the
+ *     returns a UUID-shaped `sessionId` (the id Kvy reuses for the
  *     remote→local `claude --resume <id>` handoff — design §7.4).
  *  2. **Text turn** — a plain prompt produces `agent_message_chunk`
  *     notifications that the mapper coalesces into ≥1 `text` envelope, and
@@ -21,15 +21,15 @@
  *
  * It runs TWICE (design §13.2 "pinned + latest canary"):
  *  - **pinned** (`ADAPTER_MANIFEST`) — a failure here is a HARD failure
- *    (exit 1): Falcon ships against exactly this version.
+ *    (exit 1): Kvy ships against exactly this version.
  *  - **latest** (`@agentclientprotocol/claude-agent-acp@latest`, temp-installed
  *    only when it differs from the pin) — a failure here is a loud WARNING,
- *    not a red build: it means upstream drifted and Falcon should investigate
- *    before bumping its pin, not that Falcon is currently broken.
+ *    not a red build: it means upstream drifted and Kvy should investigate
+ *    before bumping its pin, not that Kvy is currently broken.
  *
  * Standalone, billed, live — never part of `pnpm test`. Invoked only by
  * `.github/workflows/provider-contract.yml`'s daily cron (Claude installed +
- * authenticated). Local run: `pnpm --filter falcon run contract:acp`.
+ * authenticated). Local run: `pnpm --filter kvy run contract:acp`.
  */
 
 import { execFileSync } from "node:child_process";
@@ -37,7 +37,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { RequestPermissionRequest, RequestPermissionResponse } from "@agentclientprotocol/sdk";
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { AcpConnection } from "../src/acp/acpConnection.js";
 import {
   type AcpSessionUpdate,
@@ -101,12 +101,12 @@ async function runContract(homeDir: string, label: string): Promise<void> {
   const connection = new AcpConnection({
     adapterId: "claude-code",
     homeDir,
-    clientInfo: { name: "falcon-acp-contract", version: "0.0.0" },
+    clientInfo: { name: "kvy-acp-contract", version: "0.0.0" },
   });
   connection.setPermissionHandler((params) => autoAllow(params));
 
-  const workspace = mkdtempSync(join(tmpdir(), "falcon-acp-contract-ws-"));
-  writeFileSync(join(workspace, "hello.txt"), "falcon acp contract workspace\n");
+  const workspace = mkdtempSync(join(tmpdir(), "kvy-acp-contract-ws-"));
+  writeFileSync(join(workspace, "hello.txt"), "kvy acp contract workspace\n");
 
   try {
     await connection.connect();
@@ -129,7 +129,7 @@ async function runContract(homeDir: string, label: string): Promise<void> {
     const text = await runTurn(
       connection,
       session.sessionId,
-      "Reply with exactly this text and nothing else: hello falcon",
+      "Reply with exactly this text and nothing else: hello kvy",
     );
     assertContract(
       text.stopReason === "end_turn",
@@ -145,7 +145,7 @@ async function runContract(homeDir: string, label: string): Promise<void> {
     const tool = await runTurn(
       connection,
       session.sessionId,
-      "Use the Bash tool to run exactly `echo falcon-contract` and then confirm the output in one short sentence.",
+      "Use the Bash tool to run exactly `echo kvy-contract` and then confirm the output in one short sentence.",
     );
     const toolStart = tool.envelopes.find((e) => e.ev.t === "tool-start");
     assertContract(
@@ -181,7 +181,7 @@ function latestVersion(pkg: string): string | null {
 
 async function main(): Promise<void> {
   // --- pinned run (hard gate) ---
-  const homeDir = mkdtempSync(join(tmpdir(), "falcon-acp-contract-home-"));
+  const homeDir = mkdtempSync(join(tmpdir(), "kvy-acp-contract-home-"));
   try {
     const installed = await installAllAdapters({ homeDir });
     for (const outcome of installed) {
@@ -221,8 +221,8 @@ async function main(): Promise<void> {
   // A renamed/removed entry (the most common breaking upstream change) is
   // caught here as a WARNING; deeper behavioral drift is caught by the pinned
   // run once someone bumps the pin. Never fails the build — latest breaking
-  // isn't Falcon's bug yet, it's a signal to investigate before bumping.
-  const canaryHome = mkdtempSync(join(tmpdir(), "falcon-acp-contract-canary-"));
+  // isn't Kvy's bug yet, it's a signal to investigate before bumping.
+  const canaryHome = mkdtempSync(join(tmpdir(), "kvy-acp-contract-canary-"));
   try {
     const prefix = join(canaryHome, "adapters");
     execFileSync(

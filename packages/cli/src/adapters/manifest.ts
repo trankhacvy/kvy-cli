@@ -1,18 +1,18 @@
 /**
- * Pinned-version manifest for Falcon's managed ACP adapter installs (design
+ * Pinned-version manifest for Kvy's managed ACP adapter installs (design
  * §7.9, plan.md §16 "Phase 2.0 — foundation": "Adapter manager
  * (`cli/src/adapters/`, design §7.9): pinned-version manifest (package id +
- * exact version + integrity hash), install into `~/.falcon/adapters/` own
- * npm prefix, verify-before-spawn, `falcon adapters install|upgrade`
- * command, `falcon doctor` adapter checks. No npx at session start").
+ * exact version + integrity hash), install into `~/.kvy/adapters/` own
+ * npm prefix, verify-before-spawn, `kvy adapters install|upgrade`
+ * command, `kvy doctor` adapter checks. No npx at session start").
  *
  * Each entry pins an *exact* version and its npm-registry `dist.integrity`
  * (a standard Subresource Integrity string, `sha512-<base64>`) — the exact
  * value `npm view <package>@<version> dist.integrity` reports at the time
  * this manifest was written. `install.ts` verifies the resulting install
- * against these two fields (never a range, never "latest"): a Falcon
+ * against these two fields (never a range, never "latest"): a Kvy
  * release bumps this manifest deliberately; the user upgrades deliberately
- * via `falcon adapters upgrade`. Never fetched or resolved dynamically at
+ * via `kvy adapters upgrade`. Never fetched or resolved dynamically at
  * session start — that's the whole point of not using `npx`.
  *
  * Package-name note: the design doc's prose shorthand ("`claude-agent-acp`
@@ -32,7 +32,7 @@ export type AdapterId = "claude-code" | "codex";
 export interface AdapterManifestEntry {
   /** Matches `ProviderAdapter.id` (design §7.3). */
   id: AdapterId;
-  /** Human label for CLI/`falcon doctor` output. */
+  /** Human label for CLI/`kvy doctor` output. */
   label: string;
   /** Exact npm package name — always scoped, see file header. */
   packageName: string;

@@ -1,4 +1,4 @@
-import type { Update } from "@falcon/wire";
+import type { Update } from "@kvy/wire";
 import type { SyncSocketSource } from "../engine.js";
 
 /** In-memory `SyncSocketSource` double — mirrors what a real `apiSocket`'s

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Ephemeral } from "@falcon/wire";
+import type { Ephemeral } from "@kvy/wire";
 import { useEffect, useRef, useState } from "react";
 import type { AttentionKind } from "@/features/session-list/types";
 import { apiSocket } from "@/sync";
@@ -38,7 +38,7 @@ export function isWorkingFresh(workingSince: number | null, now: number): boolea
 }
 
 /** Subscribes to the live `ephemeral` stream for one session's `activity`/
- * `attention` signals (falcon-system-design.md §4.3, plan.md §16 "2.4 Web
+ * `attention` signals (kvy-system-design.md §4.3, plan.md §16 "2.4 Web
  * control surface"). Resets to `INITIAL_STATE` whenever `sessionId` changes
  * so switching sessions doesn't carry over a stale "working"/attention flag
  * from whatever was previously open. */

@@ -1,0 +1,28 @@
+diff --git a/index.js b/index.js
+index 1b66a8336ff3f4297c958f37db85df1e18d1fe88..d207c2fa72abe9e675094d0045e9a756a0f5f636 100644
+--- a/index.js
++++ b/index.js
+@@ -60,6 +60,23 @@ const isMuslFromChildProcess = () => {
+ }
+ 
+ function requireNative() {
++  // Patched for Kvy's compiled (Node SEA) binary build: unlike @napi-rs/keyring,
++  // this generator version of the napi-rs loader has no env-var override at all —
++  // every branch below does `require('./argon2.<platform>.node')` relative to
++  // this file's own location, which doesn't exist inside a single-executable
++  // binary (there's no real on-disk `index.js` to be relative to). When set, this
++  // loads straight from an absolute path the SEA bootstrap already extracted the
++  // embedded .node file to (see packages/cli/scripts/native/entry.cjs) — a
++  // deliberately different env var name from @napi-rs/keyring's
++  // `NAPI_RS_NATIVE_LIBRARY_PATH` so the two never collide when both are loaded
++  // in the same compiled binary. Untouched for every other run mode.
++  if (process.env.KVY_ARGON2_NATIVE_PATH) {
++    try {
++      return require(process.env.KVY_ARGON2_NATIVE_PATH);
++    } catch (err) {
++      loadErrors.push(err);
++    }
++  }
+   if (process.platform === 'android') {
+     if (process.arch === 'arm64') {
+       try {

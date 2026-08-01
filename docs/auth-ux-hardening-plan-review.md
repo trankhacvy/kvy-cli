@@ -334,7 +334,7 @@ plan nor (apparently) the audit covers them:
 4. **`/password/` sign-up UX pre-gates nothing** — `mode === "signup"` renders the PIN form
    immediately alongside email/password with no awareness that item 3 will hide the whole
    page; fine, but if the "keep password for self-hosters" alternative flag
-   (`FALCON_PASSWORD_AUTH`) is ever chosen, the web gate in item 3a must key off the mirrored
+   (`KVY_PASSWORD_AUTH`) is ever chosen, the web gate in item 3a must key off the mirrored
    flag, not `DEV_AUTH_ENABLED` — the plan's alternative paragraph says this correctly; just
    don't let the two halves ship mismatched.
 

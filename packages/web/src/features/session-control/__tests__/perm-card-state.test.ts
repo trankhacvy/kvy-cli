@@ -1,4 +1,4 @@
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { applyAnswerResult, fromError } from "../perm-card-state.js";
 

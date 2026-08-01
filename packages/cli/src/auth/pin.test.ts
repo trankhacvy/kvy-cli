@@ -1,4 +1,4 @@
-import { getRandomBytes, wrapWithPin } from "@falcon/crypto";
+import { getRandomBytes, wrapWithPin } from "@kvy/crypto";
 import { describe, expect, it, vi } from "vitest";
 import { promptAndUnwrapWithPin } from "./pin.js";
 

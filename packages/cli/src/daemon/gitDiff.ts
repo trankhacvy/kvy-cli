@@ -1,10 +1,10 @@
 /**
  * `git.diff` machine RPC handler (design §4.4: `'git.diff'({worktree, path?,
- * baseRef?}) → { inline?, blobRef? }`; falcon-prd.md FR-7.7 "Git panel: ...
+ * baseRef?}) → { inline?, blobRef? }`; kvy-prd.md FR-7.7 "Git panel: ...
  * file-level diff list vs configured base ref, per-file unified diff view";
  * plan.md §16 "4.1 Git panel"). Backs the web unified diff viewer.
  *
- * **Base ref resolution** (falcon-prd.md line 148, `falcon workspace
+ * **Base ref resolution** (kvy-prd.md line 148, `kvy workspace
  * config --base-ref`) is shared with `gitStatus.ts` via `gitBaseRef.ts`:
  * an explicit `params.baseRef` always wins (a one-off override, e.g.
  * comparing against a different branch than the workspace's configured
@@ -49,7 +49,7 @@
  * failed/unwired upload just leaves `blobRef` unset, same as before this
  * subsystem existed.
  */
-import type { GitDiffParams, GitDiffResult } from "@falcon/wire";
+import type { GitDiffParams, GitDiffResult } from "@kvy/wire";
 import { resolveDiffBaseline, resolveEffectiveBaseRef } from "./gitBaseRef.js";
 import { type GitExec, GitExecError, runGit, runGitDiffNoIndex } from "./gitExec.js";
 import { listUntrackedFiles } from "./gitUntracked.js";
@@ -63,7 +63,7 @@ export interface GitDiffDeps {
   git?: GitExec;
   /** Injectable for tests; defaults to `gitExec.ts`'s real `runGitDiffNoIndex` (an untracked file's own diff against `/dev/null`). */
   noIndexDiff?: GitExec;
-  /** Looks up the workspace's configured base ref for `worktree`; defaults to `workspaceConfig.ts`'s real `~/.falcon/settings.json`-backed lookup. Returns `undefined` when none is configured. */
+  /** Looks up the workspace's configured base ref for `worktree`; defaults to `workspaceConfig.ts`'s real `~/.kvy/settings.json`-backed lookup. Returns `undefined` when none is configured. */
   resolveConfiguredBaseRef?: (worktree: string) => Promise<string | undefined>;
   maxInlineBytes?: number;
   /** Encrypts+uploads the full diff and resolves its `blobId`, or `null` on any failure — see `blobClient.ts`'s `uploadBlob`. No default: unset (the state every caller had before this subsystem existed) means `blobRef` simply stays unset, never a thrown error. Only ever called when the diff was actually truncated — a diff that already fits inline has no need for a blob. */

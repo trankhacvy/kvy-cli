@@ -9,7 +9,7 @@ import { adapterEntryPath, installedLockPath } from "./paths.js";
 let homeDir: string;
 
 beforeEach(async () => {
-  homeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-health-"));
+  homeDir = await mkdtemp(path.join(tmpdir(), "kvy-adapters-health-"));
 });
 
 afterEach(async () => {

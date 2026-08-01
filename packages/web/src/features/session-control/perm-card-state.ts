@@ -1,8 +1,8 @@
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision } from "@kvy/wire";
 
 /**
  * `PermCard`'s local phase machine, kept as a pure function so the "first
- * wins across devices" branch (falcon-system-design.md §7.6) is testable
+ * wins across devices" branch (kvy-system-design.md §7.6) is testable
  * without mounting the component. This is *optimistic* state only — once
  * the canonical `perm-resolve` envelope reaches the reducer, the item's own
  * `permission.decision` prop becomes authoritative and the card renders that

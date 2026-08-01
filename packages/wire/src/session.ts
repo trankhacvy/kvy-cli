@@ -96,6 +96,15 @@ export const SessionEventSchema = z.discriminatedUnion("t", [
     outputTokens: z.number(),
     costUsd: z.number().optional(),
   }),
+  z.object({
+    t: z.literal("plan"),
+    steps: z.array(
+      z.object({
+        text: z.string(),
+        status: z.enum(["pending", "in_progress", "completed"]),
+      }),
+    ),
+  }),
 ]);
 export type SessionEvent = z.infer<typeof SessionEventSchema>;
 

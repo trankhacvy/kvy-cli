@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision } from "@kvy/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,7 @@ import {
   type PermCardPhase,
   useSessionControl,
 } from "@/features/session-control";
+import { getProviderMeta } from "@/lib/providers";
 import { parseEditArgs } from "@/lib/tool-args";
 import type { PermissionInfo } from "@/sync/reducer";
 import { DiffView } from "./DiffView";
@@ -33,7 +34,7 @@ export function isExitPlanTool(name: string): boolean {
   return EXIT_PLAN_TOOL_NAMES.has(name);
 }
 
-/** The plan's markdown body (`perm-request.args.plan`, falcon-prd.md
+/** The plan's markdown body (`perm-request.args.plan`, kvy-prd.md
  * FR-7.4), or `null` if `name` isn't the plan-approval tool or `args` didn't
  * carry a string `plan` field (an adapter contract violation — falls back
  * to the plain `JsonBlock` dump rather than a blank preview). Exported for
@@ -84,7 +85,7 @@ function PermCardPreview({ name, args }: { name: string; args: unknown }) {
 }
 
 /**
- * Interactive permission card (falcon-system-design.md §9.2 "Session" row:
+ * Interactive permission card (kvy-system-design.md §9.2 "Session" row:
  * `PermCard` "Allow/Deny/Allow-session"; plan.md §16 "2.4 Web control
  * surface"). Replaces the read-only `PermissionBadge` at both call sites
  * that carry a `PermissionInfo` (`PermPlaceholder`, `ToolCardShell`):
@@ -106,7 +107,7 @@ function PermCardPreview({ name, args }: { name: string; args: unknown }) {
  *    here does the same two things web already has separately — answer,
  *    then `actions.sendMessage` — rather than any new/edited-input channel.
  *
- * `showPreview` controls the edit-preview diff (falcon-prd.md FR-7.4: "for
+ * `showPreview` controls the edit-preview diff (kvy-prd.md FR-7.4: "for
  * edits, the proposed change preview") — `PermPlaceholder` has no other
  * body rendering `args`, so it wants the preview; a `ToolItem` inside
  * `ToolCardShell` already has its own dedicated body (e.g. `EditCard`'s
@@ -128,7 +129,7 @@ export function PermCard({
   showPreview?: boolean;
   showHeader?: boolean;
 }) {
-  const { actions } = useSessionControl();
+  const { actions, provider } = useSessionControl();
   const [phase, setPhase] = useState<PermCardPhase>({ kind: "idle" });
   const [note, setNote] = useState("");
 
@@ -162,7 +163,7 @@ export function PermCard({
   // A locally-typed terminal turn's request (`answerable: false`) has no
   // channel for a web click to drive it — the terminal, not this card, owns
   // the outcome. Rendering interactive buttons here would be a false
-  // affordance (falcon-prd.md's "never claim a control you can't honor"
+  // affordance (kvy-prd.md's "never claim a control you can't honor"
   // principle); the card resolves on its own once the reducer's
   // `permission.decision` catches up from the terminal's real answer.
   // `phase.kind === "not-answerable"` covers the defensive case where a
@@ -246,7 +247,7 @@ export function PermCard({
         value={note}
         onChange={(e) => setNote(e.target.value)}
         disabled={submitting}
-        placeholder="Optionally tell Claude what to do next (sent after Allow)…"
+        placeholder={`Optionally tell ${getProviderMeta(provider).label} what to do next (sent after Allow)…`}
         className="h-8 text-sm"
       />
 

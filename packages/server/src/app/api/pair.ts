@@ -1,4 +1,4 @@
-import { decodeBase64, encodeBase64 } from "@falcon/crypto";
+import { decodeBase64, encodeBase64 } from "@kvy/crypto";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -6,10 +6,10 @@ import { issueSession } from "../../auth/index.js";
 import { db } from "../../db/client.js";
 import { pairRequests } from "../../db/schema.js";
 
-// X25519 public keys are 32 raw bytes (falcon-system-design.md §5.1/§5.2).
+// X25519 public keys are 32 raw bytes (kvy-system-design.md §5.1/§5.2).
 const X25519_PUBLIC_KEY_BYTES = 32;
 
-// Falcon hardening vs Happy (falcon-plan.md §1.2, plan.md line 802): an unbounded pairing
+// Kvy hardening vs Happy (kvy-plan.md §1.2, plan.md line 802): an unbounded pairing
 // window was one of the vulns reported against Happy's QR auth. Every pair request gets a
 // hard 15-minute TTL, enforced on every read below (POST /pair, GET /status, POST /approve)
 // rather than via a background sweep — there's no cron here, `expiresAt` is just checked
@@ -35,7 +35,7 @@ const ErrorSchema = z.object({ error: z.string() });
  * device (the web app, which holds the master secret) to seal that secret — and, since
  * issue-4-plan.md §6.3, the CLI's own freshly-minted refresh token — to the ephemeral
  * public key. The server only ever relays the opaque sealed box — it holds no keys and
- * can't read `response` (falcon-system-design.md §5.3).
+ * can't read `response` (kvy-system-design.md §5.3).
  */
 export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
   // Upserts a PairRequest by ephemeral pubkey; once an approver has stored a sealed
@@ -47,7 +47,7 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       // Unauthenticated, polled repeatedly by a waiting CLI — allow enough headroom for
       // legitimate polling (a few requests/second) while still bounding abuse
-      // (falcon-system-design.md §12: "Rate limits: ... pair polling", plan.md §16
+      // (kvy-system-design.md §12: "Rate limits: ... pair polling", plan.md §16
       // "4.4 Hardening").
       config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
       schema: {
@@ -243,7 +243,7 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
         return reply.code(410).send({ error: "Pair request expired" });
       }
 
-      // First-approval-wins (falcon-plan.md §1.2: "stores the approver's sealed box only
+      // First-approval-wins (kvy-plan.md §1.2: "stores the approver's sealed box only
       // if not already set"). Happy does this as a read-then-write (`if (!authRequest.response)
       // { update(...) }`, `authRoutes.ts:159-164`), which is a TOCTOU race under two
       // concurrent approvals. This is the same intent expressed as a single atomic

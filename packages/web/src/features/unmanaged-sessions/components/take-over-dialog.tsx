@@ -25,7 +25,7 @@ import {
 import type { AdoptMode, UnmanagedActions, UnmanagedSessionItem } from "../types";
 
 /**
- * "Take Over / Fork Instead" dialog (falcon-system-design.md §10.4/§11 UC9,
+ * "Take Over / Fork Instead" dialog (kvy-system-design.md §10.4/§11 UC9,
  * plan.md §16 "3.3 Session adoption (UC9)"): confirms the adoption mode,
  * warns about interrupting a still-running process before a takeover, then
  * calls `adopt.take` (via the injected `actions.take`) and hands the
@@ -87,7 +87,7 @@ export function TakeOverDialog({
               </DialogTitle>
               <DialogDescription>
                 {state.mode === "takeover"
-                  ? "Falcon is now driving this session. The terminal process was stopped."
+                  ? "Kvy is now driving this session. The terminal process was stopped."
                   : "A new managed session was started from this transcript. The original terminal session is untouched."}
               </DialogDescription>
             </DialogHeader>
@@ -126,7 +126,7 @@ export function TakeOverDialog({
             <DialogHeader>
               <DialogTitle>Adopt &ldquo;{session.title}&rdquo;</DialogTitle>
               <DialogDescription>
-                Take over to continue this session from Falcon (stops the terminal process). Fork
+                Take over to continue this session from Kvy (stops the terminal process). Fork
                 instead to start a new managed session from the same history, leaving the original
                 running.
               </DialogDescription>

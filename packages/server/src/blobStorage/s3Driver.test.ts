@@ -34,7 +34,7 @@ const { createS3Driver } = await import("./s3Driver.js");
 
 describe("createS3Driver", () => {
   const config = {
-    bucket: "falcon-blobs",
+    bucket: "kvy-blobs",
     region: "us-east-1",
     endpoint: "http://localhost:9000",
     accessKeyId: "AKIA_TEST",
@@ -76,7 +76,7 @@ describe("createS3Driver", () => {
     const target = await driver.createUploadTarget({
       key: "blob-1",
       size: 42,
-      baseUrl: "https://api.falcon.dev",
+      baseUrl: "https://api.kvy.dev",
     });
 
     expect(PutObjectCommandMock).toHaveBeenCalledWith({ Bucket: config.bucket, Key: "blob-1" });
@@ -103,7 +103,7 @@ describe("createS3Driver", () => {
     const driver = createS3Driver(config);
     const target = await driver.createDownloadTarget({
       key: "blob-2",
-      baseUrl: "https://api.falcon.dev",
+      baseUrl: "https://api.kvy.dev",
     });
 
     expect(GetObjectCommandMock).toHaveBeenCalledWith({ Bucket: config.bucket, Key: "blob-2" });
@@ -126,8 +126,8 @@ describe("createS3Driver", () => {
 
   it("different keys produce different presigned commands (no key bleed-through)", async () => {
     const driver = createS3Driver(config);
-    await driver.createUploadTarget({ key: "blob-a", size: 1, baseUrl: "https://api.falcon.dev" });
-    await driver.createUploadTarget({ key: "blob-b", size: 1, baseUrl: "https://api.falcon.dev" });
+    await driver.createUploadTarget({ key: "blob-a", size: 1, baseUrl: "https://api.kvy.dev" });
+    await driver.createUploadTarget({ key: "blob-b", size: 1, baseUrl: "https://api.kvy.dev" });
 
     expect(PutObjectCommandMock).toHaveBeenNthCalledWith(1, {
       Bucket: config.bucket,

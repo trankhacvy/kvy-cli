@@ -40,7 +40,7 @@ describe("ensureDaemonRunning", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-ensure-daemon-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-ensure-daemon-"));
   });
 
   afterEach(async () => {
@@ -133,9 +133,9 @@ describe("ensureDaemonRunning", () => {
     }
   });
 
-  it("returns disabled without touching the filesystem when FALCON_NO_SERVICE=1", async () => {
+  it("returns disabled without touching the filesystem when KVY_NO_SERVICE=1", async () => {
     const spawnStartSync = vi.fn();
-    const deps = buildDeps(homeDir, { spawnStartSync, env: { FALCON_NO_SERVICE: "1" } });
+    const deps = buildDeps(homeDir, { spawnStartSync, env: { KVY_NO_SERVICE: "1" } });
 
     const result = await ensureDaemonRunning(deps);
 

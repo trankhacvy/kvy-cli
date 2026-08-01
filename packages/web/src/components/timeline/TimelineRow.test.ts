@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { RenderItem, UsageItem } from "@/sync/reducer";
+import type { PlanItem, RenderItem, UsageItem } from "@/sync/reducer";
+import { PlanChecklist } from "./PlanChecklist";
 import { ServiceLine } from "./ServiceLine";
 import { TimelineRow } from "./TimelineRow";
 import { UsageChip } from "./UsageChip";
@@ -31,6 +32,19 @@ describe("TimelineRow — usage dispatch (W4.6)", () => {
       quiet: false,
     };
     expect(TimelineRow({ item }).type).toBe(ServiceLine);
+  });
+});
+
+describe("TimelineRow — plan dispatch", () => {
+  it("routes a plan item to PlanChecklist", () => {
+    const item: PlanItem = {
+      id: "p1",
+      time: 0,
+      role: "agent",
+      kind: "plan",
+      steps: [{ text: "List files", status: "completed" }],
+    };
+    expect(TimelineRow({ item }).type).toBe(PlanChecklist);
   });
 });
 

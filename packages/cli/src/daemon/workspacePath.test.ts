@@ -12,7 +12,7 @@ describe("validateSpawnWorkspace", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "falcon-workspace-"));
+    root = await mkdtemp(path.join(tmpdir(), "kvy-workspace-"));
   });
 
   afterEach(async () => {
@@ -88,7 +88,7 @@ describe("validateSpawnWorkspace", () => {
   });
 
   it("rejects a symlink that escapes the registered root, even though the link itself lives inside it", async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), "falcon-outside-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "kvy-outside-"));
     const link = path.join(root, "escape");
     await symlink(outside, link);
 
@@ -125,7 +125,7 @@ describe("assertWorkspaceStillValid (known-issues.md #3)", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "falcon-workspace-valid-"));
+    root = await mkdtemp(path.join(tmpdir(), "kvy-workspace-valid-"));
   });
 
   afterEach(async () => {

@@ -1,23 +1,25 @@
 /**
- * Hand-rolled argument parsing for the `falcon` command surface (PRD §5.3,
+ * Hand-rolled argument parsing for the `kvy` command surface (PRD §5.3,
  * plan.md §6.1). No CLI-parsing framework — same approach Happy uses, and
  * the one that makes verbatim flag passthrough easy to reason about: a
  * framework wants to own and validate every flag, which is exactly wrong
- * for `falcon claude [args...]`, where *every* flag must reach the
+ * for `kvy claude [args...]`, where *every* flag must reach the
  * underlying provider CLI untouched.
  *
  * Two parsing modes coexist:
- *  - Falcon's own subcommands (`auth`, `daemon`, `kill`, `doctor`,
+ *  - Kvy's own subcommands (`auth`, `daemon`, `kill`, `doctor`,
  *    `sessions`, `resume`, `workspace`, `notify`, `--help`,
  *    `--version`) are parsed and validated below.
- *  - `falcon claude [args...]` / `falcon codex [args...]` — and the
- *    default `falcon [args...]` form — never inspect `args`; they are
+ *  - `kvy claude [args...]` / `kvy codex [args...]` — and the
+ *    default `kvy [args...]` form — never inspect `args`; they are
  *    forwarded verbatim as `providerArgs`.
  */
 
-export type Provider = "claude" | "codex";
+import { PROVIDER_REGISTRY } from "./provider/registry.js";
 
-export type FalconCommand =
+export type Provider = string;
+
+export type KvyCommand =
   | { type: "help" }
   | { type: "version" }
   | { type: "start"; provider: Provider; providerArgs: string[]; branch?: string }
@@ -47,7 +49,7 @@ export type FalconCommand =
   | { type: "github"; action: "login" | "logout" | "status"; token: boolean; clientId?: string }
   | { type: "update" };
 
-/** Thrown for malformed Falcon-level commands. Never thrown for provider passthrough. */
+/** Thrown for malformed Kvy-level commands. Never thrown for provider passthrough. */
 export class ArgParseError extends Error {
   readonly usage: string | undefined;
 
@@ -61,22 +63,24 @@ export class ArgParseError extends Error {
 const HELP_FLAGS = new Set(["--help", "-h"]);
 const VERSION_FLAGS = new Set(["--version", "-v", "-V"]);
 const CONTINUE_FLAGS = new Set(["--continue"]);
-const PROVIDERS = new Set<Provider>(["claude", "codex"]);
+const PROVIDERS = new Set<Provider>(
+  Object.values(PROVIDER_REGISTRY).map((entry) => entry.kvySubcommand),
+);
 const KILL_TARGETS = new Set(["daemon", "sessions", "all", "all-force"]);
 
-export function parseArgs(argv: string[]): FalconCommand {
+export function parseArgs(argv: string[]): KvyCommand {
   // `pnpm --filter <pkg> dev -- <args...>` (CLAUDE.md's documented dev
   // invocation style) forwards a literal leading "--" token into the
   // script's own argv — unlike `npm run <script> -- <args...>`, which strips
   // it. Left unhandled, that stray "--" isn't a recognized provider name or
-  // Falcon subcommand, so it fell through to `parseDefaultStart`, which
+  // Kvy subcommand, so it fell through to `parseDefaultStart`, which
   // forwards the *entire* original argv (including "auth"/"status"/etc. as
   // literal words) to `claude` as passthrough args — silently misrouting
-  // `pnpm --filter falcon dev -- auth login` into starting a claude session
+  // `pnpm --filter kvy dev -- auth login` into starting a claude session
   // instead of running the intended `auth login` subcommand. Stripping a
   // single leading "--" here (once, not repeatedly — a real provider
   // passthrough could legitimately want its own "--") makes `pnpm --filter
-  // falcon dev -- <args...>` behave identically to invoking the CLI
+  // kvy dev -- <args...>` behave identically to invoking the CLI
   // directly, for every subcommand, not just `claude`/`codex`.
   const withoutPnpmSeparator = argv[0] === "--" ? argv.slice(1) : argv;
 
@@ -88,21 +92,21 @@ export function parseArgs(argv: string[]): FalconCommand {
   const rest = withoutPnpmSeparator.slice(1);
 
   // Top-level --help/--version always win, same as most CLIs. This only
-  // applies to `falcon --help`, not `falcon claude --help` — the provider
+  // applies to `kvy --help`, not `kvy claude --help` — the provider
   // check below runs first for a recognized provider name, so
-  // `falcon claude --help` correctly forwards `--help` to Claude Code.
+  // `kvy claude --help` correctly forwards `--help` to Claude Code.
   if (HELP_FLAGS.has(first)) return { type: "help" };
   if (VERSION_FLAGS.has(first)) return { type: "version" };
-  // `falcon --continue` aliases `falcon adopt` (design §7.8 FR-9.2, plan.md
+  // `kvy --continue` aliases `kvy adopt` (design §7.8 FR-9.2, plan.md
   // §16 "3.3 Session adoption (UC9)"): preselect the most-recent plain
   // session in cwd's workspace and continue it. `--remote`/`--list`
-  // compose the same way as `falcon adopt` itself (`falcon --continue
+  // compose the same way as `kvy adopt` itself (`kvy --continue
   // --remote`).
   if (CONTINUE_FLAGS.has(first)) return parseAdopt(rest);
 
   if (isProvider(first)) {
     // Everything after the provider name is passed through VERBATIM —
-    // Falcon never interprets provider flags (PRD §5.3: "all unknown flags
+    // Kvy never interprets provider flags (PRD §5.3: "all unknown flags
     // pass through verbatim to the underlying CLI").
     return { type: "start", provider: first, providerArgs: rest };
   }
@@ -135,10 +139,10 @@ export function parseArgs(argv: string[]): FalconCommand {
     case "update":
       return { type: "update" };
     default:
-      // Not a known Falcon subcommand: the whole argv is passthrough to the
-      // default provider (claude), same as `falcon claude [args...]` minus
-      // the explicit provider name. This is what makes `falcon --resume <id>`
-      // and `falcon -b feature/x` both work directly off `falcon`. Uses
+      // Not a known Kvy subcommand: the whole argv is passthrough to the
+      // default provider (claude), same as `kvy claude [args...]` minus
+      // the explicit provider name. This is what makes `kvy --resume <id>`
+      // and `kvy -b feature/x` both work directly off `kvy`. Uses
       // `withoutPnpmSeparator`, not the original `argv` — the stray leading
       // "--" (see above) must stay stripped here too, or it would leak into
       // `providerArgs` and get forwarded to claude/codex as a literal word.
@@ -150,7 +154,7 @@ function isProvider(value: string): value is Provider {
   return PROVIDERS.has(value as Provider);
 }
 
-function parseDefaultStart(argv: string[]): FalconCommand {
+function parseDefaultStart(argv: string[]): KvyCommand {
   const providerArgs: string[] = [];
   let branch: string | undefined;
 
@@ -159,7 +163,7 @@ function parseDefaultStart(argv: string[]): FalconCommand {
     if (arg === "-b" || arg === "--branch") {
       const value = argv[i + 1];
       if (value === undefined) {
-        throw new ArgParseError(`${arg} requires a branch name`, "falcon -b <branch>");
+        throw new ArgParseError(`${arg} requires a branch name`, "kvy -b <branch>");
       }
       branch = value;
       i++;
@@ -176,18 +180,18 @@ function parseDefaultStart(argv: string[]): FalconCommand {
   };
 }
 
-function parseAuth(rest: string[]): FalconCommand {
+function parseAuth(rest: string[]): KvyCommand {
   const action = rest[0];
   if (action === "login" || action === "logout" || action === "status") {
     return { type: "auth", action };
   }
   throw new ArgParseError(
-    `Unknown "falcon auth" action: ${action ?? "(none)"}`,
-    "falcon auth login|logout|status",
+    `Unknown "kvy auth" action: ${action ?? "(none)"}`,
+    "kvy auth login|logout|status",
   );
 }
 
-function parseDaemon(rest: string[]): FalconCommand {
+function parseDaemon(rest: string[]): KvyCommand {
   const action = rest[0];
   if (action === "start") {
     return { type: "daemon", action: "start", noWait: rest.slice(1).includes("--no-wait") };
@@ -199,8 +203,8 @@ function parseDaemon(rest: string[]): FalconCommand {
   if (action === "start-sync" || action === "stop" || action === "status") {
     return { type: "daemon", action, noWait: false };
   }
-  // `falcon daemon service install|uninstall|status` (falcon-prd.md FR-4.1,
-  // falcon-system-design.md §8 "Service install (P1)") — registers the
+  // `kvy daemon service install|uninstall|status` (kvy-prd.md FR-4.1,
+  // kvy-system-design.md §8 "Service install (P1)") — registers the
   // daemon as a login-managed OS service (launchd plist / systemd --user
   // unit). Kept as its own `daemon-service` command type rather than
   // overloading `daemon`'s own `status`/`start` actions, since "is the OS
@@ -210,56 +214,56 @@ function parseDaemon(rest: string[]): FalconCommand {
     return parseDaemonService(rest.slice(1));
   }
   throw new ArgParseError(
-    `Unknown "falcon daemon" action: ${action ?? "(none)"}`,
-    "falcon daemon start [--no-wait] | start-sync | stop | status | service install|uninstall|status",
+    `Unknown "kvy daemon" action: ${action ?? "(none)"}`,
+    "kvy daemon start [--no-wait] | start-sync | stop | status | service install|uninstall|status",
   );
 }
 
-function parseDaemonService(rest: string[]): FalconCommand {
+function parseDaemonService(rest: string[]): KvyCommand {
   const action = rest[0];
   if (action === "install" || action === "uninstall" || action === "status") {
     return { type: "daemon-service", action };
   }
   throw new ArgParseError(
-    `Unknown "falcon daemon service" action: ${action ?? "(none)"}`,
-    "falcon daemon service install|uninstall|status",
+    `Unknown "kvy daemon service" action: ${action ?? "(none)"}`,
+    "kvy daemon service install|uninstall|status",
   );
 }
 
-function parseKill(rest: string[]): FalconCommand {
+function parseKill(rest: string[]): KvyCommand {
   const target = rest[0];
   if (target !== undefined && KILL_TARGETS.has(target)) {
     return { type: "kill", target: target as "daemon" | "sessions" | "all" | "all-force" };
   }
   throw new ArgParseError(
-    `Unknown "falcon kill" target: ${target ?? "(none)"}`,
-    "falcon kill daemon|sessions|all|all-force",
+    `Unknown "kvy kill" target: ${target ?? "(none)"}`,
+    "kvy kill daemon|sessions|all|all-force",
   );
 }
 
-function parseDoctor(rest: string[]): FalconCommand {
+function parseDoctor(rest: string[]): KvyCommand {
   if (rest.length === 0) return { type: "doctor", action: "report" };
   if (rest[0] === "clean") return { type: "doctor", action: "clean" };
-  throw new ArgParseError(`Unknown "falcon doctor" action: ${rest[0]}`, "falcon doctor [clean]");
+  throw new ArgParseError(`Unknown "kvy doctor" action: ${rest[0]}`, "kvy doctor [clean]");
 }
 
-function parseSessions(rest: string[]): FalconCommand {
+function parseSessions(rest: string[]): KvyCommand {
   if (rest[0] === "list") return { type: "sessions", action: "list" };
   throw new ArgParseError(
-    `Unknown "falcon sessions" action: ${rest[0] ?? "(none)"}`,
-    "falcon sessions list",
+    `Unknown "kvy sessions" action: ${rest[0] ?? "(none)"}`,
+    "kvy sessions list",
   );
 }
 
-function parseResume(rest: string[]): FalconCommand {
+function parseResume(rest: string[]): KvyCommand {
   const sessionId = rest[0];
   if (!sessionId) {
-    throw new ArgParseError('"falcon resume" requires a session id', "falcon resume <session-id>");
+    throw new ArgParseError('"kvy resume" requires a session id', "kvy resume <session-id>");
   }
   return { type: "resume", sessionId };
 }
 
-function parseWorkspace(rest: string[]): FalconCommand {
+function parseWorkspace(rest: string[]): KvyCommand {
   const [action, ...opts] = rest;
   if (action === "sync") return { type: "workspace-sync" };
   if (action === "config") return parseWorkspaceConfig(opts);
@@ -267,15 +271,15 @@ function parseWorkspace(rest: string[]): FalconCommand {
   if (action === "list") return { type: "workspace-list" };
   if (action === "unregister") return parseWorkspaceUnregister(opts);
   throw new ArgParseError(
-    `Unknown "falcon workspace" action: ${action ?? "(none)"}`,
-    "falcon workspace config|register|list|unregister|sync",
+    `Unknown "kvy workspace" action: ${action ?? "(none)"}`,
+    "kvy workspace config|register|list|unregister|sync",
   );
 }
 
 const WORKSPACE_CONFIG_USAGE =
-  "falcon workspace config [--base-ref <ref>] [--remote <name>] [--setup-script <script>] [--run-script <script>] [--directory <path>]";
+  "kvy workspace config [--base-ref <ref>] [--remote <name>] [--setup-script <script>] [--run-script <script>] [--directory <path>]";
 
-function parseWorkspaceConfig(opts: string[]): FalconCommand {
+function parseWorkspaceConfig(opts: string[]): KvyCommand {
   const result: {
     baseRef?: string;
     remote?: string;
@@ -295,7 +299,7 @@ function parseWorkspaceConfig(opts: string[]): FalconCommand {
     else if (flag === "--directory") result.directory = value;
     else
       throw new ArgParseError(
-        `Unknown "falcon workspace config" flag: ${flag}`,
+        `Unknown "kvy workspace config" flag: ${flag}`,
         WORKSPACE_CONFIG_USAGE,
       );
   }
@@ -304,9 +308,9 @@ function parseWorkspaceConfig(opts: string[]): FalconCommand {
 }
 
 const WORKSPACE_REGISTER_USAGE =
-  "falcon workspace register [--directory <path>] [--name <display-name>]";
+  "kvy workspace register [--directory <path>] [--name <display-name>]";
 
-function parseWorkspaceRegister(opts: string[]): FalconCommand {
+function parseWorkspaceRegister(opts: string[]): KvyCommand {
   const result: { directory?: string; name?: string } = {};
 
   for (let i = 0; i < opts.length; i++) {
@@ -317,7 +321,7 @@ function parseWorkspaceRegister(opts: string[]): FalconCommand {
     else if (flag === "--name") result.name = value;
     else
       throw new ArgParseError(
-        `Unknown "falcon workspace register" flag: ${flag}`,
+        `Unknown "kvy workspace register" flag: ${flag}`,
         WORKSPACE_REGISTER_USAGE,
       );
   }
@@ -325,9 +329,9 @@ function parseWorkspaceRegister(opts: string[]): FalconCommand {
   return { type: "workspace-register", ...result };
 }
 
-const WORKSPACE_UNREGISTER_USAGE = "falcon workspace unregister [--directory <path>]";
+const WORKSPACE_UNREGISTER_USAGE = "kvy workspace unregister [--directory <path>]";
 
-function parseWorkspaceUnregister(opts: string[]): FalconCommand {
+function parseWorkspaceUnregister(opts: string[]): KvyCommand {
   const result: { directory?: string } = {};
 
   for (let i = 0; i < opts.length; i++) {
@@ -337,7 +341,7 @@ function parseWorkspaceUnregister(opts: string[]): FalconCommand {
     if (flag === "--directory") result.directory = value;
     else
       throw new ArgParseError(
-        `Unknown "falcon workspace unregister" flag: ${flag}`,
+        `Unknown "kvy workspace unregister" flag: ${flag}`,
         WORKSPACE_UNREGISTER_USAGE,
       );
   }
@@ -345,54 +349,51 @@ function parseWorkspaceUnregister(opts: string[]): FalconCommand {
   return { type: "workspace-unregister", ...result };
 }
 
-function parseNotify(rest: string[]): FalconCommand {
+function parseNotify(rest: string[]): KvyCommand {
   const flagIndex = rest.indexOf("-p");
   const message = flagIndex >= 0 ? rest[flagIndex + 1] : undefined;
   if (!message) {
-    throw new ArgParseError('"falcon notify" requires -p <message>', "falcon notify -p <message>");
+    throw new ArgParseError('"kvy notify" requires -p <message>', "kvy notify -p <message>");
   }
   return { type: "notify", message };
 }
 
-const ADOPT_USAGE = "falcon adopt [--remote] [--list]";
+const ADOPT_USAGE = "kvy adopt [--remote] [--list]";
 
-function parseAdopt(rest: string[]): FalconCommand {
+function parseAdopt(rest: string[]): KvyCommand {
   let list = false;
   let remote = false;
   for (const arg of rest) {
     if (arg === "--list") list = true;
     else if (arg === "--remote") remote = true;
-    else throw new ArgParseError(`Unknown "falcon adopt" flag: ${arg}`, ADOPT_USAGE);
+    else throw new ArgParseError(`Unknown "kvy adopt" flag: ${arg}`, ADOPT_USAGE);
   }
   return { type: "adopt", list, remote };
 }
 
-/** `falcon keys approve` — answer another device's request for a copy of this account's
+/** `kvy keys approve` — answer another device's request for a copy of this account's
  * keys (docs/auth-ux-overhaul-plan.md AX-4.19). */
-function parseKeys(rest: string[]): FalconCommand {
+function parseKeys(rest: string[]): KvyCommand {
   const action = rest[0];
   if (action === "approve") return { type: "keys", action };
-  throw new ArgParseError(
-    `Unknown "falcon keys" action: ${action ?? "(none)"}`,
-    "falcon keys approve",
-  );
+  throw new ArgParseError(`Unknown "kvy keys" action: ${action ?? "(none)"}`, "kvy keys approve");
 }
 
-function parseAdapters(rest: string[]): FalconCommand {
+function parseAdapters(rest: string[]): KvyCommand {
   const action = rest[0];
   if (action === "install" || action === "upgrade") {
     return { type: "adapters", action };
   }
   throw new ArgParseError(
-    `Unknown "falcon adapters" action: ${action ?? "(none)"}`,
-    "falcon adapters install|upgrade",
+    `Unknown "kvy adapters" action: ${action ?? "(none)"}`,
+    "kvy adapters install|upgrade",
   );
 }
 
-const GITHUB_USAGE = "falcon github login [--token] [--client-id <id>] | logout | status";
+const GITHUB_USAGE = "kvy github login [--token] [--client-id <id>] | logout | status";
 
-/** `falcon github login|logout|status` (docs/features/github-pr-ci.md "GITHUB AUTH"). `login`'s `--token` takes no inline value — it's a bare toggle for the stdin-prompt path (`commands/github.ts`), never a flag a token could be passed to directly (that would leak into shell history/`ps`). */
-function parseGithub(rest: string[]): FalconCommand {
+/** `kvy github login|logout|status` (docs/features/github-pr-ci.md "GITHUB AUTH"). `login`'s `--token` takes no inline value — it's a bare toggle for the stdin-prompt path (`commands/github.ts`), never a flag a token could be passed to directly (that would leak into shell history/`ps`). */
+function parseGithub(rest: string[]): KvyCommand {
   const [action, ...opts] = rest;
   if (action === "logout" || action === "status") {
     return { type: "github", action, token: false };
@@ -411,7 +412,7 @@ function parseGithub(rest: string[]): FalconCommand {
         i++;
         continue;
       }
-      throw new ArgParseError(`Unknown "falcon github login" flag: ${flag}`, GITHUB_USAGE);
+      throw new ArgParseError(`Unknown "kvy github login" flag: ${flag}`, GITHUB_USAGE);
     }
     return {
       type: "github",
@@ -420,7 +421,7 @@ function parseGithub(rest: string[]): FalconCommand {
       ...(clientId !== undefined ? { clientId } : {}),
     };
   }
-  throw new ArgParseError(`Unknown "falcon github" action: ${action ?? "(none)"}`, GITHUB_USAGE);
+  throw new ArgParseError(`Unknown "kvy github" action: ${action ?? "(none)"}`, GITHUB_USAGE);
 }
 
 function requireValue(flag: string, value: string | undefined, usage: string): string {

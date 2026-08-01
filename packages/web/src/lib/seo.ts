@@ -4,7 +4,7 @@ import { SITE_URL, THEME_COLOR } from "./config";
 export const LANDING_DESCRIPTION =
   "Claude Code, Codex, and more, running on your own machine. Approve permissions, steer mid-session, and review diffs from any browser, end-to-end encrypted.";
 
-export const LANDING_TITLE = "Falcon · Run coding agents from anywhere";
+export const LANDING_TITLE = "Kvy · Run coding agents from anywhere";
 
 export const NO_INDEX_ROBOTS = {
   index: false,
@@ -25,12 +25,12 @@ export function absoluteUrl(pathname = "/"): string {
 export function rootMetadata(): Metadata {
   return {
     metadataBase: new URL(`${SITE_URL}/`),
-    applicationName: "Falcon",
+    applicationName: "Kvy",
     description: LANDING_DESCRIPTION,
     manifest: "/manifest.webmanifest",
     appleWebApp: {
       capable: true,
-      title: "Falcon",
+      title: "Kvy",
       statusBarStyle: "black-translucent",
     },
     formatDetection: { telephone: false },
@@ -54,7 +54,7 @@ export function landingMetadata(): Metadata {
       title: LANDING_TITLE,
       description: LANDING_DESCRIPTION,
       url: "/",
-      siteName: "Falcon",
+      siteName: "Kvy",
       locale: "en_US",
       type: "website",
       images: [
@@ -62,7 +62,7 @@ export function landingMetadata(): Metadata {
           url: "/og.png",
           width: 1200,
           height: 630,
-          alt: "Falcon",
+          alt: "Kvy",
         },
       ],
     },
@@ -86,7 +86,7 @@ export function softwareApplicationJsonLd(): Record<
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "Falcon",
+    name: "Kvy",
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Web",
     description: LANDING_DESCRIPTION,

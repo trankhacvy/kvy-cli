@@ -14,6 +14,10 @@ interface SessionControlContextValue {
    * (`isSessionControlDisabled`): the composer never hard-blocks on it (see
    * `use-composer-state.ts`), it's consumed as a non-blocking notice only. */
   machineOffline: boolean;
+  /** The session's provider id (`"claude-code"` / `"codex"`), so components
+   * like `PermCard` can label copy correctly instead of hardcoding a single
+   * provider's name. */
+  provider: string;
 }
 
 const SessionControlContext = createContext<SessionControlContextValue | null>(null);
@@ -30,17 +34,19 @@ export function SessionControlProvider({
   sessionId,
   useControl,
   machineOffline = false,
+  provider = "",
   children,
 }: {
   sessionId: string;
   useControl: UseSessionControl;
   machineOffline?: boolean;
+  provider?: string;
   children: ReactNode;
 }) {
   const actions = useControl(sessionId);
   const value = useMemo(
-    () => ({ sessionId, actions, machineOffline }),
-    [sessionId, actions, machineOffline],
+    () => ({ sessionId, actions, machineOffline, provider }),
+    [sessionId, actions, machineOffline, provider],
   );
 
   return <SessionControlContext.Provider value={value}>{children}</SessionControlContext.Provider>;

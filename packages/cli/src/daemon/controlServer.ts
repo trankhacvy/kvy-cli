@@ -1,5 +1,5 @@
 /**
- * HTTP control server for the Falcon daemon.
+ * HTTP control server for the Kvy daemon.
  *
  * Ported verbatim from happy-cli/src/daemon/controlServer.ts (MIT) per
  * plan.md §7.1 — a Fastify server bound to `127.0.0.1:0` (an OS-assigned
@@ -26,7 +26,7 @@
  * (§7.2/§7.3/§7.4, separate plan bullets).
  */
 
-import { PermissionModeSchema, StopSessionParamsSchema } from "@falcon/wire";
+import { PermissionModeSchema, ProviderIdSchema, StopSessionParamsSchema } from "@kvy/wire";
 import fastify from "fastify";
 import {
   serializerCompiler,
@@ -90,7 +90,7 @@ const ListResponseSchema = z.object({
   ),
 });
 
-// `sessionId` overlaps @falcon/wire's machine RPC contract exactly; `force`
+// `sessionId` overlaps @kvy/wire's machine RPC contract exactly; `force`
 // is accepted but unused here (this HTTP layer sends a bare stop signal —
 // force semantics belong to whatever `stopSession` implementation is injected).
 const StopSessionBodySchema = StopSessionParamsSchema;
@@ -99,7 +99,7 @@ const StopSessionResponseSchema = z.object({ success: z.boolean() });
 const SpawnSessionBodySchema = z.object({
   directory: z.string(),
   sessionId: z.string().optional(),
-  provider: z.enum(["claude-code", "codex"]).optional(),
+  provider: ProviderIdSchema.optional(),
   permissionMode: PermissionModeSchema.optional(),
   model: z.string().optional(),
   environmentVariables: z.record(z.string(), z.string()).optional(),
@@ -134,7 +134,7 @@ export interface ControlServerDeps {
   /** Called once `/stop` is hit; the caller decides how the daemon process actually exits. */
   requestShutdown: () => void;
   /**
-   * Re-read `~/.falcon/access.key` and restart machine integration in place —
+   * Re-read `~/.kvy/access.key` and restart machine integration in place —
    * the daemon only registers a machine once at startup, so a session that just
    * re-paired needs this rather than a full daemon restart (AX-1.6). Optional:
    * a caller that doesn't own machine integration (tests) can leave it unset.

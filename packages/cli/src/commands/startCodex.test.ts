@@ -1,11 +1,13 @@
+import { mkdtempSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getRandomBytes } from "@falcon/crypto";
-import { createEnvelope } from "@falcon/wire";
-import { describe, expect, it, vi } from "vitest";
+import { getRandomBytes } from "@kvy/crypto";
+import { createEnvelope } from "@kvy/wire";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AcpRemoteHandle } from "../acp/acpRemote.js";
-import type { FalconCredentials } from "../auth/credentials.js";
+import { Outbox } from "../api/outbox.js";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { ProviderDetectionResult } from "../codex/index.js";
 import type {
@@ -16,9 +18,10 @@ import type { DaemonState } from "../daemon/state.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
 import type { SessionClientHandle } from "../session/sessionClient.js";
+import type { registerWorkspace as registerWorkspaceType } from "../workspace/registry.js";
 import { runStartCodexCommand, type StartCodexCommandDeps } from "./startCodex.js";
 
-function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
+function fakeCredentials(overrides: Partial<KvyCredentials> = {}): KvyCredentials {
   return {
     refreshToken: "test-refresh-token",
     keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
@@ -32,6 +35,23 @@ async function defaultFetchImpl(): Promise<Response> {
     JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
     { status: 200 },
   );
+}
+
+/**
+ * Preflight now does real filesystem I/O (the credentials lock, known-issues.md
+ * #20) before registering session RPC handlers, so it no longer reliably settles
+ * within a single `setTimeout(r, 0)` tick — poll instead. Fake-timer-aware:
+ * `vi.waitFor` advances fake timers itself when they're active, same as the
+ * "stop RPC with force" test below already relies on.
+ */
+async function waitForHandlers(
+  getHandlers: () => SessionRpcHandlers | null,
+): Promise<SessionRpcHandlers> {
+  return vi.waitFor(() => {
+    const handlers = getHandlers();
+    if (!handlers) throw new Error("handlers not registered yet");
+    return handlers;
+  });
 }
 
 function fakeDaemonState(overrides: Partial<DaemonState> = {}): DaemonState {
@@ -60,6 +80,17 @@ interface FakeRemote {
   settle: (info: { messageId?: string; status: "completed" | "failed" | "cancelled" }) => void;
 }
 
+const baseDepsHomeDirs: string[] = [];
+
+afterEach(async () => {
+  const dirs = baseDepsHomeDirs.splice(0);
+  await Promise.all(
+    dirs.map((dir) =>
+      rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 }).catch(() => {}),
+    ),
+  );
+});
+
 function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
   deps: StartCodexCommandDeps;
   fakeRemote: FakeRemote;
@@ -67,6 +98,14 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
   errors: string[];
   releaseExit: () => void;
 } {
+  // The `announceRemoteControl()` envelope this command now enqueues at
+  // startup makes `Outbox`'s dispose-time flush a real, unconditional disk
+  // write for every test, not just the ones that already opted into a real
+  // homeDir — so `baseDeps()` needs one too instead of the placeholder
+  // `/fake/home` that used to be safe when nothing ever actually wrote to it.
+  const homeDir = mkdtempSync(path.join(tmpdir(), "kvy-codex-basedeps-"));
+  baseDepsHomeDirs.push(homeDir);
+
   const written: string[] = [];
   const errors: string[] = [];
   let releaseExit!: () => void;
@@ -94,7 +133,7 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
   };
 
   const deps: StartCodexCommandDeps = {
-    homeDir: "/fake/home",
+    homeDir,
     workingDirectory: "/fake/workdir",
     codexArgs: [],
     readCredentials: () => fakeCredentials(),
@@ -107,6 +146,12 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
       tag: "tag-1",
       created: true,
     })) as unknown as typeof bootstrapSessionType,
+    registerWorkspace: vi.fn(
+      async (directory: string) =>
+        ({ path: directory, registeredAt: "2026-01-01T00:00:00.000Z" }) as unknown as Awaited<
+          ReturnType<typeof registerWorkspaceType>
+        >,
+    ) as unknown as typeof registerWorkspaceType,
     // A1: never let a unit test hit a real daemon control server — default
     // to the always-succeeding "no daemon" fake, same precedent as
     // `start.test.ts`'s `baseDeps`.
@@ -209,6 +254,55 @@ describe("runStartCodexCommand", () => {
     expect(written.join("")).toContain("Codex has no local terminal mode");
   });
 
+  it("threads a --continue-from flag into startAcpRemote's resume option (§5.5 — resuming a codex session)", async () => {
+    const startAcpRemote = vi.fn(() => baseDeps().fakeRemote.handle);
+    const { deps, releaseExit } = baseDeps({
+      codexArgs: ["--continue-from", "prior-thread-id"],
+      startAcpRemote: startAcpRemote as unknown as StartCodexCommandDeps["startAcpRemote"],
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    expect(startAcpRemote).toHaveBeenCalledWith(
+      expect.objectContaining({ resume: "prior-thread-id" }),
+    );
+  });
+
+  it("passes resume: null into startAcpRemote when codexArgs carries no --continue-from flag", async () => {
+    const startAcpRemote = vi.fn(() => baseDeps().fakeRemote.handle);
+    const { deps, releaseExit } = baseDeps({
+      startAcpRemote: startAcpRemote as unknown as StartCodexCommandDeps["startAcpRemote"],
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    expect(startAcpRemote).toHaveBeenCalledWith(expect.objectContaining({ resume: null }));
+  });
+
+  it("announces remote control once at startup, so the web reads this session as remote from envelope #1 (known-issues.md — dead mode selector)", async () => {
+    const enqueueSpy = vi.spyOn(Outbox.prototype, "enqueue");
+    const { deps, releaseExit } = baseDeps();
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    const announceCalls = enqueueSpy.mock.calls.filter(([envelopes]) =>
+      envelopes.some(
+        (envelope) =>
+          envelope.ev.t === "mode-switch" &&
+          envelope.ev.control === "remote" &&
+          envelope.ev.by === "client",
+      ),
+    );
+    expect(announceCalls).toHaveLength(1);
+    enqueueSpy.mockRestore();
+  });
+
   // A1 (docs/known-issues.md — Codex daemon-spawn timeout): `start.ts` calls
   // `notifyDaemonSessionStarted` right after `bootstrapSession()` succeeds so
   // a daemon-initiated `spawn` RPC's `spawnAwaiter` can resolve instead of
@@ -232,6 +326,37 @@ describe("runStartCodexCommand", () => {
     ];
     expect(params.sessionId).toBe("sess_codex_1");
     expect(params.encryption?.encryptionKey).toEqual(expect.any(String));
+  });
+
+  it("re-notifies the daemon with the real ACP provider session id once known, so a future --continue-from has something to resume", async () => {
+    const notifyDaemonSessionStarted = vi.fn(async () => ({ type: "ok" as const }));
+    let onProviderSessionId: ((id: string) => void) | undefined;
+    const startAcpRemote = vi.fn((opts: { onProviderSessionId?: (id: string) => void }) => {
+      onProviderSessionId = opts.onProviderSessionId;
+      return baseDeps().fakeRemote.handle;
+    });
+    const { deps, releaseExit } = baseDeps({
+      notifyDaemonSessionStarted:
+        notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+      startAcpRemote: startAcpRemote as unknown as StartCodexCommandDeps["startAcpRemote"],
+    });
+
+    const run = runStartCodexCommand(deps);
+    await vi.waitFor(() => {
+      if (!onProviderSessionId) throw new Error("startAcpRemote not called yet");
+    });
+    onProviderSessionId?.("codex-provider-thread-1");
+    await vi.waitFor(() => {
+      expect(notifyDaemonSessionStarted).toHaveBeenCalledTimes(2);
+    });
+    releaseExit();
+    await run;
+
+    const [, secondParams] = notifyDaemonSessionStarted.mock.calls[1] as unknown as [
+      unknown,
+      { metadata: { providerSessionId?: string } },
+    ];
+    expect(secondParams.metadata.providerSessionId).toBe("codex-provider-thread-1");
   });
 
   it("still starts the session successfully when notifyDaemonSessionStarted reports no daemon present (best-effort, never blocks startup)", async () => {
@@ -314,8 +439,68 @@ describe("runStartCodexCommand", () => {
     expect(bootstrapParams.metadata.model).toBeUndefined();
   });
 
+  it("registers workingDirectory as a workspace and threads its id into bootstrapSession (known-issues.md #6)", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_codex_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const registerWorkspace = vi.fn(
+      async () =>
+        ({
+          path: "/fake/workdir",
+          registeredAt: "2026-01-01T00:00:00.000Z",
+        }) as unknown as Awaited<ReturnType<typeof registerWorkspaceType>>,
+    );
+    const { deps, releaseExit } = baseDeps({
+      bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+      registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    await run;
+
+    expect(registerWorkspace).toHaveBeenCalledWith("/fake/workdir");
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { workspaceId?: string | null },
+    ];
+    expect(bootstrapParams.workspaceId).toBe("/fake/workdir");
+  });
+
+  it("still starts the session with a null workspaceId when registerWorkspace fails, instead of failing the whole start", async () => {
+    const bootstrapSession = vi.fn(async () => ({
+      sessionId: "sess_codex_1",
+      dek: getRandomBytes(32),
+      tag: "tag-1",
+      created: true,
+    }));
+    const registerWorkspace = vi.fn(async () => {
+      throw new Error("lock contended");
+    });
+    const { deps, releaseExit } = baseDeps({
+      bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+      registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+    });
+
+    const run = runStartCodexCommand(deps);
+    releaseExit();
+    const code = await run;
+
+    expect(code).toBe(0);
+    expect(bootstrapSession).toHaveBeenCalledOnce();
+    const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
+      unknown,
+      { workspaceId?: string | null },
+    ];
+    expect(bootstrapParams.workspaceId).toBeNull();
+  });
+
   it("routes a message RPC: claims, sends to the remote, and reports the tri-state status", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-test-"));
     try {
       let handlers: SessionRpcHandlers | null = null;
       const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
@@ -328,9 +513,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      // Let startup settle so handlers are registered.
-      await new Promise((r) => setTimeout(r, 0));
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const envelope = createEnvelope("user", { t: "text", md: "hello codex" });
       const first = await h.message({ envelope });
@@ -356,12 +539,12 @@ describe("runStartCodexCommand", () => {
       await run;
       expect(fakeRemote.stop).toHaveBeenCalledOnce();
     } finally {
-      await rm(homeDir, { recursive: true, force: true });
+      await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
 
   it("stop RPC requests exit (ending the run without waitForExit ever resolving) and stops the remote", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-stop-test-"));
     try {
       let handlers: SessionRpcHandlers | null = null;
       const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
@@ -377,8 +560,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      await new Promise((r) => setTimeout(r, 0));
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const result = await h.stop({});
       expect(result).toEqual({ ok: true });
@@ -387,12 +569,12 @@ describe("runStartCodexCommand", () => {
       expect(code).toBe(0);
       expect(fakeRemote.stop).toHaveBeenCalledOnce();
     } finally {
-      await rm(homeDir, { recursive: true, force: true });
+      await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
 
   it("stop RPC with force schedules a process exit after the grace period", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-force-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-stop-force-test-"));
     vi.useFakeTimers();
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     try {
@@ -411,8 +593,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      await vi.advanceTimersByTimeAsync(0);
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const result = await h.stop({ force: true });
       expect(result).toEqual({ ok: true });
@@ -428,12 +609,12 @@ describe("runStartCodexCommand", () => {
     } finally {
       exitSpy.mockRestore();
       vi.useRealTimers();
-      await rm(homeDir, { recursive: true, force: true });
+      await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
 
   it("completes the send claim once the turn settles (a later duplicate then reports 'duplicate')", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-test-"));
     try {
       let handlers: SessionRpcHandlers | null = null;
       const { deps, fakeRemote, releaseExit } = baseDeps({
@@ -445,8 +626,7 @@ describe("runStartCodexCommand", () => {
       });
 
       const run = runStartCodexCommand(deps);
-      await new Promise((r) => setTimeout(r, 0));
-      const h = handlers as unknown as SessionRpcHandlers;
+      const h = await waitForHandlers(() => handlers);
 
       const envelope = createEnvelope("user", { t: "text", md: "run a task" });
       await h.message({ envelope });
@@ -460,7 +640,7 @@ describe("runStartCodexCommand", () => {
       releaseExit();
       await run;
     } finally {
-      await rm(homeDir, { recursive: true, force: true });
+      await rm(homeDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
     }
   });
 });

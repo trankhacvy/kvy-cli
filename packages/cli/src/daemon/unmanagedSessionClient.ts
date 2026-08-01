@@ -9,7 +9,7 @@
  * doc comment), so there is no "recover the existing DEK on replay" branch
  * here the way `bootstrapSession` has for its idempotent-create path.
  */
-import { encodeBase64, getRandomBytes, seal, wrapDek } from "@falcon/crypto";
+import { encodeBase64, getRandomBytes, seal, wrapDek } from "@kvy/crypto";
 import type { Logger } from "../logger.js";
 
 const DEK_LENGTH_BYTES = 32;
@@ -52,7 +52,7 @@ export function createUnmanagedSessionClientDeps(
   overrides: Partial<UnmanagedSessionClientDeps> = {},
 ): UnmanagedSessionClientDeps {
   return {
-    serverUrl: process.env.FALCON_SERVER_URL?.trim() || DEFAULT_SERVER_URL,
+    serverUrl: process.env.KVY_SERVER_URL?.trim() || DEFAULT_SERVER_URL,
     fetchImpl: fetch,
     logger: noopLogger,
     ...required,

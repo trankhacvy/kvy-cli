@@ -19,7 +19,7 @@ function fixture(overrides: Partial<PersistedSession> = {}): PersistedSession {
     sessionId: "sess_1",
     encryption: ENCRYPTION,
     savedAt: Date.now(),
-    directory: "/Users/vy/projects/falcon",
+    directory: "/Users/vy/projects/kvy",
     pid: 4242,
     ...overrides,
   };
@@ -30,9 +30,9 @@ const identityRealpath = (p: string) => Promise.resolve(p);
 function baseDeps(overrides: Partial<ReadoptProbeDeps> = {}): ReadoptProbeDeps {
   return {
     listProcesses: async () => [
-      { pid: 4242, ppid: 1, command: "falcon claude --starting-mode remote --started-by daemon" },
+      { pid: 4242, ppid: 1, command: "kvy claude --starting-mode remote --started-by daemon" },
     ],
-    resolveCwd: async () => "/Users/vy/projects/falcon",
+    resolveCwd: async () => "/Users/vy/projects/kvy",
     realpath: identityRealpath,
     ...overrides,
   };
@@ -75,7 +75,7 @@ describe("findLiveOrphanedSessions", () => {
     expect(listProcesses).not.toHaveBeenCalled();
   });
 
-  it("re-adopts a session whose pid is alive, classifies as a falcon session, and whose cwd matches the persisted directory", async () => {
+  it("re-adopts a session whose pid is alive, classifies as a kvy session, and whose cwd matches the persisted directory", async () => {
     const session = fixture();
     const result = await findLiveOrphanedSessions({ sess_1: session }, baseDeps());
     expect(result).toEqual([{ sessionId: "sess_1", session, pid: 4242 }]);
@@ -89,7 +89,7 @@ describe("findLiveOrphanedSessions", () => {
     expect(result).toEqual([]);
   });
 
-  it("skips a recycled pid now occupied by a non-falcon process", async () => {
+  it("skips a recycled pid now occupied by a non-kvy process", async () => {
     const result = await findLiveOrphanedSessions(
       { sess_1: fixture() },
       baseDeps({
@@ -99,11 +99,11 @@ describe("findLiveOrphanedSessions", () => {
     expect(result).toEqual([]);
   });
 
-  it("skips a recycled pid now occupied by a falcon process that isn't a session (e.g. the daemon itself)", async () => {
+  it("skips a recycled pid now occupied by a kvy process that isn't a session (e.g. the daemon itself)", async () => {
     const result = await findLiveOrphanedSessions(
       { sess_1: fixture() },
       baseDeps({
-        listProcesses: async () => [{ pid: 4242, ppid: 1, command: "falcon daemon start-sync" }],
+        listProcesses: async () => [{ pid: 4242, ppid: 1, command: "kvy daemon start-sync" }],
       }),
     );
     expect(result).toEqual([]);
@@ -126,21 +126,21 @@ describe("findLiveOrphanedSessions", () => {
   });
 
   it("canonicalizes both directories via realpath before comparing (symlink-transparent match)", async () => {
-    const session = fixture({ directory: "/Users/vy/link-to-falcon" });
+    const session = fixture({ directory: "/Users/vy/link-to-kvy" });
     const realpath = async (p: string) =>
-      p === "/Users/vy/link-to-falcon" || p === "/Users/vy/projects/falcon"
-        ? "/Users/vy/projects/falcon"
+      p === "/Users/vy/link-to-kvy" || p === "/Users/vy/projects/kvy"
+        ? "/Users/vy/projects/kvy"
         : p;
     const result = await findLiveOrphanedSessions(
       { sess_1: session },
-      baseDeps({ realpath, resolveCwd: async () => "/Users/vy/projects/falcon" }),
+      baseDeps({ realpath, resolveCwd: async () => "/Users/vy/projects/kvy" }),
     );
     expect(result).toEqual([{ sessionId: "sess_1", session, pid: 4242 }]);
   });
 
   it("skips a session whose persisted directory no longer resolves (deleted/unmounted) rather than throwing", async () => {
     const realpath = async (p: string) => {
-      if (p === "/Users/vy/projects/falcon") throw new Error("ENOENT");
+      if (p === "/Users/vy/projects/kvy") throw new Error("ENOENT");
       return p;
     };
     const result = await findLiveOrphanedSessions({ sess_1: fixture() }, baseDeps({ realpath }));
@@ -160,7 +160,7 @@ describe("findLiveOrphanedSessions", () => {
           {
             pid: 100,
             ppid: 1,
-            command: "falcon claude --starting-mode remote --started-by daemon",
+            command: "kvy claude --starting-mode remote --started-by daemon",
           },
         ],
         resolveCwd: async (pid) => (pid === 100 ? "/Users/vy/repo-a" : null),
@@ -175,8 +175,8 @@ describe("findLiveOrphanedSessions", () => {
  * a fake probe proves the wiring but not real `ps`/`lsof` discovery — exactly
  * the gap that let an earlier, in-memory-only version of Flow 3's fix pass
  * unit tests while still failing against a genuinely orphaned live process.
- * This spawns a real child whose argv classifies as a falcon `session`
- * (`falcon claude --starting-mode remote --started-by daemon`) in a real
+ * This spawns a real child whose argv classifies as a kvy `session`
+ * (`kvy claude --starting-mode remote --started-by daemon`) in a real
  * directory, then runs `findLiveOrphanedSessions` against the actual
  * `processScan.ts` implementations.
  */
@@ -185,13 +185,13 @@ describe("findLiveOrphanedSessions (real process discovery)", () => {
   let child: ReturnType<typeof spawn>;
 
   beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "falcon-readopt-"));
+    dir = await mkdtemp(path.join(tmpdir(), "kvy-readopt-"));
     child = spawn(
       process.execPath,
       [
         "-e",
         "setTimeout(() => {}, 60000)",
-        "falcon",
+        "kvy",
         "claude",
         "--starting-mode",
         "remote",

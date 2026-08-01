@@ -8,7 +8,7 @@ import {
 } from "./session";
 
 describe("SessionEventSchema", () => {
-  it("accepts all 13 event variants", () => {
+  it("accepts all 14 event variants", () => {
     const events: SessionEvent[] = [
       { t: "text", md: "hello" },
       { t: "text", md: "thinking...", thinking: true },
@@ -33,6 +33,15 @@ describe("SessionEventSchema", () => {
       { t: "sub-stop" },
       { t: "usage", inputTokens: 4, outputTokens: 5 },
       { t: "usage", inputTokens: 100, outputTokens: 50, costUsd: 0.0032 },
+      { t: "plan", steps: [] },
+      {
+        t: "plan",
+        steps: [
+          { text: "List files", status: "completed" },
+          { text: "Write hello.txt", status: "in_progress" },
+          { text: "Verify it exists", status: "pending" },
+        ],
+      },
     ];
 
     for (const event of events) {
@@ -50,6 +59,10 @@ describe("SessionEventSchema", () => {
     expect(SessionEventSchema.safeParse({ t: "file", ref: "x", name: "x" }).success).toBe(false);
     expect(SessionEventSchema.safeParse({ t: "not-a-real-type" }).success).toBe(false);
     expect(SessionEventSchema.safeParse({ t: "usage", inputTokens: 1 }).success).toBe(false);
+    expect(SessionEventSchema.safeParse({ t: "plan" }).success).toBe(false);
+    expect(
+      SessionEventSchema.safeParse({ t: "plan", steps: [{ text: "x", status: "done" }] }).success,
+    ).toBe(false);
   });
 });
 

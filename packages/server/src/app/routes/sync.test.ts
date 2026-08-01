@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { encodeBase64, getRandomBytes } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -48,6 +48,7 @@ describe("GET /v1/sync", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       headerSeq: 0,
+      accountKeyEpoch: 0,
       sessions: [],
       machines: [],
       unmanagedSessions: [],

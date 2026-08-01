@@ -49,7 +49,7 @@ describe("acquireSessionLock", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-session-lock-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-session-lock-"));
     // A few tests seed a pre-existing lock file directly (bypassing
     // `acquireSessionLock`, which would otherwise create this directory
     // itself) to simulate a stale/corrupt lock left by a prior process.

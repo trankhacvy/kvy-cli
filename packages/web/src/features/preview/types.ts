@@ -4,7 +4,7 @@ import type {
   PreviewPortInfo,
   PreviewPortsResult,
   TunnelInfo,
-} from "@falcon/wire";
+} from "@kvy/wire";
 
 /**
  * View-model types for the "Preview" tab (docs/features/dev-server-preview.md
@@ -16,10 +16,10 @@ import type {
  * what this panel wants to render, so they're re-exported rather than
  * redeclared.
  *
- * **Non-E2E caveat** (mirrors `@falcon/wire`'s `preview.ts` doc comment):
+ * **Non-E2E caveat** (mirrors `@kvy/wire`'s `preview.ts` doc comment):
  * `openTunnel`'s resulting `url` is a PUBLIC, UNAUTHENTICATED link — anyone
  * who has it can reach the local dev server, and that traffic is plain
- * HTTP(S), NOT sealed under Falcon's E2E encryption the way this RPC call
+ * HTTP(S), NOT sealed under Kvy's E2E encryption the way this RPC call
  * itself is. `OpenTunnelConfirmDialog` is the mandatory consent gate this
  * caveat requires before any `openTunnel` call fires.
  */

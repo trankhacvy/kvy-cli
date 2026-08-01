@@ -14,7 +14,7 @@ describe("localDriver", () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "falcon-blob-test-"));
+    dir = await mkdtemp(path.join(tmpdir(), "kvy-blob-test-"));
   });
 
   afterEach(async () => {
@@ -60,11 +60,11 @@ describe("localDriver", () => {
       const target = await driver.createUploadTarget({
         key: "blob-1",
         size: 10,
-        baseUrl: "https://api.falcon.dev",
+        baseUrl: "https://api.kvy.dev",
       });
       expect(target.method).toBe("PUT");
       const url = new URL(target.url);
-      expect(url.origin).toBe("https://api.falcon.dev");
+      expect(url.origin).toBe("https://api.kvy.dev");
       expect(url.pathname).toBe("/v1/blobs/local/blob-1");
       const token = url.searchParams.get("token")!;
       const exp = Number(url.searchParams.get("exp"));
@@ -78,7 +78,7 @@ describe("localDriver", () => {
       const driver = createLocalDriver(config);
       const target = await driver.createDownloadTarget({
         key: "blob-1",
-        baseUrl: "https://api.falcon.dev",
+        baseUrl: "https://api.kvy.dev",
       });
       expect(target.method).toBe("GET");
       const url = new URL(target.url);
@@ -92,7 +92,7 @@ describe("localDriver", () => {
       const target = await driver.createUploadTarget({
         key: "weird key/with slash",
         size: 1,
-        baseUrl: "https://api.falcon.dev",
+        baseUrl: "https://api.kvy.dev",
       });
       expect(new URL(target.url).pathname).toBe("/v1/blobs/local/weird%20key%2Fwith%20slash");
     });

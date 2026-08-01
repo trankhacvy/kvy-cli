@@ -9,7 +9,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import type { EncryptedBox } from "@falcon/wire";
+import type { EncryptedBox } from "@kvy/wire";
 import type { Logger } from "../logger.js";
 
 /** One sealed batch waiting to be POSTed. */

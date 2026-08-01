@@ -12,7 +12,7 @@ import type { ApiSocketAuth, SocketFactory } from "./apiSocket.js";
  * `serverUrl` defaults to `lib/config.ts`'s `API_URL` (the same
  * `NEXT_PUBLIC_API_URL`-derived base every HTTP call in this app already
  * uses — see `lib/api.ts`) but is overridable for tests/other environments.
- * Previously read a second, different env var (`NEXT_PUBLIC_FALCON_API_URL`)
+ * Previously read a second, different env var (`NEXT_PUBLIC_KVY_API_URL`)
  * independently of `lib/config.ts` — two names for the same "where's the
  * server" setting meant a deployment (or a local dev setup) that only set
  * one of them left the WS client silently pointed at the wrong origin while

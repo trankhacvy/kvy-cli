@@ -1,4 +1,4 @@
-const KEY = "falcon:sidebar-expanded-workspaces";
+const KEY = "kvy:sidebar-expanded-workspaces";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";

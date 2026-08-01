@@ -88,6 +88,27 @@ describe("groupRenderItems", () => {
     expect(groups[1].item).toMatchObject({ kind: "service", text: serviceText });
   });
 
+  it("keeps a plan item visible, as its own standalone group between messages", () => {
+    const items: RenderItem[] = [
+      agentText("a1", "working on it", "t1"),
+      {
+        id: "p1",
+        time: 2,
+        role: "agent",
+        turn: "t1",
+        kind: "plan",
+        steps: [{ text: "List files", status: "completed" }],
+      },
+      agentText("a2", "done", "t1"),
+    ];
+
+    const groups = groupRenderItems(items);
+
+    expect(groups.map((g) => g.kind)).toEqual(["message", "standalone", "message"]);
+    if (groups[1]?.kind !== "standalone") throw new Error("expected standalone group");
+    expect(groups[1].item).toMatchObject({ kind: "plan" });
+  });
+
   it("keeps user turns separate", () => {
     const items: RenderItem[] = [
       userText("u1", "first", "u-turn-1"),
@@ -164,5 +185,25 @@ describe("RenderItemGroups (Issue #8 — no internal subagentId leaks into visib
     expect(html).toContain("Subagent 2");
     expect(html).not.toContain("tz4a98xxat96iws9zmbrgioa");
     expect(html).not.toContain("k3f8p2q9wjr1n6yz0lce4dgs");
+  });
+
+  it("actually renders a plan checklist's steps into the transcript markup", () => {
+    const items: RenderItem[] = [
+      {
+        id: "p1",
+        time: 1,
+        role: "agent",
+        kind: "plan",
+        steps: [
+          { text: "List files", status: "completed" },
+          { text: "Write hello.txt", status: "in_progress" },
+        ],
+      },
+    ];
+
+    const html = renderToStaticMarkup(createElement(RenderItemGroups, { items }));
+
+    expect(html).toContain("List files");
+    expect(html).toContain("Write hello.txt");
   });
 });

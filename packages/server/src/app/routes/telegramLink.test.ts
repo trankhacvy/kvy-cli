@@ -22,7 +22,7 @@ describe("Telegram bot /start pairing (Telegram configured)", () => {
     process.env = {
       ...originalEnv,
       TELEGRAM_BOT_TOKEN: "test-bot-token",
-      TELEGRAM_BOT_USERNAME: "FalconNotifyBot",
+      TELEGRAM_BOT_USERNAME: "KvyNotifyBot",
       TELEGRAM_WEBHOOK_SECRET: "test-webhook-secret",
     };
     vi.resetModules();
@@ -61,7 +61,7 @@ describe("Telegram bot /start pairing (Telegram configured)", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.code).toEqual(expect.any(String));
-    expect(body.deepLink).toBe(`https://t.me/FalconNotifyBot?start=${body.code}`);
+    expect(body.deepLink).toBe(`https://t.me/KvyNotifyBot?start=${body.code}`);
   });
 
   it("401s without a bearer token", async () => {

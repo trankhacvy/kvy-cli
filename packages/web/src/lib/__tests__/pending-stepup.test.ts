@@ -52,7 +52,7 @@ describe("pending-stepup: sessionStorage flag", () => {
   });
 
   it("rejects malformed JSON in the flag", () => {
-    window.sessionStorage.setItem("falcon:pendingStepUp", "{not json");
+    window.sessionStorage.setItem("kvy:pendingStepUp", "{not json");
     expect(consumePendingStepUp()).toBeNull();
   });
 

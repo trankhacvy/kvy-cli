@@ -9,8 +9,8 @@ let homeDir: string;
 let userHomeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-service-cmd-home-"));
-  userHomeDir = mkdtempSync(path.join(tmpdir(), "falcon-service-cmd-user-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-service-cmd-home-"));
+  userHomeDir = mkdtempSync(path.join(tmpdir(), "kvy-service-cmd-user-"));
 });
 
 afterEach(() => {
@@ -34,7 +34,7 @@ describe("runDaemonServiceCommand", () => {
         homeDir,
         userHomeDir,
         platform: "linux",
-        falconExecutable: "/usr/local/bin/falcon",
+        kvyExecutable: "/usr/local/bin/kvy",
       },
       serviceDeps: okExec,
       write,
@@ -52,7 +52,7 @@ describe("runDaemonServiceCommand", () => {
         homeDir,
         userHomeDir,
         platform: "linux",
-        falconExecutable: "/usr/local/bin/falcon",
+        kvyExecutable: "/usr/local/bin/kvy",
       },
       serviceDeps: { exec: async () => ({ ok: false, output: "permission denied" }) },
       write,
@@ -70,7 +70,7 @@ describe("runDaemonServiceCommand", () => {
         homeDir,
         userHomeDir,
         platform: "linux",
-        falconExecutable: "/usr/local/bin/falcon",
+        kvyExecutable: "/usr/local/bin/kvy",
       },
       serviceDeps: okExec,
       write,
@@ -88,7 +88,7 @@ describe("runDaemonServiceCommand", () => {
         homeDir,
         userHomeDir,
         platform: "linux",
-        falconExecutable: "/usr/local/bin/falcon",
+        kvyExecutable: "/usr/local/bin/kvy",
       },
       serviceDeps: okExec,
       write,

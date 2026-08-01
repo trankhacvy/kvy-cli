@@ -1,6 +1,6 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { encodeBase64, getRandomBytes } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EmitEphemeralParams, EmitUpdateParams } from "../events/eventRouter.js";
@@ -266,6 +266,59 @@ describe("POST /v1/sessions/:id/status", () => {
     });
     const row = getResponse.json().sessions.find((s: { id: string }) => s.id === endedSessionId);
     expect(row.status).toBe("ended");
+  });
+
+  // The web's Archive action (`sessionArchive.ts`) stops a still-live
+  // session before marking it `archived` — the CLI's own graceful-exit
+  // report for that same stop signal can land afterward. This proves the
+  // guard that makes that race safe: a late `ended` report can never
+  // downgrade an already-`archived` session.
+  it("does not downgrade an already-archived session to ended (guards the Archive-then-stop race)", async () => {
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        tag: "status-session-archived-no-downgrade",
+        provider: "claude-code",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    const archivedSessionId = createResponse.json().id;
+
+    const archiveResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${archivedSessionId}/archive`,
+      headers: { authorization: authHeader },
+    });
+    expect(archiveResponse.statusCode).toBe(200);
+
+    const updates: EmitUpdateParams[] = [];
+    const unsubUpdate = eventRouter.onUpdate((e) => updates.push(e));
+
+    // Simulates the CLI's own graceful-exit report for the Archive action's
+    // `stop` signal, arriving after the archive PATCH already landed.
+    const lateEndedResponse = await app.inject({
+      method: "POST",
+      url: `/v1/sessions/${archivedSessionId}/status`,
+      headers: { authorization: authHeader },
+      payload: { status: "ended" },
+    });
+    unsubUpdate();
+
+    // The route still 200s (an honest no-op response), but the underlying
+    // row must stay "archived" — no downgrade, no fan-out.
+    expect(lateEndedResponse.statusCode).toBe(200);
+    expect(updates).toHaveLength(0);
+
+    const getResponse = await app.inject({
+      method: "GET",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+    });
+    const row = getResponse.json().sessions.find((s: { id: string }) => s.id === archivedSessionId);
+    expect(row.status).toBe("archived");
   });
 
   it("404s for a session that doesn't belong to the caller", async () => {

@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
 import { resolveBackendUrl } from "../auth/config.js";
 import {
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials as readAuthCredentialsDefault,
 } from "../auth/credentials.js";
 import { resolveHomeDir } from "../home.js";
+import { defaultKvyEntrypoint } from "../kvyEntrypoint.js";
 import { createLogger, type Logger } from "../logger.js";
 import { readSettings, updateSettings } from "../persistence.js";
 import {
@@ -47,17 +48,17 @@ import type { WorkspaceRootLookup } from "./workspacePath.js";
 /**
  * Wires the singleton lock (`lock.ts`), the control server (`controlServer.ts`),
  * the session registry (`sessionRegistry.ts`), and `daemon.state.json`
- * (`state.ts`) into the four `falcon daemon` verbs (design §8, plan.md
+ * (`state.ts`) into the four `kvy daemon` verbs (design §8, plan.md
  * §7.2/§7.4):
  *
  *  - `start`      — short-lived: spawns `start-sync` detached, then (unless
  *                   `--no-wait`) polls until it reports ready.
  *  - `start-sync` — the daemon's own long-running process body (see
- *                   `markers.ts` — this is the exact argv `falcon kill`
+ *                   `markers.ts` — this is the exact argv `kvy kill`
  *                   recognizes as the daemon). Acquires the lock, restores
  *                   `sessions.json` into the session registry, boots the
  *                   control server, writes state, then — if this machine
- *                   has stored credentials (`falcon auth login` already
+ *                   has stored credentials (`kvy auth login` already
  *                   ran) — opens the machine-scoped `/v1/stream` socket and
  *                   registers the real `spawn`/`resumeSession`/`git.*`/
  *                   `fs.*`/`adopt.*` RPC handlers (`machineIntegration.ts`,
@@ -89,7 +90,7 @@ import type { WorkspaceRootLookup } from "./workspacePath.js";
  * task-summary for why it was deliberately left untouched.
  *
  * The machine RPC handlers' `resolveWorkspaceRoot`/`listWorkspaces` seams
- * default to the real `~/.falcon/workspaces.json`-backed registry
+ * default to the real `~/.kvy/workspaces.json`-backed registry
  * (`workspace/registry.ts`, adapted in `workspace/adapters.ts`) — a `spawn`
  * RPC's `workspaceId` is validated against an actually-registered directory
  * (`workspacePath.ts`'s `validateSpawnWorkspace`, via
@@ -116,7 +117,7 @@ export interface DaemonCommandDeps {
   logger: Logger;
   now: () => number;
   sleep: (ms: number) => Promise<void>;
-  /** Spawns `falcon daemon start-sync` as a detached, unref'd background process. */
+  /** Spawns `kvy daemon start-sync` as a detached, unref'd background process. */
   spawnStartSync: () => void;
   /** Sends `signal` to `pid`; swallows ESRCH (process already gone). */
   killPid: (pid: number, signal: NodeJS.Signals) => void;
@@ -155,10 +156,10 @@ export interface DaemonCommandDeps {
 
   // --- Machine-scoped WS client + RPC handler wiring (machineIntegration.ts) ---
 
-  /** The backend origin `startMachineClient` registers against and opens `/v1/stream` to. Defaults to `resolveBackendUrl()` (`FALCON_BACKEND_URL`, or the production default). */
+  /** The backend origin `startMachineClient` registers against and opens `/v1/stream` to. Defaults to `resolveBackendUrl()` (`KVY_BACKEND_URL`, or the production default). */
   machineServerUrl: string;
-  /** Reads `~/.falcon/access.key`; `null` means "not logged in", in which case `start-sync` runs local-only and never opens a machine-scoped socket. Defaults to `auth/credentials.ts`'s real reader. */
-  readAuthCredentials: (homeDir: string) => FalconCredentials | null;
+  /** Reads `~/.kvy/access.key`; `null` means "not logged in", in which case `start-sync` runs local-only and never opens a machine-scoped socket. Defaults to `auth/credentials.ts`'s real reader. */
+  readAuthCredentials: (homeDir: string) => KvyCredentials | null;
   /** Builds the socket.io-client transport for the machine-scoped connection. Injectable so tests can point at a fake/local server; defaults to the real `socket.io-client`. */
   machineIoFactory: (url: string, opts: Record<string, unknown>) => Socket;
   /** How often the machine client sends its `machine-alive` heartbeat. Defaults to 60s (design §8). */
@@ -238,9 +239,10 @@ function defaultRegisterShutdownSignals(onShutdown: () => void): () => void {
 
 /**
  * Re-invokes the exact entrypoint this process was started with
- * (`process.argv[1]` — works for `tsx src/index.ts`, `node dist/index.mjs`,
- * and the `bin/falcon.mjs` shim alike) with `daemon start-sync`, detached
- * and with stdio ignored so it survives the parent `start` command exiting.
+ * (`kvyEntrypoint.ts`'s `defaultKvyEntrypoint` — works for `tsx
+ * src/index.ts`, `node dist/index.mjs`, the `bin/kvy.mjs` shim, and a
+ * compiled Node SEA binary alike) with `daemon start-sync`, detached and
+ * with stdio ignored so it survives the parent `start` command exiting.
  * Mirrors Happy's `spawnHappyCLI(['daemon', 'start-sync'], {detached: true})`.
  *
  * Also re-passes `process.execArgv` ahead of the entry path. Without this,
@@ -250,12 +252,12 @@ function defaultRegisterShutdownSignals(onShutdown: () => void): () => void {
  * outside a module`) since node can't parse raw TypeScript on its own — the
  * spawned `start-sync` would then never write `daemon.state.json`, and
  * `start` would just time out waiting for it. `execArgv` is empty for the
- * plain `node dist/index.mjs` / `bin/falcon.mjs` cases, so this is a no-op
+ * plain `node dist/index.mjs` / `bin/kvy.mjs` cases, so this is a no-op
  * there.
  */
 function defaultSpawnStartSync(): void {
-  const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
-  const child = spawn(process.execPath, [...process.execArgv, entry, "daemon", "start-sync"], {
+  const [command, ...prefixArgs] = defaultKvyEntrypoint();
+  const child = spawn(command, [...prefixArgs, "daemon", "start-sync"], {
     detached: true,
     stdio: "ignore",
   });
@@ -268,7 +270,7 @@ export function createDaemonCommandDeps(
   // Resolved ahead of the returned object (honoring an override, same as
   // the final value the `homeDir` field below will actually carry) so the
   // registry-backed defaults constructed here read/write the SAME
-  // `~/.falcon` (or overridden test tmpdir) the rest of this deps object
+  // `~/.kvy` (or overridden test tmpdir) the rest of this deps object
   // uses — never a mismatched real-home-dir default under a test's
   // overridden `homeDir`.
   const homeDir = overrides.homeDir ?? resolveHomeDir();
@@ -319,14 +321,14 @@ export async function runDaemonStart(
   if (existing && deps.isProcessAlive(existing.pid)) {
     return {
       code: 0,
-      message: `falcon daemon: already running (pid ${existing.pid}, port ${existing.port})\n`,
+      message: `kvy daemon: already running (pid ${existing.pid}, port ${existing.port})\n`,
     };
   }
 
   deps.spawnStartSync();
 
   if (opts.noWait) {
-    return { code: 0, message: "falcon daemon: starting in the background (--no-wait)\n" };
+    return { code: 0, message: "kvy daemon: starting in the background (--no-wait)\n" };
   }
 
   const deadline = Date.now() + deps.readyTimeoutMs;
@@ -335,12 +337,12 @@ export async function runDaemonStart(
     if (state && deps.isProcessAlive(state.pid)) {
       return {
         code: 0,
-        message: `falcon daemon: started (pid ${state.pid}, port ${state.port})\n`,
+        message: `kvy daemon: started (pid ${state.pid}, port ${state.port})\n`,
       };
     }
     await deps.sleep(READY_POLL_MS);
   }
-  return { code: 1, message: "falcon daemon: timed out waiting for the daemon to become ready\n" };
+  return { code: 1, message: "kvy daemon: timed out waiting for the daemon to become ready\n" };
 }
 
 export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<number> {
@@ -417,7 +419,7 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     stopSession: registry.stopSession,
     spawnSession: async () => ({
       type: "error",
-      errorMessage: "falcon daemon: session spawning is not implemented yet",
+      errorMessage: "kvy daemon: session spawning is not implemented yet",
     }),
     requestShutdown: () => triggerShutdown(),
     onSessionStarted,
@@ -594,12 +596,12 @@ async function waitWhileAlive(
 export async function runDaemonStop(deps: DaemonCommandDeps): Promise<DaemonCommandResult> {
   const state = await readDaemonState(deps.homeDir);
   if (!state) {
-    return { code: 0, message: "falcon daemon: not running\n" };
+    return { code: 0, message: "kvy daemon: not running\n" };
   }
 
   if (!deps.isProcessAlive(state.pid)) {
     await clearDaemonState(deps.homeDir);
-    return { code: 0, message: "falcon daemon: not running (stale state cleared)\n" };
+    return { code: 0, message: "kvy daemon: not running (stale state cleared)\n" };
   }
 
   // Prefer a graceful stop through the control server's own `/stop` endpoint.
@@ -632,7 +634,7 @@ export async function runDaemonStop(deps: DaemonCommandDeps): Promise<DaemonComm
   }
 
   await clearDaemonState(deps.homeDir);
-  return { code: 0, message: `falcon daemon: stopped (pid ${state.pid})\n` };
+  return { code: 0, message: `kvy daemon: stopped (pid ${state.pid})\n` };
 }
 
 async function probeControlServer(port: number, fetchImpl: typeof fetch): Promise<boolean> {
@@ -652,24 +654,24 @@ async function probeControlServer(port: number, fetchImpl: typeof fetch): Promis
 export async function runDaemonStatus(deps: DaemonCommandDeps): Promise<DaemonCommandResult> {
   const state = await readDaemonState(deps.homeDir);
   if (!state) {
-    return { code: 1, message: "falcon daemon: not running\n" };
+    return { code: 1, message: "kvy daemon: not running\n" };
   }
 
   if (!deps.isProcessAlive(state.pid)) {
     await clearDaemonState(deps.homeDir);
-    return { code: 1, message: "falcon daemon: not running (stale state cleared)\n" };
+    return { code: 1, message: "kvy daemon: not running (stale state cleared)\n" };
   }
 
   const reachable = await probeControlServer(state.port, deps.fetchImpl);
   if (!reachable) {
     return {
       code: 1,
-      message: `falcon daemon: not running (pid ${state.pid} is alive but its control server on port ${state.port} is unreachable, stale state)\n`,
+      message: `kvy daemon: not running (pid ${state.pid} is alive but its control server on port ${state.port} is unreachable, stale state)\n`,
     };
   }
 
   return {
     code: 0,
-    message: `falcon daemon: running (pid ${state.pid}, port ${state.port}, version ${state.version})\n`,
+    message: `kvy daemon: running (pid ${state.pid}, port ${state.port}, version ${state.version})\n`,
   };
 }

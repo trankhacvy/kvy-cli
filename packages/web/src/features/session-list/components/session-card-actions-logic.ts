@@ -1,20 +1,20 @@
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import type { SessionMetadataPatch } from "@/lib/use-session-metadata-write";
 import { looksLikeWorktreePath } from "../worktree-path";
 
 /**
- * Pure logic behind `SessionCardActions`' menu-item enable/disable states
- * and mutation payloads, split out into its own module — same "pure state
- * lives in a plain module, directly testable without mounting anything"
- * precedent as `stop-session-state.ts` / `group.ts` — since this package's
+ * Pure logic behind `SessionCardActions`'/`SessionActionsMenu`'s menu-item
+ * states and the Archive flow's own gates, split out into its own module —
+ * same "pure state lives in a plain module, directly testable without
+ * mounting anything" precedent as `group.ts` — since this package's
  * `vitest.config.ts` has no jsdom/RTL setup to click a closed `DropdownMenu`
  * open in a test.
  */
 
-/** A dead session (no process left to stop) is honestly disabled rather
- * than left clickable to fail with an opaque transport error. Archived
- * sessions are never actionable this way either — Restore is the only
- * lifecycle action available there (Phase 5). */
+/** Whether Archive should even attempt a `stop` RPC first — a dead session
+ * (no process left to stop) skips straight to worktree cleanup instead of
+ * failing with an opaque transport error. Archived sessions are never
+ * stoppable either (there's nothing left to archive). */
 export function isSessionStoppable(status: SessionRow["status"]): boolean {
   return status !== "ended" && status !== "failed" && status !== "archived";
 }
@@ -26,12 +26,12 @@ export function buildPinTogglePatch(currentlyPinned: boolean): SessionMetadataPa
   return (current) => ({ ...current, pinned: !currentlyPinned });
 }
 
-/** "Remove worktree" menu item gate (Phase C, new-session-from-web
- * redesign): needs both a known owning machine (the RPC is machine-scoped)
- * AND a `workspaceId` that actually looks like a Falcon-managed
- * `.worktrees/<branch>` directory (`worktree-path.ts`) — never offered for
- * an ordinary repo-root session, where "removing the worktree" would be
- * nonsensical (there isn't one) and, if it somehow reached the RPC, unsafe. */
+/** Whether Archive has an actual worktree to clean up: needs both a known
+ * owning machine (the RPC is machine-scoped) AND a `workspaceId` that
+ * actually looks like a Kvy-managed `.worktrees/<branch>` directory
+ * (`worktree-path.ts`) — never attempted for an ordinary repo-root session,
+ * where "removing the worktree" would be nonsensical (there isn't one) and,
+ * if it somehow reached the RPC, unsafe. */
 export function canOfferRemoveWorktree(
   machineId: string | null,
   workspaceId: string | null,

@@ -1,4 +1,4 @@
-import type { EncryptedBox, Ephemeral, Update } from "@falcon/wire";
+import type { EncryptedBox, Ephemeral, Update } from "@kvy/wire";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiSocket } from "../apiSocket.js";
 import { createFakeSocketFactory, createFakeVisibilitySource } from "./fakes.js";

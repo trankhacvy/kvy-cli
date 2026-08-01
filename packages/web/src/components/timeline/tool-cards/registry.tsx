@@ -15,7 +15,7 @@ import { TodoCard } from "./TodoCard";
 import { WebFetchCard } from "./WebFetchCard";
 import { WebSearchCard } from "./WebSearchCard";
 
-/** ToolCard registry (falcon-system-design.md §9.2: "Bash, Edit+diff, Read,
+/** ToolCard registry (kvy-system-design.md §9.2: "Bash, Edit+diff, Read,
  * Grep, Todo, Task/subagent group" — ported from Happy's `knownTools.tsx`
  * mapping, plan.md §8.4). Any tool name not listed here, plus every
  * `mcp__*` tool, falls back to `McpGenericCard`. `AskUserQuestion` (plan-v2.md

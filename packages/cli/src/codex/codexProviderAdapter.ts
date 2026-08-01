@@ -42,9 +42,9 @@ export const CODEX_NOT_INSTALLED_MESSAGE = [
 ].join("\n");
 
 /**
- * Printed by `falcon codex` before starting a session (index.ts) — the
+ * Printed by `kvy codex` before starting a session (index.ts) — the
  * honest note design §7.7 calls for in place of a silent/missing local
- * mode: "`falcon codex` always runs the programmatic path with the Ink
+ * mode: "`kvy codex` always runs the programmatic path with the Ink
  * status view; `startLocal()` returns null and the CLI prints an honest
  * note."
  */
@@ -92,8 +92,8 @@ function defaultResolveVersion(): string | null {
 /**
  * Detects whether the Codex CLI (specifically its `app-server` subcommand,
  * which this adapter depends on) is installed. Codex authenticates via its
- * own `codex login` / `OPENAI_API_KEY` outside Falcon's control — there is
- * no Falcon-observable "authenticated" check equivalent to Claude's
+ * own `codex login` / `OPENAI_API_KEY` outside Kvy's control — there is
+ * no Kvy-observable "authenticated" check equivalent to Claude's
  * `~/.claude` credential file, so `authenticated` always mirrors `installed`
  * here (an honest "we can't tell, so we don't claim to" rather than
  * fabricating a check that isn't real).

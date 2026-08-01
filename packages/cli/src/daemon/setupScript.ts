@@ -1,5 +1,5 @@
 /**
- * Runs a workspace's configured `setupScript` (`falcon workspace config
+ * Runs a workspace's configured `setupScript` (`kvy workspace config
  * --setup-script <script>`, docs/features/setup-run-scripts.md Phase 2) —
  * fire-and-forget, never blocking the caller on the script's completion.
  * Two callers: `spawnEngine.ts`'s post-`ensureBranchWorkspace` hook (only on

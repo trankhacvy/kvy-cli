@@ -1,4 +1,4 @@
-import { decryptBlob, encryptBlob, getRandomBytes } from "@falcon/crypto";
+import { decryptBlob, encryptBlob, getRandomBytes } from "@kvy/crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import {

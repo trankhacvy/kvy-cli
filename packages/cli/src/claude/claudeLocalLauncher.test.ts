@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import { ExitCodeError } from "./claudeLocal.js";
 import {

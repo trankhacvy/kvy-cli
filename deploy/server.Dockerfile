@@ -1,18 +1,18 @@
-# @falcon/server — self-host runtime image (falcon-system-design.md §6.5,
+# @kvy/server — self-host runtime image (kvy-system-design.md §6.5,
 # plan.md §16 "4.3 Distribution & self-host"). Multi-stage: install workspace
-# deps once, build just the packages `@falcon/server` needs at runtime
-# (`@falcon/wire` -> `@falcon/crypto` -> `@falcon/server`, in that dependency
+# deps once, build just the packages `@kvy/server` needs at runtime
+# (`@kvy/wire` -> `@kvy/crypto` -> `@kvy/server`, in that dependency
 # order), then ship a slim runtime layer. `node:20-slim` is enough at every
 # stage — this image never needs python3/make/g++ (contrast with Happy's
 # Dockerfile.server, which needed those for its own dependency tree) — but
 # only because the deps stage installs with `--ignore-scripts` (see its own
 # comment): the workspace's `node-pty` dependency (only actually used by
-# `@falcon/cli`, never this image) has no Linux prebuilt binary, so an
+# `@kvy/cli`, never this image) has no Linux prebuilt binary, so an
 # ordinary install would try to compile it via node-gyp and fail here.
 #
 # Build from the repo root (docker-compose.yml's `build.context: ..` does
 # this automatically):
-#   docker build -f deploy/server.Dockerfile -t falcon-server .
+#   docker build -f deploy/server.Dockerfile -t kvy-server .
 
 FROM node:20-slim AS deps
 
@@ -25,7 +25,7 @@ COPY scripts ./scripts
 
 # pnpm-lock.yaml's workspace importers cover every packages/* member — a
 # `pnpm install --frozen-lockfile` needs each one's package.json present
-# (even ones this image never runs, e.g. @falcon/cli/@falcon/web) or it
+# (even ones this image never runs, e.g. @kvy/cli/@kvy/web) or it
 # refuses to proceed. Full source for those is never copied into this image.
 RUN mkdir -p packages/crypto packages/wire packages/server packages/cli packages/web
 COPY packages/crypto/package.json packages/crypto/
@@ -35,11 +35,11 @@ COPY packages/cli/package.json packages/cli/
 COPY packages/web/package.json packages/web/
 
 # The workspace postinstall hook (scripts/postinstall.cjs) builds
-# @falcon/wire right after install — skip it here since wire's full source
+# @kvy/wire right after install — skip it here since wire's full source
 # isn't copied in yet; the builder stage below builds it explicitly, in
 # dependency order, alongside crypto and server. `--ignore-scripts`: the
 # lockfile's `onlyBuiltDependencies: ["node-pty"]` (root package.json) is
-# only there for @falcon/cli's PTY sessions — this image never runs cli, but
+# only there for @kvy/cli's PTY sessions — this image never runs cli, but
 # pnpm still resolves its package.json (workspace completeness, comment
 # above) and would otherwise try to compile node-pty's native addon here.
 # node-pty ships prebuilt binaries for darwin/win32 only, NOT linux, so that
@@ -49,7 +49,7 @@ COPY packages/web/package.json packages/web/
 # only job is populating node_modules, and no script this workspace's own
 # postinstall/build steps need runs here (wire's real build is the explicit
 # `turbo run build` below, unaffected by this install's --ignore-scripts).
-RUN SKIP_FALCON_WIRE_BUILD=1 pnpm install --frozen-lockfile --ignore-scripts
+RUN SKIP_KVY_WIRE_BUILD=1 pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 
@@ -58,11 +58,11 @@ COPY packages/wire ./packages/wire
 COPY packages/crypto ./packages/crypto
 COPY packages/server ./packages/server
 
-# turbo resolves the @falcon/wire -> @falcon/crypto -> @falcon/server build
+# turbo resolves the @kvy/wire -> @kvy/crypto -> @kvy/server build
 # order from each package's `dependsOn: ["^build"]` (turbo.json) — the same
 # graph a root `pnpm build` walks, scoped here to just this package and its
-# workspace dependencies via `--filter=@falcon/server...`.
-RUN pnpm exec turbo run build --filter=@falcon/server...
+# workspace dependencies via `--filter=@kvy/server...`.
+RUN pnpm exec turbo run build --filter=@kvy/server...
 
 FROM node:20-slim AS runner
 

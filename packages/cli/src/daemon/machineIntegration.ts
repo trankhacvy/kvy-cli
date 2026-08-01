@@ -32,9 +32,9 @@
  * `spawnSessionHandler` below.
  *
  * **No stored credentials ⇒ no machine client.** A daemon with nobody
- * logged in yet (`falcon auth login` never run) has no token/masterSecret
+ * logged in yet (`kvy auth login` never run) has no token/masterSecret
  * to register a machine or open an authenticated socket with — this is
- * normal, not an error (design's local-first posture: `falcon claude` works
+ * normal, not an error (design's local-first posture: `kvy claude` works
  * fully offline). `startMachineIntegration` returns `null` in that case,
  * logged at `info`, and the daemon keeps running local-only (control
  * server, session registry, self-update heartbeat all still work — none of
@@ -65,7 +65,7 @@
  * hard-code a specific registry implementation, it just wires whatever
  * `deps` supplies into `spawnSession`/`startTranscriptIndexer`.
  * `daemon/commands.ts` is the composition root that now supplies the real
- * `~/.falcon/workspaces.json`-backed registry (`workspace/adapters.ts`) as
+ * `~/.kvy/workspaces.json`-backed registry (`workspace/adapters.ts`) as
  * both of these defaults; `createMachineIntegrationDeps` here still
  * defaults to the honest "nothing registered" stand-in so this module's own
  * unit tests never depend on that store.
@@ -92,7 +92,7 @@ import {
   getRandomBytes,
   unwrapDek,
   wrapDek,
-} from "@falcon/crypto";
+} from "@kvy/crypto";
 import type {
   AdoptMirrorParams,
   AdoptMirrorResult,
@@ -123,11 +123,12 @@ import type {
   SpawnResult,
   WorkspaceGetConfigParams,
   WorkspaceGetConfigResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { Socket } from "socket.io-client";
 import { reportSessionStatus } from "../api/sessionStatus.js";
-import type { FalconCredentials } from "../auth/credentials.js";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { writeCredentials } from "../auth/credentials.js";
+import { withCredentialsLock } from "../auth/credentialsLock.js";
 import { resolveKeyMaterial } from "../auth/keyMaterial.js";
 import { createTokenProvider, type TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -189,8 +190,8 @@ export interface MachineIntegrationDeps {
   fetchImpl: typeof fetch;
   /** Injectable so tests can connect to a fake/local server instead of the real relay; production passes `socket.io-client`'s `io`. */
   ioFactory: (url: string, opts: Record<string, unknown>) => Socket;
-  /** Reads `~/.falcon/access.key`; `null` means "not logged in" (local-only mode). */
-  readCredentials: () => FalconCredentials | null;
+  /** Reads `~/.kvy/access.key`; `null` means "not logged in" (local-only mode). */
+  readCredentials: () => KvyCredentials | null;
   /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory; `null` for anything unregistered (design §12: no arbitrary-directory execution from remote). Defaults to "nothing registered" here — `daemon/commands.ts` supplies the real registry. See module header. */
   resolveWorkspaceRoot: WorkspaceRootLookup;
   /** Lists every registered workspace, for the transcript indexer's boot-time (and periodic re-scan) fs-watch. Defaults to "nothing registered" here — `daemon/commands.ts` supplies the real registry. See module header. */
@@ -293,7 +294,7 @@ export async function startMachineIntegration(
 
   // issue-4-plan.md §6.6: one tokenProvider per boot, shared by the machine socket and
   // every HTTP side-channel client below — a rotated refresh token is persisted back to
-  // `~/.falcon/access.key` immediately so a daemon restart resumes from the latest one,
+  // `~/.kvy/access.key` immediately so a daemon restart resumes from the latest one,
   // not a stale one that a prior refresh already superseded.
   const tokenProvider: TokenProvider = createTokenProvider({
     backendUrl: deps.serverUrl,
@@ -305,11 +306,14 @@ export async function startMachineIntegration(
     },
     logger: deps.logger,
     // issue #2 (docs/known-issues-cliweb-sync-test.md): this daemon-owned provider and
-    // a foreground `falcon claude`/`falcon codex` session's own provider
+    // a foreground `kvy claude`/`kvy codex` session's own provider
     // (`resolveAccessToken.ts`) both rotate the same on-disk refresh token
     // independently — re-read it on a 401 before giving up permanently, in case the
     // other process already rotated in a newer one.
     readCurrentRefreshToken: () => deps.readCredentials()?.refreshToken ?? null,
+    // known-issues.md #20: serialize actual refresh attempts against a foreground
+    // session's own provider instead of racing on the same on-disk refresh token.
+    withCredentialsLock: (fn) => withCredentialsLock(deps.homeDir, fn),
   });
 
   // issue-4-plan.md §6.1/§6.5: the daemon never runs interactively (no TTY, nobody to
@@ -547,7 +551,7 @@ export async function startMachineIntegration(
   // machine's own DEK — already established above, already what every
   // other machine RPC's params/results are sealed under — derives a blob
   // key the same way any session's DEK would (design §5.1: `HKDF(DEK,
-  // "falcon-blobs")`), and `uploadBlobToServer` is bound to this machine's
+  // "kvy-blobs")`), and `uploadBlobToServer` is bound to this machine's
   // own server credentials. Best-effort by contract (never throws — see
   // `blobClient.ts`'s header comment), so a network hiccup here just costs
   // the blobRef efficiency win, not the RPC itself.
@@ -600,7 +604,7 @@ export async function startMachineIntegration(
 
   // The Setup/Run scripts subsystem's five RPCs (docs/features/
   // setup-run-scripts.md Phase 3/4) each need `homeDir` — for
-  // `runStateStore.ts`/the log files under `~/.falcon/logs/` — the same
+  // `runStateStore.ts`/the log files under `~/.kvy/logs/` — the same
   // reason `getGitDiffHandler`'s `uploadBlob` binding above exists: the
   // dependency only exists at this composition root, not inside
   // `runProcess.ts`/`workspaceConfigRpc.ts` themselves.
@@ -649,7 +653,7 @@ export async function startMachineIntegration(
 
   // Boot-time orphan reaping (docs/features/dev-server-preview.md): a prior
   // daemon process that crashed/was SIGKILLed may have left `cloudflared`
-  // children running with no falcon argv marker `kill.ts`/`markers.ts` could
+  // children running with no kvy argv marker `kill.ts`/`markers.ts` could
   // ever find — `tunnels.json`'s pid journal is the only trail back to
   // them. Runs once per boot, before this daemon can itself start tracking
   // new tunnels.
@@ -660,7 +664,7 @@ export async function startMachineIntegration(
   });
 
   // Adoption Tier 1 (design §8/§11 UC9): fs-watch every registered
-  // workspace's transcript dir for plain (non-Falcon) provider sessions.
+  // workspace's transcript dir for plain (non-Kvy) provider sessions.
   // Reuses this same boot's credentials/DEK to upsert against
   // `POST /v1/unmanaged-sessions` — a fresh per-row DEK per upsert
   // (`unmanagedSessionClient.ts`'s own contract), unrelated to `dek` above.

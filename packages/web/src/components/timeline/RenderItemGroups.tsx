@@ -19,6 +19,7 @@ import { CopyButton } from "./CopyButton";
 import { FileAttachment } from "./FileAttachment";
 import { OrphanToolEnd } from "./OrphanToolEnd";
 import { PermPlaceholder } from "./PermPlaceholder";
+import { PlanChecklist } from "./PlanChecklist";
 import { ServiceLine } from "./ServiceLine";
 import { SubagentGroup } from "./SubagentGroup";
 import { ThinkingBlock } from "./ThinkingBlock";
@@ -29,8 +30,9 @@ type MessageGroupItem = TextItem | FileItem | PermPlaceholderItem | ToolItem | O
 /** A non-quiet `service` item (docs/bug-fix-plan.md #4) renders as its own
  * standalone row, same as a subagent group — it's a boundary marker between
  * messages (often carrying no `turn`, e.g. a model-switch confirmation),
- * not content that belongs inside an adjacent message bubble. */
-type StandaloneGroupItem = Extract<RenderItem, { kind: "subagent-group" | "service" }>;
+ * not content that belongs inside an adjacent message bubble. `plan` is the
+ * same shape of thing — a status snapshot, not conversational prose. */
+type StandaloneGroupItem = Extract<RenderItem, { kind: "subagent-group" | "service" | "plan" }>;
 
 export interface MessageRenderGroup {
   kind: "message";
@@ -61,7 +63,7 @@ function isMessageGroupItem(item: RenderItem): item is MessageGroupItem {
 }
 
 function isStandaloneGroupItem(item: RenderItem): item is StandaloneGroupItem {
-  return item.kind === "subagent-group" || item.kind === "service";
+  return item.kind === "subagent-group" || item.kind === "service" || item.kind === "plan";
 }
 
 function canAppendToMessageGroup(group: MessageRenderGroup, item: MessageGroupItem): boolean {
@@ -210,6 +212,9 @@ export function RenderItemGroups({
         }
         if (group.item.kind === "service") {
           return <ServiceLine key={key} label={group.item.text} tone="muted" />;
+        }
+        if (group.item.kind === "plan") {
+          return <PlanChecklist key={key} item={group.item} />;
         }
         subagentOrdinal += 1;
         return (

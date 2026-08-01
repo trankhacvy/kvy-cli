@@ -9,12 +9,15 @@ import type { SetModelResult } from "@/sync/sessionRpc";
  * headless ACP remote-loop flow has no live TUI to type `/model` into and
  * always answers `{ok:false}` (`runRemoteLoop`'s handler). Flag-gated the
  * same way `setMode`'s PTY path is (`ptySetModelEnabled`, defaulted to
- * `false`) until it's been live-soaked.
+ * `false`) until it's been live-soaked. `supportsLiveModelSwitch` gates the
+ * whole thing off for a provider with no live model-switch support at all.
  */
 export function canMutateModel(
   controlMode: "local" | "remote",
+  supportsLiveModelSwitch: boolean,
   ptySetModelEnabled = false,
 ): boolean {
+  if (!supportsLiveModelSwitch) return false;
   return controlMode === "local" && ptySetModelEnabled;
 }
 

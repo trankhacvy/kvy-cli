@@ -1,10 +1,10 @@
-import type { Ephemeral, Update } from "@falcon/wire";
+import type { Ephemeral, Update } from "@kvy/wire";
 import type { Server, Socket } from "socket.io";
 
 // Ported from Happy's `happy-server/sources/app/events/eventRouter.ts` (room scheme,
 // recipient filters, emitUpdate/emitEphemeral) — plan.md §4.1 "port verbatim". Adapted:
-// `userId` -> `accountId` (Falcon's identity anchor), and payload shapes come from
-// `@falcon/wire`'s `Update`/`Ephemeral` (design §4.3) instead of Happy's Prisma-shaped
+// `userId` -> `accountId` (Kvy's identity anchor), and payload shapes come from
+// `@kvy/wire`'s `Update`/`Ephemeral` (design §4.3) instead of Happy's Prisma-shaped
 // event unions. Ephemeral backpressure coalescing (§4.3, marked (N) in plan.md) is new —
 // Happy has no equivalent.
 
@@ -218,7 +218,7 @@ class EventRouter {
   /**
    * Push-suppression check (design §6.4: "skip if any user-scoped connection
    * reports `app-state: active` **and** has the session's room joined
-   * (visible)"). Falcon add vs. Happy's `isUserActive` (account-wide only,
+   * (visible)"). Kvy add vs. Happy's `isUserActive` (account-wide only,
    * see `happy-server/sources/app/push/pushDispatch.ts`): scoped to the
    * rooms a given session's traffic actually reaches
    * (`all-interested-in-session`'s room set — session-scoped room ∪
@@ -265,7 +265,7 @@ class EventRouter {
   }
 
   // Local socket lookup for the ephemeral backpressure path (single-process at MVP —
-  // design falcon-system-design.md §6.4: "Redis cluster adapter reserved behind an env
+  // design kvy-system-design.md §6.4: "Redis cluster adapter reserved behind an env
   // flag"; cross-replica delivery for these events is deferred alongside that flag).
   private socketsInRooms(rooms: string[]): Socket[] {
     const ids = new Set<string>();

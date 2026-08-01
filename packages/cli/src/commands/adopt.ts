@@ -1,8 +1,8 @@
 /**
- * `falcon adopt [--remote] [--list]` + `falcon --continue` alias (design
+ * `kvy adopt [--remote] [--list]` + `kvy --continue` alias (design
  * §7.8 FR-9.2, plan.md §16 "3.3 Session adoption (UC9)"): the
  * terminal-side half of adoption — "I started plain `claude`, now move it
- * to Falcon."
+ * to Kvy."
  *
  * `--list`: enumerate plain sessions for the current directory's workspace
  * (`adopt/listSessions.ts`), most-recently-active first, and print them —
@@ -19,7 +19,7 @@
  *    then records the old→new lineage (`adopt/lineage.ts`) — no hook
  *    wiring needed, since the exact id we're resuming from is already
  *    known going in.
- *  - **`--remote`**: launches `falcon claude --starting-mode remote
+ *  - **`--remote`**: launches `kvy claude --starting-mode remote
  *    --continue-from <id>` detached (tmux-preferred, same launcher the
  *    daemon's `spawn` RPC uses) instead of blocking the terminal. The new
  *    session's own provider session id isn't known synchronously in this
@@ -27,12 +27,11 @@
  *    recording is deferred — printed as an explicit, honest note rather
  *    than silently skipped.
  *
- * `falcon --continue` aliases the flagless case (most-recent, local) —
+ * `kvy --continue` aliases the flagless case (most-recent, local) —
  * wired in `args.ts`/`index.ts`.
  */
 import { readdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import type { ProviderSessionSummary } from "@falcon/wire";
+import type { ProviderSessionSummary } from "@kvy/wire";
 import crossSpawnDefault from "cross-spawn";
 import { recordAdoptionLineage } from "../adopt/lineage.js";
 import { listAdoptableSessions } from "../adopt/listSessions.js";
@@ -43,6 +42,7 @@ import {
   launchProviderProcess as launchProviderProcessDefault,
   type SpawnFn,
 } from "../daemon/processLauncher.js";
+import { defaultKvyEntrypoint } from "../kvyEntrypoint.js";
 import type { Logger } from "../logger.js";
 import type { PersistenceOptions } from "../persistence.js";
 
@@ -69,17 +69,12 @@ export interface AdoptCommandDeps {
   /** Injectable for tests; defaults to the real tmux-preferred/detached launcher, for the `--remote` path. */
   launchProcess?: typeof launchProviderProcessDefault;
   launchDeps?: LaunchProcessDeps;
-  /** Returns the argv that re-invokes this same falcon binary (`[node, ...execArgv, entry]`) — same convention as `spawnEngine.ts`'s `defaultFalconEntrypoint`. */
-  falconEntrypoint?: () => string[];
-  /** Forwarded to `adopt/lineage.ts`'s `recordAdoptionLineage` — overrides `~/.falcon`'s location (tests only; defaults to the real home dir). */
+  /** Returns the argv that re-invokes this same kvy binary (`[node, ...execArgv, entry]`) — same convention as `spawnEngine.ts`'s `defaultKvyEntrypoint`. */
+  kvyEntrypoint?: () => string[];
+  /** Forwarded to `adopt/lineage.ts`'s `recordAdoptionLineage` — overrides `~/.kvy`'s location (tests only; defaults to the real home dir). */
   persistenceOptions?: PersistenceOptions;
   write?: (text: string) => void;
   logger?: Logger;
-}
-
-function defaultFalconEntrypoint(): string[] {
-  const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
-  return [process.execPath, ...process.execArgv, entry];
 }
 
 /** Real, OS-backed defaults for anything not overridden. */
@@ -157,7 +152,7 @@ async function runLocalAdopt(
       newId,
       deps.persistenceOptions,
     );
-    deps.write(`falcon adopt: recorded lineage ${chain.join(" -> ")}\n`);
+    deps.write(`kvy adopt: recorded lineage ${chain.join(" -> ")}\n`);
   }
 
   return exitCode;
@@ -169,9 +164,9 @@ async function runRemoteAdopt(
   logger: Logger,
 ): Promise<number> {
   const launch = deps.launchProcess ?? launchProviderProcessDefault;
-  const [command, ...prefixArgs] = deps.falconEntrypoint?.() ?? defaultFalconEntrypoint();
+  const [command, ...prefixArgs] = deps.kvyEntrypoint?.() ?? defaultKvyEntrypoint();
   if (!command) {
-    deps.write("falcon adopt --remote: could not resolve the falcon entrypoint to re-invoke\n");
+    deps.write("kvy adopt --remote: could not resolve the kvy entrypoint to re-invoke\n");
     return 1;
   }
   const args = [
@@ -197,10 +192,10 @@ async function runRemoteAdopt(
       deps.launchDeps,
     );
     deps.write(
-      `falcon adopt --remote: launched detached session (pid ${launched.pid}, ${launched.method}) continuing from ${target.providerSessionId}\n`,
+      `kvy adopt --remote: launched detached session (pid ${launched.pid}, ${launched.method}) continuing from ${target.providerSessionId}\n`,
     );
     deps.write(
-      "falcon adopt --remote: lineage recording for the new session id isn't wired for detached starts yet. It lands once managed-session registration does\n",
+      "kvy adopt --remote: lineage recording for the new session id isn't wired for detached starts yet. It lands once managed-session registration does\n",
     );
     return 0;
   } catch (error) {
@@ -208,13 +203,13 @@ async function runRemoteAdopt(
       message: error instanceof Error ? error.message : String(error),
     });
     deps.write(
-      `falcon adopt --remote: failed to launch: ${error instanceof Error ? error.message : String(error)}\n`,
+      `kvy adopt --remote: failed to launch: ${error instanceof Error ? error.message : String(error)}\n`,
     );
     return 1;
   }
 }
 
-/** Runs `falcon adopt`/`falcon --continue`. Returns the process exit code. */
+/** Runs `kvy adopt`/`kvy --continue`. Returns the process exit code. */
 export async function runAdoptCommand(
   options: AdoptCommandOptions,
   deps: AdoptCommandDeps,
@@ -230,7 +225,7 @@ export async function runAdoptCommand(
   });
 
   if (sessions.length === 0) {
-    write(`falcon adopt: no plain Claude Code sessions found for ${deps.workingDirectory}\n`);
+    write(`kvy adopt: no plain Claude Code sessions found for ${deps.workingDirectory}\n`);
     return 0;
   }
 
@@ -242,12 +237,12 @@ export async function runAdoptCommand(
   const target = sessions[0];
   if (!target) {
     // Unreachable given the length check above; guards `noUncheckedIndexedAccess` honestly instead of a non-null assertion.
-    write(`falcon adopt: no plain Claude Code sessions found for ${deps.workingDirectory}\n`);
+    write(`kvy adopt: no plain Claude Code sessions found for ${deps.workingDirectory}\n`);
     return 0;
   }
   const runningNote = target.running ? " (currently running)" : "";
   write(
-    `falcon adopt: adopting "${target.title ?? target.providerSessionId}" (${target.providerSessionId})${runningNote}\n`,
+    `kvy adopt: adopting "${target.title ?? target.providerSessionId}" (${target.providerSessionId})${runningNote}\n`,
   );
 
   const fullDeps = { ...deps, write };

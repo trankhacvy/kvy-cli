@@ -1,10 +1,10 @@
 /**
- * `falcon sessions list` (falcon-prd.md §5.3, plan.md §16 "4.2 Adoption Tier
+ * `kvy sessions list` (kvy-prd.md §5.3, plan.md §16 "4.2 Adoption Tier
  * 3 + polish"). Lists the account's sessions from two independent sources —
- * neither one alone answers "what can I `falcon resume`":
+ * neither one alone answers "what can I `kvy resume`":
  *
  *  - **Local**: `adopt/listSessions.ts`'s `listAdoptableSessions` (the same
- *    building block `falcon adopt --list` already uses) — plain (unmanaged)
+ *    building block `kvy adopt --list` already uses) — plain (unmanaged)
  *    Claude Code transcripts for cwd's workspace, on this machine only, not
  *    yet known to the server at all.
  *  - **Remote**: `GET /v1/sessions` (design §4.3/§6.2, already landed in
@@ -16,7 +16,7 @@
  *    (`crypto/worker-handler.ts`'s `unwrapDek`, keyed off the account's
  *    content key tree), which this CLI doesn't have wired yet. Remote rows
  *    are therefore listed by id/`tag`, not a decrypted title — still enough
- *    to pick a target for `falcon resume <id>`.
+ *    to pick a target for `kvy resume <id>`.
  *
  * The remote half is skipped (not an error) when the account isn't logged
  * in, and reported inline (not a hard failure) on a network/HTTP error —
@@ -24,12 +24,12 @@
  * `api/sessionStatus.ts`; the local half is still useful entirely on its
  * own either way.
  */
-import type { ProviderSessionSummary, SessionRow } from "@falcon/wire";
+import type { ProviderSessionSummary, SessionRow } from "@kvy/wire";
 import { listAdoptableSessions } from "../adopt/listSessions.js";
 import type { LivenessDeps } from "../adopt/liveness.js";
 import { resolveBackendUrl } from "../auth/config.js";
 import {
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
 import { resolveAccessToken } from "../auth/resolveAccessToken.js";
@@ -40,8 +40,8 @@ export interface SessionsListCommandDeps {
   env?: NodeJS.ProcessEnv;
   backendUrl?: string;
   liveness?: LivenessDeps;
-  /** Injectable for tests; defaults to `auth/credentials.ts`'s real, `~/.falcon/access.key`-backed reader. */
-  readCredentials?: () => FalconCredentials | null;
+  /** Injectable for tests; defaults to `auth/credentials.ts`'s real, `~/.kvy/access.key`-backed reader. */
+  readCredentials?: () => KvyCredentials | null;
   /** Injectable for tests; defaults to the global `fetch`. */
   fetchImpl?: typeof fetch;
   write?: (text: string) => void;
@@ -65,7 +65,7 @@ type RemoteSessionsResult =
 
 async function fetchRemoteSessions(
   backendUrl: string,
-  credentials: FalconCredentials | null,
+  credentials: KvyCredentials | null,
   fetchImpl: typeof fetch,
   logger: Logger,
 ): Promise<RemoteSessionsResult> {
@@ -114,7 +114,7 @@ function formatRemote(sessions: SessionRow[]): string {
 }
 
 /**
- * Runs `falcon sessions list`. Always returns 0 — a network/auth issue on
+ * Runs `kvy sessions list`. Always returns 0 — a network/auth issue on
  * the remote half is reported inline, never a hard command failure.
  */
 export async function runSessionsListCommand(deps: SessionsListCommandDeps): Promise<number> {
@@ -137,10 +137,10 @@ export async function runSessionsListCommand(deps: SessionsListCommandDeps): Pro
   write("\nRemote sessions (this account, all machines):\n");
   switch (remote.type) {
     case "not-logged-in":
-      write("  not logged in. Run `falcon auth login` to see sessions from other machines\n");
+      write("  not logged in. Run `kvy auth login` to see sessions from other machines\n");
       break;
     case "error":
-      write(`  could not reach the Falcon server: ${remote.message}\n`);
+      write(`  could not reach the Kvy server: ${remote.message}\n`);
       break;
     case "ok":
       write(formatRemote(remote.sessions));

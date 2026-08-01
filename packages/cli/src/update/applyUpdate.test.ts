@@ -13,15 +13,15 @@ function fakeFetch(handlers: Record<string, () => Response>) {
   }) as unknown as typeof fetch;
 }
 
-const BASE = "https://github.com/falcon-dev/falcon/releases/download/cli-latest";
+const BASE = "https://github.com/kvy-dev/kvy/releases/download/cli-latest";
 
 describe("applyUpdate", () => {
   let dir: string;
   let execPath: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "falcon-apply-update-"));
-    execPath = path.join(dir, "falcon");
+    dir = await mkdtemp(path.join(tmpdir(), "kvy-apply-update-"));
+    execPath = path.join(dir, "kvy");
     await writeFile(execPath, "old binary contents");
   });
 
@@ -33,14 +33,13 @@ describe("applyUpdate", () => {
     const payload = Buffer.from("new binary contents");
     const digest = createHash("sha256").update(payload).digest("hex");
     const fetchImpl = fakeFetch({
-      [`${BASE}/falcon-darwin-arm64`]: () => new Response(payload),
-      [`${BASE}/falcon-darwin-arm64.sha256`]: () =>
-        new Response(`${digest}  falcon-darwin-arm64\n`),
+      [`${BASE}/kvy-darwin-arm64`]: () => new Response(payload),
+      [`${BASE}/kvy-darwin-arm64.sha256`]: () => new Response(`${digest}  kvy-darwin-arm64\n`),
     });
 
     const result = await applyUpdate({
       installKind: "standalone-binary",
-      repo: "falcon-dev/falcon",
+      repo: "kvy-dev/kvy",
       version: "0.2.0",
       execPath,
       fetchImpl,
@@ -58,7 +57,7 @@ describe("applyUpdate", () => {
   it("standalone-binary: reports unsupported platform without throwing", async () => {
     const result = await applyUpdate({
       installKind: "standalone-binary",
-      repo: "falcon-dev/falcon",
+      repo: "kvy-dev/kvy",
       version: "0.2.0",
       execPath,
       platform: "win32",
@@ -72,19 +71,19 @@ describe("applyUpdate", () => {
     const runNpmInstall = vi.fn(async () => {});
     const result = await applyUpdate({
       installKind: "npm",
-      repo: "falcon-dev/falcon",
+      repo: "kvy-dev/kvy",
       version: "0.2.0",
       execPath,
       runNpmInstall,
     });
     expect(result).toEqual({ applied: true, installKind: "npm" });
-    expect(runNpmInstall).toHaveBeenCalledWith("falcon@0.2.0");
+    expect(runNpmInstall).toHaveBeenCalledWith("kvy@0.2.0");
   });
 
   it("dev: no-op, never touches the filesystem", async () => {
     const result = await applyUpdate({
       installKind: "dev",
-      repo: "falcon-dev/falcon",
+      repo: "kvy-dev/kvy",
       version: "0.2.0",
       execPath,
     });

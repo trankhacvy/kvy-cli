@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { isCuid } from "@paralleldrive/cuid2";
 import { describe, expect, it } from "vitest";
 import {

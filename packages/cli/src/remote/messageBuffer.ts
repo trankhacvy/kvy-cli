@@ -4,13 +4,13 @@
  * `RemoteModeDisplay` renders from. Verbatim structure; the one behavioral
  * change is `summarizeEnvelope` below, which replaces Happy's
  * `formatClaudeMessageForInk` (that formatter reads Happy's own richer
- * `SDKMessage`/ACP log shape). Falcon's Ink display instead summarizes the
+ * `SDKMessage`/ACP log shape). Kvy's Ink display instead summarizes the
  * SAME `SessionEnvelope`s already flowing to the outbox (design §7.4's
  * `SDKToEnvelope` converter output) — one source of truth for what the
  * remote-mode terminal shows and what the web timeline shows, rather than
  * re-deriving a second formatting of the raw SDK stream.
  */
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 
 export type BufferedMessageKind = "user" | "assistant" | "system" | "tool" | "result" | "status";
 
@@ -106,6 +106,10 @@ export function summarizeEnvelope(
     case "usage":
       // Token accounting (plan-v2.md W4.6) — a web-only chip, not worth a
       // line in this already-terse remote-mode terminal display.
+      return null;
+    case "plan":
+      // Same reasoning as "usage" — the plan/todo list is a web-only
+      // checklist widget, not worth a line here.
       return null;
   }
 }

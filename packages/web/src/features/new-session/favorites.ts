@@ -1,3 +1,4 @@
+import { PROVIDER_IDS } from "@kvy/wire";
 import type { NewSessionProvider } from "./types";
 
 /**
@@ -21,9 +22,9 @@ import type { NewSessionProvider } from "./types";
  * so a star set from either place is honored by the other.
  */
 
-const MACHINE_KEY = "falcon:new-session-favorite-machine";
-const PROVIDER_KEY = "falcon:new-session-favorite-provider";
-const MODEL_KEY_PREFIX = "falcon:new-session-favorite-model:";
+const MACHINE_KEY = "kvy:new-session-favorite-machine";
+const PROVIDER_KEY = "kvy:new-session-favorite-provider";
+const MODEL_KEY_PREFIX = "kvy:new-session-favorite-model:";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -46,7 +47,7 @@ export function setFavoriteMachineId(machineId: string | null): void {
 }
 
 function isNewSessionProvider(value: string | null): value is NewSessionProvider {
-  return value === "claude-code" || value === "codex";
+  return value !== null && PROVIDER_IDS.includes(value as NewSessionProvider);
 }
 
 /** `null` means "no starred provider yet" — `new-session-screen.tsx` falls back to `INITIAL_FORM.provider`. */

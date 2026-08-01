@@ -1,5 +1,5 @@
 /**
- * PTY-injection Claude session — the terminal-attached `falcon claude` input
+ * PTY-injection Claude session — the terminal-attached `kvy claude` input
  * path (the "omnara model"; design §7, replaces the legacy mode-switch
  * takeover for sessions that have a real terminal).
  *
@@ -25,10 +25,10 @@
  *     producing structured envelopes for the web timeline.
  *
  * ## The idle/busy signal under a PTY
- * The launcher (`falcon_claude_launcher.cjs`) instruments `global.fetch` and
+ * The launcher (`kvy_claude_launcher.cjs`) instruments `global.fetch` and
  * emits `fetch-start`/`fetch-end` JSON lines. A PTY child has no spare fd 3,
  * so those lines are delivered over a unix-domain socket this module listens
- * on (path passed as `FALCON_FETCH_SIGNAL_PATH`). The same debounce
+ * on (path passed as `KVY_FETCH_SIGNAL_PATH`). The same debounce
  * `claudeLocal.ts` uses for its "thinking" indicator turns them into a clean
  * busy/idle edge for the `InjectionController`. Native-binary Claude installs
  * can't be fetch-instrumented in-process (documented launcher limitation) —
@@ -37,14 +37,14 @@
  *
  * ## Permission / lifecycle-hook seam (owned by the caller, not this module)
  * There is exactly ONE hook server per session, and this module does NOT own
- * it. The terminal `falcon claude` flow installs a single hook server (via
+ * it. The terminal `kvy claude` flow installs a single hook server (via
  * `remotePermissionHook.ts`'s `installRemotePermissionHook()`) that owns all
  * four Claude Code hooks — `SessionStart` (real provider session id),
  * `Notification`/`Stop` (attention + turn-end), and `PreToolUse` (remote
  * permission answering while the TUI stays live). That composition hands this
  * module two things:
  *  - `settingsPath`/`settingsEnv` — merged into the PTY-spawned `claude`'s
- *    args (`--settings <path>`) + env (`FALCON_HOOK_SETTINGS_PATH`) so every
+ *    args (`--settings <path>`) + env (`KVY_HOOK_SETTINGS_PATH`) so every
  *    hook fires.
  *  - the provider session id, forwarded in via `notifyProviderSessionId()` on
  *    the returned handle, which this module routes to the transcript tailer
@@ -53,11 +53,11 @@
  * hooks and race the session-id/attention signals.
  */
 
-import type { PermDecision, PermissionMode, SessionEnvelope } from "@falcon/wire";
+import type { PermDecision, PermissionMode, SessionEnvelope } from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { spawn as spawnPtyDefault } from "node-pty";
 import type { Logger } from "../logger.js";
-import { FALCON_SYSTEM_PROMPT, findLastLocalSession, resolveSessionFlags } from "./claudeLocal.js";
+import { findLastLocalSession, KVY_SYSTEM_PROMPT, resolveSessionFlags } from "./claudeLocal.js";
 import {
   type ClaudeEnvelopeMapperState,
   closeClaudeTurnWithStatus,
@@ -144,7 +144,7 @@ const RIGHT_ARROW_KEY = "[C";
  * v2.1.218: the dialog is rendered PURELY in the live terminal, never
  * written to the JSONL transcript, so it's invisible to every other
  * detection mechanism in this codebase (all transcript-file-based) — this
- * is the one place Falcon pattern-matches raw PTY output instead. Matched
+ * is the one place Kvy pattern-matches raw PTY output instead. Matched
  * against a small rolling buffer, not each individual `onData` chunk, since
  * a PTY can split the string across writes.
  */
@@ -159,7 +159,7 @@ const MODEL_SWITCH_CONFIRM_BUFFER_MAX = 500;
  * CURRENTLY in — rendered at the bottom of the screen on every frame, never
  * written to the JSONL transcript, same reasoning {@link
  * MODEL_SWITCH_CONFIRM_PATTERN}'s doc comment gives for pattern-matching raw
- * PTY output instead: this is the only other place in Falcon that does it.
+ * PTY output instead: this is the only other place in Kvy that does it.
  *
  * Exists for `setMode`'s own bug (`start.ts`'s RPC handler,
  * `pretoolPermissionBridge.ts`'s "permission_mode cache + real PTY setMode"
@@ -188,7 +188,7 @@ const MODEL_SWITCH_CONFIRM_BUFFER_MAX = 500;
  *    produces `auto mode unavailable for this model` and falls back to
  *    `default`, never rendering a `bypassPermissions` status line) — already
  *    documented as genuine Claude Code behavior in docs/known-issues.md
- *    issue #11, not a Falcon bug. There is no status text to ever match for
+ *    issue #11, not a Kvy bug. There is no status text to ever match for
  *    it, so {@link waitForModeStatus} resolves `false` immediately rather
  *    than arming a watcher that could never fire.
  *
@@ -257,15 +257,15 @@ export interface StdoutLike {
 
 export interface PtyClaudeSessionOptions {
   workingDirectory: string;
-  /** Resolved path to `scripts/falcon_claude_launcher.cjs`. */
+  /** Resolved path to `scripts/kvy_claude_launcher.cjs`. */
   launcherPath: string;
-  /** Resolved real path to the `claude` CLI (passed to the launcher as `FALCON_CLAUDE_PATH`). */
+  /** Resolved real path to the `claude` CLI (passed to the launcher as `KVY_CLAUDE_PATH`). */
   claudeCliPath: string;
   /** Provider passthrough args (never mutated). */
   claudeArgs: string[];
   /** Provider (Claude Code) session id to resume, or null for fresh/whatever-claudeArgs-says. */
   providerSessionId: string | null;
-  /** `~/.falcon` (or override) — hosts the fetch-signal socket + temp dirs. */
+  /** `~/.kvy` (or override) — hosts the fetch-signal socket + temp dirs. */
   homeDir: string;
   env?: NodeJS.ProcessEnv;
   /**
@@ -277,7 +277,7 @@ export interface PtyClaudeSessionOptions {
   settingsPath?: string | null;
   /**
    * Env vars carrying the hook settings path onto the spawned `claude`'s
-   * environment (`{ FALCON_HOOK_SETTINGS_PATH: <path> }`) — merged into the
+   * environment (`{ KVY_HOOK_SETTINGS_PATH: <path> }`) — merged into the
    * PTY child's env. From the same composition as `settingsPath`.
    */
   settingsEnv?: Record<string, string>;
@@ -388,7 +388,7 @@ export interface PtyClaudeSessionHandle {
   /**
    * Answers a locally-typed turn's OPEN permission dialog from a web
    * `perm.answer` decision — real two-way remote control (the point of
-   * running `falcon claude` in a terminal at all: a user can walk away and
+   * running `kvy claude` in a terminal at all: a user can walk away and
    * approve from their phone). Deliberately NOT gated by
    * `InjectionController.canInjectNow` like {@link sendModeCycle}/{@link
    * injectMessage} — those exist to keep a keystroke OUT of an open dialog;
@@ -671,7 +671,7 @@ export function startPtyClaudeSession(
   const createSessionScanner = deps.createSessionScanner ?? createSessionScannerDefault;
   const createFetchSignalServer = deps.createFetchSignalServer ?? createFetchSignalServerDefault;
   const findLastSession = deps.findLastSession ?? findLastLocalSession;
-  const systemPrompt = deps.systemPrompt ?? FALCON_SYSTEM_PROMPT;
+  const systemPrompt = deps.systemPrompt ?? KVY_SYSTEM_PROMPT;
   const readyDelayMs = deps.readyDelayMs ?? DEFAULT_READY_DELAY_MS;
   const busyDebounceMs = deps.busyDebounceMs ?? DEFAULT_BUSY_DEBOUNCE_MS;
   const setTimeoutImpl = deps.setTimeoutImpl ?? ((fn, ms) => setTimeout(fn, ms));
@@ -904,9 +904,9 @@ export function startPtyClaudeSession(
       const spawnEnv: NodeJS.ProcessEnv = {
         ...env,
         ...(opts.settingsEnv ?? {}),
-        FALCON_CLAUDE_PATH: opts.claudeCliPath,
+        KVY_CLAUDE_PATH: opts.claudeCliPath,
       };
-      if (fetchSignal.path) spawnEnv.FALCON_FETCH_SIGNAL_PATH = fetchSignal.path;
+      if (fetchSignal.path) spawnEnv.KVY_FETCH_SIGNAL_PATH = fetchSignal.path;
 
       logger.debug("[pty-session] spawning claude on PTY", {
         launcherPath: opts.launcherPath,

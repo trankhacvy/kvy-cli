@@ -11,8 +11,8 @@ let homeDir: string;
 let workspaceDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-git-write-guard-home-"));
-  workspaceDir = realpathSync(mkdtempSync(path.join(tmpdir(), "falcon-git-write-guard-repo-")));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-git-write-guard-home-"));
+  workspaceDir = realpathSync(mkdtempSync(path.join(tmpdir(), "kvy-git-write-guard-repo-")));
 });
 
 afterEach(() => {

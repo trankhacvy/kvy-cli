@@ -2,7 +2,7 @@
  * Core crypto-bridge worker logic. Split out from `worker.ts`'s `self.onmessage` wiring
  * so tests can drive it directly with in-memory storage.
  *
- * Trust boundary (falcon-system-design.md §5.3, §9.1): `keyTree`, `masterSecret`,
+ * Trust boundary (kvy-system-design.md §5.3, §9.1): `keyTree`, `masterSecret`,
  * `refreshToken`, `activeDek` and every pending ephemeral secret below are closed over by
  * `handle()` and never appear in any response. The main thread can ask the worker to
  * seal/open data or mint a fresh access token, but can never read the keys back out.
@@ -16,7 +16,7 @@
  *    device-to-device key sharing.
  */
 
-import type { KeyTree } from "@falcon/crypto/web";
+import type { KeyTree } from "@kvy/crypto/web";
 import {
   decodeBase64,
   decryptBlob,
@@ -36,7 +36,7 @@ import {
   unwrapDek,
   unwrapWithPin,
   wrapDek,
-} from "@falcon/crypto/web";
+} from "@kvy/crypto/web";
 import { API_URL } from "@/lib/config.js";
 import { createWrapKey, unwrapBytes, wrapBytes } from "./device-key.js";
 import {

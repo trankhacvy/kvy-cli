@@ -1,4 +1,4 @@
-import type { EncryptedBox, SessionRow } from "@falcon/wire";
+import type { EncryptedBox, SessionRow } from "@kvy/wire";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -52,7 +52,14 @@ function makeSession(overrides: Partial<SessionRow> = {}): SessionRow {
 }
 
 function makeSnapshot(sessions: SessionRow[]): SyncSnapshot {
-  return { headerSeq: 1, sessions, machines: [], unmanagedSessions: [], workspaces: [] };
+  return {
+    headerSeq: 1,
+    accountKeyEpoch: 1,
+    sessions,
+    machines: [],
+    unmanagedSessions: [],
+    workspaces: [],
+  };
 }
 
 async function renderScreen(sessionId: string, snapshot: SyncSnapshot | undefined) {

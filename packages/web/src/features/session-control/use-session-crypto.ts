@@ -1,6 +1,6 @@
 "use client";
 
-import { decodeBase64 } from "@falcon/crypto/web";
+import { decodeBase64 } from "@kvy/crypto/web";
 import { useEffect, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
 import { useDedicatedCryptoBridge } from "@/lib/use-crypto-bridge";
@@ -8,7 +8,7 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 
 /**
  * Unwraps `sessionId`'s data-encryption key into a fresh crypto-bridge
- * worker (falcon-system-design.md §5.3, plan.md's "per-session DEK-unwrap
+ * worker (kvy-system-design.md §5.3, plan.md's "per-session DEK-unwrap
  * crypto worker" bullet) — `null` until the session's row has synced *and*
  * `setSessionKey` has resolved `true`. `useLiveRenderItems` (decrypting
  * messages) and `useLiveSessionControl` (sealing/opening RPC params/

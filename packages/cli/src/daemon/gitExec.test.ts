@@ -15,7 +15,7 @@ describe("runGit (real git binary)", () => {
   let repo: string;
 
   beforeEach(async () => {
-    repo = await mkdtemp(path.join(tmpdir(), "falcon-git-exec-"));
+    repo = await mkdtemp(path.join(tmpdir(), "kvy-git-exec-"));
     await runGit(["init"], repo);
     await runGit(["config", "user.email", "test@example.com"], repo);
     await runGit(["config", "user.name", "Test"], repo);
@@ -34,7 +34,7 @@ describe("runGit (real git binary)", () => {
   });
 
   it("rejects with git's actual message when it writes to stderr (fatal error)", async () => {
-    const notARepo = await mkdtemp(path.join(tmpdir(), "falcon-git-exec-norepo-"));
+    const notARepo = await mkdtemp(path.join(tmpdir(), "kvy-git-exec-norepo-"));
     try {
       await expect(runGit(["status"], notARepo)).rejects.toThrow(/not a git repository/);
     } finally {
@@ -57,7 +57,7 @@ describe("runGitDiffNoIndex (real git binary)", () => {
   let repo: string;
 
   beforeEach(async () => {
-    repo = await mkdtemp(path.join(tmpdir(), "falcon-git-exec-noindex-"));
+    repo = await mkdtemp(path.join(tmpdir(), "kvy-git-exec-noindex-"));
   });
 
   afterEach(async () => {

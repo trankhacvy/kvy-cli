@@ -48,7 +48,7 @@
 | 3 | [A dead refresh token must trigger a real re-pair](#fix-3--a-dead-refresh-token-must-trigger-a-real-re-pair) | CRITICAL | E2E-6.4 | 6 |
 | 4 | [Key material must be bound to the account it belongs to](#fix-4--key-material-must-be-bound-to-the-account-it-belongs-to) | CRITICAL | — | 8 |
 | 5 | [Logout must delete the databases, not just empty them](#fix-5--logout-must-delete-the-databases-not-just-empty-them) | MEDIUM | E2E-5.5 | 6 |
-| 6 | [Stop backfilling transcripts that predate Falcon](#fix-6--stop-backfilling-transcripts-that-predate-falcon) | HIGH | — | 4 |
+| 6 | [Stop backfilling transcripts that predate Kvy](#fix-6--stop-backfilling-transcripts-that-predate-kvy) | HIGH | — | 4 |
 | 7 | [A key request must reach the person at the terminal](#fix-7--a-key-request-must-reach-the-person-at-the-terminal) | MEDIUM | — | 5 |
 | 8 | [`/password/` must not default to sign-up on a pairing continuation](#fix-8--password-must-not-default-to-sign-up-on-a-pairing-continuation) | LOW | — | 3 |
 | 9 | ["One more step" must say what will happen next](#fix-9--one-more-step-must-say-what-will-happen-next) | LOW | — | 3 |
@@ -247,7 +247,7 @@ Three changes, in order of importance:
 `config.ts` gains one line in `EnvSchema` (alongside `DATABASE_URL` at line 34):
 
 ```diff
-     DATABASE_URL: z.string().min(1).default("postgres://falcon:falcon@localhost:5432/falcon"),
+     DATABASE_URL: z.string().min(1).default("postgres://kvy:kvy@localhost:5432/kvy"),
 +    /** Direct (non-pooled) connection used ONLY by the boot-time migration runner — see
 +     *  `db/migrate.ts`. Unset is fine when `DATABASE_URL` already points at a direct
 +     *  endpoint (local Postgres, self-host docker-compose). */
@@ -348,7 +348,7 @@ var DC=""
 `DC` is the minified `API_URL` from `lib/config.ts:15-18`. `packages/web/.env*` does not exist,
 so Next's own bundle correctly uses the `http://localhost:3005` default (which is why every
 main-thread call works); only the worker bundle is wrong. `packages/web/public/crypto-worker.js`
-is gitignored (`.gitignore:26`) and rebuilt by `pnpm --filter @falcon/web dev`
+is gitignored (`.gitignore:26`) and rebuilt by `pnpm --filter @kvy/web dev`
 (`"dev": "node scripts/build-worker.mjs && next dev"`), so every dev run reproduces it.
 
 **Why production is not affected today, and why that is not comfort:**
@@ -630,7 +630,7 @@ already has (`:80-93`) and in the same visual language:
 ```
 
 with copy that says what is happening and does not blame the user, e.g.
-`cantReachServer: "Can't reach Falcon right now. We'll keep trying."` and `retryCta: "Try
+`cantReachServer: "Can't reach Kvy right now. We'll keep trying."` and `retryCta: "Try
 again"`. Note it must go **before** the bare `if (!sessionReady) return null;`, and that the
 existing test *"never renders children on the pre-effect pass"* still passes because
 `unreachable` starts `false`.
@@ -672,7 +672,7 @@ reintroduce that bug to fix a different one. A dedicated gate state is the corre
 `refreshSession()`'s return type is a **wire-protocol change between the main thread and the
 worker**. Both halves ship in the same bundle pair, so there is no skew risk in production, but
 a stale `public/crypto-worker.js` left over from a previous build in a developer's working tree
-*will* mismatch — `pnpm --filter @falcon/web dev` rebuilds it every start, so this is a
+*will* mismatch — `pnpm --filter @kvy/web dev` rebuilds it every start, so this is a
 "delete `public/crypto-worker.js` if things get weird" footnote, not a design problem.
 
 **There are four call sites plus one dependency type, not two** (rev 1 of this section
@@ -720,7 +720,7 @@ type-only, no new runtime export). Implemented exactly as specified, no deviatio
 
 `ensureLoggedIn()` decides "already signed in" from the **presence of a credentials file**, not
 from whether the refresh token inside it still works. Web-side revocation is server-side only —
-`~/.falcon/access.key` is never deleted — so when `runPreflightWithReauth()` detects a dead
+`~/.kvy/access.key` is never deleted — so when `runPreflightWithReauth()` detects a dead
 token, prints `RECONNECTING`, and calls `ensureLoggedIn()` expecting it to re-pair, it gets
 `{ok: true}` back without a single network call or QR code, and the second preflight
 (correctly) fails again into `NO_TTY_CANNOT_SIGN_IN` — *at a real TTY, with a human present*.
@@ -747,7 +747,7 @@ Every claim in the report is confirmed verbatim.
 1. **There are three real `ensureLoggedIn` call sites, not two.** `index.ts:348` inside
    `runStart()`, `auth/ensureCredentials.ts:22` (used by `commands/keysApprove.ts:81`), and the
    injected one at `startPreflight.ts:133`. A liveness check applied *unconditionally* inside
-   `ensureLoggedIn` would fire **twice** per `falcon claude` — once at `index.ts:348` before the
+   `ensureLoggedIn` would fire **twice** per `kvy claude` — once at `index.ts:348` before the
    daemon even starts, once inside the preflight — costing two `POST /v1/auth/refresh` round
    trips per launch and, worse, printing `WELCOME_FIRST_RUN` and a QR code *before* the
    `RECONNECTING` line is ever written. So the new behaviour must be **opt-in per call site**.
@@ -900,7 +900,7 @@ already uses `||` for the same expression. Align them:
 absorb the new optional parameter with no edit.
 
 One import the diff above depends on and does not show: `login.ts:28` currently imports
-`{ type FalconCredentials, readCredentials, writeCredentials }` from `./credentials.js` —
+`{ type KvyCredentials, readCredentials, writeCredentials }` from `./credentials.js` —
 `clearCredentials` must be added to that list. (`tsc` catches it; noted so the diff is
 self-contained.)
 
@@ -925,11 +925,11 @@ self-contained.)
   `EnsureLoggedInOptions` is type-only (safe), but adding any new *runtime* export to
   `login.ts` breaks both mocks. Keep the fix export-free, or update both.
 - `packages/cli/src/ui/messages.test.ts` — no new message constants are introduced, so its two
-  guards (`falcon auth login` only alongside `no terminal here`; no `masterSecret|keyEpoch|
+  guards (`kvy auth login` only alongside `no terminal here`; no `masterSecret|keyEpoch|
   ephPub|DEK|custody|\bbind\b`) are unaffected. Do not add a new string here without checking
   them.
 - Integration (the actual E2E-6.4 repro): revoke the CLI daemon from Settings → Devices, run
-  `falcon claude --model haiku` in a TTY, expect `Your session expired. Reconnecting…` followed
+  `kvy claude --model haiku` in a TTY, expect `Your session expired. Reconnecting…` followed
   by a **QR code**, approve in the browser, land in a session. Then send a message and confirm
   the web decrypts it — that is E2E-6.4's untested "critical half", and this fix is what
   unblocks it.
@@ -1438,7 +1438,7 @@ regress. Implemented exactly as specified, no deviation.**
 `clear()` in both storage modules deletes **one record key** from its object store and never
 calls `indexedDB.deleteDatabase()`. `key-storage.ts:110-122` does
 `objectStore(STORE_NAME).delete(RECORD_KEY)`; `session-storage.ts:97-109` is the same shape. So
-`falcon-crypto-bridge` and `falcon-session` survive logout as empty shells that
+`kvy-crypto-bridge` and `kvy-session` survive logout as empty shells that
 `indexedDB.databases()` keeps enumerating. `deleteDatabase` appears **nowhere** in
 `packages/web`.
 
@@ -1482,7 +1482,7 @@ Add `destroy()` to both storage interfaces, implemented as `clear()` followed by
 ```ts
 /**
  * Wipe the record AND remove the database itself. `clear()` empties the store, which leaves
- * `falcon-crypto-bridge` enumerable by `indexedDB.databases()` after a sign-out
+ * `kvy-crypto-bridge` enumerable by `indexedDB.databases()` after a sign-out
  * (auth-ux-overhaul-e2e-results.md E2E-5.5) — the data is gone, but "both are gone" was the
  * stated guarantee and an empty shell is not that.
  *
@@ -1593,14 +1593,14 @@ rejection; logout must not fail because another tab is open.
 
 ---
 
-## Fix 6 — Stop backfilling transcripts that predate Falcon
+## Fix 6 — Stop backfilling transcripts that predate Kvy
 
 **Status: ✅ Implemented — `RegisteredWorkspace.registeredAt` (optional), the
 `FIRST_REGISTRATION_GRACE_MS` (1hr) `isWithinWatchWindow` gate applied in both
 `processFile` (authoritative) and `scanExisting` (cheap pre-filter), and the adapter fix
 (`workspace/adapters.ts` no longer structurally discards `registeredAt`) all implemented
 exactly as specified. Tests: `transcriptIndexer.test.ts` gained a `"registeredAt gating"`
-describe block (3 cases: pre-Falcon history excluded, resumed-inside-grace-window included
+describe block (3 cases: pre-Kvy history excluded, resumed-inside-grace-window included
 via `fs.utimes` to move mtime without waiting real wall-clock time, and the
 absent-`registeredAt`-indexes-everything default); `registry.test.ts`'s two existing
 immutability tests annotated as load-bearing per the plan's note. `adapters.test.ts`'s two
@@ -1614,7 +1614,7 @@ gap the plan flagged, added at the adapter level (more direct than a broader
 The transcript indexer reads Claude Code's **own global** project directory
 (`~/.claude/projects/<cwd-hash>`) and indexes **every** `.jsonl` in it with no age or ownership
 filter, the first time a workspace is watched. On a brand-new account, that is the user's entire
-pre-Falcon Claude Code history for that folder, uploaded and attributed to the account that
+pre-Kvy Claude Code history for that folder, uploaded and attributed to the account that
 happens to be signed in.
 
 ### What was verified
@@ -1623,7 +1623,7 @@ Every claim in the prior investigation is confirmed at the cited lines:
 
 - `claude/scanner.ts:118-125` — `getProjectPath()` resolves
   `(CLAUDE_CONFIG_DIR || homedir()/.claude)/projects/<sanitised-cwd>`, and never imports
-  `home.ts`, so it is independent of `FALCON_HOME_DIR` and of which account is active.
+  `home.ts`, so it is independent of `KVY_HOME_DIR` and of which account is active.
 - `daemon/transcriptIndexer.ts:396-408` — `scanExisting` schedules every `.jsonl` from a bare
   `readdir`. Called from `watchWorkspace:414` **and again from the watcher's `onReady` hook at
   :424**, so every watch reattach re-enqueues the whole directory.
@@ -1645,13 +1645,13 @@ before the indexer could ever see it. The indexer's own `RegisteredWorkspace` ty
 
 ### Documented intent this fix must serve
 
-- `docs/falcon-prd.md:221` — *"The most common real-world entry path: the user opens plain
+- `docs/kvy-prd.md:221` — *"The most common real-world entry path: the user opens plain
   `claude` (muscle memory), works a while, then needs to leave and wants remote access to
   **that** session."*
-- `docs/falcon-prd.md:228` (FR-9.1) — passive indexing of provider transcript dirs *"for
+- `docs/kvy-prd.md:228` (FR-9.1) — passive indexing of provider transcript dirs *"for
   registered workspaces"*, with *"opt-out per workspace"*.
-- `docs/falcon-prd.md:230` (FR-9.2) — `falcon adopt` lists **recent** plain sessions.
-- `docs/falcon-system-design.md:885` — the transcript-granularity decision resolved to
+- `docs/kvy-prd.md:230` (FR-9.2) — `kvy adopt` lists **recent** plain sessions.
+- `docs/kvy-system-design.md:885` — the transcript-granularity decision resolved to
   *"on-demand (privacy + bandwidth)"*, i.e. the documented bias is toward uploading **less**.
 
 Nothing documents an archive import. "That session" and "recent" are the governing words.
@@ -1667,7 +1667,7 @@ Nothing documents an archive import. "That session" and "recent" are the governi
 ### Proposed fix
 
 **Gate indexing on file mtime against the workspace's `registeredAt`.** A transcript whose file
-has not been touched since Falcon started watching this workspace is, by definition, not the
+has not been touched since Kvy started watching this workspace is, by definition, not the
 session the user just left — it is history. Widen `RegisteredWorkspace` with an **optional**
 `registeredAt`, pass it through the adapter, and apply the gate in two places:
 
@@ -1684,9 +1684,9 @@ immediately, while one they never touch again stays out. It also happens to be t
 that leaves the existing test suite green (see Testing).
 
 **The first-registration edge, and a grace window for it (corrected in rev 2).** Rev 1 asserted
-that "a transcript not touched since Falcon started watching is, by definition, not the session
+that "a transcript not touched since Kvy started watching is, by definition, not the session
 the user just left." That is not true at *first* registration, and the PRD's own canonical
-scenario is the counterexample — `docs/falcon-prd.md:221`: *"the user opens plain `claude`
+scenario is the counterexample — `docs/kvy-prd.md:221`: *"the user opens plain `claude`
 (muscle memory), works a while, then needs to leave and wants remote access to that session."*
 Run that literally and the just-exited session's mtime is **minutes older** than
 `registeredAt`, so the gate filters out the exact transcript FR-9.1 exists to capture. (A
@@ -1697,8 +1697,8 @@ So the gate takes a grace window at the workspace's first registration:
 
 ```ts
 /**
- * How far back a workspace's FIRST registration reaches. falcon-prd.md:221's canonical entry
- * path is "run plain `claude`, work a while, THEN reach for Falcon", so the session the user
+ * How far back a workspace's FIRST registration reaches. kvy-prd.md:221's canonical entry
+ * path is "run plain `claude`, work a while, THEN reach for Kvy", so the session the user
  * just left is minutes older than `registeredAt` — a strict `mtime >= registeredAt` gate would
  * drop precisely the transcript Tier 1 exists to catch. One hour is long enough for "I just
  * finished that" and far short of the days-old archive that made a brand-new account show 11
@@ -1721,7 +1721,7 @@ proves wrong in practice, it is a one-constant change, and the failure mode of i
 small (a session the user wanted doesn't appear) is recoverable by sending one message, while
 too large re-opens the bug.
 
-*Alternative considered:* document the exclusion instead and point users at `falcon adopt`
+*Alternative considered:* document the exclusion instead and point users at `kvy adopt`
 (FR-9.2). Rejected — it makes the documented primary entry path work only if the user knows a
 second command exists, which is principle 1 inverted.
 
@@ -1731,9 +1731,9 @@ second command exists, which is principle 1 inverted.
    path: string;
 +  /**
 +   * ISO-8601 first-registration time, from `workspace/registry.ts`. Transcripts whose files
-+   * haven't been touched since then are pre-Falcon history, not "the session the user just
-+   * left" (falcon-prd.md FR-9.1), and are not indexed — a brand-new account's first
-+   * `falcon claude` was otherwise uploading the machine's entire prior Claude Code archive
++   * haven't been touched since then are pre-Kvy history, not "the session the user just
++   * left" (kvy-prd.md FR-9.1), and are not indexed — a brand-new account's first
++   * `kvy claude` was otherwise uploading the machine's entire prior Claude Code archive
 +   * for that folder as unmanaged sessions.
 +   *
 +   * Optional: absent means index everything, which keeps the daemon's default
@@ -1793,12 +1793,12 @@ and the two-line adapter change that makes any of it reachable:
   11. Adding a cap on top would only matter for a workspace registered long ago, where the
   `registeredAt` gate is already doing the right thing. Rejected as scope.
 - *Wire up `isManaged` to `adopt/lineage.ts`.* Should happen — the hook is a permanent no-op in
-  production and the lineage store exists — but it answers a different question ("has Falcon
+  production and the lineage store exists — but it answers a different question ("has Kvy
   already adopted this one?"), not "is this mine at all?". It would not have prevented a single
   one of the 11 cards. Worth a separate, small PR.
-- *Require an explicit `falcon adopt` instead of automatic backfill.* This is the biggest
+- *Require an explicit `kvy adopt` instead of automatic backfill.* This is the biggest
   behaviour change and contradicts the documented design: FR-9.1 specifies *passive* indexing
-  and `falcon adopt` (FR-9.2) is a **separate**, already-specified terminal-side command for
+  and `kvy adopt` (FR-9.2) is a **separate**, already-specified terminal-side command for
   taking one over. Removing Tier 1's ambient index would be re-planning the feature, not fixing
   a defect.
 - *Filter on the transcript's in-file `lastActivity`.* Semantically closer to "recent", and it
@@ -1825,8 +1825,8 @@ and the two-line adapter change that makes any of it reachable:
 - `packages/cli/src/daemon/machineIntegration.test.ts` has **zero** coverage of the indexer
   wiring (`grep unmanaged|indexer|listWorkspaces` → no matches). Adding one test that the
   production wiring passes a lister which preserves `registeredAt` would close a real gap.
-- Live: fresh `FALCON_HOME_DIR`, fresh account, in a directory with existing
-  `~/.claude/projects/` history — run `falcon claude`, send one message, confirm the dashboard
+- Live: fresh `KVY_HOME_DIR`, fresh account, in a directory with existing
+  `~/.claude/projects/` history — run `kvy claude`, send one message, confirm the dashboard
   shows **zero** unmanaged cards. Then run plain `claude` in the same directory, send a
   message, and confirm exactly one appears.
 
@@ -1881,15 +1881,15 @@ ships.**
 ### Root cause
 
 When another device asks for a copy of your keys, the CLI's only reaction is a line in
-`~/.falcon/logs/`. `machineClient.ts:461-468` handles the `key-request` ephemeral with
+`~/.kvy/logs/`. `machineClient.ts:461-468` handles the `key-request` ephemeral with
 `deps.logger.info(...)`, and `logger.ts:5-19` documents that this module **must never write to
 stdout/stderr** (it would corrupt the inherited provider TUI). Nobody tails that file, so the
-notification is invisible — even to a user sitting in an active `falcon claude` session.
+notification is invisible — even to a user sitting in an active `kvy claude` session.
 
 ### What was verified
 
 - `machineClient.ts:457-468` confirmed exactly, including the AX-4.17 comment. The socket event
-  is `"ephemeral"`; the payload is `@falcon/wire`'s `EphemeralSchema`, whose `key-request`
+  is `"ephemeral"`; the payload is `@kvy/wire`'s `EphemeralSchema`, whose `key-request`
   member (`packages/wire/src/updates.ts:110-115`) is `{ t, ephPub, label }` — public data only.
 - `logger.ts:5-19` confirmed (the report cited 8-18; the prohibition itself is on lines 8-13,
   inside a docblock spanning 5-19). Implementation matches: `write()` only ever
@@ -1903,7 +1903,7 @@ notification is invisible — even to a user sitting in an active `falcon claude
   session's address (`SessionStartedBodySchema:45-58` carries no port). The only daemon→session
   channel today is `process.kill` (`sessionRegistry.ts:105`).
 
-**And the finding that makes this cheap:** the running `falcon claude` process **already
+**And the finding that makes this cheap:** the running `kvy claude` process **already
 receives this event and throws it away.** `emitEphemeral`'s
 `recipientFilter: {type: "all-user-authenticated-connections"}` resolves to room
 `user:${accountId}` (`server/src/app/events/eventRouter.ts:239-240`), and **every** connection
@@ -1911,9 +1911,9 @@ joins that room regardless of type (`eventRouter.ts:116-118`). But
 `packages/cli/src/session/sessionClient.ts` registers only `connect`, `connect_error`, and
 `disconnect` — no `"ephemeral"` handler. **No new transport is needed.**
 
-Also load-bearing: `falcon claude` does **not** inherit stdio. `claude/ptyClaudeSession.ts:582`
-spawns the provider on a pty and Falcon itself relays every byte
-(`child.onData(data => stdout.write(data))` at :592-593, stdin proxied at :613-646). So Falcon
+Also load-bearing: `kvy claude` does **not** inherit stdio. `claude/ptyClaudeSession.ts:582`
+spawns the provider on a pty and Kvy itself relays every byte
+(`child.onData(data => stdout.write(data))` at :592-593, stdin proxied at :613-646). So Kvy
 owns both directions and could paint — but the TUI owns the framebuffer, so painting into it is
 still wrong.
 
@@ -1935,13 +1935,13 @@ sequence (plus a single BEL) to the real terminal. These are non-rendering contr
 the terminal consumes them and raises a system notification; they do not move the cursor or
 disturb the alternate screen buffer. iTerm2, WezTerm, kitty and Ghostty implement OSC 9;
 terminals that do not simply ignore it. This is the only way to reach the user *during* an
-active TUI without violating the rule that Falcon never paints into the provider's frame.
+active TUI without violating the rule that Kvy never paints into the provider's frame.
 
 Per guiding principle 7, state the limit honestly: **this raises the chance the user notices,
 it does not guarantee it.** In a terminal with no OSC 9 support, only layer 2 fires.
 
 **2. Print a durable line, and then actually run the review, when the TUI exits.** This is the
-guarantee. `falcon claude`'s exit path already writes to stdout (`start.ts:564`) — a command
+guarantee. `kvy claude`'s exit path already writes to stdout (`start.ts:564`) — a command
 handler, explicitly exempt from the logger rule. If a key request was seen during the session
 and `stdin.isTTY`, run the approve flow inline rather than telling the user to run it.
 Principle 1: *never print "run X" when you can run X.* `keysApprove.ts`'s `defaultConfirm`
@@ -1958,7 +1958,7 @@ so this must run **after** raw mode is restored, which the exit path already doe
 +  // (server/src/app/events/eventRouter.ts:116-118), so a key request raised on another
 +  // device already lands here — it was simply never listened for. The daemon's own handler
 +  // (daemon/machineClient.ts) logs it to a file nobody reads; this is the copy that can
-+  // reach a human, because a `falcon claude` session has a real terminal attached.
++  // reach a human, because a `kvy claude` session has a real terminal attached.
 +  socket.on("ephemeral", (payload: unknown) => {
 +    const parsed = EphemeralSchema.safeParse(payload);
 +    if (!parsed.success || parsed.data.t !== "key-request") return;
@@ -1986,7 +1986,7 @@ function notifyTerminal(stdout: NodeJS.WriteStream, text: string): void {
 ```
 
 and one new message constant. Note the constraint from `ui/messages.test.ts:26-29`: no exported
-string may contain `falcon auth login` unless it also contains `no terminal here`. This one
+string may contain `kvy auth login` unless it also contains `no terminal here`. This one
 mentions no command at all, which is the point.
 
 ```ts
@@ -2023,14 +2023,14 @@ export const KEY_REQUEST_PENDING =
   exists.
 - `packages/cli/src/ui/messages.test.ts` — the new constant is automatically covered by its two
   existing guards (`/masterSecret|keyEpoch|ephPub|DEK|custody|\bbind\b/i`, and the
-  `falcon auth login` rule). Confirm both pass.
+  `kvy auth login` rule). Confirm both pass.
 - Assert `notifyTerminal` writes **only** the OSC 9 + BEL sequence and nothing else, against a
   fake `stdout` — the regression that matters is someone later "improving" it into a visible
   line.
 - `packages/cli/src/commands/start.test.ts` — assert that when a key request was recorded, the
   exit path invokes the approve flow (injected), and that with `stdin.isTTY` false it prints the
   durable line and does **not** try to open a readline.
-- Live: with `falcon claude` running, raise a key request from a browser. Expect a desktop
+- Live: with `kvy claude` running, raise a key request from a browser. Expect a desktop
   notification; on exit, expect the approve prompt with a code matching the browser's, using the
   same `verificationCode()` (`keysApprove.ts:47-50`, contractually mirrored by
   `web/src/lib/verification-code.ts` — do not reimplement it).
@@ -2056,7 +2056,7 @@ harmlessly, which is the acceptable failure.
 `copy.signin.titleWithPendingPair` heading. New `password/page.test.ts` (source-text,
 mirroring `signin/page.test.ts`'s technique) asserts the effect placement with the
 load-bearing negative check (peekPendingPair NOT inside the `useState<Mode>` call). Ran
-`pnpm --filter @falcon/web build` as the plan's stated acceptance criterion — succeeds
+`pnpm --filter @kvy/web build` as the plan's stated acceptance criterion — succeeds
 cleanly, confirming the effect-based fix doesn't reintroduce rev 1's prerender break.
 Implemented exactly as specified, no deviation.**
 
@@ -2077,7 +2077,7 @@ pairing.
   query param there means updating them.
 - The mechanism to fix it already exists and is already used one route away:
   `lib/pending-pair.ts:18-20`'s `peekPendingPair()` is a **non-consuming** read of
-  `sessionStorage["falcon:pendingPair"]`, and `signin/page.tsx:36` calls it to swap its heading
+  `sessionStorage["kvy:pendingPair"]`, and `signin/page.tsx:36` calls it to swap its heading
   to "Connect your machine". `/password/` simply never calls it.
 - The consequence is worse than a wrong label: `handleSubmit` at :47-50 short-circuits in
   `"signup"` mode straight to `setStatus({kind:"choose-protection"})` **without calling the
@@ -2190,7 +2190,7 @@ this must read the *same* effect-set state, not call `peekPendingPair()` inline 
 
 ### Testing
 
-- **`pnpm --filter @falcon/web build` is an acceptance criterion for this fix, not an
+- **`pnpm --filter @kvy/web build` is an acceptance criterion for this fix, not an
   afterthought.** A source-text test would have passed happily on rev 1's build-breaking
   version; only a real build catches this class of error.
 - New source-text test in `app/(public)/password/`, following the technique
@@ -2199,7 +2199,7 @@ this must read the *same* effect-set state, not call `peekPendingPair()` inline 
   `useState<Mode>` call. The negative assertion is the one that matters.
 - `lib/__tests__/pending-pair.test.ts` already covers `peekPendingPair`'s non-consuming
   contract — reference it, don't duplicate it.
-- Live: run `falcon` on a machine with an existing account, open the printed link, sign in
+- Live: run `kvy` on a machine with an existing account, open the printed link, sign in
   through `/signin/` → "Continue with email + password", and confirm the page opens in
   **Sign in** mode.
 
@@ -2217,11 +2217,11 @@ strand the user on `/dashboard/` with the CLI still spinning.
 
 **Status: ✅ Implemented — `copy.ts`'s `keys` block gained `needKeysBody`'s expanded text,
 `needKeysStarting`, `codeMismatchRequester`, and `noOtherDevicesHint` (a function, so the
-"run `falcon keys approve`" instruction the jargon-linter previously couldn't see now
+"run `kvy keys approve`" instruction the jargon-linter previously couldn't see now
 routes through `copy.*`). `request-keys-panel.tsx` gained the `starting`-phase render
 branch and the mismatch line under the code. **Deviation:** moving the "no other devices"
 hint into `copy.ts` as a plain string-returning function meant dropping the `<code>` inline
-monospace styling around `falcon keys approve` (a `copy.*` string can't carry embedded JSX)
+monospace styling around `kvy keys approve` (a `copy.*` string can't carry embedded JSX)
 — content-linter coverage over that one styling detail, consistent with how every other
 `copy.ts` function in this file already works (plain string interpolation, no markup).
 Tests: `copy.test.ts` gained the requester-mismatch assertion; new
@@ -2244,7 +2244,7 @@ the request is in flight, so the first thing a user sees is a bare title, one se
   occurrence in `packages/web/src`.
 - `components/auth/request-keys-panel.tsx` is 147 lines; every rendered string is a
   `copy.keys.*` reference **except** the inline JSX at :128-131
-  (`{copy.keys.noOtherDevices} Run <code>falcon keys approve</code> on a machine that has your
+  (`{copy.keys.noOtherDevices} Run <code>kvy keys approve</code> on a machine that has your
   keys.`) — which is the one string `copy.test.ts` cannot see, because that test walks the
   `copy` object and never greps `.tsx`.
 - The panel's `starting` phase renders **no** waiting UI at all: between mount and the first
@@ -2354,7 +2354,7 @@ and it is the one that tells the user to run a command.
 ### Risk / blast radius
 
 Copy only, plus one new render branch. The one real hazard is the `copy.test.ts` regex: run
-`pnpm --filter @falcon/web test` before assuming any new sentence is safe.
+`pnpm --filter @kvy/web test` before assuming any new sentence is safe.
 
 ---
 
@@ -2725,7 +2725,7 @@ read-only.
 `packages/web` (29), `packages/cli` (11), plus build scripts and docs; and around **21 test
 files** created or updated. Three new files (`db/migrate.test.ts`, a build-worker test, and
 `complete-oauth-sign-in.test.ts` if it does not already exist). No schema migrations, no
-wire-protocol changes to `@falcon/wire`, and one internal main-thread↔worker protocol change
+wire-protocol changes to `@kvy/wire`, and one internal main-thread↔worker protocol change
 (Fix 2's `RefreshOutcome`, Fix 4's account-id parameters) that ships as a single bundle pair
 and so carries no version-skew risk.
 

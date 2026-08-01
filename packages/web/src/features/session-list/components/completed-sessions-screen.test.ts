@@ -40,7 +40,7 @@ function render(snapshot: SessionListSnapshot) {
 describe("CompletedSessionsScreen (docs/features/session-lifecycle-actions.md Phase 5)", () => {
   it("renders exactly the archived session, excluding the active one", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [
         session({ id: "active-sess", title: "Active session", status: "active" }),
@@ -55,7 +55,7 @@ describe("CompletedSessionsScreen (docs/features/session-lifecycle-actions.md Ph
 
   it("shows the empty state when nothing is archived", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [session({ id: "active-sess", status: "active" })],
     };
@@ -66,7 +66,7 @@ describe("CompletedSessionsScreen (docs/features/session-lifecycle-actions.md Ph
 
   it("renders the heading and a link back to Home", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [session({ id: "archived-sess", status: "archived" })],
     };
@@ -78,7 +78,7 @@ describe("CompletedSessionsScreen (docs/features/session-lifecycle-actions.md Ph
 
   it("never renders a 'New session' CTA", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [session({ id: "archived-sess", status: "archived" })],
     };

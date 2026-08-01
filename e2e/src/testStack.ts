@@ -1,8 +1,8 @@
 /**
  * Boots the "real local stack" the conformance harness runs its 20 steps
- * against (design §13 item 3): a real `@falcon/server` (real Fastify app,
+ * against (design §13 item 3): a real `@kvy/server` (real Fastify app,
  * real Socket.IO, real in-memory Postgres via `@electric-sql/pglite`), a
- * real `falcon` daemon boot (`runDaemonStartSync` — real singleton lock,
+ * real `kvy` daemon boot (`runDaemonStartSync` — real singleton lock,
  * real control server, real session registry, real machine-scoped RPC
  * handler wiring), and a real "controller" client socket standing in for
  * the web/mobile app.
@@ -11,7 +11,7 @@
  * RPC would normally launch — no sandbox here can run an actual Claude Code
  * session. In its place, `buildFakeLaunchProcess` mints a pid and, shortly
  * after (mirroring `commands.machineWiring.integration.test.ts`'s own
- * pattern), performs the exact two steps a real `falcon claude
+ * pattern), performs the exact two steps a real `kvy claude
  * --starting-mode remote` process performs on startup: `bootstrapSession`
  * against the real server (real session row, real minted DEK) and a
  * `FakeSessionProcess` registering the real session RPC handlers — then
@@ -25,18 +25,11 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import {
-  type BoxKeyPair,
-  deriveKeyTree,
-  getRandomBytes,
-  open,
-  seal,
-  unwrapDek,
-} from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { type BoxKeyPair, deriveKeyTree, getRandomBytes, open, seal, unwrapDek } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import { type Socket as ClientSocket, io as ioClientDefault } from "socket.io-client";
 // Cross-package source imports — see fakeSessionProcess.ts's header comment
-// for why (`falcon`/`@falcon/server` are private, unpublished packages with
+// for why (`kvy`/`@kvy/server` are private, unpublished packages with
 // no subpath `exports` for their internals).
 import { writeCredentials } from "../../packages/cli/src/auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../../packages/cli/src/auth/keyMaterial.js";
@@ -132,7 +125,7 @@ function buildFakeLaunchProcess(deps: {
 
     setTimeout(() => {
       void (async () => {
-        const outboxHomeDir = await mkdtemp(path.join(tmpdir(), "falcon-e2e-outbox-"));
+        const outboxHomeDir = await mkdtemp(path.join(tmpdir(), "kvy-e2e-outbox-"));
         const boot = await bootstrapSession(
           createBootstrapSessionDeps({ serverUrl: deps.serverUrl, getAuthToken: () => deps.token }),
           {
@@ -205,8 +198,8 @@ export async function buildTestStack(): Promise<TestStack> {
   const token = account.token;
   const accountId = account.account.id;
 
-  const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-e2e-home-"));
-  const workspaceDir = await mkdtemp(path.join(tmpdir(), "falcon-e2e-workspace-"));
+  const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-e2e-home-"));
+  const workspaceDir = await mkdtemp(path.join(tmpdir(), "kvy-e2e-workspace-"));
   await execFileAsync("git", ["init"], { cwd: workspaceDir });
 
   const masterSecret = getRandomBytes(32);

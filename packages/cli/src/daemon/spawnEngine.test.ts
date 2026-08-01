@@ -1,7 +1,7 @@
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SpawnParams } from "@falcon/wire";
+import type { SpawnParams } from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LaunchedProcess } from "./processLauncher.js";
 import {
@@ -27,7 +27,7 @@ describe("spawnSession", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "falcon-spawn-engine-"));
+    root = await mkdtemp(path.join(tmpdir(), "kvy-spawn-engine-"));
   });
 
   afterEach(async () => {
@@ -44,7 +44,7 @@ describe("spawnSession", () => {
         reject: vi.fn(() => true),
       },
       launchProcess: vi.fn(async () => launched),
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       baseEnv: {},
       ...overrides,
     };
@@ -60,7 +60,7 @@ describe("spawnSession", () => {
         sessionLabel: "idem_1",
         command: "/usr/bin/node",
         args: [
-          "/opt/falcon/dist/index.mjs",
+          "/opt/kvy/dist/index.mjs",
           "claude",
           "--starting-mode",
           "remote",
@@ -138,7 +138,7 @@ describe("spawnSession", () => {
   });
 
   it("rejects a directory outside the registered workspace root", async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), "falcon-outside-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "kvy-outside-"));
     try {
       const deps = baseDeps();
       await expect(spawnSession(baseParams({ directory: outside }), deps)).rejects.toThrow(
@@ -160,13 +160,13 @@ describe("spawnSession", () => {
 
   it("merges expanded env vars into the spawned process's environment", async () => {
     const deps = baseDeps({
-      envTemplate: { FALCON_BACKEND_URL: "${BACKEND_URL}" },
+      envTemplate: { KVY_BACKEND_URL: "${BACKEND_URL}" },
       baseEnv: { BACKEND_URL: "https://api.example.com" },
     });
     await spawnSession(baseParams({ directory: root }), deps);
     expect(deps.launchProcess).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
-        env: expect.objectContaining({ FALCON_BACKEND_URL: "https://api.example.com" }),
+        env: expect.objectContaining({ KVY_BACKEND_URL: "https://api.example.com" }),
       }),
       undefined,
     );
@@ -175,7 +175,7 @@ describe("spawnSession", () => {
   it("wraps a launch failure in SpawnError", async () => {
     const deps = baseDeps({
       launchProcess: vi.fn(async () => {
-        throw new Error("spawn falcon ENOENT");
+        throw new Error("spawn kvy ENOENT");
       }),
     });
     await expect(spawnSession(baseParams({ directory: root }), deps)).rejects.toThrow(
@@ -242,7 +242,7 @@ describe("spawnSession", () => {
   });
 
   it("still throws for a directory that exists but is outside the workspace root (not a requiresApproval case)", async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), "falcon-outside-2-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "kvy-outside-2-"));
     try {
       const deps = baseDeps();
       await expect(spawnSession(baseParams({ directory: outside }), deps)).rejects.toThrow(

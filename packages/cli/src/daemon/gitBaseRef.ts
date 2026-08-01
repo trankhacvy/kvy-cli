@@ -1,11 +1,11 @@
 /**
  * Shared "what am I comparing this workspace's changes against" resolution
- * for `gitStatus.ts`/`gitDiff.ts` (falcon-prd.md FR-7.7). Precedence:
+ * for `gitStatus.ts`/`gitDiff.ts` (kvy-prd.md FR-7.7). Precedence:
  *
  *  1. An explicit `baseRef` (a one-off "Compare against" override from the
  *     web panel).
  *  2. The workspace's configured base ref (`workspaceConfig.ts`,
- *     `falcon workspace config --base-ref`).
+ *     `kvy workspace config --base-ref`).
  *  3. A local `main` or `master` branch, whichever exists — deliberately
  *     NOT `origin/HEAD` or any other remote-derived guess: a workspace with
  *     no remote at all (never pushed, cloned with `--no-checkout`, whatever)
@@ -28,7 +28,7 @@ const DEFAULT_BRANCH_CANDIDATES = ["main", "master"] as const;
 export interface ResolveBaseRefDeps {
   /** Injectable for tests; defaults to the real `git` binary. */
   git?: GitExec;
-  /** Injectable for tests; defaults to `workspaceConfig.ts`'s real `~/.falcon/settings.json`-backed lookup. */
+  /** Injectable for tests; defaults to `workspaceConfig.ts`'s real `~/.kvy/settings.json`-backed lookup. */
   resolveConfiguredBaseRef?: (worktree: string) => Promise<string | undefined>;
 }
 

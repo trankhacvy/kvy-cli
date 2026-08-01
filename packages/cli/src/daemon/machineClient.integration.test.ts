@@ -117,7 +117,7 @@ describe("machineClient (integration: real socket.io + machines HTTP mock)", () 
   const connectedMachineIds: string[] = [];
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-client-int-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-client-int-"));
     machinesMock = buildMachinesMock();
     connectedMachineIds.length = 0;
 

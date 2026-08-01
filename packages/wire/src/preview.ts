@@ -14,7 +14,7 @@ import { z } from "zod";
  * MVP scope, recorded here so a future reader doesn't have to reconstruct it
  * from the daemon handler: **quick tunnels only** (`cloudflared tunnel --url
  * ...`, no named tunnel / custom domain support), and `cloudflared` itself is
- * detected on PATH, never installed by Falcon (it's a Go binary, not an npm
+ * detected on PATH, never installed by Kvy (it's a Go binary, not an npm
  * package — the pinned-manifest adapter manager in `packages/cli/src/
  * adapters/` doesn't apply).
  *

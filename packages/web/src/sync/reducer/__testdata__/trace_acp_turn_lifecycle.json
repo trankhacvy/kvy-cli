@@ -1,5 +1,5 @@
 {
-  "description": "ACP mapping verification (falcon-system-design.md §7.3, docs/acp-delta-proposal.md §3 A4): a full ACP-driven turn using only existing @falcon/wire envelope variants — session/prompt call/return brackets the turn (→ turn-start/turn-end), agent_thought_chunk streams onto text{thinking:true}, agent_message_chunk streams onto plain text, and tool_call/tool_call_update map onto tool-start/tool-end. No new envelope type is needed for any of these ACP update kinds.",
+  "description": "ACP mapping verification (kvy-system-design.md §7.3, docs/acp-delta-proposal.md §3 A4): a full ACP-driven turn using only existing @kvy/wire envelope variants — session/prompt call/return brackets the turn (→ turn-start/turn-end), agent_thought_chunk streams onto text{thinking:true}, agent_message_chunk streams onto plain text, and tool_call/tool_call_update map onto tool-start/tool-end. No new envelope type is needed for any of these ACP update kinds.",
   "envelopes": [
     {
       "id": "e1",

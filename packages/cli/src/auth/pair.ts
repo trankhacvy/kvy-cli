@@ -1,8 +1,8 @@
 /**
  * CLI device-pairing client — port of Happy's `doAuth` pairing dance
- * (`happy-cli/src/ui/auth.ts`) onto Falcon's actual merged pairing routes
- * (`packages/server/src/app/api/pair.ts`; falcon-plan.md §2.2,
- * falcon-system-design.md §5.2 "CLI pairing"):
+ * (`happy-cli/src/ui/auth.ts`) onto Kvy's actual merged pairing routes
+ * (`packages/server/src/app/api/pair.ts`; kvy-plan.md §2.2,
+ * kvy-system-design.md §5.2 "CLI pairing"):
  *
  *   1. generate an ephemeral X25519 keypair (never persisted — lives only
  *      for the duration of this login attempt);
@@ -29,7 +29,7 @@ import {
   encodeBase64,
   encodeBase64Url,
   libsodiumDecryptWithSecretKey,
-} from "@falcon/crypto";
+} from "@kvy/crypto";
 import tweetnacl from "tweetnacl";
 import { z } from "zod";
 
@@ -52,7 +52,7 @@ export interface PairOptions {
   frontendUrl: string;
   /** Called once with the pairing URL, before polling starts, so the caller can print/open/QR it. */
   onPairingUrlReady: (url: string) => void | Promise<void>;
-  /** Poll interval, ms — falcon-plan.md §2.2 specifies 2s. */
+  /** Poll interval, ms — kvy-plan.md §2.2 specifies 2s. */
   pollIntervalMs?: number;
   /** Lets the caller (e.g. a SIGINT handler) cancel an in-flight poll loop. */
   signal?: AbortSignal;
@@ -157,7 +157,7 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
 
   // Ephemeral X25519 keypair — the CLI's only key material for this login
   // attempt. Never written to disk; if the process dies mid-pairing, the
-  // next `falcon auth login` simply starts over with a fresh one.
+  // next `kvy auth login` simply starts over with a fresh one.
   const keypair = tweetnacl.box.keyPair();
   const ephPub = encodeBase64(keypair.publicKey);
   const postBody: PairPostBody = { ephPub, label, cwd };
@@ -166,7 +166,7 @@ export async function pairDevice(options: PairOptions): Promise<PairOutcome> {
   if (!created) return { ok: false, reason: "request-failed" };
   if (created.state === "expired") return { ok: false, reason: "expired" };
 
-  // falcon-plan.md §2.2: the pairing URL fragment carries the ephemeral
+  // kvy-plan.md §2.2: the pairing URL fragment carries the ephemeral
   // public key as base64url (URL-safe, no padding) — distinct from the
   // plain base64 the server's `/v1/auth/pair*` JSON bodies expect.
   const pairingUrl = `${frontendUrl}/pair#${encodeBase64Url(keypair.publicKey)}`;

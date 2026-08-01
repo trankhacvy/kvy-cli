@@ -9,6 +9,6 @@ export default defineConfig({
   schema: "./src/db/schema.ts",
   out: "./drizzle",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgres://falcon:falcon@localhost:5432/falcon",
+    url: process.env.DATABASE_URL ?? "postgres://kvy:kvy@localhost:5432/kvy",
   },
 });

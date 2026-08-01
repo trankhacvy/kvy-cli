@@ -31,7 +31,7 @@ describe("buildBlobStorage driver selection", () => {
   });
 
   it("selects the S3 driver when S3_BUCKET + credentials are set", async () => {
-    process.env.S3_BUCKET = "falcon-blobs";
+    process.env.S3_BUCKET = "kvy-blobs";
     process.env.S3_ACCESS_KEY_ID = "test-key";
     process.env.S3_SECRET_ACCESS_KEY = "test-secret";
     const { env, buildBlobStorage } = await importFresh();
@@ -40,7 +40,7 @@ describe("buildBlobStorage driver selection", () => {
   });
 
   it("fails fast at config parse time when S3_BUCKET is set without credentials", async () => {
-    process.env.S3_BUCKET = "falcon-blobs";
+    process.env.S3_BUCKET = "kvy-blobs";
     await expect(importFresh()).rejects.toThrow(/S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY/);
   });
 });

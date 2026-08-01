@@ -5,26 +5,26 @@
  * block until the spawned process's `/session-started` webhook reports its
  * `sessionId` back (matched by pid — `spawnAwaiter.ts`).
  *
- * Launches `falcon <provider> --starting-mode remote --started-by daemon`
+ * Launches `kvy <provider> --starting-mode remote --started-by daemon`
  * (design §7.3, `daemon/markers.ts`'s documented process-marker convention)
- * by re-invoking this same falcon entrypoint, the same way
+ * by re-invoking this same kvy entrypoint, the same way
  * `daemon/commands.ts`'s `defaultSpawnStartSync` re-invokes itself for
  * `daemon start-sync` — `process.execPath` + `process.execArgv` + the
  * on-disk entry path works identically whether this process is running
- * under `tsx`, as `node dist/index.mjs`, or via the `bin/falcon.mjs` shim.
+ * under `tsx`, as `node dist/index.mjs`, or via the `bin/kvy.mjs` shim.
  *
  * Idempotency-key replay (design: "an RPC retry must NEVER double-spawn") is
  * the caller's responsibility (`machineRpc.ts`) — this function always
  * performs a real spawn attempt when called; it never caches results itself.
  *
  * When the target directory doesn't exist yet, this resolves with a
- * `requiresApproval` result (`@falcon/wire`'s `SpawnResult`, plan.md §16
+ * `requiresApproval` result (`@kvy/wire`'s `SpawnResult`, plan.md §16
  * "3.1 Remote spawn" — "409 directory-creation approval loop") instead of
  * throwing — the web New Session flow offers to create it (`fs.mkdir`) and
  * retries `spawn` with the same `idempotencyKey`. The same now applies when
  * `workspaceId` itself is simply unregistered (plan.md §16 "Flow 3 —
  * spawn-fresh-folder-register (Piece A)": a genuinely fresh folder picked
- * cold in the web UI, never `falcon workspace register`'d from a
+ * cold in the web UI, never `kvy workspace register`'d from a
  * terminal) — that resolves to a `register-workspace` approval instead of a
  * dead-end error, mirroring the create-directory loop exactly (the web
  * confirms, calls the new `workspace.register` RPC, and retries `spawn`).
@@ -37,7 +37,7 @@
  * user-confirmed approval step, never as a silent side effect of `spawn`
  * itself).
  *
- * `params.branch` (P1, falcon-prd.md FR-1.2 "`falcon -b <branch>`") is
+ * `params.branch` (P1, kvy-prd.md FR-1.2 "`kvy -b <branch>`") is
  * resolved via `gitWorktree.ts` after workspace validation succeeds: the
  * provider process launches in the branch's worktree directory instead of
  * the workspace root when `createWorktree` is set.
@@ -71,9 +71,10 @@
  * mirrors `resumeSession.ts`'s own `registry.trackSpawned(launched.pid)`
  * call after its relaunch.
  */
-import { fileURLToPath } from "node:url";
-import type { SpawnParams, SpawnResult } from "@falcon/wire";
+import type { SpawnParams, SpawnResult } from "@kvy/wire";
+import { defaultKvyEntrypoint } from "../kvyEntrypoint.js";
 import type { Logger } from "../logger.js";
+import { PROVIDER_REGISTRY } from "../provider/registry.js";
 import { expandEnvVars } from "./envExpand.js";
 import { ensureBranchWorkspace, type GitWorktreeDeps } from "./gitWorktree.js";
 import {
@@ -92,11 +93,6 @@ export class SpawnError extends Error {
   }
 }
 
-const PROVIDER_CLI_NAME: Record<SpawnParams["provider"], string> = {
-  "claude-code": "claude",
-  codex: "codex",
-};
-
 export interface SpawnEngineDeps {
   /** Resolves a workspace's registered root directory; `null`/`undefined` rejects the spawn (design §12). */
   resolveWorkspaceRoot: WorkspaceRootLookup;
@@ -111,8 +107,8 @@ export interface SpawnEngineDeps {
   launchDeps?: LaunchProcessDeps;
   /** Injectable for tests; defaults to the real `git` binary (`gitWorktree.ts`). */
   gitWorktreeDeps?: GitWorktreeDeps;
-  /** Returns the argv that re-invokes this same falcon binary, e.g. `[process.execPath, ...process.execArgv, entry]`. Injectable for tests. */
-  falconEntrypoint?: () => string[];
+  /** Returns the argv that re-invokes this same kvy binary, e.g. `[process.execPath, ...process.execArgv, entry]`. Injectable for tests. */
+  kvyEntrypoint?: () => string[];
   /**
    * Looks up a live tracked session already running in `realDirectory`
    * (the validated, resolved spawn target), if any — the directory-dedup
@@ -197,13 +193,8 @@ const noopLogger: Logger = {
   error: () => {},
 };
 
-function defaultFalconEntrypoint(): string[] {
-  const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
-  return [process.execPath, ...process.execArgv, entry];
-}
-
 function buildProviderArgs(params: SpawnParams): string[] {
-  const providerCliName = PROVIDER_CLI_NAME[params.provider];
+  const providerCliName = PROVIDER_REGISTRY[params.provider].kvySubcommand;
   const args = [providerCliName, "--starting-mode", "remote", "--started-by", "daemon"];
   args.push("--permission-mode", params.permissionMode);
   if (params.model) args.push("--model", params.model);
@@ -298,9 +289,9 @@ export async function spawnSession(
     );
   }
 
-  const [command, ...prefixArgs] = deps.falconEntrypoint?.() ?? defaultFalconEntrypoint();
+  const [command, ...prefixArgs] = deps.kvyEntrypoint?.() ?? defaultKvyEntrypoint();
   if (!command) {
-    throw new SpawnError("could not resolve the falcon entrypoint to re-invoke");
+    throw new SpawnError("could not resolve the kvy entrypoint to re-invoke");
   }
   const args = [...prefixArgs, ...buildProviderArgs(params)];
 

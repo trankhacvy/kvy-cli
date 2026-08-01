@@ -1,6 +1,6 @@
 "use client";
 
-import type { CheckRun } from "@falcon/wire";
+import type { CheckRun } from "@kvy/wire";
 import { EllipsisVertical, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -53,7 +53,7 @@ const TABS: { id: PanelTab; label: string }[] = [
  * dialog (conductor.build-style: a single "Review" button next to the tab
  * bar, everything else tucked away) — spawns a sibling worktree session off
  * this one to review its changes. Only ever rendered once
- * `canUseWorkspaceActions` is true (the session is in a Falcon-managed
+ * `canUseWorkspaceActions` is true (the session is in a Kvy-managed
  * worktree and still controllable): a worktree off a worktree has nothing
  * to be a sibling of.
  */

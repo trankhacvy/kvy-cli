@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { EncryptedBoxSchema } from "./box";
 import { PermDecisionSchema, PermissionModeSchema } from "./permissions";
+import { ProviderIdSchema } from "./providers";
 import { SessionEnvelopeSchema } from "./session";
 
 /**
@@ -31,7 +32,7 @@ export const SpawnParamsSchema = z.object({
   idempotencyKey: z.string(), // cuid2 minted by caller; daemon replays the prior result on retry
   workspaceId: z.string(),
   directory: z.string(),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   permissionMode: PermissionModeSchema,
   model: z.string().optional(),
   branch: z
@@ -75,7 +76,7 @@ export type SpawnParams = z.infer<typeof SpawnParamsSchema>;
 // would be a breaking kind change under the frozen fixture even though the
 // value set only grew. `"register-workspace"` is the second action: a
 // `spawn` whose `workspaceId` was never registered (a genuinely fresh
-// folder picked cold in the web UI — falcon-prd.md FR-7.5, plan.md §16
+// folder picked cold in the web UI — kvy-prd.md FR-7.5, plan.md §16
 // "3.1 Remote spawn") resolves to this instead of throwing, mirroring the
 // `"create-directory"` loop — the caller confirms, registers it (the new
 // `workspace.register` RPC below), and retries `spawn`.
@@ -104,7 +105,7 @@ export const ListSessionsParamsSchema = z.object({});
 export const LocalSessionInfoSchema = z.object({
   sessionId: z.string(),
   workspaceId: z.string(),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   controlMode: z.enum(["local", "remote"]),
   status: z.enum(["active", "failed", "stopped"]),
   pid: z.number().optional(),
@@ -173,13 +174,15 @@ export type GitBranchesParams = z.infer<typeof GitBranchesParamsSchema>;
 // `checkedOutAt` is the absolute worktree path currently holding this branch
 // (git forbids the same branch in two worktrees — callers should disable
 // such rows). `lastCommitAt` is unix seconds from `%(committerdate:unix)`.
-// Local `refs/heads` only for MVP — no remote-tracking branches.
+// `refs/heads` always; `refs/remotes` too (each entry marked `remote: true`)
+// when the repo has at least one configured remote.
 export const GitBranchInfoSchema = z.object({
   name: z.string(),
   isCurrent: z.boolean(),
   checkedOutAt: z.string().optional(),
   upstream: z.string().optional(),
   lastCommitAt: z.number().optional(),
+  remote: z.boolean().optional(),
 });
 export type GitBranchInfo = z.infer<typeof GitBranchInfoSchema>;
 
@@ -219,7 +222,7 @@ export type GitRemotesResult = z.infer<typeof GitRemotesResultSchema>;
 // `git.status`/`git.branches`.
 export const ProviderAccountParamsSchema = z.object({
   idempotencyKey: z.string(),
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
 });
 export type ProviderAccountParams = z.infer<typeof ProviderAccountParamsSchema>;
 
@@ -244,7 +247,7 @@ export type ProviderUsageMeter = z.infer<typeof ProviderUsageMeterSchema>;
 // absent for it, and an API-key-authenticated account has no email/org to
 // show.
 export const ProviderAccountResultSchema = z.object({
-  provider: z.enum(["claude-code", "codex"]),
+  provider: ProviderIdSchema,
   authenticated: z.boolean(),
   /** e.g. "oauth", "api-key", "chatgpt" — the local auth mechanism in use, read from the CLI's own config. */
   authType: z.string().optional(),
@@ -443,7 +446,7 @@ export type GitInitResult = z.infer<typeof GitInitResultSchema>;
 // the wire — a caller that wants one uses a terminal.
 //
 // `url` is passed as its own argv element and is validated only for the
-// argv-injection hazard (a leading `-`), NOT for reachability: Falcon manages
+// argv-injection hazard (a leading `-`), NOT for reachability: Kvy manages
 // no git credentials (see `GitPushParamsSchema`'s own note), so whether the
 // URL actually works is git's business at push time, not this RPC's.
 export const GitSetRemoteParamsSchema = z.object({
@@ -554,7 +557,7 @@ export const FsReadResultSchema = z.object({
 export type FsReadResult = z.infer<typeof FsReadResultSchema>;
 
 // `fs.list`/`fs.mkdir` — the New Session directory picker's daemon-provided
-// browsing RPCs (falcon-prd.md FR-7.5 "workspace/directory picker
+// browsing RPCs (kvy-prd.md FR-7.5 "workspace/directory picker
 // (daemon-provided)"; plan.md §16 "3.1 Remote spawn"). Deliberately NOT
 // scoped to a `worktree` like `fs.read` above: picking a brand-new
 // directory has to work before any workspace/worktree is registered.
@@ -923,7 +926,7 @@ export const SetModelResultSchema = z.object({
 // docs/competitive-notes-omnara.md #7): a persisted "Setup script" (runs
 // once per freshly-created worktree, e.g. `npm install`) and "Run script"
 // (a one-click, long-lived dev-server-style process, e.g. `npm run dev`),
-// both defined CLI-only (`falcon workspace config --setup-script/
+// both defined CLI-only (`kvy workspace config --setup-script/
 // --run-script`, design §12's local-consent boundary — no RPC params
 // schema below ever carries a script string, only a `worktree` path the
 // daemon resolves back to its own on-disk config). `workspace.getConfig` is

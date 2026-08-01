@@ -1,5 +1,5 @@
 /**
- * Session-scoped WS client for a Falcon session process.
+ * Session-scoped WS client for a Kvy session process.
  *
  * New code (plan.md §16 Phase 1.4 line 688: "`alive` keepalive emits (working
  * flag from fd3 thinking state) over WS"), structured to mirror the
@@ -32,7 +32,7 @@
  *    into `getWorking` without touching this module.
  *  - issue-4-plan.md §6.6: the auth handshake takes a live `TokenProvider`
  *    (not a fixed `token: string`) via an async `auth` callback — mirrors
- *    `machineClient.ts` exactly, closing the "`falcon claude` outlives the
+ *    `machineClient.ts` exactly, closing the "`kvy claude` outlives the
  *    access token's TTL" gap `commands/start.ts` used to document as a known
  *    scope cut: a proactive in-band `renew-token` re-arms ~10 minutes before
  *    the token would go stale, and an auth-shaped `connect_error` forces one
@@ -45,7 +45,7 @@
  *    connected state so a dead connection never appears "alive" server-side.
  */
 
-import { EphemeralSchema } from "@falcon/wire";
+import { EphemeralSchema } from "@kvy/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
 import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -177,7 +177,7 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
       const token = await deps.tokenProvider.getAccessToken();
       if (!token) {
         deps.logger.warn(
-          "[session-client] could not obtain an access token to renew — re-authentication required, run `falcon auth login`",
+          "[session-client] could not obtain an access token to renew — re-authentication required, run `kvy auth login`",
         );
         return;
       }
@@ -200,7 +200,7 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
   // (server/src/app/events/eventRouter.ts:116-118), so a key request raised on another
   // device already lands here — it was simply never listened for. The daemon's own handler
   // (daemon/machineClient.ts) logs it to a file nobody reads; this is the copy that can
-  // reach a human, because a `falcon claude` session has a real terminal attached.
+  // reach a human, because a `kvy claude` session has a real terminal attached.
   socket.on("ephemeral", (payload: unknown) => {
     const parsed = EphemeralSchema.safeParse(payload);
     if (!parsed.success || parsed.data.t !== "key-request") return;

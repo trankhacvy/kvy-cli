@@ -1,9 +1,9 @@
 /**
- * Falcon process marker convention (plan.md §7.2/§7.4).
+ * Kvy process marker convention (plan.md §7.2/§7.4).
  *
- * `falcon kill *` has to discover its targets by process-scan alone (see
+ * `kvy kill *` has to discover its targets by process-scan alone (see
  * `processScan.ts`), so it needs a documented, argv-based convention for
- * recognizing which OS processes are Falcon's — an env var isn't usable
+ * recognizing which OS processes are Kvy's — an env var isn't usable
  * here: reading *another* process's environment portably requires
  * platform-specific privileges/APIs, whereas `ps` gives every process's
  * command line for free. This is deliberately the same style Happy —
@@ -13,18 +13,18 @@
  * separate, in-flight task) can stay compatible with it:
  *
  *  - **Daemon**: the daemon's own long-running process is launched as
- *    `falcon daemon start-sync` (the short-lived `daemon start` command
+ *    `kvy daemon start-sync` (the short-lived `daemon start` command
  *    spawns this detached and exits — see Happy's
  *    `spawnHappyCLI(['daemon','start-sync'], {detached:true})` pattern,
  *    `daemon/CLAUDE.md`). Both `start-sync` and a bare `start` still
  *    running are classified as `daemon`.
  *  - **Session**: a daemon-spawned remote session is launched as
- *    `falcon <provider> --starting-mode remote --started-by daemon`
- *    (plan.md §7.3). Every other bare `falcon` / `falcon <provider>`
+ *    `kvy <provider> --starting-mode remote --started-by daemon`
+ *    (plan.md §7.3). Every other bare `kvy` / `kvy <provider>`
  *    invocation (local-mode session wrapper) is a session too — the
  *    `--started-by daemon` flag only distinguishes *how* it was started
  *    (`spawnedByDaemon`), not whether it's killable as a session.
- *  - **Other**: Falcon's own short-lived administrative subcommands
+ *  - **Other**: Kvy's own short-lived administrative subcommands
  *    (`daemon stop/status`, `kill`, `doctor`, `auth`, `sessions`, `resume`,
  *    `workspace`, `notify`, `--help`/`--version`) are neither a daemon nor
  *    a session — they exit almost immediately and must never be treated
@@ -35,10 +35,10 @@
 
 import type { ProcessEntry } from "./processScan.js";
 
-export type FalconProcessKind = "daemon" | "session" | "other";
+export type KvyProcessKind = "daemon" | "session" | "other";
 
 export interface ClassifiedProcess extends ProcessEntry {
-  kind: FalconProcessKind;
+  kind: KvyProcessKind;
   /** True if this session's argv carries the daemon-spawn marker (`--started-by daemon`). Informational only. */
   spawnedByDaemon: boolean;
 }
@@ -66,23 +66,23 @@ function tokenize(command: string): string[] {
     .filter((token) => token.length > 0);
 }
 
-/** Recognizes the Falcon CLI entrypoint token itself (`falcon`, `bin/falcon.mjs`, or the built/dev entry under `packages/cli`). */
-function isFalconEntrypointToken(token: string): boolean {
+/** Recognizes the Kvy CLI entrypoint token itself (`kvy`, `bin/kvy.mjs`, or the built/dev entry under `packages/cli`). */
+function isKvyEntrypointToken(token: string): boolean {
   const base = token.split("/").pop() ?? token;
-  if (base === "falcon" || base === "falcon.mjs") return true;
+  if (base === "kvy" || base === "kvy.mjs") return true;
   if ((base === "index.mjs" || base === "index.ts") && token.includes("/cli/")) return true;
   return false;
 }
 
-interface FalconClassification {
-  kind: FalconProcessKind;
+interface KvyClassification {
+  kind: KvyProcessKind;
   spawnedByDaemon: boolean;
 }
 
-/** Classifies a single `ps` command string, or `null` if it isn't a Falcon process at all. */
-export function classifyFalconCommand(command: string): FalconClassification | null {
+/** Classifies a single `ps` command string, or `null` if it isn't a Kvy process at all. */
+export function classifyKvyCommand(command: string): KvyClassification | null {
   const tokens = tokenize(command);
-  const entrypointIndex = tokens.findIndex(isFalconEntrypointToken);
+  const entrypointIndex = tokens.findIndex(isKvyEntrypointToken);
   if (entrypointIndex === -1) return null;
 
   const args = tokens.slice(entrypointIndex + 1);
@@ -99,8 +99,8 @@ export function classifyFalconCommand(command: string): FalconClassification | n
 }
 
 /**
- * Classifies a raw process list into Falcon-owned processes only,
- * excluding `currentPid` (the invoking `falcon kill` process itself must
+ * Classifies a raw process list into Kvy-owned processes only,
+ * excluding `currentPid` (the invoking `kvy kill` process itself must
  * never be a target of its own scan).
  */
 export function classifyProcesses(
@@ -110,7 +110,7 @@ export function classifyProcesses(
   const result: ClassifiedProcess[] = [];
   for (const proc of processes) {
     if (proc.pid === currentPid) continue;
-    const classification = classifyFalconCommand(proc.command);
+    const classification = classifyKvyCommand(proc.command);
     if (!classification) continue;
     result.push({ ...proc, ...classification });
   }

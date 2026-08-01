@@ -21,7 +21,7 @@ class FakeChild extends EventEmitter {
 function baseOpts() {
   return {
     sessionLabel: "abc123",
-    command: "falcon",
+    command: "kvy",
     args: ["claude", "--starting-mode", "remote"],
     cwd: "/tmp/proj",
     env: { PATH: "/usr/bin" },
@@ -48,7 +48,7 @@ describe("launchProviderProcess", () => {
 
     const result = await launchProviderProcess(baseOpts(), { spawnImpl });
 
-    expect(result).toMatchObject({ method: "tmux", pid: 54321, tmuxSessionName: "falcon-abc123" });
+    expect(result).toMatchObject({ method: "tmux", pid: 54321, tmuxSessionName: "kvy-abc123" });
     expect(result.watchExit).toEqual(expect.any(Function));
     expect(calls[0]).toMatchObject({
       command: "tmux",
@@ -56,9 +56,9 @@ describe("launchProviderProcess", () => {
         "new-session",
         "-d",
         "-s",
-        "falcon-abc123",
+        "kvy-abc123",
         "--",
-        "falcon",
+        "kvy",
         "claude",
         "--starting-mode",
         "remote",
@@ -66,7 +66,7 @@ describe("launchProviderProcess", () => {
     });
     expect(calls[1]).toMatchObject({
       command: "tmux",
-      args: ["list-panes", "-t", "falcon-abc123", "-F", "#{pane_pid}"],
+      args: ["list-panes", "-t", "kvy-abc123", "-F", "#{pane_pid}"],
     });
   });
 
@@ -91,7 +91,7 @@ describe("launchProviderProcess", () => {
     const spawnImpl: SpawnFn = vi.fn(() => {
       const child = new FakeChild();
       queueMicrotask(() => {
-        child.stderr.emit("data", Buffer.from("duplicate session: falcon-abc123"));
+        child.stderr.emit("data", Buffer.from("duplicate session: kvy-abc123"));
         child.emit("close", 1);
       });
       return child as unknown as ChildProcess;
@@ -112,7 +112,7 @@ describe("launchProviderProcess", () => {
         });
       } else {
         queueMicrotask(() => {
-          const error = Object.assign(new Error("spawn falcon ENOENT"), { code: "ENOENT" });
+          const error = Object.assign(new Error("spawn kvy ENOENT"), { code: "ENOENT" });
           child.emit("error", error);
         });
       }
@@ -120,7 +120,7 @@ describe("launchProviderProcess", () => {
     });
 
     await expect(launchProviderProcess(baseOpts(), { spawnImpl })).rejects.toThrow(
-      /failed to spawn "falcon"/,
+      /failed to spawn "kvy"/,
     );
   });
 

@@ -27,7 +27,7 @@ function CopyableCommand({ command }: { command: string }) {
 
 /**
  * Shown instead of "No sessions yet" when the account has NO machines at all. The old
- * empty state told the user to run `falcon` "on any paired machine" — when they had none
+ * empty state told the user to run `kvy` "on any paired machine" — when they had none
  * — and offered a "New session" button that needs a machine to work.
  *
  * Advances by itself: the parent re-renders from the same `['sync']` snapshot the socket

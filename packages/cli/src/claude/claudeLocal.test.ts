@@ -8,7 +8,7 @@ import {
   type ClaudeLocalOptions,
   claudeLocal,
   ExitCodeError,
-  FALCON_SYSTEM_PROMPT,
+  KVY_SYSTEM_PROMPT,
 } from "./claudeLocal.js";
 
 interface FakeChild {
@@ -51,7 +51,7 @@ function buildDeps(
   overrides: Partial<ClaudeLocalDeps> = {},
 ): ClaudeLocalDeps {
   return {
-    launcherPath: "/fake/pkg/scripts/falcon_claude_launcher.cjs",
+    launcherPath: "/fake/pkg/scripts/kvy_claude_launcher.cjs",
     spawnImpl,
     findLastSession: () => null,
     logger: noopLogger(),
@@ -134,17 +134,17 @@ describe("claudeLocal", () => {
 
       expect(spawnImpl).toHaveBeenCalledWith(
         "node",
-        expect.arrayContaining(["/fake/pkg/scripts/falcon_claude_launcher.cjs"]),
+        expect.arrayContaining(["/fake/pkg/scripts/kvy_claude_launcher.cjs"]),
         expect.any(Object),
       );
-      expect(capturedArgs[0]).toBe("/fake/pkg/scripts/falcon_claude_launcher.cjs");
+      expect(capturedArgs[0]).toBe("/fake/pkg/scripts/kvy_claude_launcher.cjs");
       expect(capturedOptions.stdio).toEqual(["inherit", "inherit", "inherit", "pipe"]);
       expect(capturedOptions.cwd).toBe("/work/dir");
       expect(capturedOptions.signal).toBe(abort.signal);
       expect(capturedOptions.env).toMatchObject({ BASE: "1", FOO: "bar" });
     });
 
-    it("injects --append-system-prompt with the default Falcon prompt", async () => {
+    it("injects --append-system-prompt with the default Kvy prompt", async () => {
       const { child, emitExit } = createFakeChild(false);
       let capturedArgs: string[] = [];
       const spawnImpl = vi.fn((_c, args) => {
@@ -158,7 +158,7 @@ describe("claudeLocal", () => {
 
       const idx = capturedArgs.indexOf("--append-system-prompt");
       expect(idx).toBeGreaterThanOrEqual(0);
-      expect(capturedArgs[idx + 1]).toBe(FALCON_SYSTEM_PROMPT);
+      expect(capturedArgs[idx + 1]).toBe(KVY_SYSTEM_PROMPT);
     });
   });
 

@@ -31,14 +31,14 @@ function fixNodePtySpawnHelper() {
   }
 }
 
-// @falcon/wire is the shared wire-protocol contract package that every other
+// @kvy/wire is the shared wire-protocol contract package that every other
 // workspace package (crypto, cli, server, web) imports as a built dependency.
 // Build it right after install so downstream packages never see a missing/stale
 // dist/ (mirrors Happy's scripts/postinstall.cjs pattern).
-if (process.env.SKIP_FALCON_WIRE_BUILD === "1") {
-  console.warn("[postinstall] SKIP_FALCON_WIRE_BUILD=1, skipping @falcon/wire build");
+if (process.env.SKIP_KVY_WIRE_BUILD === "1") {
+  console.warn("[postinstall] SKIP_KVY_WIRE_BUILD=1, skipping @kvy/wire build");
 } else {
-  execSync("pnpm --filter @falcon/wire build", {
+  execSync("pnpm --filter @kvy/wire build", {
     stdio: "inherit",
   });
 }

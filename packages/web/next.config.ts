@@ -2,7 +2,7 @@ import path from "node:path";
 import type { NextConfig } from "next";
 import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
 
-// Static export: falcon-web is a client-only PWA, statically exported and
+// Static export: kvy-web is a client-only PWA, statically exported and
 // served from an origin separate from the API server (design §5.3 trust
 // boundary, §9 stack). Next never server-renders user content here — it's
 // ciphertext to the server anyway — so App Router pages are prerendered at
@@ -67,7 +67,7 @@ const nextConfig = (phase: string): NextConfig => ({
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   webpack(config) {
     // `src/crypto/*` (the crypto-bridge worker bridge, shared with the
-    // isomorphic @falcon/crypto package), the reducer (`src/sync/reducer/`),
+    // isomorphic @kvy/crypto package), the reducer (`src/sync/reducer/`),
     // and other `tsconfig.base.json` "moduleResolution": "bundler" code all
     // use explicit `.js`-suffixed relative imports against `.ts`/`.tsx`
     // source files — the standard pattern for that resolution mode, which

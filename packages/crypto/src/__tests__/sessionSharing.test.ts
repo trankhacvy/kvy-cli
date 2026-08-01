@@ -1,6 +1,6 @@
 /**
  * Round-trip proof for Flow 4's "pair with a teammate" sharing primitive
- * (falcon-flows plan, Flow 4 root-cause point 3 — `docs/plan-flows-3-4-5.md`).
+ * (kvy-flows plan, Flow 4 root-cause point 3 — `docs/plan-flows-3-4-5.md`).
  *
  * No new crypto: this validates that `wrapDek`/`unwrapDek` (`../dek.js`) —
  * already used for the owner's own DEK — also works, unmodified, as a

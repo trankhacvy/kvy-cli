@@ -45,10 +45,10 @@ export default function SignInPage() {
     if (peekPendingPair()) setBanner("pair");
   }, []);
 
-  // Per-screen tab title (falcon-prd.md FR-7.9), same set-on-mount/clear-on-unmount
+  // Per-screen tab title (kvy-prd.md FR-7.9), same set-on-mount/clear-on-unmount
   // pattern as `useTabAttention`.
   useEffect(() => {
-    setTitleOverride("signin", "Sign in · Falcon");
+    setTitleOverride("signin", "Sign in · Kvy");
     return () => clearTitleOverride("signin");
   }, []);
 

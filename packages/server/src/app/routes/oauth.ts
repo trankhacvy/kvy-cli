@@ -1,8 +1,8 @@
 /**
- * Falcon-specific OAuth sign-up route — see https://github.com/slopus/happy
+ * Kvy-specific OAuth sign-up route — see https://github.com/slopus/happy
  * (MIT), the reference codebase for this monorepo. This route is not a port:
  * it has no equivalent in Happy's original single-key auth model
- * (falcon-plan.md §1.2 delta D5). It is the sibling of `auth.ts`'s
+ * (kvy-plan.md §1.2 delta D5). It is the sibling of `auth.ts`'s
  * near-verbatim `POST /v1/auth` port; see the docblock on `buildOAuthRoutes`
  * below for the full delta rationale.
  */
@@ -71,7 +71,7 @@ export function buildOAuthRoutes(
     // yields a usable ID token straight from a browser redirect) requires the app's
     // client secret to exchange `code` for an access token, and GitHub's token
     // endpoint has no CORS allowance for a direct browser fetch — so the browser
-    // hands the `code` here, and this server (which already holds `FALCON_MASTER_SECRET`
+    // hands the `code` here, and this server (which already holds `KVY_MASTER_SECRET`
     // and other real secrets) makes that one call on its behalf. The resulting access
     // token is returned to the browser exactly as if it had obtained one itself, and is
     // used the same way afterward: as `oauthProof` to `/v1/auth/register` (unaltered).
@@ -79,7 +79,7 @@ export function buildOAuthRoutes(
       "/v1/auth/oauth/github/exchange",
       {
         // Unauthenticated (no account yet), and it holds this server's own client
-        // secret behind it — keep it tight (falcon-system-design.md §12, plan.md §16
+        // secret behind it — keep it tight (kvy-system-design.md §12, plan.md §16
         // "4.4 Hardening").
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         schema: {
@@ -106,7 +106,7 @@ export function buildOAuthRoutes(
       "/v1/auth/register",
       {
         // Unauthenticated route (no account yet) — same rationale as `auth.ts`'s
-        // `POST /v1/auth` (falcon-system-design.md §12, plan.md §16 "4.4 Hardening").
+        // `POST /v1/auth` (kvy-system-design.md §12, plan.md §16 "4.4 Hardening").
         config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
         schema: {
           body: RegisterRequestSchema,

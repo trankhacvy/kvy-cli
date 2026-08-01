@@ -289,7 +289,7 @@ describe("exchangeGithubCode", () => {
 
     const token = await exchangeGithubCode(
       "a-code",
-      "https://app.falcon.dev/auth/callback/github",
+      "https://app.kvy.dev/auth/callback/github",
       fetchToken,
     );
 
@@ -303,13 +303,13 @@ describe("exchangeGithubCode", () => {
       return new Response(JSON.stringify({ access_token: "gho_realtoken" }), { status: 200 });
     };
 
-    await exchangeGithubCode("a-code", "https://app.falcon.dev/auth/callback/github", fetchToken);
+    await exchangeGithubCode("a-code", "https://app.kvy.dev/auth/callback/github", fetchToken);
 
     expect(sentBody).toEqual({
       client_id: "test-github-client-id",
       client_secret: "test-github-client-secret",
       code: "a-code",
-      redirect_uri: "https://app.falcon.dev/auth/callback/github",
+      redirect_uri: "https://app.kvy.dev/auth/callback/github",
     });
   });
 
@@ -319,7 +319,7 @@ describe("exchangeGithubCode", () => {
 
     const token = await exchangeGithubCode(
       "bad-code",
-      "https://app.falcon.dev/auth/callback/github",
+      "https://app.kvy.dev/auth/callback/github",
       fetchToken,
     );
 
@@ -332,7 +332,7 @@ describe("exchangeGithubCode", () => {
 
     const token = await exchangeGithubCode(
       "a-code",
-      "https://app.falcon.dev/auth/callback/github",
+      "https://app.kvy.dev/auth/callback/github",
       fetchToken,
     );
 
@@ -346,7 +346,7 @@ describe("exchangeGithubCode", () => {
 
     const token = await exchangeGithubCode(
       "a-code",
-      "https://app.falcon.dev/auth/callback/github",
+      "https://app.kvy.dev/auth/callback/github",
       fetchToken,
     );
 
@@ -364,7 +364,7 @@ describe("exchangeGithubCode", () => {
 
     const token = await freshExchange(
       "a-code",
-      "https://app.falcon.dev/auth/callback/github",
+      "https://app.kvy.dev/auth/callback/github",
       fetchToken,
     );
 

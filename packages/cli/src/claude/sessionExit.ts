@@ -54,7 +54,7 @@
  *      SIGINT") gets classified as a resumable signal-exit, not a crash.
  *
  * `uncaughtException`/`unhandledRejection` are a separate case — a bug in
- * Falcon's own wrapper code, not the child. Those *are* always a crash:
+ * Kvy's own wrapper code, not the child. Those *are* always a crash:
  * best-effort report it with whatever session id is known, then exit.
  */
 

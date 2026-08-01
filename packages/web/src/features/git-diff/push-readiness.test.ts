@@ -1,4 +1,4 @@
-import type { GitRemoteInfo, GitStatusResult } from "@falcon/wire";
+import type { GitRemoteInfo, GitStatusResult } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { derivePushReadiness, PUSH_READINESS_COPY } from "./push-readiness";
 

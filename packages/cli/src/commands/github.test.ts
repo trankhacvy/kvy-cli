@@ -9,7 +9,7 @@ import { runGithubLogin, runGithubLogout, runGithubStatus } from "./github.js";
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-github-cmd-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-github-cmd-test-"));
 });
 
 afterEach(() => {
@@ -44,8 +44,8 @@ function bodyOf(init: RequestInit | undefined): Record<string, unknown> {
   return JSON.parse(init?.body as string) as Record<string, unknown>;
 }
 
-describe("parseArgs: falcon github", () => {
-  it("parses `falcon github login --token`", () => {
+describe("parseArgs: kvy github", () => {
+  it("parses `kvy github login --token`", () => {
     expect(parseArgs(["github", "login", "--token"])).toEqual({
       type: "github",
       action: "login",
@@ -53,7 +53,7 @@ describe("parseArgs: falcon github", () => {
     });
   });
 
-  it("parses `falcon github login --client-id <id>`", () => {
+  it("parses `kvy github login --client-id <id>`", () => {
     expect(parseArgs(["github", "login", "--client-id", "abc123"])).toEqual({
       type: "github",
       action: "login",
@@ -62,7 +62,7 @@ describe("parseArgs: falcon github", () => {
     });
   });
 
-  it("parses `falcon github login` with neither flag", () => {
+  it("parses `kvy github login` with neither flag", () => {
     expect(parseArgs(["github", "login"])).toEqual({
       type: "github",
       action: "login",
@@ -70,7 +70,7 @@ describe("parseArgs: falcon github", () => {
     });
   });
 
-  it("parses `falcon github logout`", () => {
+  it("parses `kvy github logout`", () => {
     expect(parseArgs(["github", "logout"])).toEqual({
       type: "github",
       action: "logout",
@@ -78,7 +78,7 @@ describe("parseArgs: falcon github", () => {
     });
   });
 
-  it("parses `falcon github status`", () => {
+  it("parses `kvy github status`", () => {
     expect(parseArgs(["github", "status"])).toEqual({
       type: "github",
       action: "status",
@@ -86,13 +86,13 @@ describe("parseArgs: falcon github", () => {
     });
   });
 
-  it("rejects an unknown falcon github action", () => {
-    expect(() => parseArgs(["github", "bogus"])).toThrow(/Unknown "falcon github" action/);
+  it("rejects an unknown kvy github action", () => {
+    expect(() => parseArgs(["github", "bogus"])).toThrow(/Unknown "kvy github" action/);
   });
 
-  it("rejects an unknown falcon github login flag", () => {
+  it("rejects an unknown kvy github login flag", () => {
     expect(() => parseArgs(["github", "login", "--bogus"])).toThrow(
-      /Unknown "falcon github login" flag/,
+      /Unknown "kvy github login" flag/,
     );
   });
 
@@ -102,7 +102,7 @@ describe("parseArgs: falcon github", () => {
     // the stdin-prompt path; a token pasted on the command line would leak
     // into shell history and `ps`, which is exactly what this guards against.
     expect(() => parseArgs(["github", "login", "--token", "gho_realtoken"])).toThrow(
-      /Unknown "falcon github login" flag/,
+      /Unknown "kvy github login" flag/,
     );
   });
 });
@@ -178,7 +178,7 @@ describe("runGithubLogin", () => {
     expect(readGithubToken(homeDir)).toBeNull();
   });
 
-  it("device flow: --client-id wins over FALCON_GITHUB_CLIENT_ID", async () => {
+  it("device flow: --client-id wins over KVY_GITHUB_CLIENT_ID", async () => {
     const fetchImpl = fetchMock(async (url) => {
       if (url.includes("device/code")) {
         return jsonResponse({
@@ -198,7 +198,7 @@ describe("runGithubLogin", () => {
       {
         homeDir,
         write,
-        env: { FALCON_GITHUB_CLIENT_ID: "env-client" },
+        env: { KVY_GITHUB_CLIENT_ID: "env-client" },
         fetchImpl,
         sleep: async () => {},
       },
@@ -214,7 +214,7 @@ describe("runGithubLogin", () => {
     expect(bodyOf(deviceCodeCall?.[1]).client_id).toBe("explicit-client");
   });
 
-  it("device flow: falls back to FALCON_GITHUB_CLIENT_ID when --client-id is omitted", async () => {
+  it("device flow: falls back to KVY_GITHUB_CLIENT_ID when --client-id is omitted", async () => {
     const fetchImpl = fetchMock(async (url) => {
       if (url.includes("device/code")) {
         return jsonResponse({
@@ -233,7 +233,7 @@ describe("runGithubLogin", () => {
       {
         homeDir,
         write: () => {},
-        env: { FALCON_GITHUB_CLIENT_ID: "env-client" },
+        env: { KVY_GITHUB_CLIENT_ID: "env-client" },
         fetchImpl,
         sleep: async () => {},
       },

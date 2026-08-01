@@ -1,11 +1,11 @@
 /**
  * crypto-bridge RPC protocol — the postMessage-shaped contract between the main thread
  * (`client.ts`) and the crypto worker (`worker.ts` / `worker-handler.ts`). See
- * falcon-system-design.md §5.3, §9.1: keys live in worker memory only, so every response
+ * kvy-system-design.md §5.3, §9.1: keys live in worker memory only, so every response
  * shape here is deliberately incapable of carrying raw key material — only ciphertext
  * (`EncryptedBox`), booleans, or already-public values cross back out.
  */
-import type { EncryptedBox } from "@falcon/crypto/web";
+import type { EncryptedBox } from "@kvy/crypto/web";
 import type { KeyWrapMode } from "./key-storage.js";
 
 /**

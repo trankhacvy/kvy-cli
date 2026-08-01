@@ -21,7 +21,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
 describe("groupSessionsByWorkspace", () => {
   it("groups sessions under their workspace and sorts each group newest-first", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [
         session({ id: "old", workspaceId: "w1", updatedAt: 1 }),
@@ -52,7 +52,7 @@ describe("groupSessionsByWorkspace", () => {
 
   it("buckets sessions with no resolvable workspace into a trailing ungrouped group", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [
         session({ id: "placed", workspaceId: "w1", updatedAt: 1 }),
@@ -73,7 +73,7 @@ describe("groupSessionsByWorkspace", () => {
 
   it("sorts pinned sessions before unpinned ones, ahead of the updatedAt ordering", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "falcon" }],
+      workspaces: [{ id: "w1", name: "kvy" }],
       machines: [],
       sessions: [
         session({ id: "unpinned-new", workspaceId: "w1", updatedAt: 100, pinned: false }),

@@ -3,12 +3,12 @@
 > **Status:** stub — outline + pointers only, same convention as
 > `docs/protocol.md`/`docs/encryption.md`. Backs `plan.md` §16 "4.4
 > Hardening & release gate": "Prometheus metrics + `/metrics`". Full
-> context: falcon-system-design.md §13 "Observability & Testing".
+> context: kvy-system-design.md §13 "Observability & Testing".
 
-`@falcon/server` exposes `GET /metrics` in Prometheus text-exposition
+`@kvy/server` exposes `GET /metrics` in Prometheus text-exposition
 format (`packages/server/src/app/routes/metrics.ts`). No user content is
 ever in these metrics — they're operational counters/histograms only
-(falcon-system-design.md §13: "No content, ever"), consistent with the
+(kvy-system-design.md §13: "No content, ever"), consistent with the
 server's zero-knowledge posture everywhere else.
 
 ## What's exposed
@@ -39,7 +39,7 @@ metrics.ts` needing to know about `rpcHandler.ts` at all.
 
 ## Deployment note: keep this off the public ingress
 
-falcon-system-design.md §6.2 lists this route as `GET /metrics
+kvy-system-design.md §6.2 lists this route as `GET /metrics
 (bind-local)` — intentionally not something a random internet client
 should be able to scrape. Fastify has no per-route "which listener" concept
 once bound to one port, so this is an **operator responsibility**, not
@@ -64,5 +64,5 @@ content, ever" rule metrics follow.
 
 **TODO:** a real dashboard (Grafana JSON, or equivalent) once this has been
 scraped in production long enough to know which panels are actually useful;
-alerting rules (error-rate/latency SLOs from falcon-prd.md §8 "Success
+alerting rules (error-rate/latency SLOs from kvy-prd.md §8 "Success
 Metrics" — p50 < 1.5s / p95 < 4s terminal→web event latency, etc.).

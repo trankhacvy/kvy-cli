@@ -1,5 +1,5 @@
 /**
- * `~/.falcon/run-state.json` — the persisted state for the Setup/Run
+ * `~/.kvy/run-state.json` — the persisted state for the Setup/Run
  * scripts subsystem's daemon-side run process and setup-script runs
  * (docs/features/setup-run-scripts.md Phase 3). Keyed by a directory's real
  * (symlink-resolved) absolute path — same key convention as

@@ -7,7 +7,7 @@
 
 export const copy = {
   signin: {
-    titleDefault: "Sign in to Falcon",
+    titleDefault: "Sign in to Kvy",
     titleWithPendingPair: "Connect your machine",
     /** Plain-language value line under the title — mirrors the landing hero's verbs,
      *  no design-doc words ("trusted devices", "access recovery"). */
@@ -28,7 +28,7 @@ export const copy = {
     emailHint: "Email sign-in is only available on local setups.",
     /** The sign-up affordance: nothing else on the page tells a newcomer that signing
      *  in also registers them. */
-    footer: "New to Falcon? Signing in also creates your account.",
+    footer: "New to Kvy? Signing in also creates your account.",
     /** Caption over the art panel — the landing hero's tagline, so the two public
      *  pages speak with one voice. */
     panelCaption: "Walk away. Your agents won't.",
@@ -39,8 +39,8 @@ export const copy = {
     /** Sits under `approveTitle` so the confirm screen reads as one sentence about what's
      *  about to happen, not a bare heading over a data table. */
     confirmSubtitle:
-      "Someone requested access using the Falcon CLI. Review the details below before approving.",
-    approveWarning: "Only approve this if you just ran `falcon` yourself.",
+      "Someone requested access using the Kvy CLI. Review the details below before approving.",
+    approveWarning: "Only approve this if you just ran `kvy` yourself.",
     approveCta: "Approve",
     /** Shown on the Approve button in place of `approveCta` while the crypto worker is
      *  still booting — the button must never look clickable before `approve()` can do
@@ -59,14 +59,14 @@ export const copy = {
     doneRedirectHint: "Taking you to the dashboard in a few seconds…",
     invalidLinkTitle: "This link is out of date",
     invalidLinkBody:
-      "Run `falcon` again on your machine to get a fresh link. Pairing links expire quickly for security.",
+      "Run `kvy` again on your machine to get a fresh link. Pairing links expire quickly for security.",
     /** Heading for the `error` gate — the message itself (`gate.message`, e.g. "Request not
      *  found") is dynamic and rendered as the body underneath, not the whole screen. */
     errorTitle: "Approval failed",
     signedOutMidFlow: "You've been signed out. Sign in again to finish connecting.",
     checking: "Checking your link…",
     retryCta: "Try again",
-    backCta: "Back to Falcon",
+    backCta: "Back to Kvy",
     unknownMachine: "Unknown machine",
     /** Shown on the key-request panel when it interrupts a pairing, so the two prompts read
      *  as one flow instead of two unrelated demands. */
@@ -96,7 +96,7 @@ export const copy = {
     approveBody: "A device is asking for a copy of your keys so it can read your sessions.",
     cantReach: "Can't reach any of those devices?",
     noOtherDevices: "No other devices are signed in.",
-    /** The "run `falcon keys approve`" instruction — pulled out of the component's inline
+    /** The "run `kvy keys approve`" instruction — pulled out of the component's inline
      *  JSX so `copy.test.ts`'s jargon walker can see it (it previously couldn't, being the
      *  one user-facing string in `request-keys-panel.tsx` not routed through `copy.*`). */
     noOtherDevicesHint: (command: string) => `Run ${command} on a machine that has your keys.`,
@@ -139,15 +139,23 @@ export const copy = {
     signedOutMidFlow: "You've been signed out. Please start over.",
     signedOutTitle: "You've been signed out",
     backToSigninCta: "Back to sign in",
+    /** Shown when `keys/bind`'s "other devices online" 409 fires — the only self-serve way
+     *  out when the user genuinely can't reach any of those other devices. */
+    otherDevicesCta: "Log out all other devices",
+  },
+
+  lockedSession: {
+    title: "From before a key reset",
+    body: "This session was encrypted with a key you no longer have. It can't be opened, but it stays in your history.",
   },
 
   onboarding: {
     title: "Connect your first machine",
-    subtitle: "Falcon runs on your own computer. Two commands.",
+    subtitle: "Kvy runs on your own computer. Two commands.",
     step1: "Install",
-    step1Cmd: "npm install -g falcon",
+    step1Cmd: "npm install -g kvy",
     step2: "Run it from any project",
-    step2Cmd: "cd ~/your-project && falcon",
+    step2Cmd: "cd ~/your-project && kvy",
     step3: "Approve when your browser asks",
     step3Hint: "We'll bring you back here automatically.",
     waiting: "Waiting for your first machine…",
@@ -167,7 +175,7 @@ export const copy = {
   session: {
     /** Shown when a session refresh couldn't reach the server at all — distinct from a
      *  genuine sign-out, which redirects instead. See `RequireAuth`'s `unreachable` state. */
-    cantReachServer: "Can't reach Falcon right now. We'll keep trying.",
+    cantReachServer: "Can't reach Kvy right now. We'll keep trying.",
     retryCta: "Try again",
   },
 } as const;

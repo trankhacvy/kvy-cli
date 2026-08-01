@@ -5,7 +5,7 @@ import type { ClientKind } from "./tokens.js";
 import { mintAccessToken } from "./tokens.js";
 
 // issue-4-plan.md §4.6: absolute (not sliding) 60-day refresh-token lifetime — a
-// daily-active daemon still re-runs `falcon auth login` every 60 days. Recorded in
+// daily-active daemon still re-runs `kvy auth login` every 60 days. Recorded in
 // docs/encryption.md.
 export const REFRESH_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 

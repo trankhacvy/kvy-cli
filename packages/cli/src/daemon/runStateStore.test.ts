@@ -14,7 +14,7 @@ import {
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-run-state-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-run-state-test-"));
 });
 
 afterEach(() => {
@@ -41,7 +41,7 @@ describe("readRunState", () => {
             run: {
               pid: 123,
               method: "tmux",
-              tmuxSessionName: "falcon-run-abc",
+              tmuxSessionName: "kvy-run-abc",
               startedAt: 1,
               logFile: "/logs/run-abc.log",
               script: "npm run dev",
@@ -106,7 +106,7 @@ describe("updateDirectoryRunState / readDirectoryRunState", () => {
       run: {
         pid: 999,
         method: "tmux",
-        tmuxSessionName: "falcon-run-x",
+        tmuxSessionName: "kvy-run-x",
         startedAt: 1,
         logFile: "/logs/a.log",
         script: "npm run dev",
@@ -117,7 +117,7 @@ describe("updateDirectoryRunState / readDirectoryRunState", () => {
     // this module holds no other in-memory state to reset.
     const reread = await readDirectoryRunState(homeDir, "/repo/a");
     expect(reread?.run?.pid).toBe(999);
-    expect(reread?.run?.tmuxSessionName).toBe("falcon-run-x");
+    expect(reread?.run?.tmuxSessionName).toBe("kvy-run-x");
   });
 });
 

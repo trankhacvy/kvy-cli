@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AdoptTakeParams, SpawnResult } from "@falcon/wire";
+import type { AdoptTakeParams, SpawnResult } from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { LivenessDeps } from "../adopt/liveness.js";
 import { getProjectPath } from "../claude/scanner.js";

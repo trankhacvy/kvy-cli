@@ -15,8 +15,8 @@ It follows the same rigour and section shape as `docs/bug-fix-plan.md`
 (Problem / Root cause / Proposed fix / Testing notes per flow), and closes with a **Master
 TODO checklist (execution units)** using the same `[inline]`/`[bundle]`/`[solo]`/`[human]`
 convention that doc's own checklist established, each unit carrying an explicit
-**Definition of Done**, driven by `.claude/workflows/falcon-flows-workflow.js` — a fork of
-`falcon-bugfix-workflow.js` adapted for this doc's `FL*.*` units and Flow 4's human-gate
+**Definition of Done**, driven by `.claude/workflows/kvy-flows-workflow.js` — a fork of
+`kvy-bugfix-workflow.js` adapted for this doc's `FL*.*` units and Flow 4's human-gate
 dependency chain. Unit IDs use the
 `FL` prefix (`FL3.1`, `FL4.1`, …) so they never collide with `docs/bug-fix-plan.md`'s `BF`
 units or `plan-v2.md`'s `U` units if the three ever run side by side.
@@ -52,13 +52,13 @@ labels):**
 ### Problem
 
 The New Session wizard is real end-to-end (machine picker → directory picker → `spawn`
-machine RPC → daemon → live `falcon claude --starting-mode remote` process), and it works
-for a folder previously registered via `falcon workspace register` from a terminal. But a
+machine RPC → daemon → live `kvy claude --starting-mode remote` process), and it works
+for a folder previously registered via `kvy workspace register` from a terminal. But a
 **genuinely fresh folder** — one the user browses to and picks cold in the web UI, that was
 never registered — fails at final submit with `unknown-workspace`. That directly undercuts
 the flow's whole premise ("no terminal needed"): you still need a terminal, once, to register
 the folder. Separately, there is **no dedup guard**: submitting the wizard twice for the same
-directory launches two independent `falcon claude` processes in it.
+directory launches two independent `kvy claude` processes in it.
 
 ### Root cause
 
@@ -121,7 +121,7 @@ if (root === null || root === undefined) {
 
 And the real `resolveWorkspaceRoot` the daemon wires in
 (`packages/cli/src/workspace/adapters.ts:38-43`) returns `null` for any path not present in
-`~/.falcon/workspaces.json`:
+`~/.kvy/workspaces.json`:
 
 ```ts
 export function createWorkspaceRootLookup(options: RegistryOptions = {}): WorkspaceRootLookup {
@@ -263,7 +263,7 @@ explicit, user-confirmed action from the web, mirroring the existing create-dire
 
 4. Extend the web `runSpawnFlow` loop (`packages/web/src/features/new-session/spawn-flow.ts`)
    to branch on the new action exactly as it already branches on `create-directory`: prompt
-   the user ("Add this folder as a Falcon workspace?"), on approval call
+   the user ("Add this folder as a Kvy workspace?"), on approval call
    `actions.registerWorkspace(directory)`, then retry `actions.spawn(request)` once with the
    same request, mirroring the create-directory retry at `spawn-flow.ts:32-45`.
 
@@ -335,8 +335,8 @@ explicit, user-confirmed action from the web, mirroring the existing create-dire
   success path (mirroring its existing create-directory test), and a decline path returning
   `{ outcome: "declined" }`.
 - `[human]` live: from a second machine's browser, run the wizard against a real daemon, pick
-  a folder that was **never** `falcon workspace register`'d, confirm the register-approval
-  prompt appears, approve it, and confirm a live `falcon claude --starting-mode remote`
+  a folder that was **never** `kvy workspace register`'d, confirm the register-approval
+  prompt appears, approve it, and confirm a live `kvy claude --starting-mode remote`
   process starts in that folder and mirrors to web. Then submit the wizard a second time for
   the same folder and confirm it does not spawn a duplicate.
 
@@ -350,8 +350,8 @@ explicit, user-confirmed action from the web, mirroring the existing create-dire
 
 There is **no way for a genuinely different person** to view or approve one of your sessions.
 `docs/user-flows.md` marks this ❌ "not implemented at all," and a fresh code read confirms it
-is not only unimplemented but **undesigned**: a grep of `falcon-system-design.md` and
-`falcon-prd.md` for `collaborat`/`teammate`/`multi-account`/`grantee`/`session share` returns
+is not only unimplemented but **undesigned**: a grep of `kvy-system-design.md` and
+`kvy-prd.md` for `collaborat`/`teammate`/`multi-account`/`grantee`/`session share` returns
 nothing. Every table, route, and Socket.IO room is single-`accountId`-scoped. The existing
 "pairing" primitive is *device* pairing — it hands a **new device of the same account** the
 whole account secret; it is not scoped, per-session access for a second identity.
@@ -619,7 +619,7 @@ this is a known, not-yet-landed gap, in its own doc comment
  * lands. Both are unblocked by this route existing now: `kind` is generic,
 ```
 
-So: a session spawned by Flow 3's wizard (`falcon claude --starting-mode remote`, ACP-driven)
+So: a session spawned by Flow 3's wizard (`kvy claude --starting-mode remote`, ACP-driven)
 never pushes a permission-pending notification today. This is arguably the *canonical* flow-5
 scenario — "kicked something off remotely, walked away, need to catch a risky action before it
 runs" — and it is not resolved. Flow 5 is genuinely resolved only for the "started at my desk"
@@ -698,7 +698,7 @@ proposed above is real, unstarted implementation work — not just verification.
 
 ### Testing notes
 
-- `[human]` live (terminal path close-out): with `falcon claude` running, send a follow-up
+- `[human]` live (terminal path close-out): with `kvy claude` running, send a follow-up
   **from web** that triggers a permission (e.g. a `Write`), walk away from the tab, confirm a
   push arrives on phone/another browser, tap it, deny from the PermCard, and confirm the tool
   never executes (transcript shows the deny, no file written). Then confirm suppression: with
@@ -720,8 +720,8 @@ proposed above is real, unstarted implementation work — not just verification.
 ## Master TODO checklist (execution units)
 
 Target branch: `v2-pty-injection` — every unit lands there. This checklist is driven by
-`.claude/workflows/falcon-flows-workflow.js` (same worktree/merge/ancestry-proof mechanics and
-`[inline]`/`[bundle]`/`[solo]`/`[human]` semantics as `falcon-bugfix-workflow.js`, forked and
+`.claude/workflows/kvy-flows-workflow.js` (same worktree/merge/ancestry-proof mechanics and
+`[inline]`/`[bundle]`/`[solo]`/`[human]` semantics as `kvy-bugfix-workflow.js`, forked and
 adapted for `FL*.*` units and Flow 4's human-design-review gate). It points its unit-finder at
 `FL*.*` checkboxes in *this* file and keeps its cycle bookkeeping in
 `docs/plan-flows-progress.md`, a separate file so it never collides with a `BF`/`U` cycle
@@ -855,8 +855,8 @@ work), Flow 4 last (needs a design review before any implementation).
     build && pnpm typecheck && pnpm test && pnpm lint` all clean; commit lands.
 - [ ] **FL3.3 `[human]` "flow-3-live-verify"**
   - [ ] From a second machine's browser, run the wizard against a real daemon, pick a folder
-        never `falcon workspace register`'d → register-approval prompt → approve → live
-        `falcon claude --starting-mode remote` starts and mirrors to web.
+        never `kvy workspace register`'d → register-approval prompt → approve → live
+        `kvy claude --starting-mode remote` starts and mirrors to web.
   - [ ] Submit the wizard again for the same folder → no duplicate process spawned.
   - **Definition of Done:** both live scenarios reproduced exactly as described from a real
     second machine's browser against a real daemon (not a mocked/local dev shortcut); if
@@ -1001,19 +1001,19 @@ work still to do.
 
 ### Flow 5 — `[human]` live verification (`FL5.3`)
 
-- [x] **TC-F5-1 (terminal, deny-before-execution).** With `falcon claude` running locally in
+- [x] **TC-F5-1 (terminal, deny-before-execution).** With `kvy claude` running locally in
       tmux, open the session in a browser. Send a follow-up **from web** that will trigger a
       permission (e.g. ask it to write a file). Switch away from the tab (or close it).
       **Expect:** a push notification arrives; tapping it deep-links to the session; the
       PermCard is answerable; choosing Deny leaves the file unwritten (confirm via the
       terminal transcript / `ls`, not just the UI).
-  - Result: Ran against a real terminal `falcon claude` session in a scratch dir. Web Push
+  - Result: Ran against a real terminal `kvy claude` session in a scratch dir. Web Push
     (VAPID) isn't configured on this dev server, so verification used the real `ntfy` fallback
     channel (subscribed to a throwaway topic) as the "push" signal instead of an OS banner —
     genuine outbound HTTP push to ntfy.sh, cross-checked against the server's
     `POST /v1/sessions/:id/notify` request log. Sent "create hello.txt" from web -> ntfy
-    received "Falcon needs your permission" -> web PermCard appeared (Allow/Deny + diff
-    preview) -> clicked Deny -> terminal showed "Error: Denied from the Falcon web UI." ->
+    received "Kvy needs your permission" -> web PermCard appeared (Allow/Deny + diff
+    preview) -> clicked Deny -> terminal showed "Error: Denied from the Kvy web UI." ->
     `ls` confirmed `hello.txt` was never created. Full pass, double-verified (terminal
     transcript + filesystem), not just the UI's word for it.
 - [x] **TC-F5-2 (terminal, suppression).** Repeat TC-F5-1 but keep the tab focused/foregrounded
@@ -1034,21 +1034,21 @@ work still to do.
       This is the documented boundary, not a bug; the test is confirming it's still exactly
       this, not worse (e.g. not silently no-push at all).
   - Result: With app-state forced back to background, typed a prompt directly into the tmux
-    pane (not via the web composer). A fresh ntfy push ("Falcon needs your permission")
+    pane (not via the web composer). A fresh ntfy push ("Kvy needs your permission")
     arrived. Reloaded the web session page fresh (no stale JS state) — it showed only the
     earlier, already-resolved web-turn permission card, and no new card at all for the
     local-turn request. Boundary confirmed exactly as documented. Pass.
 - [x] **TC-F5-4 (headless/ACP, the actual FL5.2 payoff).** From web, use the New Session
-      wizard to spawn a session on a remote machine (`falcon claude --starting-mode remote`).
+      wizard to spawn a session on a remote machine (`kvy claude --starting-mode remote`).
       From web, send a message that triggers a permission. Walk away. **Expect:** a push now
       arrives (this is the gap FL5.2 closed — confirm it did NOT fire this way before FL5.2 by
       checking `docs/plan-flows-progress.md`'s cycle notes, or by temporarily reverting the
       FL5.2 commit in a scratch worktree if you want to see the "before" state directly).
-  - Result: Spawned a real `falcon claude --starting-mode remote --started-by daemon` session
+  - Result: Spawned a real `kvy claude --starting-mode remote --started-by daemon` session
     via the New Session wizard (confirmed via `ps aux`'s full command line and the tmux pane's
     own `RemoteModeDisplay` UI — "📡 Remote Mode — controlled from web" — distinct from the
     terminal path's real interactive Claude Code TUI seen in TC-F5-1/2/3). Sent a Write-tool
-    message from web while backgrounded; an ntfy push ("Falcon needs your permission") arrived
+    message from web while backgrounded; an ntfy push ("Kvy needs your permission") arrived
     (a few minutes delayed vs. the near-instant terminal-path pushes — worth watching, not
     re-tested further here) and the web PermCard was genuinely answerable. Clicked Deny -> pane
     showed "🔓 Permission deny" / "❌ failed" -> confirmed via `ls` the file was never created.
@@ -1066,28 +1066,28 @@ work still to do.
 
 - [x] **TC-F3-1 (fresh-folder register, happy path).** From a second machine's browser (or a
       second profile), open the New Session wizard, browse to and pick a folder that has
-      **never** been through `falcon workspace register` from any terminal. Submit. **Expect:**
+      **never** been through `kvy workspace register` from any terminal. Submit. **Expect:**
       a "register this folder as a workspace?" prompt (not a hard `unknown-workspace` error);
-      approving it results in a live `falcon claude --starting-mode remote` process starting in
+      approving it results in a live `kvy claude --starting-mode remote` process starting in
       that exact folder, visible/mirrored in the web timeline.
   - Result: Adapted per the brief — no second physical machine available, so "from the web UI,
     not the terminal" stood in for "second machine." Picked a genuinely fresh scratch
-    directory, never registered. Submit showed "isn't a Falcon workspace yet. Add it as one?"
+    directory, never registered. Submit showed "isn't a Kvy workspace yet. Add it as one?"
     (not a hard error). Approving it produced, in order: daemon log "requesting registration
     approval" -> "launched provider process (tmux)" -> "session-client connected" -> web
     showed "Session started" -> opened into a live, controllable session. Cross-checked
-    `falcon workspace list` from a terminal to confirm the directory was genuinely registered
+    `kvy workspace list` from a terminal to confirm the directory was genuinely registered
     server-side, not just a UI illusion. Pass.
 - [x] **TC-F3-2 (decline path).** Repeat TC-F3-1 but decline the register prompt. **Expect:**
       no process spawned, no partial/orphaned workspace registration
-      (`falcon workspace list` from a terminal should not show the folder).
-  - Result: Clicked "Cancel" on the register prompt for a fresh directory. `falcon workspace
+      (`kvy workspace list` from a terminal should not show the folder).
+  - Result: Clicked "Cancel" on the register prompt for a fresh directory. `kvy workspace
     list` showed no registered workspaces; `ps aux` showed no spawned process for that
     directory; the daemon log had the "requesting registration approval" line with no
     follow-up launch line. Pass.
 - [x] **TC-F3-3 (dedup).** Immediately submit the wizard a second time for the *same* folder
       used in TC-F3-1 (now already registered and already running). **Expect:** no second
-      `falcon claude` process spawned — the wizard should land you on the existing session
+      `kvy claude` process spawned — the wizard should land you on the existing session
       (or clearly indicate one is already running there, depending on how FL3.2's UX shipped).
   - Result: Submitted the wizard twice in a row for the same already-registered, already-live
     directory, no daemon restart in between. Daemon log on the second submit: "a live session
@@ -1104,7 +1104,7 @@ work still to do.
     match a pre-restart session again. Reproduced concretely: spawned a session in a fresh
     directory, restarted the daemon (a normal, expected lifecycle event per this project's own
     self-update/heartbeat docs, not an exotic scenario), then resubmitted the wizard for the
-    *same* directory — the daemon spawned a genuine second `falcon claude --starting-mode
+    *same* directory — the daemon spawned a genuine second `kvy claude --starting-mode
     remote` process (confirmed via two distinct live pids, in two separate tmux sessions,
     both rooted in the identical directory, via `ps` and `tmux ls`). This is a real gap: any
     daemon restart — including ordinary ones, not just my repeated manual ones — silently
@@ -1113,7 +1113,7 @@ work still to do.
       already registered before this work (the original, pre-`FL` happy path). **Expect:**
       spawn still works exactly as before — no new prompt, no behavior change. This guards
       against FL3.1 accidentally making the already-working case worse.
-  - Result: Pre-registered a fresh scratch directory via `falcon workspace register` from a
+  - Result: Pre-registered a fresh scratch directory via `kvy workspace register` from a
     terminal, then spawned it through the wizard. No register-workspace prompt appeared;
     daemon log went straight to "launched provider process" / "session-client connected",
     identical shape to the pre-FL3.1 happy path. Pass.

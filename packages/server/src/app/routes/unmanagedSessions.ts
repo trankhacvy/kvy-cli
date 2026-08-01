@@ -1,5 +1,5 @@
-import { decodeBase64 } from "@falcon/crypto";
-import { EncryptedBoxSchema, UnmanagedSessionRowSchema } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto";
+import { EncryptedBoxSchema, UnmanagedSessionRowSchema } from "@kvy/wire";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -22,7 +22,7 @@ const UpsertUnmanagedSessionBodySchema = z.object({
 /**
  * `POST /v1/unmanaged-sessions` — upsert-by-`(machineId, providerRef)` for
  * the daemon transcript indexer (plan.md §16 "3.3 Session adoption (UC9)",
- * falcon-system-design.md §8 "Transcript indexer (adoption Tier 1)"). Every
+ * kvy-system-design.md §8 "Transcript indexer (adoption Tier 1)"). Every
  * indexer tick re-encrypts the summary under a freshly-minted DEK and POSTs
  * it here; the unique index on `(machine_id, provider_ref)` (schema.ts) is
  * the actual dedup mechanism, so this is a plain last-write-wins upsert, not

@@ -53,7 +53,7 @@ interface AttachmentPreview {
 }
 
 /**
- * Follow-up message input (falcon-prd.md FR-7.3; plan.md §16 "2.4 Web
+ * Follow-up message input (kvy-prd.md FR-7.3; plan.md §16 "2.4 Web
  * control surface"). Purely presentational — the mutation, optimistic
  * insert, and reconciliation live in `useComposerState`
  * (`@/features/session-control`) so `Timeline` and this component can share
@@ -126,6 +126,7 @@ export function Composer({
   isQueued,
   cryptoReady,
   disabled = false,
+  disabledPlaceholder = "This session has ended.",
   error,
   notice,
   working = false,
@@ -141,6 +142,11 @@ export function Composer({
   isQueued: boolean;
   cryptoReady: boolean;
   disabled?: boolean;
+  /** Placeholder shown in place of the normal "Send a follow-up…" once
+   * `disabled` — varies by why (ended/failed/archived all disable, but read
+   * differently; `SessionTimelineScreen`'s `composerDisabledPlaceholder`
+   * picks the right one). */
+  disabledPlaceholder?: string;
   error: string | null;
   /** Non-blocking `outcome-unknown` delivery notice (design §7.10) — shown
    * alongside, never instead of, the composer's normal controls. */
@@ -452,7 +458,7 @@ export function Composer({
               }}
               onKeyDown={handleComposerKeyDown}
               onBlur={closeMention}
-              placeholder={disabled ? "This session has ended." : "Send a follow-up…"}
+              placeholder={disabled ? disabledPlaceholder : "Send a follow-up…"}
             />
           </PromptInputBody>
           <PromptInputFooter>

@@ -13,7 +13,7 @@ import {
 
 /**
  * Raw Postgres `bytea` column holding an opaque `EncryptedBox` payload (see
- * `@falcon/wire`'s `box.ts`). The server stores and routes these bytes but
+ * `@kvy/wire`'s `box.ts`). The server stores and routes these bytes but
  * never decrypts them — it holds no keys (design §5.3, §6.1). Every column
  * using this type is a candidate for the wire-schema compat lint: payload
  * shapes are additive-only, forever.
@@ -210,7 +210,7 @@ export const sessionMessages = pgTable(
   (t) => [uniqueIndex().on(t.sessionId, t.seq), uniqueIndex().on(t.sessionId, t.localId)],
 );
 
-// Adoption Tier 1 (FR-9.1): provider sessions Falcon knows about but doesn't manage.
+// Adoption Tier 1 (FR-9.1): provider sessions Kvy knows about but doesn't manage.
 export const unmanagedSessions = pgTable(
   "unmanaged_sessions",
   {
@@ -311,7 +311,7 @@ export const pushSubscriptions = pgTable(
   (t) => [index().on(t.accountId)],
 );
 
-// Telegram bot `/start` deep-link pairing (falcon-system-design.md §6.4,
+// Telegram bot `/start` deep-link pairing (kvy-system-design.md §6.4,
 // plan.md §10: "Fallback channels"). `code` is the opaque token embedded in
 // the `https://t.me/<bot>?start=<code>` link; the webhook route
 // (routes/telegramLink.ts) resolves it back to `accountId` once the user

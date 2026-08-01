@@ -27,9 +27,9 @@
  *
  * ---
  * Local-mode Claude Code child-process spawn wrapper (plan.md §16, "1.3 CLI
- * skeleton + local mode"; falcon-plan.md §3.2). Spawns `falcon`'s local
+ * skeleton + local mode"; kvy-plan.md §3.2). Spawns `kvy`'s local
  * launcher script (a separate, already-in-flight plan bullet — see
- * `scripts/falcon_claude_launcher.cjs` — treated here as a given path, not
+ * `scripts/kvy_claude_launcher.cjs` — treated here as a given path, not
  * duplicated) with the real Claude CLI's flags, and:
  *
  *  1. Forces the inherited stdin fd back to blocking I/O before spawn — a
@@ -55,14 +55,14 @@
  *     clean exit (the mode-switch/shutdown path terminates the child this
  *     way on purpose).
  *
- * Scope note: mirrors falcon-plan.md §3.2's five numbered items exactly.
+ * Scope note: mirrors kvy-plan.md §3.2's five numbered items exactly.
  * Happy's `--mcp-config`/`--allowedTools` injections and its sandbox
  * (`initializeSandbox`/`wrapCommand`) integration are out of scope — neither
- * is part of Falcon's current design surface. `launcherPath` (the launcher
+ * is part of Kvy's current design surface. `launcherPath` (the launcher
  * script's resolved location) and any hook-server wiring are supplied by the
  * caller via `ClaudeLocalDeps`/`ClaudeLocalOptions` rather than resolved
  * here, since both come from separate, still-unmerged plan bullets
- * (`falcon_claude_launcher.cjs`, `cliLocator.ts`, `hookServer.ts`) whose
+ * (`kvy_claude_launcher.cjs`, `cliLocator.ts`, `hookServer.ts`) whose
  * interfaces this module treats as given.
  */
 
@@ -87,13 +87,13 @@ export class ExitCodeError extends Error {
 }
 
 /**
- * Default system prompt Falcon appends via `--append-system-prompt`. Kept
- * intentionally minimal — unlike Happy's equivalent, Falcon does not (yet)
+ * Default system prompt Kvy appends via `--append-system-prompt`. Kept
+ * intentionally minimal — unlike Happy's equivalent, Kvy does not (yet)
  * ship an MCP tool for the agent to call, so there is nothing to instruct
  * it to use.
  */
-export const FALCON_SYSTEM_PROMPT =
-  "You are running inside Falcon, a terminal + web session wrapper around Claude Code.";
+export const KVY_SYSTEM_PROMPT =
+  "You are running inside Kvy, a terminal + web session wrapper around Claude Code.";
 
 const SESSION_ID_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -199,7 +199,7 @@ export interface ClaudeLocalOptions {
   /** Aborting this signal terminates the child with SIGTERM, treated as a clean exit. */
   abort: AbortSignal;
   /**
-   * Falcon's currently known provider session id for this workspace (e.g.
+   * Kvy's currently known provider session id for this workspace (e.g.
    * carried over from a prior turn), or null to start fresh unless a
    * `--resume`/`--continue`/`--session-id` flag says otherwise.
    */
@@ -207,7 +207,7 @@ export interface ClaudeLocalOptions {
   /** cwd for the spawned process; also where session transcripts are looked up. */
   workingDirectory: string;
   /**
-   * Provider passthrough args (already stripped of any Falcon-only flags by
+   * Provider passthrough args (already stripped of any Kvy-only flags by
    * the caller's arg parser). Session flags are extracted from a local copy
    * — the array the caller passed in is never mutated.
    */
@@ -216,7 +216,7 @@ export interface ClaudeLocalOptions {
   /**
    * Absolute path to a temp `--settings` file wiring the SessionStart hook
    * (`hookServer.ts`'s `writeHookSettingsFile`). Omit/null to run in
-   * "offline" mode, where Falcon mints/tracks the session id itself instead
+   * "offline" mode, where Kvy mints/tracks the session id itself instead
    * of waiting on the hook to report it.
    */
   hookSettingsPath?: string | null;
@@ -231,7 +231,7 @@ export interface ClaudeLocalOptions {
 
 export interface ClaudeLocalDeps {
   /**
-   * Resolved path to `falcon_claude_launcher.cjs` (a separate, already-in-
+   * Resolved path to `kvy_claude_launcher.cjs` (a separate, already-in-
    * flight plan bullet). Supplied by the caller rather than resolved here —
    * see the module header.
    */
@@ -342,7 +342,7 @@ export function resolveSessionFlags(
 }
 
 /**
- * Spawn a local-mode Claude Code child process via the Falcon launcher
+ * Spawn a local-mode Claude Code child process via the Kvy launcher
  * script. Resolves once the child exits cleanly; rejects with
  * `ExitCodeError` (non-zero exit) or a signal error; resolves on `SIGTERM`
  * while `opts.abort.aborted` is true (the abort-triggered shutdown path).
@@ -359,7 +359,7 @@ export async function claudeLocal(
   const env = deps.env ?? process.env;
   const spawnImpl = deps.spawnImpl ?? crossSpawn;
   const findLastSession = deps.findLastSession ?? findLastLocalSession;
-  const systemPrompt = deps.systemPrompt ?? FALCON_SYSTEM_PROMPT;
+  const systemPrompt = deps.systemPrompt ?? KVY_SYSTEM_PROMPT;
 
   const hasUserSessionControl =
     (opts.claudeArgs?.includes("--continue") ?? false) ||
@@ -376,7 +376,7 @@ export async function claudeLocal(
   //  - with hookSettingsPath: Claude Code reports the real id via the
   //    SessionStart hook (normal mode) — this call never invokes
   //    onSessionFound itself.
-  //  - without: Falcon mints/tracks the session id itself (offline mode).
+  //  - without: Kvy mints/tracks the session id itself (offline mode).
   let newSessionId: string | null = null;
   let effectiveSessionId: string | null = startFrom;
 
@@ -525,7 +525,7 @@ export async function claudeLocal(
         // switch" path below (both are listening on the same `settled`
         // guard, first one wins). Left unhandled, every local->remote mode
         // switch rejected this promise with a generic AbortError that
-        // propagated all the way to `main()` and crashed the whole `falcon
+        // propagated all the way to `main()` and crashed the whole `kvy
         // claude` process — an intentional abort must resolve the same way
         // the 'exit' handler's clean path does, not be treated as a real
         // spawn failure.

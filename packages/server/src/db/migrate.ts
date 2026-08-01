@@ -11,11 +11,11 @@ import { env } from "../config.js";
 // so re-running on an already-current database is a no-op.
 //
 // `migrationsFolder` is resolved relative to the process cwd, which is
-// `packages/server/` both for `pnpm --filter @falcon/server dev|start` and
+// `packages/server/` both for `pnpm --filter @kvy/server dev|start` and
 // for the production Docker image (WORKDIR mirrors the package root, with
 // `dist/` and `drizzle/` copied in as siblings).
 //
-// Arbitrary constant lock key, unique to Falcon's migration runner (any int8 works —
+// Arbitrary constant lock key, unique to Kvy's migration runner (any int8 works —
 // it's just a namespace so this lock never collides with an unrelated advisory lock).
 const MIGRATION_ADVISORY_LOCK_KEY = 727_106;
 

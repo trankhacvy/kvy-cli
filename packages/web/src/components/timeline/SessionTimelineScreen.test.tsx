@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { isSessionControlDisabled, LifecycleBanner } from "./SessionTimelineScreen";
@@ -21,14 +21,14 @@ import { isSessionControlDisabled, LifecycleBanner } from "./SessionTimelineScre
 const STATUSES: SessionRow["status"][] = ["active", "archived", "compacted", "ended", "failed"];
 
 describe("isSessionControlDisabled", () => {
-  it("disables only for the two terminal CLI-process-gone statuses", () => {
+  it("disables for the two terminal CLI-process-gone statuses plus archived", () => {
     const disabled = STATUSES.filter(isSessionControlDisabled);
-    expect(disabled.sort()).toEqual(["ended", "failed"]);
+    expect(disabled.sort()).toEqual(["archived", "ended", "failed"]);
   });
 });
 
 describe("LifecycleBanner", () => {
-  it.each(["active", "archived", "compacted"] as const)(
+  it.each(["active", "compacted"] as const)(
     "renders nothing for a still-controllable session (%s)",
     (status) => {
       const html = renderToStaticMarkup(<LifecycleBanner sessionStatus={status} />);
@@ -48,6 +48,13 @@ describe("LifecycleBanner", () => {
     expect(html).toContain("Session failed");
     expect(html).toContain("can no longer be controlled from the web");
     expect(html).toContain("bg-destructive");
+  });
+
+  it("renders archived-specific copy, styled as a neutral (non-destructive) notice", () => {
+    const html = renderToStaticMarkup(<LifecycleBanner sessionStatus="archived" />);
+    expect(html).toContain("This session is archived");
+    expect(html).toContain("worktree has been removed");
+    expect(html).not.toContain("bg-destructive");
   });
 });
 

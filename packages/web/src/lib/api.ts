@@ -12,7 +12,7 @@ import type {
   PushSubscribeBody,
   SessionRow,
   WorkspaceRow,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { MessagesPage, SyncSnapshot } from "@/sync";
 import { API_URL } from "./config.js";
 
@@ -43,7 +43,7 @@ async function request<T>(
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
-    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+    throw new ApiError("Could not reach the Kvy server. Check your connection.", 0);
   }
 
   let json: unknown;
@@ -327,18 +327,6 @@ export function archiveSession(token: string, sessionId: string): Promise<{ stat
   return postJson(`/v1/sessions/${sessionId}/archive`, undefined, token);
 }
 
-/** `POST /v1/sessions/:id/unarchive` — Restore, the inverse of Mark done
- * (docs/features/session-lifecycle-actions.md Phase 1). Idempotent
- * server-side; a non-archived row is left untouched and the response
- * reports the row's honest current status rather than fabricating
- * `"active"`. */
-export function unarchiveSession(
-  token: string,
-  sessionId: string,
-): Promise<{ status: SessionRow["status"] }> {
-  return postJson(`/v1/sessions/${sessionId}/unarchive`, undefined, token);
-}
-
 export type PutSessionMetadataCasResult =
   | { ok: true; version: number }
   | { ok: false; current: { value: EncryptedBox | null; version: number } };
@@ -367,7 +355,7 @@ export async function putSessionMetadataCas(
       body: JSON.stringify(body),
     });
   } catch {
-    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+    throw new ApiError("Could not reach the Kvy server. Check your connection.", 0);
   }
 
   if (response.ok) {
@@ -423,7 +411,7 @@ export async function putWorkspaceMetadataCas(
       body: JSON.stringify(body),
     });
   } catch {
-    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+    throw new ApiError("Could not reach the Kvy server. Check your connection.", 0);
   }
 
   if (response.ok) {
@@ -445,12 +433,6 @@ export async function putWorkspaceMetadataCas(
       : `workspace metadata update failed with ${response.status}`,
     response.status,
   );
-}
-
-/** `DELETE /v1/sessions/:id` — permanently deletes a session row (and, via
- * `schema.ts`'s `onDelete: "cascade"`, its messages). */
-export function deleteSession(token: string, sessionId: string): Promise<Record<string, never>> {
-  return sendJson("DELETE", `/v1/sessions/${sessionId}`, undefined, token);
 }
 
 /** `POST /v1/blobs/request-upload` — mint an upload target for an already-encrypted blob (design §6.2; plan.md §16 "4.3 Distribution & self-host"). `size`/`contentHash` describe the *encrypted* bytes — the server never sees plaintext. */

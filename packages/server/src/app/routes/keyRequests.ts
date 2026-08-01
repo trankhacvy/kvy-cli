@@ -12,7 +12,7 @@
  * code both screens display (`web/src/lib/verification-code.ts`), backed here by the
  * server-attested requester facts `GET /v1/keys/requests` returns.
  */
-import { decodeBase64, encodeBase64 } from "@falcon/crypto";
+import { decodeBase64, encodeBase64 } from "@kvy/crypto";
 import { and, eq, gt, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";

@@ -22,8 +22,8 @@
  * bytes never exist on either side.
  */
 
-const PRF_SALT = new TextEncoder().encode("falcon-key-wrap-v1") as BufferSource;
-const RP_NAME = "Falcon";
+const PRF_SALT = new TextEncoder().encode("kvy-key-wrap-v1") as BufferSource;
+const RP_NAME = "Kvy";
 
 export async function isPrfAvailable(): Promise<boolean> {
   if (typeof window === "undefined" || !window.PublicKeyCredential) return false;

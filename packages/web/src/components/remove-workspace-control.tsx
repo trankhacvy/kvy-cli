@@ -54,9 +54,9 @@ export function RemoveWorkspaceControl({
           <DialogHeader>
             <DialogTitle>Remove this workspace?</DialogTitle>
             <DialogDescription>
-              Falcon stops tracking this folder. Nothing on disk changes, and every session's
-              history stays exactly as readable as it is now. Add it again anytime from a new
-              session's folder picker.
+              Kvy stops tracking this folder. Nothing on disk changes, and every session's history
+              stays exactly as readable as it is now. Add it again anytime from a new session's
+              folder picker.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

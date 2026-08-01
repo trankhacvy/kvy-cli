@@ -22,7 +22,7 @@ import {
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-persistence-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-persistence-test-"));
 });
 
 afterEach(() => {

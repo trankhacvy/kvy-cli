@@ -3,10 +3,10 @@
 **Status:** proposed (implementation plan) — code-grounded against `v2-pty-injection`.
 **Builds on:** [`docs/issue-4-plan.md`](./issue-4-plan.md) (identity ↔ key-custody split, refresh
 tokens, `keys/bind` fenced rotation, device sessions).
-**Scope:** `@falcon/web` (most items), `@falcon/server` (`auth/oauth.ts`, `config.ts`, OAuth
-register route), `@falcon/wire` + `falcon` CLI (item 8 only), docs (items 11).
+**Scope:** `@kvy/web` (most items), `@kvy/server` (`auth/oauth.ts`, `config.ts`, OAuth
+register route), `@kvy/wire` + `kvy` CLI (item 8 only), docs (items 11).
 
-This document is the implementation/fix plan produced from a UX/security audit of Falcon's auth
+This document is the implementation/fix plan produced from a UX/security audit of Kvy's auth
 flow after the issue-4 re-architecture landed. It follows the same section shape and rigour as
 `docs/issue-4-plan.md` and `docs/plan-flows-3-4-5.md`: one numbered phase per audit finding,
 each with the **current behavior** (real code quoted, `file:line`), the **problem**, the
@@ -39,7 +39,7 @@ notes. Places where the real code diverged from the audit notes are called out i
 Two decisions frame the whole plan:
 
 1. **Production login is OAuth-only (Google + GitHub).** Email+password stays, but becomes a
-   **dev/local-testing** identity gated behind the same `FALCON_DEV_AUTH` / `DEV_AUTH_ENABLED`
+   **dev/local-testing** identity gated behind the same `KVY_DEV_AUTH` / `DEV_AUTH_ENABLED`
    flag that already hides the "Continue without OAuth (dev only)" bypass. No email
    verification is added (email+password is never a production credential).
 
@@ -144,7 +144,7 @@ page load. `RequireAuth` handles exactly this by calling `silentRefresh()` first
 
 ### Problem
 
-The pairing link (`app.falcon.dev/pair#<ephPub>`) is very plausibly the **first** thing opened
+The pairing link (`app.kvy.dev/pair#<ephPub>`) is very plausibly the **first** thing opened
 in a new tab — its own docblock (`pair/page.tsx:29-33`) says so. On that first load the
 in-memory access token is always `null`, so `isSignedIn()` is `false` even for a fully
 provisioned, PIN-unlocked browser that holds a live refresh token in the worker. The page
@@ -364,7 +364,7 @@ and a timestamp; the in-memory half is a plain module variable, not persisted an
  * full-page navigation that wipes module memory.
  */
 
-const PENDING_STEPUP_KEY = "falcon:pendingStepUp";
+const PENDING_STEPUP_KEY = "kvy:pendingStepUp";
 const PENDING_STEPUP_TTL_MS = 5 * 60_000; // an OAuth consent round trip; abandoned attempts expire
 
 export type StepUpProvider = "google" | "github";
@@ -779,17 +779,17 @@ reload between callback and `/reset-keys/`.
 
 There is an existing dev-only-gating pattern to extend:
 
-- **Web flag** (`lib/config.ts:35`): `DEV_AUTH_ENABLED = process.env.NEXT_PUBLIC_FALCON_DEV_AUTH === "1"`.
+- **Web flag** (`lib/config.ts:35`): `DEV_AUTH_ENABLED = process.env.NEXT_PUBLIC_KVY_DEV_AUTH === "1"`.
 - **Web gate** (`signin/page.tsx:106-115`): the "Continue without OAuth (dev only)" button
   renders only when `DEV_AUTH_ENABLED`.
 - **Server flag + boot guard** (`config.ts:47` and `config.ts:170-173`):
 
   ```ts
-  FALCON_DEV_AUTH: z.coerce.boolean().default(false),
+  KVY_DEV_AUTH: z.coerce.boolean().default(false),
   // ...
-  .refine((parsed) => !(parsed.NODE_ENV === "production" && parsed.FALCON_DEV_AUTH), {
-    message: "FALCON_DEV_AUTH must not be enabled when NODE_ENV=production",
-    path: ["FALCON_DEV_AUTH"],
+  .refine((parsed) => !(parsed.NODE_ENV === "production" && parsed.KVY_DEV_AUTH), {
+    message: "KVY_DEV_AUTH must not be enabled when NODE_ENV=production",
+    path: ["KVY_DEV_AUTH"],
   })
   ```
 
@@ -806,9 +806,9 @@ account against prod.
 
 ### Proposed fix
 
-Reuse the existing `FALCON_DEV_AUTH` flag rather than inventing a second one — email+password
+Reuse the existing `KVY_DEV_AUTH` flag rather than inventing a second one — email+password
 and the dev-OAuth-bypass share the same "local testing only" lifetime, and `config.ts`'s
-`.refine()` boot guard already makes `FALCON_DEV_AUTH=1` structurally impossible in production.
+`.refine()` boot guard already makes `KVY_DEV_AUTH=1` structurally impossible in production.
 
 #### 3a. Web — hide the email+password link behind `DEV_AUTH_ENABLED`
 
@@ -845,12 +845,12 @@ The `!GOOGLE_OAUTH_CLIENT_ID && !GITHUB_OAUTH_CLIENT_ID && !DEV_AUTH_ENABLED` "n
 configured" note (`signin/page.tsx:101-105`) moves up to the OAuth section so a production
 deployment with no OAuth ids still shows a sensible message rather than a blank card.
 
-#### 3b. Server — reject the password routes when `FALCON_DEV_AUTH` is off
+#### 3b. Server — reject the password routes when `KVY_DEV_AUTH` is off
 
 The password routes live in `packages/server/src/app/routes/password.ts` —
 `buildPasswordRoutes(db, email)` (`password.ts:54`), a sibling of `buildOAuthRoutes`, with the
 register/login/reset handlers registered at `password.ts:56,113,178,214`. Gate the `register`
-and `login` handlers on `env.FALCON_DEV_AUTH`, returning a fail-closed 404 (route effectively
+and `login` handlers on `env.KVY_DEV_AUTH`, returning a fail-closed 404 (route effectively
 does not exist in production) — matching the "dev provider returns null when off" stance in
 `auth/oauth.ts:168-171`. The file already imports from `drizzle-orm`/`zod` but not `config` —
 add the import, then guard each handler:
@@ -859,7 +859,7 @@ add the import, then guard each handler:
 import { env } from "../../config.js";
 
 // ...as the first line of the register and login handlers:
-if (!env.FALCON_DEV_AUTH) {
+if (!env.KVY_DEV_AUTH) {
   return reply.code(404).send({ error: "Not found" });
 }
 ```
@@ -869,7 +869,7 @@ gate them too, so a production deployment exposes no email+password endpoints at
 
 A 404 (rather than 403) avoids advertising that a gated endpoint exists — same reasoning as the
 no-enumeration stance the password routes already take. No new boot-time guard is needed: the
-existing `.refine()` at `config.ts:170-173` already prevents `FALCON_DEV_AUTH=1` under
+existing `.refine()` at `config.ts:170-173` already prevents `KVY_DEV_AUTH=1` under
 `NODE_ENV=production`, so these routes are unreachable in prod transitively.
 
 **Add `404` to the Zod response schemas (review Problem 6, minor).** All four handlers declare
@@ -885,7 +885,7 @@ response: { 200: SessionResponseSchema, 400: ErrorSchema, 404: ErrorSchema },
 
 #### 3c. Migration precondition — existing production password accounts
 
-The gate is fail-closed: once `FALCON_DEV_AUTH=0`, `password/login` returns 404, so **any account
+The gate is fail-closed: once `KVY_DEV_AUTH=0`, `password/login` returns 404, so **any account
 that registered via email+password against a production deployment is locked out entirely** —
 login, and (since item 2's step-up only accepts OAuth or password) reset too, with no linking
 story. Before item 3 ships, resolve this one of two ways, explicitly:
@@ -900,28 +900,28 @@ story. Before item 3 ships, resolve this one of two ways, explicitly:
   so those users retain a reachable login + OAuth step-up before password is disabled.
 
 > If a *separate* flag is preferred (so a self-hoster could keep dev-OAuth off but password on),
-> add `FALCON_PASSWORD_AUTH: z.coerce.boolean().default(false)` to `config.ts` with an identical
-> `.refine()` production guard, mirror it as `NEXT_PUBLIC_FALCON_PASSWORD_AUTH` in
-> `lib/config.ts`, and gate on that instead. The plan's default is to **reuse `FALCON_DEV_AUTH`**
+> add `KVY_PASSWORD_AUTH: z.coerce.boolean().default(false)` to `config.ts` with an identical
+> `.refine()` production guard, mirror it as `NEXT_PUBLIC_KVY_PASSWORD_AUTH` in
+> `lib/config.ts`, and gate on that instead. The plan's default is to **reuse `KVY_DEV_AUTH`**
 > for minimal surface; call this out at review.
 >
 > **Consistency guard (review "Anything missing #4"):** if this separate-flag path is chosen, the
-> **web gate in 3a must key off the mirrored `NEXT_PUBLIC_FALCON_PASSWORD_AUTH`, not
+> **web gate in 3a must key off the mirrored `NEXT_PUBLIC_KVY_PASSWORD_AUTH`, not
 > `DEV_AUTH_ENABLED`** — otherwise the UI and the server disagree (button hidden but routes live,
 > or vice-versa). The two halves (server route gate + web link gate) must ship on the *same* flag;
 > don't let them diverge.
 
 ### New env vars
 
-None (reuses `FALCON_DEV_AUTH` / `NEXT_PUBLIC_FALCON_DEV_AUTH`). Optional
-`FALCON_PASSWORD_AUTH` documented above if the team wants independent control.
+None (reuses `KVY_DEV_AUTH` / `NEXT_PUBLIC_KVY_DEV_AUTH`). Optional
+`KVY_PASSWORD_AUTH` documented above if the team wants independent control.
 
 ### What to verify
 
-- Prod-shaped build (`NEXT_PUBLIC_FALCON_DEV_AUTH` unset): `/signin/` shows only Google/GitHub;
+- Prod-shaped build (`NEXT_PUBLIC_KVY_DEV_AUTH` unset): `/signin/` shows only Google/GitHub;
   no email+password link, no dev bypass.
-- `POST /v1/auth/password/register` against a `FALCON_DEV_AUTH=0` server returns 404.
-- Local dev (`FALCON_DEV_AUTH=1` both sides): email+password still works end-to-end (the CLAUDE.md
+- `POST /v1/auth/password/register` against a `KVY_DEV_AUTH=0` server returns 404.
+- Local dev (`KVY_DEV_AUTH=1` both sides): email+password still works end-to-end (the CLAUDE.md
   runbook path).
 - **Regression gate for §0:** confirm item 2's `/reset-keys/` is reachable and functional
   *before* this lands.
@@ -1061,7 +1061,7 @@ with no confirmation. Revoking the current device also immediately logs *this* b
 ### Problem
 
 A single misclick logs out a device (or the current browser, which is a full sign-out). This is
-destructive and irreversible from this screen (the CLI daemon would need `falcon auth login`
+destructive and irreversible from this screen (the CLI daemon would need `kvy auth login`
 again). It needs a confirmation step — especially for the "This device" row.
 
 ### Proposed fix
@@ -1250,7 +1250,7 @@ const defaultFetchUser = (token: string): Promise<Response> =>
   fetch("https://api.github.com/user", {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "falcon-server",
+      "User-Agent": "kvy-server",
       Accept: "application/vnd.github+json",
     },
   });
@@ -1259,7 +1259,7 @@ const defaultFetchEmails = (token: string): Promise<Response> =>
   fetch("https://api.github.com/user/emails", {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "falcon-server",
+      "User-Agent": "kvy-server",
       Accept: "application/vnd.github+json",
     },
   });
@@ -1275,7 +1275,7 @@ metadata, not an auth gate.
 
 ```ts
 function verifyDevProof(proof: string): OAuthIdentity | null {
-  if (!env.FALCON_DEV_AUTH) return null;
+  if (!env.KVY_DEV_AUTH) return null;
   return { provider: "dev", subject: proof || "dev", email: null, emailVerified: false };
 }
 ```
@@ -1450,7 +1450,7 @@ everything to a boolean: `MachineRow` carries only `lastSeenAt` (`wire/src/rows.
 
 A daemon that is *running but can't authenticate* (refresh token revoked, e.g. after a rotate or
 "log out other devices") looks identical to a machine that is simply powered off. The user has
-no signal that the fix is `falcon auth login`, not "wake the machine."
+no signal that the fix is `kvy auth login`, not "wake the machine."
 
 ### Problem shape / design (this one is design-heavy — flagged, not fully specced)
 
@@ -1509,7 +1509,7 @@ This needs a signal threaded CLI → server → wire → web. Real work at each 
    and thread `MachineStatus` through `SessionListMachine.online` → a `status` field
    (`live-source.ts:364-372`) and the badge renderer.
 
-> This item touches `@falcon/wire` (schema + a migration if `MachineRow.needsReauth` is
+> This item touches `@kvy/wire` (schema + a migration if `MachineRow.needsReauth` is
 > persisted), the server presence emitter, the CLI daemon, and several web files. It is the
 > largest of the punch list and should be its own PR. The **minimum viable** version is
 > server-inferred (`revokedAt` + recent `lastSeenAt`) with **no CLI change at all** — the CLI
@@ -1521,7 +1521,7 @@ This needs a signal threaded CLI → server → wire → web. Real work at each 
 - Revoke a daemon's session via Settings → Devices while the machine is otherwise up → Home
   shows "Needs re-authentication" (amber), not "Offline" (grey).
 - Actually power off a machine → still "Offline".
-- `falcon auth login` on the affected machine clears the status back to online.
+- `kvy auth login` on the affected machine clears the status back to online.
 - Wire round-trip: old web clients ignore the new optional field (additive-only holds).
 
 ---
@@ -1570,7 +1570,7 @@ packages/web/src` returns only code comments, never JSX text.
 ### Current behavior
 
 - `PinSetupForm` (`pin-setup-form.tsx:43-47`): "Protects your encrypted key material on this
-  device. You'll need it again after a reload — Falcon never stores it, so there's no way to
+  device. You'll need it again after a reload — Kvy never stores it, so there's no way to
   recover a lost PIN except rotating your keys from another signed-in device."
 - `PinUnlockForm` (`pin-unlock-form.tsx:37-39`): "Unlocks this browser's encrypted key material
   for this session."
@@ -1589,7 +1589,7 @@ access, not the account, and other devices are unaffected.
 ```tsx
         <p className="text-sm leading-6 text-muted-foreground">
           This PIN protects your keys on <strong>this browser only</strong> — not your whole
-          account. You'll re-enter it after a reload. Falcon never stores it, so if you forget it
+          account. You'll re-enter it after a reload. Kvy never stores it, so if you forget it
           you recover this browser by pairing from another device (or resetting keys), without
           affecting your account or your other devices.
         </p>
@@ -1781,7 +1781,7 @@ there for a sign-up-then-pair flow (consistency; low risk).
 
 ## Master TODO checklist (execution units)
 
-Read by `.claude/workflows/falcon-bugfix-workflow.js` (repurposed for this doc — see that
+Read by `.claude/workflows/kvy-bugfix-workflow.js` (repurposed for this doc — see that
 file's own header comment). Unit ids use an `AH*` prefix (Auth Hardening) so they never
 collide with `plan-v2.md`'s `U*`, `docs/bug-fix-plan.md`'s `BF*`, or `docs/plan-flows-3-4-5.md`'s
 `FL*` units, even if all four run against the same branch.
@@ -1840,7 +1840,7 @@ gated on AH1 (it closes `known-issues.md` issue #14, which AH1 fixes).
   - [ ] `[human]` live: real Google + real GitHub step-up round trip against a local dev stack
 
 - [x] **AH3 `[solo]` "gate-password-prod"** (item 3 — depends on AH2 merged+verified)
-  - [x] Extend the `DEV_AUTH_ENABLED`/`FALCON_DEV_AUTH` pattern to email+password: hide the
+  - [x] Extend the `DEV_AUTH_ENABLED`/`KVY_DEV_AUTH` pattern to email+password: hide the
         `/signin/` link behind the same flag; reject all four `password.ts` handlers
         server-side when the flag is off; boot-time error if enabled under `NODE_ENV=production`
   - [x] Add `404: ErrorSchema` to the gated routes' Zod response schemas

@@ -1,4 +1,4 @@
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OrderedEnvelopeQueue } from "./outgoingQueue.js";
 

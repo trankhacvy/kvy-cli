@@ -23,7 +23,7 @@ describe("acquireDaemonLock", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-daemon-lock-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-daemon-lock-"));
   });
 
   afterEach(async () => {

@@ -7,7 +7,7 @@ import { unwrapWithDeviceKey, wrapWithDeviceKey } from "./deviceKey.js";
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-devicekey-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-devicekey-test-"));
 });
 
 afterEach(() => {

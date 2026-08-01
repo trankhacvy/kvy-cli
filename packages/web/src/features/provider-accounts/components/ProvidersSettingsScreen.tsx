@@ -1,5 +1,6 @@
 "use client";
 
+import { PROVIDER_IDS } from "@kvy/wire";
 import {
   MachineBadge,
   type SessionListMachine,
@@ -9,7 +10,7 @@ import type { ProviderAccountProvider, UseProviderAccountActions } from "../type
 import { useLiveProviderAccountActions } from "../use-live-provider-account-actions";
 import { ProviderAccountCard } from "./ProviderAccountCard";
 
-const PROVIDERS: ProviderAccountProvider[] = ["claude-code", "codex"];
+const PROVIDERS: ProviderAccountProvider[] = [...PROVIDER_IDS];
 
 /**
  * Settings → Providers (docs/competitive-notes-omnara.md #9 "Provider

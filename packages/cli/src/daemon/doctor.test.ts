@@ -15,13 +15,13 @@ import { writeDaemonState } from "./state.js";
 
 const FIXTURE_PROCESSES: ProcessEntry[] = [
   { pid: 1, ppid: 0, command: "/sbin/launchd" },
-  { pid: 100, ppid: 1, command: "falcon daemon start-sync" },
-  { pid: 200, ppid: 100, command: "falcon claude --starting-mode remote --started-by daemon" },
-  { pid: 300, ppid: 1, command: "falcon claude --resume abc" },
-  { pid: 999, ppid: 1, command: "falcon doctor" }, // the invoking process
+  { pid: 100, ppid: 1, command: "kvy daemon start-sync" },
+  { pid: 200, ppid: 100, command: "kvy claude --starting-mode remote --started-by daemon" },
+  { pid: 300, ppid: 1, command: "kvy claude --resume abc" },
+  { pid: 999, ppid: 1, command: "kvy doctor" }, // the invoking process
 ];
 
-/** Fake adapter/provider deps — every `runDoctor()` call below injects these so tests never touch a real `~/.falcon/adapters` install or shell out to a real `claude`/`codex`/`cloudflared` on PATH. */
+/** Fake adapter/provider deps — every `runDoctor()` call below injects these so tests never touch a real `~/.kvy/adapters` install or shell out to a real `claude`/`codex`/`cloudflared` on PATH. */
 const FAKE_HEALTH_DEPS = {
   checkAdapters: async () => [],
   detectClaudeProvider: async () => ({
@@ -41,7 +41,7 @@ describe("runDoctor", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-doctor-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-doctor-"));
   });
 
   afterEach(async () => {
@@ -62,7 +62,7 @@ describe("runDoctor", () => {
     expect(report.processes).toEqual([]);
   });
 
-  it("reports a running daemon and classifies every Falcon-owned process, excluding the current pid", async () => {
+  it("reports a running daemon and classifies every Kvy-owned process, excluding the current pid", async () => {
     await writeDaemonState(homeDir, { pid: 100, port: 4242, version: "0.1.0", startedAt: 1 });
     await persistSession(homeDir, {
       sessionId: "sess_1",
@@ -170,7 +170,7 @@ describe("describeDoctorReport", () => {
       daemon: { running: true, pid: 100, port: 4242, version: "0.1.0" },
       resumableSessionCount: 2,
       processes: [
-        { pid: 200, ppid: 100, command: "falcon claude", kind: "session", spawnedByDaemon: true },
+        { pid: 200, ppid: 100, command: "kvy claude", kind: "session", spawnedByDaemon: true },
       ],
       adapters: [
         {
@@ -200,7 +200,7 @@ describe("describeDoctorReport", () => {
 
     expect(text).toContain("daemon: running (pid 100, port 4242, version 0.1.0)");
     expect(text).toContain("resumable sessions (sessions.json): 2");
-    expect(text).toContain("pid 200 [session] [daemon-spawned] - falcon claude");
+    expect(text).toContain("pid 200 [session] [daemon-spawned] - kvy claude");
     expect(text).toContain("claude-code - @agentclientprotocol/claude-agent-acp@0.59.0: ok");
     expect(text).toContain("codex - @agentclientprotocol/codex-acp@1.1.4: not-installed");
     expect(text).toContain("claude: installed (version 2.1.0)");
@@ -223,7 +223,7 @@ describe("describeDoctorReport", () => {
     });
 
     expect(text).toContain("daemon: not running");
-    expect(text).toContain("no falcon-owned processes found");
+    expect(text).toContain("no kvy-owned processes found");
     expect(text).toContain("cloudflared: not installed");
     expect(text).toContain("no journaled tunnels");
   });
@@ -245,7 +245,7 @@ describe("runDoctorClean", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-doctor-clean-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-doctor-clean-"));
   });
 
   afterEach(async () => {
@@ -270,7 +270,7 @@ describe("runDoctorClean", () => {
     );
     expect(summary.targeted).toEqual([]);
     expect(describeDoctorCleanSummary(summary)).toBe(
-      "falcon doctor clean: no runaway processes found\n",
+      "kvy doctor clean: no runaway processes found\n",
     );
   });
 
@@ -320,17 +320,15 @@ describe("describeDoctorCleanSummary", () => {
         {
           pid: 100,
           ppid: 1,
-          command: "falcon daemon start-sync",
+          command: "kvy daemon start-sync",
           kind: "daemon",
           spawnedByDaemon: false,
         },
       ],
-      outcomes: [
-        { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
-      ],
+      outcomes: [{ pid: 100, command: "kvy daemon start-sync", kind: "daemon", signal: "SIGTERM" }],
     });
 
-    expect(text).toContain("falcon doctor clean: 1/1 runaway process(es) terminated");
-    expect(text).toContain("pid 100 [daemon] SIGTERM - falcon daemon start-sync");
+    expect(text).toContain("kvy doctor clean: 1/1 runaway process(es) terminated");
+    expect(text).toContain("pid 100 [daemon] SIGTERM - kvy daemon start-sync");
   });
 });

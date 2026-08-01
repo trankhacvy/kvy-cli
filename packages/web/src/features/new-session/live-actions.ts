@@ -18,7 +18,7 @@ import type { NewSessionActions, SpawnOutcome } from "./types";
  * reuses the same convention for `adopt.list`'s own `workspaceId` param.
  *
  * A genuinely fresh directory — picked cold in the wizard, never
- * `falcon workspace register`'d from a terminal — is not yet in that
+ * `kvy workspace register`'d from a terminal — is not yet in that
  * registry, so `spawn` resolves with a `register-workspace` approval
  * (plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)") instead of
  * throwing `unknown-workspace`; `registerWorkspace` below (the new

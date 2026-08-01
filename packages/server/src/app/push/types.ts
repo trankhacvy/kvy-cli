@@ -1,4 +1,4 @@
-import type { LifecycleKind } from "@falcon/wire";
+import type { LifecycleKind } from "@kvy/wire";
 import type { pushSubscriptions } from "../../db/schema.js";
 
 export type { LifecycleKind };
@@ -19,7 +19,7 @@ export interface PresencePort {
 }
 
 /**
- * One outbound notification channel (design plan.md §10: "Falcon add —
+ * One outbound notification channel (design plan.md §10: "Kvy add —
  * fallback channels"). `send` throwing is the normal way to report failure —
  * `dispatch.ts` catches per-subscription so one dead endpoint never blocks
  * the others. A thrown error with a `statusCode` of 404/410 is treated as

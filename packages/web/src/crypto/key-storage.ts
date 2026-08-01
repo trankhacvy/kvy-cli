@@ -20,7 +20,7 @@
  * now (`session-storage.ts`, Phase 4a) so a browser with no key material can still hold a
  * session. It remains on the v1 shape purely so the migration can carry it across.
  */
-import type { PinWrapped } from "@falcon/crypto/web";
+import type { PinWrapped } from "@kvy/crypto/web";
 import type { WrappedBytes } from "./device-key.js";
 
 export type KeyWrapMode = "prf" | "device";
@@ -71,7 +71,7 @@ export interface KeyStorage {
   clear(): Promise<void>;
   /**
    * Wipe the record AND remove the database itself. `clear()` empties the store, which
-   * leaves `falcon-crypto-bridge` enumerable by `indexedDB.databases()` after a sign-out
+   * leaves `kvy-crypto-bridge` enumerable by `indexedDB.databases()` after a sign-out
    * (auth-ux-overhaul-e2e-results.md E2E-5.5) — the data is gone, but "both are gone" was
    * the stated guarantee and an empty shell is not that.
    *
@@ -84,7 +84,7 @@ export interface KeyStorage {
   destroy(): Promise<void>;
 }
 
-const DB_NAME = "falcon-crypto-bridge";
+const DB_NAME = "kvy-crypto-bridge";
 const DB_VERSION = 1;
 const STORE_NAME = "keys";
 const RECORD_KEY = "keyRecord";

@@ -25,15 +25,15 @@ function options(overrides: Partial<ServiceInstallOptions> = {}): ServiceInstall
   return {
     homeDir,
     userHomeDir,
-    falconExecutable: "/usr/local/bin/falcon",
+    kvyExecutable: "/usr/local/bin/kvy",
     env: {},
     ...overrides,
   };
 }
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-service-home-"));
-  userHomeDir = mkdtempSync(path.join(tmpdir(), "falcon-service-user-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-service-home-"));
+  userHomeDir = mkdtempSync(path.join(tmpdir(), "kvy-service-user-"));
   calls = [];
 });
 
@@ -47,10 +47,10 @@ describe("installService — launchd (darwin)", () => {
     const result = await installService(options({ platform: "darwin" }), { exec: fakeExec() });
 
     expect(result.ok).toBe(true);
-    const plistPath = path.join(userHomeDir, "Library", "LaunchAgents", "dev.falcon.daemon.plist");
+    const plistPath = path.join(userHomeDir, "Library", "LaunchAgents", "dev.kvy.daemon.plist");
     expect(existsSync(plistPath)).toBe(true);
     const content = readFileSync(plistPath, "utf8");
-    expect(content).toContain("/usr/local/bin/falcon");
+    expect(content).toContain("/usr/local/bin/kvy");
     expect(content).toContain("start-sync");
 
     const commands = calls.map((c) => `${c.command} ${c.args.join(" ")}`);
@@ -61,7 +61,7 @@ describe("installService — launchd (darwin)", () => {
   it("reports failure when launchctl bootstrap fails, but leaves the plist written", async () => {
     const result = await installService(options({ platform: "darwin" }), {
       exec: fakeExec({
-        [`launchctl bootstrap gui/${process.getuid?.() ?? 0} ${path.join(userHomeDir, "Library", "LaunchAgents", "dev.falcon.daemon.plist")}`]:
+        [`launchctl bootstrap gui/${process.getuid?.() ?? 0} ${path.join(userHomeDir, "Library", "LaunchAgents", "dev.kvy.daemon.plist")}`]:
           { ok: false, output: "boom" },
       }),
     });
@@ -76,36 +76,24 @@ describe("installService — systemd (linux)", () => {
     const result = await installService(options({ platform: "linux" }), { exec: fakeExec() });
 
     expect(result.ok).toBe(true);
-    const unitPath = path.join(
-      userHomeDir,
-      ".config",
-      "systemd",
-      "user",
-      "dev.falcon.daemon.service",
-    );
+    const unitPath = path.join(userHomeDir, ".config", "systemd", "user", "dev.kvy.daemon.service");
     expect(existsSync(unitPath)).toBe(true);
     const content = readFileSync(unitPath, "utf8");
-    expect(content).toContain("ExecStart=/usr/local/bin/falcon daemon start-sync");
+    expect(content).toContain("ExecStart=/usr/local/bin/kvy daemon start-sync");
 
     const commands = calls.map((c) => `${c.command} ${c.args.join(" ")}`);
     expect(commands).toContain("systemctl --user daemon-reload");
-    expect(commands).toContain("systemctl --user enable --now dev.falcon.daemon.service");
+    expect(commands).toContain("systemctl --user enable --now dev.kvy.daemon.service");
   });
 
-  it("includes FALCON_HOME_DIR as an Environment= line when set", async () => {
-    await installService(options({ platform: "linux", env: { FALCON_HOME_DIR: homeDir } }), {
+  it("includes KVY_HOME_DIR as an Environment= line when set", async () => {
+    await installService(options({ platform: "linux", env: { KVY_HOME_DIR: homeDir } }), {
       exec: fakeExec(),
     });
 
-    const unitPath = path.join(
-      userHomeDir,
-      ".config",
-      "systemd",
-      "user",
-      "dev.falcon.daemon.service",
-    );
+    const unitPath = path.join(userHomeDir, ".config", "systemd", "user", "dev.kvy.daemon.service");
     const content = readFileSync(unitPath, "utf8");
-    expect(content).toContain(`Environment=FALCON_HOME_DIR=${homeDir}`);
+    expect(content).toContain(`Environment=KVY_HOME_DIR=${homeDir}`);
   });
 });
 
@@ -116,7 +104,7 @@ describe("uninstallService", () => {
 
     expect(result.ok).toBe(true);
     expect(result.message).toContain("Stopped and removed");
-    const plistPath = path.join(userHomeDir, "Library", "LaunchAgents", "dev.falcon.daemon.plist");
+    const plistPath = path.join(userHomeDir, "Library", "LaunchAgents", "dev.kvy.daemon.plist");
     expect(existsSync(plistPath)).toBe(false);
   });
 

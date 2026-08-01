@@ -3,7 +3,7 @@
  *
  * Ported from Happy's `happy-app/sources/sync/apiSocket.ts`: one Socket.IO
  * connection carrying the read-only `update`/`ephemeral` event stream (all
- * writes go over HTTP — ⚠ DELTA D1, see falcon-system-design.md §4.3/§9.1).
+ * writes go over HTTP — ⚠ DELTA D1, see kvy-system-design.md §4.3/§9.1).
  * Two deltas from Happy's React Native original:
  *
  *  - `app-state` ("active" | "background") is derived from
@@ -27,8 +27,8 @@
  * swap in in-memory fakes instead of a real Socket.IO connection and a real
  * `document` — mirrors `crypto/client.ts`'s `WorkerLike` split.
  */
-import type { EncryptedBox, Ephemeral, Update } from "@falcon/wire";
-import { EphemeralSchema, UpdateSchema } from "@falcon/wire";
+import type { EncryptedBox, Ephemeral, Update } from "@kvy/wire";
+import { EphemeralSchema, UpdateSchema } from "@kvy/wire";
 
 export type AppState = "active" | "background";
 

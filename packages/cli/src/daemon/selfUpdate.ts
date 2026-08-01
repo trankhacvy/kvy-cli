@@ -5,7 +5,7 @@
  *
  * Compares the built CLI bundle's (`dist/index.mjs`) mtime captured at
  * daemon startup against its current mtime on every heartbeat tick. A
- * package manager replacing the installed CLI (`npm i -g falcon`, a fresh
+ * package manager replacing the installed CLI (`npm i -g kvy`, a fresh
  * `curl | sh` re-run, etc.) rewrites that file on disk; the already-running
  * daemon keeps executing the *old* in-memory code until something restarts
  * it — this module is purely the detection half of that.

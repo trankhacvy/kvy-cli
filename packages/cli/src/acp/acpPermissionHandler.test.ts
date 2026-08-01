@@ -1,5 +1,5 @@
 import type { PermissionOption, RequestPermissionRequest } from "@agentclientprotocol/sdk";
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { ReportSessionAttentionDeps } from "../api/sessionNotify.js";
 import type { Logger } from "../logger.js";

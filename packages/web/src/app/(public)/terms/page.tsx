@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SUPPORT_EMAIL } from "@/lib/config";
 
 export const metadata: Metadata = {
-  description: "Terms of use for the Falcon web app and related services.",
+  description: "Terms of use for the Kvy web app and related services.",
   alternates: { canonical: "/terms/" },
   robots: { index: true, follow: true },
 };
@@ -14,7 +14,7 @@ export default function TermsPage() {
       <main className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
         <p className="text-muted-foreground text-sm">
           <Link href="/" className="hover:text-foreground">
-            Falcon
+            Kvy
           </Link>
           <span aria-hidden="true"> · </span>
           Terms
@@ -26,9 +26,9 @@ export default function TermsPage() {
           <section className="space-y-2">
             <h2 className="font-medium text-base">Service</h2>
             <p>
-              Falcon provides software to coordinate coding agents running on machines you control.
-              You are responsible for the agents you run, the code they touch, and the credentials
-              those machines hold.
+              Kvy provides software to coordinate coding agents running on machines you control. You
+              are responsible for the agents you run, the code they touch, and the credentials those
+              machines hold.
             </p>
           </section>
 
@@ -52,8 +52,8 @@ export default function TermsPage() {
           <section className="space-y-2">
             <h2 className="font-medium text-base">Liability</h2>
             <p>
-              Falcon is provided as-is. To the fullest extent permitted by law, we are not liable
-              for indirect damages, lost profits, or loss of encrypted data when keys are lost.
+              Kvy is provided as-is. To the fullest extent permitted by law, we are not liable for
+              indirect damages, lost profits, or loss of encrypted data when keys are lost.
             </p>
           </section>
 

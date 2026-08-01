@@ -1,4 +1,4 @@
-# nginx site config for the @falcon/web static export (design §5.3/§9,
+# nginx site config for the @kvy/web static export (design §5.3/§9,
 # plan.md §16 "4.3 Distribution & self-host": served from an origin separate
 # from the API, strict CSP + SRI).
 #
@@ -37,7 +37,7 @@ server {
     # security-reviewed policy — it only permits THIS app to EMBED a
     # Cloudflare quick-tunnel URL inline (`TunnelFrame.tsx`). It does not
     # touch `frame-ancestors 'none'`/`X-Frame-Options: DENY` below, which
-    # protect Falcon itself from being framed by someone else — a completely
+    # protect Kvy itself from being framed by someone else — a completely
     # different directive. `script-src`/`connect-src`/every other directive
     # are untouched. Without this, a `*.trycloudflare.com` iframe is
     # hard-blocked (falls back to `default-src 'self'`) — the embed is

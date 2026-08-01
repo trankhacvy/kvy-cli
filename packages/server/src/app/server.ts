@@ -88,7 +88,7 @@ export async function buildServer(
     pushDispatcher?: PushDispatcherPort;
     /** Injectable so tests never need real S3 creds or a writable disk; defaults to `buildBlobStorage(env)` (S3 if `S3_BUCKET` is set, else local-disk). */
     blobStorage?: BlobStorageDriver;
-    /** Only consulted when `blobStorage.kind === "local"`; defaults to `resolveLocalDriverConfig(env)`. Tests inject a throwaway temp dir here instead of touching `~/.falcon/server/blobs` or process env. */
+    /** Only consulted when `blobStorage.kind === "local"`; defaults to `resolveLocalDriverConfig(env)`. Tests inject a throwaway temp dir here instead of touching `~/.kvy/server/blobs` or process env. */
     blobLocalConfig?: LocalDriverConfig;
     /** Defaults to the dev-logger transport (`auth/email.ts`) — no real SMTP wired up yet (issue-4-plan.md Phase 0). Tests inject a recording fake to assert on. */
     emailTransport?: EmailTransport;
@@ -119,7 +119,7 @@ export async function buildServer(
 
   const emailTransport = deps.emailTransport ?? createDevLoggerEmailTransport(app.log);
 
-  // HTTP CORS for the split-origin self-host shape (falcon-system-design.md §5.3/§9,
+  // HTTP CORS for the split-origin self-host shape (kvy-system-design.md §5.3/§9,
   // plan.md §16 "4.3 Distribution & self-host": web is a static export served from a
   // different origin than this API). Reuses the exact same allowlist validator Socket.IO's
   // `cors.origin` already uses (`security/cors.ts`, built for the wildcard-CORS removal in

@@ -17,7 +17,7 @@ vi.mock("./credentials.js", () => ({
   clearCredentials: clearCredentialsMock,
 }));
 // `wrapNewKeyMaterial` always device-key wraps now — mocked so this suite never touches
-// a real OS vault or a real `~/.falcon/device.key`.
+// a real OS vault or a real `~/.kvy/device.key`.
 vi.mock("./deviceKey.js", () => ({
   wrapWithDeviceKey: wrapWithDeviceKeyMock,
 }));
@@ -117,7 +117,7 @@ describe("runAuthLogin", () => {
   });
 
   it.each([
-    ["request-failed", "Could not reach the Falcon server"],
+    ["request-failed", "Could not reach the Kvy server"],
     ["expired", "That sign-in link expired"],
     ["cancelled", "Sign-in cancelled."],
     ["decrypt-failed", "unreadable response"],
@@ -184,7 +184,7 @@ describe("ensureLoggedIn", () => {
       expect(result).toEqual({ ok: true });
       expect(pairDeviceMock).toHaveBeenCalledOnce();
       expect(writeCredentialsMock).toHaveBeenCalledOnce();
-      expect(joinedOutput(stdout)).toContain("Welcome to Falcon");
+      expect(joinedOutput(stdout)).toContain("Welcome to Kvy");
     }));
 
   it("propagates failure (with no extra message) when the auto-triggered pairing fails", async () =>

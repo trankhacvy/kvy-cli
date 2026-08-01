@@ -1,8 +1,8 @@
-import type { PermissionMode, WorkspaceGetConfigResult } from "@falcon/wire";
+import type { PermissionMode, ProviderId, WorkspaceGetConfigResult } from "@kvy/wire";
 
 /**
  * Shared RPC/view-model types for spawning a session against a machine
- * (falcon-system-design.md §9.2 "New session" row, falcon-prd.md
+ * (kvy-system-design.md §9.2 "New session" row, kvy-prd.md
  * FR-7.5/UC5). Originally the old free-form wizard's types (machine picker →
  * directory picker → provider/mode/model → spawn); the machine/directory
  * concepts (`NewSessionMachine`, `DirectoryListing`'s browse-centric
@@ -22,14 +22,14 @@ export interface DirectoryEntry {
   isDirectory: boolean;
 }
 
-/** Mirrors `@falcon/wire`'s `FsListResult` — the daemon `fs.list` RPC's response, one directory's worth of browsing. */
+/** Mirrors `@kvy/wire`'s `FsListResult` — the daemon `fs.list` RPC's response, one directory's worth of browsing. */
 export interface DirectoryListing {
   path: string;
   parent: string | null;
   entries: DirectoryEntry[];
 }
 
-export type NewSessionProvider = "claude-code" | "codex";
+export type NewSessionProvider = ProviderId;
 
 export interface BranchOption {
   name: string;
@@ -46,7 +46,7 @@ export interface BranchOption {
 
 /**
  * One local branch the daemon's `git.branches` machine RPC surfaced —
- * mirrors `@falcon/wire`'s `GitBranchInfo` (docs/features/worktree-isolation.md
+ * mirrors `@kvy/wire`'s `GitBranchInfo` (docs/features/worktree-isolation.md
  * Phase 4). Backs the existing-branch worktree picker in `OptionsStep`.
  */
 export interface BranchItem {
@@ -63,19 +63,19 @@ export interface SpawnRequest {
   provider: NewSessionProvider;
   permissionMode: PermissionMode;
   model?: string;
-  /** P1 — falcon-prd.md FR-1.2 "`falcon -b <branch>`". */
+  /** P1 — kvy-prd.md FR-1.2 "`kvy -b <branch>`". */
   branch?: BranchOption;
-  /** Set when the session-import step (falcon-prd.md FR-7.8 UC7 "continue
+  /** Set when the session-import step (kvy-prd.md FR-7.8 UC7 "continue
    * from a recent CLI session") picked a candidate to continue instead of
-   * starting fresh — mirrors `@falcon/wire`'s `SpawnParams.continueFrom`. */
+   * starting fresh — mirrors `@kvy/wire`'s `SpawnParams.continueFrom`. */
   continueFrom?: { providerSessionId: string };
 }
 
 /**
- * One recent plain (non-Falcon) CLI session the daemon's `adopt.list`
+ * One recent plain (non-Kvy) CLI session the daemon's `adopt.list`
  * machine RPC surfaced for a chosen directory — the session-import step's
- * view-model, mirroring `@falcon/wire`'s `ProviderSessionSummary` (design
- * §4.4, falcon-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9). Same "decrypted upstream"
+ * view-model, mirroring `@kvy/wire`'s `ProviderSessionSummary` (design
+ * §4.4, kvy-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9). Same "decrypted upstream"
  * convention as the rest of this file's view-models — there's nothing to
  * decrypt here (the daemon computes this straight from local transcript
  * files), but the shape stays a plain view-model for consistency with
@@ -91,7 +91,7 @@ export interface ImportCandidate {
 }
 
 /**
- * Mirrors `@falcon/wire`'s `SpawnResult`, flattened into a discriminated
+ * Mirrors `@kvy/wire`'s `SpawnResult`, flattened into a discriminated
  * union — easier for the screen to branch on than the wire's "exactly one
  * of two optional fields" shape. `action` carries `SpawnResult.
  * requiresApproval.action` through untouched (plan.md §16 "Flow 3 —
@@ -122,10 +122,10 @@ export interface NewSessionActions {
   browseDirectory(path?: string): Promise<DirectoryListing>;
   /** Creates `path` (and any missing parents) on the machine. Throws on failure. */
   createDirectory(path: string): Promise<void>;
-  /** Registers `directory` as a genuine Falcon workspace (the daemon's `workspace.register` RPC, plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)") — backs the `register-workspace` approval branch of `spawn`, the same way `createDirectory` backs `create-directory`. Idempotent; throws only on a real failure. */
+  /** Registers `directory` as a genuine Kvy workspace (the daemon's `workspace.register` RPC, plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)") — backs the `register-workspace` approval branch of `spawn`, the same way `createDirectory` backs `create-directory`. Idempotent; throws only on a real failure. */
   registerWorkspace(directory: string): Promise<void>;
   spawn(request: SpawnRequest): Promise<SpawnOutcome>;
-  /** Lists recent plain `claude`/`codex` sessions for `directory` (the daemon's `adopt.list` RPC, keyed by workspace — `directory` doubles as the workspace id, same convention `spawn`'s `workspaceId` already uses in `live-actions.ts`) — the session-import step's data source (falcon-prd.md FR-7.8 UC7). Throws on failure (unreachable machine, ...); an empty array means "none found", not an error. */
+  /** Lists recent plain `claude`/`codex` sessions for `directory` (the daemon's `adopt.list` RPC, keyed by workspace — `directory` doubles as the workspace id, same convention `spawn`'s `workspaceId` already uses in `live-actions.ts`) — the session-import step's data source (kvy-prd.md FR-7.8 UC7). Throws on failure (unreachable machine, ...); an empty array means "none found", not an error. */
   listImportCandidates(directory: string): Promise<ImportCandidate[]>;
   /** Lists local branches at `directory` (the daemon's `git.branches` RPC, docs/features/worktree-isolation.md — `directory` doubles as the RPC's `worktree` param, same "a workspaceId/worktree IS a directory path" convention as `spawn`/`listImportCandidates` above) — the existing-branch worktree picker's data source. Throws on failure (unreachable machine, not a git repo, ...); an empty array means "no local branches", not an error. */
   listBranches(directory: string): Promise<BranchItem[]>;

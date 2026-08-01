@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://app.falcon.dev/</loc>
+    <loc>https://app.kvy.dev/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://app.falcon.dev/privacy/</loc>
+    <loc>https://app.kvy.dev/privacy/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>https://app.falcon.dev/terms/</loc>
+    <loc>https://app.kvy.dev/terms/</loc>
     <changefreq>monthly</changefreq>
     <priority>0.3</priority>
   </url>

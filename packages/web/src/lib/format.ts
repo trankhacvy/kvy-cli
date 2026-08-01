@@ -1,4 +1,4 @@
-/** Human-readable byte size, base-1024 (`FileItem.size` — falcon-system-design.md §4.2). */
+/** Human-readable byte size, base-1024 (`FileItem.size` — kvy-system-design.md §4.2). */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -74,7 +74,7 @@ export function shouldShowHourDivider(previousTime: number | undefined, time: nu
 
 /** Hourly-divider label, e.g. "Jul 18, 3:00 PM". Locale pinned to `en-US`
  * (like every other formatter in this file) so rendering is deterministic
- * regardless of the host machine's locale, not because Falcon only
+ * regardless of the host machine's locale, not because Kvy only
  * supports English. */
 export function formatHourDividerLabel(ms: number): string {
   return new Intl.DateTimeFormat("en-US", {

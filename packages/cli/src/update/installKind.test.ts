@@ -9,7 +9,7 @@ describe("detectInstallKind", () => {
   let bundlePath: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "falcon-install-kind-"));
+    dir = await mkdtemp(path.join(tmpdir(), "kvy-install-kind-"));
     bundlePath = path.join(dir, "index.mjs");
   });
 

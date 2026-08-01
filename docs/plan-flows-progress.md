@@ -1,6 +1,6 @@
 # Flows (3/4/5) execution progress
 
-Tracks cycles run by the `falcon-dev-loop`-style executor against
+Tracks cycles run by the `kvy-dev-loop`-style executor against
 `docs/plan-flows-3-4-5.md`. See that file for the authoritative checklist.
 
 ## Cycle 1 — 2026-07-21/22

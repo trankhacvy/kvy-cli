@@ -32,7 +32,7 @@ describe("sessionsStore", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-sessions-store-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-sessions-store-"));
   });
 
   afterEach(async () => {
@@ -104,12 +104,10 @@ describe("sessionsStore", () => {
   });
 
   it("round-trips the optional directory field (Flow 3 — spawn-directory-dedup)", async () => {
-    const session = fixture({ directory: "/Users/vy/projects/falcon" });
+    const session = fixture({ directory: "/Users/vy/projects/kvy" });
     await persistSession(homeDir, session);
 
-    expect((await readPersistedSessions(homeDir)).sess_1?.directory).toBe(
-      "/Users/vy/projects/falcon",
-    );
+    expect((await readPersistedSessions(homeDir)).sess_1?.directory).toBe("/Users/vy/projects/kvy");
   });
 
   it("round-trips the optional pid field (boot-time re-adoption, readoptSessions.ts)", async () => {
@@ -146,7 +144,7 @@ describe("sessionsStore", () => {
           sess_legacy: {
             sessionId: "sess_legacy",
             provider: "claude-code",
-            directory: "/Users/vy/projects/falcon",
+            directory: "/Users/vy/projects/kvy",
             encryption: {
               encryptionKey: "wrapped-dek",
               seq: 7,
@@ -167,7 +165,7 @@ describe("sessionsStore", () => {
     expect(legacy).toEqual({
       sessionId: "sess_legacy",
       provider: "claude-code",
-      directory: "/Users/vy/projects/falcon",
+      directory: "/Users/vy/projects/kvy",
       encryption: {
         encryptionKey: "wrapped-dek",
         seq: 7,

@@ -5,20 +5,20 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   clearCredentials,
   credentialsPath,
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials,
   writeCredentials,
 } from "./credentials.js";
 
 let homeDir: string;
 
-const plaintext: FalconCredentials = {
+const plaintext: KvyCredentials = {
   refreshToken: "t",
   keyMaterial: { mode: "plaintext-fallback", bundle: "s" },
 };
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-credentials-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-credentials-test-"));
 });
 
 afterEach(() => {
@@ -61,7 +61,7 @@ describe("writeCredentials / readCredentials round-trip", () => {
   });
 
   it("persists and reads back device-wrapped key material", () => {
-    const credentials: FalconCredentials = {
+    const credentials: KvyCredentials = {
       refreshToken: "r",
       keyMaterial: { mode: "device", wrapped: { v: 1, nonce: "bm9uY2U=", ct: "Y3Q=" } },
     };
@@ -70,7 +70,7 @@ describe("writeCredentials / readCredentials round-trip", () => {
   });
 
   it("persists and reads back PIN-wrapped key material", () => {
-    const credentials: FalconCredentials = {
+    const credentials: KvyCredentials = {
       refreshToken: "r",
       keyMaterial: {
         mode: "pin",
@@ -82,7 +82,7 @@ describe("writeCredentials / readCredentials round-trip", () => {
   });
 
   it("creates the home directory if missing", () => {
-    const nested = path.join(homeDir, "nested", "falcon-home");
+    const nested = path.join(homeDir, "nested", "kvy-home");
     writeCredentials(plaintext, nested);
     expect(existsSync(credentialsPath(nested))).toBe(true);
   });

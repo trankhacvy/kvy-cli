@@ -2,7 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthArtPanel } from "@/components/auth/auth-art-panel";
 import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
 import { KeyProtectionChoice } from "@/components/auth/key-protection-choice";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Spinner } from "@/components/ui/spinner";
 import { type KeyWrapMode, provisionKeyProtection } from "@/crypto";
-import { ApiError, passwordLogin } from "@/lib/api";
+import { ApiError, passwordLogin, revokeOtherSessions } from "@/lib/api";
 import { rotateKeyEpoch, rotateKeyEpochOAuth } from "@/lib/complete-password-sign-in";
 import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
 import { copy } from "@/lib/copy";
@@ -51,6 +51,13 @@ export default function ResetKeysPage() {
   const bridge = useCryptoBridge();
   const [phase, setPhase] = useState<Phase>({ kind: "confirm-identity" });
   const [confirmingReset, setConfirmingReset] = useState(false);
+  /** The last bind attempt, re-invoked by "Log out all other devices" once that call
+   *  succeeds — a ref (not state) since it's never rendered, just re-called; a plain
+   *  closure over `handleProtectionChoice`'s own `token`/`protection`/`phase` so retrying
+   *  doesn't redo `provisionKeyProtection` (which can be an interactive passkey ceremony
+   *  for "prf" mode) or regenerate the master secret a second time. */
+  const retryBindRef = useRef<(() => Promise<void>) | null>(null);
+  const [revokingOthers, setRevokingOthers] = useState(false);
 
   // The password step-up form's own local state — a lighter-weight sibling of `/password/`'s
   // sign-in form, scoped to just proving the current password before rotating keys.
@@ -65,7 +72,7 @@ export default function ResetKeysPage() {
   }, []);
 
   useEffect(() => {
-    setTitleOverride("reset-keys", "Reset your keys · Falcon");
+    setTitleOverride("reset-keys", "Reset your keys · Kvy");
     return () => clearTitleOverride("reset-keys");
   }, []);
 
@@ -95,39 +102,78 @@ export default function ResetKeysPage() {
   async function handleProtectionChoice(mode: KeyWrapMode): Promise<void> {
     if (!bridge) return;
     if (phase.kind !== "returned") return;
+    const returnedPhase = phase;
     const token = getToken();
     if (!token) {
       setPhase({ kind: "error", message: copy.reset.signedOutMidFlow });
       return;
     }
-    setPhase({ kind: "rotating" });
-    const protection = await provisionKeyProtection(mode, "Falcon");
+    const protection = await provisionKeyProtection(mode, "Kvy");
 
-    if (phase.method === "oauth") {
-      const { provider, oauthProof, refreshToken } = phase;
-      const outcome = await rotateKeyEpochOAuth(bridge, token, refreshToken, protection, {
-        provider,
-        oauthProof,
-      });
+    async function attempt(): Promise<void> {
+      // Both re-checked here (already guaranteed non-null by the outer early-returns above)
+      // so this nested closure's own control-flow narrowing applies to `bridge`/`token`.
+      if (!bridge || !token) return;
+      setPhase({ kind: "rotating" });
+
+      if (returnedPhase.method === "oauth") {
+        const { provider, oauthProof, refreshToken } = returnedPhase;
+        const outcome = await rotateKeyEpochOAuth(bridge, token, refreshToken, protection, {
+          provider,
+          oauthProof,
+        });
+        if (outcome.kind === "ok") {
+          router.replace(outcome.nextUrl);
+          return;
+        }
+        if (outcome.kind === "identity-mismatch") {
+          setPhase({ kind: "confirm-identity" }); // wrong account at the provider — re-prove
+          return;
+        }
+        if (outcome.kind === "other-devices-online") {
+          setPhase({ kind: "rotating", error: outcome.message, otherDevicesOnline: true });
+          return;
+        }
+        setPhase({ kind: "rotating", error: outcome.message });
+        return;
+      }
+
+      const { refreshToken, stepUpPassword: proofPassword } = returnedPhase;
+      const outcome = await rotateKeyEpoch(bridge, token, refreshToken, proofPassword, protection);
       if (outcome.kind === "ok") {
         router.replace(outcome.nextUrl);
         return;
       }
-      if (outcome.kind === "identity-mismatch") {
-        setPhase({ kind: "confirm-identity" }); // wrong account at the provider — re-prove
+      if (outcome.kind === "other-devices-online") {
+        setPhase({ kind: "rotating", error: outcome.message, otherDevicesOnline: true });
         return;
       }
-      setPhase({ kind: "rotating", error: outcome.message }); // 409 / other
-      return;
+      setPhase({ kind: "rotating", error: outcome.message });
     }
 
-    const { refreshToken, stepUpPassword: proofPassword } = phase;
-    const outcome = await rotateKeyEpoch(bridge, token, refreshToken, proofPassword, protection);
-    if (outcome.kind === "ok") {
-      router.replace(outcome.nextUrl);
-      return;
+    retryBindRef.current = attempt;
+    await attempt();
+  }
+
+  /** The 409's self-serve way out: the endpoint only requires being logged in, not having
+   *  keys (`sessionsAdmin.ts`'s `revoke-others` — identity-gated, same as this whole page),
+   *  so it's reachable from exactly the keyless state this page runs in. */
+  async function handleLogOutOthersAndRetry(): Promise<void> {
+    const token = getToken();
+    if (!token || !retryBindRef.current) return;
+    setRevokingOthers(true);
+    try {
+      await revokeOtherSessions(token);
+      await retryBindRef.current();
+    } catch (err) {
+      setPhase({
+        kind: "rotating",
+        error: err instanceof ApiError ? err.message : "Couldn't log out other devices. Retry.",
+        otherDevicesOnline: true,
+      });
+    } finally {
+      setRevokingOthers(false);
     }
-    setPhase({ kind: "rotating", error: outcome.message });
   }
 
   return (
@@ -290,15 +336,28 @@ export default function ResetKeysPage() {
                     {phase.error}
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="h-11"
-                  onClick={() => setPhase({ kind: "confirm-identity" })}
-                >
-                  {copy.reset.retryCta}
-                </Button>
+                {phase.otherDevicesOnline ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="lg"
+                    className="h-11"
+                    disabled={revokingOthers}
+                    onClick={() => void handleLogOutOthersAndRetry()}
+                  >
+                    {revokingOthers ? "Please wait…" : copy.reset.otherDevicesCta}
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-11"
+                    onClick={() => setPhase({ kind: "confirm-identity" })}
+                  >
+                    {copy.reset.retryCta}
+                  </Button>
+                )}
               </div>
             )}
 

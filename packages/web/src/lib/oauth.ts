@@ -1,7 +1,7 @@
 /**
  * Client-only OAuth redirect flows for the two providers `POST
  * /v1/auth/register` accepts (design §5.2 "Sign-up"). Both are pure browser
- * navigations — no popup, no third-party SDK script (falcon-system-design.md
+ * navigations — no popup, no third-party SDK script (kvy-system-design.md
  * §12: "strict CSP … no third-party scripts") — chosen specifically because
  * this is a static export with no server of its own to complete a flow on
  * its behalf:
@@ -11,7 +11,7 @@
  *    (never sent to any server) — that token is used as-is as `oauthProof`.
  *  - **GitHub**: standard authorization-code flow. GitHub's token endpoint
  *    requires the app's client secret and has no browser CORS allowance, so
- *    the resulting `code` is hosted through the Falcon server's
+ *    the resulting `code` is hosted through the Kvy server's
  *    `/v1/auth/oauth/github/exchange` proxy to obtain the access token used
  *    as `oauthProof` (see packages/server/src/auth/oauth.ts).
  *
@@ -21,7 +21,7 @@
  */
 import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "./config.js";
 
-const STATE_KEY = "falcon:oauth:state";
+const STATE_KEY = "kvy:oauth:state";
 
 function randomToken(): string {
   const bytes = new Uint8Array(16);

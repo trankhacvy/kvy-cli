@@ -3,7 +3,7 @@ import type { GitStatusSnapshot } from "../types";
 import { FileStatChange, FileStatusBadge } from "./FileStatusBadge";
 
 /**
- * The changed-files list (falcon-prd.md FR-7.7 "file-level diff list vs
+ * The changed-files list (kvy-prd.md FR-7.7 "file-level diff list vs
  * configured base ref"): branch + ahead/behind header, one row per changed
  * file with its status chip, `selectedPath === null` meaning "show the
  * combined diff for every file".

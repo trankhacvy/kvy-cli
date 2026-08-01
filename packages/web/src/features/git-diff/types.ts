@@ -5,18 +5,18 @@ import type {
   GitRemoteInfo,
   GitSetRemoteResult,
   GitStatusResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 
 /**
- * View-model types for the Git panel (falcon-system-design.md §4.4
- * `git.status`/`git.diff`; falcon-prd.md FR-7.7 "file-level diff list vs
+ * View-model types for the Git panel (kvy-system-design.md §4.4
+ * `git.status`/`git.diff`; kvy-prd.md FR-7.7 "file-level diff list vs
  * configured base ref, per-file unified diff view"; plan.md §16 "4.1 Git
  * panel"). Real commit/push/rename write actions and a "compare against
  * any ref" selector landed in docs/features/git-write-actions.md — this is
  * no longer read-only.
  *
  * `GitStatusSnapshot`/`FileStatus`/`GitBranchInfo` are re-exported straight
- * off `@falcon/wire` rather than redeclared: unlike `features/new-session`'s
+ * off `@kvy/wire` rather than redeclared: unlike `features/new-session`'s
  * `DirectoryListing` (which flattens the wire shape for the wizard's own
  * convenience), the status/diff/branches RPC results are already exactly
  * what this panel wants to render.
@@ -54,7 +54,7 @@ export interface GitDiffActions {
     message: string,
     options?: { stageAll?: boolean },
   ): Promise<{ committed: boolean; commitSha?: string; nothingToCommit?: boolean }>;
-  /** Pushes `worktree`'s current branch. `force: true` maps to `--force-with-lease` (never raw `--force` — see `@falcon/wire`'s `GitPushParamsSchema`). Throws on any failure (including missing/rejected git credentials — surfaced as-is, no Falcon-specific wrapping). */
+  /** Pushes `worktree`'s current branch. `force: true` maps to `--force-with-lease` (never raw `--force` — see `@kvy/wire`'s `GitPushParamsSchema`). Throws on any failure (including missing/rejected git credentials — surfaced as-is, no Kvy-specific wrapping). */
   push(
     worktree: string,
     options?: { force?: boolean; setUpstream?: boolean },

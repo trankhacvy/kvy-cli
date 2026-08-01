@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type {
   ReportSessionAttentionDeps,
@@ -26,10 +26,17 @@ class FakeConnection implements AcpRemoteConnection {
   prompts: PromptCall[] = [];
   cancelled: string[] = [];
   modeCalls: { sessionId: string; modeId: string }[] = [];
+  loadSessionCalls: { sessionId: string; cwd: string }[] = [];
+  /** Every `loadSession` invocation, success or throw — unlike
+   * `loadSessionCalls` (successes only), this lets a test assert the call
+   * was actually attempted even when `failLoadSession` makes it throw. */
+  loadSessionAttempts: { sessionId: string; cwd: string }[] = [];
   disconnected = false;
   permissionHandler?: PermissionRequestHandler;
   sessionId = "uuid-session-1";
   failConnect?: Error;
+  sessionLoadSupported = false;
+  failLoadSession?: Error;
 
   private updateListeners = new Set<(n: { update: unknown }) => void>();
   private errorListeners = new Set<(e: AcpConnectionError) => void>();
@@ -64,6 +71,17 @@ class FakeConnection implements AcpRemoteConnection {
 
   async setMode(sessionId: string, modeId: string): Promise<void> {
     this.modeCalls.push({ sessionId, modeId });
+  }
+
+  supportsSessionLoad(): boolean {
+    return this.sessionLoadSupported;
+  }
+
+  async loadSession(sessionId: string, cwd: string): Promise<unknown> {
+    this.loadSessionAttempts.push({ sessionId, cwd });
+    if (this.failLoadSession) throw this.failLoadSession;
+    this.loadSessionCalls.push({ sessionId, cwd });
+    return {};
   }
 
   async disconnect(): Promise<void> {
@@ -103,6 +121,7 @@ interface Harness {
 
 function harness(
   opts: {
+    adapterId?: "claude-code" | "codex";
     resume?: string;
     model?: string;
     failConnect?: Error;
@@ -118,11 +137,12 @@ function harness(
   const providerIds: string[] = [];
   const handle = startAcpRemote(
     {
+      adapterId: opts.adapterId,
       workingDirectory: "/tmp/ws",
       resume: opts.resume,
       model: opts.model,
       permissionMode: "default",
-      homeDir: "/tmp/falcon-home",
+      homeDir: "/tmp/kvy-home",
       sessionId: opts.sessionId,
       attention: opts.attention,
       onEnvelopes: (batch) => envelopes.push(...batch),
@@ -149,12 +169,56 @@ describe("session startup", () => {
       systemPrompt: {
         type: "preset",
         preset: "claude_code",
-        append: expect.stringContaining("Falcon"),
+        append: expect.stringContaining("Kvy"),
       },
       claudeCode: {
         options: { resume: "prior-uuid", model: "claude-x", permissionMode: "default" },
       },
     });
+    expect(h.providerIds).toEqual(["uuid-session-1"]);
+  });
+
+  it("uses session/new (createSession), not session/load, when the adapter doesn't advertise loadSession support — matches prior behavior for every provider that never gained resume support", async () => {
+    const h = harness({ resume: "prior-uuid" });
+    h.handle.send("hi");
+    await flushMicrotasks();
+
+    expect(h.connection.loadSessionCalls).toEqual([]);
+    expect(h.providerIds).toEqual(["uuid-session-1"]);
+  });
+
+  it("resumes via session/load when the adapter advertises loadSession support and a resume id was given", async () => {
+    const h = harness({ adapterId: "codex", resume: "prior-uuid" });
+    h.connection.sessionLoadSupported = true;
+    h.handle.send("hi");
+    await flushMicrotasks();
+
+    expect(h.connection.loadSessionCalls).toEqual([{ sessionId: "prior-uuid", cwd: "/tmp/ws" }]);
+    // The resumed session's id IS the requested one — session/load never mints a new one.
+    expect(h.providerIds).toEqual(["prior-uuid"]);
+  });
+
+  it("falls back to a fresh session/new when session/load throws (e.g. the target session no longer exists)", async () => {
+    const h = harness({ adapterId: "codex", resume: "gone-uuid" });
+    h.connection.sessionLoadSupported = true;
+    h.connection.failLoadSession = new Error("session not found");
+    h.handle.send("hi");
+    await flushMicrotasks();
+
+    // It really was attempted (and threw) — not just skipped outright.
+    expect(h.connection.loadSessionAttempts).toEqual([{ sessionId: "gone-uuid", cwd: "/tmp/ws" }]);
+    expect(h.connection.loadSessionCalls).toEqual([]);
+    // Falls through to the real createSession path and gets a fresh id.
+    expect(h.providerIds).toEqual(["uuid-session-1"]);
+  });
+
+  it("goes straight to session/new when no resume id was given, even if the adapter supports loadSession", async () => {
+    const h = harness({ adapterId: "codex" });
+    h.connection.sessionLoadSupported = true;
+    h.handle.send("hi");
+    await flushMicrotasks();
+
+    expect(h.connection.loadSessionCalls).toEqual([]);
     expect(h.providerIds).toEqual(["uuid-session-1"]);
   });
 
@@ -278,12 +342,30 @@ describe("permission pipeline wiring", () => {
     );
   });
 
-  it("setMode passes wire modes through as ACP mode ids", async () => {
+  it("setMode passes wire modes through as ACP mode ids for claude-code", async () => {
     const h = harness();
     h.handle.send("x");
     await flushMicrotasks();
     await h.handle.setMode("plan");
     expect(h.connection.modeCalls).toEqual([{ sessionId: "uuid-session-1", modeId: "plan" }]);
+  });
+
+  it("setMode maps wire modes to codex-acp's real mode ids (live-verified 2026-07-31: codex rejects the wire strings directly with 'Invalid params')", async () => {
+    const h = harness({ adapterId: "codex" });
+    h.handle.send("x");
+    await flushMicrotasks();
+
+    await h.handle.setMode("default");
+    await h.handle.setMode("acceptEdits");
+    await h.handle.setMode("plan");
+    await h.handle.setMode("bypassPermissions");
+
+    expect(h.connection.modeCalls).toEqual([
+      { sessionId: "uuid-session-1", modeId: "agent" },
+      { sessionId: "uuid-session-1", modeId: "agent" },
+      { sessionId: "uuid-session-1", modeId: "read-only" },
+      { sessionId: "uuid-session-1", modeId: "agent-full-access" },
+    ]);
   });
 });
 

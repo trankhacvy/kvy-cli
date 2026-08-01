@@ -38,7 +38,7 @@ describe("MachineOfflineNotice", () => {
     const state: MachineOnlineState = {
       availability: "needs-reauth",
       isKnownUnavailable: true,
-      reason: "This project's machine needs to sign in again. Run `falcon auth login` there.",
+      reason: "This project's machine needs to sign in again. Run `kvy auth login` there.",
     };
     const html = renderToStaticMarkup(createElement(MachineOfflineNotice, { state }));
     expect(html).toContain("sign in again");

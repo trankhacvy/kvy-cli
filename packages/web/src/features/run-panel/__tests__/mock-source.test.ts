@@ -36,7 +36,7 @@ describe("createMockRunPanelActions", () => {
       started: true,
       method: "tmux",
       pid: 4242,
-      tmuxSessionName: "falcon-run-demo",
+      tmuxSessionName: "kvy-run-demo",
     });
     expect(second.started).toBe(false);
     expect(second.alreadyRunning).toBe(true);

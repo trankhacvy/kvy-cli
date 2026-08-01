@@ -10,15 +10,15 @@
  * entirely — the user names a folder, sees exactly where it will be, and
  * that's the whole decision.
  *
- * WHY NOT `~/.falcon/`: that directory is app state, not user data —
+ * WHY NOT `~/.kvy/`: that directory is app state, not user data —
  * `workspace/registry.ts` keeps `workspaces.json` there, `runStateStore.ts`
  * keeps `run-state.json`, the CLI keeps `access.key`, and
- * `docs/uninstall.md` tells people to `rm -rf ~/.falcon` to uninstall.
+ * `docs/uninstall.md` tells people to `rm -rf ~/.kvy` to uninstall.
  * Putting source code there would make uninstalling delete the user's work.
  */
 
 /** The single, visible base directory every web-created project lands in, relative to the machine's home directory. */
-export const WORKSPACE_BASE_DIR = "falcon-workspaces";
+export const WORKSPACE_BASE_DIR = "kvy-workspaces";
 
 export type WorkspaceNameError =
   | "empty"
@@ -30,7 +30,7 @@ export type WorkspaceNameError =
 
 /**
  * Validates a folder name as ONE safe path segment. Rejects anything that
- * could escape `~/falcon-workspaces/` or confuse a shell/filesystem. This is
+ * could escape `~/kvy-workspaces/` or confuse a shell/filesystem. This is
  * defense in depth, not the security boundary: `fs.mkdir` requires an
  * absolute path (`fsBrowse.ts`) and `spawn` validates against the registry
  * (`workspacePath.ts`) — but an escaping name would produce a genuinely

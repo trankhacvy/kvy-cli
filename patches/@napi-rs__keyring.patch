@@ -1,0 +1,20 @@
+diff --git a/index.js b/index.js
+index 9e467f3bad8d877e1a59ded6294b660c571b792f..2335f0b9d995ec588d20d58e4b4ff02a48840e41 100644
+--- a/index.js
++++ b/index.js
+@@ -65,8 +65,14 @@ const isMuslFromChildProcess = () => {
+ 
+ function requireNative() {
+   if (process.env.NAPI_RS_NATIVE_LIBRARY_PATH) {
++    // Patched for Kvy's compiled (Node SEA) binary build: upstream sets `nativeBinding`
++    // via closure here but never `return`s it, so the real call site (`nativeBinding =
++    // requireNative()` below) immediately overwrites a successful load with `undefined`.
++    // A real, `return`-ing load is what packages/cli/scripts/native/entry.cjs relies on
++    // when it points this env var at the .node file it just extracted from the SEA
++    // binary's embedded assets.
+     try {
+-      nativeBinding = require(process.env.NAPI_RS_NATIVE_LIBRARY_PATH);
++      return require(process.env.NAPI_RS_NATIVE_LIBRARY_PATH);
+     } catch (err) {
+       loadErrors.push(err)
+     }

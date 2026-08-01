@@ -4,8 +4,8 @@ import { MobileHandoffButton, sessionShareUrl } from "./MobileHandoffDialog";
 
 describe("sessionShareUrl", () => {
   it("joins the origin and session id into the /dashboard/session/<id>/ convention", () => {
-    expect(sessionShareUrl("https://app.falcon.example", "abc123")).toBe(
-      "https://app.falcon.example/dashboard/session/abc123/",
+    expect(sessionShareUrl("https://app.kvy.example", "abc123")).toBe(
+      "https://app.kvy.example/dashboard/session/abc123/",
     );
   });
 

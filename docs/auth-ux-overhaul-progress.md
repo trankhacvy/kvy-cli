@@ -13,7 +13,7 @@ Companion to `docs/auth-ux-overhaul-plan.md`, following the same convention as
 | 2 · pairing gate order | 12 | Identity-first, approve card with machine/folder, success screen, `StartOverLink`. |
 | 3 · onboarding | 5 | Zero-machine install guide that advances by itself. |
 | 4a · session store split | 8 | Refresh token moved to its own store — "signed in, no keys" is now reachable. |
-| 4 · key sharing | 22 | `key_requests` table + 4 routes, verification code, approve card, `falcon keys approve`. |
+| 4 · key sharing | 22 | `key_requests` table + 4 routes, verification code, approve card, `kvy keys approve`. |
 | 5 · PIN removal | 18 | PIN deleted end to end; PRF-or-device protection, one-time migration. |
 | 6 · copy pass | 8 | Jargon sweep + principles added to `CLAUDE.md`. |
 | 7 · later | 6 | Session quota, device labels, rate-limit keyer fix. |
@@ -60,6 +60,6 @@ plus a second test pinning the `0` default.
 - **No live end-to-end run.** Everything here is verified by typecheck + unit/integration
   suites. The tmux + Chrome-MCP runbook in `CLAUDE.md` (updated for the new flows) has not
   been executed against a running stack.
-- **`falcon keys approve` is a command, not a prompt.** The daemon now *sees* key requests
+- **`kvy keys approve` is a command, not a prompt.** The daemon now *sees* key requests
   (`AX-4.17`) but deliberately never auto-approves. `AX-7.5` tracks turning that into an
   inline prompt inside a running session.

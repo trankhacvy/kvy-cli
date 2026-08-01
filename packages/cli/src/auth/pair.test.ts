@@ -3,7 +3,7 @@ import {
   encodeBase64,
   getRandomBytes,
   libsodiumEncryptForPublicKey,
-} from "@falcon/crypto";
+} from "@kvy/crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { delay, pairDevice } from "./pair.js";
 

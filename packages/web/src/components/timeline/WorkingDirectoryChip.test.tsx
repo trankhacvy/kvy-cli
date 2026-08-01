@@ -4,15 +4,15 @@ import { WorkingDirectoryChip, workingDirectoryBasename } from "./WorkingDirecto
 
 describe("workingDirectoryBasename", () => {
   it("returns the final path segment for a plain absolute path", () => {
-    expect(workingDirectoryBasename("/Users/vy/code/falcon")).toBe("falcon");
+    expect(workingDirectoryBasename("/Users/vy/code/kvy")).toBe("kvy");
   });
 
   it("ignores a trailing slash", () => {
-    expect(workingDirectoryBasename("/Users/vy/code/falcon/")).toBe("falcon");
+    expect(workingDirectoryBasename("/Users/vy/code/kvy/")).toBe("kvy");
   });
 
   it("handles a Windows-style path", () => {
-    expect(workingDirectoryBasename("C:\\Users\\vy\\falcon")).toBe("falcon");
+    expect(workingDirectoryBasename("C:\\Users\\vy\\kvy")).toBe("kvy");
   });
 
   it("falls back to the full path for a bare root", () => {
@@ -20,15 +20,15 @@ describe("workingDirectoryBasename", () => {
   });
 
   it("falls back to the full value when there's no separator at all", () => {
-    expect(workingDirectoryBasename("falcon")).toBe("falcon");
+    expect(workingDirectoryBasename("kvy")).toBe("kvy");
   });
 });
 
 describe("WorkingDirectoryChip", () => {
   it("renders the basename, and carries the full path as the hover title", () => {
-    const html = renderToStaticMarkup(<WorkingDirectoryChip path="/Users/vy/code/falcon" />);
-    expect(html).toContain("falcon");
-    expect(html).toContain('title="/Users/vy/code/falcon"');
+    const html = renderToStaticMarkup(<WorkingDirectoryChip path="/Users/vy/code/kvy" />);
+    expect(html).toContain("kvy");
+    expect(html).toContain('title="/Users/vy/code/kvy"');
   });
 
   it("wires the copy button to the full path, not just the basename", () => {

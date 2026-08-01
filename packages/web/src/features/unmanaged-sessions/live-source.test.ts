@@ -1,4 +1,4 @@
-import type { MachineRow, UnmanagedSessionRow } from "@falcon/wire";
+import type { MachineRow, UnmanagedSessionRow } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { buildSnapshot } from "./live-source";
 

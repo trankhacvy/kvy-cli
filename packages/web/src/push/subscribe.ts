@@ -15,7 +15,7 @@
  * `subscribePush`/`unsubscribePush`, which is what the real `PushApiPort`
  * wraps.
  */
-import type { PushSubscribeBody } from "@falcon/wire";
+import type { PushSubscribeBody } from "@kvy/wire";
 import { urlBase64ToUint8Array } from "./vapid.js";
 
 export interface PushSubscriptionLike {

@@ -37,7 +37,7 @@ describe("runAdoptCommand", () => {
     baseDir = join(tmpdir(), `adopt-cmd-test-${unique}`);
     claudeConfigDir = join(baseDir, "claude-home");
     workspacePath = join(baseDir, "project");
-    homeDir = mkdtempSync(path.join(tmpdir(), "falcon-adopt-cmd-home-"));
+    homeDir = mkdtempSync(path.join(tmpdir(), "kvy-adopt-cmd-home-"));
     env = { CLAUDE_CONFIG_DIR: claudeConfigDir };
     projectDir = getProjectPath(workspacePath, env);
     await mkdir(projectDir, { recursive: true });
@@ -181,7 +181,7 @@ describe("runAdoptCommand", () => {
         { list: false, remote: true },
         baseDeps({
           launchProcess,
-          falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+          kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
         }),
       );
 
@@ -190,7 +190,7 @@ describe("runAdoptCommand", () => {
         expect.objectContaining({
           command: "/usr/bin/node",
           args: expect.arrayContaining([
-            "/opt/falcon/dist/index.mjs",
+            "/opt/kvy/dist/index.mjs",
             "claude",
             "--starting-mode",
             "remote",
@@ -216,7 +216,7 @@ describe("runAdoptCommand", () => {
         { list: false, remote: true },
         baseDeps({
           launchProcess,
-          falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+          kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
         }),
       );
 

@@ -1,4 +1,4 @@
-import type { PushChannelName } from "@falcon/wire";
+import type { PushChannelName } from "@kvy/wire";
 import type { PushChannel } from "../types.js";
 import { ntfyChannel } from "./ntfy.js";
 import { telegramChannel } from "./telegram.js";

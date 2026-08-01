@@ -2,7 +2,7 @@
  * Ported (adapted) from Happy — https://github.com/slopus/happy (MIT).
  * Original: happy-cli/src/persistence.ts (`readPersistedSessions`/`persistSession`).
  *
- * `~/.falcon/sessions.json` — the durability store design §7.2/§8 and
+ * `~/.kvy/sessions.json` — the durability store design §7.2/§8 and
  * plan.md §16 "3.2 Durability" describe: "finished/active session records
  * incl. wrapped DEKs (resume survival)" / "finished sessions persisted to
  * `sessions.json` including wrapped DEK + seq + versions so resume survives
@@ -19,6 +19,7 @@
  */
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { PROVIDER_IDS, type ProviderId } from "@kvy/wire";
 import type { SessionEncryptionData } from "./types.js";
 
 /**
@@ -39,7 +40,7 @@ export const SESSIONS_SCHEMA_VERSION = 3;
  */
 export interface PersistedSession {
   sessionId: string;
-  provider?: "claude-code" | "codex";
+  provider?: ProviderId;
   metadata?: unknown;
   encryption: SessionEncryptionData;
   /** `Date.now()` at the time this record was last written — drives expiry below. */
@@ -98,7 +99,7 @@ function isPersistedSession(value: unknown): value is PersistedSession {
   const c = value as Record<string, unknown>;
   if (typeof c.sessionId !== "string") return false;
   if (typeof c.savedAt !== "number") return false;
-  if (c.provider !== undefined && c.provider !== "claude-code" && c.provider !== "codex") {
+  if (c.provider !== undefined && !PROVIDER_IDS.includes(c.provider as ProviderId)) {
     return false;
   }
   if (c.directory !== undefined && typeof c.directory !== "string") return false;
@@ -198,7 +199,7 @@ export async function removePersistedSession(homeDir: string, sessionId: string)
   });
 }
 
-/** Deletes `sessions.json` outright. Used by `falcon doctor clean`/tests; a no-op if it doesn't exist. */
+/** Deletes `sessions.json` outright. Used by `kvy doctor clean`/tests; a no-op if it doesn't exist. */
 export async function clearPersistedSessions(homeDir: string): Promise<void> {
   await serialize(homeDir, async () => {
     await unlink(sessionsFilePath(homeDir)).catch((error: NodeJS.ErrnoException) => {

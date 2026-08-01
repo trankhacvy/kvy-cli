@@ -1,6 +1,6 @@
 "use client";
 
-import type { WorktreeRemoveResult } from "@falcon/wire";
+import type { WorktreeRemoveResult } from "@kvy/wire";
 import { useMachineCrypto } from "@/lib/use-machine-crypto";
 import { apiSocket, createMachineRpcClient } from "@/sync";
 

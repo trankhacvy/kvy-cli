@@ -75,7 +75,7 @@ export function KeyProtectionChoice({
         <span>
           <span className="block text-sm font-medium">Ask for my fingerprint</span>
           <span className="block text-sm text-muted-foreground">
-            One quick check each time you open Falcon. Someone who steals this computer still can't
+            One quick check each time you open Kvy. Someone who steals this computer still can't
             read your sessions.
           </span>
         </span>

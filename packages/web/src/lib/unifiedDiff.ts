@@ -1,6 +1,6 @@
 /**
  * Parses `git diff`'s unified diff text (the daemon `git.diff` RPC's
- * `inline` result, design §4.4; falcon-prd.md FR-7.7 "per-file unified diff
+ * `inline` result, design §4.4; kvy-prd.md FR-7.7 "per-file unified diff
  * view") into a structured, per-line model the web diff viewer renders —
  * never via `dangerouslySetInnerHTML`, same principle as `markdown.ts`.
  *

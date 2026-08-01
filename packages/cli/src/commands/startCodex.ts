@@ -1,11 +1,11 @@
 /**
- * `falcon codex [args...]` (design §7.7 "Codex adapter (v0.3 — ACP)", plan.md
- * §17 Phase 2.3). Codex has no local-interactive TUI, so — unlike `falcon
+ * `kvy codex [args...]` (design §7.7 "Codex adapter (v0.3 — ACP)", plan.md
+ * §17 Phase 2.3). Codex has no local-interactive TUI, so — unlike `kvy
  * claude`'s local↔remote mode loop (`commands/start.ts`) — a Codex session is
  * **remote from the start**: it drives one `AcpRemote` on the `codex-acp`
  * adapter for its whole lifetime, with no `loop()` and no local child.
  *
- * The surrounding scaffolding is the same a `falcon claude` session uses
+ * The surrounding scaffolding is the same a `kvy claude` session uses
  * (bootstrap → outbox → session-scoped WS + the five session RPCs → the
  * send-idempotency claim store), just without the mode machinery: the
  * `message`/`interrupt`/`setMode`/`perm.answer` RPCs route straight into the
@@ -17,14 +17,14 @@
  * (design §7.6), so nothing Codex-specific is needed on the permission path.
  */
 import path from "node:path";
-import { encodeBase64, wrapDek } from "@falcon/crypto";
+import { encodeBase64, wrapDek } from "@kvy/crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox } from "../api/outbox.js";
 import { resolveBackendUrl } from "../auth/config.js";
 import {
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
 import { ensureLoggedIn as ensureLoggedInDefault } from "../auth/login.js";
@@ -44,16 +44,20 @@ import { reloadDaemonAuth as reloadDaemonAuthDefault } from "../daemon/reloadAut
 import { type DaemonState, readDaemonState as readDaemonStateDefault } from "../daemon/state.js";
 import type { Logger } from "../logger.js";
 import { registerSessionRpcHandlers, type SessionRpcHandlers } from "../rpc/sessionRpc.js";
+import { announceRemoteControl } from "../session/announceRemoteControl.js";
 import {
   bootstrapSession as bootstrapSessionDefault,
   createBootstrapSessionDeps,
 } from "../session/bootstrap.js";
+import { extractContinueFromFlag } from "../session/continueFromFlag.js";
 import { extractModelFlag } from "../session/modelFlag.js";
+import { registerSessionWorkspace } from "../session/registerSessionWorkspace.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
 } from "../session/sessionClient.js";
 import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
+import type { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
 import { runPreflightWithReauth } from "./startPreflight.js";
 
 const noopLogger: Logger = {
@@ -69,11 +73,12 @@ export interface StartCodexCommandDeps {
   codexArgs: string[];
   env?: NodeJS.ProcessEnv;
   backendUrl?: string;
-  readCredentials?: (homeDir: string) => FalconCredentials | null;
+  readCredentials?: (homeDir: string) => KvyCredentials | null;
   readDaemonState?: (homeDir: string) => Promise<DaemonState | null>;
   fetchImpl?: typeof fetch;
   detectCodex?: (options?: DetectCodexOptions) => Promise<ProviderDetectionResult>;
   bootstrapSession?: typeof bootstrapSessionDefault;
+  registerWorkspace?: typeof registerWorkspaceDefault;
   /**
    * Injectable for tests; defaults to the real `notifyDaemonSessionStarted()`
    * (`daemon/notify.ts` — best-effort, never throws). Mirrors `start.ts`'s
@@ -124,7 +129,7 @@ function waitForSigint(): Promise<void> {
   });
 }
 
-/** Runs `falcon codex [args...]`. Returns the process exit code. */
+/** Runs `kvy codex [args...]`. Returns the process exit code. */
 export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const writeError = deps.writeError ?? ((text: string) => process.stderr.write(text));
@@ -148,7 +153,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   // isn't installed.
   const detection = await detect();
   if (!detection.installed) {
-    writeError(`falcon codex: ${detection.error ?? "Codex CLI is not installed."}\n`);
+    writeError(`kvy codex: ${detection.error ?? "Codex CLI is not installed."}\n`);
     return 1;
   }
 
@@ -184,6 +189,11 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     model: extractModelFlag(deps.codexArgs),
   };
 
+  const workspaceId = await registerSessionWorkspace(deps.workingDirectory, {
+    registerWorkspace: deps.registerWorkspace,
+    logger,
+  });
+
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {
     bootstrap = await doBootstrapSession(
@@ -196,6 +206,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
       {
         machineId,
         workspacePath: deps.workingDirectory,
+        workspaceId,
         nonce: createId(),
         provider: "codex",
         contentKeyPair,
@@ -205,7 +216,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-codex] bootstrapSession failed", { message });
-    writeError(`falcon codex: failed to start session: ${message}\n`);
+    writeError(`kvy codex: failed to start session: ${message}\n`);
     // A4: same best-effort self-report as `start.ts` — lets a daemon-
     // initiated spawn's `spawnAwaiter` reject with the real error instead
     // of a generic timeout.
@@ -243,7 +254,35 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     notifyResult,
   });
 
-  write(`falcon codex: starting session ${bootstrap.sessionId}\n${CODEX_NO_LOCAL_MODE_NOTE}\n`);
+  // Re-notify the daemon once the real ACP provider session id is known
+  // (`startAcpRemote`'s `onProviderSessionId`, below) — mirrors `start.ts`'s
+  // `notifyDaemonProviderSessionId`. Without this, `providerSessionId` never
+  // reaches persisted session metadata, so a future `--continue-from` (§5.5)
+  // has nothing to resume: the id this session ran under would be lost the
+  // moment the process exits.
+  function notifyDaemonProviderSessionId(providerSessionId: string): void {
+    void doNotifyDaemonSessionStarted(
+      createNotifyDaemonSessionStartedDeps({ homeDir: deps.homeDir, fetchImpl, logger }),
+      {
+        sessionId: bootstrap.sessionId,
+        metadata: { ...sessionMetadata, providerSessionId },
+        encryption: {
+          encryptionKey: encodeBase64(wrapDek(bootstrap.dek, contentKeyPair.publicKey)),
+          seq: 0,
+          metadataVersion: 0,
+          agentStateVersion: 0,
+        },
+      },
+    ).then((result) => {
+      logger.debug("[start-codex] daemon self-report (provider session id)", {
+        sessionId: bootstrap.sessionId,
+        providerSessionId,
+        result,
+      });
+    });
+  }
+
+  write(`kvy codex: starting session ${bootstrap.sessionId}\n${CODEX_NO_LOCAL_MODE_NOTE}\n`);
 
   const outbox = new Outbox({
     sessionId: bootstrap.sessionId,
@@ -285,9 +324,11 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   const remote = startAcpRemote({
     adapterId: "codex",
     workingDirectory: deps.workingDirectory,
+    resume: extractContinueFromFlag(deps.codexArgs),
     permissionMode: "default",
     homeDir: deps.homeDir,
     onEnvelopes: (envelopes) => outbox.enqueue(envelopes),
+    onProviderSessionId: (providerSessionId) => notifyDaemonProviderSessionId(providerSessionId),
     onTurnSettled: ({ messageId, status }) => {
       if (!messageId) return;
       const claimId = openClaims.get(messageId);
@@ -308,6 +349,8 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     },
     logger,
   });
+
+  outbox.enqueue([announceRemoteControl()]);
 
   const rpcHandlers: SessionRpcHandlers = {
     message: async ({ envelope }) => {

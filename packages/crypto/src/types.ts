@@ -1,9 +1,9 @@
 /**
- * Shared types for @falcon/crypto.
+ * Shared types for @kvy/crypto.
  *
- * Deliberately zod-free and dependency-free: @falcon/crypto has no dependency
- * on @falcon/wire so it can be built fully in parallel with it. The shape
- * here is structurally identical to `EncryptedBoxSchema` in @falcon/wire —
+ * Deliberately zod-free and dependency-free: @kvy/crypto has no dependency
+ * on @kvy/wire so it can be built fully in parallel with it. The shape
+ * here is structurally identical to `EncryptedBoxSchema` in @kvy/wire —
  * that's a convention, not a coupling.
  */
 
@@ -29,16 +29,16 @@ export interface SignKeyPair {
 
 /**
  * The key hierarchy derived from a client-held masterSecret.
- * See falcon-system-design.md §5.1.
+ * See kvy-system-design.md §5.1.
  */
 export interface KeyTree {
-  /** Ed25519 signing keypair — server auth challenge (HKDF("falcon-auth")). */
+  /** Ed25519 signing keypair — server auth challenge (HKDF("kvy-auth")). */
   signing: SignKeyPair;
-  /** X25519 content keypair — wraps per-session/per-machine DEKs (HKDF("falcon-content")). */
+  /** X25519 content keypair — wraps per-session/per-machine DEKs (HKDF("kvy-content")). */
   content: BoxKeyPair;
-  /** Stable pseudonymous identifier, 16 hex chars (HKDF("falcon-anon")). */
+  /** Stable pseudonymous identifier, 16 hex chars (HKDF("kvy-anon")). */
   anonId: string;
-  /** Legacy/global blob key, rarely used directly (HKDF("falcon-blob-master")). */
+  /** Legacy/global blob key, rarely used directly (HKDF("kvy-blob-master")). */
   blobMasterKey: Uint8Array;
 }
 

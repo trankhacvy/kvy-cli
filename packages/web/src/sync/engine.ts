@@ -3,7 +3,7 @@
  *
  * Ported from Happy's `happy-app/sources/sync/sync.ts` model (a singleton
  * combining `apiSocket` + `InvalidateSync`), split per **⚠ DELTA D1/D2**
- * (falcon-system-design.md §4.3, §9.1; plan.md §8.1, §16 line 705): reads
+ * (kvy-system-design.md §4.3, §9.1; plan.md §8.1, §16 line 705): reads
  * arrive over the WS `update` stream, but *writes* go through TanStack Query
  * mutations against the HTTP endpoints (§4.3) — this module only ever reads
  * from the socket and reconciles the Query cache, it never emits writes.
@@ -40,7 +40,7 @@ import type {
   Update,
   UpdateBody,
   WorkspaceRow,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   isSyncQueryKey,

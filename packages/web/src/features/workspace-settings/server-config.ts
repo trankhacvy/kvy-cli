@@ -1,5 +1,5 @@
-import { decodeBase64 } from "@falcon/crypto/web";
-import type { WorkspaceRow } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto/web";
+import type { WorkspaceRow } from "@kvy/wire";
 import type { CryptoBridgeClient } from "@/crypto";
 import type {
   createWorkspace as createWorkspaceDefault,

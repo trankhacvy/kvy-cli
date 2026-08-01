@@ -8,7 +8,7 @@ import { Reveal } from "./reveal";
 
 const FAQS = [
   {
-    q: "What is Falcon?",
+    q: "What is Kvy?",
     a: "A CLI that runs coding agents like Claude Code and Codex on your own machine, plus a web dashboard that mirrors every session so you can approve, steer, and review from any browser.",
   },
   {
@@ -21,7 +21,7 @@ const FAQS = [
   },
   {
     q: "How is this different from running the CLI directly, or a cloud coding agent?",
-    a: "A bare CLI ties you to one terminal on one machine. A cloud agent runs your code on someone else's infrastructure. Falcon keeps execution on your machine like the CLI does, and adds the remote visibility and control of a cloud tool without moving your code off it.",
+    a: "A bare CLI ties you to one terminal on one machine. A cloud agent runs your code on someone else's infrastructure. Kvy keeps execution on your machine like the CLI does, and adds the remote visibility and control of a cloud tool without moving your code off it.",
   },
   {
     q: "Does it support agents besides Claude Code and Codex?",

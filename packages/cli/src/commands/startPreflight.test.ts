@@ -1,13 +1,13 @@
-import { deriveKeyTree, getRandomBytes } from "@falcon/crypto";
+import { deriveKeyTree, getRandomBytes } from "@kvy/crypto";
 import { describe, expect, it, vi } from "vitest";
-import type { FalconCredentials } from "../auth/credentials.js";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { Logger } from "../logger.js";
 import { type PreflightWithReauthDeps, runPreflightWithReauth } from "./startPreflight.js";
 
 const noopLogger: Logger = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
-function credentialsFor(secret: Uint8Array): FalconCredentials {
+function credentialsFor(secret: Uint8Array): KvyCredentials {
   return { refreshToken: "refresh-1", keyMaterial: plaintextFallbackKeyMaterial(secret) };
 }
 

@@ -14,7 +14,7 @@ export function deriveCloudflaredMissing(ports: PreviewPortsSnapshot | undefined
  * (docs/features/dev-server-preview.md). Polling MVP, same "no server-side
  * push channel of its own" reasoning as `use-git-panel.ts`/
  * `use-checks-panel.ts` — the reserved `preview:*` ephemeral-streaming
- * namespace (`@falcon/wire`'s `reserved.ts`) is the real fix for live
+ * namespace (`@kvy/wire`'s `reserved.ts`) is the real fix for live
  * tunnel-liveness updates, deferred to a later phase.
  *
  * Two independent polling intervals, not one shared fetch: `preview.ports`

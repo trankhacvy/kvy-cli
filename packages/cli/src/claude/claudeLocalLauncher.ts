@@ -51,7 +51,7 @@
  * or the RPC/keypress transport that decides *when* `requestSwitch()` gets
  * called (that's `loop.ts`'s job, per its own file header).
  */
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import type { Logger } from "../logger.js";
 import {
   type ClaudeLocalDeps,
@@ -79,7 +79,7 @@ export interface ClaudeLocalLauncherOptions {
 }
 
 export interface ClaudeLocalLauncherDeps {
-  /** Resolved path to `falcon_claude_launcher.cjs` — forwarded to `claudeLocal()` verbatim. */
+  /** Resolved path to `kvy_claude_launcher.cjs` — forwarded to `claudeLocal()` verbatim. */
   launcherPath: string;
   /** Injectable for tests; defaults to the real `claudeLocal()`. */
   claudeLocal?: typeof claudeLocalDefault;

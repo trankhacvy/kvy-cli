@@ -1,10 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getRandomBytes, open } from "@falcon/crypto";
-import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon/wire";
+import { getRandomBytes, open } from "@kvy/crypto";
+import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@kvy/wire";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { FalconCredentials } from "../auth/credentials.js";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { LoopOptions } from "../claude/loop.js";
 import type {
@@ -48,7 +48,7 @@ function fakeOutbox(): { outbox: OutboxLike; enqueued: SessionEnvelope[][] } {
   };
 }
 
-function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
+function fakeCredentials(overrides: Partial<KvyCredentials> = {}): KvyCredentials {
   return {
     refreshToken: "test-refresh-token",
     keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
@@ -163,7 +163,7 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     workingDirectory: "/fake/workdir",
     claudeArgs: [],
     launcherPath: "/fake/launcher.cjs",
-    frontendUrl: "https://app.falcon.invalid",
+    frontendUrl: "https://app.kvy.invalid",
     hasGitDir: async () => true,
     displayQrCode: vi.fn(),
     readCredentials: () => fakeCredentials(),
@@ -376,11 +376,11 @@ describe("runStartClaudeCommand — startup banners", () => {
     await runStartClaudeCommand(
       baseDeps({
         bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
-        frontendUrl: "https://app.falcon.invalid",
+        frontendUrl: "https://app.kvy.invalid",
         write: (text) => written.push(text),
       }),
     );
-    expect(written.join("")).toContain("https://app.falcon.invalid/dashboard/session/sess_web_1/");
+    expect(written.join("")).toContain("https://app.kvy.invalid/dashboard/session/sess_web_1/");
   });
 
   it("renders a QR code for the session URL only when stdin is a TTY", async () => {
@@ -545,12 +545,12 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(bootstrapParams.metadata.model).toBeUndefined();
   });
 
-  it("resumes the provider transcript from FALCON_RECONNECT_PROVIDER_SESSION_ID when set (plan-v2.md W3.7)", async () => {
+  it("resumes the provider transcript from KVY_RECONNECT_PROVIDER_SESSION_ID when set (plan-v2.md W3.7)", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
 
     await runStartClaudeCommand(
       baseDeps({
-        env: { FALCON_RECONNECT_PROVIDER_SESSION_ID: "provider-sess-abc" },
+        env: { KVY_RECONNECT_PROVIDER_SESSION_ID: "provider-sess-abc" },
         startPtyClaudeSession,
       }),
     );
@@ -561,12 +561,12 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBe("provider-sess-abc");
   });
 
-  it("treats a whitespace-only FALCON_RECONNECT_PROVIDER_SESSION_ID as absent, not a truthy sessionId", async () => {
+  it("treats a whitespace-only KVY_RECONNECT_PROVIDER_SESSION_ID as absent, not a truthy sessionId", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
 
     await runStartClaudeCommand(
       baseDeps({
-        env: { FALCON_RECONNECT_PROVIDER_SESSION_ID: "   " },
+        env: { KVY_RECONNECT_PROVIDER_SESSION_ID: "   " },
         startPtyClaudeSession,
       }),
     );
@@ -577,7 +577,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBeNull();
   });
 
-  it("passes env through to bootstrapSession so it can honor FALCON_RECONNECT_SESSION_ID", async () => {
+  it("passes env through to bootstrapSession so it can honor KVY_RECONNECT_SESSION_ID", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_1",
       dek: getRandomBytes(32),
@@ -585,8 +585,8 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       created: false,
     }));
     const reconnectEnv = {
-      FALCON_RECONNECT_SESSION_ID: "sess_existing",
-      FALCON_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
+      KVY_RECONNECT_SESSION_ID: "sess_existing",
+      KVY_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
     };
 
     await runStartClaudeCommand(
@@ -663,9 +663,9 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     // on top for the terminal case — both must flow through this single
     // `runStartClaudeCommand` call without one clobbering the other.
     const fullReconnectEnv = {
-      FALCON_RECONNECT_SESSION_ID: "sess_existing",
-      FALCON_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
-      FALCON_RECONNECT_PROVIDER_SESSION_ID: "provider-sess-xyz",
+      KVY_RECONNECT_SESSION_ID: "sess_existing",
+      KVY_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
+      KVY_RECONNECT_PROVIDER_SESSION_ID: "provider-sess-xyz",
     };
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_existing",
@@ -699,7 +699,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const installRemotePermissionHook = vi.fn(async () =>
       fakeRemotePermissionHook({
         settingsPath: "/tmp/hooks/s.json",
-        settingsEnv: { FALCON_HOOK_SETTINGS_PATH: "/tmp/hooks/s.json" },
+        settingsEnv: { KVY_HOOK_SETTINGS_PATH: "/tmp/hooks/s.json" },
       }),
     );
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
@@ -719,7 +719,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     ];
     expect(ptyOptions.settingsPath).toBe("/tmp/hooks/s.json");
     expect(ptyOptions.settingsEnv).toEqual({
-      FALCON_HOOK_SETTINGS_PATH: "/tmp/hooks/s.json",
+      KVY_HOOK_SETTINGS_PATH: "/tmp/hooks/s.json",
     });
   });
 
@@ -859,7 +859,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   });
 
   it("injects a message RPC into the PTY and completes the send claim once the message is submitted", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-start-test-"));
     try {
       const injectMessage = vi.fn();
       let onInjected: ((id: string) => void) | undefined;
@@ -915,7 +915,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
   });
 
   it("completes a dropped injection's claim as dropped-session-ended so a retry sees an honest duplicate (W3.9)", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-start-test-"));
     try {
       let onDroppedInjections: ((messages: { id: string; text: string }[]) => void) | undefined;
       const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {
@@ -1233,7 +1233,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
     await runStartClaudeCommand(
       baseDeps({
-        // `FALCON_PTY_SETMODE` deliberately absent — setMode must stay
+        // `KVY_PTY_SETMODE` deliberately absent — setMode must stay
         // `{ok:false}` by default regardless of what the host's own
         // process.env happens to have (plan-v2.md W4.3, flag-gated).
         env: {},
@@ -1250,7 +1250,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
       ok: false,
     });
-    // `FALCON_PTY_SETMODEL` also deliberately absent — same default-off
+    // `KVY_PTY_SETMODEL` also deliberately absent — same default-off
     // discipline as setMode (issue #12).
     await expect(handlers.setModel({ model: "sonnet" })).resolves.toEqual({
       ok: false,
@@ -1268,7 +1268,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
-  describe("setMode (W4.3 — real PTY setMode, flag-gated behind FALCON_PTY_SETMODE=1)", () => {
+  describe("setMode (W4.3 — real PTY setMode, flag-gated behind KVY_PTY_SETMODE=1)", () => {
     async function setup(overrides: {
       getCurrentPermissionMode?: () =>
         | "default"
@@ -1304,7 +1304,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
       await runStartClaudeCommand(
         baseDeps({
-          env: { FALCON_PTY_SETMODE: "1", ...overrides.env },
+          env: { KVY_PTY_SETMODE: "1", ...overrides.env },
           installRemotePermissionHook,
           startPtyClaudeSession,
           registerSessionRpcHandlers,
@@ -1321,7 +1321,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     it("stays {ok:false} when the flag is off, even with a cached mode available", async () => {
       const { handlers } = await setup({
         getCurrentPermissionMode: () => "default",
-        env: { FALCON_PTY_SETMODE: "0" },
+        env: { KVY_PTY_SETMODE: "0" },
       });
       await expect(handlers.setMode({ mode: "plan" })).resolves.toEqual({
         ok: false,
@@ -1454,7 +1454,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
-  describe("setModel (issue #12 — real PTY setModel, flag-gated behind FALCON_PTY_SETMODEL=1)", () => {
+  describe("setModel (issue #12 — real PTY setModel, flag-gated behind KVY_PTY_SETMODEL=1)", () => {
     async function setup(
       overrides: {
         sendModelChange?: ReturnType<typeof vi.fn>;
@@ -1478,7 +1478,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
 
       await runStartClaudeCommand(
         baseDeps({
-          env: { FALCON_PTY_SETMODEL: "1", ...overrides.env },
+          env: { KVY_PTY_SETMODEL: "1", ...overrides.env },
           startPtyClaudeSession,
           registerSessionRpcHandlers,
           setTimeoutImpl: overrides.setTimeoutImpl,
@@ -1494,7 +1494,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     }
 
     it("stays {ok:false} when the flag is off, even though sendModelChange would succeed", async () => {
-      const { handlers, sendModelChange } = await setup({ env: { FALCON_PTY_SETMODEL: "0" } });
+      const { handlers, sendModelChange } = await setup({ env: { KVY_PTY_SETMODEL: "0" } });
       await expect(handlers.setModel({ model: "sonnet" })).resolves.toEqual({ ok: false });
       expect(sendModelChange).not.toHaveBeenCalled();
     });
@@ -1837,7 +1837,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
     // immediate process termination with no `finally` block (including the
     // per-directory session lock's `release()`) ever running. This is the
     // documented root cause of a session lock going stale (a dead pid still
-    // "held" in the lock file) after an interactive `falcon claude` was
+    // "held" in the lock file) after an interactive `kvy claude` was
     // interrupted with Ctrl-C before the PTY (and its raw-mode byte
     // forwarding) was up.
     const rpcStop = vi.fn();
@@ -1953,7 +1953,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 
   it("routes a message RPC into loop()'s onMessage subscribers on the remote flow", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-start-remote-test-"));
     try {
       const received: { id: string; text: string }[] = [];
       const loop = vi.fn(async (options: LoopOptions) => {
@@ -2038,7 +2038,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 
   it("routes a stop RPC into loop()'s onExitRequested subscribers on the remote flow", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-stop-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-start-remote-stop-test-"));
     try {
       let exitRequests = 0;
       const loop = vi.fn(async (options: LoopOptions) => {
@@ -2072,7 +2072,7 @@ describe("runStartClaudeCommand — daemon-spawned remote flow (--starting-mode 
   });
 
   it("stop RPC with force schedules a process exit after the grace period on the remote flow", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-start-remote-stop-force-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-start-remote-stop-force-test-"));
     vi.useFakeTimers();
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     try {
@@ -2257,9 +2257,9 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP/SIGINT lifecycle-status repor
     // `session/sessionLock.ts`): before this fix, SIGINT had no registered
     // handler at all, so Node applied its default disposition — instant
     // process termination, skipping every `finally` block, including the
-    // one that calls `sessionLock.release()`. A subsequent `falcon claude`
+    // one that calls `sessionLock.release()`. A subsequent `kvy claude`
     // in the same directory would then see a lock file naming a pid that no
-    // longer existed and refuse to start ("a Falcon session is already
+    // longer existed and refuse to start ("a Kvy session is already
     // running..."), even though nothing was actually still running.
     const reportSessionStatus = vi.fn(async () => ({ type: "ok" }) as const);
     const { handle, stop } = fakeStoppablePtyHandle();
@@ -2298,7 +2298,7 @@ describe("runStartClaudeCommand — SIGTERM/SIGHUP/SIGINT lifecycle-status repor
     expect(code).toBe(1);
     // The actual fix under test: the lock this invocation acquired was
     // released — no stale, dead-pid lock left behind for the next
-    // `falcon claude` in this directory to trip over.
+    // `kvy claude` in this directory to trip over.
     expect(release).toHaveBeenCalledTimes(1);
 
     expect(reportSessionStatus).toHaveBeenCalledTimes(1);

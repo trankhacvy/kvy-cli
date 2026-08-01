@@ -1,9 +1,9 @@
 /**
- * `falcon github login [--token] [--client-id <id>]` / `logout` / `status`
+ * `kvy github login [--token] [--client-id <id>]` / `logout` / `status`
  * (docs/features/github-pr-ci.md "GITHUB AUTH"). Local-only, no daemon
  * interaction (same rationale as `workspace config`/`adapters`): this reads/
- * writes `~/.falcon/github.key` directly (`../github/githubAuth.js`) and
- * talks to GitHub's own REST API over plain `fetch`, never Falcon's server —
+ * writes `~/.kvy/github.key` directly (`../github/githubAuth.js`) and
+ * talks to GitHub's own REST API over plain `fetch`, never Kvy's server —
  * the whole point of this token is that the server never sees it (design
  * §5.3/§6.1).
  *
@@ -12,10 +12,10 @@
  * history and `ps`'s process listing, exactly the kind of exposure this
  * module exists to avoid. Without `--token`, `login` runs the GitHub device
  * authorization flow (`../github/deviceFlow.js`), which needs a client id:
- * `--client-id` wins, then `FALCON_GITHUB_CLIENT_ID`, then
- * `DEFAULT_GITHUB_CLIENT_ID` below — empty until a Falcon GitHub OAuth app
+ * `--client-id` wins, then `KVY_GITHUB_CLIENT_ID`, then
+ * `DEFAULT_GITHUB_CLIENT_ID` below — empty until a Kvy GitHub OAuth app
  * with Device Flow enabled actually exists (docs/features/github-pr-ci.md's
- * risk note), so `falcon github login` with no flags and no configured
+ * risk note), so `kvy github login` with no flags and no configured
  * client id fails fast with an explicit "use --token instead" message
  * rather than hanging on a device code request that was never going to
  * succeed.
@@ -24,7 +24,7 @@ import { createInterface } from "node:readline/promises";
 import { pollForToken, requestDeviceCode } from "../github/deviceFlow.js";
 import { clearGithubToken, readGithubToken, writeGithubToken } from "../github/githubAuth.js";
 
-/** No Falcon GitHub OAuth app with Device Flow enabled exists yet (docs/features/github-pr-ci.md risk note: "Device-flow client id"). Set `FALCON_GITHUB_CLIENT_ID` or pass `--client-id` once one does. */
+/** No Kvy GitHub OAuth app with Device Flow enabled exists yet (docs/features/github-pr-ci.md risk note: "Device-flow client id"). Set `KVY_GITHUB_CLIENT_ID` or pass `--client-id` once one does. */
 export const DEFAULT_GITHUB_CLIENT_ID = "";
 
 export interface GithubLoginOptions {
@@ -108,10 +108,10 @@ async function defaultReadSecretLine(prompt: string): Promise<string> {
 }
 
 function resolveClientId(options: GithubLoginOptions, env: NodeJS.ProcessEnv): string {
-  return options.clientId ?? env.FALCON_GITHUB_CLIENT_ID ?? DEFAULT_GITHUB_CLIENT_ID;
+  return options.clientId ?? env.KVY_GITHUB_CLIENT_ID ?? DEFAULT_GITHUB_CLIENT_ID;
 }
 
-/** Runs `falcon github login`. Returns 1 (no token saved) if `--token` produced an empty paste, or if the device flow has no usable client id — never throws for either expected case. */
+/** Runs `kvy github login`. Returns 1 (no token saved) if `--token` produced an empty paste, or if the device flow has no usable client id — never throws for either expected case. */
 export async function runGithubLogin(
   options: GithubLoginOptions,
   deps: GithubCommandDeps = {},
@@ -126,7 +126,7 @@ export async function runGithubLogin(
       "Paste a GitHub personal access token (repo, read:checks scopes): ",
     );
     if (!token) {
-      write("falcon github login: no token entered, nothing saved.\n");
+      write("kvy github login: no token entered, nothing saved.\n");
       return 1;
     }
     writeGithubToken({ token, createdAt: now(), method: "pat" }, deps.homeDir);
@@ -137,9 +137,9 @@ export async function runGithubLogin(
   const clientId = resolveClientId(options, env);
   if (!clientId) {
     write(
-      "falcon github login: no GitHub OAuth client id is configured yet.\n" +
-        "Run `falcon github login --token` and paste a personal access token instead,\n" +
-        "or set FALCON_GITHUB_CLIENT_ID / pass --client-id once a Falcon GitHub OAuth app exists.\n",
+      "kvy github login: no GitHub OAuth client id is configured yet.\n" +
+        "Run `kvy github login --token` and paste a personal access token instead,\n" +
+        "or set KVY_GITHUB_CLIENT_ID / pass --client-id once a Kvy GitHub OAuth app exists.\n",
     );
     return 1;
   }
@@ -165,7 +165,7 @@ export async function runGithubLogin(
   return 0;
 }
 
-/** Runs `falcon github logout`. Always returns 0 — a no-op when there was nothing to clear, same contract as `clearGithubToken` itself. */
+/** Runs `kvy github logout`. Always returns 0 — a no-op when there was nothing to clear, same contract as `clearGithubToken` itself. */
 export function runGithubLogout(deps: GithubCommandDeps = {}): number {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   clearGithubToken(deps.homeDir);
@@ -173,12 +173,12 @@ export function runGithubLogout(deps: GithubCommandDeps = {}): number {
   return 0;
 }
 
-/** Runs `falcon github status`: reports whether a token is stored, and — if so — verifies it live against GitHub's `/user` endpoint (never against Falcon's own server, which never sees this token) and reports the granted scopes from the `X-OAuth-Scopes` response header. Returns 1 for "not connected" and for a rejected/invalid token, so scripting can detect either. */
+/** Runs `kvy github status`: reports whether a token is stored, and — if so — verifies it live against GitHub's `/user` endpoint (never against Kvy's own server, which never sees this token) and reports the granted scopes from the `X-OAuth-Scopes` response header. Returns 1 for "not connected" and for a rejected/invalid token, so scripting can detect either. */
 export async function runGithubStatus(deps: GithubCommandDeps = {}): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const token = readGithubToken(deps.homeDir);
   if (!token) {
-    write("falcon github status: not connected to GitHub on this machine.\n");
+    write("kvy github status: not connected to GitHub on this machine.\n");
     return 1;
   }
 
@@ -192,9 +192,7 @@ export async function runGithubStatus(deps: GithubCommandDeps = {}): Promise<num
   });
 
   if (!response.ok) {
-    write(
-      "falcon github status: invalid token. GitHub rejected it. Run `falcon github login` again.\n",
-    );
+    write("kvy github status: invalid token. GitHub rejected it. Run `kvy github login` again.\n");
     return 1;
   }
 

@@ -24,7 +24,7 @@ function allStrings(): string[] {
 describe("CLI auth copy", () => {
   it("never tells the user to run auth login, except with no terminal", () => {
     const offenders = allStrings().filter(
-      (message) => /falcon auth login/.test(message) && !/no terminal here/.test(message),
+      (message) => /kvy auth login/.test(message) && !/no terminal here/.test(message),
     );
     expect(offenders).toEqual([]);
   });

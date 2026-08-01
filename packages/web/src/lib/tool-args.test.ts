@@ -395,7 +395,7 @@ describe("parseAskQuestions", () => {
 
 describe("parseAskAnswers", () => {
   // Real Claude Code 2.1.218 tool_result `content` strings, captured from a
-  // live `falcon claude` session (docs/known-issues.md issue #5 track B) —
+  // live `kvy claude` session (docs/known-issues.md issue #5 track B) —
   // not hand-guessed. Both a single- and a two-question call use this exact
   // `"question"="answer"` shape.
   it("parses a real single-question tool_result string", () => {
@@ -437,16 +437,16 @@ describe("parseAskAnswers", () => {
     ).toEqual([{ question: "What is your favorite drink?", answer: "Hot chocolate" }]);
   });
 
-  // Falcon's own "deny-with-answer" reason text (`composeAskAnswerReason` in
+  // Kvy's own "deny-with-answer" reason text (`composeAskAnswerReason` in
   // `packages/cli/src/claude/pretoolPermissionBridge.ts`) — the shape actually delivered
   // for a web-answered question that couldn't be driven into a live terminal widget
   // (docs/known-issues-cliweb-sync-test.md issue #4: a free-text answer, or any answer
   // to a purely web-initiated turn). Distinct from the `"question"="answer"` shape above
   // — no quotes, a `- question` / `  → answer` line pair instead.
-  it("parses Falcon's own deny-with-answer reason text (free-text web answer)", () => {
+  it("parses Kvy's own deny-with-answer reason text (free-text web answer)", () => {
     expect(
       parseAskAnswers(
-        "The user answered via the Falcon web UI:\n- Pick a fruit\n  → Mango\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
+        "The user answered via the Kvy web UI:\n- Pick a fruit\n  → Mango\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
       ),
     ).toEqual([{ question: "Pick a fruit", answer: "Mango" }]);
   });
@@ -454,7 +454,7 @@ describe("parseAskAnswers", () => {
   it("parses a multi-question deny-with-answer reason text, in order", () => {
     expect(
       parseAskAnswers(
-        "The user answered via the Falcon web UI:\n- Which color?\n  → Blue\n- Which size?\n  → Small\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
+        "The user answered via the Kvy web UI:\n- Which color?\n  → Blue\n- Which size?\n  → Small\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
       ),
     ).toEqual([
       { question: "Which color?", answer: "Blue" },

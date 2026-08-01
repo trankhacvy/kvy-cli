@@ -1,5 +1,5 @@
 /**
- * Daemon-side HTTP client for the blob storage subsystem (falcon-system-
+ * Daemon-side HTTP client for the blob storage subsystem (kvy-system-
  * design.md §6.2 "POST /blobs/request-upload   POST /blobs/request-download",
  * §6.5; plan.md §16 "4.3 Distribution & self-host"). Encrypts with
  * `encryptBlob`/a machine-DEK-derived blob key (`deriveBlobKey`, design
@@ -7,7 +7,7 @@
  * boundary every other content path in this codebase respects.
  *
  * This is what backs the `blobRef` fields `git.diff`/`adopt.mirror`
- * reserved on the wire (`@falcon/wire`'s `rpc.ts`) for exactly this
+ * reserved on the wire (`@kvy/wire`'s `rpc.ts`) for exactly this
  * subsystem, once it existed — see `gitDiff.ts`/`transcriptMirror.ts`'s own
  * doc comments for how they consume `uploadBlob` below.
  *
@@ -19,7 +19,7 @@
  * "best-effort side channel, log and return a falsy sentinel" contract.
  */
 import { createHash } from "node:crypto";
-import { decryptBlob, encryptBlob } from "@falcon/crypto";
+import { decryptBlob, encryptBlob } from "@kvy/crypto";
 import type { Logger } from "../logger.js";
 
 const DEFAULT_SERVER_URL = "http://127.0.0.1:3005";
@@ -47,7 +47,7 @@ export function createBlobClientDeps(
   overrides: Partial<BlobClientDeps> = {},
 ): BlobClientDeps {
   return {
-    serverUrl: process.env.FALCON_SERVER_URL?.trim() || DEFAULT_SERVER_URL,
+    serverUrl: process.env.KVY_SERVER_URL?.trim() || DEFAULT_SERVER_URL,
     fetchImpl: fetch,
     logger: noopLogger,
     ...required,

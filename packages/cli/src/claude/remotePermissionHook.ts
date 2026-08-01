@@ -19,8 +19,8 @@
  *
  * ## What the caller (`commands/start.ts`) wires from the returned handle
  *  - `settingsEnv` — merge into the spawned `claude`'s `claudeEnvVars` so
- *    whatever launches the live TUI passes `--settings "$FALCON_HOOK_SETTINGS_PATH"`.
- *    (Falcon's local spawn wrapper already supports a `--settings` hook file;
+ *    whatever launches the live TUI passes `--settings "$KVY_HOOK_SETTINGS_PATH"`.
+ *    (Kvy's local spawn wrapper already supports a `--settings` hook file;
  *    the exact `--settings` plumbing for the PTY-wrapped TUI is the input
  *    path's job and is reconciled at merge — this env var is how the path
  *    reaches it without this module reaching into the spawn.)
@@ -51,7 +51,7 @@
  */
 
 import path from "node:path";
-import type { PermDecision, PermissionMode, SessionEnvelope } from "@falcon/wire";
+import type { PermDecision, PermissionMode, SessionEnvelope } from "@kvy/wire";
 import type { PermAnswerResult } from "../acp/acpPermissionHandler.js";
 import type { Logger } from "../logger.js";
 import {
@@ -64,7 +64,7 @@ import type { AskQuestion } from "./pretoolPermissionBridge.js";
 import { PreToolPermissionBridge } from "./pretoolPermissionBridge.js";
 
 /** Env var carrying the generated `--settings` path onto the spawned `claude`'s environment. */
-export const HOOK_SETTINGS_ENV_VAR = "FALCON_HOOK_SETTINGS_PATH";
+export const HOOK_SETTINGS_ENV_VAR = "KVY_HOOK_SETTINGS_PATH";
 
 /**
  * Default max quiet time before an active web turn auto-clears (plan-v2.md
@@ -138,7 +138,7 @@ export interface RemotePermissionHookDeps {
 export interface RemotePermissionHookHandle {
   /** Absolute path to the generated `--settings` file to pass to `claude`. */
   settingsPath: string;
-  /** `{ FALCON_HOOK_SETTINGS_PATH: <settingsPath> }` — merge into `claudeEnvVars`. */
+  /** `{ KVY_HOOK_SETTINGS_PATH: <settingsPath> }` — merge into `claudeEnvVars`. */
   settingsEnv: Record<string, string>;
   /** Loopback port the hook forwarder talks to (introspection/tests). */
   port: number;
@@ -303,7 +303,7 @@ export async function installRemotePermissionHook(
   };
 }
 
-/** Convenience: the conventional hooks temp directory under a Falcon home dir. */
+/** Convenience: the conventional hooks temp directory under a Kvy home dir. */
 export function defaultHooksDir(homeDir: string): string {
   return path.join(homeDir, "tmp", "hooks");
 }

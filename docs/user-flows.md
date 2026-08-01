@@ -1,6 +1,6 @@
 # User flows + fix plan
 
-Reference doc for Falcon's core usage scenarios and their real implementation status,
+Reference doc for Kvy's core usage scenarios and their real implementation status,
 verified by live-testing (tmux + real Chrome MCP, 2026-07-19) and code tracing
 (file:line citations below). Companion to `pty-continuation-brief.md` (which already
 flagged the status-stuck bug as open problem #2) and `acp-delta-proposal.md` (ACP
@@ -11,7 +11,7 @@ Status legend: ✅ implemented · ⚠️ implemented but needs work · ❌ not i
 ## The 5 flows
 
 ### 1. Started at my desk, walked away
-Run `falcon claude` locally, work a while, physically leave. Something needs attention
+Run `kvy claude` locally, work a while, physically leave. Something needs attention
 (permission request, question, turn finishes) — get pinged on phone, act remotely.
 
 - ✅ Session mirrors to web live; approving/denying a permission from web resolves the
@@ -35,9 +35,9 @@ Not at any machine with the code. Open web, "New session," pick machine + folder
 terminal involved at all.
 
 - ✅ The wizard is real end-to-end (machine picker → directory browser → `spawn` machine
-  RPC → daemon → live `falcon claude --starting-mode remote` process) — confirmed live
+  RPC → daemon → live `kvy claude --starting-mode remote` process) — confirmed live
   and by code trace, not a stub.
-- ⚠️ Only works for a folder already registered via `falcon workspace register` from a
+- ⚠️ Only works for a folder already registered via `kvy workspace register` from a
   terminal. A genuinely fresh folder picked cold in the wizard fails at final submit
   (`unknown-workspace`), undercutting "no terminal needed."
 - ⚠️ No dedup guard against starting two fresh sessions in the same directory from the wizard.

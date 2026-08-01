@@ -5,7 +5,7 @@ describe("createMockNewSessionActions", () => {
   it("browses the seeded fake filesystem, sorted alphabetically", async () => {
     const actions = createMockNewSessionActions("mach-1");
     const listing = await actions.browseDirectory("/Users/vy/projects");
-    expect(listing.entries.map((e) => e.name)).toEqual(["falcon", "happy", "scratch"]);
+    expect(listing.entries.map((e) => e.name)).toEqual(["happy", "kvy", "scratch"]);
     expect(listing.parent).toBe("/Users/vy");
   });
 
@@ -17,7 +17,7 @@ describe("createMockNewSessionActions", () => {
   it("spawn succeeds directly for an existing directory", async () => {
     const actions = createMockNewSessionActions("mach-1");
     const outcome = await actions.spawn({
-      directory: "/Users/vy/projects/falcon",
+      directory: "/Users/vy/projects/kvy",
       provider: "claude-code",
       permissionMode: "default",
     });
@@ -50,7 +50,7 @@ describe("createMockNewSessionActions", () => {
 
   it("listImportCandidates returns seeded candidates for a directory that has them", async () => {
     const actions = createMockNewSessionActions("mach-1");
-    const candidates = await actions.listImportCandidates("/Users/vy/projects/falcon");
+    const candidates = await actions.listImportCandidates("/Users/vy/projects/kvy");
     expect(candidates.length).toBeGreaterThan(0);
     expect(candidates.some((c) => c.running)).toBe(true);
   });
@@ -63,7 +63,7 @@ describe("createMockNewSessionActions", () => {
 
   it("listBranches returns the seeded branches, including one current and one already checked out elsewhere", async () => {
     const actions = createMockNewSessionActions("mach-1");
-    const branches = await actions.listBranches("/Users/vy/projects/falcon");
+    const branches = await actions.listBranches("/Users/vy/projects/kvy");
     expect(branches.some((b) => b.isCurrent)).toBe(true);
     expect(branches.some((b) => b.checkedOutAt !== undefined)).toBe(true);
   });

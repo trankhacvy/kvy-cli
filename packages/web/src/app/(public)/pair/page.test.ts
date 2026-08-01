@@ -31,7 +31,7 @@ describe("pair/page.tsx — gate order (docs/auth-ux-overhaul-plan.md AX-2.2)", 
 
   it("offers to fetch keys instead of dead-ending a browser that has none", () => {
     expect(pageSource).toContain("RequestKeysPanel");
-    expect(pageSource).not.toContain("no Falcon key material");
+    expect(pageSource).not.toContain("no Kvy key material");
   });
 
   it("renders the approve card's requester-supplied details as plain text", () => {

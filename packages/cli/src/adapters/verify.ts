@@ -11,7 +11,7 @@
  * ever needing network access.
  *
  * Deliberately never throws: every caller (the installer's post-install
- * check, `falcon doctor`, and Phase 2.1's `acpConnection.ts` spawn path)
+ * check, `kvy doctor`, and Phase 2.1's `acpConnection.ts` spawn path)
  * needs a plain "is this usable, and if not, why" answer rather than a
  * try/catch — same "no silent failures, no thrown surprises" shape as
  * `codexProviderAdapter.ts`'s `detectCodex`.

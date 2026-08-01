@@ -3,18 +3,18 @@ import { SERVICE_LABEL } from "./serviceInstallPaths.js";
 import { buildLaunchdPlist, buildSystemdUnit } from "./serviceInstallTemplates.js";
 
 const baseConfig = {
-  falconExecutable: "/usr/local/bin/falcon",
-  stdoutLogPath: "/home/u/.falcon/logs/daemon.service.log",
-  stderrLogPath: "/home/u/.falcon/logs/daemon.service.error.log",
+  kvyExecutable: "/usr/local/bin/kvy",
+  stdoutLogPath: "/home/u/.kvy/logs/daemon.service.log",
+  stderrLogPath: "/home/u/.kvy/logs/daemon.service.error.log",
 };
 
 describe("buildLaunchdPlist", () => {
-  it("is valid-shaped plist XML with the falcon daemon start-sync argv", () => {
+  it("is valid-shaped plist XML with the kvy daemon start-sync argv", () => {
     const plist = buildLaunchdPlist(baseConfig);
 
     expect(plist).toContain('<?xml version="1.0" encoding="UTF-8"?>');
     expect(plist).toContain(`<string>${SERVICE_LABEL}</string>`);
-    expect(plist).toContain("<string>/usr/local/bin/falcon</string>");
+    expect(plist).toContain("<string>/usr/local/bin/kvy</string>");
     expect(plist).toContain("<string>daemon</string>");
     expect(plist).toContain("<string>start-sync</string>");
     expect(plist).toContain("<key>RunAtLoad</key>");
@@ -27,29 +27,29 @@ describe("buildLaunchdPlist", () => {
   it("includes an EnvironmentVariables dict when env overrides are given", () => {
     const plist = buildLaunchdPlist({
       ...baseConfig,
-      env: { FALCON_HOME_DIR: "/home/u/.falcon2" },
+      env: { KVY_HOME_DIR: "/home/u/.kvy2" },
     });
 
     expect(plist).toContain("<key>EnvironmentVariables</key>");
-    expect(plist).toContain("<key>FALCON_HOME_DIR</key>");
-    expect(plist).toContain("<string>/home/u/.falcon2</string>");
+    expect(plist).toContain("<key>KVY_HOME_DIR</key>");
+    expect(plist).toContain("<string>/home/u/.kvy2</string>");
   });
 
   it("XML-escapes special characters in the executable path", () => {
-    const plist = buildLaunchdPlist({ ...baseConfig, falconExecutable: "/usr/local/bin/a & b" });
+    const plist = buildLaunchdPlist({ ...baseConfig, kvyExecutable: "/usr/local/bin/a & b" });
     expect(plist).toContain("/usr/local/bin/a &amp; b");
     expect(plist).not.toContain("/usr/local/bin/a & b</string>");
   });
 });
 
 describe("buildSystemdUnit", () => {
-  it("is a valid-shaped unit file with the falcon daemon start-sync ExecStart", () => {
+  it("is a valid-shaped unit file with the kvy daemon start-sync ExecStart", () => {
     const unit = buildSystemdUnit(baseConfig);
 
     expect(unit).toContain("[Unit]");
     expect(unit).toContain("[Service]");
     expect(unit).toContain("[Install]");
-    expect(unit).toContain(`ExecStart=${baseConfig.falconExecutable} daemon start-sync`);
+    expect(unit).toContain(`ExecStart=${baseConfig.kvyExecutable} daemon start-sync`);
     expect(unit).toContain("Restart=on-failure");
     expect(unit).toContain(`StandardOutput=append:${baseConfig.stdoutLogPath}`);
     expect(unit).toContain(`StandardError=append:${baseConfig.stderrLogPath}`);
@@ -57,7 +57,7 @@ describe("buildSystemdUnit", () => {
   });
 
   it("adds an Environment= line per env override", () => {
-    const unit = buildSystemdUnit({ ...baseConfig, env: { FALCON_HOME_DIR: "/home/u/.falcon2" } });
-    expect(unit).toContain("Environment=FALCON_HOME_DIR=/home/u/.falcon2");
+    const unit = buildSystemdUnit({ ...baseConfig, env: { KVY_HOME_DIR: "/home/u/.kvy2" } });
+    expect(unit).toContain("Environment=KVY_HOME_DIR=/home/u/.kvy2");
   });
 });

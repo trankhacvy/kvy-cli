@@ -1,4 +1,4 @@
-import { PushPayloadSchema } from "@falcon/wire";
+import { PushPayloadSchema } from "@kvy/wire";
 import webpush from "web-push";
 import { env } from "../../../config.js";
 import type { PushChannel } from "../types.js";

@@ -9,7 +9,7 @@
  * arbitrary-command-context) execution primitive for anyone who can reach
  * the account's machine RPC target. Instead every call is checked against
  * the *locally* registered root for its `workspaceId` — a workspace the
- * account has actually configured on this machine (`falcon workspace
+ * account has actually configured on this machine (`kvy workspace
  * config`, a separate plan bullet) — and the resolved real path (symlinks
  * followed) must land inside that root.
  *

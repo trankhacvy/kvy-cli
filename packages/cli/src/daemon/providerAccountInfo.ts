@@ -1,6 +1,6 @@
 /**
  * `provider.account` machine RPC handler (docs/competitive-notes-omnara.md
- * #9 "Provider account inspection + usage metering"; `@falcon/wire`'s
+ * #9 "Provider account inspection + usage metering"; `@kvy/wire`'s
  * `rpc.ts` doc comment above `ProviderAccountResultSchema`). Settings →
  * Providers' per-machine, per-provider account card: email, organization,
  * org role, billing type, last-refreshed timestamp, and a usage meter —
@@ -37,10 +37,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
-import type { ProviderAccountResult, ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@kvy/wire";
 
 export interface ProviderAccountInfoParams {
-  provider: "claude-code" | "codex";
+  provider: ProviderId;
 }
 
 export interface ProviderAccountInfoDeps {

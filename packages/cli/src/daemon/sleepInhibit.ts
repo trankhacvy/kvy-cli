@@ -21,8 +21,8 @@
  *
  * The `-w <daemon pid>` tether on BOTH flags is the leak-safety guard in
  * place of any `daemon/doctor.ts`/`markers.ts` reaping: `markers.ts`
- * classifies processes argv-first by the Falcon entrypoint token, so a raw
- * `caffeinate` child could never be recognized as Falcon-owned there. `-w`
+ * classifies processes argv-first by the Kvy entrypoint token, so a raw
+ * `caffeinate` child could never be recognized as Kvy-owned there. `-w`
  * instead makes macOS itself release the assertion the instant the tethered
  * pid exits — daemon crash (SIGKILL) included — so a leaked caffeinate
  * child that outlives the daemon is structurally impossible, not just
@@ -35,7 +35,7 @@
  * it's plugged in.
  */
 import { type ChildProcess, spawn } from "node:child_process";
-import type { SleepInhibitMode, SleepInhibitState } from "@falcon/wire";
+import type { SleepInhibitMode, SleepInhibitState } from "@kvy/wire";
 import type { Logger } from "../logger.js";
 
 /** Minimal shape a spawned sleep-inhibit child needs to expose — injectable so tests never spawn a real `caffeinate`. */

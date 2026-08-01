@@ -3,7 +3,7 @@
  * webhook matching by PID with a 15s awaiter").
  *
  * The daemon can't know a spawned session's `sessionId` at spawn time — the
- * spawned `falcon <provider>` process mints/resumes its own session and only
+ * spawned `kvy <provider>` process mints/resumes its own session and only
  * reports the id back once it's ready, via the control server's
  * `/session-started` webhook (`controlServer.ts`). This module bridges that
  * gap: `spawnEngine.ts` calls `waitFor(pid)` right after launching the child

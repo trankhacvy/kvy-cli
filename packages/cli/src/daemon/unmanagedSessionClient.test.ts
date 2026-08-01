@@ -1,5 +1,5 @@
-import { deriveKeyTree, getRandomBytes, open, unwrapDek } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { deriveKeyTree, getRandomBytes, open, unwrapDek } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import {

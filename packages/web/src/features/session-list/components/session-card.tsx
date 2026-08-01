@@ -71,8 +71,6 @@ export function SessionCard({
           pinned={session.pinned}
           status={session.status}
           machineId={session.machineId}
-          machineOnline={machine?.online ?? false}
-          machineName={machine?.name ?? null}
           workspaceId={session.workspaceId}
         />
       </div>

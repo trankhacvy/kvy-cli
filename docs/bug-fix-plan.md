@@ -1,7 +1,7 @@
 # Bug fix plan — live E2E pass (2026-07-21)
 
 This is an implementation/fix plan for 13 issues found during an exhaustive live end-to-end
-test pass of Falcon: real `tmux` CLI sessions (`falcon claude`) driving a real Claude Code
+test pass of Kvy: real `tmux` CLI sessions (`kvy claude`) driving a real Claude Code
 process, exercised against a real Chrome browser (MCP-automated) hitting a real running
 server, with **server-side decryption used to verify some findings directly against stored
 ciphertext** — several of these are not guesses, they were confirmed against real data
@@ -22,13 +22,13 @@ session it was found in.
 
 ### Problem
 
-`falcon claude`'s transcript tailer (`packages/cli/src/claude/scanner.ts`) watches the
+`kvy claude`'s transcript tailer (`packages/cli/src/claude/scanner.ts`) watches the
 *entire* Claude Code project transcript directory (`~/.claude/projects/<project-id>/`) as a
 fallback for when the `SessionStart` hook doesn't fire. That directory is shared by *every*
 Claude Code process running against the same working directory on the machine — including
 completely unrelated sessions in other terminals. The fallback watcher treats **any**
 `.jsonl` file it hasn't personally seen before as proof that *its own* tracked session
-rotated. Live repro: a `falcon claude --model haiku` session whose own transcript file was
+rotated. Live repro: a `kvy claude --model haiku` session whose own transcript file was
 slow to appear (>60s — hit the "session transcript never appeared — dropping" path) later
 had its dropped session slot silently reattached to a totally unrelated, already-running
 session's transcript file. The server ended up storing that *other* session's real message
@@ -525,7 +525,7 @@ model to X" pattern), while fixing what's actually shown in chat.
   envelope with no XML tags and no ANSI codes.
 - Extend `packages/cli/src/claude/modelChange.test.ts` (or a new
   `envelopeMapper.localCommand.test.ts`) with the exact strings from the live repro.
-- Manual repro: run `falcon claude`, type `/model haiku`, confirm the web timeline shows a
+- Manual repro: run `kvy claude`, type `/model haiku`, confirm the web timeline shows a
   clean "Set model to Haiku 4.5..." service line with no visible tags or escape codes, and
   that the model chip in `ComposerControls` still updates.
 
@@ -684,7 +684,7 @@ direct, single source of truth without hunting through permission decisions at a
 - Extend `session-state.test.ts` with a case asserting a `permission-mode` item with
   `source: "terminal"` updates `deriveCurrentPermissionMode` independent of any
   `perm-placeholder`/`tool` decision.
-- Manual repro: run `falcon claude`, press Shift+Tab at the terminal to cycle to
+- Manual repro: run `kvy claude`, press Shift+Tab at the terminal to cycle to
   `acceptEdits`, confirm the web `ComposerControls` mode chip updates within one tool-call
   hook round-trip (no user action needed on the web side).
 
@@ -1132,7 +1132,7 @@ signal).
 - Add `packages/web/src/lib/__tests__/session.test.ts` cases: a token with a far-future
   `exp` → `isSignedIn() === true`; a token with a past `exp` → `false`; a malformed token
   (not 3 dot-separated segments, or non-JSON payload) → treated as expired, not thrown.
-- Manual repro: manually set an expired JWT into `localStorage["falcon:token"]`, reload the
+- Manual repro: manually set an expired JWT into `localStorage["kvy:token"]`, reload the
   app, confirm a "please sign in again" state appears proactively rather than the app
   silently failing to sync.
 
@@ -1142,7 +1142,7 @@ signal).
 
 ### Problem
 
-Reloading the page with an expired token leaves the UI stuck on "Reconnecting to Falcon…"
+Reloading the page with an expired token leaves the UI stuck on "Reconnecting to Kvy…"
 forever, with no way out except manually clearing storage/signing out.
 
 ### Root cause
@@ -1215,7 +1215,7 @@ resolve itself" copy:
 // OfflineBanner.tsx:29-31
 const message = !online
   ? "You're offline. Changes will sync once your connection returns."
-  : "Reconnecting to Falcon…";
+  : "Reconnecting to Kvy…";
 ```
 
 There is no code path anywhere that turns "the server told us the token is invalid" into
@@ -1313,11 +1313,11 @@ its own.
 
 ---
 
-## 11. `falcon auth login` leaks abort listeners
+## 11. `kvy auth login` leaks abort listeners
 
 ### Problem
 
-Running `falcon auth login` produces `MaxListenersExceededWarning: Possible EventTarget
+Running `kvy auth login` produces `MaxListenersExceededWarning: Possible EventTarget
 memory leak detected. 11 abort listeners added to [AbortSignal]` after the process has been
 polling for approval for a while.
 
@@ -1413,7 +1413,7 @@ synchronously during construction.)
   `controller.signal.listenerCount ? controller.signal.listenerCount("abort") : ...`— or,
   simpler, spy on `AbortSignal.prototype.addEventListener`/`removeEventListener` call counts
   and assert they're equal after the loop (every add has a matching remove).
-- Manual repro: run `falcon auth login`, do not approve it, watch the CLI's stderr/log
+- Manual repro: run `kvy auth login`, do not approve it, watch the CLI's stderr/log
   output for 30+ seconds (15+ poll ticks) and confirm no `MaxListenersExceededWarning`
   appears (previously reproducible around the 11th tick, ~22s in).
 
@@ -1589,7 +1589,7 @@ async function restoreFromRecoveryCode(bridge: CryptoBridgeClient, code: string)
 {status.kind === "needs-signup" && (
   <>
     <div className="space-y-3 rounded-xl border border-border/70 bg-muted/30 p-4">
-      <p className="text-sm font-medium">Already have a Falcon account?</p>
+      <p className="text-sm font-medium">Already have a Kvy account?</p>
       <p className="text-sm text-muted-foreground">
         If this is a new or wiped browser, restore your existing identity with your
         recovery code instead of creating a new account.
@@ -1610,7 +1610,7 @@ async function restoreFromRecoveryCode(bridge: CryptoBridgeClient, code: string)
 `packages/web/src/components/auth/recovery-code-card.tsx`) — omitted here for brevity, but
 straightforward: a controlled text field plus a button calling `onSubmit`.
 
-This reuses `decodeRecoveryCode` (import from `@falcon/crypto/web`, matching this package's
+This reuses `decodeRecoveryCode` (import from `@kvy/crypto/web`, matching this package's
 existing import style for `getRandomBytes`/`ready` in `complete-oauth-sign-in.ts:23`),
 `bridge.init` (same method the fresh-signup path already calls,
 `complete-oauth-sign-in.ts:44`), and `completeChallengeSignIn` (the exact same
@@ -1778,13 +1778,13 @@ applies symmetrically to `SessionListMachine.name` / `MachineBadge`.
 Target branch: `v2-pty-injection` — every unit below lands there, matching plan-v2.md's own
 Master TODO. Decision: rather than merging this checklist into plan-v2.md's own Master TODO
 (which tracks an unrelated build-out track), a forked workflow —
-`.claude/workflows/falcon-bugfix-workflow.js` (`falcon-bugfix-loop`) — reads *this* file's
-checklist instead. It mirrors `falcon-dev-workflow.js` exactly (same phases, worktree/merge/
+`.claude/workflows/kvy-bugfix-workflow.js` (`kvy-bugfix-loop`) — reads *this* file's
+checklist instead. It mirrors `kvy-dev-workflow.js` exactly (same phases, worktree/merge/
 ancestry-proof mechanics, `[inline]`/`[bundle]`/`[solo]`/`[human]` semantics) with three
 differences: it points at `docs/bug-fix-plan.md` instead of `plan-v2.md`, its unit-finder looks
 for `BF*.*` checkboxes instead of `U*.*`, and its cycle bookkeeping writes to a separate
 `docs/bug-fix-progress.md` instead of the repo's `progress.md` — so a bugfix cycle's
-bookkeeping never collides with a `falcon-dev-loop` cycle's, even against the same branch.
+bookkeeping never collides with a `kvy-dev-loop` cycle's, even against the same branch.
 
 The 13 issues above are restructured into **execution units** sized for that dev workflow, using
 the same rationale plan-v2.md's own Master TODO states: running the full implement→test→
@@ -1869,7 +1869,7 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
         result) into a new CLI fixture and assert `mapClaudeToEnvelopes` produces one clean
         `service` envelope with no XML tags/ANSI codes; extend `modelChange.test.ts` with the
         same strings
-  - [ ] `[human]` live: run `falcon claude`, type `/model haiku`, confirm the web timeline shows
+  - [ ] `[human]` live: run `kvy claude`, type `/model haiku`, confirm the web timeline shows
         a clean "Set model to Haiku 4.5..." service line (no visible tags/escape codes) and the
         model chip still updates
 
@@ -1983,7 +1983,7 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
       `RecoveryCodeInput` component; no server/schema changes needed)
   - [ ] Add a `restoring` status branch to `signin/page.tsx` and a
         `restoreFromRecoveryCode(bridge, code)` handler: `decodeRecoveryCode(code)` (from
-        `@falcon/crypto`, already tested, currently unused anywhere in `packages/web/src`) → on
+        `@kvy/crypto`, already tested, currently unused anywhere in `packages/web/src`) → on
         success `bridge.init(masterSecret)` → `completeChallengeSignIn(bridge)` (the existing
         returning-device path) → redirect; on a malformed code or a challenge-sign-in failure,
         show an inline error without side effects
@@ -2014,7 +2014,7 @@ ancestry-proven (`git merge-base --is-ancestor <tip> v2-pty-injection`).
         stored messages never contain the other pane's content
   - [ ] Issue #2: confirm the stuck-"Working…" regression does not reappear (a
         Stop-hook-before-transcript-write race)
-  - [ ] Issue #4: `falcon claude`, `/model haiku` — clean service line, no XML/ANSI, model chip
+  - [ ] Issue #4: `kvy claude`, `/model haiku` — clean service line, no XML/ANSI, model chip
         updates
   - [ ] Issue #5: Shift+Tab in the live TUI — web mode chip updates within one tool-call
         round-trip

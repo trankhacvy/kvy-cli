@@ -529,7 +529,7 @@ describe("workspace.getConfig / run.* schemas (docs/features/setup-run-scripts.m
         started: true,
         method: "tmux",
         pid: 123,
-        tmuxSessionName: "falcon-run-abc",
+        tmuxSessionName: "kvy-run-abc",
       }).success,
     ).toBe(true);
     expect(RunStartResultSchema.safeParse({ started: true, method: "ssh" }).success).toBe(false);
@@ -646,7 +646,7 @@ describe("fs.list / fs.mkdir schemas (directory picker)", () => {
       FsListResultSchema.safeParse({
         path: "/home/me/projects",
         parent: "/home/me",
-        entries: [{ name: "falcon", isDirectory: true }],
+        entries: [{ name: "kvy", isDirectory: true }],
       }).success,
     ).toBe(true);
     expect(FsListResultSchema.safeParse({ path: "/", parent: null, entries: [] }).success).toBe(

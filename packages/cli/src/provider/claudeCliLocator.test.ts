@@ -198,7 +198,7 @@ describe("getVersion", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-cli-locator-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-cli-locator-"));
   });
 
   afterEach(() => {
@@ -231,7 +231,7 @@ describe("findClaudeInPath", () => {
   const originalPath = process.env.PATH;
 
   beforeEach(() => {
-    root = mkdtempSync(path.join(tmpdir(), "falcon-cli-locator-path-"));
+    root = mkdtempSync(path.join(tmpdir(), "kvy-cli-locator-path-"));
   });
 
   afterEach(() => {
@@ -297,25 +297,25 @@ describe("findGlobalClaudeCliPath", () => {
   let dir: string;
 
   beforeEach(() => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-cli-locator-env-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-cli-locator-env-"));
   });
 
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("uses FALCON_CLAUDE_PATH when set and the path exists", () => {
+  it("uses KVY_CLAUDE_PATH when set and the path exists", () => {
     const cliPath = path.join(dir, "claude");
     writeFileSync(cliPath, "#!/bin/sh\necho mock\n");
     chmodSync(cliPath, 0o755);
 
-    const result = findGlobalClaudeCliPath({ FALCON_CLAUDE_PATH: cliPath });
-    expect(result?.source).toBe("FALCON_CLAUDE_PATH");
+    const result = findGlobalClaudeCliPath({ KVY_CLAUDE_PATH: cliPath });
+    expect(result?.source).toBe("KVY_CLAUDE_PATH");
     expect(result?.path).toBe(realpathSync(cliPath));
   });
 
-  it("ignores FALCON_CLAUDE_PATH when the path does not exist", () => {
-    const result = findGlobalClaudeCliPath({ FALCON_CLAUDE_PATH: path.join(dir, "nonexistent") });
-    expect(result?.source).not.toBe("FALCON_CLAUDE_PATH");
+  it("ignores KVY_CLAUDE_PATH when the path does not exist", () => {
+    const result = findGlobalClaudeCliPath({ KVY_CLAUDE_PATH: path.join(dir, "nonexistent") });
+    expect(result?.source).not.toBe("KVY_CLAUDE_PATH");
   });
 });

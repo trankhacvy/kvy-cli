@@ -1,6 +1,6 @@
 name: provider-contract
 
-# Daily provider contract check (falcon-system-design.md §13 item 2,
+# Daily provider contract check (kvy-system-design.md §13 item 2,
 # plan.md §16 "4.4 Hardening & release gate"): installs the *latest*
 # published Claude Code CLI and runs it against a small fixture-prompt
 # corpus (packages/cli/scripts/provider-contract-test.ts), asserting that
@@ -61,7 +61,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm run contract:provider
 
-      # v2 (ACP, plan.md §17 Phase 2.4 / design §13.2): exercise Falcon's real
+      # v2 (ACP, plan.md §17 Phase 2.4 / design §13.2): exercise Kvy's real
       # ACP stack (AcpConnection + acpToEnvelope + acpPermissionHandler)
       # against the pinned claude-agent-acp adapter — hard-fail on a broken
       # pinned contract, warn on latest-version drift. Same billed Claude

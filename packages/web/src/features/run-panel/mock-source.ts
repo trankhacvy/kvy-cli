@@ -57,7 +57,7 @@ export function createMockRunPanelActions(_machineId: string): RunPanelActions {
         startedAt: Date.now(),
         logTail: "Server listening on http://localhost:3000\n",
       };
-      return { started: true, method: "tmux", pid: 4242, tmuxSessionName: "falcon-run-demo" };
+      return { started: true, method: "tmux", pid: 4242, tmuxSessionName: "kvy-run-demo" };
     },
 
     async stop(_worktree) {

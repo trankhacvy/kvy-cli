@@ -10,7 +10,7 @@
  *
  * `backendUrl`/`accessToken` are caller-supplied rather than resolved here:
  * this module doesn't own config resolution or auth-token storage (neither
- * exists on `main` yet — `falcon auth login` is still a stub), matching the
+ * exists on `main` yet — `kvy auth login` is still a stub), matching the
  * "treated as a given" pattern `claudeLocal.ts`/`hookServer.ts` already use
  * for their own not-yet-landed dependencies.
  *

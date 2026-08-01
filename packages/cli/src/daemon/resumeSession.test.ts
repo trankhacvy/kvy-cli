@@ -31,7 +31,7 @@ function fakeRegistry(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe("resumeSession", () => {
-  it("re-spawns with FALCON_RECONNECT_* env carrying the persisted encryption material", async () => {
+  it("re-spawns with KVY_RECONNECT_* env carrying the persisted encryption material", async () => {
     const launchProcess = vi.fn(async () => ({
       method: "detached" as const,
       pid: 555,
@@ -44,7 +44,7 @@ describe("resumeSession", () => {
       awaiter: fakeAwaiter(),
       resolveDirectory: () => "/tmp/proj",
       launchProcess,
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       baseEnv: {},
     });
 
@@ -54,7 +54,7 @@ describe("resumeSession", () => {
         sessionLabel: "sess_1",
         command: "/usr/bin/node",
         args: [
-          "/opt/falcon/dist/index.mjs",
+          "/opt/kvy/dist/index.mjs",
           "claude",
           "--starting-mode",
           "remote",
@@ -63,11 +63,11 @@ describe("resumeSession", () => {
         ],
         cwd: "/tmp/proj",
         env: expect.objectContaining({
-          FALCON_RECONNECT_SESSION_ID: "sess_1",
-          FALCON_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
-          FALCON_RECONNECT_SEQ: "3",
-          FALCON_RECONNECT_METADATA_VERSION: "2",
-          FALCON_RECONNECT_AGENT_STATE_VERSION: "1",
+          KVY_RECONNECT_SESSION_ID: "sess_1",
+          KVY_RECONNECT_ENCRYPTION_KEY: "wrapped-dek",
+          KVY_RECONNECT_SEQ: "3",
+          KVY_RECONNECT_METADATA_VERSION: "2",
+          KVY_RECONNECT_AGENT_STATE_VERSION: "1",
         }),
       }),
       undefined,
@@ -91,14 +91,14 @@ describe("resumeSession", () => {
       // The resolved directory the relaunch runs in — this exact string must
       // be threaded into `trackSpawned` so `scanForLiveSessionInDirectory`
       // can match the resumed session again.
-      resolveDirectory: () => "/Users/vy/projects/falcon",
+      resolveDirectory: () => "/Users/vy/projects/kvy",
       launchProcess,
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       baseEnv: {},
     });
 
     // Not just "called" — called with the directory as the second argument.
-    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(777, "/Users/vy/projects/falcon");
+    expect(registry.trackSpawned).toHaveBeenCalledExactlyOnceWith(777, "/Users/vy/projects/kvy");
   });
 
   it("uses the codex CLI name for a persisted codex session", async () => {
@@ -115,7 +115,7 @@ describe("resumeSession", () => {
       awaiter: fakeAwaiter(),
       resolveDirectory: () => "/tmp/proj",
       launchProcess,
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
     });
 
     expect(launchProcess).toHaveBeenCalledWith(
@@ -136,7 +136,7 @@ describe("resumeSession", () => {
         pid: 1,
         watchExit: () => () => {},
       })),
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       isAlive: () => false,
     });
 
@@ -165,7 +165,7 @@ describe("resumeSession", () => {
       awaiter: fakeAwaiter(),
       resolveDirectory: () => "/tmp/proj",
       launchProcess,
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       isAlive,
       sleep,
       now: () => now++,
@@ -196,7 +196,7 @@ describe("resumeSession", () => {
         pid: 1,
         watchExit: () => () => {},
       })),
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       isAlive,
       killPid,
       sleep: vi.fn(async () => {}),
@@ -223,7 +223,7 @@ describe("resumeSession", () => {
         awaiter: fakeAwaiter(),
         resolveDirectory: () => "/tmp/proj",
         launchProcess,
-        falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+        kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
         isAlive: () => true, // never dies, even after SIGKILL
         killPid: vi.fn(),
         sleep: vi.fn(async () => {}),
@@ -264,7 +264,7 @@ describe("resumeSession", () => {
         launchProcess: vi.fn(async () => {
           throw new Error("ENOENT");
         }),
-        falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+        kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       }),
     ).rejects.toThrow(/failed to launch provider process for resume/);
   });
@@ -284,7 +284,7 @@ describe("resumeSession", () => {
           pid: 1,
           watchExit: () => () => {},
         })),
-        falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+        kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       }),
     ).rejects.toThrow(/resume launched \(pid 1, detached\) but/);
   });

@@ -4,9 +4,9 @@
  * `launchctl`/`systemctl` process-exec side so these are plain,
  * snapshot-testable string builders with no I/O of their own.
  *
- * Both templates point the service straight at `falcon daemon start-sync`
+ * Both templates point the service straight at `kvy daemon start-sync`
  * — the daemon's own long-running process body (`daemon/commands.ts`),
- * normally spawned detached-and-polled by `falcon daemon start`. Once the
+ * normally spawned detached-and-polled by `kvy daemon start`. Once the
  * OS is supervising restarts (`KeepAlive`/`Restart=on-failure` below),
  * that detach-and-poll dance is redundant — the service manager *is* the
  * supervisor.
@@ -14,10 +14,10 @@
 import { SERVICE_LABEL } from "./serviceInstallPaths.js";
 
 export interface ServiceUnitConfig {
-  falconExecutable: string;
+  kvyExecutable: string;
   stdoutLogPath: string;
   stderrLogPath: string;
-  /** Extra environment variables the service process should see, e.g. a non-default `FALCON_HOME_DIR`. */
+  /** Extra environment variables the service process should see, e.g. a non-default `KVY_HOME_DIR`. */
   env?: Record<string, string>;
 }
 
@@ -41,7 +41,7 @@ export function buildLaunchdPlist(config: ServiceUnitConfig): string {
     `  <string>${xmlEscape(SERVICE_LABEL)}</string>`,
     "  <key>ProgramArguments</key>",
     "  <array>",
-    `    <string>${xmlEscape(config.falconExecutable)}</string>`,
+    `    <string>${xmlEscape(config.kvyExecutable)}</string>`,
     "    <string>daemon</string>",
     "    <string>start-sync</string>",
     "  </array>",
@@ -76,13 +76,13 @@ export function buildSystemdUnit(config: ServiceUnitConfig): string {
 
   return [
     "[Unit]",
-    `Description=Falcon daemon (${SERVICE_LABEL})`,
+    `Description=Kvy daemon (${SERVICE_LABEL})`,
     "After=network-online.target",
     "Wants=network-online.target",
     "",
     "[Service]",
     "Type=simple",
-    `ExecStart=${config.falconExecutable} daemon start-sync`,
+    `ExecStart=${config.kvyExecutable} daemon start-sync`,
     "Restart=on-failure",
     "RestartSec=5",
     `StandardOutput=append:${config.stdoutLogPath}`,

@@ -41,15 +41,15 @@ describe("ntfyChannel", () => {
       "https://ntfy.sh/my-ntfy-topic",
       expect.objectContaining({
         method: "POST",
-        headers: { Title: "Falcon" },
-        body: "Falcon has a question for you",
+        headers: { Title: "Kvy" },
+        body: "Kvy has a question for you",
       }),
     );
   });
 
   it("uses NTFY_BASE_URL when configured (self-hosted ntfy) and sets a Click deep link", async () => {
     process.env.NTFY_BASE_URL = "https://ntfy.internal/";
-    process.env.PUBLIC_WEB_ORIGIN = "https://app.falcon.dev";
+    process.env.PUBLIC_WEB_ORIGIN = "https://app.kvy.dev";
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
     const { ntfyChannel } = await import("./ntfy.js");
 
@@ -58,7 +58,7 @@ describe("ntfyChannel", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://ntfy.internal/my-ntfy-topic",
       expect.objectContaining({
-        headers: { Title: "Falcon", Click: "https://app.falcon.dev/dashboard/session/sess_1/" },
+        headers: { Title: "Kvy", Click: "https://app.kvy.dev/dashboard/session/sess_1/" },
       }),
     );
   });

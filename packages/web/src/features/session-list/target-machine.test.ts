@@ -24,7 +24,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
 }
 
 function group(sessions: SessionListSession[]): WorkspaceGroup {
-  return { workspace: { id: "w1", name: "falcon" }, sessions };
+  return { workspace: { id: "w1", name: "kvy" }, sessions };
 }
 
 describe("deriveWorkspaceTargetMachines", () => {

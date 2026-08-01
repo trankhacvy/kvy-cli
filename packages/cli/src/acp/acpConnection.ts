@@ -93,7 +93,7 @@ export type SpawnFn = (command: string, args: string[], options: SpawnOptions) =
 export interface AcpConnectionOptions {
   /** Which managed adapter to spawn — resolved via `resolveAdapterSpawn` (design §7.9). */
   adapterId: AdapterId;
-  /** `~/.falcon` (or override) — passed straight through to `resolveAdapterSpawn`. */
+  /** `~/.kvy` (or override) — passed straight through to `resolveAdapterSpawn`. */
   homeDir: string;
   clientInfo: { name: string; version: string };
   /** Extra env vars merged onto `process.env` for the spawned adapter. */
@@ -315,7 +315,7 @@ export class AcpConnection {
     // after `bootstrapSession()`) long before this connect() ever ran — the
     // ACP connection only opens later inside `runRemoteLoop()`. If the
     // adapter was simply never installed (the clean, common first-run case —
-    // `falcon adapters install` was never run and no prior spawn attempt
+    // `kvy adapters install` was never run and no prior spawn attempt
     // installed it either), a web user would see a session that looked live
     // and then silently broke. Auto-install once, here, so the first
     // daemon-initiated spawn just works.
@@ -325,7 +325,7 @@ export class AcpConnection {
     //   - "version-mismatch": the manifest was bumped since the last
     //     install. Silently reinstalling here would mask a real upgrade
     //     event behind an opaque connect failure/retry; the explicit
-    //     `falcon adapters upgrade` path exists precisely so a version
+    //     `kvy adapters upgrade` path exists precisely so a version
     //     change is a visible, intentional action, not something that
     //     happens invisibly on a background daemon spawn.
     //   - "integrity-mismatch": the installed bytes don't match the pinned
@@ -333,14 +333,14 @@ export class AcpConnection {
     //     install" case `verify.ts`'s own doc comment calls out as real,
     //     load-bearing verification. Auto-reinstalling over it would
     //     silently paper over a signal that something on disk doesn't match
-    //     what Falcon shipped a hash for, which defeats the point of having
-    //     the check at all — this must surface to a human (or `falcon
+    //     what Kvy shipped a hash for, which defeats the point of having
+    //     the check at all — this must surface to a human (or `kvy
     //     doctor`), not be quietly "fixed".
     //   - "entry-missing": lock says the right version+integrity is present
     //     but the spawn entrypoint file itself is gone (e.g. a partially
     //     deleted `node_modules`). This is arguably as safe to
     //     auto-remediate as "not-installed", but it's a rare enough state
-    //     (and cheap enough to diagnose via `falcon doctor`/`adapters
+    //     (and cheap enough to diagnose via `kvy doctor`/`adapters
     //     install`) that treating it the same as a real mismatch — fail
     //     loudly rather than silently reinstall — was chosen to keep this
     //     auto-install path narrow and easy to reason about.
@@ -530,7 +530,7 @@ export class AcpConnection {
   /** Aborts the in-flight prompt's cancellation signal (if any — cooperative, the agent's eventual response still settles the `prompt()` promise) and sends the protocol-level `session/cancel` notification. */
   async cancel(sessionId: string): Promise<void> {
     const connection = this.requireReady();
-    this.promptControllers.get(sessionId)?.abort(new Error("Prompt cancelled by Falcon client"));
+    this.promptControllers.get(sessionId)?.abort(new Error("Prompt cancelled by Kvy client"));
     await connection.agent.notify(methods.agent.session.cancel, { sessionId });
   }
 

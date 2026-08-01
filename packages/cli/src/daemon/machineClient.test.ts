@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { EncryptedBox } from "@falcon/wire";
+import type { EncryptedBox } from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -269,7 +269,7 @@ describe("persistMachineId", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-client-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-client-"));
   });
 
   afterEach(async () => {
@@ -536,7 +536,7 @@ describe("startMachineClient", () => {
   });
 
   it("persists the resolved machineId into daemon.state.json when one exists", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-client-ws-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-client-ws-"));
     try {
       await writeDaemonState(homeDir, { pid: 1, port: 2, version: "0.1.0", startedAt: 0 });
       const fetchImpl = vi

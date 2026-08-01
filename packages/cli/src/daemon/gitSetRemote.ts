@@ -14,11 +14,11 @@
  * hazard the same way `gitPush.ts`'s `assertSafeRefName` guards its own
  * remote/branch (a `--config=...`-shaped "url" would otherwise be parsed
  * as a `git remote` option). The URL is NOT validated for scheme, host or
- * reachability: Falcon manages no git credentials (`gitPush.ts`'s doc
+ * reachability: Kvy manages no git credentials (`gitPush.ts`'s doc
  * comment), so "does this remote actually work" is answered by the user's
  * own next push, with git's own stderr — not fabricated here.
  */
-import type { GitSetRemoteParams, GitSetRemoteResult } from "@falcon/wire";
+import type { GitSetRemoteParams, GitSetRemoteResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";
 

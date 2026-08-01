@@ -4,8 +4,8 @@ import {
   encodeBase64,
   getRandomBytes,
   wrapDek,
-} from "@falcon/crypto/web";
-import type { EncryptedBox, WorkspaceRow } from "@falcon/wire";
+} from "@kvy/crypto/web";
+import type { EncryptedBox, WorkspaceRow } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { CryptoBridgeClient } from "@/crypto";
 import { createCryptoBridgeClient } from "@/crypto";

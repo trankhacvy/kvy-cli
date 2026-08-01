@@ -15,7 +15,7 @@ export interface MirrorTranscriptState {
 }
 
 /**
- * Live read-only transcript mirror (falcon-system-design.md §8/§10.4,
+ * Live read-only transcript mirror (kvy-system-design.md §8/§10.4,
  * plan.md §16 "3.3 Session adoption (UC9)"): polls `actions.mirror` on an
  * interval, reassembling the full transcript from cursor `0` each time
  * (`fetchFullTranscript`) and parsing it into a readable line feed. Never

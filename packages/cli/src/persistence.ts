@@ -24,7 +24,7 @@
  * SOFTWARE.
  *
  * ---
- * `~/.falcon/` local state persistence (design §7.2, plan.md §16 "1.3 CLI
+ * `~/.kvy/` local state persistence (design §7.2, plan.md §16 "1.3 CLI
  * skeleton + local mode"):
  *
  *   settings.json   schema-versioned; atomic read-modify-write via an
@@ -32,10 +32,10 @@
  *   access.key      {token, masterSecret} — 0600, written via tmp + rename
  *                   so a reader never observes a partially-written file.
  *
- * Adapted from Happy: settings fields trimmed to what Falcon's design
+ * Adapted from Happy: settings fields trimmed to what Kvy's design
  * actually defines (no `sandboxConfig`/`chromeMode` — Happy-specific
- * features with no Falcon equivalent); credentials narrowed to the single
- * `masterSecret` variant, since @falcon/crypto's `deriveKeyTree` (unlike
+ * features with no Kvy equivalent); credentials narrowed to the single
+ * `masterSecret` variant, since @kvy/crypto's `deriveKeyTree` (unlike
  * Happy's legacy-vs-dataKey split) only ever derives from one masterSecret.
  */
 
@@ -56,7 +56,7 @@ import * as z from "zod";
 import { resolveHomeDir } from "./home.js";
 
 export interface PersistenceOptions {
-  /** Overrides the resolved `~/.falcon` (or `FALCON_HOME_DIR`) directory. */
+  /** Overrides the resolved `~/.kvy` (or `KVY_HOME_DIR`) directory. */
   homeDir?: string;
   env?: NodeJS.ProcessEnv;
 }
@@ -89,31 +89,31 @@ export interface Settings {
   onboardingCompleted: boolean;
   /** Assigned once at first run; identifies this machine to the server (design §3.2, §7.2). */
   machineId?: string;
-  /** Persisted override for FALCON_BACKEND_URL (e.g. set once by `falcon auth login`). */
+  /** Persisted override for KVY_BACKEND_URL (e.g. set once by `kvy auth login`). */
   backendUrl?: string;
-  /** Persisted override for FALCON_FRONTEND_URL. */
+  /** Persisted override for KVY_FRONTEND_URL. */
   frontendUrl?: string;
   /** Whether `ensureDaemonRunning()` (plan.md §16 "1.5 Daemon v1") auto-starts the daemon. */
   daemonAutoStart?: boolean;
   /**
-   * Old→new provider-session-id lineage recorded by `falcon adopt`
+   * Old→new provider-session-id lineage recorded by `kvy adopt`
    * (design §7.8 FR-9.5, plan.md §16 "3.3 Session adoption (UC9)"): keyed
    * by the original (oldest) provider session id, each value is the full
    * adoption chain in order, `[originalId, ...resumedIds]` — Claude Code's
    * `--resume` mints a brand-new session id every time, so this is how
-   * Falcon later presents one continuous timeline across resumes instead
+   * Kvy later presents one continuous timeline across resumes instead
    * of a series of unrelated sessions.
    */
   adoptedSessions?: Record<string, string[]>;
   /**
-   * Per-workspace settings written by `falcon workspace config
+   * Per-workspace settings written by `kvy workspace config
    * [--base-ref/--remote/--setup-script/--run-script/--directory]`
-   * (falcon-prd.md line 148, plan.md §16 "4.1 Git panel";
+   * (kvy-prd.md line 148, plan.md §16 "4.1 Git panel";
    * docs/features/setup-run-scripts.md) — keyed by the workspace's real
    * (symlink-resolved) absolute directory path, same key shape
    * `daemon/gitDiff.ts`'s `resolveConfiguredBaseRef` looks up when a
    * `git.diff` RPC omits an explicit `baseRef`. `remote` is stored for a
-   * future `git push`/PR fast-follow (falcon-prd.md FR-7.7) — unused by the
+   * future `git push`/PR fast-follow (kvy-prd.md FR-7.7) — unused by the
    * read-only MVP diff viewer. `setupScript`/`runScript`
    * (docs/features/setup-run-scripts.md) back the Setup/Run scripts
    * subsystem — `daemon/setupScript.ts` reads `setupScript` after a fresh
@@ -127,8 +127,8 @@ export interface Settings {
   /**
    * Epoch-ms timestamp of the last auto-update-on-start background check
    * (`update/autoUpdateTrigger.ts`, plan.md §16 "4.3 Distribution &
-   * self-host") — rate-limits how often `falcon` spawns a background
-   * `falcon update` child so a stream of invocations doesn't hammer GitHub.
+   * self-host") — rate-limits how often `kvy` spawns a background
+   * `kvy update` child so a stream of invocations doesn't hammer GitHub.
    */
   lastUpdateCheckAt?: number;
   /**
@@ -139,7 +139,7 @@ export interface Settings {
    * previously persisted "always" is enforced even in local-only mode),
    * and written by the `sleepInhibit.set` machine RPC handler whenever the
    * manager reports `supported: true` for the local platform. Absent (or
-   * omitted from a settings.json an older `falcon` wrote) means "off" —
+   * omitted from a settings.json an older `kvy` wrote) means "off" —
    * same lenient, unknown-value-tolerant precedent as `daemonAutoStart`.
    */
   sleepInhibit?: "off" | "onPower" | "always";
@@ -258,7 +258,7 @@ async function acquireLock(lockFile: string): Promise<FileHandle> {
 
 /**
  * Atomically read-modify-write `settings.json`, safe against concurrent
- * `falcon` invocations: an exclusive lock file guards the critical section,
+ * `kvy` invocations: an exclusive lock file guards the critical section,
  * and the write itself lands via tmp-file + rename (atomic on POSIX), so a
  * concurrent reader never observes a half-written file.
  */
@@ -299,7 +299,7 @@ export async function updateSettings(
 
 const credentialsSchema = z.object({
   token: z.string().min(1),
-  /** Base64-encoded masterSecret — see @falcon/crypto's `deriveKeyTree`. */
+  /** Base64-encoded masterSecret — see @kvy/crypto's `deriveKeyTree`. */
   masterSecret: z.string().min(1),
 });
 
@@ -343,7 +343,7 @@ export async function writeCredentials(
 }
 
 /**
- * Deletes `access.key`, e.g. on `falcon auth logout`. A no-op if it doesn't
+ * Deletes `access.key`, e.g. on `kvy auth logout`. A no-op if it doesn't
  * exist — including if it's removed concurrently between the check and the
  * delete (e.g. two overlapping `logout` calls), so this never throws on a
  * race, only on a genuine unexpected error (e.g. permissions).

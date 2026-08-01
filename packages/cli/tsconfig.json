@@ -9,7 +9,7 @@
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   // `bootstrap.integration.test.ts`/`commands.machineWiring.integration.test.ts`
-  // import `@falcon/server`'s TS source directly (a private, unpublished app
+  // import `@kvy/server`'s TS source directly (a private, unpublished app
   // package with no subpath `exports` for its test utilities — see those
   // files' own comments) purely so vitest can run a real end-to-end check.
   // Those files pull in dependencies (drizzle-orm, @electric-sql/pglite, …)

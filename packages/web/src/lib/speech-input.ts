@@ -96,7 +96,7 @@ export function extractSpeechResult(event: SpeechRecognitionEventLike): SpeechRe
 
 /** Human-readable message for a `SpeechRecognition` `error` event's `error`
  * code — the codes themselves (`"not-allowed"`, `"audio-capture"`, etc.) are
- * from the Web Speech API spec, not Falcon's own vocabulary. `"no-speech"`
+ * from the Web Speech API spec, not Kvy's own vocabulary. `"no-speech"`
  * (recognizer timed out waiting for audio) and `"aborted"` (the user's own
  * `stop()` call, or a session-ending `disabled` flip) are deliberately
  * *not* covered here — callers should treat those as silent, expected

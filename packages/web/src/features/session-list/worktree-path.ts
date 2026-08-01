@@ -3,7 +3,7 @@
  * `assertLooksLikeWorktreeDir` safety check (Phase C, new-session-from-web
  * redesign — see that module's doc comment for the full "why"): a session's
  * `workspaceId` is only ever safe to offer "Remove worktree" for when it's a
- * Falcon-managed `.worktrees/<branch>` directory, not a plain repo root.
+ * Kvy-managed `.worktrees/<branch>` directory, not a plain repo root.
  *
  * This is a UX-layer mirror, not the actual security boundary — the daemon
  * RPC re-checks this itself (and MUST, since a web client's own gating is
@@ -19,7 +19,7 @@ export function looksLikeWorktreePath(workspaceId: string | null): boolean {
 }
 
 /**
- * The parent workspace path a Falcon-managed worktree directory nests under
+ * The parent workspace path a Kvy-managed worktree directory nests under
  * (`gitWorktree.ts`'s own `<repoDirectory>/.worktrees/<branch>` convention),
  * or `null` if `workspaceId` isn't a worktree path at all
  * (`looksLikeWorktreePath` above).

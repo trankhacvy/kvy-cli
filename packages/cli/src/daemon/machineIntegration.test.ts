@@ -1,11 +1,11 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { decodeBase64, deriveKeyTree, getRandomBytes, unwrapDek } from "@falcon/crypto";
-import type { EncryptedBox, MachineRow } from "@falcon/wire";
+import { decodeBase64, deriveKeyTree, getRandomBytes, unwrapDek } from "@kvy/crypto";
+import type { EncryptedBox, MachineRow } from "@kvy/wire";
 import type { Socket } from "socket.io-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { FalconCredentials } from "../auth/credentials.js";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { Logger } from "../logger.js";
 import { createMachineIntegrationDeps, startMachineIntegration } from "./machineIntegration.js";
@@ -130,10 +130,10 @@ function fakeServer() {
 describe("startMachineIntegration — DEK survives a crash-restart", () => {
   let homeDir: string;
   let masterSecret: Uint8Array;
-  let credentials: FalconCredentials;
+  let credentials: KvyCredentials;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-integration-"));
     masterSecret = getRandomBytes(32);
     credentials = {
       refreshToken: "test-refresh-token",
@@ -229,10 +229,10 @@ describe("startMachineIntegration — DEK survives a crash-restart", () => {
 describe("startMachineIntegration — preview-tunnel wiring", () => {
   let homeDir: string;
   let masterSecret: Uint8Array;
-  let credentials: FalconCredentials;
+  let credentials: KvyCredentials;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-preview-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-integration-preview-"));
     masterSecret = getRandomBytes(32);
     credentials = {
       refreshToken: "test-refresh-token",
@@ -286,10 +286,10 @@ describe("startMachineIntegration — preview-tunnel wiring", () => {
 describe("startMachineIntegration — transcript indexer isManaged wiring", () => {
   let homeDir: string;
   let masterSecret: Uint8Array;
-  let credentials: FalconCredentials;
+  let credentials: KvyCredentials;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-integration-transcript-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-integration-transcript-"));
     masterSecret = getRandomBytes(32);
     credentials = {
       refreshToken: "test-refresh-token",
@@ -305,7 +305,7 @@ describe("startMachineIntegration — transcript indexer isManaged wiring", () =
   // Confirms the regression this fix closes: `startTranscriptIndexer` used
   // to be wired with no `isManaged` override at all here, so it silently
   // ran with `createTranscriptIndexerDeps`'s permanent `() => false` default
-  // — nothing was ever recognized as already Falcon-managed, which is
+  // — nothing was ever recognized as already Kvy-managed, which is
   // exactly why a session's own transcript kept getting duplicated as
   // "Unmanaged" (docs/auth-ux-post-verification-fixes.md).
   it("wires isManaged to the injected registry's isProviderSessionManaged, not the indexer's own no-op default", async () => {

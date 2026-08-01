@@ -15,7 +15,7 @@ describe("claimStore", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-claim-store-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-claim-store-"));
   });
 
   afterEach(async () => {

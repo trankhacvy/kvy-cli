@@ -1,9 +1,9 @@
-import type { GitRemoteInfo, GitStatusResult } from "@falcon/wire";
+import type { GitRemoteInfo, GitStatusResult } from "@kvy/wire";
 
 /**
  * Whether the Git panel's Push button can possibly succeed, derived — never
  * stored — from data the panel already holds (design principle #3). Modeled
- * on `@falcon/wire`'s `GithubChecksResult.state`: every distinct empty/
+ * on `@kvy/wire`'s `GithubChecksResult.state`: every distinct empty/
  * blocked case is its own value so the UI renders derived copy instead of
  * string-matching git's stderr (`GitToolbar.tsx` prints `pushError`
  * verbatim today, which is the right behaviour for a CREDENTIAL failure and

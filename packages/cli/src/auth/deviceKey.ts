@@ -1,10 +1,10 @@
 /**
  * Cross-platform OS-vault device-key wrapping for the CLI's default at-rest custody
  * (issue-4-plan.md §6.1/§6.5, revised): wraps a secret (the masterSecret for
- * `falcon auth login`, or a reduced-custody content bundle for the daemon) under a
+ * `kvy auth login`, or a reduced-custody content bundle for the daemon) under a
  * random AES-256 key that itself lives in the OS's own credential vault — macOS
  * Keychain, Windows Credential Manager, or the Linux Secret Service — rather than
- * inside `~/.falcon/access.key` alongside the wrapped blob.
+ * inside `~/.kvy/access.key` alongside the wrapped blob.
  *
  * The plan is candid that this "delivers little at-rest benefit on daemon boxes
  * anyway" (§6.5) — a root/owner compromise that can read `access.key` can usually also
@@ -31,8 +31,8 @@ export interface DeviceWrapped {
   ct: string;
 }
 
-const KEYRING_SERVICE = "Falcon-device-key";
-const KEYRING_ACCOUNT = "falcon";
+const KEYRING_SERVICE = "Kvy-device-key";
+const KEYRING_ACCOUNT = "kvy";
 const FALLBACK_KEY_FILE = "device.key";
 const DEVICE_KEY_BYTES = 32;
 const NONCE_BYTES = 12;
@@ -132,7 +132,7 @@ export function wrapWithDeviceKey(
 }
 
 /** Inverse of `wrapWithDeviceKey`. Never throws — returns `null` on a missing/rotated
- * device key or a corrupt blob (same never-throw contract as `@falcon/crypto`'s
+ * device key or a corrupt blob (same never-throw contract as `@kvy/crypto`'s
  * `unwrapWithPin`). */
 export function unwrapWithDeviceKey(
   wrapped: DeviceWrapped,

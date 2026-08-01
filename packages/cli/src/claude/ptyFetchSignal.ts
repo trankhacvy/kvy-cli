@@ -1,12 +1,12 @@
 /**
  * The receive side of the PTY-mode fetch signal (see
- * `falcon_claude_launcher.cjs`'s "PTY mode" note and `ptyClaudeSession.ts`).
+ * `kvy_claude_launcher.cjs`'s "PTY mode" note and `ptyClaudeSession.ts`).
  *
  * A PTY child has no spare fd 3, so the launcher's `fetch-start`/`fetch-end`
  * lines — the same instrumentation `claudeLocal.ts` reads off fd 3 for its
  * "thinking" indicator — are delivered over a unix-domain socket instead.
  * This module owns that socket: it binds an OS-local path, hands the path
- * back for `FALCON_FETCH_SIGNAL_PATH`, parses newline-delimited JSON from the
+ * back for `KVY_FETCH_SIGNAL_PATH`, parses newline-delimited JSON from the
  * launcher, and invokes `onEvent` for each well-formed fetch event.
  *
  * Best-effort by construction: a bind failure resolves with an empty `path`
@@ -37,7 +37,7 @@ export interface FetchSignalEvent {
 
 export interface FetchSignalServer {
   /**
-   * The socket path to advertise as `FALCON_FETCH_SIGNAL_PATH`, or an empty
+   * The socket path to advertise as `KVY_FETCH_SIGNAL_PATH`, or an empty
    * string when binding failed (idle detection then degrades gracefully).
    */
   path: string;
@@ -56,10 +56,10 @@ function makeSocketPath(): string {
   const token = `${process.pid}-${randomBytes(6).toString("hex")}`;
   if (process.platform === "win32") {
     // Windows named pipe (unix-socket filesystem paths don't apply).
-    return `\\\\.\\pipe\\falcon-fetch-${token}`;
+    return `\\\\.\\pipe\\kvy-fetch-${token}`;
   }
   // Keep well under the ~104-char sockaddr_un limit.
-  return path.join(tmpdir(), `falcon-fetch-${token}.sock`);
+  return path.join(tmpdir(), `kvy-fetch-${token}.sock`);
 }
 
 function handleConnectionData(

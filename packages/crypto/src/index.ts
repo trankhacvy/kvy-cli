@@ -1,6 +1,6 @@
 /**
- * @falcon/crypto — node entry point (CLI, server). For the browser build
- * (libsodium-wrappers + WebCrypto AES-GCM), import "@falcon/crypto/web" instead.
+ * @kvy/crypto — node entry point (CLI, server). For the browser build
+ * (libsodium-wrappers + WebCrypto AES-GCM), import "@kvy/crypto/web" instead.
  */
 
 export * from "./base64.js";

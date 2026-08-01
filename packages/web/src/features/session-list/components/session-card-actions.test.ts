@@ -21,8 +21,6 @@ function render(props: Partial<Parameters<typeof SessionCardActions>[0]> = {}) {
         pinned: false,
         status: "active",
         machineId: null,
-        machineOnline: false,
-        machineName: null,
         workspaceId: null,
         ...props,
       }),
@@ -40,19 +38,14 @@ describe("SessionCardActions", () => {
     expect(html).not.toContain('disabled=""');
   });
 
-  it("does not render the delete-confirm dialog's content until it's opened", () => {
-    const html = render();
-    expect(html).not.toContain("Permanently deletes this session");
-  });
-
   it("does not render the rename dialog's content until it's opened", () => {
     const html = render();
     expect(html).not.toContain("Rename session");
   });
 
-  it("does not render the stop-confirm dialog's content until it's opened", () => {
+  it("does not render the archive dialog's content until it's opened", () => {
     const html = render();
-    expect(html).not.toContain("Ends the CLI process");
+    expect(html).not.toContain('Archive "');
   });
 
   it("renders without throwing for a title containing characters that would matter if this were ever built via string concatenation instead of JSX interpolation", () => {
@@ -70,31 +63,11 @@ describe("SessionCardActions", () => {
     expect(() => render({ pinned: true })).not.toThrow();
     expect(() => render({ pinned: false })).not.toThrow();
   });
-});
 
-describe("Remove worktree gating (Phase C, new-session-from-web redesign)", () => {
-  // `DropdownMenuContent` is portal-based and renders nothing while closed
-  // (this file's own "menu swap by status" section above notes the same
-  // constraint), so the menu item's own text can't be asserted on here —
-  // the real gating logic is `canOfferRemoveWorktree`, covered directly
-  // below with real assertions. These just confirm every combination
-  // renders without throwing, including the ones the dialog itself is
-  // conditionally mounted for.
-  it("renders without throwing for a repo-root session (no worktree to remove)", () => {
+  it("renders without throwing for every worktree/machine combination", () => {
     expect(() => render({ machineId: "m1", workspaceId: "/repo" })).not.toThrow();
-  });
-
-  it("renders without throwing for a .worktrees session with no owning machine", () => {
     expect(() => render({ machineId: null, workspaceId: "/repo/.worktrees/wf/foo" })).not.toThrow();
-  });
-
-  it("renders without throwing for a .worktrees session with a known machine (Remove worktree eligible)", () => {
     expect(() => render({ machineId: "m1", workspaceId: "/repo/.worktrees/wf/foo" })).not.toThrow();
-  });
-
-  it("does not render the remove-worktree dialog's content until it's opened", () => {
-    const html = render({ machineId: "m1", workspaceId: "/repo/.worktrees/wf/foo" });
-    expect(html).not.toContain("uncommitted or untracked changes");
   });
 });
 
@@ -116,18 +89,7 @@ describe("canOfferRemoveWorktree", () => {
   });
 });
 
-describe("SessionCardActions menu swap by status (docs/features/session-lifecycle-actions.md Phase 5)", () => {
-  // The `DropdownMenuContent` itself renders inside a closed Radix portal
-  // (nothing to assert on directly, same constraint as the rest of this
-  // file's tests), but Radix still emits the trigger button's own
-  // `title`/`aria-*` attributes and this component's plain (non-portaled)
-  // dialogs unconditionally, which is enough to prove the archived branch
-  // took a materially different shape without throwing.
-  it("does not render the delete-confirm dialog's content for an archived session either", () => {
-    const html = render({ status: "archived" });
-    expect(html).not.toContain("Permanently deletes this session");
-  });
-
+describe("SessionCardActions menu swap by status (archived rows drop Archive)", () => {
   it("renders without throwing for every combination of status and pinned", () => {
     const statuses = ["active", "archived", "failed", "compacted", "ended"] as const;
     for (const status of statuses) {
@@ -138,7 +100,7 @@ describe("SessionCardActions menu swap by status (docs/features/session-lifecycl
   });
 });
 
-describe("isSessionStoppable (Stop menu-item enable/disable matrix)", () => {
+describe("isSessionStoppable (gates whether Archive attempts a stop RPC first)", () => {
   it("is stoppable while active", () => {
     expect(isSessionStoppable("active")).toBe(true);
   });

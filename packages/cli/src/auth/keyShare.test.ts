@@ -1,4 +1,4 @@
-import { encodeBase64, getRandomBytes, libsodiumDecryptWithSecretKey } from "@falcon/crypto";
+import { encodeBase64, getRandomBytes, libsodiumDecryptWithSecretKey } from "@kvy/crypto";
 import tweetnacl from "tweetnacl";
 import { describe, expect, it } from "vitest";
 import { verificationCode } from "../commands/keysApprove.js";

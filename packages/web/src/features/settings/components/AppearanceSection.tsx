@@ -16,7 +16,7 @@ export function AppearanceSection() {
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Falcon defaults to dark. Switch to light if you&apos;d rather.
+          Kvy defaults to dark. Switch to light if you&apos;d rather.
         </p>
 
         <div className="flex gap-2">
@@ -43,12 +43,12 @@ export function AppearanceSection() {
         <div>
           <h3 className="font-medium text-sm">Install app</h3>
           <p className="mt-1 text-muted-foreground text-sm">
-            Add Falcon to your home screen for a standalone window and more reliable notifications
-            on mobile.
+            Add Kvy to your home screen for a standalone window and more reliable notifications on
+            mobile.
           </p>
         </div>
         {isInstalled ? (
-          <p className="text-muted-foreground text-sm">Falcon is installed on this device.</p>
+          <p className="text-muted-foreground text-sm">Kvy is installed on this device.</p>
         ) : canInstall ? (
           <Button
             type="button"
@@ -69,7 +69,7 @@ export function AppearanceSection() {
             }}
           >
             <DownloadIcon data-icon="inline-start" />
-            {installBusy ? "Installing…" : "Install Falcon"}
+            {installBusy ? "Installing…" : "Install Kvy"}
           </Button>
         ) : (
           <p className="text-muted-foreground text-sm">

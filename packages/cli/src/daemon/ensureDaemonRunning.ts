@@ -3,8 +3,8 @@ import { type DaemonState, readDaemonState } from "./state.js";
 
 /**
  * `ensureDaemonRunning()` — auto-start wiring for every agent-invoking
- * `falcon` subcommand (plan.md §16 1.5, design §7.2/§8; PRD FR-1.2: "First
- * run of `falcon` triggers ... daemon auto-start — no separate setup
+ * `kvy` subcommand (plan.md §16 1.5, design §7.2/§8; PRD FR-1.2: "First
+ * run of `kvy` triggers ... daemon auto-start — no separate setup
  * steps").
  *
  * Checks `daemon.state.json` (`state.ts`) for an existing daemon, then
@@ -19,7 +19,7 @@ import { type DaemonState, readDaemonState } from "./state.js";
  * elapses. No spawn/poll logic is duplicated here — this is a thin
  * "is one already up, else start one and confirm" wrapper.
  *
- * Respects `FALCON_NO_SERVICE=1` (the env convention already documented in
+ * Respects `KVY_NO_SERVICE=1` (the env convention already documented in
  * `index.ts`'s help text): when set, returns `{ ok: false, reason:
  * "disabled" }` without reading any state or spawning anything — the user
  * has explicitly opted out of daemon auto-management, so callers should
@@ -48,7 +48,7 @@ export type EnsureDaemonRunningResult =
 export async function ensureDaemonRunning(
   deps: EnsureDaemonRunningDeps,
 ): Promise<EnsureDaemonRunningResult> {
-  if (deps.env.FALCON_NO_SERVICE === "1") {
+  if (deps.env.KVY_NO_SERVICE === "1") {
     return { ok: false, reason: "disabled" };
   }
 
@@ -71,7 +71,7 @@ export async function ensureDaemonRunning(
     return {
       ok: false,
       reason: "start-failed",
-      message: "falcon: daemon reported ready but daemon.state.json is missing\n",
+      message: "kvy: daemon reported ready but daemon.state.json is missing\n",
     };
   }
   return { ok: true, state };

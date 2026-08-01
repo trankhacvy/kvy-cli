@@ -1,6 +1,6 @@
 /**
  * Typed caller-side client for the session RPC methods
- * (falcon-system-design.md §4.4 "Session RPCs — registered by the session
+ * (kvy-system-design.md §4.4 "Session RPCs — registered by the session
  * process"; plan.md §16 "2.4 Web control surface"; `stop` added by
  * plan-v2.md W2.3 "Stop session from the web"). This is the web's
  * counterpart to `packages/cli/src/rpc/sessionRpc.ts` (the session-process
@@ -28,7 +28,7 @@ import {
   type StopRpcParamsSchema,
   StopRpcResultSchema,
   TakeControlResultSchema,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { ZodType, z } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
 
@@ -36,7 +36,7 @@ export type MessageRpcParams = z.infer<typeof MessageRpcParamsSchema>;
 export type MessageRpcResult = z.infer<typeof MessageRpcResultSchema>;
 /** The tri-state `message` RPC reply's `status` field (design §7.10) — re-exported
  * here for callers (`features/session-control/optimistic-composer.ts`) that branch
- * on it without importing `@falcon/wire` directly. */
+ * on it without importing `@kvy/wire` directly. */
 export type MessageRpcStatus = z.infer<typeof MessageRpcStatusSchema>;
 export type PermAnswerParams = z.infer<typeof PermAnswerParamsSchema>;
 export type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;
@@ -108,8 +108,8 @@ export class SessionRpcError extends Error {
  * locally so this module has no compile-time dependency on `@/crypto`,
  * mirroring `engine.ts`'s `SyncSocketSource` seam. */
 export interface SessionRpcCrypto {
-  seal(data: unknown): Promise<import("@falcon/wire").EncryptedBox>;
-  open<T = unknown>(box: import("@falcon/wire").EncryptedBox): Promise<T | null>;
+  seal(data: unknown): Promise<import("@kvy/wire").EncryptedBox>;
+  open<T = unknown>(box: import("@kvy/wire").EncryptedBox): Promise<T | null>;
 }
 
 export interface SessionRpcDeps {

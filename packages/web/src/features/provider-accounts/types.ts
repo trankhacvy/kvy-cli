@@ -1,4 +1,4 @@
-import type { ProviderAccountResult, ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@kvy/wire";
 
 /**
  * View-model types for Settings → Providers (docs/competitive-notes-omnara.md
@@ -10,15 +10,14 @@ import type { ProviderAccountResult, ProviderUsageMeter } from "@falcon/wire";
  * machine RPC (`packages/cli/src/daemon/providerAccountInfo.ts`).
  *
  * `ProviderAccountSnapshot`/`ProviderUsageMeter` are re-exported straight off
- * `@falcon/wire` rather than redeclared — same "the RPC result is already
+ * `@kvy/wire` rather than redeclared — same "the RPC result is already
  * exactly what this screen wants to render" precedent as `features/git-diff/
  * types.ts`'s `GitStatusSnapshot`.
  */
 export type ProviderAccountSnapshot = ProviderAccountResult;
 export type { ProviderUsageMeter };
 
-/** The two providers this screen ever shows a card for — mirrors `NewSessionProvider` (`features/new-session/types.ts`) without importing across feature boundaries for one literal union. */
-export type ProviderAccountProvider = "claude-code" | "codex";
+export type ProviderAccountProvider = ProviderId;
 
 /**
  * The RPC surface this feature needs, seamed off from *how* the call

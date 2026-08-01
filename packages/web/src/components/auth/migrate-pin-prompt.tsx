@@ -29,7 +29,7 @@ export function MigratePinPrompt({ onMigrated }: { onMigrated: () => void }) {
     setError(null);
     // Keep the same protection the browser would get on a fresh setup — the passkey
     // prompt (if any) happens here on the main thread, never inside the worker.
-    const protection = await provisionKeyProtection("prf", getAccountId() ?? "Falcon");
+    const protection = await provisionKeyProtection("prf", getAccountId() ?? "Kvy");
     const ok = await bridge.migrateFromPin(pin, protection);
     setPending(false);
     if (ok) {
@@ -44,7 +44,7 @@ export function MigratePinPrompt({ onMigrated }: { onMigrated: () => void }) {
       <div className="space-y-2">
         <h1 className="text-xl font-semibold">One last time</h1>
         <p className="text-sm text-muted-foreground">
-          Falcon doesn't ask for a PIN any more. Enter yours once and this browser will stop asking.
+          Kvy doesn't ask for a PIN any more. Enter yours once and this browser will stop asking.
         </p>
       </div>
       <Input

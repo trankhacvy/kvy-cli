@@ -1,6 +1,6 @@
-# Falcon Web App Deployment on Vercel
+# Kvy Web App Deployment on Vercel
 
-`@falcon/web` is a **static Next.js export** — it ships as pre-built HTML/CSS/JS, never server-renders user content, and can run on any static host. Vercel is optimized for it.
+`@kvy/web` is a **static Next.js export** — it ships as pre-built HTML/CSS/JS, never server-renders user content, and can run on any static host. Vercel is optimized for it.
 
 ## Setup Steps
 
@@ -73,7 +73,7 @@ This split protects against:
 
 ```bash
 # Local dev
-pnpm --filter @falcon/web dev    # http://localhost:3000
+pnpm --filter @kvy/web dev    # http://localhost:3000
 
 # Stage/preview (auto, every push to a branch)
 # Vercel builds and deploys to https://<branch>.yourapp.vercel.app

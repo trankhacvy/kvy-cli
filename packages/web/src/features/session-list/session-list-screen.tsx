@@ -23,7 +23,7 @@ function workspaceKey(group: WorkspaceGroup): string {
 }
 
 /**
- * The Home screen (falcon-system-design.md §9.2 "Home" row; falcon-prd.md
+ * The Home screen (kvy-system-design.md §9.2 "Home" row; kvy-prd.md
  * FR-7.1): every session across machines, grouped by workspace, each with a
  * derived status dot and its machine's online/offline badge.
  *
@@ -33,8 +33,8 @@ function workspaceKey(group: WorkspaceGroup): string {
  * fixture snapshot without touching `WorkspaceSection`/`SessionCard`.
  *
  * The `features/unmanaged-sessions` section (plain claude/codex sessions the
- * daemon's transcript indexer found but Falcon never spawned) is
- * intentionally NOT rendered here right now — a `falcon claude` session can
+ * daemon's transcript indexer found but Kvy never spawned) is
+ * intentionally NOT rendered here right now — a `kvy claude` session can
  * itself show up as a false-positive "unmanaged" duplicate of its own
  * managed card when the daemon's "this one's already mine" self-report lands
  * late or is missing for a given launch path (open gap for the
@@ -43,8 +43,7 @@ function workspaceKey(group: WorkspaceGroup): string {
  * into this screen or reachable, pending a fix.
  *
 
- * Archived ("Mark done") sessions are excluded here (docs/features/
- * session-lifecycle-actions.md Phase 5) — they live on the dedicated
+ * Archived sessions are excluded here — they live on the dedicated
  * `/completed/` screen (`CompletedSessionsScreen`) instead. `group.ts` itself
  * stays filter-free so that screen can reuse the exact same
  * `groupSessionsByWorkspace` over the complementary (archived-only) subset.
@@ -53,7 +52,7 @@ function workspaceKey(group: WorkspaceGroup): string {
  * old standalone "New session" wizard/route is retired — a session now
  * always starts from the `+` on an existing `WorkspaceSection` row
  * (`components/new-session-panel.tsx`), since a workspace only exists
- * server-side once `falcon` has actually run there once. That used to leave
+ * server-side once `kvy` has actually run there once. That used to leave
  * one genuine gap: an account with machines but literally zero sessions
  * ever run had no workspace row to put a `+` on yet. Feature 4 (docs/
  * web-ux-improvements-plan.md) closes it — `NewWorkspaceTrigger`
@@ -121,8 +120,8 @@ export function SessionListScreen({
         <p className="text-sm font-medium">No sessions yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
           Create a new project below, or run{" "}
-          <code className="rounded bg-muted px-1 py-0.5">falcon</code> from an existing project on
-          one of your machines. It shows up here automatically, and you'll be able to start more
+          <code className="rounded bg-muted px-1 py-0.5">kvy</code> from an existing project on one
+          of your machines. It shows up here automatically, and you'll be able to start more
           sessions in that same project right from here.
         </p>
         <NewWorkspaceTrigger machines={snapshot.machines} />

@@ -1,4 +1,4 @@
-import type { SleepInhibitMode, SleepInhibitState } from "@falcon/wire";
+import type { SleepInhibitMode, SleepInhibitState } from "@kvy/wire";
 
 /**
  * View-model types for Settings → Machines' Sleep Inhibit card
@@ -7,7 +7,7 @@ import type { SleepInhibitMode, SleepInhibitState } from "@falcon/wire";
  * `features/provider-accounts/types.ts`.
  *
  * `SleepInhibitMode`/`SleepInhibitState` are re-exported straight off
- * `@falcon/wire` rather than redeclared — same "the RPC result is already
+ * `@kvy/wire` rather than redeclared — same "the RPC result is already
  * exactly what this screen wants to render" precedent as
  * `ProviderAccountSnapshot`.
  */

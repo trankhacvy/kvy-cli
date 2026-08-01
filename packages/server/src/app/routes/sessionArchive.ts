@@ -1,4 +1,4 @@
-import { type SessionStatus, SessionStatusSchema } from "@falcon/wire";
+import { type SessionStatus, SessionStatusSchema } from "@kvy/wire";
 import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -14,7 +14,7 @@ const DeleteResponseSchema = z.object({});
 
 /**
  * `POST /v1/sessions/:id/archive` + `DELETE /v1/sessions/:id`
- * (falcon-system-design.md §6.2/§6.1's `sessions.status = 'archived'` note,
+ * (kvy-system-design.md §6.2/§6.1's `sessions.status = 'archived'` note,
  * plan-v2.md W4.2 "Archive/delete: server routes exist … wire buttons" —
  * that line assumed these routes already existed; they didn't yet, so this
  * is where they land). Both wire shapes (`session-update{status:"archived"}`,

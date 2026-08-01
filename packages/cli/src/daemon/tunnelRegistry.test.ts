@@ -50,7 +50,7 @@ describe("tunnel journal", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-tunnels-test-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-tunnels-test-"));
   });
 
   afterEach(async () => {
@@ -107,7 +107,7 @@ describe("reapOrphanedTunnels", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-tunnels-reap-test-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-tunnels-reap-test-"));
   });
 
   afterEach(async () => {

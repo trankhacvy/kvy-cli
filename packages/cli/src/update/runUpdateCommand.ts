@@ -1,9 +1,9 @@
 /**
- * `falcon update` — the explicit, user-facing entrypoint for the
+ * `kvy update` — the explicit, user-facing entrypoint for the
  * self-update mechanism (plan.md §16 "4.3 Distribution & self-host"), and
  * also what `autoUpdateTrigger.ts` spawns as a detached background child on
- * every `falcon` start. Both paths share this exact same check-then-apply
- * logic; the only difference is `silent` (set via `FALCON_UPDATE_SILENT=1`
+ * every `kvy` start. Both paths share this exact same check-then-apply
+ * logic; the only difference is `silent` (set via `KVY_UPDATE_SILENT=1`
  * on the background child, since nothing reads a detached process's
  * stdout) gating whether progress is printed.
  *
@@ -51,7 +51,7 @@ export async function runUpdateCommand(
   });
 
   if (installKind === "dev") {
-    const message = "falcon: running from source (dev mode), nothing to self-update\n";
+    const message = "kvy: running from source (dev mode), nothing to self-update\n";
     deps.logger.debug("update: skipped (dev mode)");
     return { code: 0, message: say(message) };
   }
@@ -77,7 +77,7 @@ export async function runUpdateCommand(
     deps.logger.warn("update: could not reach the update endpoint", { repo });
     return {
       code: silent ? 0 : 1,
-      message: say(`falcon: could not check for updates (repo: ${repo}). Try again later\n`),
+      message: say(`kvy: could not check for updates (repo: ${repo}). Try again later\n`),
     };
   }
 
@@ -86,7 +86,7 @@ export async function runUpdateCommand(
       currentVersion: deps.currentVersion,
       latestVersion,
     });
-    return { code: 0, message: say(`falcon: already up to date (${deps.currentVersion})\n`) };
+    return { code: 0, message: say(`kvy: already up to date (${deps.currentVersion})\n`) };
   }
 
   deps.logger.info("update: newer version available, applying", {
@@ -107,19 +107,19 @@ export async function runUpdateCommand(
 
     if (!result.applied) {
       deps.logger.warn("update: apply skipped", { reason: result.reason });
-      return { code: silent ? 0 : 1, message: say(`falcon: ${result.reason}\n`) };
+      return { code: silent ? 0 : 1, message: say(`kvy: ${result.reason}\n`) };
     }
 
     deps.logger.info("update: applied", { latestVersion, installKind });
     return {
       code: 0,
       message: say(
-        `falcon: updated ${deps.currentVersion} -> ${latestVersion}. Restart falcon to use the new version\n`,
+        `kvy: updated ${deps.currentVersion} -> ${latestVersion}. Restart kvy to use the new version\n`,
       ),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     deps.logger.error("update: apply failed", { message });
-    return { code: silent ? 0 : 1, message: say(`falcon: update failed: ${message}\n`) };
+    return { code: silent ? 0 : 1, message: say(`kvy: update failed: ${message}\n`) };
   }
 }

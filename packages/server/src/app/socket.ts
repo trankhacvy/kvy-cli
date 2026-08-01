@@ -23,12 +23,12 @@ type ClientType = "session-scoped" | "machine-scoped" | "user-scoped";
 // 1.2 task). Keeps: auth-in-middleware (so events can't race the connection), the three
 // client scopes, room joins via `eventRouter`, machine online/offline ephemeral
 // broadcast, and `app-state` tracking for push suppression. Dropped from Happy's version:
-// the Redis streams adapter wiring (falcon-system-design.md §6.4 defers multi-process to
+// the Redis streams adapter wiring (kvy-system-design.md §6.4 defers multi-process to
 // behind an env flag; single process at MVP) and the non-read-path handlers
 // (sessionUpdateHandler/usageHandler/machineUpdateHandler/etc. — out of scope for this task).
 export function startSocket(app: FastifyInstance, db: Database): Server {
   const io = new Server(app.server, {
-    // Explicit allowlist, not a wildcard (falcon-system-design.md §12, plan.md §16 "4.4
+    // Explicit allowlist, not a wildcard (kvy-system-design.md §12, plan.md §16 "4.4
     // Hardening": "wildcard-CORS removal"). `origin: "*"` combined with
     // `credentials: true` is a standing vuln class — no real browser honors that
     // combination for credentialed requests, so it only ever gave a false sense of

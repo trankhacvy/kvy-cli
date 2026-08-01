@@ -1,6 +1,6 @@
 "use client";
 
-import type { GitBranchInfo } from "@falcon/wire";
+import type { GitBranchInfo } from "@kvy/wire";
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import {

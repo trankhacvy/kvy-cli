@@ -18,7 +18,14 @@ export type ResetKeysPhase =
       refreshToken: string;
     }
   | { kind: "returned"; method: "password"; refreshToken: string; stepUpPassword: string }
-  | { kind: "rotating"; error?: string }
+  | {
+      kind: "rotating";
+      error?: string;
+      /** Set when `keys/bind`'s "other devices online" 409 is the reason `error` is set —
+       *  distinguishes "offer a log-out-others retry button" from a plain failed-rotation
+       *  error, whose only recovery is starting over from `confirm-identity`. */
+      otherDevicesOnline?: boolean;
+    }
   | { kind: "error"; message: string };
 
 /**

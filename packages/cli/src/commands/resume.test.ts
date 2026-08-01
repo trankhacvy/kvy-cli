@@ -49,7 +49,7 @@ describe("runResumeCommand", () => {
     baseDir = join(tmpdir(), `resume-cmd-test-${unique}`);
     claudeConfigDir = join(baseDir, "claude-home");
     workspacePath = join(baseDir, "project");
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-resume-cmd-home-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-resume-cmd-home-"));
     env = { CLAUDE_CONFIG_DIR: claudeConfigDir };
     projectDir = getProjectPath(workspacePath, env);
     await mkdir(projectDir, { recursive: true });
@@ -154,7 +154,7 @@ describe("runResumeCommand", () => {
               reject: vi.fn(),
             },
             launchProcess,
-            falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+            kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
           },
         }),
       );
@@ -164,9 +164,9 @@ describe("runResumeCommand", () => {
       expect(written.join("")).toContain("resumed session sess_1");
     });
 
-    it("relaunches into the session's own persisted directory, not the CLI invocation's cwd (known-issues.md: `falcon resume` ignores the persisted session directory)", async () => {
+    it("relaunches into the session's own persisted directory, not the CLI invocation's cwd (known-issues.md: `kvy resume` ignores the persisted session directory)", async () => {
       // A directory distinct from `workspacePath` (the CLI's own cwd, per `baseDeps()` below) —
-      // proves resume uses the SESSION's directory, not wherever `falcon resume` was run from.
+      // proves resume uses the SESSION's directory, not wherever `kvy resume` was run from.
       const sessionOwnDir = join(baseDir, "session-own-dir");
       await mkdir(sessionOwnDir, { recursive: true });
       const expectedCwd = await realpath(sessionOwnDir);
@@ -199,7 +199,7 @@ describe("runResumeCommand", () => {
               reject: vi.fn(),
             },
             launchProcess,
-            falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+            kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
           },
         }),
       );
@@ -234,7 +234,7 @@ describe("runResumeCommand", () => {
             registry,
             awaiter: { waitFor: vi.fn(), resolve: vi.fn(), reject: vi.fn() },
             launchProcess,
-            falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+            kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
           },
         }),
       );
@@ -324,7 +324,7 @@ describe("runResumeCommand", () => {
               reject: vi.fn(),
             },
             launchProcess,
-            falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+            kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
           },
         }),
       );

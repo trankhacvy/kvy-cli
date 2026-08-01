@@ -10,12 +10,12 @@ import { cn } from "@/lib/utils";
 import type { UnmanagedSessionItem, UseUnmanagedActions } from "../types";
 import { TakeOverDialog } from "./take-over-dialog";
 
-/** One unmanaged (plain claude/codex) session row (falcon-system-design.md
+/** One unmanaged (plain claude/codex) session row (kvy-system-design.md
  * §9.2 "Home" row: `UnmanagedSection`; §11/§10.4 UC9). Mirrors
  * `features/session-list`'s `SessionCard` layout/spacing so both sections
  * read as one family of cards, distinguished by the "Unmanaged" badge and
  * the mirror/take-over actions in place of a status dot (there's no reduced
- * transcript to derive one from — this session was never Falcon-managed).
+ * transcript to derive one from — this session was never Kvy-managed).
  *
  * `useActions` is called here, not by the caller (`UnmanagedSection`),
  * because it's a hook: each card is its own component instance, so calling

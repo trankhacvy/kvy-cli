@@ -4,15 +4,15 @@ import type {
   RunStatusResult,
   RunStopResult,
   WorkspaceGetConfigResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 
 /**
- * View-model types for the "Setup / Run" tab (falcon-system-design.md §4.4
+ * View-model types for the "Setup / Run" tab (kvy-system-design.md §4.4
  * `workspace.getConfig`/`run.*`; docs/features/setup-run-scripts.md
  * "Per-workspace Setup/Run scripts"). Structural clone of
  * `features/git-diff/types.ts`'s seam layout.
  *
- * `RunConfig`/`RunStatusSnapshot` are re-exported straight off `@falcon/wire`
+ * `RunConfig`/`RunStatusSnapshot` are re-exported straight off `@kvy/wire`
  * rather than redeclared — the RPC results are already exactly what this
  * panel wants to render, same reasoning as `features/git-diff/types.ts`'s
  * own `GitStatusSnapshot`.
@@ -31,7 +31,7 @@ export type RunStatusSnapshot = RunStatusResult;
  * Script DEFINITION is deliberately absent from this surface — every method
  * here takes only a `worktree` path, never a script string (design §12's
  * local-consent boundary, docs/features/setup-run-scripts.md's central risk
- * note: scripts are defined CLI-only, via `falcon workspace config
+ * note: scripts are defined CLI-only, via `kvy workspace config
  * --setup-script/--run-script`, and never travel over the wire).
  */
 export interface RunPanelActions {

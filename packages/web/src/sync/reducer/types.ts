@@ -1,12 +1,12 @@
-import type { PermDecision, PermissionMode, SessionRole } from "@falcon/wire";
+import type { PermDecision, PermissionMode, SessionRole } from "@kvy/wire";
 
 /**
- * Render items — the output of the reducer (falcon-system-design.md §9.1,
+ * Render items — the output of the reducer (kvy-system-design.md §9.1,
  * plan.md §8.2). `SessionEnvelope[]` in, an ordered `RenderItem[]` out, ready
  * for a (later, out of scope here) timeline UI to map 1:1 onto components.
  *
  * Ported from Happy's `happy-app/sources/sync/reducer/reducer.ts` — logic
- * only. Happy's client renders a nested-content-block message model; Falcon's
+ * only. Happy's client renders a nested-content-block message model; Kvy's
  * wire protocol is a flatter discriminated-union event stream
  * (`SessionEvent`), so the shapes below are a fresh design that preserves the
  * four load-bearing behaviors plan.md calls out: permission-placeholder ↔
@@ -86,13 +86,22 @@ export interface SubStopItem extends RenderItemBase {
 /** Per-message token usage (plan-v2.md W4.6, AI Elements `Context` pattern)
  * — one per assistant transcript record that reported `usage`, rendered as
  * a quiet per-turn token chip. `costUsd` is optional: no provider surfaces
- * it in Falcon's transcript source today, so it's always absent for now,
+ * it in Kvy's transcript source today, so it's always absent for now,
  * but the wire event reserves the field for a future pricing lookup. */
 export interface UsageItem extends RenderItemBase {
   kind: "usage";
   inputTokens: number;
   outputTokens: number;
   costUsd?: number;
+}
+
+/** The agent's task/todo list (ACP's `plan` session/update — codex-acp's own
+ * plan/todo tool). Each `plan` wire event carries the full current list, so
+ * this item is a snapshot replaced wholesale by the next one, same as
+ * `UsageItem`. */
+export interface PlanItem extends RenderItemBase {
+  kind: "plan";
+  steps: Array<{ text: string; status: "pending" | "in_progress" | "completed" }>;
 }
 
 /** Live state of a permission request, shared by reference between whatever
@@ -170,6 +179,7 @@ export type RenderItem =
   | SubStartItem
   | SubStopItem
   | UsageItem
+  | PlanItem
   | PermPlaceholderItem
   | ToolItem
   | OrphanToolEndItem

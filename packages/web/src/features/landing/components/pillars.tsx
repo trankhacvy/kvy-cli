@@ -27,7 +27,7 @@ const PILLARS: Pillar[] = [
   },
 ];
 
-/** Falcon's worldview in three lines, replacing a vanity stats strip. */
+/** Kvy's worldview in three lines, replacing a vanity stats strip. */
 export function Pillars() {
   return (
     <section className="border-border border-y px-4 sm:px-6">

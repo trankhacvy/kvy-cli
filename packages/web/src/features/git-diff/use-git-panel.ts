@@ -9,7 +9,7 @@ import { derivePushReadiness } from "./push-readiness";
 import type { GitDiffActions } from "./types";
 
 /**
- * The Git panel's data-fetching + write-action state (falcon-prd.md FR-7.7;
+ * The Git panel's data-fetching + write-action state (kvy-prd.md FR-7.7;
  * docs/features/git-write-actions.md): `git.status` once per `worktree`,
  * `git.diff` re-fetched whenever the selected file or `compareRef` changes,
  * and `git.branches` for the "Compare against" selector's branch options.
@@ -59,7 +59,7 @@ function handlerErrorCode(error: unknown): string | undefined {
  */
 export function translateInitRepoError(raw: string): string {
   if (raw === "unknown-method") {
-    return "This machine is running an older version of Falcon. Update it there and try again.";
+    return "This machine is running an older version of Kvy. Update it there and try again.";
   }
   return raw;
 }

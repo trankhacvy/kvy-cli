@@ -43,7 +43,7 @@ function formatRelative(iso: string | null): string {
 }
 
 /**
- * CLI pairing approval: the CLI prints `app.falcon.dev/pair#<ephPub>` and polls while this
+ * CLI pairing approval: the CLI prints `app.kvy.dev/pair#<ephPub>` and polls while this
  * already-authenticated browser approves it.
  *
  * docs/auth-ux-overhaul-plan.md AX-2.2: the gate order is IDENTITY FIRST, crypto second.

@@ -1,4 +1,4 @@
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { deriveTitleFromFirstUserMessage } from "./firstMessageTitle.js";
 

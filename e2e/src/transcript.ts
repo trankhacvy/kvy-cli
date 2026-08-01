@@ -5,8 +5,8 @@
  * shows up — the harness's way of observing what the `FakeSessionProcess`
  * did without any side-channel shortcut.
  */
-import { open } from "@falcon/crypto";
-import type { SessionEnvelope } from "@falcon/wire";
+import { open } from "@kvy/crypto";
+import type { SessionEnvelope } from "@kvy/wire";
 import type { TestStack } from "./testStack.js";
 
 export async function fetchEnvelopes(

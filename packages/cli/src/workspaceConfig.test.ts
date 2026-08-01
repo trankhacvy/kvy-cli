@@ -9,8 +9,8 @@ let homeDir: string;
 let workspaceDir: string;
 
 beforeEach(async () => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-test-home-"));
-  const raw = mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-test-repo-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-workspace-config-test-home-"));
+  const raw = mkdtempSync(path.join(tmpdir(), "kvy-workspace-config-test-repo-"));
   workspaceDir = await realpath(raw);
 });
 
@@ -26,7 +26,7 @@ describe("readWorkspaceGitConfig", () => {
 
   it("returns null for an unrelated directory once one workspace is configured", async () => {
     await setWorkspaceGitConfig(workspaceDir, { baseRef: "main" }, { homeDir });
-    const other = mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-test-other-"));
+    const other = mkdtempSync(path.join(tmpdir(), "kvy-workspace-config-test-other-"));
     try {
       expect(await readWorkspaceGitConfig(other, { homeDir })).toBeNull();
     } finally {
@@ -58,7 +58,7 @@ describe("setWorkspaceGitConfig", () => {
   it("keys by real path, so a symlinked directory resolves to the same config", async () => {
     await setWorkspaceGitConfig(workspaceDir, { baseRef: "main" }, { homeDir });
 
-    const linkParent = mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-test-link-"));
+    const linkParent = mkdtempSync(path.join(tmpdir(), "kvy-workspace-config-test-link-"));
     const link = path.join(linkParent, "repo-link");
     const { symlink } = await import("node:fs/promises");
     await symlink(workspaceDir, link);

@@ -1,6 +1,6 @@
 /**
  * Maps Claude Code transcript entries (`RawJSONLines`, from `types.ts`) onto
- * `@falcon/wire`'s `SessionEnvelope` stream — the shape the HTTP outbox
+ * `@kvy/wire`'s `SessionEnvelope` stream — the shape the HTTP outbox
  * (plan.md §6.5) batches, encrypts, and POSTs.
  *
  * Ported from happy-cli/src/claude/utils/sessionProtocolMapper.ts (MIT),
@@ -16,7 +16,7 @@
  *  - `tool_result`             -> `tool-end`
  *  - sidechain `user` message  -> subagent-scoped text
  *
- * Deltas from Happy, driven by `@falcon/wire`'s actual (already-merged)
+ * Deltas from Happy, driven by `@kvy/wire`'s actual (already-merged)
  * contract rather than Happy's own `happy-wire`:
  *
  *  - **No provider ids on the wire.** `session.ts`: "provider-native ids
@@ -66,12 +66,12 @@ import {
   type SessionEnvelope,
   type SessionEvent,
   type SessionRole,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { normalizeTranscriptText } from "./modelChange.js";
 import type { RawJSONLines } from "./types.js";
 
-/** `@falcon/wire` doesn't export this narrowed type on its own — derive it. */
+/** `@kvy/wire` doesn't export this narrowed type on its own — derive it. */
 export type SessionTurnEndStatus = Extract<SessionEvent, { t: "turn-end" }>["status"];
 
 /**

@@ -46,7 +46,7 @@ describe("buildLoggerOptions", () => {
     process.env.NODE_ENV = "production";
     // config.ts refuses to boot in production with the dev-only default secret
     // (see config.ts / config.test.ts) — this test only cares about log transport.
-    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+    process.env.KVY_MASTER_SECRET = "a".repeat(32);
     const { buildLoggerOptions } = await importFreshLogger();
 
     expect(buildLoggerOptions().transport).toBeUndefined();

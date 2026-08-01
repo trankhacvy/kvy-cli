@@ -1,5 +1,5 @@
-# Self-host stack (falcon-system-design.md §6.5, plan.md §16 "4.3 Distribution
-# & self-host"): @falcon/server + Postgres 16 + an optional MinIO (the
+# Self-host stack (kvy-system-design.md §6.5, plan.md §16 "4.3 Distribution
+# & self-host"): @kvy/server + Postgres 16 + an optional MinIO (the
 # S3-compatible target the already-landed blob-storage driver picks up
 # whenever `S3_BUCKET` is set — see packages/server/src/blobStorage/index.ts;
 # leave it unset and blobs fall back to local disk, no MinIO required). The
@@ -8,7 +8,7 @@
 # packages/web/next.config.ts's `experimental.sri`.
 #
 # Usage (from this directory):
-#   cp .env.example .env            # then set FALCON_MASTER_SECRET at least
+#   cp .env.example .env            # then set KVY_MASTER_SECRET at least
 #   docker compose up -d --build              # server + postgres + web
 #   docker compose --profile minio up -d --build   # ...plus MinIO
 #
@@ -19,13 +19,13 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: falcon
-      POSTGRES_PASSWORD: falcon
-      POSTGRES_DB: falcon
+      POSTGRES_USER: kvy
+      POSTGRES_PASSWORD: kvy
+      POSTGRES_DB: kvy
     volumes:
-      - falcon-pg-data:/var/lib/postgresql/data
+      - kvy-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U falcon -d falcon"]
+      test: ["CMD-SHELL", "pg_isready -U kvy -d kvy"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -44,12 +44,12 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=3005
-      - DATABASE_URL=postgres://falcon:falcon@postgres:5432/falcon
+      - DATABASE_URL=postgres://kvy:kvy@postgres:5432/kvy
       # Fails the compose invocation up front (rather than the container
       # crash-looping) if this is still unset — config.ts refuses to boot
       # with the dev-only default once NODE_ENV=production anyway, but this
       # surfaces the same mistake before an image even starts.
-      - FALCON_MASTER_SECRET=${FALCON_MASTER_SECRET:?Set FALCON_MASTER_SECRET in deploy/.env to a real 32+ char secret before starting}
+      - KVY_MASTER_SECRET=${KVY_MASTER_SECRET:?Set KVY_MASTER_SECRET in deploy/.env to a real 32+ char secret before starting}
       # CORS allowlist for both the HTTP API and the /v1/stream WebSocket
       # (app/security/cors.ts) — must name the *web* container's own public
       # origin, since that's the split origin the browser will call in from.
@@ -80,7 +80,7 @@ services:
       - TELEGRAM_WEBHOOK_SECRET
       - NTFY_BASE_URL
     volumes:
-      - falcon-server-data:/data
+      - kvy-server-data:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -114,20 +114,20 @@ services:
   # Optional S3-compatible target for the blob-storage driver (design §6.5:
   # "MinIO in dev/self-host"). Only started with `--profile minio`; leave
   # S3_BUCKET unset in `.env` to skip this entirely and use the local-disk
-  # driver instead (falcon-server-data volume above already covers that).
+  # driver instead (kvy-server-data volume above already covers that).
   minio:
     image: minio/minio:latest
     restart: unless-stopped
     profiles: ["minio"]
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-falcon}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-falcon12345}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-kvy}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-kvy12345}
     ports:
       - "127.0.0.1:${MINIO_PORT:-9000}:9000"
       - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
-      - falcon-minio-data:/data
+      - kvy-minio-data:/data
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 5s
@@ -145,9 +145,9 @@ services:
       minio:
         condition: service_healthy
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-falcon}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-falcon12345}
-      S3_BUCKET: ${S3_BUCKET:-falcon-blobs}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-kvy}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-kvy12345}
+      S3_BUCKET: ${S3_BUCKET:-kvy-blobs}
     entrypoint: sh
     command:
       - -c
@@ -156,6 +156,6 @@ services:
         mc mb --ignore-existing "local/$$S3_BUCKET"
 
 volumes:
-  falcon-pg-data: {}
-  falcon-server-data: {}
-  falcon-minio-data: {}
+  kvy-pg-data: {}
+  kvy-server-data: {}
+  kvy-minio-data: {}

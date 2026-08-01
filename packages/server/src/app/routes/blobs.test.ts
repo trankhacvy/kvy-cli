@@ -166,7 +166,7 @@ describe("PUT/GET /v1/blobs/local/:id (local-disk driver end-to-end)", () => {
   const tokenSecret = "test-local-token-secret-32-chars!!";
 
   beforeAll(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "falcon-blob-route-test-"));
+    dir = await mkdtemp(path.join(tmpdir(), "kvy-blob-route-test-"));
     const created = await createTestDb();
     db = created.db;
     pglite = created.pglite;

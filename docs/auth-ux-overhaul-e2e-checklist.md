@@ -19,10 +19,10 @@ Two long-lived tmux panes. No Docker, no local Postgres — `DATABASE_URL` in th
 
 ```bash
 # pane: server
-pnpm --filter @falcon/server dev          # :3005, migrates on boot
+pnpm --filter @kvy/server dev          # :3005, migrates on boot
 
 # pane: web
-pnpm --filter @falcon/web dev             # :3000
+pnpm --filter @kvy/web dev             # :3000
 ```
 
 - [ ] **S1** Server boot log shows migrations applied, including `0006` (pair_requests
@@ -36,21 +36,21 @@ pnpm --filter @falcon/web dev             # :3000
 ### 0.2 CLI environment
 
 Every CLI pane needs these, and an **isolated home dir** so you never touch the real
-`~/.falcon`:
+`~/.kvy`:
 
 ```bash
-export FALCON_BACKEND_URL=http://localhost:3005
-export FALCON_FRONTEND_URL=http://localhost:3000
-export FALCON_HOME_DIR=/tmp/falcon-e2e-A     # use -B, -C for extra machines
+export KVY_BACKEND_URL=http://localhost:3005
+export KVY_FRONTEND_URL=http://localhost:3000
+export KVY_HOME_DIR=/tmp/kvy-e2e-A     # use -B, -C for extra machines
 ```
 
-Run the CLI via `pnpm --filter falcon dev -- <args>` (tsx, no build needed).
+Run the CLI via `pnpm --filter kvy dev -- <args>` (tsx, no build needed).
 
 ### 0.3 Process hygiene
 
 Only manage processes you started. Verify a PID's cwd before killing it. If :3000/:3005 are
 taken by another worktree, pick free ports and set `PORT` / `NEXT_PUBLIC_API_URL` /
-`FALCON_BACKEND_URL` to match — never blanket-kill by process name.
+`KVY_BACKEND_URL` to match — never blanket-kill by process name.
 
 ### 0.4 Useful browser helpers
 
@@ -61,26 +61,26 @@ Via `mcp__claude-in-chrome__javascript_tool`:
 indexedDB.databases().then(d => JSON.stringify(d))
 
 // Make this browser KEYLESS but keep it SIGNED IN (the Phase 4a state).
-// Deletes ONLY the key store. `falcon-session` must survive.
-indexedDB.deleteDatabase("falcon-crypto-bridge")
+// Deletes ONLY the key store. `kvy-session` must survive.
+indexedDB.deleteDatabase("kvy-crypto-bridge")
 
 // Full reset (signed out, no keys)
-indexedDB.deleteDatabase("falcon-crypto-bridge");
-indexedDB.deleteDatabase("falcon-session");
+indexedDB.deleteDatabase("kvy-crypto-bridge");
+indexedDB.deleteDatabase("kvy-session");
 ```
 
 ---
 
 ## 1. First run — CLI (Phase 1)
 
-The headline complaint this work started from: `falcon claude` showed a red error telling
+The headline complaint this work started from: `kvy claude` showed a red error telling
 you to run another command.
 
-- [ ] **E2E-1.1** With a brand-new `FALCON_HOME_DIR` and **no** account yet, run
-      `falcon claude --model haiku`.
-      **PASS:** stdout shows `Welcome to Falcon.` → `Opening your browser…` → a QR code →
+- [ ] **E2E-1.1** With a brand-new `KVY_HOME_DIR` and **no** account yet, run
+      `kvy claude --model haiku`.
+      **PASS:** stdout shows `Welcome to Kvy.` → `Opening your browser…` → a QR code →
       `Waiting for approval…`.
-      **FAIL:** any red/stderr output, or any text telling you to run `falcon auth login`.
+      **FAIL:** any red/stderr output, or any text telling you to run `kvy auth login`.
 - [ ] **E2E-1.2** The printed URL is `http://localhost:3000/pair#<fragment>`.
 - [ ] **E2E-1.3** The URL fallback line (`If it didn't open, go to:`) appears **only** when
       the browser could not be opened. If a browser did open, that line must be absent.
@@ -88,10 +88,10 @@ you to run another command.
       `✓ Connected as <the account email>` — a real address, not a placeholder — then
       `Starting your session…`, then continues **into the Claude session with no second
       command**.
-- [ ] **E2E-1.5** `falcon auth status` reports logged in, key material
+- [ ] **E2E-1.5** `kvy auth status` reports logged in, key material
       `device-key-protected (OS Keychain)`, and an account-key fingerprint.
-- [ ] **E2E-1.6** Non-interactive path: `echo "" | falcon claude` (or run with stdin not a
-      TTY) fails with `falcon: not logged in, and there's no terminal here to sign in from.`
+- [ ] **E2E-1.6** Non-interactive path: `echo "" | kvy claude` (or run with stdin not a
+      TTY) fails with `kvy: not logged in, and there's no terminal here to sign in from.`
       — this is the one place a hard failure is correct.
 
 ---
@@ -101,7 +101,7 @@ you to run another command.
 - [ ] **E2E-2.1** **Signed-out visitor.** With no session in the browser, open the pairing
       URL from E2E-1.2.
       **PASS:** redirected to `/signin/`, and the heading reads **"Connect your machine"**
-      (not the default "Sign in to Falcon").
+      (not the default "Sign in to Kvy").
       **FAIL:** any screen mentioning "key material", or a "Reset keys" button. That was the
       old dead end and its absence is the point of this test.
 - [ ] **E2E-2.2** Sign up at `/password/` with a throwaway email + a ≥8-char password.
@@ -111,14 +111,14 @@ you to run another command.
 - [ ] **E2E-2.3** After sign-up you are returned to the pairing screen automatically (the
       pending pair was stashed), **without** re-opening the link by hand.
 - [ ] **E2E-2.4** The approve card shows: **Machine** = the CLI host's hostname,
-      **Folder** = the directory you ran `falcon` in, **Requested** = a relative time, and
-      the warning *"Only approve this if you just ran `falcon` yourself."*
+      **Folder** = the directory you ran `kvy` in, **Requested** = a relative time, and
+      the warning *"Only approve this if you just ran `kvy` yourself."*
 - [ ] **E2E-2.5** Click **Approve** → success screen reads *"… is connected. Go back to your
       terminal — your session is starting."*
 - [ ] **E2E-2.6** **Malformed link.** Open `http://localhost:3000/pair#notavalidkey`.
-      **PASS:** *"This link is out of date. Run `falcon` again…"*. No crash, no dead end.
+      **PASS:** *"This link is out of date. Run `kvy` again…"*. No crash, no dead end.
 - [ ] **E2E-2.7** **base64url regression guard.** Repeat pairing until you get a fragment
-      containing `-` or `_` (retry `falcon auth login` a few times with a fresh home dir).
+      containing `-` or `_` (retry `kvy auth login` a few times with a fresh home dir).
       **PASS:** it still pairs. This is the `+`/`/` conversion bug the helper exists to
       prevent; if pairing fails only for such keys, that is a real finding.
 
@@ -129,7 +129,7 @@ you to run another command.
 - [ ] **E2E-3.1** Sign up a **fresh** account in the browser and never run the CLI.
       **PASS:** the dashboard shows **"Connect your first machine"** with three numbered
       steps, two copy buttons, and a spinner reading *"Waiting for your first machine…"*.
-      **FAIL:** the old *"Run `falcon` from a project on any **paired** machine"* text.
+      **FAIL:** the old *"Run `kvy` from a project on any **paired** machine"* text.
 - [ ] **E2E-3.2** The **New session** button is **absent** while there are no machines.
 - [ ] **E2E-3.3** Both copy buttons actually copy (`navigator.clipboard` — verify via
       `javascript_tool` reading the clipboard, or by pasting into a text input).
@@ -150,7 +150,7 @@ This is the new feature and the most security-sensitive UI in the product. Take 
 With a paired CLI already working (§1–2), run in the browser console:
 
 ```js
-indexedDB.deleteDatabase("falcon-crypto-bridge")   // keys gone, session store intact
+indexedDB.deleteDatabase("kvy-crypto-bridge")   // keys gone, session store intact
 ```
 
 Then reload `/dashboard/`.
@@ -168,7 +168,7 @@ Then reload `/dashboard/`.
 
 ### 4.2 Approving from the CLI
 
-- [ ] **E2E-4.4** In a tmux pane on the paired machine: `falcon keys approve`.
+- [ ] **E2E-4.4** In a tmux pane on the paired machine: `kvy keys approve`.
       **PASS:** it prints the request with **Signed in as** (server-attested client kind),
       **Says it is** (the browser's self-reported label), **Asked** (relative time), and
       *"Check that device shows this code:  NNN NNN"*.
@@ -229,15 +229,15 @@ otherwise — do not fake it.
 - [ ] **E2E-5.3** Confirm the stored record shape:
       ```js
       // in the browser console
-      const db = await new Promise(r => { const q = indexedDB.open("falcon-crypto-bridge"); q.onsuccess = () => r(q.result); });
+      const db = await new Promise(r => { const q = indexedDB.open("kvy-crypto-bridge"); q.onsuccess = () => r(q.result); });
       const tx = db.transaction("keys", "readonly");
       tx.objectStore("keys").get("keyRecord").onsuccess = e => console.log(JSON.stringify(Object.keys(e.target.result)), e.target.result.v, e.target.result.mode);
       ```
       **PASS:** `v: 2`, `mode: "device"` (or `"prf"`), and **no** `wrappedRefreshToken` key —
-      the session credential lives in the separate `falcon-session` database now.
-- [ ] **E2E-5.4** Confirm `falcon-session` exists as its own database (`indexedDB.databases()`).
+      the session credential lives in the separate `kvy-session` database now.
+- [ ] **E2E-5.4** Confirm `kvy-session` exists as its own database (`indexedDB.databases()`).
 - [ ] **E2E-5.5** **Logout wipes both.** Sign out via the sidebar. **PASS:** both
-      `falcon-crypto-bridge` and `falcon-session` are gone. A surviving session DB would be
+      `kvy-crypto-bridge` and `kvy-session` are gone. A surviving session DB would be
       a live 60-day credential left behind — report as HIGH.
 
 ---
@@ -252,7 +252,7 @@ otherwise — do not fake it.
 - [ ] **E2E-6.3** "Log out all other devices" → the CLI daemon's socket drops **immediately**
       (watch the daemon log), not after a delay.
 - [ ] **E2E-6.4** ⚠️ **Dead refresh token → inline re-pair (the AX-1.5 path).** After
-      revoking the CLI's session, run `falcon claude --model haiku` again.
+      revoking the CLI's session, run `kvy claude --model haiku` again.
       **PASS:** prints `Your session expired. Reconnecting…` and runs the pairing flow
       **inline** — no red error, no instruction to run another command.
       **PASS (critical half):** after re-pairing, **send a message in the session and
@@ -285,7 +285,7 @@ callback, `RequireAuth`'s no-keys state, Devices.
 - **No biometric prompt / no key-protection choice screen.** Automated Chrome has no
   platform authenticator, so `isPrfAvailable()` is false and the flow auto-resolves to
   `"device"`. Correct behaviour.
-- **`falcon keys approve` is a separate command** you must run by hand. Deliberate — the
+- **`kvy keys approve` is a separate command** you must run by hand. Deliberate — the
   daemon sees key requests but never auto-approves, because silent approval would hand full
   read access to anyone with a stolen session.
 - **A ~2s delay** before the requesting browser advances. It polls; the socket push is an
@@ -321,6 +321,6 @@ Finish with:
 2. Anything **BLOCKED** and precisely why.
 3. The single most serious finding, stated plainly.
 4. An explicit answer to: **did the three original complaints actually get fixed?**
-   - `falcon claude` no longer shows a red error on first run
+   - `kvy claude` no longer shows a red error on first run
    - the pairing link no longer dead-ends on a confusing message
    - a web-first user with no CLI gets real onboarding

@@ -1,4 +1,4 @@
-import type { WorkspaceGetConfigResult } from "@falcon/wire";
+import type { WorkspaceGetConfigResult } from "@kvy/wire";
 import { useMemo } from "react";
 import type {
   BranchItem,
@@ -29,8 +29,8 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 function seedFakeFs(): Map<string, string[]> {
   return new Map([
     ["/Users/vy", ["projects", "Documents", "Downloads"]],
-    ["/Users/vy/projects", ["falcon", "happy", "scratch"]],
-    ["/Users/vy/projects/falcon", []],
+    ["/Users/vy/projects", ["kvy", "happy", "scratch"]],
+    ["/Users/vy/projects/kvy", []],
     ["/Users/vy/projects/happy", []],
     ["/Users/vy/projects/scratch", []],
     ["/Users/vy/Documents", []],
@@ -39,13 +39,13 @@ function seedFakeFs(): Map<string, string[]> {
 }
 
 /**
- * `directory` → simulated `adopt.list` candidates — only `/Users/vy/projects/falcon`
+ * `directory` → simulated `adopt.list` candidates — only `/Users/vy/projects/kvy`
  * has any, so the import step's "no recent CLI sessions found here" empty
  * state is exercisable for every other seeded directory.
  */
 const MOCK_IMPORT_CANDIDATES: Map<string, ImportCandidate[]> = new Map([
   [
-    "/Users/vy/projects/falcon",
+    "/Users/vy/projects/kvy",
     [
       {
         providerSessionId: "prov-running-1",
@@ -64,7 +64,7 @@ const MOCK_IMPORT_CANDIDATES: Map<string, ImportCandidate[]> = new Map([
 ]);
 
 /**
- * `directory` → simulated `git.branches` result — only `/Users/vy/projects/falcon`
+ * `directory` → simulated `git.branches` result — only `/Users/vy/projects/kvy`
  * has any (same "not every seeded directory needs one" precedent as
  * `MOCK_IMPORT_CANDIDATES` above), and includes one `isCurrent` branch plus
  * one with `checkedOutAt` set so the existing-branch picker's disabled-row
@@ -73,13 +73,13 @@ const MOCK_IMPORT_CANDIDATES: Map<string, ImportCandidate[]> = new Map([
  */
 const MOCK_BRANCHES: Map<string, BranchItem[]> = new Map([
   [
-    "/Users/vy/projects/falcon",
+    "/Users/vy/projects/kvy",
     [
       { name: "main", isCurrent: true, lastCommitAt: Math.floor(Date.now() / 1000) - 3_600 },
       {
         name: "wf/in-progress",
         isCurrent: false,
-        checkedOutAt: "/Users/vy/projects/falcon/.worktrees/wf/in-progress",
+        checkedOutAt: "/Users/vy/projects/kvy/.worktrees/wf/in-progress",
         lastCommitAt: Math.floor(Date.now() / 1000) - 7_200,
       },
       {
@@ -92,9 +92,9 @@ const MOCK_BRANCHES: Map<string, BranchItem[]> = new Map([
   ],
 ]);
 
-/** `directory` → simulated `workspace.getConfig` result — only `/Users/vy/projects/falcon` has a configured `baseRef`, so `deriveDefaultBaseBranch`'s "configured ref wins over `isCurrent`" precedence is exercisable against the mock too. */
+/** `directory` → simulated `workspace.getConfig` result — only `/Users/vy/projects/kvy` has a configured `baseRef`, so `deriveDefaultBaseBranch`'s "configured ref wins over `isCurrent`" precedence is exercisable against the mock too. */
 const MOCK_WORKSPACE_CONFIG: Map<string, WorkspaceGetConfigResult> = new Map([
-  ["/Users/vy/projects/falcon", { baseRef: "main" }],
+  ["/Users/vy/projects/kvy", { baseRef: "main" }],
 ]);
 
 function parentOf(path: string): string | null {

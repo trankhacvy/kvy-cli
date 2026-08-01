@@ -41,29 +41,37 @@
  * mobvibe's `executeMessageSend` rule, kept exactly.
  *
  * ## Mode-id mapping
- * Verified against the installed adapter: its ACP session-mode ids are
- * literally the four wire `PermissionMode` strings (`default`/`acceptEdits`/
- * `plan`/`bypassPermissions`), so `setMode` passes them through unchanged.
- * (`bypassPermissions` may be refused agent-side when running as root — the
- * error is logged, not thrown, same as v1's best-effort mode sync.)
+ * `claude-code`: verified against the installed adapter — its ACP
+ * session-mode ids are literally the four wire `PermissionMode` strings
+ * (`default`/`acceptEdits`/`plan`/`bypassPermissions`), so `setMode` passes
+ * them through unchanged. (`bypassPermissions` may be refused agent-side
+ * when running as root — the error is logged, not thrown, same as v1's
+ * best-effort mode sync.)
+ * `codex`: NOT the same ids — live-verified 2026-07-31 (the installed
+ * `codex-acp`'s own `_AgentMode` list) that its real mode ids are
+ * `read-only`/`agent`/`agent-full-access`, nothing like the wire strings.
+ * Sending a wire `PermissionMode` straight through gets rejected by the
+ * agent with a JSON-RPC "Invalid params" error. `PROVIDER_MODE_ID` below
+ * maps each wire mode to its closest codex equivalent before every
+ * `session/set_mode` call.
  *
  * ## Known v2 delta: AskUserQuestion
  * The adapter disables the `AskUserQuestion` tool when the client doesn't
- * advertise form-elicitation capability (Falcon doesn't yet — see
+ * advertise form-elicitation capability (Kvy doesn't yet — see
  * `ACP_CLIENT_CAPABILITIES`). The model falls back to asking questions as
  * plain transcript text answered via the composer — functional, just not a
  * structured card. v1's structured flow depended on `updatedInput`, which
  * ACP's permission outcome cannot carry either way. Revisit with elicitation
  * support if the UX gap matters in practice.
  */
-import type { PermissionMode, SessionEnvelope } from "@falcon/wire";
-import { createEnvelope } from "@falcon/wire";
+import type { PermissionMode, SessionEnvelope } from "@kvy/wire";
+import { createEnvelope } from "@kvy/wire";
 import type { AdapterId } from "../adapters/index.js";
 import type {
   ReportSessionAttentionDeps,
   reportSessionAttention as reportSessionAttentionDefault,
 } from "../api/sessionNotify.js";
-import { FALCON_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
+import { KVY_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
 import type { Logger } from "../logger.js";
 import { OrderedEnvelopeQueue } from "../remote/outgoingQueue.js";
 import type { AcpConnectionError, PermissionRequestHandler } from "./acpConnection.js";
@@ -79,6 +87,18 @@ import {
   mapAcpUpdateToEnvelopes,
   startAcpTurn,
 } from "./acpToEnvelope.js";
+
+const CODEX_MODE_ID_BY_PERMISSION_MODE: Record<PermissionMode, string> = {
+  default: "agent",
+  acceptEdits: "agent",
+  plan: "read-only",
+  bypassPermissions: "agent-full-access",
+};
+
+function providerModeId(adapterId: AdapterId, mode: PermissionMode): string {
+  if (adapterId === "codex") return CODEX_MODE_ID_BY_PERMISSION_MODE[mode];
+  return mode;
+}
 
 export interface AcpRemoteOptions {
   /**
@@ -96,7 +116,7 @@ export interface AcpRemoteOptions {
   resume?: string | null;
   permissionMode: PermissionMode;
   model?: string;
-  /** `~/.falcon` (or override) — for the adapter manager's verify-before-spawn. */
+  /** `~/.kvy` (or override) — for the adapter manager's verify-before-spawn. */
   homeDir: string;
   /** Every envelope this session produces, already strict-ordered. */
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
@@ -105,7 +125,7 @@ export interface AcpRemoteOptions {
   /** Fires when a turn's `session/prompt` RESOLVED — the claim-completion hook (file header). */
   onTurnSettled?: (info: { messageId?: string; status: SessionTurnEndStatus }) => void;
   /**
-   * Falcon session id + backend/auth config for the session-attention
+   * Kvy session id + backend/auth config for the session-attention
    * notify POST (docs/plan-flows-3-4-5.md Flow 5's ACP wiring,
    * `api/sessionNotify.ts`), threaded straight into the `AcpPermissionHandler`
    * this module owns (`perm`/`question` kinds) and consulted again at this
@@ -133,6 +153,8 @@ export interface AcpRemoteConnection {
   ): Promise<{ stopReason: string }>;
   cancel(sessionId: string): Promise<void>;
   setMode(sessionId: string, modeId: string): Promise<void>;
+  supportsSessionLoad(): boolean;
+  loadSession(sessionId: string, cwd: string): Promise<unknown>;
   disconnect(): Promise<void>;
   onSessionUpdate(listener: (notification: { update: unknown }) => void): () => void;
   onError(listener: (error: AcpConnectionError) => void): () => void;
@@ -175,7 +197,7 @@ const noopLogger: Logger = {
   error: () => {},
 };
 
-const DEFAULT_CLIENT_INFO = { name: "falcon", version: "0.0.0" };
+const DEFAULT_CLIENT_INFO = { name: "kvy", version: "0.0.0" };
 
 interface QueuedTurn {
   text: string;
@@ -249,7 +271,7 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
   const sessionMeta: Record<string, unknown> | null =
     adapterId === "claude-code"
       ? {
-          systemPrompt: { type: "preset", preset: "claude_code", append: FALCON_SYSTEM_PROMPT },
+          systemPrompt: { type: "preset", preset: "claude_code", append: KVY_SYSTEM_PROMPT },
           claudeCode: {
             options: {
               ...(opts.resume ? { resume: opts.resume } : {}),
@@ -260,11 +282,28 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
         }
       : null;
 
-  // Session startup — connect + session/new. `ready` is awaited by the turn
-  // drain; a startup failure surfaces once as a service envelope and fails
+  // Session startup — connect + session/new (or session/load, for a
+  // resumed session on an adapter that advertises support for it — see
+  // file header's "Mode-id mapping" note for the same "verify per adapter,
+  // don't assume" lesson this took). `ready` is awaited by the turn drain;
+  // a startup failure surfaces once as a service envelope and fails
   // subsequent sends fast.
   const ready: Promise<string> = (async () => {
     await connection.connect();
+
+    if (opts.resume && connection.supportsSessionLoad()) {
+      try {
+        await connection.loadSession(opts.resume, opts.workingDirectory);
+        providerSessionId = opts.resume;
+        opts.onProviderSessionId?.(opts.resume);
+        return opts.resume;
+      } catch (error) {
+        logger.warn("[acp-remote] loadSession failed, starting a fresh session instead", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     const session = await connection.createSession({
       cwd: opts.workingDirectory,
       meta: sessionMeta,
@@ -287,7 +326,7 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
 
   async function setSessionMode(mode: PermissionMode): Promise<void> {
     const sessionId = await ready;
-    await connection.setMode(sessionId, mode); // mode ids are the wire modes (file header)
+    await connection.setMode(sessionId, providerModeId(adapterId, mode));
   }
 
   // --- sequential turn drain ---

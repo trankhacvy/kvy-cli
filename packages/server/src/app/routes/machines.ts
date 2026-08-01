@@ -1,5 +1,5 @@
-import { decodeBase64 } from "@falcon/crypto";
-import { EncryptedBoxSchema, MachineRowSchema } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto";
+import { EncryptedBoxSchema, MachineRowSchema } from "@kvy/wire";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -208,7 +208,7 @@ export function buildMachinesRoutes(
           // AH8 "machine-status-reauth": same backfill as the register
           // branch above — an update is just as good a signal that THIS
           // device session is the one currently running as this machine
-          // (e.g. re-registering after `falcon auth login` minted a new
+          // (e.g. re-registering after `kvy auth login` minted a new
           // session for an already-known machine).
           if (req.clientKind === "cli-daemon") {
             await tx

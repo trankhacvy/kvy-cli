@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * The lifecycle events Falcon ever pushes/notifies on — design §5.8 FR-8.2,
+ * The lifecycle events Kvy ever pushes/notifies on — design §5.8 FR-8.2,
  * §10: "no per-message notifications, ever." Shared by the `attention`
  * ephemeral (see `updates.ts`), the server's push-dispatch module
  * (`packages/server/src/app/push/`), and the Web Push payload the service
@@ -11,7 +11,7 @@ export const LifecycleKindSchema = z.enum(["perm", "question", "done", "failed"]
 export type LifecycleKind = z.infer<typeof LifecycleKindSchema>;
 
 /**
- * `pushSubscriptions.channel` (design §6.1) — Falcon-add fallback channels
+ * `pushSubscriptions.channel` (design §6.1) — Kvy-add fallback channels
  * (plan.md §10: "iOS Web Push is unreliable, and the notification IS the
  * product"). `webpush` is fully wired; `telegram`/`ntfy` accept subscriptions
  * today but their senders are stubs until a later task.

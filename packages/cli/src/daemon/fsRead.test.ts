@@ -11,7 +11,7 @@ describe("readFile", () => {
     // realpath'd up front: on macOS `mkdtemp` under `/tmp` resolves through a
     // `/private` symlink, and `readFile`'s containment check always compares
     // against the resolved worktree — see `fsBrowse.test.ts`'s own note.
-    root = await realpath(await mkdtemp(path.join(tmpdir(), "falcon-fs-read-")));
+    root = await realpath(await mkdtemp(path.join(tmpdir(), "kvy-fs-read-")));
     await mkdir(path.join(root, "src"));
     await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
     await writeFile(path.join(root, "binary.bin"), Buffer.from([0x00, 0x01, 0x02, 0x03]));
@@ -43,7 +43,7 @@ describe("readFile", () => {
   });
 
   it("rejects a symlink inside the worktree pointing outside it", async () => {
-    const outside = await mkdtemp(path.join(tmpdir(), "falcon-fs-read-outside-"));
+    const outside = await mkdtemp(path.join(tmpdir(), "kvy-fs-read-outside-"));
     await writeFile(path.join(outside, "secret.txt"), "top secret");
     const link = path.join(root, "escape-link");
     try {

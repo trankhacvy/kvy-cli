@@ -1,6 +1,6 @@
 "use client";
 
-import type { CheckRun, PullRequestInfo } from "@falcon/wire";
+import type { CheckRun, PullRequestInfo } from "@kvy/wire";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +36,7 @@ function PullRequestHeader({ pr }: { pr: PullRequestInfo }) {
   );
 }
 
-/** Copy for every non-`"ok"` `GithubChecksResult.state`, derived here rather than stored (design principle #3) — see `@falcon/wire`'s `rpc.ts` doc comment on `GithubChecksResultSchema` for what each state means. */
+/** Copy for every non-`"ok"` `GithubChecksResult.state`, derived here rather than stored (design principle #3) — see `@kvy/wire`'s `rpc.ts` doc comment on `GithubChecksResultSchema` for what each state means. */
 function EmptyState({ children }: { children: React.ReactNode }) {
   return <p className="p-4 text-sm text-muted-foreground">{children}</p>;
 }
@@ -68,8 +68,8 @@ export function ChecksBody({
   if (error instanceof DaemonUnsupportedError) {
     return (
       <EmptyState>
-        This machine&apos;s falcon daemon doesn&apos;t support CI checks yet. Update falcon and
-        restart the daemon.
+        This machine&apos;s kvy daemon doesn&apos;t support CI checks yet. Update kvy and restart
+        the daemon.
       </EmptyState>
     );
   }
@@ -86,8 +86,8 @@ export function ChecksBody({
     case "no-token":
       return (
         <EmptyState>
-          GitHub is not connected on this machine. Run <code>falcon github login</code> in a
-          terminal on it.
+          GitHub is not connected on this machine. Run <code>kvy github login</code> in a terminal
+          on it.
         </EmptyState>
       );
     case "unsupported-remote":
@@ -126,7 +126,7 @@ export function ChecksBody({
 }
 
 /**
- * The "Checks" tab (falcon-system-design.md §4.4 `github.checks`;
+ * The "Checks" tab (kvy-system-design.md §4.4 `github.checks`;
  * docs/features/github-pr-ci.md "GitHub PR/CI integration";
  * docs/competitive-notes-omnara.md #4): PR header (when one exists) plus its
  * check-run list, or a derived empty-state message otherwise (`ChecksBody`

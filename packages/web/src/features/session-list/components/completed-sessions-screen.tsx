@@ -9,12 +9,13 @@ import { SessionListSkeleton } from "./session-list-skeleton";
 import { WorkspaceSection } from "./workspace-section";
 
 /**
- * The Completed Chats screen (docs/features/session-lifecycle-actions.md
- * Phase 5) — the "Mark done" destination: same shape as `SessionListScreen`
- * (reusing `groupSessionsByWorkspace`/`WorkspaceSection`/`SessionCard` as-is),
- * but showing ONLY `status === "archived"` sessions, with no `UnmanagedSection`
- * and no "New session" CTA (there's nothing to spawn from here). Restore
- * (`SessionCardActions`' archived branch) is each row's way back to Home.
+ * The Completed Chats screen — the Archive destination: same shape as
+ * `SessionListScreen` (reusing `groupSessionsByWorkspace`/`WorkspaceSection`/
+ * `SessionCard` as-is), but showing ONLY `status === "archived"` sessions,
+ * with no `UnmanagedSection` and no "New session" CTA (there's nothing to
+ * spawn from here). A row here is read-only-viewable but no longer
+ * controllable (its worktree is already gone) — there's no restore back to
+ * Home for now, matching conductor.build's one-way Archive model.
  *
  * `useData` defaults to the same real `useLiveSessionListSnapshot` Home
  * uses — both screens read the identical `['sync']` snapshot and simply
@@ -49,7 +50,7 @@ export function CompletedSessionsScreen({
         <Header />
         <div className="flex min-h-[30vh] flex-col items-center justify-center gap-3 p-8 text-center">
           <p className="text-sm font-medium">Nothing completed yet</p>
-          <p className="max-w-sm text-sm text-muted-foreground">Mark done moves sessions here.</p>
+          <p className="max-w-sm text-sm text-muted-foreground">Archive moves sessions here.</p>
         </div>
       </main>
     );

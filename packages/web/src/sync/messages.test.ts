@@ -1,4 +1,4 @@
-import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import { decryptMessageBatches, type MessageDecryptor } from "./messages.js";
 import type { MessageItem, MessagesPage } from "./types.js";

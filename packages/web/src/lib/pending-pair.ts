@@ -7,7 +7,7 @@
  * durable state.
  */
 
-const PENDING_PAIR_KEY = "falcon:pendingPair";
+const PENDING_PAIR_KEY = "kvy:pendingPair";
 
 export function stashPendingPair(ephPub: string): void {
   window.sessionStorage.setItem(PENDING_PAIR_KEY, ephPub);

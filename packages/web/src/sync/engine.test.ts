@@ -1,4 +1,4 @@
-import type { EncryptedBox, SessionRow, Update } from "@falcon/wire";
+import type { EncryptedBox, SessionRow, Update } from "@kvy/wire";
 import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFakeSyncSocket } from "./__tests__/engineFakes.js";
@@ -34,6 +34,7 @@ function makeSession(id: string, overrides: Partial<SessionRow> = {}): SessionRo
 function makeSnapshot(overrides: Partial<SyncSnapshot> = {}): SyncSnapshot {
   return {
     headerSeq: 5,
+    accountKeyEpoch: 1,
     sessions: [makeSession("sess-1")],
     machines: [],
     unmanagedSessions: [],

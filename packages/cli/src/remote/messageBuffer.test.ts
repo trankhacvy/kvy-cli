@@ -1,4 +1,4 @@
-import { createEnvelope } from "@falcon/wire";
+import { createEnvelope } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { MessageBuffer, pushEnvelopeToBuffer, summarizeEnvelope } from "./messageBuffer.js";
 
@@ -91,6 +91,14 @@ describe("summarizeEnvelope", () => {
 
   it("returns null for usage (web-only chip, W4.6)", () => {
     const envelope = createEnvelope("agent", { t: "usage", inputTokens: 4, outputTokens: 5 });
+    expect(summarizeEnvelope(envelope)).toBeNull();
+  });
+
+  it("returns null for plan (web-only checklist widget)", () => {
+    const envelope = createEnvelope("agent", {
+      t: "plan",
+      steps: [{ text: "List files", status: "completed" }],
+    });
     expect(summarizeEnvelope(envelope)).toBeNull();
   });
 

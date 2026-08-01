@@ -13,7 +13,7 @@ import { RepoFilesPanel } from "./RepoFilesPanel";
  * (`app/session/[id]/files/page.tsx`) stays a thin static-export shell.
  *
  * `machineId`/`worktree` come straight off the session's own row
- * (`SessionRow.machineId`/`.workspaceId`, `@falcon/wire`'s `rows.ts` —
+ * (`SessionRow.machineId`/`.workspaceId`, `@kvy/wire`'s `rows.ts` —
  * plaintext fields the server is allowed to see, design §5.3), same
  * source `SessionGitScreen` reads from — no decrypt needed, only the
  * `['sync']` snapshot to have synced the row at all.

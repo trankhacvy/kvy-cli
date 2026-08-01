@@ -53,7 +53,7 @@ import type {
   PreviewPortsResult,
   PreviewTunnelsParams,
   PreviewTunnelsResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import crossSpawnDefault from "cross-spawn";
 import type { Logger } from "../logger.js";

@@ -1,8 +1,8 @@
 /**
  * PTY-injection gating (the "omnara model" — design §7, the terminal-attached
- * `falcon claude` input path).
+ * `kvy claude` input path).
  *
- * When a message arrives from the web (the `message` session RPC), Falcon
+ * When a message arrives from the web (the `message` session RPC), Kvy
  * types it into the SAME pseudo-terminal the interactive `claude` TUI is
  * running on — the text, then a submit keystroke — exactly as if the human at
  * the keyboard had typed it. There is no mode switch and no process kill:

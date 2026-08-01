@@ -14,7 +14,7 @@ describe("isClaudeCodeAuthenticated", () => {
   let homeDir: string;
 
   beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), "falcon-claude-auth-"));
+    homeDir = mkdtempSync(path.join(tmpdir(), "kvy-claude-auth-"));
   });
 
   afterEach(() => {
@@ -95,7 +95,7 @@ describe("isClaudeCodeAuthenticated — macOS Keychain fallback", () => {
   let homeDir: string;
 
   beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), "falcon-claude-auth-keychain-"));
+    homeDir = mkdtempSync(path.join(tmpdir(), "kvy-claude-auth-keychain-"));
   });
 
   afterEach(() => {

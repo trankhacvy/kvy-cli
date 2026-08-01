@@ -1,6 +1,6 @@
 /**
  * Per-line shiki syntax highlighting for the unified diff viewer
- * (falcon-prd.md FR-7.7 "per-file unified diff view"; plan.md §16 "4.1 Git
+ * (kvy-prd.md FR-7.7 "per-file unified diff view"; plan.md §16 "4.1 Git
  * panel"). Same shiki dependency `markdown.ts` already uses for fenced code
  * blocks (`theme: "github-dark"`, matching the app's single-theme-for-now
  * state — see that module's own doc comment) — reused here directly rather

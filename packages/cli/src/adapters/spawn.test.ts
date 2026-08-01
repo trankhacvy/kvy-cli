@@ -9,7 +9,7 @@ import { resolveAdapterSpawn } from "./spawn.js";
 let homeDir: string;
 
 beforeEach(async () => {
-  homeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-spawn-"));
+  homeDir = await mkdtemp(path.join(tmpdir(), "kvy-adapters-spawn-"));
 });
 
 afterEach(async () => {

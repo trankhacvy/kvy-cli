@@ -124,7 +124,7 @@ export function FileViewer({
               </Button>
             </>
           ) : (
-            <span>This file was truncated. It exceeded the size Falcon inlines directly.</span>
+            <span>This file was truncated. It exceeded the size Kvy inlines directly.</span>
           )}
         </div>
       )}

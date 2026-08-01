@@ -9,19 +9,19 @@
  * (happy-cli/src/api/rpc/RpcHandlerManager.ts, MIT) and the `rpc-request`
  * wiring in `happy-cli/src/api/apiSession.ts` — same shape (register a
  * target by joining a room, decrypt on receipt, encrypt the reply, ack via
- * callback), adapted to Falcon's actual (already-landed) server contract and
+ * callback), adapted to Kvy's actual (already-landed) server contract and
  * wire schemas rather than Happy's own:
  *
- *  - **Registration payload is `{ target }`, not `{ method }`.** Falcon's
+ *  - **Registration payload is `{ target }`, not `{ method }`.** Kvy's
  *    server-side `rpcHandler.ts` (`packages/server/src/app/socket/rpcHandler.ts`,
  *    ported wholesale from Happy's own server) reads `data.target` off
  *    `rpc-register`/`rpc-unregister` — that's the field name this module
  *    must emit, regardless of what Happy's CLI-side manager historically
  *    sent.
  *  - **Params/results are `EncryptedBox` objects, not opaque base64
- *    strings.** `@falcon/wire`'s `RpcCallSchema.params: EncryptedBoxSchema`
+ *    strings.** `@kvy/wire`'s `RpcCallSchema.params: EncryptedBoxSchema`
  *    (design §4.4: "Params/results are always an `EncryptedBox`") — so this
- *    module seals/opens `{t:'enc', v:1, c}` objects via `@falcon/crypto`'s
+ *    module seals/opens `{t:'enc', v:1, c}` objects via `@kvy/crypto`'s
  *    `seal`/`open` (the same session DEK the HTTP outbox encrypts messages
  *    under), not Happy's own base64-string convention.
  *  - **One handler per method, not a generic bag.** The session RPC
@@ -30,11 +30,11 @@
  *    `SessionRpcHandlers` is a closed interface instead of Happy's
  *    `registerHandler(method, fn)` free-form registry.
  *  - **Validated against the wire schemas.** Every decrypted params/result
- *    payload is round-tripped through its `@falcon/wire` zod schema — a
+ *    payload is round-tripped through its `@kvy/wire` zod schema — a
  *    malformed call (or a handler returning the wrong shape) is caught here
  *    rather than silently sent as whatever-shape-it-happens-to-be.
  */
-import { open, seal } from "@falcon/crypto";
+import { open, seal } from "@kvy/crypto";
 import {
   type EncryptedBox,
   EncryptedBoxSchema,
@@ -50,12 +50,12 @@ import {
   StopRpcParamsSchema,
   StopRpcResultSchema,
   TakeControlResultSchema,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { Socket } from "socket.io-client";
 import { type ZodType, z } from "zod";
 import type { Logger } from "../logger.js";
 
-// `@falcon/wire`'s rpc.ts exports the schemas below but not their inferred
+// `@kvy/wire`'s rpc.ts exports the schemas below but not their inferred
 // types (unlike SpawnParams/LocalSessionInfo/etc.) — derive them locally
 // rather than adding exports to a package outside this task's scope
 // (packages/cli/src/{remote,rpc} only).

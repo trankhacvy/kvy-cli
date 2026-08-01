@@ -32,7 +32,7 @@ export function sessionShareUrl(origin: string, sessionId: string): string {
  * "Continue on mobile" QR-code handoff (docs/competitive-notes-omnara.md
  * #11): a header button that opens a dialog showing a QR code encoding this
  * session's own URL, plus a copy-link button — scan-to-open on a phone (the
- * same PWA, since Falcon has no separate mobile app), or paste the link
+ * same PWA, since Kvy has no separate mobile app), or paste the link
  * anywhere. Session content itself stays end-to-end encrypted regardless —
  * this only hands off *which session to open*, the same as any other link
  * to `/dashboard/session/<id>/`; whoever opens it still needs to be signed in.

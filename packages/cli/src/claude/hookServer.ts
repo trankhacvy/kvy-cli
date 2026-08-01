@@ -15,7 +15,7 @@
  * ## Why a hook instead of watching the transcript file for its name?
  * Claude Code's own transcript filename *is* the provider session UUID, but
  * discovering it by watching `~/.claude/projects/**` is racy once more than
- * one `falcon claude` process can be running (which file belongs to which
+ * one `kvy claude` process can be running (which file belongs to which
  * process?). The `SessionStart` hook instead has Claude Code tell this
  * specific process's server about its own session id directly — a 1:1
  * mapping with no race, matching Happy's rationale for preferring hooks
@@ -54,7 +54,7 @@
  * writeHookSettingsFile(dir, port)  →  <dir>/session-hook-<id>.json
  *                                       (SessionStart/Notification/Stop →
  *                                        forwarder.cjs)
- *                                       <dir>/falcon-hook-forwarder-<id>.cjs
+ *                                       <dir>/kvy-hook-forwarder-<id>.cjs
  * spawn claude --settings <path>    →  Claude Code fires SessionStart
  *                                       → forwarder POSTs stdin JSON to
  *                                         /hook/session-start
@@ -71,15 +71,15 @@
  *   it's part of the still-unmerged `P1-1.2-server-write-http` worktree.
  * - Actually calling `POST /v1/sessions/:id/notify` (or emitting over the
  *   session-scoped WS client, `session/sessionClient.ts`) once `onAttention`
- *   fires — both need Falcon's own `sessionId` + an auth token, neither of
+ *   fires — both need Kvy's own `sessionId` + an auth token, neither of
  *   which this loopback hook server (one per Claude Code *provider* process,
- *   keyed by no Falcon identity at all) has any business owning. `onAttention`
+ *   keyed by no Kvy identity at all) has any business owning. `onAttention`
  *   is the seam a caller that does hold those wires the real network call
  *   through, exactly like `onSessionId` today.
  * - Wiring `startHookServer`/`writeHookSettingsFile` into the real
- *   `claudeLocal.ts` spawn flow and the `falcon_claude_launcher.cjs`
+ *   `claudeLocal.ts` spawn flow and the `kvy_claude_launcher.cjs`
  *   launcher script — both are separate, currently in-flight plan bullets
- *   (`claudeLocal.ts` port, "Launcher `falcon_claude_launcher.cjs`").
+ *   (`claudeLocal.ts` port, "Launcher `kvy_claude_launcher.cjs`").
  * This module is fully decoupled via callback injection (like
  * `controlServer.ts`'s `deps` pattern) precisely so it can be wired in
  * later without changes here.
@@ -105,7 +105,7 @@ import {
 } from "./pretoolPermissionBridge.js";
 
 /** The lifecycle-signal kinds a local-mode session can honestly report —
- * the subset of `@falcon/wire`'s `LifecycleKind` that `POST
+ * the subset of `@kvy/wire`'s `LifecycleKind` that `POST
  * /v1/sessions/:id/notify` accepts (`failed` has its own richer route,
  * `sessionStatus.ts`, and isn't something a hook ever reports). */
 export type AttentionKind = "perm" | "question" | "done";
@@ -217,7 +217,7 @@ export interface HookServerDeps {
   onAttention?: (kind: AttentionKind) => void;
   /**
    * Invoked when Claude Code's `PreToolUse` hook fires — a tool is about to
-   * run and Falcon gets to approve/deny/defer it (design §7.6, remote
+   * run and Kvy gets to approve/deny/defer it (design §7.6, remote
    * permission answering). Resolves with the `PreToolUse` output the
    * forwarder writes back to Claude Code as the hook's stdout. Optional: when
    * omitted, every tool is deferred to the normal TUI prompt (`ask`), so a
@@ -309,7 +309,7 @@ export function startHookServer(deps: HookServerDeps): Promise<HookServerHandle>
       },
     );
 
-    // A tool is about to run — route it through Falcon's permission pipeline
+    // A tool is about to run — route it through Kvy's permission pipeline
     // (design §7.6). This handler may block until the web answers (or the
     // bridge times out); the forwarder holds the hook open and streams this
     // JSON back to Claude Code as the hook's stdout.
@@ -456,7 +456,7 @@ export interface HookSettingsFile {
  * defers (`ask`), and `PermissionRequest` is where the web-vs-terminal fork
  * actually lives (fires only for calls that would genuinely show a dialog).
  *
- * `dir` is caller-supplied (e.g. a `~/.falcon/tmp/hooks`-style directory)
+ * `dir` is caller-supplied (e.g. a `~/.kvy/tmp/hooks`-style directory)
  * rather than resolved here, keeping this module decoupled from
  * `resolveHomeDir`/the real launcher's directory conventions.
  */
@@ -464,7 +464,7 @@ export function writeHookSettingsFile(dir: string, port: number): HookSettingsFi
   mkdirSync(dir, { recursive: true });
 
   const id = `${process.pid}-${randomUUID()}`;
-  const forwarderPath = path.join(dir, `falcon-hook-forwarder-${id}.cjs`);
+  const forwarderPath = path.join(dir, `kvy-hook-forwarder-${id}.cjs`);
   const settingsPath = path.join(dir, `session-hook-${id}.json`);
 
   writeFileSync(forwarderPath, FORWARDER_SCRIPT, { mode: 0o755 });

@@ -18,7 +18,7 @@
  * in the MVP.
  */
 import { execFile } from "node:child_process";
-import type { PreviewPortInfo } from "@falcon/wire";
+import type { PreviewPortInfo } from "@kvy/wire";
 
 const LSOF_ARGS = ["-nP", "-iTCP", "-sTCP:LISTEN"];
 

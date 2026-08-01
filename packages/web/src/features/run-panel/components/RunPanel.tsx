@@ -132,7 +132,7 @@ export function RunPanelBody({
               title={
                 hasRunScript
                   ? undefined
-                  : 'No run script configured. Set one from a terminal: falcon workspace config --run-script "npm run dev"'
+                  : 'No run script configured. Set one from a terminal: kvy workspace config --run-script "npm run dev"'
               }
             >
               <Play className="size-3.5" />
@@ -144,7 +144,7 @@ export function RunPanelBody({
           <p className="text-xs text-muted-foreground">
             No run script configured. Set one from a terminal:{" "}
             <code className="rounded bg-muted px-1 py-0.5">
-              falcon workspace config --run-script &quot;npm run dev&quot;
+              kvy workspace config --run-script &quot;npm run dev&quot;
             </code>
           </p>
         )}
@@ -177,7 +177,7 @@ export function RunPanelBody({
             title={
               hasSetupScript
                 ? undefined
-                : 'No setup script configured. Set one from a terminal: falcon workspace config --setup-script "npm install"'
+                : 'No setup script configured. Set one from a terminal: kvy workspace config --setup-script "npm install"'
             }
           >
             <RefreshCw className="size-3.5" />
@@ -188,7 +188,7 @@ export function RunPanelBody({
           <p className="text-xs text-muted-foreground">
             No setup script configured. Set one from a terminal:{" "}
             <code className="rounded bg-muted px-1 py-0.5">
-              falcon workspace config --setup-script &quot;npm install&quot;
+              kvy workspace config --setup-script &quot;npm install&quot;
             </code>
           </p>
         )}
@@ -202,7 +202,7 @@ export function RunPanelBody({
 /**
  * The "Setup / Run" tab (docs/features/setup-run-scripts.md, plan.md §16
  * "17."): play/stop the workspace's configured run script and re-run its
- * setup script, both defined CLI-only (`falcon workspace config
+ * setup script, both defined CLI-only (`kvy workspace config
  * --setup-script/--run-script`).
  *
  * `useActions` is the injectable seam — mirrors `GitDiffPanel`/`ChecksPanel`'s

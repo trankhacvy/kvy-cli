@@ -12,9 +12,9 @@ async function renderToHtml(md: string): Promise<string> {
 
 describe("renderMarkdown", () => {
   it("renders basic inline formatting to real elements", async () => {
-    const html = await renderToHtml("Hello **world**, this is *Falcon*.");
+    const html = await renderToHtml("Hello **world**, this is *Kvy*.");
     expect(html).toContain("<strong>world</strong>");
-    expect(html).toContain("<em>Falcon</em>");
+    expect(html).toContain("<em>Kvy</em>");
   });
 
   it("renders GFM features (tables, strikethrough, task lists)", async () => {

@@ -9,7 +9,7 @@ import { verifyAdapterInstall } from "./verify.js";
 let homeDir: string;
 
 beforeEach(async () => {
-  homeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-verify-"));
+  homeDir = await mkdtemp(path.join(tmpdir(), "kvy-adapters-verify-"));
 });
 
 afterEach(async () => {
@@ -23,7 +23,7 @@ async function writeLock(overrides: Record<string, unknown> = {}) {
   await writeFile(
     lockPath,
     JSON.stringify({
-      name: "falcon-adapters",
+      name: "kvy-adapters",
       lockfileVersion: 3,
       packages: {
         [`node_modules/${entry.packageName}`]: {

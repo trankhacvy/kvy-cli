@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import { TriangleAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {

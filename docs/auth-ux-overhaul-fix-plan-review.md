@@ -261,7 +261,7 @@ The `onblocked → resolve` posture (never fail logout because a second tab is o
 right, and the fake-indexeddb restraint ("add it only if the interface test proves
 insufficient") is the correct call for a package with a node-only vitest environment.
 
-## Fix 6 — Stop backfilling transcripts that predate Falcon — **MOSTLY SOUND**
+## Fix 6 — Stop backfilling transcripts that predate Kvy — **MOSTLY SOUND**
 
 Code claims all verified:
 
@@ -280,17 +280,17 @@ Code claims all verified:
   writes both files at test time (fresh mtime), so it survives the gate as claimed.
 
 One semantic concern the plan under-weighs: the gate's own justifying sentence — "a
-transcript whose file has not been touched since Falcon started watching this workspace
+transcript whose file has not been touched since Kvy started watching this workspace
 is, by definition, not the session the user just left" — is not true at **first
-registration**. FR-9.1's canonical entry path (falcon-prd.md:221: run plain `claude`,
-work, *then* reach for Falcon) means the user's just-exited plain session has
+registration**. FR-9.1's canonical entry path (kvy-prd.md:221: run plain `claude`,
+work, *then* reach for Kvy) means the user's just-exited plain session has
 `mtime < registeredAt` by minutes, and is now filtered out of the very surface built to
 capture it. A *still-running* plain session survives (its next write re-triggers the
 watcher with a fresh mtime), and the plan's failure-mode analysis ("under-indexing is
 recoverable — touch the file / send a message") is honest, so this is not disqualifying
 — but the fix should either (a) add a small grace window at first registration
 (e.g. `registeredAt - N minutes`), or (b) explicitly document that the just-exited-
-before-first-run case is deliberately excluded and `falcon adopt`/resume is the answer.
+before-first-run case is deliberately excluded and `kvy adopt`/resume is the answer.
 Right now the plan asserts the exclusion can't happen, which is the one part of this
 section that doesn't survive contact with the PRD scenario it quotes.
 
@@ -305,7 +305,7 @@ The load-bearing discovery is verified and is a genuinely good find:
 - `eventRouter.ts:118` — **every** connection joins `user:${accountId}` regardless of
   type, and `all-user-authenticated-connections` routes to exactly that room (:238-240).
 - `session/sessionClient.ts` registers exactly three socket handlers (`connect`,
-  `connect_error`, `disconnect`) — no `"ephemeral"`. So the running `falcon claude`
+  `connect_error`, `disconnect`) — no `"ephemeral"`. So the running `kvy claude`
   process really does receive and discard the event today; no new transport needed.
 - `machineClient.ts:457-468` (log-only handler, AX-4.17 comment), `logger.ts:5-19`
   (stdout prohibition), `ptyClaudeSession.ts:582/592-593` (pty spawn + byte relay),
@@ -368,7 +368,7 @@ warning in React. Given this page is client-gated and dev-only, that's tolerable
 the *cleanest* shape is the `useEffect`-set-mode variant (one extra render, no
 mismatch). Either way: the plan's diff must not land as written, and its proposed
 source-text test (assert `peekPendingPair()` appears in the initializer) would happily
-pass on the broken version — add a build (`pnpm --filter @falcon/web build`) to the
+pass on the broken version — add a build (`pnpm --filter @kvy/web build`) to the
 acceptance criteria for this fix.
 
 Graded PROBLEMATIC not for direction (which is right) but because the exact diff ships a
@@ -389,7 +389,7 @@ All constraints re-verified against `lib/copy.ts` and `lib/__tests__/copy.test.t
   leading "run", `codeMismatchRequester` matches `/code/i`).
 - The `starting` phase truly renders nothing today (`request-keys-panel.tsx` renders
   `waiting` at :110; `starting` has no branch), and the inline
-  `Run <code>falcon keys approve</code>…` JSX at :128-129 is indeed the one user-facing
+  `Run <code>kvy keys approve</code>…` JSX at :128-129 is indeed the one user-facing
   string the copy test cannot see. Moving it into `copy.ts` is the right call.
 
 Copy quality is good, the loader for the `starting` phase closes a real blank-first-
@@ -465,7 +465,7 @@ The 1→11 order contains no forward dependencies: Fix 4's dependence on Fix 2
 (`getAccountId()` needs a cold-load token, which needs a working refresh) is real and
 correctly ordered; Fix 3 is genuinely independent of Fix 2 in code; Fix 10's reuse of
 Fix 9's copy tokens is real; Fixes 1 and 6 are isolated. Landing 4 and 5 adjacent for
-one `key-storage.ts` review pass is sensible. The "no `@falcon/wire` changes, no schema
+one `key-storage.ts` review pass is sensible. The "no `@kvy/wire` changes, no schema
 migrations" claim was checked and holds — both protocol changes (Fix 2's
 `RefreshOutcome`, Fix 4's account ids) live entirely in `packages/web/src/crypto`'s
 main-thread↔worker protocol, which ships as one bundle pair.

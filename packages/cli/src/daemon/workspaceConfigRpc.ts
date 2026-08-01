@@ -3,24 +3,24 @@
  * (docs/features/setup-run-scripts.md Phase 3/4): the web Workspace
  * Settings UI's surface for the configured `baseRef`/`remote`/
  * `setupScript`/`runScript` — `workspaceConfig.ts`'s store previously had
- * no daemon surface at all (`falcon workspace config` is CLI-only, "no
+ * no daemon surface at all (`kvy workspace config` is CLI-only, "no
  * daemon interaction"). Script *definition* stays CLI-only (design §12's
  * local-consent boundary, this feature's central risk note): `setConfig`'s
- * params schema (`@falcon/wire`'s `WorkspaceSetConfigParamsSchema`)
+ * params schema (`@kvy/wire`'s `WorkspaceSetConfigParamsSchema`)
  * carries only `baseRef`/`remote` — never `setupScript`/`runScript` —
  * exactly so this RPC can't reopen the "remote code execution via a script
  * string over the wire" risk `getConfig`'s read-only design avoided.
  *
  * Both gated on the same registered-workspace authorizer as every `run.*`
  * handler (`runProcess.ts`'s `resolveRunContext`) — scoped to worktrees the
- * user has actually designated as a Falcon workspace.
+ * user has actually designated as a Kvy workspace.
  */
 import type {
   WorkspaceGetConfigParams,
   WorkspaceGetConfigResult,
   WorkspaceSetConfigParams,
   WorkspaceSetConfigResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { resolveHomeDir } from "../home.js";
 import { readWorkspaceGitConfig, setWorkspaceGitConfig } from "../workspaceConfig.js";
 import { type RunProcessDeps, resolveRunContext } from "./runProcess.js";

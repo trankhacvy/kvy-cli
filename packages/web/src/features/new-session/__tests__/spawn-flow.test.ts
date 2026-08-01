@@ -95,7 +95,7 @@ describe("runSpawnFlow", () => {
   });
 
   // Flow 3 — spawn-fresh-folder-register (Piece A): a genuinely fresh
-  // folder picked cold in the web UI, never `falcon workspace register`'d
+  // folder picked cold in the web UI, never `kvy workspace register`'d
   // from a terminal, resolves the *same* approval-loop shape as
   // create-directory, just with `action: "register-workspace"` and
   // `registerWorkspace` in place of `createDirectory`.

@@ -447,7 +447,7 @@ describe("writeHookSettingsFile", () => {
   });
 
   it("writes a settings file whose SessionStart hook command embeds the given port", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 54321);
     try {
       expect(existsSync(settingsPath)).toBe(true);
@@ -468,7 +468,7 @@ describe("writeHookSettingsFile", () => {
   });
 
   it("also writes Notification and Stop hooks pointing at their own endpoints", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 54321);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -489,7 +489,7 @@ describe("writeHookSettingsFile", () => {
   });
 
   it("writes a PreToolUse hook pointing at /hook/pre-tool-use with a command timeout", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 54321);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -507,7 +507,7 @@ describe("writeHookSettingsFile", () => {
   });
 
   it("writes a PermissionRequest hook (the 5th settings entry) pointing at /hook/permission-request with a command timeout", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 54321);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -539,7 +539,7 @@ describe("writeHookSettingsFile", () => {
       },
     }));
     const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -573,7 +573,7 @@ describe("writeHookSettingsFile", () => {
   it("end-to-end: a 204 (no decision) means the forwarder writes nothing to its own stdout", async () => {
     const onPermissionRequest = vi.fn(async () => undefined);
     const server = await startHookServer({ onSessionId: () => {}, onPermissionRequest });
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -612,7 +612,7 @@ describe("writeHookSettingsFile", () => {
       suppressOutput: true as const,
     }));
     const server = await startHookServer({ onSessionId: () => {}, onPreToolUse });
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -643,7 +643,7 @@ describe("writeHookSettingsFile", () => {
   });
 
   it("cleanup() removes both the settings file and the forwarder script", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, 1234);
     const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
     const forwarderPath = parsed.hooks.SessionStart[0].hooks[0].command.match(
@@ -657,7 +657,7 @@ describe("writeHookSettingsFile", () => {
   });
 
   it("each call produces a distinct, non-colliding settings + forwarder pair", () => {
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const a = writeHookSettingsFile(dir, 1000);
     const b = writeHookSettingsFile(dir, 1001);
     try {
@@ -671,7 +671,7 @@ describe("writeHookSettingsFile", () => {
   it("end-to-end: the generated forwarder script actually delivers stdin JSON to the hook server", async () => {
     const onSessionId = vi.fn();
     const server = await startHookServer({ onSessionId });
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));
@@ -703,7 +703,7 @@ describe("writeHookSettingsFile", () => {
   it("end-to-end: the Stop hook's forwarder command reaches onAttention('done')", async () => {
     const onAttention = vi.fn();
     const server = await startHookServer({ onSessionId: () => {}, onAttention });
-    dir = mkdtempSync(path.join(tmpdir(), "falcon-hook-test-"));
+    dir = mkdtempSync(path.join(tmpdir(), "kvy-hook-test-"));
     const { path: settingsPath, cleanup } = writeHookSettingsFile(dir, server.port);
     try {
       const parsed = JSON.parse(readFileSync(settingsPath, "utf-8"));

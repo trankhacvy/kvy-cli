@@ -1,5 +1,5 @@
-import { open, seal } from "@falcon/crypto";
-import type { AdoptTakeParams, AdoptTakeResult, EncryptedBox } from "@falcon/wire";
+import { open, seal } from "@kvy/crypto";
+import type { AdoptTakeParams, AdoptTakeResult, EncryptedBox } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import { type MachineRpcDeps, registerMachineRpcHandlers } from "./machineRpc.js";
 

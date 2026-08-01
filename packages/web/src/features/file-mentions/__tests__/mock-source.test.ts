@@ -7,7 +7,7 @@ describe("mockFileMentionActions", () => {
     expect(results.length).toBeGreaterThan(0);
   });
 
-  it("finds the two example files falcon-prd.md's own copy calls out", async () => {
+  it("finds the two example files kvy-prd.md's own copy calls out", async () => {
     const claude = await mockFileMentionActions.search("CLAUDE.md");
     expect(claude.map((r) => r.path)).toContain("CLAUDE.md");
 

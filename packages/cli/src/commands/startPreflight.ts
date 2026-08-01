@@ -10,8 +10,8 @@
  *
  * Shared by `commands/start.ts` (claude) and `commands/startCodex.ts`.
  */
-import { deriveKeyTree, type KeyTree } from "@falcon/crypto";
-import type { FalconCredentials } from "../auth/credentials.js";
+import { deriveKeyTree, type KeyTree } from "@kvy/crypto";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { resolveKeyMaterial } from "../auth/keyMaterial.js";
 import { createTokenProviderForCredentials } from "../auth/resolveAccessToken.js";
 import type { TokenProvider } from "../auth/tokenProvider.js";
@@ -30,7 +30,7 @@ const MACHINE_ID_WAIT_TIMEOUT_MS = 3000;
 const MACHINE_ID_POLL_MS = 100;
 
 export interface Preflight {
-  credentials: FalconCredentials;
+  credentials: KvyCredentials;
   masterSecret: Uint8Array;
   contentKeyPair: KeyTree["content"];
   machineId: string;
@@ -47,7 +47,7 @@ export type PreflightResult =
 export interface PreflightDeps {
   homeDir: string;
   backendUrl: string;
-  readCredentials: (homeDir: string) => FalconCredentials | null;
+  readCredentials: (homeDir: string) => KvyCredentials | null;
   readDaemonState: (homeDir: string) => Promise<DaemonState | null>;
   fetchImpl: typeof fetch;
   sleep: (ms: number) => Promise<void>;

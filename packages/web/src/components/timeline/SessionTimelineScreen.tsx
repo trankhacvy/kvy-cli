@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionMode, SessionRow } from "@falcon/wire";
+import type { PermissionMode, SessionRow } from "@kvy/wire";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -23,8 +23,8 @@ import {
   useSessionTitle,
   useTabAttention,
 } from "@/features/session-control";
-import { deriveMachineOnline, useMachinePresence } from "@/features/session-list";
 import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
+import { copy } from "@/lib/copy";
 import { useMachineOnline } from "@/lib/use-machine-online";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { cn } from "@/lib/utils";
@@ -41,8 +41,8 @@ import { TimelineSkeleton } from "./TimelineSkeleton";
 import { WorkingDirectoryChip } from "./WorkingDirectoryChip";
 
 /**
- * Session timeline screen (falcon-system-design.md §9.2 "Session" row,
- * falcon-prd.md FR-7.2/FR-7.3/FR-7.4). Renders the reducer's `RenderItem[]`
+ * Session timeline screen (kvy-system-design.md §9.2 "Session" row,
+ * kvy-prd.md FR-7.2/FR-7.3/FR-7.4). Renders the reducer's `RenderItem[]`
  * output as a structured chat transcript plus the full control surface
  * (plan.md §16 "2.4 Web control surface"): `Composer` (queue-aware follow-up
  * input + footer session chips), interactive `PermCard`s inline in the
@@ -84,8 +84,19 @@ export function SessionTimelineScreen({
   // until the snapshot has loaded or this session id isn't (yet) present in
   // it; treated the same as `"active"` below (the default a fresh session
   // row is created with) — never as "ended"/"failed" by absence alone.
-  const session = useSyncSnapshotQuery().data?.sessions.find((s) => s.id === sessionId);
+  const syncSnapshot = useSyncSnapshotQuery().data;
+  const session = syncSnapshot?.sessions.find((s) => s.id === sessionId);
+  // A reset-keys rotation (`/reset-keys/`) throws away the old key entirely — a session
+  // whose own `keyEpoch` (mirrors `sessions.key_epoch`) is older than the account's current
+  // one (`accountKeyEpoch`) can never be decrypted again, by design. Checked BEFORE trying
+  // to render anything decrypt-dependent below, rather than letting `useLiveRenderItems`
+  // fail and surfacing a raw decrypt error — see `LockedOldKeySessionScreen`.
+  const isLockedOldKey =
+    session?.keyEpoch !== undefined &&
+    syncSnapshot?.accountKeyEpoch !== undefined &&
+    session.keyEpoch < syncSnapshot.accountKeyEpoch;
   const sessionStatus: SessionRow["status"] = session?.status ?? "active";
+  const provider = session?.provider ?? "";
   // `workspaceId` (when set) *is* the workspace's real absolute directory
   // path — same plaintext-on-the-row convention `SessionGitScreen` already
   // relies on (design §5.3: the server is allowed to see this field, unlike
@@ -100,26 +111,13 @@ export function SessionTimelineScreen({
   // `SessionSidePanel`'s Checks tab (docs/features/github-pr-ci.md) so it
   // can gate its live `ChecksPanel` on both being present.
   const machineId = session?.machineId ?? null;
-  // Restart's enable condition (docs/features/session-lifecycle-actions.md
-  // Phase 6) needs to know whether the owning machine is actually online,
-  // not just that it exists — same `deriveMachineOnline` (live
-  // `machine-presence` ephemeral, falling back to the `lastSeenAt`
-  // heuristic) `features/session-list`'s Home screen already uses.
-  const machinePresence = useMachinePresence();
-  const machineRow = useSyncSnapshotQuery().data?.machines.find((m) => m.id === machineId);
-  const machineOnline = machineRow
-    ? deriveMachineOnline(machineRow, machinePresence, Date.now())
-    : false;
-  // Feature 2 (docs/web-ux-improvements-plan.md §2.4d): a SEPARATE signal from
-  // `machineOnline` above — that one feeds Restart's hard enable/disable gate
-  // (docs/features/session-lifecycle-actions.md Phase 6), which must stay
-  // conservative (no owning machine yet = not restartable). The composer's
-  // notice, by contrast, must never treat "we haven't heard from this machine
-  // yet" as "offline" (`useMachineOnline`'s own "unknown must never look like
-  // offline" rule) — so it uses `isKnownUnavailable`, not the plain boolean.
+  // The composer's notice must never treat "we haven't heard from this
+  // machine yet" as "offline" (`useMachineOnline`'s own "unknown must never
+  // look like offline" rule) — so it uses `isKnownUnavailable`, not a plain
+  // online/offline boolean.
   const machineAvailability = useMachineOnline(machineId);
 
-  // Viewing the screen counts as "seen" for this device (falcon-prd.md
+  // Viewing the screen counts as "seen" for this device (kvy-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
   // not on every render, so a completed-turn-while-open doesn't immediately
   // re-flag "done" the instant it lands.
@@ -151,11 +149,16 @@ export function SessionTimelineScreen({
 
   useTabAttention(title ?? `Session ${sessionId}`, attention, working);
 
+  if (isLockedOldKey) {
+    return <LockedOldKeySessionScreen sessionId={sessionId} />;
+  }
+
   return (
     <SessionControlProvider
       sessionId={sessionId}
       useControl={useControl}
       machineOffline={machineAvailability.isKnownUnavailable}
+      provider={provider}
     >
       <SessionTimelineBody
         sessionId={sessionId}
@@ -174,7 +177,7 @@ export function SessionTimelineScreen({
         sessionStatus={sessionStatus}
         workspacePath={workspacePath}
         machineId={machineId}
-        machineOnline={machineOnline}
+        provider={provider}
       />
     </SessionControlProvider>
   );
@@ -200,7 +203,7 @@ function SessionTimelineBody({
   sessionStatus,
   workspacePath,
   machineId,
-  machineOnline,
+  provider,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), or `null` until it's
@@ -234,11 +237,7 @@ function SessionTimelineBody({
    * into `SessionSidePanel`'s Checks tab alongside `workspacePath`
    * (docs/features/github-pr-ci.md). */
   machineId: string | null;
-  /** Whether `machineId`'s machine is currently online — Restart's enable
-   * condition (docs/features/session-lifecycle-actions.md Phase 6),
-   * `deriveMachineOnline`'d in the parent alongside every other
-   * machine-row-derived value passed down here. */
-  machineOnline: boolean;
+  provider: string;
 }) {
   const { mergedItems, send, sendAttachment, isSending, isQueued, cryptoReady, error, notice } =
     useComposerState(items);
@@ -284,8 +283,7 @@ function SessionTimelineBody({
               title={title ?? sessionId}
               status={sessionStatus}
               machineId={machineId}
-              machineOnline={machineOnline}
-              disabled={isDisabled}
+              workspaceId={workspacePath}
             />
           </div>
         </header>
@@ -329,6 +327,7 @@ function SessionTimelineBody({
                 isQueued={isQueued}
                 cryptoReady={cryptoReady}
                 disabled={isDisabled}
+                disabledPlaceholder={composerDisabledPlaceholder(sessionStatus)}
                 error={error}
                 notice={notice}
                 working={working}
@@ -340,6 +339,7 @@ function SessionTimelineBody({
                     controlMode={controlMode}
                     disabled={isDisabled}
                     modelChip={modelChip}
+                    provider={provider}
                   />
                 }
               />
@@ -361,13 +361,29 @@ function SessionTimelineBody({
   );
 }
 
-/** Once the CLI process itself is gone (W1.4's `ended`/`failed` — as
- * opposed to `completed`/`archived`/`compacted`, which describe a turn or
- * an explicit archive on a session that's still otherwise controllable),
- * nothing sent from this screen can reach a live process anymore — disable
- * the controls rather than let a request silently go nowhere. Only these
- * two terminal states disable controls; `archived`/`compacted` (like
- * `active`) leave a still-controllable session's controls enabled.
+/** Shown instead of the whole composer/timeline tree for a session whose `keyEpoch` is
+ *  older than the account's current one (a reset-keys rotation threw away the only key
+ *  that could ever decrypt it) — a plain, hook-free component with its own render test,
+ *  same precedent as `isSessionControlDisabled`/`LifecycleBanner` below. Deliberately
+ *  never attempts a decrypt (no `Timeline`/`Composer` mounted at all) rather than letting
+ *  one fail and surfacing a raw "failed to decrypt" error the user can't act on. */
+export function LockedOldKeySessionScreen({ sessionId }: { sessionId: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 p-8 text-center">
+      <p className="text-sm font-medium">{copy.lockedSession.title}</p>
+      <p className="max-w-sm text-sm text-muted-foreground">{copy.lockedSession.body}</p>
+      <p className="mt-2 text-xs text-muted-foreground">{sessionId}</p>
+    </div>
+  );
+}
+
+/** Once the CLI process itself is gone (W1.4's `ended`/`failed`) or the
+ * session has been explicitly archived (its worktree already removed —
+ * `ArchiveSessionDialog`), nothing sent from this screen can reach a live
+ * process anymore — disable the controls rather than let a request
+ * silently go nowhere. `compacted` (like `active`) describes an
+ * in-progress turn on an otherwise still-controllable session, so it's the
+ * only status left enabled.
  *
  * Exported (alongside `LifecycleBanner` below) as a plain, hook-free
  * function/component so the actual disabled-wiring rule and banner copy
@@ -376,11 +392,12 @@ function SessionTimelineBody({
  * `lib/markdown.test.ts`) without needing to stand up this screen's full
  * live sync/crypto hook graph. */
 export function isSessionControlDisabled(status: SessionRow["status"]): boolean {
-  return status === "ended" || status === "failed";
+  return status === "ended" || status === "failed" || status === "archived";
 }
 
-/** The ended/failed banner shown above the control bar (plan-v2.md
- * W1.4+B15). Renders nothing for every other status. */
+/** The read-only banner shown above the control bar once a session can no
+ * longer be controlled from the web (plan-v2.md W1.4+B15) — ended, failed,
+ * or archived. Renders nothing for every other status. */
 export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["status"] }) {
   if (!isSessionControlDisabled(sessionStatus)) return null;
   return (
@@ -392,9 +409,24 @@ export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["
           : "bg-muted/40 text-muted-foreground",
       )}
     >
-      {sessionStatus === "failed"
-        ? "Session failed. This session can no longer be controlled from the web."
-        : "Session ended. This session can no longer be controlled from the web."}
+      {lifecycleBannerCopy(sessionStatus)}
     </div>
   );
+}
+
+function lifecycleBannerCopy(sessionStatus: SessionRow["status"]): string {
+  if (sessionStatus === "failed") {
+    return "Session failed. This session can no longer be controlled from the web.";
+  }
+  if (sessionStatus === "archived") {
+    return "This session is archived — read-only. You can view messages here, but the worktree has been removed and it can no longer be controlled from the web.";
+  }
+  return "Session ended. This session can no longer be controlled from the web.";
+}
+
+/** Composer's disabled-placeholder copy — archived gets its own, shorter
+ * message (the full explanation already lives in `LifecycleBanner` above
+ * it); ended/failed keep the original text. */
+function composerDisabledPlaceholder(sessionStatus: SessionRow["status"]): string {
+  return sessionStatus === "archived" ? "This session is archived." : "This session has ended.";
 }

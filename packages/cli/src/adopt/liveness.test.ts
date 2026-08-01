@@ -12,8 +12,8 @@ describe("isPlainClaudeCommand", () => {
     expect(isPlainClaudeCommand("/usr/local/bin/claude --resume abc")).toBe(true);
   });
 
-  it("rejects a Falcon-launched session", () => {
-    expect(isPlainClaudeCommand("falcon claude --starting-mode remote --started-by daemon")).toBe(
+  it("rejects a Kvy-launched session", () => {
+    expect(isPlainClaudeCommand("kvy claude --starting-mode remote --started-by daemon")).toBe(
       false,
     );
   });
@@ -55,14 +55,14 @@ describe("findOwningClaudeProcess", () => {
     expect(result).toBeNull();
   });
 
-  it("ignores a Falcon-managed process even if its cwd matches", async () => {
+  it("ignores a Kvy-managed process even if its cwd matches", async () => {
     await writeFile(join(projectDir, "sess-a.jsonl"), "{}");
     const result = await findOwningClaudeProcess(
       workspacePath,
       projectDir,
       deps({
         listProcesses: async () => [
-          { pid: 1, ppid: 0, command: "falcon claude --starting-mode remote --started-by daemon" },
+          { pid: 1, ppid: 0, command: "kvy claude --starting-mode remote --started-by daemon" },
         ],
         resolveProcessCwd: async () => workspacePath,
       }),

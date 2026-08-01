@@ -5,11 +5,11 @@
  */
 import type { Logger } from "../logger.js";
 import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
-import { type FalconCredentials, readCredentials } from "./credentials.js";
+import { type KvyCredentials, readCredentials } from "./credentials.js";
 import { ensureLoggedIn } from "./login.js";
 
 export type EnsureCredentialsResult =
-  | { ok: true; credentials: FalconCredentials }
+  | { ok: true; credentials: KvyCredentials }
   | { ok: false; message: string };
 
 export async function ensureCredentials(

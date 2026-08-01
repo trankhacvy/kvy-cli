@@ -1,6 +1,6 @@
 export type Theme = "light" | "dark";
 
-/** Falcon's default theme (design §9 stack table: "dark default theme").
+/** Kvy's default theme (design §9 stack table: "dark default theme").
  * `layout.tsx`'s pre-hydration script and `use-theme.ts`'s server snapshot
  * both fall back to this when no stored preference exists yet — the two
  * places that need to agree on it without importing each other (the script
@@ -10,7 +10,7 @@ export const DEFAULT_THEME: Theme = "dark";
 /** `localStorage` key for the persisted preference — shared by the
  * pre-hydration script (`layout.tsx`) and `use-theme.ts`'s store so both
  * read/write the exact same slot. */
-export const THEME_STORAGE_KEY = "falcon:theme";
+export const THEME_STORAGE_KEY = "kvy:theme";
 
 /** Narrows an arbitrary stored value (whatever `localStorage.getItem`
  * returned, or `null`) to a valid `Theme` — a missing key, a stale/foreign

@@ -48,7 +48,7 @@ function loadServiceWorker(): FakeSelf {
     skipWaiting: vi.fn().mockResolvedValue(undefined),
     caches: {
       open: vi.fn().mockResolvedValue(cache),
-      keys: vi.fn().mockResolvedValue(["falcon-shell-v1"]),
+      keys: vi.fn().mockResolvedValue(["kvy-shell-v1"]),
       delete: vi.fn().mockResolvedValue(true),
       match: vi.fn().mockResolvedValue(undefined),
     },
@@ -63,7 +63,7 @@ function loadServiceWorker(): FakeSelf {
     skipWaiting: fake.skipWaiting,
     clients: { claim: fake.claim, matchAll: fake.matchAll, openWindow: fake.openWindow },
     registration: { showNotification: fake.showNotification },
-    location: { origin: "https://falcon.example" },
+    location: { origin: "https://kvy.example" },
   };
 
   const sandbox = {
@@ -126,7 +126,7 @@ describe("public/sw.js", () => {
     await fireWaitUntil(push, { data: { json: () => ({ sessionId: "sess_1", kind: "perm" }) } });
 
     expect(sw.showNotification).toHaveBeenCalledWith(
-      "Falcon needs your permission",
+      "Kvy needs your permission",
       expect.objectContaining({
         tag: "sess_1",
         icon: "/icon-192.png",
@@ -149,7 +149,7 @@ describe("public/sw.js", () => {
     });
 
     expect(sw.showNotification).toHaveBeenCalledWith(
-      "Falcon",
+      "Kvy",
       expect.objectContaining({ data: { url: "/dashboard/" } }),
     );
   });
@@ -161,7 +161,7 @@ describe("public/sw.js", () => {
     await fireWaitUntil(push, { data: null });
 
     expect(sw.showNotification).toHaveBeenCalledWith(
-      "Falcon",
+      "Kvy",
       expect.objectContaining({ data: { url: "/dashboard/" } }),
     );
   });
@@ -169,7 +169,7 @@ describe("public/sw.js", () => {
   it("notificationclick: focuses an already-open tab for the exact same session URL", async () => {
     const focus = vi.fn().mockResolvedValue(undefined);
     sw.matchAll.mockResolvedValue([
-      { url: "https://falcon.example/dashboard/session/sess_1/", focus },
+      { url: "https://kvy.example/dashboard/session/sess_1/", focus },
     ]);
     const notificationclick = sw.listeners.get("notificationclick");
     if (!notificationclick) throw new Error("no notificationclick handler registered");
@@ -184,7 +184,7 @@ describe("public/sw.js", () => {
     expect(sw.openWindow).not.toHaveBeenCalled();
   });
 
-  it("notificationclick: opens a new window when no Falcon tab is open at all", async () => {
+  it("notificationclick: opens a new window when no Kvy tab is open at all", async () => {
     sw.matchAll.mockResolvedValue([]);
     const notificationclick = sw.listeners.get("notificationclick");
     if (!notificationclick) throw new Error("no notificationclick handler registered");
@@ -193,14 +193,14 @@ describe("public/sw.js", () => {
       notification: { close: vi.fn(), data: { url: "/dashboard/session/sess_2/" } },
     });
 
-    expect(sw.openWindow).toHaveBeenCalledWith("https://falcon.example/dashboard/session/sess_2/");
+    expect(sw.openWindow).toHaveBeenCalledWith("https://kvy.example/dashboard/session/sess_2/");
   });
 
   it("notificationclick: navigates an existing tab to the target session when none matches exactly", async () => {
     const navigate = vi.fn().mockResolvedValue(undefined);
     const focus = vi.fn().mockResolvedValue(undefined);
     sw.matchAll.mockResolvedValue([
-      { url: "https://falcon.example/dashboard/session/other/", focus, navigate },
+      { url: "https://kvy.example/dashboard/session/other/", focus, navigate },
     ]);
     const notificationclick = sw.listeners.get("notificationclick");
     if (!notificationclick) throw new Error("no notificationclick handler registered");
@@ -210,7 +210,7 @@ describe("public/sw.js", () => {
     });
 
     expect(focus).toHaveBeenCalled();
-    expect(navigate).toHaveBeenCalledWith("https://falcon.example/dashboard/session/sess_3/");
+    expect(navigate).toHaveBeenCalledWith("https://kvy.example/dashboard/session/sess_3/");
     expect(sw.openWindow).not.toHaveBeenCalled();
   });
 
@@ -231,7 +231,7 @@ describe("public/sw.js", () => {
       request: {
         method: "GET",
         mode: "cors",
-        url: "https://falcon.example/v1/sync",
+        url: "https://kvy.example/v1/sync",
       },
       respondWith: () => {
         responded = true;

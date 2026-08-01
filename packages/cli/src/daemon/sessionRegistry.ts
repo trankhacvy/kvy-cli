@@ -94,10 +94,10 @@ export interface SessionRegistry {
   /**
    * True if `providerSessionId` (a Claude Code/Codex transcript's own id —
    * the JSONL filename) is already tracked, live or durably persisted, as
-   * one of THIS daemon's own Falcon-managed sessions — `transcriptIndexer.ts`'s
-   * `isManaged` lineage-lookup hook (falcon-system-design.md §8/§11 UC9): a
+   * one of THIS daemon's own Kvy-managed sessions — `transcriptIndexer.ts`'s
+   * `isManaged` lineage-lookup hook (kvy-system-design.md §8/§11 UC9): a
    * session's own local transcript must never be independently re-surfaced
-   * as "unmanaged" while (or after) Falcon is already managing it. Checks
+   * as "unmanaged" while (or after) Kvy is already managing it. Checks
    * both `pidToSession` (live) and `resumable` (ended-but-still-tracked, and
    * whatever `restore()` reloaded from `sessions.json`) so a session that
    * already exited is still recognized. `providerSessionId` only ever

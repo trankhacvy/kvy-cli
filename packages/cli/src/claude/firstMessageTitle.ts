@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 
 const SYSTEM_INSTRUCTION_RE = /^\s*<system_instruction>[\s\S]*?<\/system_instruction>\s*/i;
 const MAX_TITLE_LENGTH = 120;

@@ -11,7 +11,7 @@ describe("listDirectory", () => {
     // realpath'd up front: on macOS `mkdtemp` under `/tmp` resolves through a
     // `/private` symlink, and `listDirectory` always returns the resolved
     // path — comparisons below need the same resolved form as `root`.
-    root = await realpath(await mkdtemp(path.join(tmpdir(), "falcon-fs-browse-")));
+    root = await realpath(await mkdtemp(path.join(tmpdir(), "kvy-fs-browse-")));
     await mkdir(path.join(root, "b-dir"));
     await mkdir(path.join(root, "a-dir"));
     await writeFile(path.join(root, "a-file.txt"), "hi");
@@ -30,7 +30,7 @@ describe("listDirectory", () => {
   });
 
   it("resolves symlinks and reports the real path listed", async () => {
-    const link = path.join(tmpdir(), `falcon-fs-browse-link-${Date.now()}`);
+    const link = path.join(tmpdir(), `kvy-fs-browse-link-${Date.now()}`);
     await symlink(root, link);
     try {
       const result = await listDirectory({ idempotencyKey: "idem-2", path: link });
@@ -65,7 +65,7 @@ describe("createDirectory", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "falcon-fs-mkdir-"));
+    root = await mkdtemp(path.join(tmpdir(), "kvy-fs-mkdir-"));
   });
 
   afterEach(async () => {

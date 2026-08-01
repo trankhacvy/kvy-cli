@@ -24,7 +24,7 @@ export interface ConnectivityState {
   /** Whether `apiSocket`'s WS connection is currently up. Distinct from
    * `online`: a genuinely offline browser is caught by the check above
    * before the socket even gets a chance to report disconnected, while a
-   * *reachable* network with the Falcon server unreachable (server down,
+   * *reachable* network with the Kvy server unreachable (server down,
    * blocked, auth failure) only ever shows up here. */
   wsConnected: boolean;
   /** True once the server has rejected a (re)connection attempt as an auth

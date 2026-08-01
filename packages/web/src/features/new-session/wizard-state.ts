@@ -1,4 +1,4 @@
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import type { ImportCandidate, NewSessionProvider, SpawnRequest } from "./types";
 
 /**
@@ -42,7 +42,7 @@ export interface NewSessionForm {
    * git's own default of branching from whatever's currently checked out.
    */
   baseBranch: string;
-  /** The session-import step's pick (falcon-prd.md FR-7.8 UC7), or `null` to start fresh — the default, and always a valid choice (the step is optional). */
+  /** The session-import step's pick (kvy-prd.md FR-7.8 UC7), or `null` to start fresh — the default, and always a valid choice (the step is optional). */
   importCandidate: ImportCandidate | null;
 }
 

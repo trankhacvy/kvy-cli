@@ -23,7 +23,7 @@
  * through and shown to the user (annoying, not dangerous), never a
  * fabricated `committed: true`.
  */
-import type { GitCommitParams, GitCommitResult } from "@falcon/wire";
+import type { GitCommitParams, GitCommitResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";
 

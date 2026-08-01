@@ -39,7 +39,7 @@ describe("wire schema additive-only compat", () => {
       // eslint-disable-next-line no-console
       console.warn(
         `[wire] ${uncovered.length} schema(s) not yet in wire-shapes.json fixture: ${uncovered.join(", ")}. ` +
-          'Run "pnpm --filter @falcon/wire exec tsx scripts/snapshot-shapes.ts" to freeze them.',
+          'Run "pnpm --filter @kvy/wire exec tsx scripts/snapshot-shapes.ts" to freeze them.',
       );
     }
     expect(true).toBe(true);

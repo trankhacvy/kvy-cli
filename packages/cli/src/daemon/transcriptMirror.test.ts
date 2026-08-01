@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AdoptMirrorParams } from "@falcon/wire";
+import type { AdoptMirrorParams } from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getProjectPath } from "../claude/scanner.js";
 import type { ResolvedProviderSession } from "./providerSessionResolver.js";

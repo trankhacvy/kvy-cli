@@ -24,7 +24,7 @@
  * SOFTWARE.
  *
  * ---
- * Node entry point (default `import`/`require` condition of @falcon/crypto).
+ * Node entry point (default `import`/`require` condition of @kvy/crypto).
  * Uses node:crypto for AES-256-GCM + random bytes, tweetnacl for NaCl box/
  * secretbox/sign. See `encryption.web.ts` for the browser counterpart
  * (libsodium-wrappers + WebCrypto AES-GCM).
@@ -77,7 +77,7 @@ export function libsodiumEncryptForPublicKey(
  * Inverse of libsodiumEncryptForPublicKey — open a [ephPub32|nonce24|ct] sealed
  * box with the recipient's secret key. Not present in Happy's original file
  * (Happy only ever encrypts *to* the app, never needs to open one CLI-side);
- * added here because @falcon/crypto's `unwrapDek` needs the symmetric decrypt.
+ * added here because @kvy/crypto's `unwrapDek` needs the symmetric decrypt.
  * Never throws — returns null on any failure (design principle #1).
  */
 export function libsodiumDecryptWithSecretKey(

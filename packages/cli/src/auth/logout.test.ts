@@ -13,12 +13,12 @@ function fakeLogger() {
 }
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-logout-test-"));
-  process.env.FALCON_HOME_DIR = homeDir;
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-logout-test-"));
+  process.env.KVY_HOME_DIR = homeDir;
 });
 
 afterEach(() => {
-  delete process.env.FALCON_HOME_DIR;
+  delete process.env.KVY_HOME_DIR;
   rmSync(homeDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });

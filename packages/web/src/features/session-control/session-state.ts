@@ -1,8 +1,8 @@
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import type { RenderItem } from "@/sync/reducer";
 
 /**
- * The session's current local/remote control mode (falcon-system-design.md
+ * The session's current local/remote control mode (kvy-system-design.md
  * §7.5's mode state machine), read straight off the most recent
  * `mode-switch` item — `"local"` if none has happened yet (sessions start
  * local unless spawned with `--starting-mode remote`). Drives whether
@@ -71,7 +71,7 @@ export function deriveWorking(items: RenderItem[], ephemeralWorking: boolean): b
 }
 
 /**
- * The session's current permission mode (falcon-system-design.md §7.5,
+ * The session's current permission mode (kvy-system-design.md §7.5,
  * plan-v2.md W2.4), replacing `SessionTimelineScreen`'s previously-hardcoded
  * `"default"` passed to `ControlBar`. There is no wire event carrying a bare
  * "the mode is now X" fact — `mode-switch` items only carry *control*

@@ -15,25 +15,25 @@ import { registerWorkspace, unregisterWorkspace } from "./workspaceRegisterRpc.j
  * way `fsBrowse.test.ts` tests `createDirectory`/`listDirectory` directly
  * rather than only through `machineRpc.test.ts`.
  *
- * Uses `FALCON_HOME_DIR` (not an injected options param — `registerWorkspace`
+ * Uses `KVY_HOME_DIR` (not an injected options param — `registerWorkspace`
  * here intentionally takes no such seam, same "real, dependency-free
  * default" contract as `fs.list`/`fs.mkdir`) to isolate each test's
- * `workspaces.json` from the real `~/.falcon`, same technique
+ * `workspaces.json` from the real `~/.kvy`, same technique
  * `machineRpc.test.ts`'s "with the real default" block already uses.
  */
 describe("registerWorkspace (workspace.register RPC backing module)", () => {
   let homeDir: string;
-  let previousFalconHomeDir: string | undefined;
+  let previousKvyHomeDir: string | undefined;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-register-rpc-unit-"));
-    previousFalconHomeDir = process.env.FALCON_HOME_DIR;
-    process.env.FALCON_HOME_DIR = homeDir;
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-workspace-register-rpc-unit-"));
+    previousKvyHomeDir = process.env.KVY_HOME_DIR;
+    process.env.KVY_HOME_DIR = homeDir;
   });
 
   afterEach(async () => {
-    if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
-    else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+    if (previousKvyHomeDir === undefined) delete process.env.KVY_HOME_DIR;
+    else process.env.KVY_HOME_DIR = previousKvyHomeDir;
     await rm(homeDir, { recursive: true, force: true });
   });
 
@@ -61,17 +61,17 @@ describe("registerWorkspace (workspace.register RPC backing module)", () => {
 
 describe("unregisterWorkspace (workspace.unregister RPC backing module, known-issues.md #3)", () => {
   let homeDir: string;
-  let previousFalconHomeDir: string | undefined;
+  let previousKvyHomeDir: string | undefined;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-workspace-unregister-rpc-unit-"));
-    previousFalconHomeDir = process.env.FALCON_HOME_DIR;
-    process.env.FALCON_HOME_DIR = homeDir;
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-workspace-unregister-rpc-unit-"));
+    previousKvyHomeDir = process.env.KVY_HOME_DIR;
+    process.env.KVY_HOME_DIR = homeDir;
   });
 
   afterEach(async () => {
-    if (previousFalconHomeDir === undefined) delete process.env.FALCON_HOME_DIR;
-    else process.env.FALCON_HOME_DIR = previousFalconHomeDir;
+    if (previousKvyHomeDir === undefined) delete process.env.KVY_HOME_DIR;
+    else process.env.KVY_HOME_DIR = previousKvyHomeDir;
     await rm(homeDir, { recursive: true, force: true });
   });
 

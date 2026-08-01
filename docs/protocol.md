@@ -1,15 +1,15 @@
 # Wire Protocol
 
 > **Status:** stub — outline + pointers only. Expand this doc as each piece of
-> `@falcon/wire` and the transports that use it actually land. Full detail
-> currently lives in [`falcon-system-design.md` §4](../falcon-system-design.md#4-wire-protocol-falconwire).
+> `@kvy/wire` and the transports that use it actually land. Full detail
+> currently lives in [`kvy-system-design.md` §4](../kvy-system-design.md#4-wire-protocol-kvywire).
 >
 > **Rule:** this file is updated in the same PR as any protocol change
-> (`plan.md` cross-cutting note). If a schema in `@falcon/wire` changes and
+> (`plan.md` cross-cutting note). If a schema in `@kvy/wire` changes and
 > this doc doesn't, the PR is incomplete.
 
-This document will describe the Falcon wire protocol as implemented in
-`packages/wire` (`@falcon/wire`) and consumed by `packages/server`,
+This document will describe the Kvy wire protocol as implemented in
+`packages/wire` (`@kvy/wire`) and consumed by `packages/server`,
 `packages/cli`, and `packages/web`. See [`encryption.md`](./encryption.md)
 for how payloads inside this protocol are encrypted.
 
@@ -23,7 +23,7 @@ handling are covered in `encryption.md`; the wire-level shape is:
 type EncryptedBox = { t: 'enc'; v: 1; c: string /* base64 */ };
 ```
 
-Design doc: [§4.1 Encryption container](../falcon-system-design.md#41-encryption-container-outermost-everything-user-content-crosses-in-this).
+Design doc: [§4.1 Encryption container](../kvy-system-design.md#41-encryption-container-outermost-everything-user-content-crosses-in-this).
 
 ## 2. Session event envelope
 
@@ -32,7 +32,7 @@ Adapter-minted `cuid2` ids only — provider-native ids (`toolu_*`, Codex ids)
 never cross the wire. Covers text/thinking, tool start/end, files, turns,
 permission request/resolve, mode-switch, and subagent lifecycle.
 
-Design doc: [§4.2 Session event envelope](../falcon-system-design.md#42-session-event-envelope-provider-agnostic-flat-stream).
+Design doc: [§4.2 Session event envelope](../kvy-system-design.md#42-session-event-envelope-provider-agnostic-flat-stream).
 
 **No token streaming (W4.1 decision):** the local (non-ACP) transcript path
 only ever emits whole `text`/`tool-*` envelopes, never partial-token deltas —
@@ -55,7 +55,7 @@ for structural changes, per-session `msgSeq` for transcript messages. **All
 writes go over idempotent HTTP**, never WS — see the write/read split and
 the reasoning in the design doc before touching this.
 
-Design doc: [§4.3 Server↔client update stream](../falcon-system-design.md#43-serverclient-update-stream).
+Design doc: [§4.3 Server↔client update stream](../kvy-system-design.md#43-serverclient-update-stream).
 
 ## 4. RPC contracts
 
@@ -73,17 +73,17 @@ boolean. A retried/duplicated send whose claim already completed replies
 mid-turn) replies `outcome-unknown` and the client reconciles from the
 transcript rather than blind-resending. See design §7.10.
 
-Design doc: [§4.4 RPC contracts](../falcon-system-design.md#44-rpc-contracts).
+Design doc: [§4.4 RPC contracts](../kvy-system-design.md#44-rpc-contracts).
 
 ## 5. Provider transport (ACP) — below the wire protocol
 
 The wire protocol above is CLI↔server↔client. Separately, **inside** the CLI
 session process, remote mode talks to the coding agent over the **Agent
-Client Protocol (ACP)**: Falcon spawns a managed adapter child
+Client Protocol (ACP)**: Kvy spawns a managed adapter child
 (`@agentclientprotocol/claude-agent-acp`, `@agentclientprotocol/codex-acp`)
 and drives it via `@agentclientprotocol/sdk` over NDJSON stdio. This is a
 loopback, CLI-internal concern — it never crosses the encryption boundary and
-is not part of `@falcon/wire`.
+is not part of `@kvy/wire`.
 
 ACP's `session/update` notifications map onto the provider-agnostic
 `SessionEnvelope` stream (§2) by a single shared mapper (`cli/src/acp/
@@ -93,7 +93,7 @@ ACP is visible to the server, web, or wire schema — swapping the provider
 transport (as v2 did, from the Claude Agent SDK / hand-rolled Codex client to
 ACP) is invisible above this line.
 
-Design doc: [§7.3–§7.10 CLI provider layer](../falcon-system-design.md#73-provider-adapter-interface).
+Design doc: [§7.3–§7.10 CLI provider layer](../kvy-system-design.md#73-provider-adapter-interface).
 
 ## Reserved namespaces (deferred features)
 
@@ -109,6 +109,6 @@ compat lint in CI plus golden fixtures per version (see `plan.md` §16 0.2).
 
 ---
 
-**TODO as `@falcon/wire` lands:** concrete Zod schema names and file
+**TODO as `@kvy/wire` lands:** concrete Zod schema names and file
 locations, request/response examples per RPC method, error shapes, and a
 changelog of schema versions.

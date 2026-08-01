@@ -1,8 +1,8 @@
-# Falcon — Technical System Design
+# Kvy — Technical System Design
 
 **Version:** 0.3
 **Date:** 2026-07-17
-**Companion docs:** `falcon-prd.md` (requirements; FR-x.x references below point there),
+**Companion docs:** `kvy-prd.md` (requirements; FR-x.x references below point there),
 `docs/acp-delta-proposal.md` (v2 migration rationale, feasibility evidence, decisions)
 **Scope:** MVP = CLI + daemon + relay server + web PWA. Remote sandboxing deferred (schema hooks only).
 
@@ -17,7 +17,7 @@ deleted, not flag-gated.
    integration and the hand-rolled `codex app-server` JSON-RPC client (§7.4, §7.7).
 2. **Local TUI mode unchanged.** ACP is headless; the fidelity path (real `claude` TUI,
    launcher, transcript tailer, hooks) and the mode state machine stay as-is (§7.5).
-3. **Managed adapter installs** — pinned exact versions under `~/.falcon/adapters/`,
+3. **Managed adapter installs** — pinned exact versions under `~/.kvy/adapters/`,
    integrity-checked, spawned locally; never `npx` at session start (§7.9).
 4. **Send-time idempotency claim** — durable claim-before-execute on the `message` RPC;
    tri-state reply (`queued | duplicate | outcome-unknown`); a retried RPC can never run
@@ -56,7 +56,7 @@ deleted, not flag-gated.
 │                                                                              │
 │  Terminal                                                                    │
 │  ┌─────────────────────────────┐      ┌──────────────────────────────────┐   │
-│  │ falcon CLI (session proc)   │      │ falcon daemon (1 per machine)    │   │
+│  │ kvy CLI (session proc)   │      │ kvy daemon (1 per machine)    │   │
 │  │  • provider adapter          │◄────►│  • machine-scoped WS to server   │   │
 │  │    - claude local (spawn)    │ HTTP │  • RPC: spawn/stop/resume/git/fs │   │
 │  │    - remote = ACP child      │ loop-│  • process registry + liveness  │   │
@@ -67,12 +67,12 @@ deleted, not flag-gated.
 │  │  • E2E encrypt/decrypt       │      └───────────────┬──────────────────┘   │
 │  │  • session-scoped WS         │                      │                     │
 │  └──────────────┬───────────────┘                      │                     │
-│                 │ ~/.falcon/ (settings, keys, daemon.state.json, sessions)   │
+│                 │ ~/.kvy/ (settings, keys, daemon.state.json, sessions)   │
 └─────────────────┼──────────────────────────────────────┼─────────────────────┘
                   │ WSS session-scoped        WSS machine-scoped
                   ▼                                      ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  falcon-server (zero-knowledge relay)                                        │
+│  kvy-server (zero-knowledge relay)                                        │
 │  Fastify: REST /v1 = ALL WRITES (idempotent) + fetch/pagination              │
 │  Socket.IO: WS /v1/stream = READ-ONLY updates/ephemerals + RPC transport     │
 │  ├─ auth: OAuth sign-in + Ed25519 challenge/response + JWT                   │
@@ -88,7 +88,7 @@ deleted, not flag-gated.
                                    │ WSS user-scoped (read) + REST (write/fetch)
                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│  falcon-web (Next.js PWA · shadcn/ui · Tailwind CSS · TanStack React Query)  │
+│  kvy-web (Next.js PWA · shadcn/ui · Tailwind CSS · TanStack React Query)  │
 │  sync engine (seq fast-path + refetch) · message reducer/normalizer ·        │
 │  session UI (timeline, permission cards, composer) · service worker (push)   │
 │  key custody (IndexedDB, crypto worker) · new-session & takeover flows       │
@@ -108,17 +108,17 @@ deleted, not flag-gated.
 ## 3. Monorepo & Tech Stack
 
 ```
-falcon/
+kvy/
 ├─ packages/
-│  ├─ wire/           # @falcon/wire — Zod schemas: ALL wire messages, events,
+│  ├─ wire/           # @kvy/wire — Zod schemas: ALL wire messages, events,
 │  │                  #   RPC contracts, enums. Zero runtime deps beyond zod+cuid2.
-│  ├─ crypto/         # @falcon/crypto — isomorphic (node + browser) key hierarchy,
+│  ├─ crypto/         # @kvy/crypto — isomorphic (node + browser) key hierarchy,
 │  │                  #   AES-GCM / NaCl box+secretbox, base64, recovery codes.
-│  ├─ cli/            # `falcon` npm package + standalone binaries.
+│  ├─ cli/            # `kvy` npm package + standalone binaries.
 │  │  └─ src/{index,commands/,claude/,codex/,daemon/,api/,adopt/,ui/,sandbox-stub/}
-│  ├─ server/         # falcon-server. Fastify 5 + Socket.IO 4 + Drizzle ORM.
+│  ├─ server/         # kvy-server. Fastify 5 + Socket.IO 4 + Drizzle ORM.
 │  │  └─ src/{main,app/{api,auth,events,rpc,push,presence,blobs},db/{schema,migrations}/}
-│  ├─ web/            # falcon-web. Next.js (App Router, static/PWA output) + React 19.
+│  ├─ web/            # kvy-web. Next.js (App Router, static/PWA output) + React 19.
 │  │  │                #   shadcn/ui + Tailwind CSS; TanStack React Query for REST.
 │  │  └─ src/{app/,sync/,reducer/,components/{ui,session,tools}/,crypto-bridge/,push/}
 │  └─ shared-render/  # session-timeline components shared with future clients (P2)
@@ -143,7 +143,7 @@ falcon/
 
 ---
 
-## 4. Wire Protocol (`@falcon/wire`)
+## 4. Wire Protocol (`@kvy/wire`)
 
 ### 4.1 Encryption container (outermost, everything user-content crosses in this)
 
@@ -263,7 +263,7 @@ RPC method names are scope-prefixed: `m:<machineId>:<method>` and `s:<sessionId>
 'github.checks'({worktree})   → { state: 'no-token'|'unsupported-remote'|'not-pushed'|'no-pr'|'ok';
                                    repo?; branch?; pr?: PullRequestInfo; checks?: CheckRun[] }
                               // "Checks" tab (docs/features/github-pr-ci.md). Authenticated with a
-                              // machine-local GitHub token (~/.falcon/github.key, `falcon github
+                              // machine-local GitHub token (~/.kvy/github.key, `kvy github
                               // login`) — never held by the server, same custody model as every
                               // other machine-local secret (§5.3/§6.1). `state` is derived fresh on
                               // every call, never stored (design principle #3).
@@ -305,21 +305,21 @@ No TTLs, no external registry: room membership (cleaned on disconnect) is the si
 
 ---
 
-## 5. Encryption Design (`@falcon/crypto`)
+## 5. Encryption Design (`@kvy/crypto`)
 
 ### 5.1 Key hierarchy
 
 ```
 masterSecret (32B, generated client-side at signup; NEVER leaves clients unwrapped)
- ├─ HKDF("falcon-auth")    → ed25519 seed → signing keypair   (server auth challenge)
- ├─ HKDF("falcon-content") → x25519 seed → content keypair    (wraps DEKs)
- ├─ HKDF("falcon-anon")    → anonId (16 hex)                  (analytics identity)
- └─ HKDF("falcon-blob-master") → legacy/global blob key       (rarely used)
+ ├─ HKDF("kvy-auth")    → ed25519 seed → signing keypair   (server auth challenge)
+ ├─ HKDF("kvy-content") → x25519 seed → content keypair    (wraps DEKs)
+ ├─ HKDF("kvy-anon")    → anonId (16 hex)                  (analytics identity)
+ └─ HKDF("kvy-blob-master") → legacy/global blob key       (rarely used)
 
 Per session / per machine record:
   DEK = random 32B
     • payload encryption: AES-256-GCM  [0x01 | nonce12 | ct | tag16]
-    • blob key: HKDF(DEK, "falcon-blobs")   → attachments isolated from text
+    • blob key: HKDF(DEK, "kvy-blobs")   → attachments isolated from text
   wrapped DEK = sealed-box(contentPubKey, DEK) = [ephPub32 | nonce24 | ct]
   stored server-side as opaque `dek` column: [0x00 | sealedBox]
 ```
@@ -338,11 +338,11 @@ Per session / per machine record:
 CLI                                    Server                        Web (has keys)
  │ ephemeral x25519 keypair              │                                │
  │ POST /v1/auth/pair {ephPub} ─────────►│ create PairRequest             │
- │ print URL: app.falcon.dev/pair#ephPub │                                │
+ │ print URL: app.kvy.dev/pair#ephPub │                                │
  │ poll GET /v1/auth/pair/status ───────►│◄── POST /v1/auth/pair/approve ─│
  │                                       │    {box(ephPub, [0x00|masterSecret… or contentKey bundle])}
  │◄── {state:'authorized', box, token} ──│                                │
- │ decrypt with ephPriv → store ~/.falcon/access.key                      │
+ │ decrypt with ephPriv → store ~/.kvy/access.key                      │
 ```
 The server relays an opaque box; it cannot read the key material.
 
@@ -487,7 +487,7 @@ GET  /health   GET /metrics (bind-local)
 ### 6.4 Push pipeline
 
 Trigger points (from session event ingest): `perm-request`, `agent question` (perm-request with `name: 'AskUserQuestion'`), `turn-end(status!=cancelled)` after remote-initiated turns, `session failed`.
-Suppression: skip if any user-scoped connection reports `app-state: active` **and** has the session's room joined (visible). Re-notify unanswered `perm-request` at +5 min, +10 min (max 3). Payload contains only `{sessionId, kind}` — title/body are generic ("Falcon: agent needs permission") unless the client opts into locally-rendered rich notifications (service worker fetches + decrypts the detail).
+Suppression: skip if any user-scoped connection reports `app-state: active` **and** has the session's room joined (visible). Re-notify unanswered `perm-request` at +5 min, +10 min (max 3). Payload contains only `{sessionId, kind}` — title/body are generic ("Kvy: agent needs permission") unless the client opts into locally-rendered rich notifications (service worker fetches + decrypts the detail).
 
 **Fallback channels (iOS reality):** Web Push on iOS Safari requires an installed PWA and is unreliable — and the notification IS the product. `push_subscriptions.channel` supports `webpush | telegram | ntfy`: users can link a Telegram bot (`/start` deep-link pairing) or an ntfy.sh topic as a secondary channel. Same lifecycle-only events, same suppression rules, same generic payloads (`{sessionId, kind}` + deep link — no content). Cheap to build, extremely reliable, buys time until a native app.
 
@@ -502,9 +502,9 @@ Suppression: skip if any user-scoped connection reports `app-state: active` **an
 
 ### 7.1 Process anatomy
 
-Each `falcon <provider>` invocation is a **session process**: owns exactly one Session, one session-scoped WS, one provider adapter instance, and the mode state machine. The daemon is a separate long-lived process (§8). Session processes self-register with the daemon over the loopback control API (`POST /session-started` with pid, sessionId, wrapped DEK) so the daemon can track/persist/resume them.
+Each `kvy <provider>` invocation is a **session process**: owns exactly one Session, one session-scoped WS, one provider adapter instance, and the mode state machine. The daemon is a separate long-lived process (§8). Session processes self-register with the daemon over the loopback control API (`POST /session-started` with pid, sessionId, wrapped DEK) so the daemon can track/persist/resume them.
 
-### 7.2 Local state (`~/.falcon/`)
+### 7.2 Local state (`~/.kvy/`)
 
 ```
 settings.json        # schema-versioned; atomic write via lock file (O_CREAT|O_EXCL + rename)
@@ -558,13 +558,13 @@ closed and stays provider-agnostic.
 
 **Local mode (fidelity path):**
 - Spawn via `cross-spawn`: `node claude_launcher.cjs <passthrough args>` with `stdio: ['inherit','inherit','inherit','pipe']`. Before spawn: `setBlocking(stdin)` (clear `O_NONBLOCK` left by Ink — known garbled-TTY bug class).
-- The launcher `require()`s the user's installed Claude CLI; injects `--append-system-prompt` (Falcon context note), a `SessionStart` hook via temp `--settings` file (reports the real provider session UUID to a loopback hook server), and passes through everything else. fd 3 carries `fetch-start/fetch-end` JSON lines from a `global.fetch` patch → working/idle signal (hostname+path only).
+- The launcher `require()`s the user's installed Claude CLI; injects `--append-system-prompt` (Kvy context note), a `SessionStart` hook via temp `--settings` file (reports the real provider session UUID to a loopback hook server), and passes through everything else. fd 3 carries `fetch-start/fetch-end` JSON lines from a `global.fetch` patch → working/idle signal (hostname+path only).
 - **Transcript tailer:** watch `~/.claude/projects/<slug>/<uuid>.jsonl`; on each appended line → `sessionProtocolMapper` → `SessionEnvelope[]` → **coalescing buffer (flush every 300 ms or 20 envelopes)** → encrypt one batch → `POST /sessions/:id/messages {localId}` via a **disk-backed outbox** (retry with backoff until 2xx; localId makes blind retries safe). Dedup by provider record uuid (`processedKeys` set seeded on start). The mapper implements the Claude→envelope rules: assistant text → `text`; thinking → `text{thinking}`; non-Task `tool_use` → `tool-start`; **Task `tool_use` → subagent registration (no parent tool card)** + orphan buffering until parent known; `tool_result` → `tool-end`; sidechain user strings → subagent `text`.
 - Local mode **cannot answer permissions remotely** (prompts live on the provider's TTY). Provider hooks (`Notification`/`Stop` hooks in the temp settings) still fire attention events → dashboard shows "waiting at the terminal" (FR-3.6).
 
 **Remote mode (v0.3 — ACP):** spawn the managed `claude-agent-acp` child (§7.9) and drive
 it via `@agentclientprotocol/sdk` over NDJSON stdio: `initialize` → `session/new` with
-`_meta.systemPrompt: {type:'preset', preset:'claude_code', append: FALCON_SYSTEM_PROMPT}`
+`_meta.systemPrompt: {type:'preset', preset:'claude_code', append: KVY_SYSTEM_PROMPT}`
 and `_meta.claudeCode.options.resume: providerSessionId` (or `session/load` when history
 replay is wanted — adoption). Each user turn is one `session/prompt` request;
 `session/cancel` = interrupt; `session/set_mode` = permission-mode sync. The adapter's ACP
@@ -580,7 +580,7 @@ web — Ctrl-T to take back").
 ### 7.5 Mode state machine
 
 ```
-        ┌─────────── falcon starts (default local; --starting-mode remote for spawns) ──────────┐
+        ┌─────────── kvy starts (default local; --starting-mode remote for spawns) ──────────┐
         ▼                                                                                       │
    ┌─────────┐   remote msg arrives / takeControl RPC     ┌──────────┐                          │
    │  LOCAL   │ ────────────────────────────────────────► │  REMOTE  │                          │
@@ -615,7 +615,7 @@ ACP session/request_permission {toolCall, options}   ← server→client request
 ```
 
 ACP itself imposes no timeout or default on a pending permission — the request blocks
-until answered or the turn is cancelled; Falcon's re-notify policy above sits on top.
+until answered or the turn is cancelled; Kvy's re-notify policy above sits on top.
 One shared handler serves every provider (Claude and Codex `exec`/`patch` approvals
 arrive through the same ACP method); the first-wins rule below is unchanged.
 
@@ -629,32 +629,32 @@ itself runs `codex app-server` (the user's install via `CODEX_PATH`/PATH, bundle
 surfaced through the standard `session/request_permission` → same permission pipeline
 (§7.6). The v1 hand-rolled `codex app-server` JSON-RPC client, Codex-specific envelope
 mapper, and Codex-specific permission handler are deleted — that protocol drift is now
-maintained upstream by OpenAI/Zed/JetBrains. No local TUI mode: `falcon codex` always
+maintained upstream by OpenAI/Zed/JetBrains. No local TUI mode: `kvy codex` always
 runs the programmatic path with the Ink status view; `startLocal()` returns null and the
 CLI prints an honest note.
 
 ### 7.8 Adoption module (`src/adopt/`, FR-9.x)
 
-- `falcon adopt [--remote] [--list]`: enumerate provider transcripts in cwd's workspace (`listRecentSessions`), preselect most recent, import history (stream `importTranscript` envelopes with a `imported: true` meta flag), then continue via local `claude --resume` (default) or remote SDK (`--remote`).
+- `kvy adopt [--remote] [--list]`: enumerate provider transcripts in cwd's workspace (`listRecentSessions`), preselect most recent, import history (stream `importTranscript` envelopes with a `imported: true` meta flag), then continue via local `claude --resume` (default) or remote SDK (`--remote`).
 - Identity mapping: resume mints a new provider session id → session metadata records `providerSessionLineage: [old, new, …]`; the tailer switches files accordingly.
-- Takeover-from-phone: daemon RPC `adopt.take` → find owning pid (process scan matching transcript file handles / cwd) → if running: SIGTERM, wait ≤ 5 s, SIGKILL fallback → spawn `falcon claude --starting-mode remote --continue-from <id>`. `mode: 'fork'` skips the kill and copies the transcript to a fresh lineage.
+- Takeover-from-phone: daemon RPC `adopt.take` → find owning pid (process scan matching transcript file handles / cwd) → if running: SIGTERM, wait ≤ 5 s, SIGKILL fallback → spawn `kvy claude --starting-mode remote --continue-from <id>`. `mode: 'fork'` skips the kill and copies the transcript to a fresh lineage.
 
 ### 7.9 ACP adapter manager (v0.3)
 
 The two adapter packages are **installed, pinned, and verified** — never fetched at
 session start.
 
-- **Layout:** `~/.falcon/adapters/` is Falcon's own npm prefix; each adapter is installed
-  at an exact version recorded in a Falcon-shipped manifest (package id + version +
+- **Layout:** `~/.kvy/adapters/` is Kvy's own npm prefix; each adapter is installed
+  at an exact version recorded in a Kvy-shipped manifest (package id + version +
   integrity hash). Spawn = `node <adapters>/node_modules/<pkg>/dist/index.js` (stdio
   pipes, env passthrough per provider needs).
-- **Install/upgrade:** `falcon adapters install|upgrade` (explicit user command; also run
-  automatically once at `falcon auth login`/first `falcon <provider>` when missing).
+- **Install/upgrade:** `kvy adapters install|upgrade` (explicit user command; also run
+  automatically once at `kvy auth login`/first `kvy <provider>` when missing).
   Post-install integrity check against the manifest hash; a mismatch refuses to spawn.
-  Upgrades are never implicit — a Falcon release bumps the pinned versions, the user
+  Upgrades are never implicit — a Kvy release bumps the pinned versions, the user
   upgrades deliberately. Rationale: no npx cold-start latency, works offline, and the
-  supply chain is exactly the code Falcon's release tested against.
-- **Diagnostics:** `falcon doctor` reports adapter presence/version/integrity and the
+  supply chain is exactly the code Kvy's release tested against.
+- **Diagnostics:** `kvy doctor` reports adapter presence/version/integrity and the
   underlying provider CLI detection (`claude` binary, `codex` binary); adapter spawn
   failures carry the ring-buffered stderr tail (§7.4).
 
@@ -664,7 +664,7 @@ Protects the `message` session RPC end-to-end: a retried or duplicated RPC must 
 cause the agent to run a turn twice for one logical send. (The display-layer id-based
 reconcile already prevents double *rendering*; this prevents double *execution*.)
 
-- **Store:** `~/.falcon/claims/<sessionId>.json` — atomic tmp-write+rename under the
+- **Store:** `~/.kvy/claims/<sessionId>.json` — atomic tmp-write+rename under the
   existing lock-file pattern; entries `{envelopeId → {claimedAt} | {result, completedAt}}`
   with a bounded retention window (claims are one-per-human-send; volume is tiny).
 - **Flow (claim-before-execute):** on `message {envelope}`: ① look up `envelopeId` —
@@ -686,11 +686,11 @@ reconcile already prevents double *rendering*; this prevents double *execution*.
 - **Singleton:** atomic lock file (hard-link with pid payload; stale detection via `kill(pid, 0)`).
 - **Loopback control API** (Fastify on `127.0.0.1:0`, port in `daemon.state.json`, bearer = local secret): `/session-started`, `/list`, `/spawn-session`, `/stop-session`, `/stop`.
 - **Machine WS:** registers machine RPCs (§4.4), heartbeats every 60 s (prunes dead session pids via `kill(pid,0)`), publishes encrypted daemonState with CAS versioning.
-- **Spawner:** tmux preferred (`tmux new-session -d -s falcon-<sid>`), detached child fallback. Env allowlist expansion (`${VAR}` from daemon env, fail-fast on unresolved). Auth for spawned sessions: local `access.key` (never through the server).
+- **Spawner:** tmux preferred (`tmux new-session -d -s kvy-<sid>`), detached child fallback. Env allowlist expansion (`${VAR}` from daemon env, fail-fast on unresolved). Auth for spawned sessions: local `access.key` (never through the server).
 - **Session registry:** `pid → TrackedSession`; spawn↔self-report matched by pid with 15 s awaiter; finished sessions persisted to `sessions.json` **including wrapped DEK + seq + versions** so resume survives daemon restarts (FR-4.4).
 - **Transcript indexer (adoption Tier 1):** fs-watch provider transcript dirs for registered workspace paths; debounce 2 s; on change, upsert `UnmanagedSession` (encrypted summary: title guess, last-activity, running-pid?) — skipping sessions already managed (lineage lookup). Read-only mirror on demand: when a user opens an unmanaged session in the dashboard, the daemon streams the transcript via chunked RPC rather than uploading whole histories eagerly (bandwidth + privacy frugality).
 - **Self-update:** watch installed artifact mtime (not version string); restart when idle.
-- **Service install (P1):** launchd plist / systemd-user unit / schtasks, all labeled `dev.falcon.daemon`.
+- **Service install (P1):** launchd plist / systemd-user unit / schtasks, all labeled `dev.kvy.daemon`.
 
 ---
 
@@ -740,7 +740,7 @@ Service worker: precache shell, `push` handler → decrypt-or-generic notificati
 ### 10.1 Start & mirror (UC1)
 
 ```
-user: falcon
+user: kvy
  CLI ── ensure auth (access.key) ── ensure daemon (spawn if needed)
  CLI ── POST /v1/sessions {tag, provider, enc(metadata), wrappedDEK} ─► server (create-or-get)
  CLI ── WS connect (session-scoped) ── daemon loopback /session-started
@@ -782,7 +782,7 @@ web composer → rpc-call s:<sid>:message {envelope}
 daemon indexer: unmanaged row visible on phone (live read-only mirror via chunked RPC)
  phone: "Take over" → confirm (mid-turn warning if running)
  web ── rpc-call m:<mid>:adopt.take {providerRef, mode:'takeover'}
- daemon: find pid → SIGTERM (≤5 s) → spawn falcon claude --starting-mode remote --continue-from <ref>
+ daemon: find pid → SIGTERM (≤5 s) → spawn kvy claude --starting-mode remote --continue-from <ref>
  new session proc: import transcript (imported envelopes) → resume via ACP (§7.4) → sessionId back to web
  web: navigates to new managed session; unmanaged row marked adopted (lineage link)
 ```
@@ -803,8 +803,8 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 
 | Failure | Detection | Recovery | Data risk |
 |---|---|---|---|
-| Session proc crash | daemon pid probe; WS drop | status `failed`; resumable via `falcon resume` (transcript intact) | none (transcript on disk) |
-| Daemon crash | CLI can't reach loopback; machine offline ephemeral | any `falcon` cmd respawns; registry rebuilt from `sessions.json` + process scan | none |
+| Session proc crash | daemon pid probe; WS drop | status `failed`; resumable via `kvy resume` (transcript intact) | none (transcript on disk) |
+| Daemon crash | CLI can't reach loopback; machine offline ephemeral | any `kvy` cmd respawns; registry rebuilt from `sessions.json` + process scan | none |
 | Server down | WS drop, REST 5xx | CLI disk outbox keeps retrying POSTs (10 MB cap, backoff); web shows offline banner; Query retries reads | delayed sync only |
 | Double perm answer (two devices) | session proc atomic resolve | loser gets `already-answered` + decision; UI shows "answered elsewhere" | none |
 | RPC retry after timeout | idempotency key on mutating RPCs | daemon replays stored result; no double-spawn | none |
@@ -813,7 +813,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 | `message` RPC retried/duplicated | claim store hit (§7.10) | reply `duplicate` (replay) or `outcome-unknown` (never re-execute) | none — at-most-once turn execution |
 | Mode-switch race (remote msg + local typing) | state machine serializes via single mode owner | queue holds remote msg until switch completes; dedup buffer kills doubles | none |
 | Version mismatch (CAS) | `version-mismatch` response | re-read current, re-apply, retry ×3 | none |
-| Wedged provider process | takeover/stop timeout | SIGKILL fallback; `falcon kill sessions` escape hatch | current turn only |
+| Wedged provider process | takeover/stop timeout | SIGKILL fallback; `kvy kill sessions` escape hatch | current turn only |
 | Undecryptable record | unwrap returns null | render "undecryptable item"; continue batch | isolated record |
 
 ---
@@ -824,7 +824,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 - Loopback daemon API: bearer-protected, bound to 127.0.0.1; spawn params validated against registered workspace paths (no arbitrary-directory execution from remote).
 - RPC bodies encrypted ⇒ server cannot inject commands even if compromised (client verifies structure post-decrypt).
 - Rate limits: auth endpoints, pair polling, msg ingest per session.
-- Secrets never in argv (env or stdin); logs scrub tokens; `FALCON_DEBUG` never logs plaintext content.
+- Secrets never in argv (env or stdin); logs scrub tokens; `KVY_DEBUG` never logs plaintext content.
 - Supply chain: lockfiles, provenance-pinned deps, minimal native modules (sodium-native, better-sqlite3), release artifacts signed + checksummed.
 
 ---
@@ -835,7 +835,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 
 **Testing strategy:**
 1. **Golden-trace reducer tests** — recorded real Claude/Codex transcripts → expected render trees.
-2. **Provider contract tests (CI, daily)** — run latest Claude Code against fixture prompts in a container; assert transcript format assumptions (JSONL fields, hook events, resume behavior). Breakage pages the team before users see it. **v0.3 addition:** the same harness exercises the *pinned* ACP adapters (initialize handshake, session/new meta options, update kinds, permission round-trip) — and, separately, the *latest* adapter versions, so an upstream ACP change is caught before Falcon bumps its pins.
+2. **Provider contract tests (CI, daily)** — run latest Claude Code against fixture prompts in a container; assert transcript format assumptions (JSONL fields, hook events, resume behavior). Breakage pages the team before users see it. **v0.3 addition:** the same harness exercises the *pinned* ACP adapters (initialize handshake, session/new meta options, update kinds, permission round-trip) — and, separately, the *latest* adapter versions, so an upstream ACP change is caught before Kvy bumps its pins.
 3. **Conformance harness (`e2e/`)** — scripted 20-step session exercising every primitive (perm allow/deny/allow-session, question, interrupt, mode switch ×2, adoption takeover, reconnect) against a real local stack; run pre-release.
 4. **Chaos suite** — kill daemon mid-turn, kill server mid-send, sleep/wake simulation, double-takeover race.
 5. **RPC integration tests** — dead-peer fast-fail (<2 s), reconnect grace, presence flap.
@@ -847,7 +847,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 
 - `Session.executionTarget` + `Workspace.syncEnabled/sandboxConfig` columns exist, unused.
 - Wire reserves namespaces: `checkpoint:*` (workspace sync), `preview:*` (live previews), `voice:*`.
-- `falcon workspace sync|load` commands print "coming soon" and are wired to no-op handlers behind a feature flag, keeping help output honest.
+- `kvy workspace sync|load` commands print "coming soon" and are wired to no-op handlers behind a feature flag, keeping help output honest.
 - Daemon RPC surface versioned (`rpc.hello` exchanges `{cliVersion, rpcRev}`); additive evolution policy documented in `docs/rpc.md`.
 
 ---
@@ -873,7 +873,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 |---|---|---|
 | R9 | Headless provider protocol | **ACP** via official adapters (`claude-agent-acp`, `codex-acp`); one `AcpRemote` + one `acpToEnvelope` mapper replaces the direct Claude Agent SDK integration and the hand-rolled `codex app-server` client. Local TUI mode untouched |
 | R10 | Migration style | **Hard cut** — old paths deleted as each phase lands; rollback = git tag `v1`. No transport flag |
-| R11 | Adapter distribution | **Managed installs**: pinned exact versions + integrity manifest under `~/.falcon/adapters/`; explicit upgrades; `falcon doctor` coverage. Never npx at session start |
+| R11 | Adapter distribution | **Managed installs**: pinned exact versions + integrity manifest under `~/.kvy/adapters/`; explicit upgrades; `kvy doctor` coverage. Never npx at session start |
 | R12 | CLI-local durability | **Send-idempotency claim only** (§7.10) — no local event WAL; the server (Postgres + msgSeq + outbox) remains the single durable event store. (mobvibe's local SQLite WAL exists because its gateway is ephemeral — inverted topology, doesn't transfer) |
 
 **Still open:**

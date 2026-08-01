@@ -9,7 +9,6 @@ export { BaseBranchPicker } from "./components/base-branch-picker";
 export { ModelPicker } from "./components/model-picker";
 export { PermissionModePicker } from "./components/permission-mode-picker";
 export { ProviderPicker } from "./components/provider-picker";
-export { getDefaultBranchMode, setDefaultBranchMode } from "./git-defaults";
 export { machineRpcToActions } from "./live-actions";
 export { useLiveNewSessionActions } from "./live-source";
 export { createMockNewSessionActions, useMockNewSessionActions } from "./mock-source";

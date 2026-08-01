@@ -1,4 +1,4 @@
-import type { EncryptedBox } from "@falcon/wire";
+import type { EncryptedBox } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { ApiSocket, RpcCallResult } from "../apiSocket.js";
 import { createMachineRpcClient, type MachineRpcCrypto, MachineRpcError } from "../machineRpc.js";
@@ -519,7 +519,7 @@ describe("createMachineRpcClient", () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({
         ok: true,
-        result: box({ started: true, method: "tmux", pid: 555, tmuxSessionName: "falcon-run-x" }),
+        result: box({ started: true, method: "tmux", pid: 555, tmuxSessionName: "kvy-run-x" }),
       })),
       crypto: fakeCrypto(),
       machineId: "mach-1",
@@ -534,7 +534,7 @@ describe("createMachineRpcClient", () => {
       started: true,
       method: "tmux",
       pid: 555,
-      tmuxSessionName: "falcon-run-x",
+      tmuxSessionName: "kvy-run-x",
     });
   });
 

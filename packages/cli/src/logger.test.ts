@@ -7,7 +7,7 @@ import { createLogger } from "./logger.js";
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-logger-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-logger-test-"));
 });
 
 afterEach(() => {
@@ -61,7 +61,7 @@ describe("createLogger", () => {
     expect(typeof lines[0]?.time).toBe("string");
   });
 
-  it("suppresses debug lines by default (no FALCON_DEBUG)", () => {
+  it("suppresses debug lines by default (no KVY_DEBUG)", () => {
     const logger = createLogger({ homeDir, env: {} });
     logger.debug("should be suppressed");
     logger.info("should be kept");
@@ -70,8 +70,8 @@ describe("createLogger", () => {
     expect(lines.map((l) => l.message)).toEqual(["should be kept"]);
   });
 
-  it("includes debug lines when FALCON_DEBUG=1", () => {
-    const logger = createLogger({ homeDir, env: { FALCON_DEBUG: "1" } });
+  it("includes debug lines when KVY_DEBUG=1", () => {
+    const logger = createLogger({ homeDir, env: { KVY_DEBUG: "1" } });
     logger.debug("should be kept");
 
     const lines = readLogLines(homeDir) as Array<{ message: string }>;
@@ -98,7 +98,7 @@ describe("createLogger", () => {
     // A file sitting where the `logs/` directory should go makes mkdirSync
     // throw ENOTDIR. Logging is a diagnostic side channel — it must never
     // crash the CLI's actual command handling over a broken home dir.
-    const blockedHome = mkdtempSync(path.join(tmpdir(), "falcon-logger-test-blocked-"));
+    const blockedHome = mkdtempSync(path.join(tmpdir(), "kvy-logger-test-blocked-"));
     writeFileSync(path.join(blockedHome, "logs"), "not a directory");
 
     const logger = createLogger({ homeDir: blockedHome, debug: true });

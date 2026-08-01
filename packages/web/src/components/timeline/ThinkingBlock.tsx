@@ -14,7 +14,7 @@ export function thinkingBlockLabel(open: boolean): string {
   return open ? "Hide thinking" : "Thought process";
 }
 
-/** Collapsible thinking block (falcon-prd.md FR-7.2 "collapsible thinking").
+/** Collapsible thinking block (kvy-prd.md FR-7.2 "collapsible thinking").
  * Closed by default — thinking is reasoning detail, not the message. */
 export function ThinkingBlock({ md, compact = false }: { md: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);

@@ -10,7 +10,7 @@
  * doesn't exist.
  */
 
-const PREFIX = "falcon:composer-draft:";
+const PREFIX = "kvy:composer-draft:";
 
 function hasSessionStorage(): boolean {
   return typeof window !== "undefined" && typeof window.sessionStorage !== "undefined";

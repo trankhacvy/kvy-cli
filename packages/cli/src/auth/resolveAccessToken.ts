@@ -5,11 +5,13 @@
  * through, instead of reading the old fixed `credentials.token` straight off disk. A
  * one-shot process naturally gets a fresh token on every invocation this way, without
  * needing to persist an access token at all — only the refresh token is ever written to
- * `~/.falcon/access.key`.
+ * `~/.kvy/access.key`.
  */
 
+import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";
-import { type FalconCredentials, readCredentials, writeCredentials } from "./credentials.js";
+import { type KvyCredentials, readCredentials, writeCredentials } from "./credentials.js";
+import { withCredentialsLock } from "./credentialsLock.js";
 import { createTokenProvider, type TokenProvider } from "./tokenProvider.js";
 
 export interface ResolveAccessTokenOptions {
@@ -23,35 +25,40 @@ const noopLogger: Logger = { debug: () => {}, info: () => {}, warn: () => {}, er
 
 /**
  * Builds a `TokenProvider` bound to `credentials`' refresh token, persisting each
- * rotation back to `~/.falcon/access.key` — the same construction `resolveAccessToken`
+ * rotation back to `~/.kvy/access.key` — the same construction `resolveAccessToken`
  * below uses internally, exposed directly for callers (issue-4-plan.md §6.6:
- * `commands/start.ts`'s `falcon claude` session path) that need to keep minting fresh
+ * `commands/start.ts`'s `kvy claude` session path) that need to keep minting fresh
  * access tokens for the lifetime of a long-running process, not just once at startup.
  */
 export function createTokenProviderForCredentials(
-  credentials: FalconCredentials,
+  credentials: KvyCredentials,
   options: ResolveAccessTokenOptions,
 ): TokenProvider {
+  const homeDir = options.homeDir ?? resolveHomeDir();
   return createTokenProvider({
     backendUrl: options.backendUrl,
     refreshToken: credentials.refreshToken,
     fetchImpl: options.fetchImpl ?? fetch,
     now: () => Date.now(),
     onRotate: (refreshToken) => {
-      writeCredentials({ ...credentials, refreshToken }, options.homeDir);
+      writeCredentials({ ...credentials, refreshToken }, homeDir);
     },
     logger: options.logger ?? noopLogger,
     // issue #2 (docs/known-issues-cliweb-sync-test.md): this long-lived provider can
     // outlive many refresh-token rotations by sibling processes (the daemon's own
     // `TokenProvider` in `daemon/machineIntegration.ts` chief among them) — re-read
-    // `~/.falcon/access.key` on a 401 before giving up permanently.
-    readCurrentRefreshToken: () => readCredentials(options.homeDir)?.refreshToken ?? null,
+    // `~/.kvy/access.key` on a 401 before giving up permanently.
+    readCurrentRefreshToken: () => readCredentials(homeDir)?.refreshToken ?? null,
+    // known-issues.md #20: this session-owned provider and the daemon's own
+    // (`daemon/machineIntegration.ts`) both rotate the same on-disk refresh token —
+    // serialize actual refresh attempts against each other instead of racing.
+    withCredentialsLock: (fn) => withCredentialsLock(homeDir, fn),
   });
 }
 
 /** Returns a valid access token for `credentials`, or `null` if the refresh token is dead (re-authentication required). */
 export async function resolveAccessToken(
-  credentials: FalconCredentials,
+  credentials: KvyCredentials,
   options: ResolveAccessTokenOptions,
 ): Promise<string | null> {
   const provider = createTokenProviderForCredentials(credentials, options);
@@ -60,7 +67,7 @@ export async function resolveAccessToken(
 
   // The refresh token we started with may already be one rotation behind another
   // process sharing this home dir (the daemon's `machineClient.ts` renewing on its own
-  // schedule, or a long-running `falcon claude` session's own preflight token
+  // schedule, or a long-running `kvy claude` session's own preflight token
   // provider) — `refresh.ts` rotates single-use, with only a 60s grace for the
   // immediately-previous hash, so a stale-by-one read 401s even though the account is
   // genuinely signed in. Re-read the credentials file once — another process may have

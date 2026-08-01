@@ -2,7 +2,7 @@ import type { AttentionKind } from "@/features/session-list/types";
 import type { RenderItem } from "@/sync/reducer";
 
 /**
- * A single session's attention state (falcon-prd.md FR-8.1: "attention
+ * A single session's attention state (kvy-prd.md FR-8.1: "attention
  * states are derived, never stored: a session needs attention iff
  * (pending permission ∨ pending question ∨ completed-and-unseen)").
  * Priority order when more than one would apply, highest first: a pending
@@ -77,7 +77,7 @@ export function deriveAttention(input: DeriveAttentionInput): AttentionState {
 export interface AttentionMeta {
   label: string;
   /** Single-character glyph for a favicon/title prefix — cheap, high-value
-   * web ergonomics (falcon-prd.md FR-7.9), no image asset required. */
+   * web ergonomics (kvy-prd.md FR-7.9), no image asset required. */
   glyph: string;
   /** Tailwind color token for a favicon dot, matching `SESSION_STATUS_META`'s
    * palette (`features/session-list/status.ts`) so the same state reads the

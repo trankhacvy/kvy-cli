@@ -1,7 +1,7 @@
 /**
  * Adapter manager barrel (design §7.9, plan.md §16 "Phase 2.0 —
  * foundation: Adapter manager"). Standalone module — no dependency on the
- * claim store or `@falcon/wire` changes landing alongside it in the same
+ * claim store or `@kvy/wire` changes landing alongside it in the same
  * phase.
  */
 

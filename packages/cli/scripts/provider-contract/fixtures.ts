@@ -1,6 +1,6 @@
 /**
  * Fixture-prompt corpus for the provider contract test
- * (`scripts/provider-contract-test.ts`, falcon-system-design.md §13 item 2).
+ * (`scripts/provider-contract-test.ts`, kvy-system-design.md §13 item 2).
  *
  * Kept deliberately small and tool-free: the point of this suite is to
  * check the *shape* Claude Code writes things in (transcript JSONL fields,

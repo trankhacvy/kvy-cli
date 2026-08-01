@@ -1,9 +1,9 @@
-import type { PermissionMode } from "@falcon/wire";
-import { PermissionModeSchema } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
+import { PermissionModeSchema } from "@kvy/wire";
 
 /**
  * Pulls a `--permission-mode <value>` (or `--permission-mode=value`)
- * override out of a passthrough args array (`falcon claude [args...]`'s full
+ * override out of a passthrough args array (`kvy claude [args...]`'s full
  * flag passthrough) — the same real Claude Code flag `daemon/spawnEngine.ts`
  * passes for a daemon-spawned session (`--permission-mode`,
  * `packages/wire/src/permissions.ts`'s `PermissionModeSchema`).

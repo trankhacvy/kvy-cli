@@ -6,7 +6,7 @@ import type { FileTreeNode } from "./types";
  * `features/new-session/components/directory-step-logic.ts`'s own doc
  * comment.
  *
- * `git.files` (`@falcon/wire`'s `GitFilesResult`) returns a flat array of
+ * `git.files` (`@kvy/wire`'s `GitFilesResult`) returns a flat array of
  * worktree-relative, posix-separated paths — this folds that into a nested
  * `FileTreeNode[]` the tree view can actually render, directories sorted
  * before files and both alphabetically within their own group (the

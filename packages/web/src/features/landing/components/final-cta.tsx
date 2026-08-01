@@ -13,13 +13,13 @@ export function FinalCta() {
         </h2>
         <p className="mt-4 text-base text-muted-foreground leading-relaxed">
           Free while in beta. Install, sign in, type{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">falcon</code>.
+          <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">kvy</code>.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Button asChild size="lg">
             <Link href="/signin/">Get started</Link>
           </Button>
-          <CopyCommand command="npm install -g falcon" />
+          <CopyCommand command="npm install -g kvy" />
         </div>
       </Reveal>
     </section>

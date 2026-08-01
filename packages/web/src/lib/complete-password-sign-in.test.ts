@@ -374,7 +374,7 @@ describe("rotateKeyEpochOAuth", () => {
     // keysBind — throw. It must be caught by the same try/catch, or the caller
     // (reset-keys/page.tsx's handleNewPin, which has no try/catch of its own) is left with
     // an unhandled rejection and no way to surface an error to the user.
-    keysChallengeMock.mockRejectedValue(new ApiError("Could not reach the Falcon server", 0));
+    keysChallengeMock.mockRejectedValue(new ApiError("Could not reach the Kvy server", 0));
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 

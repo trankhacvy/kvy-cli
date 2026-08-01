@@ -12,7 +12,7 @@ import {
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-github-auth-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-github-auth-test-"));
 });
 
 afterEach(() => {
@@ -60,7 +60,7 @@ describe("writeGithubToken / readGithubToken round-trip", () => {
   });
 
   it("creates the home directory if missing", () => {
-    const nested = path.join(homeDir, "nested", "falcon-home");
+    const nested = path.join(homeDir, "nested", "kvy-home");
     writeGithubToken({ token: "t", createdAt: 1, method: "pat" }, nested);
     expect(existsSync(githubTokenPath(nested))).toBe(true);
   });

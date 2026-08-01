@@ -1,14 +1,14 @@
 /**
- * "How is this `falcon` currently installed?" — the self-update mechanism
+ * "How is this `kvy` currently installed?" — the self-update mechanism
  * needs a different apply strategy for each:
  *
  *  - `standalone-binary`: a `bun build --compile` executable
  *    (`scripts/build-binaries.sh`, installed by `scripts/install.sh` or a
  *    manual download). Self-update atomically replaces the running
  *    executable file itself (`applyUpdate.ts`).
- *  - `npm`: installed via `npm install -g falcon` (or run from a built
+ *  - `npm`: installed via `npm install -g kvy` (or run from a built
  *    `dist/index.mjs` in this workspace). Self-update shells out to
- *    `npm install -g falcon@<version>`, reusing the exact publish pipeline
+ *    `npm install -g kvy@<version>`, reusing the exact publish pipeline
  *    `P4-4.3-standalone-binaries` wired up.
  *  - `dev`: running straight from TypeScript source (`tsx src/index.ts` /
  *    `vitest`) — there is no built artifact to replace, so self-update is a
@@ -21,11 +21,9 @@ export type InstallKind = "standalone-binary" | "npm" | "dev";
 
 export interface DetectInstallKindOptions {
   /**
-   * Whether this process is itself a `bun build --compile` binary —
-   * callers pass `typeof __FALCON_CLI_VERSION__ !== "undefined"`
-   * (`index.ts`'s own compile-time-define check; that identifier is only
-   * ever declared in `index.ts`'s module scope, so it can't be referenced
-   * from here directly).
+   * Whether this process is itself a compiled Node SEA binary
+   * (`scripts/native/build.mjs`) — callers pass `index.ts`'s own
+   * `isCompiledBinary()` (`node:sea`'s `isSea()` under the hood).
    */
   isCompiledBinary: boolean;
   /** `packages/cli/dist/index.mjs` in prod, absent in dev — same file `daemon/selfUpdate.ts` watches. */

@@ -31,7 +31,7 @@ const MAX_FILES_COLLECTED = 5000;
 /**
  * Adapts a `MachineRpcClient` to `FileMentionActions` via the existing
  * `fs.list` RPC (`features/new-session`'s directory picker,
- * `@falcon/wire`'s `FsListParamsSchema`) — there's no dedicated "search
+ * `@kvy/wire`'s `FsListParamsSchema`) — there's no dedicated "search
  * files" RPC, so this does its own bounded breadth-first walk of `root`,
  * then fuzzy-filters the collected paths client-side (`fuzzy.ts`) exactly
  * like `mock-source.ts` does over its fixed set. Mirrors
@@ -76,7 +76,7 @@ async function collectFiles(rpc: MachineRpcClient, root: string): Promise<FileMe
     if (dir === undefined) break;
     visited++;
 
-    let listing: import("@falcon/wire").FsListResult;
+    let listing: import("@kvy/wire").FsListResult;
     try {
       listing = await rpc.call("fs.list", {
         idempotencyKey: crypto.randomUUID(),

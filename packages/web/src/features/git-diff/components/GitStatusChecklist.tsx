@@ -1,4 +1,4 @@
-import type { GithubChecksResult } from "@falcon/wire";
+import type { GithubChecksResult } from "@kvy/wire";
 import { CheckCircle2, Circle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 

@@ -1,12 +1,17 @@
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import type { SetModeResult } from "@/sync/sessionRpc";
 
 /** "Take control" is only meaningful for a genuine remote-loop session — a
  * PTY/terminal session's `takeControl` RPC handler is a permanent,
  * always-`{ok:true}` no-op ("the human is already at this terminal"), so
- * callers hide the action entirely for `controlMode === "local"`. */
-export function shouldShowTakeControl(controlMode: "local" | "remote"): boolean {
-  return controlMode === "remote";
+ * callers hide the action entirely for `controlMode === "local"`.
+ * `supportsTakeControl` additionally gates providers with no local mode to
+ * hand control back to at all (e.g. Codex). */
+export function shouldShowTakeControl(
+  controlMode: "local" | "remote",
+  supportsTakeControl: boolean,
+): boolean {
+  return supportsTakeControl && controlMode === "remote";
 }
 
 /**
@@ -14,9 +19,16 @@ export function shouldShowTakeControl(controlMode: "local" | "remote"): boolean 
  * degrade to a read-only display (`false`). A remote-loop session's
  * `setMode` is unconditionally real; a PTY/local session's is real only once
  * the flag-gated Shift+Tab cycle (plan-v2.md W4.3) has been enabled on this
- * build (`ptySetModeEnabled`, defaulted to `false`).
+ * build (`ptySetModeEnabled`, defaulted to `false`). `supportsLiveModeSwitch`
+ * gates the whole thing off for a provider that can't live-switch modes at
+ * all, regardless of `controlMode`.
  */
-export function canMutateMode(controlMode: "local" | "remote", ptySetModeEnabled = false): boolean {
+export function canMutateMode(
+  controlMode: "local" | "remote",
+  supportsLiveModeSwitch: boolean,
+  ptySetModeEnabled = false,
+): boolean {
+  if (!supportsLiveModeSwitch) return false;
   return controlMode === "remote" || (controlMode === "local" && ptySetModeEnabled);
 }
 

@@ -154,7 +154,7 @@ resolves the `destroy()` promise (so logout itself finishes and the user reaches
 `/signin/`), but the real delete stays permanently pending in the browser's IndexedDB
 engine. The next sign-in's `indexedDB.open(DB_NAME, ...)` (inside `ensureLoaded`/`init`/
 `persistKeyMaterial`) then queues behind that permanently-blocked delete and hangs — exactly
-the CDP `Runtime.evaluate` timeout observed, specific to any `falcon-crypto-bridge`
+the CDP `Runtime.evaluate` timeout observed, specific to any `kvy-crypto-bridge`
 transaction, recoverable only by closing the tab (which force-closes the leaked connection).
 
 ### Fix approach
@@ -179,7 +179,7 @@ needed for this one either.**
 
 ---
 
-## Bug C — `falcon keys approve` fails with a misleading "not logged in" against a logged-in home dir
+## Bug C — `kvy keys approve` fails with a misleading "not logged in" against a logged-in home dir
 
 ### Root cause
 
@@ -204,7 +204,7 @@ The server's refresh tokens are single-use and rotating
 a hash older than that (or more than one rotation behind) gets a clean 401 (:88-100). The
 daemon's `machineClient.ts` runs its own long-lived `TokenProvider` that proactively rotates
 via `armRenewTimer` (:383-410, every 10 minutes) independent of whatever a one-shot command
-does, and the interactive `falcon claude` process (`commands/start.ts`) holds a *third*
+does, and the interactive `kvy claude` process (`commands/start.ts`) holds a *third*
 independent `TokenProvider` for the life of the session. Any of these writing a fresh
 rotation to `access.key` (`onRotate`, `resolveAccessToken.ts:40-42`) between the moment
 `keys approve` reads the file and the moment its own `/v1/auth/refresh` call lands makes
@@ -231,16 +231,16 @@ on a dead provider and retries with it if the refresh token actually changed. Ad
 `packages/cli/src/auth/resolveAccessToken.test.ts` (new file) covering: the happy path
 unchanged, a dead token with a since-rotated file on disk now succeeding, and a dead token
 with an unchanged file on disk still failing honestly. Full-repo `pnpm typecheck`/`pnpm test`
-pass (`falcon`/cli: 166 files/1986 tests).**
+pass (`kvy`/cli: 166 files/1986 tests).**
 
 ---
 
-## Bug D — a Falcon-managed session's own transcript re-appears as a duplicate "Unmanaged" card
+## Bug D — a Kvy-managed session's own transcript re-appears as a duplicate "Unmanaged" card
 
 Follow-up to `docs/auth-ux-fix-verification-results.md`'s Item 3 (Fix 6 — unmanaged sessions
 scoping): F6.1–F6.3 all passed, but a related bug was found live and outside the checklist's
 wording — a managed session's own local JSONL transcript (written by the real `claude` binary
-`falcon_claude_launcher.cjs` wraps) got independently re-surfaced as a second, duplicate
+`kvy_claude_launcher.cjs` wraps) got independently re-surfaced as a second, duplicate
 "Unmanaged" card, identical in content to the session already listed correctly under
 "Sessions". Confirmed not transient (persisted 10+ minutes across reloads) and confirmed it
 scales (2 managed sessions in one directory produced exactly 4 duplicate unmanaged entries).
@@ -249,12 +249,12 @@ scales (2 managed sessions in one directory produced exactly 4 duplicate unmanag
 
 `packages/cli/src/daemon/transcriptIndexer.ts:100-101,117` defines an `isManaged` hook (`(providerRef:
 string) => boolean | Promise<boolean>`) meant to skip a transcript that's already the backing
-file for a Falcon-managed session — but `createTranscriptIndexerDeps`'s own default is `()
+file for a Kvy-managed session — but `createTranscriptIndexerDeps`'s own default is `()
 => false`, and `packages/cli/src/daemon/machineIntegration.ts` (the only place that wires
 `startTranscriptIndexer` into a live daemon) never overrode it — the override list at the
 `createTranscriptIndexerDeps` call site was `{ logger: deps.logger }` only. So in production
 **nothing was ever recognized as already managed**, regardless of Fix 6's `registeredAt` gate
-(which correctly excludes *old* pre-Falcon history by mtime, but has nothing to do with a
+(which correctly excludes *old* pre-Kvy history by mtime, but has nothing to do with a
 session's own *current* transcript).
 
 Wiring a real check required closing a second, deeper gap: the daemon's local session
@@ -283,7 +283,7 @@ Two changes, both additive:
 2. **`packages/cli/src/daemon/sessionRegistry.ts`** — new `isProviderSessionManaged(providerSessionId)`
    on `SessionRegistry`, checking both the live `pidToSession` map and the durable `resumable`
    set (seeded from `sessions.json` on `restore()`) for a tracked session whose `metadata.providerSessionId`
-   matches — so a session Falcon already manages is recognized whether it's still running or
+   matches — so a session Kvy already manages is recognized whether it's still running or
    has already ended, and survives a daemon restart.
    **`packages/cli/src/daemon/machineIntegration.ts`** wires this into the indexer for real:
    `isManaged: (providerRef) => deps.registry.isProviderSessionManaged(providerRef)`, replacing
@@ -294,7 +294,7 @@ intended design — no new store or RPC needed, just closing the gap between wha
 plaintext-knows and what the daemon's own local registry was actually told.
 
 **Scope note (not overclaimed):** this only covers the terminal-attached PTY flow
-(`runLocalPty`, the flow the reported repro used and where `falcon_claude_launcher.cjs`-wrapped
+(`runLocalPty`, the flow the reported repro used and where `kvy_claude_launcher.cjs`-wrapped
 transcripts live). `runRemoteLoop` (the headless ACP `--starting-mode remote` flow) has no
 equivalent `onProviderSessionId` callback wired at this composition level and still relies on
 the same registry state — a session started that way that also gets independently transcript-scanned
@@ -313,10 +313,10 @@ would not yet get this same protection. Not the reported bug's flow, left as a k
   (pre-existing, unmodified) already covers the indexer module itself correctly skipping
   `upsert` when `isManaged` returns true.
 - **Live end-to-end** (fresh throwaway account, real CLI pairing, real `claude` binary via
-  `falcon_claude_launcher.cjs`, against the already-running local `@falcon/server`/`@falcon/web`
-  stack): signed up a new account, paired a fresh `falcon claude --model haiku` session in an
+  `kvy_claude_launcher.cjs`, against the already-running local `@kvy/server`/`@kvy/web`
+  stack): signed up a new account, paired a fresh `kvy claude --model haiku` session in an
   isolated temp workspace/home dir, sent it a real prompt, and confirmed
-  `~/.falcon/sessions.json`'s persisted metadata for the session carried
+  `~/.kvy/sessions.json`'s persisted metadata for the session carried
   `"providerSessionId": "a3609679-9672-48fa-8112-4781e9f3b051"` — exactly the real Claude Code
   transcript file's id (`~/.claude/projects/.../a3609679-....jsonl`). After the turn completed
   (transcript written, fs-watcher long since debounced/fired), the dashboard showed exactly one
@@ -333,17 +333,17 @@ live-verified end-to-end.**
 ## Full-repo verification notes
 
 `pnpm typecheck` is fully green across all 6 packages. `pnpm test` is green for every
-package these fixes touch (`falcon`/cli, `@falcon/web`) and for everything else **except**
+package these fixes touch (`kvy`/cli, `@kvy/web`) and for everything else **except**
 two pre-existing, unrelated issues already present before this session started (confirmed
 against files this session never edited):
 
-- `@falcon/server` — 3 failing tests in `src/app/push/channels/{ntfy,telegram}.test.ts`
-  asserting a push notification's deep-link URL is `https://app.falcon.dev/session/…`; the
+- `@kvy/server` — 3 failing tests in `src/app/push/channels/{ntfy,telegram}.test.ts`
+  asserting a push notification's deep-link URL is `https://app.kvy.dev/session/…`; the
   actual (correct, current) route is `/dashboard/session/…`. This is fallout from the
   in-progress `(protected)/dashboard/**` route migration already uncommitted in this working
   tree before this session began (`packages/server/src/app/push/channels/messageText.ts` was
   already modified at session start) — the push-channel URL builder just hasn't been updated
   to match yet. Unrelated to auth/crypto/tokens.
-- `@falcon/e2e` — fails with `ENOSPC: no space left on device`. The host filesystem is at
+- `@kvy/e2e` — fails with `ENOSPC: no space left on device`. The host filesystem is at
   100% capacity (`df -h /`), an environment issue with nothing to do with this session's
   changes.

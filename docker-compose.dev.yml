@@ -2,7 +2,7 @@
 #
 # Spins up a real Postgres 16 so `packages/server` can run against the same
 # SQL dialect it uses in prod/self-host (design decision: one dialect, one
-# drizzle-kit migration set forever — see falcon-system-design.md §6.5).
+# drizzle-kit migration set forever — see kvy-system-design.md §6.5).
 #
 # This is the dev-only sibling of `deploy/docker-compose.yml`, which adds
 # the `server`/`web` services (+ optional `minio`) for self-hosting. Run the
@@ -10,12 +10,12 @@
 #
 # Usage:
 #   docker compose -f docker-compose.dev.yml up -d
-#   DATABASE_URL=postgres://falcon:falcon@localhost:5432/falcon
+#   DATABASE_URL=postgres://kvy:kvy@localhost:5432/kvy
 #
 # Port already taken? If you already run a local Postgres on 5432, override
 # the host port instead of editing this file:
 #   POSTGRES_PORT=5433 docker compose -f docker-compose.dev.yml up -d
-#   DATABASE_URL=postgres://falcon:falcon@localhost:5433/falcon
+#   DATABASE_URL=postgres://kvy:kvy@localhost:5433/kvy
 # (or add POSTGRES_PORT=5433 to a .env file next to this compose file — it's
 # picked up automatically by `docker compose`).
 
@@ -24,18 +24,18 @@ services:
     image: postgres:16
     restart: unless-stopped
     environment:
-      POSTGRES_USER: falcon
-      POSTGRES_PASSWORD: falcon
-      POSTGRES_DB: falcon
+      POSTGRES_USER: kvy
+      POSTGRES_PASSWORD: kvy
+      POSTGRES_DB: kvy
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - falcon-pg-dev:/var/lib/postgresql/data
+      - kvy-pg-dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U falcon -d falcon"]
+      test: ["CMD-SHELL", "pg_isready -U kvy -d kvy"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  falcon-pg-dev: {}
+  kvy-pg-dev: {}

@@ -1,17 +1,17 @@
 /**
- * Key hierarchy — falcon-system-design.md §5.1.
+ * Key hierarchy — kvy-system-design.md §5.1.
  *
  * masterSecret (32B, generated client-side, never leaves clients unwrapped)
- *  ├─ HKDF("falcon-auth")        → ed25519 seed → signing keypair   (server auth challenge)
- *  ├─ HKDF("falcon-content")     → x25519 seed  → content keypair   (wraps DEKs)
- *  ├─ HKDF("falcon-anon")        → anonId (16 hex)                  (analytics identity)
- *  └─ HKDF("falcon-blob-master") → legacy/global blob key           (rarely used)
+ *  ├─ HKDF("kvy-auth")        → ed25519 seed → signing keypair   (server auth challenge)
+ *  ├─ HKDF("kvy-content")     → x25519 seed  → content keypair   (wraps DEKs)
+ *  ├─ HKDF("kvy-anon")        → anonId (16 hex)                  (analytics identity)
+ *  └─ HKDF("kvy-blob-master") → legacy/global blob key           (rarely used)
  *
  * New code (not present in Happy), but the derivation primitive is adapted
  * verbatim from Happy — https://github.com/slopus/happy (MIT) —
  * `happy-app/sources/encryption/deriveKey.ts` (HMAC-SHA512 master-seed
  * expansion, the same construction BIP32 uses for its root key) — flattened
- * to Falcon's single-level domain list instead of a full child-key path
+ * to Kvy's single-level domain list instead of a full child-key path
  * tree, and made synchronous (Node's `tweetnacl.hash`
  * SHA-512 is pure JS, so there's no async WASM/native boundary to cross).
  * Deliberately isomorphic and dependency-free of `./encryption(.web).ts` so
@@ -52,7 +52,7 @@ function hmacSha512(key: Uint8Array, data: Uint8Array): Uint8Array {
 
 /**
  * Derive a 32-byte domain-separated seed from masterSecret.
- * `label` is the domain separator (e.g. "falcon-auth") — same masterSecret,
+ * `label` is the domain separator (e.g. "kvy-auth") — same masterSecret,
  * different label, produces cryptographically independent output.
  */
 function deriveDomainSeed(masterSecret: Uint8Array, label: string): Uint8Array {
@@ -69,9 +69,9 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * Per-session/per-machine blob key — falcon-system-design.md §5.1:
+ * Per-session/per-machine blob key — kvy-system-design.md §5.1:
  *
- *   • blob key: HKDF(DEK, "falcon-blobs")   → attachments isolated from text
+ *   • blob key: HKDF(DEK, "kvy-blobs")   → attachments isolated from text
  *
  * Unlike `deriveKeyTree`'s domains (all rooted in `masterSecret`), this one
  * is rooted in a *DEK* (a session's or machine's row-level data-encryption
@@ -82,18 +82,18 @@ function toHex(bytes: Uint8Array): string {
  * the same DEK. Feed the result to `encryptBlob`/`decryptBlob`.
  */
 export function deriveBlobKey(dek: Uint8Array): Uint8Array {
-  return deriveDomainSeed(dek, "falcon-blobs");
+  return deriveDomainSeed(dek, "kvy-blobs");
 }
 
 /**
- * Derive the full Falcon key hierarchy from a client-held masterSecret.
+ * Derive the full Kvy key hierarchy from a client-held masterSecret.
  * Deterministic: the same masterSecret always yields the same tree.
  */
 export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
-  const authSeed = deriveDomainSeed(masterSecret, "falcon-auth");
-  const contentSeed = deriveDomainSeed(masterSecret, "falcon-content");
-  const anonSeed = deriveDomainSeed(masterSecret, "falcon-anon");
-  const blobMasterKey = deriveDomainSeed(masterSecret, "falcon-blob-master");
+  const authSeed = deriveDomainSeed(masterSecret, "kvy-auth");
+  const contentSeed = deriveDomainSeed(masterSecret, "kvy-content");
+  const anonSeed = deriveDomainSeed(masterSecret, "kvy-anon");
+  const blobMasterKey = deriveDomainSeed(masterSecret, "kvy-blob-master");
 
   const signing = tweetnacl.sign.keyPair.fromSeed(authSeed);
 

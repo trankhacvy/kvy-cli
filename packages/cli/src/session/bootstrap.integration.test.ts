@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net";
 import type { PGlite } from "@electric-sql/pglite";
-import { deriveKeyTree, getRandomBytes } from "@falcon/crypto";
+import { deriveKeyTree, getRandomBytes } from "@kvy/crypto";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -8,11 +8,11 @@ import {
   createTestDb,
   RecordingEventRouter,
 } from "../../../server/src/app/routes/testHelpers.js";
-// Cross-package source import (test-only): `@falcon/server` is a private,
+// Cross-package source import (test-only): `@kvy/server` is a private,
 // unpublished app package with no subpath `exports` map for its test
 // utilities, so this reaches its TS source directly rather than through a
 // built `dist/` entry point — same file the task names
-// (packages/server/src/app/routes/testHelpers.ts). `@falcon/server` is
+// (packages/server/src/app/routes/testHelpers.ts). `@kvy/server` is
 // declared as a devDependency in package.json for workspace-graph clarity
 // even though the import itself is a relative path, not the package name.
 import { buildServer } from "../../../server/src/app/server.js";

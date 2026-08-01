@@ -1,6 +1,6 @@
 /**
  * Defensive readers over `ToolItem.args`/`.output` (typed `unknown` on the
- * wire — falcon-system-design.md §4.2, adapter-specific shapes). Every
+ * wire — kvy-system-design.md §4.2, adapter-specific shapes). Every
  * reader here degrades to `undefined` on a shape mismatch instead of
  * throwing (design principle: no silent failures at the *display* layer
  * means "never crash the card", not "never show raw JSON" — callers fall
@@ -402,10 +402,10 @@ export interface AskAnswerEntry {
 const ASK_ANSWER_PAIR_PATTERN = /"([^"]*)"="([^"]*)"/g;
 
 /**
- * Matches Falcon's own "deny-with-answer" tool_result text — `composeAskAnswerReason()`
+ * Matches Kvy's own "deny-with-answer" tool_result text — `composeAskAnswerReason()`
  * in `packages/cli/src/claude/pretoolPermissionBridge.ts`, e.g.:
  * ```
- * The user answered via the Falcon web UI:
+ * The user answered via the Kvy web UI:
  * - Pick a fruit
  *   → Mango
  * Proceed using these answers. Do not call AskUserQuestion again for these questions.
@@ -461,13 +461,13 @@ const ASK_ANSWER_ARROW_PATTERN = /^- (.+)\n {2}→ (.+)$/gm;
  *    it naturally falls through to `undefined` here — `isDeclinedQuestion`
  *    in `AskUserQuestionToolCard.tsx` is what actually recognizes that case,
  *    entirely independently of this function.
- * 2. Falcon's own "deny-with-answer" reason text ({@link ASK_ANSWER_ARROW_PATTERN} —
+ * 2. Kvy's own "deny-with-answer" reason text ({@link ASK_ANSWER_ARROW_PATTERN} —
  *    see its own doc comment) — the shape used for a web-answered question that
  *    couldn't be driven into a live terminal widget (any web-turn answer, fixed-option
  *    or free-text alike, plus a free-text answer on a locally-typed turn). Verified
  *    live: this is what actually reaches the model (docs/known-issues-cliweb-sync-test.md
  *    issue #4), even though it carries `is_error: true` on the wire.
- * 3. `{answers: {question: answer}}` (Falcon's own deny-with-answer convention as a
+ * 3. `{answers: {question: answer}}` (Kvy's own deny-with-answer convention as a
  *    structured value, in case a future transport ever mirrors it back that way instead
  *    of as a string).
  * 4. An array of `{question, answer}` entries.

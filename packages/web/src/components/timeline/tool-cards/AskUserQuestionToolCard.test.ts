@@ -99,7 +99,7 @@ describe("AskUserQuestionToolCard", () => {
         args: { questions: [{ question: "Pick a fruit", options: ["Apple", "Banana"] }] },
         ok: false,
         output:
-          "The user answered via the Falcon web UI:\n- Pick a fruit\n  → Mango\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
+          "The user answered via the Kvy web UI:\n- Pick a fruit\n  → Mango\nProceed using these answers. Do not call AskUserQuestion again for these questions.",
       }),
     });
 

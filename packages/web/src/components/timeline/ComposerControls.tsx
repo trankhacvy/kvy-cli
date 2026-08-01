@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionMode, RunningSessionModelAlias } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import { useMutation } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -12,11 +12,10 @@ import {
   PromptInputSelectTrigger,
   PromptInputSelectValue,
 } from "@/components/ai-elements/prompt-input";
-import { DEFAULT_MODEL_VALUE, MODEL_OPTIONS } from "@/features/new-session/model-meta";
 import { useSessionControl } from "@/features/session-control";
-import { PTY_SET_MODE_ENABLED, PTY_SET_MODEL_ENABLED } from "@/lib/config";
+import { PTY_SET_MODE_ENABLED } from "@/lib/config";
+import { getProviderCapabilities } from "@/lib/providers";
 import { canMutateMode, nextModeAfterSetMode, shouldShowTakeControl } from "./mode-switch-state";
-import { canMutateModel, nextModelAfterSetModel } from "./model-switch-state";
 
 const MODES: PermissionMode[] = ["default", "acceptEdits", "plan", "bypassPermissions"];
 const MODE_LABEL: Record<PermissionMode, string> = {
@@ -25,20 +24,6 @@ const MODE_LABEL: Record<PermissionMode, string> = {
   plan: "Plan",
   bypassPermissions: "Bypass permissions",
 };
-
-/**
- * The running-session model selector's own curated options (issue #12) —
- * `MODEL_OPTIONS["claude-code"]` minus the "provider default" sentinel,
- * which only makes sense at spawn time, not for a session already running.
- * Kept in sync with `@falcon/wire`'s `RUNNING_SESSION_MODEL_ALIASES` (the
- * actual keystroke-injection allowlist the CLI/server enforce) by
- * `model-meta.test.ts`'s drift-guard test, rather than importing the wire
- * enum directly here — this module wants the display labels, wire only
- * carries the bare values.
- */
-const RUNNING_SESSION_MODEL_OPTIONS = MODEL_OPTIONS["claude-code"].filter(
-  (option) => option.value !== DEFAULT_MODEL_VALUE,
-);
 
 /**
  * The composer footer's left-side session chips (plan-v2.md W2.4's
@@ -62,6 +47,7 @@ export function ComposerControls({
   controlMode,
   disabled = false,
   modelChip,
+  provider,
 }: {
   mode: PermissionMode;
   controlMode: "local" | "remote";
@@ -69,10 +55,12 @@ export function ComposerControls({
   /** Decrypted model id from the session's metadata, or null until known —
    *  the chip is hidden rather than fabricated when there's nothing real to show. */
   modelChip: string | null;
+  provider: string;
 }) {
   const { actions } = useSessionControl();
   const [selectedMode, setSelectedMode] = useState(mode);
   const [modeError, setModeError] = useState<string | null>(null);
+  const capabilities = getProviderCapabilities(provider);
 
   // The canonical mode can change underneath this component (another device
   // switched it, or a permission answer resolved by mode-switch) — stay in
@@ -84,10 +72,6 @@ export function ComposerControls({
   const takeControlMutation = useMutation({ mutationFn: () => actions.takeControl() });
   const setModeMutation = useMutation({
     mutationFn: (next: PermissionMode) => actions.setMode(next),
-  });
-  const [modelError, setModelError] = useState<string | null>(null);
-  const setModelMutation = useMutation({
-    mutationFn: (next: RunningSessionModelAlias) => actions.setModel(next),
   });
 
   function handleModeChange(next: PermissionMode) {
@@ -107,57 +91,30 @@ export function ComposerControls({
     });
   }
 
-  // Unlike the mode selector, this one is uncontrolled (no `value` prop):
-  // `modelChip` is Claude Code's own free-text display name (e.g. "Sonnet
-  // 5"), which never string-equals one of the curated alias values
-  // (`sonnet`) this selector's options use, so there's no reliable "current
-  // selection" to seed it with. The read-only chip above stays the source
-  // of truth for what's actually running — it self-updates once the
-  // requested switch lands, via the same pre-existing metadata sync path
-  // (`handlePossibleModelChange`/`updateModel`) — this selector is purely
-  // an action, "request a switch to X", not a persistent toggle.
-  function handleModelChange(next: RunningSessionModelAlias) {
-    setModelError(null);
-    setModelMutation.mutate(next, {
-      onSuccess: (result) => setModelError(nextModelAfterSetModel(result).error),
-      onError: (error) => {
-        setModelError(error instanceof Error ? error.message : "Could not change the model.");
-      },
-    });
-  }
+  // A read-only label, never a mutating control — issue #12's `setModel`
+  // (typing `/model` into the live PTY) has real, unfixed correctness bugs
+  // (false-positive on a switch Claude Code itself refused, no requested-
+  // vs-observed equality check, an unguarded confirm-dialog race), so the
+  // web never offers to change the model, for any provider. When the model
+  // is unknown AND this provider has no live model-switch capability at all
+  // (`!capabilities.supportsLiveModelSwitch`, e.g. Codex), there is no path
+  // that will ever resolve "unknown" into a real value later — showing a
+  // permanent "Model unknown" chip would read as broken, not pending, so
+  // the chip is hidden entirely instead. For a provider that DOES support
+  // live switching (Claude Code), "unknown" is transient (resolves once the
+  // CLI's own transcript reports a model), so the chip still shows to make
+  // that in-flight state visible.
+  const showModelChip = modelChip !== null || capabilities.supportsLiveModelSwitch;
 
   return (
     <>
-      {/* Always rendered, even with no known model, rather than silently
-       * disappearing (docs/known-issues.md issue #12) — a session where the
-       * CLI hasn't detected an explicit model change yet is the common case,
-       * not an error, so it gets an honest "Model unknown" label instead of
-       * a confusing gap in the footer. */}
-      <PromptInputButton size="sm" tooltip="The model this session is running" aria-label="Model">
-        <Sparkles className="size-3.5" />
-        <span className="text-xs">{modelChip ?? "Model unknown"}</span>
-      </PromptInputButton>
-      {canMutateModel(controlMode, PTY_SET_MODEL_ENABLED) && (
-        <PromptInputSelect
-          disabled={disabled || setModelMutation.isPending}
-          onValueChange={(value) => handleModelChange(value as RunningSessionModelAlias)}
-        >
-          <PromptInputSelectTrigger
-            className="h-8 w-auto gap-1 border-none bg-transparent px-2 text-xs shadow-none hover:bg-muted"
-            aria-label="Change model"
-          >
-            <PromptInputSelectValue placeholder="Change model" />
-          </PromptInputSelectTrigger>
-          <PromptInputSelectContent>
-            {RUNNING_SESSION_MODEL_OPTIONS.map((option) => (
-              <PromptInputSelectItem key={option.value} value={option.value}>
-                {option.label}
-              </PromptInputSelectItem>
-            ))}
-          </PromptInputSelectContent>
-        </PromptInputSelect>
+      {showModelChip && (
+        <PromptInputButton size="sm" tooltip="The model this session is running" aria-label="Model">
+          <Sparkles className="size-3.5" />
+          <span className="text-xs">{modelChip ?? "Model unknown"}</span>
+        </PromptInputButton>
       )}
-      {canMutateMode(controlMode, PTY_SET_MODE_ENABLED) ? (
+      {canMutateMode(controlMode, capabilities.supportsLiveModeSwitch, PTY_SET_MODE_ENABLED) ? (
         <PromptInputSelect
           value={selectedMode}
           disabled={disabled || setModeMutation.isPending}
@@ -177,7 +134,7 @@ export function ComposerControls({
       ) : (
         <span className="px-2 text-xs text-muted-foreground">{MODE_LABEL[mode]}</span>
       )}
-      {shouldShowTakeControl(controlMode) && (
+      {shouldShowTakeControl(controlMode, capabilities.supportsTakeControl) && (
         <PromptInputButton
           size="sm"
           disabled={disabled || takeControlMutation.isPending}
@@ -188,7 +145,6 @@ export function ComposerControls({
         </PromptInputButton>
       )}
       {modeError && <span className="px-1 text-xs text-destructive">{modeError}</span>}
-      {modelError && <span className="px-1 text-xs text-destructive">{modelError}</span>}
       {takeControlMutation.isError && (
         <span className="px-1 text-xs text-destructive">Could not take control.</span>
       )}

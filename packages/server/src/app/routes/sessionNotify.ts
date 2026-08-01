@@ -20,11 +20,11 @@ const NotifyResponseSchema = z.object({ ok: z.literal(true) });
  * title/body/data — because session content is E2E encrypted and the server
  * holds no keys (design §5.3); Happy's analogous `POST /v1/sessions/
  * :sessionId/push-event` carries plaintext title/body because Happy has no
- * E2E encryption; Falcon's push payload stays `{sessionId, kind}` and the
+ * E2E encryption; Kvy's push payload stays `{sessionId, kind}` and the
  * client renders a fixed, kind-keyed message.
  *
  * Callers: the CLI's transcript pipeline already detects `turn-end` locally
- * (the `SessionEvent` `turn-end` variant, `@falcon/wire`'s `session.ts`) and
+ * (the `SessionEvent` `turn-end` variant, `@kvy/wire`'s `session.ts`) and
  * will POST here on a remote-initiated turn's completion once that call site
  * is wired (out of scope for this task — CLI is a disjoint worktree); the
  * permission pipeline (§2.3) will POST here for `perm`/`question` once it
