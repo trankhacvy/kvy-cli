@@ -1,19 +1,25 @@
 name: release
 
-# Changesets decides WHAT gets published, on every push to main:
-#   - pending changesets exist  -> open/update a "Version Packages" PR
-#     (see .changeset/README.md) — nothing published yet.
-#   - that PR was just merged  -> `pnpm changeset publish` runs for real,
-#     publishing `kvy` if it was bumped. @kvy/wire and @kvy/crypto are
-#     internal-only (private, bundled straight into kvy's own build output
-#     by pkgroll — see packages/cli/package.json's devDependencies) and
-#     @kvy/server / @kvy/web / @kvy/e2e are deployed, never versioned — all
-#     five are excluded via .changeset/config.json's `ignore`.
-#
-# Once `kvy` is published, the rest of this workflow runs: a real per-OS
-# matrix compiles standalone Node SEA binaries
-# (packages/cli/scripts/native/, kvy-system-design.md §3) and attaches them
-# to a `vX.Y.Z` GitHub Release for scripts/install.sh to fetch.
+# Native distribution (curl | sh, and eventually Homebrew) and npm
+# publishing are INDEPENDENT of each other — neither needs the other to
+# succeed:
+#   - `publish-npm` best-effort publishes `kvy-cli` via Changesets
+#     (`continue-on-error: true` — nothing else in this workflow depends on
+#     it, so an npm-side failure, e.g. the registry's name-similarity
+#     filter rejecting a candidate name, never blocks a release). @kvy/wire
+#     and @kvy/crypto are internal-only (private, bundled straight into
+#     kvy-cli's own build output by pkgroll — see
+#     packages/cli/package.json's devDependencies) and @kvy/server /
+#     @kvy/web / @kvy/e2e are deployed, never versioned — all five are
+#     excluded via .changeset/config.json's `ignore`, so this only ever
+#     publishes `kvy-cli` itself.
+#   - `resolve-native-release` mints a `vX.Y.Z` tag straight from
+#     `packages/cli/package.json`'s current version, whenever that version
+#     hasn't been tagged yet — no dependency on npm publishing at all. A
+#     real per-OS matrix then compiles standalone Node SEA binaries
+#     (packages/cli/scripts/native/, kvy-system-design.md §3) and attaches
+#     them to that tag's GitHub Release for scripts/install.sh (and,
+#     eventually, a Homebrew formula) to fetch.
 on:
   push:
     branches: [main]
@@ -26,12 +32,14 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: version or publish (changesets)
+  publish-npm:
+    name: version or publish (changesets, best-effort)
     runs-on: ubuntu-latest
-    outputs:
-      published: ${{ steps.changesets.outputs.published }}
-      published_packages: ${{ steps.changesets.outputs.publishedPackages }}
+    # A registry-side rejection (e.g. npm's name-similarity filter) fails
+    # this job's steps, but must not fail — or block — the workflow: native
+    # binary distribution doesn't need npm at all. Nothing else in this
+    # workflow reads this job's outputs or `needs` it.
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -75,38 +83,31 @@ jobs:
 
   resolve-native-release:
     name: resolve kvy's release tag
-    needs: release
-    if: needs.release.outputs.published == 'true'
     runs-on: ubuntu-latest
     outputs:
       should_build: ${{ steps.resolve.outputs.should_build }}
       tag: ${{ steps.resolve.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # `changeset publish` already tagged whatever it published as
-      # `<name>@<version>` (e.g. `kvy@0.2.0`) and pushed that — but
-      # scripts/install.sh, the GitHub Release, and the `cli-latest` rolling
-      # pointer all expect a plain `vX.Y.Z` tag. Mint that as a second alias
-      # on the same commit. kvy is the only package this repo ever publishes
-      # (@kvy/wire/@kvy/crypto are bundled in, not published separately —
-      # see .changeset/config.json's `ignore`), so "published" here always
-      # means kvy.
-      - name: Resolve whether kvy was published, mint its vX.Y.Z tag
+      # Independent of npm entirely: the source of truth for "is there a
+      # new release to cut" is packages/cli/package.json's own version, not
+      # anything changesets/npm reported. `scripts/install.sh`, the GitHub
+      # Release, and the `cli-latest` rolling pointer all expect a plain
+      # `vX.Y.Z` tag — mint one only if this exact version hasn't already
+      # been tagged (covers both "no version bump since last release" and
+      # "this exact commit already got tagged by a prior run").
+      - name: Resolve whether kvy's version needs a new tag/release
         id: resolve
-        env:
-          PUBLISHED_PACKAGES: ${{ needs.release.outputs.published_packages }}
         run: |
-          VERSION=$(node -e "
-            const pkgs = JSON.parse(process.env.PUBLISHED_PACKAGES || '[]');
-            const kvy = pkgs.find((p) => p.name === 'kvy');
-            if (kvy) process.stdout.write(kvy.version);
-          ")
-          if [ -z "$VERSION" ]; then
+          VERSION=$(node -p "require('./packages/cli/package.json').version")
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          TAG="v$VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$TAG"
