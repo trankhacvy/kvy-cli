@@ -2,13 +2,13 @@
  * "How is this `kvy` currently installed?" — the self-update mechanism
  * needs a different apply strategy for each:
  *
- *  - `standalone-binary`: a `bun build --compile` executable
- *    (`scripts/build-binaries.sh`, installed by `scripts/install.sh` or a
- *    manual download). Self-update atomically replaces the running
- *    executable file itself (`applyUpdate.ts`).
- *  - `npm`: installed via `npm install -g kvy` (or run from a built
+ *  - `standalone-binary`: a Node SEA executable
+ *    (`packages/cli/scripts/native/build.mjs`, installed by
+ *    `scripts/install.sh` or a manual download). Self-update atomically
+ *    replaces the running executable file itself (`applyUpdate.ts`).
+ *  - `npm`: installed via `npm install -g kvy-cli` (or run from a built
  *    `dist/index.mjs` in this workspace). Self-update shells out to
- *    `npm install -g kvy@<version>`, reusing the exact publish pipeline
+ *    `npm install -g kvy-cli@<version>`, reusing the exact publish pipeline
  *    `P4-4.3-standalone-binaries` wired up.
  *  - `dev`: running straight from TypeScript source (`tsx src/index.ts` /
  *    `vitest`) — there is no built artifact to replace, so self-update is a

@@ -22,7 +22,7 @@ Pick one:
 curl -fsSL https://kvy.dev/install.sh | sh
 
 # Or, if you already have Node ≥20:
-npm install -g kvy
+npm install -g kvy-cli
 ```
 
 Both put a `kvy` binary on your `PATH` (`~/.kvy/bin/kvy` for the

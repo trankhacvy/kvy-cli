@@ -54,7 +54,7 @@ async function applyStandaloneBinaryUpdate(
     return {
       applied: false,
       reason:
-        "no standalone binary published for this platform/architecture. Run 'npm install -g kvy' instead",
+        "no standalone binary published for this platform/architecture. Run 'npm install -g kvy-cli' instead",
     };
   }
 
@@ -74,7 +74,7 @@ async function applyStandaloneBinaryUpdate(
 
 async function applyNpmUpdate(options: ApplyUpdateOptions): Promise<ApplyUpdateResult> {
   const runNpmInstall = options.runNpmInstall ?? defaultRunNpmInstall;
-  await runNpmInstall(`kvy@${options.version}`);
+  await runNpmInstall(`kvy-cli@${options.version}`);
   return { applied: true, installKind: "npm" };
 }
 

@@ -19,7 +19,7 @@ export function FinalCta() {
           <Button asChild size="lg">
             <Link href="/signin/">Get started</Link>
           </Button>
-          <CopyCommand command="npm install -g kvy" />
+          <CopyCommand command="npm install -g kvy-cli" />
         </div>
       </Reveal>
     </section>

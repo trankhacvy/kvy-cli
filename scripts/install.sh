@@ -32,7 +32,7 @@ detect_platform() {
   case "$(uname -s)" in
     Darwin) echo "darwin" ;;
     Linux) echo "linux" ;;
-    *) err "unsupported OS '$(uname -s)' — standalone binaries cover macOS and Linux only. Try 'npm install -g kvy' instead." ;;
+    *) err "unsupported OS '$(uname -s)' — standalone binaries cover macOS and Linux only. Try 'npm install -g kvy-cli' instead." ;;
   esac
 }
 
@@ -40,7 +40,7 @@ detect_arch() {
   case "$(uname -m)" in
     arm64 | aarch64) echo "arm64" ;;
     x86_64 | amd64) echo "x64" ;;
-    *) err "unsupported architecture '$(uname -m)'. Try 'npm install -g kvy' instead." ;;
+    *) err "unsupported architecture '$(uname -m)'. Try 'npm install -g kvy-cli' instead." ;;
   esac
 }
 
@@ -48,7 +48,7 @@ PLATFORM="$(detect_platform)"
 ARCH="$(detect_arch)"
 
 if [ "$PLATFORM" = "linux" ] && [ "$ARCH" = "arm64" ]; then
-  err "linux-arm64 has no standalone binary yet. Try 'npm install -g kvy' instead."
+  err "linux-arm64 has no standalone binary yet. Try 'npm install -g kvy-cli' instead."
 fi
 
 ASSET="kvy-$PLATFORM-$ARCH"

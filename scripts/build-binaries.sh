@@ -14,7 +14,7 @@
 # `.github/workflows/release.yml`'s matrix runs this once per real target OS
 # instead of once total.
 #
-# Prerequisite: `pnpm --filter kvy... build` must already have produced
+# Prerequisite: `pnpm --filter kvy-cli... build` must already have produced
 # `packages/cli/dist/index.mjs` — this compiles *that* bundle, not raw TS
 # source, so the exact bundle `tsc`/`pkgroll`/CI type-checked and tested is
 # what ships in the binary.
@@ -26,7 +26,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENTRY="$ROOT_DIR/packages/cli/dist/index.mjs"
 
 if [ ! -f "$ENTRY" ]; then
-  echo "error: $ENTRY not found — run 'pnpm --filter kvy... build' first" >&2
+  echo "error: $ENTRY not found — run 'pnpm --filter kvy-cli... build' first" >&2
   exit 1
 fi
 

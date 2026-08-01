@@ -80,7 +80,7 @@ function packageRootDir(): string {
 }
 
 /**
- * Works unchanged whether this is a dev run, a plain `npm install -g kvy`,
+ * Works unchanged whether this is a dev run, a plain `npm install -g kvy-cli`,
  * or a compiled Node SEA binary (`scripts/native/build.mjs`) — the SEA
  * entrypoint (`scripts/native/entry.cjs`) extracts its embedded assets into
  * a real temp directory shaped exactly like the npm package (`dist/
@@ -121,7 +121,7 @@ function resolveClaudeLauncherPath(): string {
   return path.join(packageRootDir(), "scripts", "kvy_claude_launcher.cjs");
 }
 
-/** `true` for a compiled Node SEA standalone binary (`scripts/native/build.mjs`) — `false` for dev and for a plain `npm install -g kvy`. Threaded through as a plain boolean to `update/installKind.ts` and friends, which decide their own self-update strategy from it. */
+/** `true` for a compiled Node SEA standalone binary (`scripts/native/build.mjs`) — `false` for dev and for a plain `npm install -g kvy-cli`. Threaded through as a plain boolean to `update/installKind.ts` and friends, which decide their own self-update strategy from it. */
 function isCompiledBinary(): boolean {
   return isSea();
 }
@@ -294,7 +294,7 @@ async function runDaemonService(
  * `kvy update` (plan.md §16 "4.3 Distribution & self-host") — checks the
  * `cli-latest` rolling release tag and, if a newer version is published,
  * downloads and atomically replaces the running standalone binary (or
- * shells out to `npm install -g kvy@<version>` for an npm install).
+ * shells out to `npm install -g kvy-cli@<version>` for an npm install).
  * Deliberately does **not** call `ensureDaemon()`: unlike `start`/`auth`/
  * etc., updating the CLI itself has no daemon interaction, and running it
  * ahead of a daemon auto-start would also re-trigger the very

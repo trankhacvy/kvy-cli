@@ -59,7 +59,7 @@ jobs:
       # dependencies) — both still need their own `dist/` built first so
       # pkgroll has something to resolve and inline.
       - name: Build kvy (bundles @kvy/wire + @kvy/crypto)
-        run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter kvy build
+        run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter kvy-cli build
 
       - name: Version or publish
         id: changesets
@@ -164,7 +164,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build kvy + its workspace dependencies
-        run: pnpm --filter kvy... build
+        run: pnpm --filter kvy-cli... build
 
       - name: Compile standalone binary (Node SEA)
         shell: bash

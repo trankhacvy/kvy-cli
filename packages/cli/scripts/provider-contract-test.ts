@@ -24,7 +24,7 @@
  * pipeline (every commit, every contributor's machine). It is invoked only
  * by `.github/workflows/provider-contract.yml`'s daily cron job, where the
  * CLI is guaranteed to be installed and authenticated. Run locally via
- * `pnpm --filter kvy run contract:provider` once `claude` is on PATH and
+ * `pnpm --filter kvy-cli run contract:provider` once `claude` is on PATH and
  * `ANTHROPIC_API_KEY` (or another supported auth method) is set.
  *
  * Any contract violation throws and `main()`'s `.catch` turns it into a

@@ -77,7 +77,7 @@ describe("applyUpdate", () => {
       runNpmInstall,
     });
     expect(result).toEqual({ applied: true, installKind: "npm" });
-    expect(runNpmInstall).toHaveBeenCalledWith("kvy@0.2.0");
+    expect(runNpmInstall).toHaveBeenCalledWith("kvy-cli@0.2.0");
   });
 
   it("dev: no-op, never touches the filesystem", async () => {
