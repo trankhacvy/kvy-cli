@@ -21,7 +21,7 @@ describe("detectClaudeCode", () => {
   let homeDir: string;
 
   beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), "falcon-provider-detect-"));
+    homeDir = mkdtempSync(path.join(tmpdir(), "kvy-provider-detect-"));
   });
 
   afterEach(() => {

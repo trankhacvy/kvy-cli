@@ -3,18 +3,18 @@
  * "3.3 Session adoption (UC9)"): Claude Code's `--resume` mints a brand-new
  * provider session id every time (documented in Happy's `CLAUDE.md` as
  * "Session Forking" and echoed in this project's own `plan.md` §11), so
- * `falcon adopt` records old→new mappings locally in
- * `~/.falcon/settings.json`'s `adoptedSessions` — so a session's history
+ * `kvy adopt` records old→new mappings locally in
+ * `~/.kvy/settings.json`'s `adoptedSessions` — so a session's history
  * can be presented as one continuous timeline across resumes instead of a
  * chain of apparently-unrelated sessions.
  */
 import { type PersistenceOptions, readSettings, updateSettings } from "../persistence.js";
 
 /**
- * `falcon adopt`'s real call site (`commands/adopt.ts`) always passes
+ * `kvy adopt`'s real call site (`commands/adopt.ts`) always passes
  * `listAdoptableSessions()`'s pick as `oldProviderSessionId` — i.e. the
  * *most recently active* transcript on disk. After a first adopt (A -> B),
- * B is now that most-recent transcript, so the next `falcon adopt` records
+ * B is now that most-recent transcript, so the next `kvy adopt` records
  * (B, C), not (A, C). Chains must therefore be looked up by *any* id they
  * contain, not just their first (root) element, or each new adopt+resume
  * hop would fragment into its own disconnected 2-entry chain instead of

@@ -1,8 +1,8 @@
 /**
- * `falcon doctor` adapter-health checks (design §7.9: "`falcon doctor`
+ * `kvy doctor` adapter-health checks (design §7.9: "`kvy doctor`
  * reports adapter presence/version/integrity"). Kept as its own module
  * rather than inlined into `daemon/doctor.ts` so it's independently
- * testable and reusable from the `falcon adapters` command / Phase 2.1's
+ * testable and reusable from the `kvy adapters` command / Phase 2.1's
  * `acpConnection.ts` without a `daemon/` import — this module has zero
  * dependency on the daemon.
  */

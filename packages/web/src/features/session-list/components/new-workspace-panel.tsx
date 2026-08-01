@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import { ChevronRight, Loader2, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -47,7 +47,7 @@ import type { SessionListMachine } from "../types";
  * sessions ever run has no `+` on a `WorkspaceSection` row to click.
  *
  * No filesystem browser: the folder always lands at
- * `~/falcon-workspaces/<name>` (`new-workspace.ts`'s fixed base directory),
+ * `~/kvy-workspaces/<name>` (`new-workspace.ts`'s fixed base directory),
  * shown read-only — the user only edits the last path segment.
  */
 export function NewWorkspaceTrigger({

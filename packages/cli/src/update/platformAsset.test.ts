@@ -2,27 +2,27 @@ import { describe, expect, it } from "vitest";
 import { detectPlatformAsset } from "./platformAsset.js";
 
 describe("detectPlatformAsset", () => {
-  it("maps darwin/arm64 to falcon-darwin-arm64", () => {
+  it("maps darwin/arm64 to kvy-darwin-arm64", () => {
     expect(detectPlatformAsset("darwin", "arm64")).toEqual({
       platform: "darwin",
       arch: "arm64",
-      assetName: "falcon-darwin-arm64",
+      assetName: "kvy-darwin-arm64",
     });
   });
 
-  it("maps darwin/x64 to falcon-darwin-x64", () => {
+  it("maps darwin/x64 to kvy-darwin-x64", () => {
     expect(detectPlatformAsset("darwin", "x64")).toEqual({
       platform: "darwin",
       arch: "x64",
-      assetName: "falcon-darwin-x64",
+      assetName: "kvy-darwin-x64",
     });
   });
 
-  it("maps linux/x64 to falcon-linux-x64", () => {
+  it("maps linux/x64 to kvy-linux-x64", () => {
     expect(detectPlatformAsset("linux", "x64")).toEqual({
       platform: "linux",
       arch: "x64",
-      assetName: "falcon-linux-x64",
+      assetName: "kvy-linux-x64",
     });
   });
 

@@ -78,7 +78,7 @@ status codes, expiry sweep, prompt-fatigue controls).
  */
 
 export const WELCOME_FIRST_RUN =
-  "\n  Welcome to Falcon.\n  Let's connect this machine to your account.\n\n";
+  "\n  Welcome to Kvy.\n  Let's connect this machine to your account.\n\n";
 
 export const OPENING_BROWSER = "  Opening your browser…\n";
 
@@ -104,8 +104,8 @@ export const STARTING_SESSION = "  Starting your session…\n\n";
  * test is a silent break (review finding H3).
  */
 export const NO_TTY_CANNOT_SIGN_IN =
-  "falcon: not logged in, and there's no terminal here to sign in from.\n" +
-  "Run `falcon auth login` on a machine with a browser, then try again.\n";
+  "kvy: not logged in, and there's no terminal here to sign in from.\n" +
+  "Run `kvy auth login` on a machine with a browser, then try again.\n";
 ```
 
 ### 0.2 `packages/web/src/lib/copy.ts` (new)
@@ -113,7 +113,7 @@ export const NO_TTY_CANNOT_SIGN_IN =
 ```ts
 export const copy = {
   signin: {
-    titleDefault: "Sign in to Falcon",
+    titleDefault: "Sign in to Kvy",
     titleWithPendingPair: "Connect your machine",
     subtitleWithPendingPair: (machine: string) => `Sign in to finish connecting ${machine}.`,
     expiredBanner: "Your session expired — sign in to continue.",
@@ -121,7 +121,7 @@ export const copy = {
 
   pair: {
     approveTitle: "Connect this machine?",
-    approveWarning: "Only approve this if you just ran `falcon` yourself.",
+    approveWarning: "Only approve this if you just ran `kvy` yourself.",
     approveCta: "Approve",
     cancelCta: "Cancel",
     doneTitle: "Connected",
@@ -129,7 +129,7 @@ export const copy = {
       `${machine} is connected. Go back to your terminal — your session is starting.`,
     doneCta: "Go to dashboard",
     invalidLink:
-      "This link is out of date. Run `falcon` again on your machine to get a fresh one.",
+      "This link is out of date. Run `kvy` again on your machine to get a fresh one.",
   },
 
   keys: {
@@ -157,11 +157,11 @@ export const copy = {
 
   onboarding: {
     title: "Connect your first machine",
-    subtitle: "Falcon runs on your own computer. Two commands.",
+    subtitle: "Kvy runs on your own computer. Two commands.",
     step1: "Install",
-    step1Cmd: "npm install -g falcon",
+    step1Cmd: "npm install -g kvy",
     step2: "Run it from any project",
-    step2Cmd: "cd ~/your-project && falcon",
+    step2Cmd: "cd ~/your-project && kvy",
     step3: "Approve when your browser asks",
     step3Hint: "We'll bring you back here automatically.",
     waiting: "Waiting for your first machine…",
@@ -195,7 +195,7 @@ index.ts runStart()
 
 ```ts
 // packages/cli/src/index.ts — runStart, NEW
-async function runStart(command: Extract<FalconCommand, { type: "start" }>): Promise<number> {
+async function runStart(command: Extract<KvyCommand, { type: "start" }>): Promise<number> {
   // Auth for EVERY provider, not just claude (item 3) — `startCodex` has the same
   // read-credentials-then-fail shape at commands/startCodex.ts:139.
   const auth = await ensureLoggedIn(logger);
@@ -256,7 +256,7 @@ key. Extract the whole block into a function and re-run it:
 // packages/cli/src/commands/start.ts — NEW
 
 interface Preflight {
-  credentials: FalconCredentials;
+  credentials: KvyCredentials;
   masterSecret: Uint8Array;
   contentKeyPair: KeyTree["content"];
   machineId: string;
@@ -348,7 +348,7 @@ Call site:
 > **Open question for you:** `restartDaemon()` does not exist yet. The daemon registers a
 > machine once at startup (`daemon/machineIntegration.ts:281`), so after an inline re-pair
 > it is running with dead credentials. Options: (a) add a daemon RPC "re-read credentials
-> and re-register"; (b) stop/start the daemon; (c) accept one extra `falcon` invocation
+> and re-register"; (b) stop/start the daemon; (c) accept one extra `kvy` invocation
 > after a re-pair. **(a) is the right answer** but it is real work — see
 > [Decisions](#decisions-that-need-your-sign-off).
 
@@ -449,7 +449,7 @@ payload stays at `v0x01`, untouched.
 
 ```ts
 // packages/cli/src/auth/login.ts
--const NOT_LOGGED_IN_MESSAGE = 'falcon: not logged in — run "falcon auth login" first\n';
+-const NOT_LOGGED_IN_MESSAGE = 'kvy: not logged in — run "kvy auth login" first\n';
 +import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
 
    if (process.stdin.isTTY !== true) {
@@ -487,7 +487,7 @@ function allStrings(): string[] {
 describe("CLI auth copy", () => {
   it("never tells the user to run auth login, except with no terminal", () => {
     const offenders = allStrings().filter(
-      (m) => /falcon auth login/.test(m) && !/no terminal here/.test(m),
+      (m) => /kvy auth login/.test(m) && !/no terminal here/.test(m),
     );
     expect(offenders).toEqual([]);
   });
@@ -580,7 +580,7 @@ export default function PairPage() {
 
 ```ts
 // packages/web/src/app/(public)/pair/parse-eph-pub.ts (new)
-import { decodeBase64, encodeBase64 } from "@falcon/crypto/web";
+import { decodeBase64, encodeBase64 } from "@kvy/crypto/web";
 
 const X25519_PUBLIC_KEY_BYTES = 32;
 
@@ -858,7 +858,7 @@ export interface StoredSessionRecord {
   wrapped: { nonce: Uint8Array; ct: Uint8Array };
 }
 
-const DB_NAME = "falcon-session";            // separate DB from `falcon-crypto-bridge`
+const DB_NAME = "kvy-session";            // separate DB from `kvy-crypto-bridge`
 ```
 
 The worker gains `setRefreshToken` / `refreshSession` behaviour that **no longer depends on
@@ -934,7 +934,7 @@ architectural fusion, not just Phase 4's prerequisite.
 > claim, plain-text label) are all satisfied by an attacker holding a stolen access token.
 > Today's pairing has weak co-presence proof — a human physically opened a URL the CLI
 > printed. Removing that without replacing it converts token theft into full plaintext
-> compromise, breaking `falcon-system-design.md` §5.3's identity-plane/content-plane
+> compromise, breaking `kvy-system-design.md` §5.3's identity-plane/content-plane
 > separation. The verification code below is the replacement, and it is **not optional**.
 
 ### 4.1 Schema
@@ -1000,7 +1000,7 @@ export const keyRequests = pgTable(
 > The repo's additive-only rule is about **optional fields** (see `needsReauth`,
 > `updates.ts:89-95`), not new union members.
 >
-> **Consequences:** `@falcon/wire` builds first (CLAUDE.md), so this gates the phase; and
+> **Consequences:** `@kvy/wire` builds first (CLAUDE.md), so this gates the phase; and
 > `packages/web/public/sw.js` needs a cache-bust so clients actually pick up the new bundle.
 > The polling fallback in `RequestKeysPanel` is what keeps stale clients functional.
 
@@ -1052,7 +1052,7 @@ untrusted `label` — `clientKind`, `createdAt`, and `lastRefreshedAt` come from
  * Every route requires `app.authenticate` and scopes by `request.accountId`. The server
  * relays an opaque sealed box and holds no keys, exactly like `api/pair.ts`.
  */
-import { decodeBase64, encodeBase64 } from "@falcon/crypto";
+import { decodeBase64, encodeBase64 } from "@kvy/crypto";
 import { and, eq, gt, isNotNull, isNull, lt } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -1324,13 +1324,13 @@ export interface SealKeysForPeerRequest { id: string; type: "sealKeysForPeer"; e
 
 ```ts
 // packages/web/src/crypto/worker-handler.ts
-// ⚠️ Rev 2: `@falcon/crypto/web` exports NO keypair generator (verified against
+// ⚠️ Rev 2: `@kvy/crypto/web` exports NO keypair generator (verified against
 // packages/crypto/src/index.web.ts) — rev 1's `boxKeyPair()` does not exist. Either import
 // tweetnacl directly here, or add an export to the crypto package. Prefer the export, so
 // the worker bundle keeps one source of keypair generation:
 //     // packages/crypto/src/encryption.web.ts
 //     export function generateEphemeralKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array }
-import { generateEphemeralKeyPair } from "@falcon/crypto/web";
+import { generateEphemeralKeyPair } from "@kvy/crypto/web";
 
 const KEY_SHARE_PAYLOAD_VERSION = 0x02;
 
@@ -1562,7 +1562,7 @@ export function RequestKeysPanel({ onReady }: { onReady: () => void }) {
             {phase.devices.length === 0 && (
               <li className="px-4 py-3 text-sm text-muted-foreground">
                 No other devices are signed in. Run{" "}
-                <code className="rounded bg-muted px-1">falcon keys approve</code> on a
+                <code className="rounded bg-muted px-1">kvy keys approve</code> on a
                 machine that has your keys.
               </li>
             )}
@@ -1768,11 +1768,11 @@ Two pieces of work, in order:
   });
 ```
 
-**b) `falcon keys approve`** — an explicit command, because silent auto-approval would let
+**b) `kvy keys approve`** — an explicit command, because silent auto-approval would let
 anyone with a stolen account session pull the keys with no human in the loop.
 
 ```
-$ falcon keys approve
+$ kvy keys approve
 
   A device is asking for a copy of your keys:
 
@@ -1790,7 +1790,7 @@ $ falcon keys approve
 
 This does violate principle 1 ("never print run X") — noted honestly. The mitigation is
 that (a) makes the daemon *aware*, so a future iteration can print this prompt inline in a
-running `falcon claude` session instead of requiring a separate command. Track that as
+running `kvy claude` session instead of requiring a separate command. Track that as
 follow-up; do not auto-approve to avoid it.
 
 The node twin of `sealKeysForPeer` goes in `packages/cli/src/auth/keyShare.ts` and must be
@@ -1809,7 +1809,7 @@ unit-tested against the worker's version to guarantee byte compatibility.
 **What a non-extractable `CryptoKey` in IndexedDB does and does not do:**
 
 IndexedDB is **origin**-scoped. Any same-origin script — including injected XSS on the main
-thread — can open `falcon-crypto-bridge`, read the record, obtain the `CryptoKey` handle
+thread — can open `kvy-crypto-bridge`, read the record, obtain the `CryptoKey` handle
 with its `["encrypt","decrypt"]` usages, and call `crypto.subtle.decrypt`.
 Non-extractability blocks `exportKey`; it does not block **use**. There is no web-platform
 mechanism to bind a `CryptoKey` to a worker.
@@ -1842,7 +1842,7 @@ by user verification (Touch ID / Windows Hello / Android biometric).
  * Returns null when PRF is unavailable: no platform authenticator, an older browser, or a
  * credential created before PRF was requested. Callers MUST handle that — see the fallback.
  */
-const PRF_SALT = new TextEncoder().encode("falcon-key-wrap-v1");
+const PRF_SALT = new TextEncoder().encode("kvy-key-wrap-v1");
 
 export async function isPrfAvailable(): Promise<boolean> {
   if (!window.PublicKeyCredential) return false;
@@ -1882,7 +1882,7 @@ honestly** rather than sold as protection.
 - Settings shows: *"This browser keeps you signed in without asking. Anyone who can use
   this computer can read your sessions."*
 - Setup offers a plain choice, in the user's words:
-  - *"Use Touch ID"* (PRF available) — "Ask for my fingerprint each time I open Falcon."
+  - *"Use Touch ID"* (PRF available) — "Ask for my fingerprint each time I open Kvy."
   - *"Stay signed in"* — "No prompt. Only use this on a computer only you can use."
 
 That is a real user decision stated in real words, not a hidden downgrade.
@@ -2017,14 +2017,14 @@ Remove `migrateFromPin` (and the worker's `pin.web.ts` import) one release later
 ## Phase 6 — Copy pass (items 36–41)
 
 ```bash
-rg -n 'key material|masterSecret|master secret|keyEpoch|key epoch|Falcon key|crypto bridge|custody' \
+rg -n 'key material|masterSecret|master secret|keyEpoch|key epoch|Kvy key|crypto bridge|custody' \
   packages/web/src packages/cli/src -g '!**/__tests__/**' -g '!**/*.test.*'
 ```
 
 | File:line *(verified)* | Before | After |
 |---|---|---|
-| `pair/page.tsx:140` | "This browser has no Falcon key material for your account yet — sign in with email/password or OAuth first, then reopen this pairing link." | *(deleted — `RequestKeysPanel`)* |
-| `require-auth.tsx:116` | "This browser has no Falcon key material for your account…" | "This browser doesn't have your keys yet." |
+| `pair/page.tsx:140` | "This browser has no Kvy key material for your account yet — sign in with email/password or OAuth first, then reopen this pairing link." | *(deleted — `RequestKeysPanel`)* |
+| `require-auth.tsx:116` | "This browser has no Kvy key material for your account…" | "This browser doesn't have your keys yet." |
 | `reset-keys/page.tsx:81` | "Resetting keys signs every other device out and archives data encrypted under the old keys." | "Starting over erases all your past sessions and signs out every other device." |
 | `oauth-callback-page.tsx:204` | "This account already has keys on another device." | "Your keys are on another device." |
 | `oauth-callback-page.tsx:212` *(was `:211` in rev 1)* | "Reset keys for this browser" | `StartOverLink` |
@@ -2074,7 +2074,7 @@ describe("web auth copy", () => {
 - **45 — ~~Optional passkey lock~~ → promoted into Phase 5.** *(rev 2)*
 - **46 — Fix the rate-limit keyer** (finding L1): `req.accountId` is empty at the global
   `preHandler` hook, so every "per-account" limit is really per-IP. Pre-existing; file it.
-- **47 — Inline daemon approval prompt** so `falcon keys approve` stops being a separate
+- **47 — Inline daemon approval prompt** so `kvy keys approve` stops being a separate
   command (see 4.9).
 
 ---
@@ -2093,7 +2093,7 @@ describe("web auth copy", () => {
    rows. **Recommendation: ask, in plain words.**
 3. **`restartDaemon()`** (Phase 1, item 2). Needed so a re-paired CLI's daemon picks up the
    new credentials. Options: a daemon RPC (right), stop/start (blunt), or accept one extra
-   `falcon` invocation (cheapest). **Recommendation: the RPC**, but it is real work not
+   `kvy` invocation (cheapest). **Recommendation: the RPC**, but it is real work not
    costed here.
 4. **The `key-request` ephemeral breaks stale PWA clients** until their service worker
    updates (4.2). The polling fallback keeps them working. Confirm you are happy shipping
@@ -2255,13 +2255,13 @@ unit conventions so a loop skill can execute them later.
 ### Phase 4 — Reverse-direction key sharing *(⛔ Phase 4a + `AX-G.4`)* ✅ COMPLETE
 
 - [x] **AX-4.1** — Add the `key_requests` table + migration.
-      · `packages/server/src/db/schema.ts`, then `pnpm --filter @falcon/server db:generate`.
+      · `packages/server/src/db/schema.ts`, then `pnpm --filter @kvy/server db:generate`.
       · Done when: `uniqueIndex(accountId, ephPub)` — **not** globally unique — and
       `requestedBySessionId` is `notNull`.
 - [x] **AX-4.2** ⚠️ — Create `packages/web/src/lib/verification-code.ts`.
       · Done when: deterministic, 6 digits, zero-padded, plus `formatVerificationCode`.
 - [x] **AX-4.3** ⛔`AX-G.4` — Add the `key-request` member to `EphemeralSchema`.
-      · `packages/wire/src/updates.ts:79`. · **`@falcon/wire` builds first** — this gates the
+      · `packages/wire/src/updates.ts:79`. · **`@kvy/wire` builds first** — this gates the
       whole phase. Also bump the service-worker cache (`packages/web/public/sw.js`).
 - [x] **AX-4.4** — Add `buildKeyRequestEphemeral` to `eventRouter.ts`.
 - [x] **AX-4.5** ⚠️ — Create `routes/keyRequests.ts` with all four routes.
@@ -2269,7 +2269,7 @@ unit conventions so a loop skill can execute them later.
       for a malformed key; self-approval blocked; claim bound to `requestedBySessionId`;
       TTL-refreshing upsert; opportunistic expiry sweep.
 - [x] **AX-4.6** — Register the routes in `server.ts` next to `pairRoutes` (`:206`).
-- [x] **AX-4.7** — Export `generateEphemeralKeyPair` from `@falcon/crypto/web`.
+- [x] **AX-4.7** — Export `generateEphemeralKeyPair` from `@kvy/crypto/web`.
       · `packages/crypto/src/encryption.web.ts` + `index.web.ts`. · Rev 1's `boxKeyPair()`
       does not exist — verified against `index.web.ts`.
 - [x] **AX-4.8** — Add the three worker request types to `protocol.ts` + results map.
@@ -2295,7 +2295,7 @@ unit conventions so a loop skill can execute them later.
       · `packages/cli/src/daemon/machineClient.ts` (connect handler). · Today it handles only
       `connect`/`connect_error`/`disconnect`.
 - [x] **AX-4.18** — Create `packages/cli/src/auth/keyShare.ts` (node twin of `sealKeysForPeer`).
-- [x] **AX-4.19** — Implement `falcon keys approve` + register it in the command parser.
+- [x] **AX-4.19** — Implement `kvy keys approve` + register it in the command parser.
       · Done when: it shows the attested row, prints the code, and requires an explicit `y`.
       **Never auto-approves.**
 - [x] **AX-4.20** 🔬 ⚠️ — Route tests: cross-account approve → 404; claim by a different
@@ -2350,7 +2350,7 @@ unit conventions so a loop skill can execute them later.
 ### Phase 6 — Copy pass *(depends on Phase 0; final sweep after Phase 5)* ✅ COMPLETE
 
 - [x] **AX-6.1** — Run the jargon grep and fix every hit in the §6 table.
-- [x] **AX-6.2** — Replace `require-auth.tsx:116`'s "no Falcon key material" copy.
+- [x] **AX-6.2** — Replace `require-auth.tsx:116`'s "no Kvy key material" copy.
 - [x] **AX-6.3** — Replace `reset-keys/page.tsx:81` and `oauth-callback-page.tsx:204`.
 - [x] **AX-6.4** — Fix `session-list-screen.tsx:85`'s "any paired machine".
 - [x] **AX-6.5** — Delete `signin/page.tsx:116`'s PIN sentence (after Phase 5).
@@ -2367,7 +2367,7 @@ unit conventions so a loop skill can execute them later.
 - [x] **AX-7.3** — `PATCH /v1/machines/:id` + inline rename in the Devices list.
 - [x] **AX-7.4** — Fix the rate-limit keyer: `req.accountId` is empty at the global
       `preHandler` hook (`server.ts:162-168`), so every "per-account" limit is per-IP.
-- [x] **AX-7.5** — Inline daemon approval prompt so `falcon keys approve` stops being a
+- [x] **AX-7.5** — Inline daemon approval prompt so `kvy keys approve` stops being a
       separate command.
 - [x] **AX-7.6** — Re-run the independent adversarial review against the finished
       implementation, not just the plan.
@@ -2436,7 +2436,7 @@ Mirror this repo's existing convention — as phases land, record outcomes in
 
 1. **Cold first run** — welcome, QR, `/signin/` with "Connect your machine", approve card
    shows hostname + cwd, terminal continues with no second command.
-2. **Dead refresh token** — revoke the CLI session from Settings → Devices, run `falcon`.
+2. **Dead refresh token** — revoke the CLI session from Settings → Devices, run `kvy`.
    Expect "Reconnecting…", inline re-pair, and — critically — verify the session's
    **content key was re-derived** (send a message, confirm the web can decrypt it).
 3. **Web-first** — 3-step onboarding, no "New session", advances by itself.
@@ -2447,7 +2447,7 @@ Mirror this repo's existing convention — as phases land, record outcomes in
 6. **Prompt fatigue** — POST 5 requests. Confirm "Not now" suppresses, and the 4th trips
    the "Too many key requests" warning instead of showing another card.
 7. **CLI as holder** — close every tab, request from a second browser, run
-   `falcon keys approve`, compare codes, approve.
+   `kvy keys approve`, compare codes, approve.
 8. **No PIN** (Phase 5) — reload repeatedly; either zero prompts (device mode) or one
    biometric tap (PRF mode), never a typed PIN.
 9. **Migration** — provision on the old build, upgrade, confirm the one-time prompt appears

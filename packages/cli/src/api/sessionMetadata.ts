@@ -1,5 +1,5 @@
-import { open, seal } from "@falcon/crypto";
-import { EncryptedBoxSchema } from "@falcon/wire";
+import { open, seal } from "@kvy/crypto";
+import { EncryptedBoxSchema } from "@kvy/wire";
 import { z } from "zod";
 
 const CasOkSchema = z.object({ version: z.number().int().nonnegative() });

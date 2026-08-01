@@ -1,4 +1,4 @@
-import type { GithubChecksResult } from "@falcon/wire";
+import type { GithubChecksResult } from "@kvy/wire";
 
 /**
  * The manual (browser) "Create/open PR" action's target URL, derived from

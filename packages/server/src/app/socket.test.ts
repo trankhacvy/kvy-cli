@@ -1,6 +1,6 @@
 import type { AddressInfo } from "node:net";
 import type { PGlite } from "@electric-sql/pglite";
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
+import { encodeBase64, getRandomBytes } from "@kvy/crypto";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";

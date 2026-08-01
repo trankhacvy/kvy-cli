@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { isSessionControlDisabled, LifecycleBanner } from "./SessionTimelineScreen";

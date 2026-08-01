@@ -54,7 +54,7 @@ export interface MachineOnlineState {
  * button is the first such caller. */
 export const UNAVAILABLE_COPY: Record<Exclude<MachineStatus, "online">, string> = {
   offline: "This project's machine is offline right now.",
-  "needs-reauth": "This project's machine needs to sign in again. Run `falcon auth login` there.",
+  "needs-reauth": "This project's machine needs to sign in again. Run `kvy auth login` there.",
 };
 
 export function useMachineOnline(machineId: string | null | undefined): MachineOnlineState {

@@ -1,4 +1,4 @@
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import type { SessionMetadataPatch } from "@/lib/use-session-metadata-write";
 import { looksLikeWorktreePath } from "../worktree-path";
 
@@ -28,7 +28,7 @@ export function buildPinTogglePatch(currentlyPinned: boolean): SessionMetadataPa
 
 /** Whether Archive has an actual worktree to clean up: needs both a known
  * owning machine (the RPC is machine-scoped) AND a `workspaceId` that
- * actually looks like a Falcon-managed `.worktrees/<branch>` directory
+ * actually looks like a Kvy-managed `.worktrees/<branch>` directory
  * (`worktree-path.ts`) — never attempted for an ordinary repo-root session,
  * where "removing the worktree" would be nonsensical (there isn't one) and,
  * if it somehow reached the RPC, unsafe. */

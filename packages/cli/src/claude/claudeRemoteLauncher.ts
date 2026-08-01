@@ -76,8 +76,8 @@
  * here would open a race window where the kernel echoes in-flight bytes at
  * wherever Ink last left the cursor (visible garbage / a "second cursor").
  */
-import type { PermDecision, PermissionMode, SessionEnvelope } from "@falcon/wire";
-import { createEnvelope } from "@falcon/wire";
+import type { PermDecision, PermissionMode, SessionEnvelope } from "@kvy/wire";
+import { createEnvelope } from "@kvy/wire";
 import { render as inkRenderDefault } from "ink";
 import React from "react";
 import type { PermAnswerResult } from "../acp/acpPermissionHandler.js";
@@ -103,7 +103,7 @@ export interface ClaudeRemoteLauncherOptions {
   providerSessionId?: string | null;
   permissionMode: PermissionMode;
   model?: string;
-  /** `~/.falcon` (or override) — passed to `AcpRemote` for the adapter manager's verify-before-spawn. */
+  /** `~/.kvy` (or override) — passed to `AcpRemote` for the adapter manager's verify-before-spawn. */
   homeDir: string;
   /** Messages queued while local mode was aborting, delivered immediately once the session starts, in order. */
   initialMessages?: QueuedMessage[];

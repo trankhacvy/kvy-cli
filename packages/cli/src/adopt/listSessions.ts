@@ -2,7 +2,7 @@
  * Local (terminal-side) enumeration of plain Claude Code sessions for a
  * workspace directory — design §7.8's `listRecentSessions`: "enumerate
  * provider transcripts in cwd's workspace, preselect most recent." Backs
- * `falcon adopt [--list]` (plan.md §16 "3.3 Session adoption (UC9)").
+ * `kvy adopt [--list]` (plan.md §16 "3.3 Session adoption (UC9)").
  *
  * Purely local: no server round-trip. Reuses
  * `daemon/transcriptIndexer.ts`'s `parseTranscript` (title/last-activity
@@ -13,7 +13,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ProviderSessionSummary } from "@falcon/wire";
+import type { ProviderSessionSummary } from "@kvy/wire";
 import { getProjectPath } from "../claude/scanner.js";
 import { parseTranscript } from "../daemon/transcriptIndexer.js";
 import { createLivenessDeps, findOwningClaudeProcess, type LivenessDeps } from "./liveness.js";

@@ -10,7 +10,7 @@ import { Pillars } from "./components/pillars";
  * The public landing page (`/`), structured after the Briefberry skeleton —
  * bare nav → centered hero with product moment → worldview pillars →
  * feature rows with dedicated visuals → FAQ → closing CTA → minimal footer —
- * rendered entirely in Falcon's own shadcn tokens. Public by construction: no
+ * rendered entirely in Kvy's own shadcn tokens. Public by construction: no
  * auth gate, no sync engine, no crypto bridge; the only client-side islands
  * are `Reveal` (motion), `CopyCommand` (clipboard), and `Faq`'s accordion.
  */

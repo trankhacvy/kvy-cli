@@ -24,7 +24,7 @@ import { AddRemoteDialog } from "./AddRemoteDialog";
  * staging everything — `git add -A` — via `live-actions.ts`'s own
  * `stageAll` default, this checkbox is the override), Push, and Force Push
  * behind a confirm dialog. Every mutation error surfaces the raw
- * `GitExecError` message inline (`text-destructive`) rather than a Falcon
+ * `GitExecError` message inline (`text-destructive`) rather than a Kvy
  * abstraction — this IS the credential-failure UX (docs/features/
  * git-write-actions.md: "push auth is the machine's ambient git credential
  * helper/SSH agent").

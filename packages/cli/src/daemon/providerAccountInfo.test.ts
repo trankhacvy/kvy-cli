@@ -21,7 +21,7 @@ describe("getProviderAccountInfo — claude-code", () => {
   let homeDir: string;
 
   beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), "falcon-provider-account-claude-"));
+    homeDir = mkdtempSync(path.join(tmpdir(), "kvy-provider-account-claude-"));
   });
 
   afterEach(() => {
@@ -106,7 +106,7 @@ describe("getProviderAccountInfo — codex", () => {
   let homeDir: string;
 
   beforeEach(() => {
-    homeDir = mkdtempSync(path.join(tmpdir(), "falcon-provider-account-codex-"));
+    homeDir = mkdtempSync(path.join(tmpdir(), "kvy-provider-account-codex-"));
     mkdirSync(path.join(homeDir, ".codex"), { recursive: true });
   });
 

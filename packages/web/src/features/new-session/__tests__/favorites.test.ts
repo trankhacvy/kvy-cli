@@ -51,7 +51,7 @@ describe("favorites (window.localStorage present)", () => {
   });
 
   it("provider: ignores a garbage stored value rather than throwing", () => {
-    window.localStorage.setItem("falcon:new-session-favorite-provider", "gemini");
+    window.localStorage.setItem("kvy:new-session-favorite-provider", "gemini");
     expect(getFavoriteProvider()).toBeNull();
   });
 

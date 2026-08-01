@@ -1,7 +1,7 @@
 /**
  * Sync reducer — folds `SessionEnvelope[]` into ordered render items
- * (falcon-system-design.md §9.1, plan.md §8.2). Pure, dependency-free logic
- * over `@falcon/wire`'s `SessionEnvelope`/`SessionEvent` schemas; not wired
+ * (kvy-system-design.md §9.1, plan.md §8.2). Pure, dependency-free logic
+ * over `@kvy/wire`'s `SessionEnvelope`/`SessionEvent` schemas; not wired
  * into the sync engine or timeline UI yet (later plan bullets).
  */
 export { reduceEnvelopes, stableSortByTime } from "./reduce.js";

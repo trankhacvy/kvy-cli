@@ -19,7 +19,7 @@ describe("notifyDaemonSessionStarted (integration against a real control server)
   let server: ControlServerHandle;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-notify-integration-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-notify-integration-"));
   });
 
   afterEach(async () => {

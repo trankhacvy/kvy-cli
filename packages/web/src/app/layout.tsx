@@ -37,7 +37,7 @@ export default function RootLayout({
     >
       <head>
         <script suppressHydrationWarning>{themeInitScript}</script>
-        <meta name="apple-mobile-web-app-title" content="Falcon" />
+        <meta name="apple-mobile-web-app-title" content="Kvy" />
       </head>
       <body className="antialiased">
         <DocumentTitle />

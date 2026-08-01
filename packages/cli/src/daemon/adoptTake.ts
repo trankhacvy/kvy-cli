@@ -4,7 +4,7 @@
  * (unmanaged) `claude` session the transcript indexer has already surfaced.
  *
  * - `mode: 'takeover'` — the divergence guard (design FR-9.4: "never two
- *   live continuations of the same history"). If a live, non-Falcon
+ *   live continuations of the same history"). If a live, non-Kvy
  *   `claude` process still owns this transcript, SIGTERM it, wait up to
  *   `gracefulTimeoutMs` (default 5s), SIGKILL if it's still alive — then
  *   spawn a new managed session continuing from the same provider session
@@ -23,7 +23,7 @@
  * turn had finished, so any live process is treated as "possibly mid-turn"
  * and the client is told plainly rather than guessing silently.
  */
-import type { AdoptTakeParams, AdoptTakeResult, SpawnParams, SpawnResult } from "@falcon/wire";
+import type { AdoptTakeParams, AdoptTakeResult, SpawnParams, SpawnResult } from "@kvy/wire";
 import {
   createLivenessDeps,
   findOwningClaudeProcess,

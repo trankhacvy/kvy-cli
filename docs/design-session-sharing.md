@@ -3,7 +3,7 @@
 **Status: DRAFT — awaiting product/design review, not yet approved.**
 
 This is a *first-pass* design for letting a genuinely different person view — and,
-depending on the scope decision below, approve permissions on — someone else's Falcon
+depending on the scope decision below, approve permissions on — someone else's Kvy
 session, from their own account and device. It exists to give the product owner something
 concrete to react to and correct, not to be an implementation spec. Every section that
 records a real open question flags it as such; the [Open questions](#open-questions-for-the-product-owner)
@@ -398,7 +398,7 @@ decision. Two realistic options:
 The owner creates a share *invite* (a new short-TTL row, shape like `pairRequests`/
 `telegramLinkRequests`: opaque `code`, `sessionId`, `role`, `expiresAt`) and gets a link
 (`https://<web>/share/<code>`). The owner sends it out-of-band (Slack/email/etc.). The
-grantee opens it **while signed into their own Falcon account**; the web client POSTs the
+grantee opens it **while signed into their own Kvy account**; the web client POSTs the
 grantee's `accountId` + `contentPubKey` to redeem it. The server then either (a) notifies the
 owner's client, which does the `wrapDek` and completes the grant, or (b) — since the server
 already stores the grantee's `contentPubKey` (`schema.ts:28`) — hands the owner's client the
@@ -423,7 +423,7 @@ directly.
 
 - **Pros:** One step, no link to leak, feels like normal "invite by email."
 - **Cons:** Requires an account-directory lookup, which is a **privacy/enumeration surface**
-  the product doesn't have today (you could probe which emails have Falcon accounts). Needs
+  the product doesn't have today (you could probe which emails have Kvy accounts). Needs
   rate-limiting and probably a consent model (does the grantee get to accept before their
   key is used? Wrapping to someone's public key without consent is cryptographically
   harmless but socially surprising). The trust anchor ("I typed the right email") is

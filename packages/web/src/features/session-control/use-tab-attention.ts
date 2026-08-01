@@ -33,13 +33,13 @@ function applyFavicon(href: string): () => void {
 
 /**
  * Reflects a session's attention state in the browser tab — title prefix +
- * a colored-dot favicon (falcon-prd.md FR-7.9: "cheap, high-value web
+ * a colored-dot favicon (kvy-prd.md FR-7.9: "cheap, high-value web
  * ergonomics"). Pure computation lives in `tab-attention.ts`.
  *
  * The favicon is a plain DOM side effect (this screen is the only place in
  * the app that touches it today, restored on unmount). The title *can't*
  * use the same trick: `app/layout.tsx` used to render a static `metadata`
- * `<title>Falcon</title>`, and a plain `document.title = ...` mutation from
+ * `<title>Kvy</title>`, and a plain `document.title = ...` mutation from
  * a `useEffect` here got silently clobbered by the very next unrelated
  * React re-render anywhere in the tree — confirmed live, the manual
  * assignment never stuck. Rendering our *own* competing `<title>` element

@@ -1,4 +1,4 @@
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import type { BranchItem, ImportCandidate, NewSessionProvider, SpawnRequest } from "../new-session";
 
 /**
@@ -30,7 +30,7 @@ export interface InlineSpawnForm {
 /**
  * Resolves the base-branch picker's initial selection: prefers the
  * workspace's configured base ref (`workspace.getConfig`'s
- * `WorkspaceGitConfig.baseRef`, set via `falcon workspace config
+ * `WorkspaceGitConfig.baseRef`, set via `kvy workspace config
  * --base-ref <ref>`) when one's been set; otherwise falls back to whichever
  * local branch `git.branches` reports as `isCurrent` for the workspace's own
  * repo root, and finally to the literal `"main"` when branches haven't
@@ -109,7 +109,7 @@ export function translateSpawnError(raw: string): string {
   // `spawnAwaiter.ts`'s exit-watcher (A3): the child process was observed to
   // exit before it ever reported starting.
   if (/exited before it reported starting/i.test(raw)) {
-    return "The session process exited before it could start. Check that machine's `falcon` logs for what went wrong.";
+    return "The session process exited before it could start. Check that machine's `kvy` logs for what went wrong.";
   }
 
   // `spawnAwaiter.ts`'s `/session-start-failed` self-report (A4) — the
@@ -122,7 +122,7 @@ export function translateSpawnError(raw: string): string {
       return "This account has hit its session limit on that machine. Stop another session there first, or wait a bit and try again.";
     }
     if (/adapter/i.test(detail) || /not[- ]installed/i.test(detail)) {
-      return "That machine needed to install a provider adapter first and it didn't finish in time. Try again in a moment, or run `falcon adapters install` there directly if it keeps failing.";
+      return "That machine needed to install a provider adapter first and it didn't finish in time. Try again in a moment, or run `kvy adapters install` there directly if it keeps failing.";
     }
     return `The session failed to start: ${detail}`;
   }

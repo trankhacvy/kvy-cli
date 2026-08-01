@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import { Archive, MoreHorizontal, Pencil, Pin, PinOff } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

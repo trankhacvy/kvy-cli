@@ -1,12 +1,12 @@
 /**
  * tmux-preferred process launcher for the daemon `spawn` RPC (design §7.3:
- * "prefer tmux (`tmux new-session -d -s falcon-<sid>`) so users can attach a
+ * "prefer tmux (`tmux new-session -d -s kvy-<sid>`) so users can attach a
  * real terminal, detached fallback otherwise"; plan.md §16 "3.1 Remote
  * spawn"). Same `cross-spawn` convention already used by
  * `claude/claudeLocal.ts` (Windows `.cmd` shim correctness).
  *
  * tmux wins when available because it gives the user a real terminal to
- * `tmux attach -t falcon-<label>` into later — the detached fallback runs
+ * `tmux attach -t kvy-<label>` into later — the detached fallback runs
  * headless with no way to attach a TTY after the fact, which is strictly
  * worse UX but still correct (the session is fully controllable remotely
  * either way).
@@ -20,7 +20,7 @@ import type { ProcessExitInfo, ProcessExitWatcher } from "./types.js";
 export type SpawnFn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 
 export interface LaunchProcessOptions {
-  /** Used to build the tmux session name (`falcon-<sessionLabel>`) — caller's job to keep it tmux-session-name-safe (e.g. a cuid2 idempotency key). */
+  /** Used to build the tmux session name (`kvy-<sessionLabel>`) — caller's job to keep it tmux-session-name-safe (e.g. a cuid2 idempotency key). */
   sessionLabel: string;
   command: string;
   args: string[];
@@ -128,7 +128,7 @@ const noopLogger: Logger = {
 };
 
 function tmuxSessionName(sessionLabel: string): string {
-  return `falcon-${sessionLabel}`;
+  return `kvy-${sessionLabel}`;
 }
 
 type CompletionResult =

@@ -1,8 +1,8 @@
 {
-  "name": "@falcon/server",
+  "name": "@kvy/server",
   "version": "0.1.0",
   "private": true,
-  "description": "falcon-server — Fastify 5 API. Blind to user content: routes ciphertext and coordination metadata only.",
+  "description": "kvy-server — Fastify 5 API. Blind to user content: routes ciphertext and coordination metadata only.",
   "license": "MIT",
   "type": "module",
   "main": "./dist/main.js",
@@ -17,8 +17,8 @@
   },
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.700.0",
-    "@falcon/crypto": "workspace:*",
-    "@falcon/wire": "workspace:*",
+    "@kvy/crypto": "workspace:*",
+    "@kvy/wire": "workspace:*",
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.2.0",
     "@node-rs/argon2": "^2.0.2",

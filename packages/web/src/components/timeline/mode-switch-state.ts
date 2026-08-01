@@ -1,4 +1,4 @@
-import type { PermissionMode } from "@falcon/wire";
+import type { PermissionMode } from "@kvy/wire";
 import type { SetModeResult } from "@/sync/sessionRpc";
 
 /** "Take control" is only meaningful for a genuine remote-loop session — a

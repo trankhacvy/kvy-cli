@@ -1,10 +1,10 @@
 /**
- * `falcon auth status` — reports the current local auth state. Deliberately makes no
+ * `kvy auth status` — reports the current local auth state. Deliberately makes no
  * network call (no live access token is persisted anymore — issue-4-plan.md §6.6 — only
  * the opaque, non-introspectable refresh token is, so there's nothing to decode
  * client-side the way the old bare-JWT `token` field allowed).
  */
-import { decodeBase64, deriveKeyTree } from "@falcon/crypto";
+import { decodeBase64, deriveKeyTree } from "@kvy/crypto";
 import { resolveHomeDir } from "../home.js";
 import { credentialsPath, readCredentials } from "./credentials.js";
 import { unwrapWithDeviceKey } from "./deviceKey.js";
@@ -29,7 +29,7 @@ function describeKeyMaterialMode(mode: "pin" | "device" | "plaintext-fallback"):
 export function runAuthStatus(): number {
   const credentials = readCredentials();
   if (!credentials) {
-    process.stdout.write("Not logged in. Run `falcon auth login` to authenticate.\n");
+    process.stdout.write("Not logged in. Run `kvy auth login` to authenticate.\n");
     return 0;
   }
 
@@ -43,7 +43,7 @@ export function runAuthStatus(): number {
   // adding one to a plain status check, so the account-key fingerprint below is
   // best-effort, shown only for the two modes that unwrap without asking anyone
   // anything. `masterSecretOrContentBundle` is exactly 32 raw bytes for a fully-paired
-  // account (falcon-plan.md §2.1); anything else (a reduced content-key bundle from a
+  // account (kvy-plan.md §2.1); anything else (a reduced content-key bundle from a
   // lower-trust pairing) can't derive a signing identity, so this is best-effort
   // display, not a schema assumption enforced elsewhere.
   const secret =

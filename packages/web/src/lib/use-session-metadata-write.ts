@@ -1,7 +1,7 @@
 "use client";
 
-import { decodeBase64 } from "@falcon/crypto/web";
-import type { EncryptedBox } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto/web";
+import type { EncryptedBox } from "@kvy/wire";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import type { CryptoBridgeClient } from "@/crypto";
@@ -44,7 +44,7 @@ const MAX_ATTEMPTS = 5;
  * Never starts from `{}` on an unopenable box — a decrypt failure throws
  * visibly instead of silently sealing over (and clobbering) a title/pin it
  * failed to read, per this codebase's "no silent data loss" principle
- * (`@falcon/crypto`'s `open()` doc comment).
+ * (`@kvy/crypto`'s `open()` doc comment).
  */
 export async function patchSessionMetadataCas(
   deps: {

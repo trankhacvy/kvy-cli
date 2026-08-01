@@ -23,33 +23,26 @@
  *
  * Auth-token retrieval is an injectable seam (same shape as `notify.ts`'s
  * `fetchImpl`) so this module has no hard dependency on the not-yet-merged
- * `falcon auth login` CLI work — callers pass a `getAuthToken` function
+ * `kvy auth login` CLI work — callers pass a `getAuthToken` function
  * (sync or async) that returns a bearer token.
  *
  * **Resume (plan-v2.md W3.7, design v0.3 §7.4):** a re-spawned session
- * process (`daemon/resumeSession.ts`'s `FALCON_RECONNECT_*` env contract —
+ * process (`daemon/resumeSession.ts`'s `KVY_RECONNECT_*` env contract —
  * currently only set by the daemon's own headless resume path) must keep
  * writing into its *existing* server-side session row, never mint a fresh
  * one under a brand-new nonce — a second row for the same logical session
  * would silently fork the transcript the web UI already has cached. When
- * `FALCON_RECONNECT_SESSION_ID` is present this call skips `POST
+ * `KVY_RECONNECT_SESSION_ID` is present this call skips `POST
  * /v1/sessions` entirely and re-attaches locally: the wrapped DEK already
- * travelled via `FALCON_RECONNECT_ENCRYPTION_KEY` (the same wrapped-DEK
+ * travelled via `KVY_RECONNECT_ENCRYPTION_KEY` (the same wrapped-DEK
  * shape `/session-started` reports and `sessions.json` persists), so
  * unwrapping it with the caller's content secret key is enough — no network
  * round trip needed, and no new tag is minted (there's nothing to create).
  */
 import { createHash } from "node:crypto";
-import type { BoxKeyPair } from "@falcon/crypto";
-import {
-  decodeBase64,
-  encodeBase64,
-  getRandomBytes,
-  seal,
-  unwrapDek,
-  wrapDek,
-} from "@falcon/crypto";
-import { type ProviderId, SessionRowSchema } from "@falcon/wire";
+import type { BoxKeyPair } from "@kvy/crypto";
+import { decodeBase64, encodeBase64, getRandomBytes, seal, unwrapDek, wrapDek } from "@kvy/crypto";
+import { type ProviderId, SessionRowSchema } from "@kvy/wire";
 import type { Logger } from "../logger.js";
 
 const DEK_LENGTH_BYTES = 32;
@@ -91,7 +84,7 @@ export interface BootstrapSessionParams {
   executionTarget?: string;
   /**
    * Injectable for tests; defaults to `process.env`. When
-   * `FALCON_RECONNECT_SESSION_ID` is set, this call re-attaches to that
+   * `KVY_RECONNECT_SESSION_ID` is set, this call re-attaches to that
    * existing session instead of create-or-getting a fresh one — see the
    * module doc comment above.
    */
@@ -102,7 +95,7 @@ export interface BootstrapSessionDeps {
   serverUrl: string;
   /** Injectable so unit tests never make a real network call. */
   fetchImpl: typeof fetch;
-  /** Injectable so this module has no hard dependency on `falcon auth login` (not yet merged). */
+  /** Injectable so this module has no hard dependency on `kvy auth login` (not yet merged). */
   getAuthToken: () => string | Promise<string>;
   logger?: Logger;
 }
@@ -119,7 +112,7 @@ export interface BootstrapSessionResult {
 }
 
 /**
- * Builds deps with sensible defaults (`FALCON_SERVER_URL` env var, global
+ * Builds deps with sensible defaults (`KVY_SERVER_URL` env var, global
  * `fetch`); `getAuthToken` has no sane default and must always be supplied.
  */
 export function createBootstrapSessionDeps(
@@ -127,7 +120,7 @@ export function createBootstrapSessionDeps(
     Pick<BootstrapSessionDeps, "getAuthToken">,
 ): BootstrapSessionDeps {
   return {
-    serverUrl: process.env.FALCON_SERVER_URL?.trim() || DEFAULT_SERVER_URL,
+    serverUrl: process.env.KVY_SERVER_URL?.trim() || DEFAULT_SERVER_URL,
     fetchImpl: fetch,
     ...overrides,
   };
@@ -158,9 +151,9 @@ export function buildSessionTag(params: {
 }
 
 /**
- * Re-attaches to an already-existing session (`FALCON_RECONNECT_SESSION_ID`)
+ * Re-attaches to an already-existing session (`KVY_RECONNECT_SESSION_ID`)
  * by unwrapping the wrapped DEK the reconnect env already carries
- * (`FALCON_RECONNECT_ENCRYPTION_KEY`) — no `POST /v1/sessions` call, no fresh
+ * (`KVY_RECONNECT_ENCRYPTION_KEY`) — no `POST /v1/sessions` call, no fresh
  * tag (there's nothing being created). `tag` on the returned result is `""`:
  * meaningless here since no create-or-get call was made, and unused by every
  * caller (checked: only `bootstrap.test.ts` asserts on `tag`, and only on the
@@ -171,15 +164,15 @@ function reattachSession(
   params: { sessionId: string; env: NodeJS.ProcessEnv; contentKeyPair: BoxKeyPair },
 ): BootstrapSessionResult {
   const { logger } = deps;
-  const wrappedDekB64 = params.env.FALCON_RECONNECT_ENCRYPTION_KEY?.trim();
+  const wrappedDekB64 = params.env.KVY_RECONNECT_ENCRYPTION_KEY?.trim();
   if (!wrappedDekB64) {
     logger?.error(
-      "[session/bootstrap] FALCON_RECONNECT_SESSION_ID set without FALCON_RECONNECT_ENCRYPTION_KEY",
+      "[session/bootstrap] KVY_RECONNECT_SESSION_ID set without KVY_RECONNECT_ENCRYPTION_KEY",
       { sessionId: params.sessionId },
     );
     throw new Error(
-      `bootstrapSession: FALCON_RECONNECT_SESSION_ID=${params.sessionId} set without ` +
-        "FALCON_RECONNECT_ENCRYPTION_KEY, cannot re-attach without the wrapped DEK",
+      `bootstrapSession: KVY_RECONNECT_SESSION_ID=${params.sessionId} set without ` +
+        "KVY_RECONNECT_ENCRYPTION_KEY, cannot re-attach without the wrapped DEK",
     );
   }
 
@@ -194,7 +187,7 @@ function reattachSession(
     );
   }
 
-  logger?.debug("[session/bootstrap] re-attached via FALCON_RECONNECT_SESSION_ID", {
+  logger?.debug("[session/bootstrap] re-attached via KVY_RECONNECT_SESSION_ID", {
     sessionId: params.sessionId,
   });
   return { sessionId: params.sessionId, dek, tag: "", created: false };
@@ -207,7 +200,7 @@ function reattachSession(
  * this is a required startup step, not a best-effort side channel.
  *
  * Short-circuits to `reattachSession()` (no network call at all) when
- * `FALCON_RECONNECT_SESSION_ID` is present in `params.env` — see the module
+ * `KVY_RECONNECT_SESSION_ID` is present in `params.env` — see the module
  * doc comment.
  */
 export async function bootstrapSession(
@@ -215,7 +208,7 @@ export async function bootstrapSession(
   params: BootstrapSessionParams,
 ): Promise<BootstrapSessionResult> {
   const env = params.env ?? process.env;
-  const reconnectSessionId = env.FALCON_RECONNECT_SESSION_ID?.trim();
+  const reconnectSessionId = env.KVY_RECONNECT_SESSION_ID?.trim();
   if (reconnectSessionId) {
     return reattachSession(deps, {
       sessionId: reconnectSessionId,

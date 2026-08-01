@@ -1,15 +1,15 @@
 /**
- * `falcon daemon service install/uninstall/status` — registers the daemon
+ * `kvy daemon service install/uninstall/status` — registers the daemon
  * as a login-managed OS service so it auto-starts and is supervised
- * (falcon-prd.md FR-4.1 "installable as a login service (launchd /
- * systemd-user) [P1]"; falcon-system-design.md §8 "Service install (P1)";
+ * (kvy-prd.md FR-4.1 "installable as a login service (launchd /
+ * systemd-user) [P1]"; kvy-system-design.md §8 "Service install (P1)";
  * plan.md §16 "4.3 Distribution & self-host").
  *
  * macOS: writes a launchd plist to `~/Library/LaunchAgents` and registers
  * it via `launchctl bootstrap gui/<uid>` (the modern replacement for the
  * deprecated `launchctl load`). Linux: writes a systemd `--user` unit to
  * `~/.config/systemd/user` and registers it via `systemctl --user enable
- * --now`. Both point straight at `falcon daemon start-sync`
+ * --now`. Both point straight at `kvy daemon start-sync`
  * (`serviceInstallTemplates.ts`) — see that module's doc comment for why.
  *
  * Every `launchctl`/`systemctl` invocation is injectable (`ServiceExec`),
@@ -23,7 +23,7 @@ import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   daemonServiceLogPaths,
-  resolveFalconExecutable,
+  resolveKvyExecutable,
   resolveServicePlatform,
   SERVICE_LABEL,
   type ServiceInstallOptions,
@@ -79,7 +79,7 @@ async function writeFileAtomic(target: string, content: string): Promise<void> {
 function resolveEnvOverrides(options: ServiceInstallOptions): Record<string, string> {
   const env = options.env ?? process.env;
   const overrides: Record<string, string> = {};
-  if (env.FALCON_HOME_DIR) overrides.FALCON_HOME_DIR = env.FALCON_HOME_DIR;
+  if (env.KVY_HOME_DIR) overrides.KVY_HOME_DIR = env.KVY_HOME_DIR;
   return overrides;
 }
 
@@ -89,12 +89,12 @@ export async function installService(
 ): Promise<ServiceCommandResult> {
   const exec = deps.exec ?? runServiceCommand;
   const platform = resolveServicePlatform(options);
-  const falconExecutable = resolveFalconExecutable(options);
+  const kvyExecutable = resolveKvyExecutable(options);
   const { stdout: stdoutLogPath, stderr: stderrLogPath } = daemonServiceLogPaths(options);
   await mkdir(path.dirname(stdoutLogPath), { recursive: true });
 
   const config = {
-    falconExecutable,
+    kvyExecutable,
     stdoutLogPath,
     stderrLogPath,
     env: resolveEnvOverrides(options),

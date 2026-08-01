@@ -1,4 +1,4 @@
-import { PROVIDER_IDS } from "@falcon/wire";
+import { PROVIDER_IDS } from "@kvy/wire";
 import { PROVIDER_META as WEB_PROVIDER_META, type WebProviderMeta } from "@/lib/providers";
 import type { NewSessionProvider } from "./types";
 

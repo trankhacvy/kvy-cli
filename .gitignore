@@ -1,4 +1,4 @@
-# Reference-only codebases (not part of Falcon's own history)
+# Reference-only codebases (not part of Kvy's own history)
 happy/
 superset/
 omnara/
@@ -33,7 +33,7 @@ packages/web/public/crypto-worker.js
 .vscode/
 .idea/
 
-# Worktrees used by falcon-dev-loop
+# Worktrees used by kvy-dev-loop
 .worktrees/
 
 # Agent tooling (skills, reports) — local environment artifacts, not project source

@@ -1,4 +1,4 @@
-import type { MachineRow } from "@falcon/wire";
+import type { MachineRow } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import {
   deriveMachineOnline,

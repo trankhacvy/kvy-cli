@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FalconMark } from "@/components/falcon-mark";
+import { KvyMark } from "@/components/kvy-mark";
 import { cn } from "@/lib/utils";
 
 /**
@@ -11,8 +11,8 @@ import { cn } from "@/lib/utils";
 export function AuthBrandMark({ className }: { className?: string }) {
   return (
     <Link href="/" className={cn("flex items-center gap-2.5", className)}>
-      <FalconMark className="size-8" />
-      <span className="font-semibold tracking-tight">Falcon</span>
+      <KvyMark className="size-8" />
+      <span className="font-semibold tracking-tight">Kvy</span>
     </Link>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { decodeBase64 } from "@falcon/crypto/web";
-import type { MachineRow, SessionRow } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto/web";
+import type { MachineRow, SessionRow } from "@kvy/wire";
 import { useEffect, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
 

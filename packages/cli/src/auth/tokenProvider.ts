@@ -8,7 +8,7 @@
  * (`POST /v1/auth/refresh`), caches the current one until shortly before its own `exp`
  * claim, and persists each rotation back to disk via the injected `onRotate`. A refresh
  * that comes back definitively rejected (401) means the credential is dead — callers
- * should stop retrying and tell the user to run `falcon auth login` again, not loop
+ * should stop retrying and tell the user to run `kvy auth login` again, not loop
  * forever on a corpse the way the old fixed-token path did.
  */
 import { z } from "zod";
@@ -26,15 +26,15 @@ export interface TokenProviderDeps {
   refreshToken: string;
   fetchImpl: typeof fetch;
   now: () => number;
-  /** Persist a rotated refresh token (e.g. back to `~/.falcon/access.key`). */
+  /** Persist a rotated refresh token (e.g. back to `~/.kvy/access.key`). */
   onRotate: (refreshToken: string) => void | Promise<void>;
   logger: Logger;
   /**
    * Re-reads whatever refresh token is CURRENTLY persisted on disk (e.g.
-   * `~/.falcon/access.key`) — a last-chance mitigation for the same hazard
+   * `~/.kvy/access.key`) — a last-chance mitigation for the same hazard
    * `resolveAccessToken.ts`'s one-shot helper already documents: this refresh token may
    * already be one rotation behind another long-lived process sharing the same home dir
-   * (the daemon's own `TokenProvider` vs. a `falcon claude` session's), since rotation
+   * (the daemon's own `TokenProvider` vs. a `kvy claude` session's), since rotation
    * is single-use with only a 60s grace window. On a 401, if the disk copy differs from
    * the one that was just rejected, one retry is made with the disk copy before this
    * instance is marked permanently `dead` — a sibling process may have already rotated
@@ -107,8 +107,8 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
       if (res.status === 401) {
         // Stale-by-one mitigation (issue #2, docs/known-issues-cliweb-sync-test.md):
         // before condemning this instance forever, check whether a sibling process
-        // (the daemon vs. a `falcon claude` session, both reading/writing the same
-        // `~/.falcon/access.key`) already rotated the single-use refresh token out from
+        // (the daemon vs. a `kvy claude` session, both reading/writing the same
+        // `~/.kvy/access.key`) already rotated the single-use refresh token out from
         // under us. Only retried once — if the disk copy is unchanged, or the retry
         // itself 401s, the token really is dead.
         if (!retriedStaleToken) {
@@ -124,7 +124,7 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
 
         dead = true;
         deps.logger.error(
-          "[token-provider] refresh token rejected — re-authentication required, run `falcon auth login`",
+          "[token-provider] refresh token rejected — re-authentication required, run `kvy auth login`",
         );
         return null;
       }

@@ -1,7 +1,7 @@
 /**
- * `falcon workspace config [--base-ref <ref>] [--remote <name>]
+ * `kvy workspace config [--base-ref <ref>] [--remote <name>]
  * [--setup-script <script>] [--run-script <script>] [--directory <path>]`
- * (falcon-prd.md line 148: "Per-workspace settings (base ref for diffs, git
+ * (kvy-prd.md line 148: "Per-workspace settings (base ref for diffs, git
  * remote)"; plan.md §16 "4.1 Git panel"; docs/features/
  * setup-run-scripts.md "Per-workspace Setup/Run scripts"). Sets (or, with no
  * flags at all, just prints) the configured git base ref/remote and
@@ -48,7 +48,7 @@ function formatConfig(directory: string, config: WorkspaceGitConfig): string {
   const setupScript = config.setupScript ?? "(none)";
   const runScript = config.runScript ?? "(none)";
   return (
-    `falcon workspace config: ${directory}\n` +
+    `kvy workspace config: ${directory}\n` +
     `  base ref:     ${baseRef}\n` +
     `  remote:       ${remote}\n` +
     `  setup script: ${setupScript}\n` +
@@ -56,7 +56,7 @@ function formatConfig(directory: string, config: WorkspaceGitConfig): string {
   );
 }
 
-/** Runs `falcon workspace config`. Returns the process exit code — always 0; a bad `--directory` just means the config lookup/write keys on the raw path (see `workspaceConfig.ts`'s `resolveWorkspaceKey`), it never fails the command. */
+/** Runs `kvy workspace config`. Returns the process exit code — always 0; a bad `--directory` just means the config lookup/write keys on the raw path (see `workspaceConfig.ts`'s `resolveWorkspaceKey`), it never fails the command. */
 export async function runWorkspaceConfigCommand(
   options: WorkspaceConfigCommandOptions,
   deps: WorkspaceConfigCommandDeps,

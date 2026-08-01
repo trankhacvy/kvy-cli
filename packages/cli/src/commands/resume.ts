@@ -1,18 +1,18 @@
 /**
- * `falcon resume <session-id>` (falcon-prd.md §5.3, plan.md §16 "4.2
+ * `kvy resume <session-id>` (kvy-prd.md §5.3, plan.md §16 "4.2
  * Adoption Tier 3 + polish"): reattach a terminal to an existing session,
  * local or daemon-managed.
  *
  *  - **local**: `<session-id>` matches a plain (unmanaged) Claude Code
  *    transcript in cwd's workspace (`adopt/listSessions.ts`'s
- *    `listAdoptableSessions` — the same lookup `falcon sessions list`/
- *    `falcon adopt --list` use). Resumed the same way `commands/adopt.ts`'s
+ *    `listAdoptableSessions` — the same lookup `kvy sessions list`/
+ *    `kvy adopt --list` use). Resumed the same way `commands/adopt.ts`'s
  *    already-landed local path does: `claude --resume <id>` spawned with
  *    inherited stdio, blocking until it exits — this is Claude Code's own
  *    `--resume`/session-flag handling (`claude/claudeLocal.ts`'s module doc
  *    describes the same flag interception the full launcher performs; the
  *    direct spawn here mirrors `adopt.ts`'s precedent rather than routing
- *    through the still-unwired `falcon_claude_launcher.cjs` launcher, since
+ *    through the still-unwired `kvy_claude_launcher.cjs` launcher, since
  *    general provider spawning — `index.ts`'s `runStart` — is separate,
  *    later work: "provider spawning not implemented yet").
  *  - **daemon-managed**: everything else. Calls `daemon/resumeSession.ts`'s
@@ -20,8 +20,8 @@
  *    machine RPC wraps (`daemon/machineRpc.ts`) — against a `SessionRegistry`
  *    restored from this machine's own `sessions.json`
  *    (`sessionRegistry.ts`/`sessionsStore.ts`, the same durable store
- *    `falcon daemon start-sync` restores at boot). Guards against racing a
- *    *live* daemon's own copy of the same session first: if `falcon daemon
+ *    `kvy daemon start-sync` restores at boot). Guards against racing a
+ *    *live* daemon's own copy of the same session first: if `kvy daemon
  *    start` is currently running and its control server already tracks
  *    `<session-id>` as live, this refuses rather than risking two processes
  *    sharing one session's DEK/seq (see `resumeSession.ts`'s own module doc
@@ -64,8 +64,8 @@ export interface ResumeCommandDeps {
   /** Injectable for tests; defaults to the real tmux-preferred/detached launcher, for the daemon-managed path. */
   launchProcess?: typeof launchProviderProcessDefault;
   launchDeps?: LaunchProcessDeps;
-  /** Returns the argv that re-invokes this same falcon binary (`[node, ...execArgv, entry]`). Injectable for tests. */
-  falconEntrypoint?: () => string[];
+  /** Returns the argv that re-invokes this same kvy binary (`[node, ...execArgv, entry]`). Injectable for tests. */
+  kvyEntrypoint?: () => string[];
   /** Test-only escape hatch: overrides merged into the `resumeSession()` deps (e.g. a fake registry/awaiter). */
   resumeSessionOverrides?: Partial<ResumeSessionDeps>;
   write?: (text: string) => void;
@@ -79,7 +79,7 @@ const noopLogger: Logger = {
   error: () => {},
 };
 
-function defaultFalconEntrypoint(): string[] {
+function defaultKvyEntrypoint(): string[] {
   const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
   return [process.execPath, ...process.execArgv, entry];
 }
@@ -92,7 +92,7 @@ async function runLocalResume(
   const env = deps.env ?? process.env;
   const spawnImpl = deps.spawnImpl ?? (crossSpawnDefault as unknown as SpawnFn);
 
-  deps.write(`falcon resume: reattaching to local session ${sessionId}\n`);
+  deps.write(`kvy resume: reattaching to local session ${sessionId}\n`);
   return new Promise<number>((resolve) => {
     const child: ChildProcess = spawnImpl("claude", ["--resume", sessionId], {
       cwd: deps.workingDirectory,
@@ -101,7 +101,7 @@ async function runLocalResume(
     });
     child.once("error", (error: Error) => {
       logger.error("[resume] failed to launch claude --resume", { message: error.message });
-      deps.write(`falcon resume: failed to launch claude: ${error.message}\n`);
+      deps.write(`kvy resume: failed to launch claude: ${error.message}\n`);
       resolve(1);
     });
     child.once("close", (code: number | null) => resolve(code ?? 0));
@@ -156,7 +156,7 @@ async function runDaemonManagedResume(
   const liveElsewhere = await isLiveOnRunningDaemon(sessionId, deps.homeDir, isAlive, fetchImpl);
   if (liveElsewhere) {
     deps.write(
-      `falcon resume: session ${sessionId} is currently live-managed by the running daemon. Attaching to an already-live daemon session isn't supported yet (see \`falcon daemon status\`/\`falcon kill sessions\`)\n`,
+      `kvy resume: session ${sessionId} is currently live-managed by the running daemon. Attaching to an already-live daemon session isn't supported yet (see \`kvy daemon status\`/\`kvy kill sessions\`)\n`,
     );
     return 1;
   }
@@ -170,33 +170,33 @@ async function runDaemonManagedResume(
     // Re-resolve the session's own persisted directory (packages/cli/src/daemon
     // /resumeSession.ts's resolveResumeDirectoryFromRecord — the same default the
     // RPC-triggered resume path uses) rather than the CLI invocation's own cwd:
-    // `falcon resume <id>` run from an arbitrary directory must relaunch the
+    // `kvy resume <id>` run from an arbitrary directory must relaunch the
     // session where it actually started, not wherever the command happened to be
-    // run from (known-issues.md "`falcon resume` (CLI command) ignores the
+    // run from (known-issues.md "`kvy resume` (CLI command) ignores the
     // persisted session directory"). Fails the resume cleanly (no directory
     // resolved) for a session with no persisted directory, matching this file's
     // own "fail rather than guess" convention for resolveDirectory.
     resolveDirectory: resolveResumeDirectoryFromRecord,
     launchProcess: deps.launchProcess,
     launchDeps: deps.launchDeps,
-    falconEntrypoint: deps.falconEntrypoint ?? defaultFalconEntrypoint,
+    kvyEntrypoint: deps.kvyEntrypoint ?? defaultKvyEntrypoint,
     logger,
     ...deps.resumeSessionOverrides,
   };
 
   try {
     const result = await resumeSession(sessionId, resumeDeps);
-    deps.write(`falcon resume: resumed session ${result.sessionId}\n`);
+    deps.write(`kvy resume: resumed session ${result.sessionId}\n`);
     return 0;
   } catch (error) {
     const message = error instanceof ResumeSessionError ? error.message : String(error);
     logger.error("[resume] daemon-managed resume failed", { sessionId, message });
-    deps.write(`falcon resume: ${message}\n`);
+    deps.write(`kvy resume: ${message}\n`);
     return 1;
   }
 }
 
-/** Runs `falcon resume <session-id>`. Returns the process exit code. */
+/** Runs `kvy resume <session-id>`. Returns the process exit code. */
 export async function runResumeCommand(
   sessionId: string,
   deps: ResumeCommandDeps,

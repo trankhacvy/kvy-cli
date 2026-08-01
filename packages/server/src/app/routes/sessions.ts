@@ -1,5 +1,5 @@
-import { decodeBase64 } from "@falcon/crypto";
-import { EncryptedBoxSchema, ProviderIdSchema, SessionRowSchema } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto";
+import { EncryptedBoxSchema, ProviderIdSchema, SessionRowSchema } from "@kvy/wire";
 import { and, count, desc, eq, inArray, lt, ne, or } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";

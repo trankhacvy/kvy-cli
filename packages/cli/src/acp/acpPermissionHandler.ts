@@ -18,11 +18,11 @@
  *    allow-lists.** Under ACP those rules run *inside the agent process*:
  *    the Claude adapter hands the SDK the session's `permissionMode` (synced
  *    via `session/set_mode`) and the SDK's own `canUseTool` auto-allows per
- *    mode before any request reaches Falcon; an `allow_always` option
- *    selection is likewise persisted agent-side. Falcon only ever sees the
+ *    mode before any request reaches Kvy; an `allow_always` option
+ *    selection is likewise persisted agent-side. Kvy only ever sees the
  *    requests that genuinely need a human, so re-implementing the rules here
  *    would be dead code shadowing the agent's real behavior. (v1 needed the
- *    engine because Falcon itself *was* the `canUseTool` callback.)
+ *    engine because Kvy itself *was* the `canUseTool` callback.)
  *  - **`updatedInput` on allow decisions.** ACP's `selected` outcome carries
  *    only an `optionId` — there is no channel for modified tool input. A
  *    decision carrying `updatedInput` still resolves as a plain allow, with
@@ -50,7 +50,7 @@
  *  - `{kind:'mode', mode}`             → `onModeChange(mode)` + allow (as above)
  *
  * No timeout, no default: ACP blocks a permission request until answered or
- * aborted (same as mobvibe's reference handler) — Falcon's re-notify policy
+ * aborted (same as mobvibe's reference handler) — Kvy's re-notify policy
  * lives in the push pipeline (§6.4), driven by the `perm-request` envelope
  * this class emits, not here.
  */
@@ -66,7 +66,7 @@ import {
   type PermDecision,
   type PermissionMode,
   type SessionEnvelope,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import type { z } from "zod";
 import {
@@ -125,7 +125,7 @@ export interface AcpPermissionHandlerDeps {
    * (`api/sessionNotify.ts`) so a push notification reaches a user who's
    * walked away from a headless/ACP session — the ACP-path equivalent of
    * the terminal path's `pretoolPermissionBridge.ts`'s `onPendingAttention`
-   * / `start.ts`'s `reportAttention`. `sessionId` is Falcon's own session
+   * / `start.ts`'s `reportAttention`. `sessionId` is Kvy's own session
    * id (NOT the ACP/provider session id). Both `sessionId` and `attention`
    * must be supplied for reporting to fire; either missing is treated as
    * "no live caller has wired this yet" (same not-yet-connected-seam

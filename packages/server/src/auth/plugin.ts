@@ -7,7 +7,7 @@ import { verifyToken } from "./tokens.js";
 declare module "fastify" {
   interface FastifyInstance {
     /**
-     * Route preHandler (falcon-plan.md §16 "0.4 Server foundation"): rejects the
+     * Route preHandler (kvy-plan.md §16 "0.4 Server foundation"): rejects the
      * request with 401 unless `Authorization: Bearer <token>` carries a valid,
      * unexpired token; otherwise sets `request.accountId`/`request.sessionId`/
      * `request.clientKind`. Usage: `{ preHandler: app.authenticate }`.

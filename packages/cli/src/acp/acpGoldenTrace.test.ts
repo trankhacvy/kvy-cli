@@ -31,7 +31,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import {
@@ -85,7 +85,7 @@ describe("golden trace: real text-only turn (acp-text-turn.jsonl)", () => {
     expect(envelopes.map((e) => e.ev.t)).toEqual(["turn-start", "text", "turn-end"]);
 
     const text = envelopes[1];
-    expect(text?.ev).toEqual({ t: "text", md: "hello falcon" });
+    expect(text?.ev).toEqual({ t: "text", md: "hello kvy" });
     expect(text?.role).toBe("agent");
     expect(text?.turn).toBe(envelopes[0]?.turn);
 
@@ -111,8 +111,8 @@ describe("golden trace: real Bash tool turn (acp-tool-turn.jsonl)", () => {
       t: "tool-start",
       call: expect.any(String),
       name: "Bash", // from _meta.claudeCode.toolName, not ACP's generic kind
-      title: "echo falcon-fixture", // refined from the initial "Terminal"
-      args: { command: "echo falcon-fixture" }, // NOT the initial empty rawInput
+      title: "echo kvy-fixture", // refined from the initial "Terminal"
+      args: { command: "echo kvy-fixture" }, // NOT the initial empty rawInput
       risk: "exec",
     });
 
@@ -121,11 +121,11 @@ describe("golden trace: real Bash tool turn (acp-tool-turn.jsonl)", () => {
       t: "tool-end",
       call: start?.ev.t === "tool-start" ? start.ev.call : "",
       ok: true,
-      output: "falcon-fixture",
+      output: "kvy-fixture",
     });
 
-    // Per-delta chunks ("The" + " command printed `falcon-fixture`.") → one envelope.
-    expect(envelopes[3]?.ev).toEqual({ t: "text", md: "The command printed `falcon-fixture`." });
+    // Per-delta chunks ("The" + " command printed `kvy-fixture`.") → one envelope.
+    expect(envelopes[3]?.ev).toEqual({ t: "text", md: "The command printed `kvy-fixture`." });
     expect(envelopes[4]?.ev).toEqual({ t: "turn-end", status: "completed" });
     expect(logger.warn).not.toHaveBeenCalled();
   });

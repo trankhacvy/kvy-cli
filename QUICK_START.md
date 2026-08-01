@@ -1,15 +1,15 @@
-# Quick Start: Production Falcon Deployment
+# Quick Start: Production Kvy Deployment
 
 **Target:** Server + Postgres on Docker, web on Vercel, blobs on Cloudflare R2.
 
 ## 1. Generate Secrets
 
 ```bash
-# FALCON_MASTER_SECRET (HMAC key for auth JWTs)
+# KVY_MASTER_SECRET (HMAC key for auth JWTs)
 openssl rand -base64 32
 
 # VAPID keypair (if using push notifications)
-pnpm --filter @falcon/server exec web-push generate-vapid-keys
+pnpm --filter @kvy/server exec web-push generate-vapid-keys
 ```
 
 ## 2. Set Up Cloudflare R2
@@ -26,13 +26,13 @@ Copy and fill in:
 ```bash
 # deploy/.env.prod → deploy/.env
 
-FALCON_MASTER_SECRET=<from step 1>
+KVY_MASTER_SECRET=<from step 1>
 PUBLIC_WEB_ORIGIN=https://app.yourcompany.com
 PUBLIC_API_ORIGIN=https://api.yourcompany.com
 POSTGRES_PASSWORD=<strong-password>
 
 # Cloudflare R2
-S3_BUCKET=falcon-blobs
+S3_BUCKET=kvy-blobs
 S3_REGION=auto
 S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 S3_ACCESS_KEY_ID=<R2 API token ID>
@@ -120,13 +120,13 @@ curl https://app.yourcompany.com/ | head -20
 
 - **Full runbook:** `docs/PROD_DEPLOYMENT_RUNBOOK.md`
 - **Vercel setup:** `docs/VERCEL_DEPLOYMENT.md`
-- **Architecture:** `../falcon-system-design.md`
+- **Architecture:** `../kvy-system-design.md`
 
 ## Key Env Vars Reference
 
 | Var | Purpose | Required |
 |-----|---------|----------|
-| `FALCON_MASTER_SECRET` | JWT signing key | ✓ |
+| `KVY_MASTER_SECRET` | JWT signing key | ✓ |
 | `PUBLIC_WEB_ORIGIN` | Vercel domain | ✓ |
 | `PUBLIC_API_ORIGIN` | API domain | ✓ |
 | `S3_BUCKET` | R2 bucket name | ✓ |
@@ -141,5 +141,5 @@ curl https://app.yourcompany.com/ | head -20
 
 ---
 
-**Done!** Your Falcon production stack is live.
+**Done!** Your Kvy production stack is live.
 Done

@@ -115,7 +115,7 @@ describe("removeWorktree", () => {
         { idempotencyKey: "idem-1", worktree: "/repo" },
         { git, authorize, stat: existingStat() as never },
       ),
-    ).rejects.toThrow(/doesn't look like a Falcon-managed/);
+    ).rejects.toThrow(/doesn't look like a Kvy-managed/);
     // Must reject before ever invoking `git worktree remove` against a real repo root.
     expect(git).not.toHaveBeenCalled();
   });

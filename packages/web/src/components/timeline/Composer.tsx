@@ -53,7 +53,7 @@ interface AttachmentPreview {
 }
 
 /**
- * Follow-up message input (falcon-prd.md FR-7.3; plan.md §16 "2.4 Web
+ * Follow-up message input (kvy-prd.md FR-7.3; plan.md §16 "2.4 Web
  * control surface"). Purely presentational — the mutation, optimistic
  * insert, and reconciliation live in `useComposerState`
  * (`@/features/session-control`) so `Timeline` and this component can share

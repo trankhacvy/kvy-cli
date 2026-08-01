@@ -10,7 +10,7 @@ function fakeFetch(handlers: Record<string, () => Response>) {
   }) as unknown as typeof fetch;
 }
 
-const BASE = "https://github.com/falcon-dev/falcon/releases/download/cli-latest";
+const BASE = "https://github.com/kvy-dev/kvy/releases/download/cli-latest";
 
 describe("downloadAndVerify", () => {
   it("resolves the verified bytes when the checksum matches", async () => {
@@ -18,14 +18,13 @@ describe("downloadAndVerify", () => {
     const digest = createHash("sha256").update(payload).digest("hex");
 
     const fetchImpl = fakeFetch({
-      [`${BASE}/falcon-darwin-arm64`]: () => new Response(payload),
-      [`${BASE}/falcon-darwin-arm64.sha256`]: () =>
-        new Response(`${digest}  falcon-darwin-arm64\n`),
+      [`${BASE}/kvy-darwin-arm64`]: () => new Response(payload),
+      [`${BASE}/kvy-darwin-arm64.sha256`]: () => new Response(`${digest}  kvy-darwin-arm64\n`),
     });
 
     const result = await downloadAndVerify({
-      repo: "falcon-dev/falcon",
-      assetName: "falcon-darwin-arm64",
+      repo: "kvy-dev/kvy",
+      assetName: "kvy-darwin-arm64",
       fetchImpl,
     });
     expect(result.equals(payload)).toBe(true);
@@ -34,26 +33,26 @@ describe("downloadAndVerify", () => {
   it("throws DownloadVerificationError on a checksum mismatch", async () => {
     const payload = Buffer.from("tampered");
     const fetchImpl = fakeFetch({
-      [`${BASE}/falcon-linux-x64`]: () => new Response(payload),
-      [`${BASE}/falcon-linux-x64.sha256`]: () =>
+      [`${BASE}/kvy-linux-x64`]: () => new Response(payload),
+      [`${BASE}/kvy-linux-x64.sha256`]: () =>
         new Response(
-          "0000000000000000000000000000000000000000000000000000000000000000  falcon-linux-x64\n",
+          "0000000000000000000000000000000000000000000000000000000000000000  kvy-linux-x64\n",
         ),
     });
 
     await expect(
-      downloadAndVerify({ repo: "falcon-dev/falcon", assetName: "falcon-linux-x64", fetchImpl }),
+      downloadAndVerify({ repo: "kvy-dev/kvy", assetName: "kvy-linux-x64", fetchImpl }),
     ).rejects.toThrow(DownloadVerificationError);
   });
 
   it("throws DownloadVerificationError on an HTTP failure", async () => {
     const fetchImpl = fakeFetch({
-      [`${BASE}/falcon-linux-x64`]: () => new Response("nope", { status: 500 }),
-      [`${BASE}/falcon-linux-x64.sha256`]: () => new Response("deadbeef  falcon-linux-x64\n"),
+      [`${BASE}/kvy-linux-x64`]: () => new Response("nope", { status: 500 }),
+      [`${BASE}/kvy-linux-x64.sha256`]: () => new Response("deadbeef  kvy-linux-x64\n"),
     });
 
     await expect(
-      downloadAndVerify({ repo: "falcon-dev/falcon", assetName: "falcon-linux-x64", fetchImpl }),
+      downloadAndVerify({ repo: "kvy-dev/kvy", assetName: "kvy-linux-x64", fetchImpl }),
     ).rejects.toThrow(DownloadVerificationError);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import { useState } from "react";
 import { useSessionCrypto } from "@/features/session-control/use-session-crypto";
 import {

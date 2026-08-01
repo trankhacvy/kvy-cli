@@ -10,7 +10,7 @@ const BASE_DEPS = {
   currentVersion: "0.1.0",
   isCompiledBinary: true,
   bundlePath: "/nonexistent/dist/index.mjs",
-  execPath: "/nonexistent/falcon",
+  execPath: "/nonexistent/kvy",
   env: {},
   logger: fakeLogger(),
 };
@@ -63,7 +63,7 @@ describe("runUpdateCommand", () => {
     const fetchLatestVersionImpl = vi.fn(async () => null);
     const result = await runUpdateCommand({
       ...BASE_DEPS,
-      env: { FALCON_UPDATE_SILENT: "1" },
+      env: { KVY_UPDATE_SILENT: "1" },
       fetchLatestVersionImpl,
     });
     expect(result.code).toBe(0);

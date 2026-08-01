@@ -1,20 +1,20 @@
 {
   "$schema": "https://turborepo.dev/schema.v2.json",
-  "globalPassThroughEnv": ["SKIP_FALCON_WIRE_BUILD"],
+  "globalPassThroughEnv": ["SKIP_KVY_WIRE_BUILD"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
-    "@falcon/web#build": {
+    "@kvy/web#build": {
       "dependsOn": ["^build"],
       "outputs": ["out/**", ".next/**", "!.next/cache/**"]
     },
-    // @falcon/e2e is a scripted harness (design §13 item 3), not a library —
+    // @kvy/e2e is a scripted harness (design §13 item 3), not a library —
     // its "build" is a type-check only (`tsc --noEmit`, no pkgroll bundle;
     // it's driven via `tsx`/vitest in-repo, never published or imported by
     // another package). No `dist/**` to cache.
-    "@falcon/e2e#build": {
+    "@kvy/e2e#build": {
       "dependsOn": ["^build"],
       "outputs": []
     },
@@ -22,9 +22,9 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
-    "@falcon/web#typecheck": {
+    "@kvy/web#typecheck": {
       // Unlike the default `typecheck` task (which only needs upstream
-      // workspace packages built, via `^build`), @falcon/web's `tsc --noEmit`
+      // workspace packages built, via `^build`), @kvy/web's `tsc --noEmit`
       // type-checks generated route types under `.next/types/app/**` that
       // Next.js only emits as a side effect of `next build`. Depending on
       // just `^build` lets turbo schedule this package's `typecheck` and
@@ -42,9 +42,9 @@
       "dependsOn": ["build"],
       "outputs": []
     },
-    "@falcon/web#test": {
+    "@kvy/web#test": {
       // The default `test` task depends on the *same-package* `build` task,
-      // which for @falcon/web means a full `next build` static export runs
+      // which for @kvy/web means a full `next build` static export runs
       // as a prerequisite of `vitest run` on every `pnpm test`. The web
       // package's unit tests (src/lib/utils.test.ts, button.test.ts) import
       // source modules directly — they exercise none of Next's build output

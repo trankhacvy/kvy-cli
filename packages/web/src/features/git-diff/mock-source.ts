@@ -1,4 +1,4 @@
-import type { GitBranchInfo, GitRemoteInfo } from "@falcon/wire";
+import type { GitBranchInfo, GitRemoteInfo } from "@kvy/wire";
 import { useMemo } from "react";
 import type { GitDiffActions, GitDiffContent, GitStatusSnapshot, UseGitDiffActions } from "./types";
 
@@ -80,7 +80,7 @@ const MOCK_BRANCHES: GitBranchInfo[] = [
   { name: "wf/other-task", isCurrent: false },
 ];
 
-const MOCK_REMOTES: GitRemoteInfo[] = [{ name: "origin", url: "git@github.com:falcon/falcon.git" }];
+const MOCK_REMOTES: GitRemoteInfo[] = [{ name: "origin", url: "git@github.com:kvy/kvy.git" }];
 
 function defaultDiffFor(path: string): string {
   return [

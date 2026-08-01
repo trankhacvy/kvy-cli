@@ -38,7 +38,7 @@ import { type RawJSONLines, RawJSONLinesSchema } from "./types.js";
  * that are not actual conversation messages — internal state/tracking
  * events silently skipped rather than surfaced or logged as errors.
  *
- * Exported so `scripts/provider-contract-test.ts` (falcon-system-design.md
+ * Exported so `scripts/provider-contract-test.ts` (kvy-system-design.md
  * §13 item 2) validates transcript lines against this exact same skip-list
  * instead of maintaining a second copy that could silently drift from it.
  */
@@ -155,7 +155,7 @@ async function readSessionEntries(
       // Anything other than "not there yet" (permission denied, I/O error,
       // path is a directory, etc.) is a real fault, not the expected
       // not-yet-started case — surface it at `warn` so it's visible without
-      // FALCON_DEBUG, even though we still degrade to "no entries" rather
+      // KVY_DEBUG, even though we still degrade to "no entries" rather
       // than throwing (a transcript read must never crash the scanner).
       logger.warn("[SESSION_SCANNER] error reading session file", {
         file,

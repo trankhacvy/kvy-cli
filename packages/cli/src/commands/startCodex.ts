@@ -1,11 +1,11 @@
 /**
- * `falcon codex [args...]` (design §7.7 "Codex adapter (v0.3 — ACP)", plan.md
- * §17 Phase 2.3). Codex has no local-interactive TUI, so — unlike `falcon
+ * `kvy codex [args...]` (design §7.7 "Codex adapter (v0.3 — ACP)", plan.md
+ * §17 Phase 2.3). Codex has no local-interactive TUI, so — unlike `kvy
  * claude`'s local↔remote mode loop (`commands/start.ts`) — a Codex session is
  * **remote from the start**: it drives one `AcpRemote` on the `codex-acp`
  * adapter for its whole lifetime, with no `loop()` and no local child.
  *
- * The surrounding scaffolding is the same a `falcon claude` session uses
+ * The surrounding scaffolding is the same a `kvy claude` session uses
  * (bootstrap → outbox → session-scoped WS + the five session RPCs → the
  * send-idempotency claim store), just without the mode machinery: the
  * `message`/`interrupt`/`setMode`/`perm.answer` RPCs route straight into the
@@ -17,14 +17,14 @@
  * (design §7.6), so nothing Codex-specific is needed on the permission path.
  */
 import path from "node:path";
-import { encodeBase64, wrapDek } from "@falcon/crypto";
+import { encodeBase64, wrapDek } from "@kvy/crypto";
 import { createId } from "@paralleldrive/cuid2";
 import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox } from "../api/outbox.js";
 import { resolveBackendUrl } from "../auth/config.js";
 import {
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
 import { ensureLoggedIn as ensureLoggedInDefault } from "../auth/login.js";
@@ -73,7 +73,7 @@ export interface StartCodexCommandDeps {
   codexArgs: string[];
   env?: NodeJS.ProcessEnv;
   backendUrl?: string;
-  readCredentials?: (homeDir: string) => FalconCredentials | null;
+  readCredentials?: (homeDir: string) => KvyCredentials | null;
   readDaemonState?: (homeDir: string) => Promise<DaemonState | null>;
   fetchImpl?: typeof fetch;
   detectCodex?: (options?: DetectCodexOptions) => Promise<ProviderDetectionResult>;
@@ -129,7 +129,7 @@ function waitForSigint(): Promise<void> {
   });
 }
 
-/** Runs `falcon codex [args...]`. Returns the process exit code. */
+/** Runs `kvy codex [args...]`. Returns the process exit code. */
 export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const writeError = deps.writeError ?? ((text: string) => process.stderr.write(text));
@@ -153,7 +153,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   // isn't installed.
   const detection = await detect();
   if (!detection.installed) {
-    writeError(`falcon codex: ${detection.error ?? "Codex CLI is not installed."}\n`);
+    writeError(`kvy codex: ${detection.error ?? "Codex CLI is not installed."}\n`);
     return 1;
   }
 
@@ -216,7 +216,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-codex] bootstrapSession failed", { message });
-    writeError(`falcon codex: failed to start session: ${message}\n`);
+    writeError(`kvy codex: failed to start session: ${message}\n`);
     // A4: same best-effort self-report as `start.ts` — lets a daemon-
     // initiated spawn's `spawnAwaiter` reject with the real error instead
     // of a generic timeout.
@@ -282,7 +282,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     });
   }
 
-  write(`falcon codex: starting session ${bootstrap.sessionId}\n${CODEX_NO_LOCAL_MODE_NOTE}\n`);
+  write(`kvy codex: starting session ${bootstrap.sessionId}\n${CODEX_NO_LOCAL_MODE_NOTE}\n`);
 
   const outbox = new Outbox({
     sessionId: bootstrap.sessionId,

@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import type {
   OrphanToolEndItem,
   PermissionInfo,
@@ -10,7 +10,7 @@ import type {
 
 /**
  * Folds a `SessionEnvelope[]` into an ordered `RenderItem[]`
- * (falcon-system-design.md §9.1, plan.md §8.2). Pure and idempotent: calling
+ * (kvy-system-design.md §9.1, plan.md §8.2). Pure and idempotent: calling
  * it twice on the same (possibly re-fetched, possibly re-ordered) array
  * yields the same result, which is what makes it safe to re-run on every
  * sync merge rather than incrementally patched.

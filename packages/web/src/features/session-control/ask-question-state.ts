@@ -1,4 +1,4 @@
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision } from "@kvy/wire";
 import type { AskQuestionParsed } from "@/lib/tool-args";
 
 /**

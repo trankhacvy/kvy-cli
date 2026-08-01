@@ -1,12 +1,12 @@
 /**
- * Reserved wire namespaces for deferred features (falcon-system-design.md
- * §14 "Deferred-Feature Hooks"; falcon-prd.md §6.4). No schemas exist for
+ * Reserved wire namespaces for deferred features (kvy-system-design.md
+ * §14 "Deferred-Feature Hooks"; kvy-prd.md §6.4). No schemas exist for
  * these yet — this file exists only to reserve the `t`/method prefixes so a
  * future feature can never collide with (or be confused for) an
  * already-shipped literal.
  *
  * - `checkpoint:*` — workspace sync / checkpoint restore
- *   (`falcon workspace sync|load`; `Workspace.syncEnabled`/`sandboxConfig`
+ *   (`kvy workspace sync|load`; `Workspace.syncEnabled`/`sandboxConfig`
  *   columns already exist, unused).
  * - `preview:*`    — live preview STREAMING (push updates) for spawned dev
  *   servers/tunnels — still reserved and unused. The request/response

@@ -1,15 +1,15 @@
 # Encryption Design
 
 > **Status:** stub — outline + pointers only. Expand this doc as
-> `@falcon/crypto` and its consumers actually land. Full detail currently
-> lives in [`falcon-system-design.md` §5](../falcon-system-design.md#5-encryption-design-falconcrypto).
+> `@kvy/crypto` and its consumers actually land. Full detail currently
+> lives in [`kvy-system-design.md` §5](../kvy-system-design.md#5-encryption-design-kvycrypto).
 >
 > **Rule:** this file is updated in the same PR as any crypto change
 > (`plan.md` cross-cutting note). If key handling, wrapping, or the trust
 > boundary changes and this doc doesn't, the PR is incomplete.
 
-This document will describe how Falcon encrypts data end-to-end, as
-implemented in `packages/crypto` (`@falcon/crypto`), and how those encrypted
+This document will describe how Kvy encrypts data end-to-end, as
+implemented in `packages/crypto` (`@kvy/crypto`), and how those encrypted
 payloads map onto the fields defined in [`protocol.md`](./protocol.md).
 
 Core principle (design doc §1): **the server is blind.** All user content —
@@ -29,7 +29,7 @@ content public key and stored server-side as an opaque wrapped blob.
   as "undecryptable" and sync continues.
 - Recovery: `masterSecret` exportable as error-tolerant grouped Base32.
 
-Design doc: [§5.1 Key hierarchy](../falcon-system-design.md#51-key-hierarchy).
+Design doc: [§5.1 Key hierarchy](../kvy-system-design.md#51-key-hierarchy).
 
 ## 2. Auth flows
 
@@ -38,7 +38,7 @@ keys, OAuth binds identity for recovery/contact), sign-in on a returning
 device (ed25519 challenge/response → JWT), and CLI pairing (ephemeral
 x25519 keypair, QR/URL handoff, server relays an opaque box it cannot read).
 
-Design doc: [§5.2 Auth flows](../falcon-system-design.md#52-auth-flows).
+Design doc: [§5.2 Auth flows](../kvy-system-design.md#52-auth-flows).
 
 ## 3. What the server can/cannot see
 
@@ -47,7 +47,7 @@ server can see ids, public keys, seq numbers/versions/timestamps, and
 routing metadata. It cannot see message/metadata/diff/attachment
 plaintext, DEKs, or RPC params/results.
 
-Design doc: [§5.3 What the server can/cannot see](../falcon-system-design.md#53-what-the-server-cancannot-see-published-table-fr-64).
+Design doc: [§5.3 What the server can/cannot see](../kvy-system-design.md#53-what-the-server-cancannot-see-published-table-fr-64).
 
 ## 4. Trust boundary (honest E2E boundary)
 
@@ -59,7 +59,7 @@ API, strict CSP, Subresource Integrity, reproducible builds with checksums,
 and CLI-as-key-origin as the recommended setup. This caveat must appear
 wherever E2E claims are made publicly — never marketed without it.
 
-Design doc: [§5.3 trust boundary](../falcon-system-design.md#53-what-the-server-cancannot-see-published-table-fr-64), [§12 Security Considerations](../falcon-system-design.md#12-security-considerations).
+Design doc: [§5.3 trust boundary](../kvy-system-design.md#53-what-the-server-cancannot-see-published-table-fr-64), [§12 Security Considerations](../kvy-system-design.md#12-security-considerations).
 
 ## 5. Identity vs. key custody (issue-4-plan.md, issue #4 rework)
 
@@ -85,7 +85,7 @@ can decrypt**):
   (`machines`/`sessions`/`workspaces`) is tagged with the epoch its `dek` was
   wrapped under, so a client can render "archived" instead of erroring on an
   old-epoch row.
-- **PIN honesty**: the client-side PIN (`@falcon/crypto`'s `pin.ts`/
+- **PIN honesty**: the client-side PIN (`@kvy/crypto`'s `pin.ts`/
   `pin.web.ts`, argon2id + AES-256-GCM, identical KDF params both platforms)
   protects `masterSecret` at rest against **casual/opportunistic** access to
   a lost or shared device. It is **not** a defense against a determined
@@ -107,7 +107,7 @@ can decrypt**):
   additional at-rest protection on daemon boxes specifically. **As shipped**
   (see docs/issue-4-plan.md's Phase 5 notes): the CLI's PIN-wrap and
   OS-keychain device-key wrap were not implemented in this pass —
-  `~/.falcon/access.key` still stores `masterSecretOrContentBundle` as a
+  `~/.kvy/access.key` still stores `masterSecretOrContentBundle` as a
   bare base64 string, 0600-permissioned, the same at-rest posture as before.
   What changed is the *credential* alongside it: a rotating refresh token
   instead of a fixed 1h/15m access token, which is what actually fixes a
@@ -118,9 +118,9 @@ can decrypt**):
   access token's own TTL (now 15 minutes, down from 1 hour) on plain HTTP,
   since access tokens are stateless by design (no per-request DB hit).
 
-Design doc: [§5.2 Auth flows](../falcon-system-design.md#52-auth-flows) still
+Design doc: [§5.2 Auth flows](../kvy-system-design.md#52-auth-flows) still
 describes the pre-issue-4 shape; `docs/issue-4-plan.md` is the current
-source of truth for the identity/session layer until falcon-system-design.md
+source of truth for the identity/session layer until kvy-system-design.md
 itself is updated (tracked as a follow-up, not done in this pass).
 
 ## Encrypted-schema evolution policy
@@ -131,7 +131,7 @@ golden fixtures per version. A field is never repurposed.
 
 ---
 
-**TODO as `@falcon/crypto` lands:** binary layout diagrams (nonce/ciphertext/
+**TODO as `@kvy/crypto` lands:** binary layout diagrams (nonce/ciphertext/
 tag byte offsets, mirroring Happy's `encryption.md`), primitive choices
 confirmed in code (libsodium + WebCrypto AES-GCM), recovery-code
 normalization table, and cross-impl (node ↔ web) test vector references.

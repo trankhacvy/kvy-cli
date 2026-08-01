@@ -17,7 +17,7 @@ import type { NewSessionActions, SpawnRequest } from "./types";
  *
  * Adds NO new RPC: `fs.mkdir` (`create-directory`) and `workspace.register`
  * (`register-workspace`) are the exact two approval branches `spawn`
- * already defines (`@falcon/wire`'s `SpawnResult.requiresApproval`), and
+ * already defines (`@kvy/wire`'s `SpawnResult.requiresApproval`), and
  * `spawn-flow.ts`'s `runSpawnFlow` already orchestrates them. The only
  * thing missing was a caller willing to APPROVE: the two existing call
  * sites (`use-inline-spawn.ts`, `use-review-spawn.ts`) both hard-decline,

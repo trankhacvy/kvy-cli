@@ -55,7 +55,7 @@ function ApprovalPreview() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="flex items-center justify-between font-medium text-xs">
-              Falcon <span className="text-muted-foreground">now</span>
+              Kvy <span className="text-muted-foreground">now</span>
             </p>
             <p className="truncate text-muted-foreground text-xs">
               Permission requested: pnpm install
@@ -151,7 +151,7 @@ export function Features() {
             One dashboard for every session, on every machine.
           </h2>
           <p className="mt-4 text-base text-muted-foreground leading-relaxed">
-            Stop babysitting terminals. Falcon turns long agent runs into a check-in workflow.
+            Stop babysitting terminals. Kvy turns long agent runs into a check-in workflow.
           </p>
         </Reveal>
 

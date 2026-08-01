@@ -3,7 +3,7 @@
 import { HomeIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FalconMark } from "@/components/falcon-mark";
+import { KvyMark } from "@/components/kvy-mark";
 import { MachineSwitcher } from "@/components/machine-switcher";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -39,7 +39,7 @@ function pageTitle(pathname: string): string {
   if (pathname.includes("/git/")) return "Files changed";
   if (pathname.includes("/files/")) return "Repo files";
   if (pathname.startsWith("/dashboard/session/")) return "Session";
-  return "Falcon";
+  return "Kvy";
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild size="lg" tooltip="Falcon">
+              <SidebarMenuButton asChild size="lg" tooltip="Kvy">
                 <Link href="/dashboard/">
                   {/*
                    * `shrink-0` + `aspect-square` keep the logo box a full
@@ -64,9 +64,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                    * (the broken-header bug). The label hides in icon mode
                    * instead. Same shape as shadcn's TeamSwitcher logo box.
                    */}
-                  <FalconMark className="aspect-square size-8 shrink-0" />
+                  <KvyMark className="aspect-square size-8 shrink-0" />
                   <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
-                    Falcon
+                    Kvy
                   </span>
                 </Link>
               </SidebarMenuButton>

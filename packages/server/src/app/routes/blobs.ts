@@ -1,5 +1,5 @@
 /**
- * Blob storage subsystem (falcon-system-design.md §6.2 "POST /blobs/
+ * Blob storage subsystem (kvy-system-design.md §6.2 "POST /blobs/
  * request-upload   POST /blobs/request-download", §6.5; plan.md §16 "4.3
  * Distribution & self-host": "Blob storage: presigned upload/download
  * routes + S3/local-disk drivers"). The server is blind to blob content —
@@ -34,7 +34,7 @@ import {
   BlobRequestDownloadResultSchema,
   BlobRequestUploadBodySchema,
   BlobRequestUploadResultSchema,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { and, eq } from "drizzle-orm";
 import type { FastifyRequest } from "fastify";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";

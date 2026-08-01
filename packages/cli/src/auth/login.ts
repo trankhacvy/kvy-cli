@@ -1,7 +1,7 @@
 /**
- * `falcon auth login` — port of Happy's `doWebAuth`/`waitForAuthentication`
- * (`happy-cli/src/ui/auth.ts`), collapsed onto Falcon's single web-app
- * pairing target (falcon-plan.md §5/§2.2): the CLI always prints the pairing
+ * `kvy auth login` — port of Happy's `doWebAuth`/`waitForAuthentication`
+ * (`happy-cli/src/ui/auth.ts`), collapsed onto Kvy's single web-app
+ * pairing target (kvy-plan.md §5/§2.2): the CLI always prints the pairing
  * URL and a QR code, and *additionally* tries to open it in a browser
  * automatically — the "OAuth browser flow" is just that URL, since the web
  * app (not the CLI) is what talks to Google/GitHub and already holds the
@@ -27,7 +27,7 @@ import { openBrowser } from "./browser.js";
 import { resolveBackendUrl, resolveFrontendUrl } from "./config.js";
 import {
   clearCredentials,
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials,
   writeCredentials,
 } from "./credentials.js";
@@ -49,7 +49,7 @@ const SessionsResponseSchema = z.object({ email: z.string().nullable() });
  * Best-effort — a failure just drops the name from one success line.
  */
 async function fetchAccountEmail(
-  credentials: FalconCredentials,
+  credentials: KvyCredentials,
   backendUrl: string,
 ): Promise<string | null> {
   try {
@@ -68,9 +68,9 @@ async function fetchAccountEmail(
 
 /**
  * First-run UX (plan.md §16 PRD FR-1.2's "no separate setup steps" goal, extended to
- * auth): `falcon claude` shouldn't hard-fail with an instruction to run a second command
+ * auth): `kvy claude` shouldn't hard-fail with an instruction to run a second command
  * when nobody's logged in yet — if a human is actually present at this terminal (a real
- * TTY), just run the same pairing flow `falcon auth login` uses, inline, then let the
+ * TTY), just run the same pairing flow `kvy auth login` uses, inline, then let the
  * caller continue straight into the session. A non-interactive invocation (CI, a
  * headless script) has no one to show a QR code to, so that case keeps the old, honest
  * hard-fail instead of hanging.
@@ -114,7 +114,7 @@ export async function ensureLoggedIn(
 function describeFailure(reason: PairFailureReason): string {
   switch (reason) {
     case "request-failed":
-      return "Could not reach the Falcon server. Check FALCON_BACKEND_URL and your network, then try again.";
+      return "Could not reach the Kvy server. Check KVY_BACKEND_URL and your network, then try again.";
     case "expired":
       return "That sign-in link expired before it was approved. Starting over will get you a fresh one.";
     case "cancelled":
@@ -162,9 +162,9 @@ export async function runAuthLogin(
 
     // issue-4-plan.md §6.1/§6.5, revised: always device-key wrap — no PIN prompt for the
     // CLI, interactive or not. Works unattended (the daemon needs exactly that) and
-    // avoids asking a human to type a PIN on every future `falcon claude` invocation.
+    // avoids asking a human to type a PIN on every future `kvy claude` invocation.
     const keyMaterial = await wrapNewKeyMaterial(outcome.result.masterSecret, homeDir);
-    const credentials: FalconCredentials = {
+    const credentials: KvyCredentials = {
       refreshToken: outcome.result.refreshToken,
       keyMaterial,
     };

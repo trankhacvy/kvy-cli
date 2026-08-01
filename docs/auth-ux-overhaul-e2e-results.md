@@ -1,8 +1,8 @@
 # Auth UX Overhaul — E2E Verification Results
 
-Run date: 2026-07-25/26 (local machine timezone UTC+7). Stack: `@falcon/server` on :3005,
-`@falcon/web` on :3000, hosted Neon Postgres (shared). CLI driven from tmux with
-`FALCON_HOME_DIR=/tmp/falcon-e2e-A`; web driven via Chrome MCP on the user's real Chrome
+Run date: 2026-07-25/26 (local machine timezone UTC+7). Stack: `@kvy/server` on :3005,
+`@kvy/web` on :3000, hosted Neon Postgres (shared). CLI driven from tmux with
+`KVY_HOME_DIR=/tmp/kvy-e2e-A`; web driven via Chrome MCP on the user's real Chrome
 profile (no second profile available — §4.3 BLOCKED per the checklist's own allowance).
 
 Per the checklist's rule: report only, no source edits. One exception, disclosed here and
@@ -42,9 +42,9 @@ DB to exactly the state `db:generate`/`db:migrate` are supposed to produce autom
 
 ## 1. First run — CLI (Phase 1)
 
-- E2E-1.1 — PASS. Fresh `FALCON_HOME_DIR`, no account: stdout showed exactly
-  `Welcome to Falcon.` → `Opening your browser…` → QR code → `Waiting for approval…`. No
-  stderr, no red text, no mention of `falcon auth login`.
+- E2E-1.1 — PASS. Fresh `KVY_HOME_DIR`, no account: stdout showed exactly
+  `Welcome to Kvy.` → `Opening your browser…` → QR code → `Waiting for approval…`. No
+  stderr, no red text, no mention of `kvy auth login`.
 - E2E-1.2 — PASS. Fragment was `http://localhost:3000/pair#<base64url>`, confirmed by
   decoding the CLI's own status-poll requests.
 - E2E-1.3 — PASS (indirect). No `If it didn't open, go to:` fallback line appeared, which
@@ -57,17 +57,17 @@ DB to exactly the state `db:generate`/`db:migrate` are supposed to produce autom
   `✓ Connected as e2e-fresh-1753549367@example.com` → `Starting your session…`, then
   straight into a live Claude Code session (`Claude Code v2.1.220 · Haiku 4.5`) with no
   second command. Real account email, not a placeholder.
-- E2E-1.5 — PASS. `falcon auth status`:
+- E2E-1.5 — PASS. `kvy auth status`:
   ```
   Logged in.
-    Credentials file: /tmp/falcon-e2e-A/access.key
+    Credentials file: /tmp/kvy-e2e-A/access.key
     Key material: device-key-protected (OS Keychain)
     Account key: 6acc96a8ae475b65…
     Refresh token: present (60-day absolute lifetime; no local expiry to show)
   ```
-- E2E-1.6 — PASS. `echo "" | falcon claude` (non-TTY):
-  `falcon: not logged in, and there's no terminal here to sign in from.` /
-  `Run 'falcon auth login' on a machine with a browser, then try again.` — exit 1.
+- E2E-1.6 — PASS. `echo "" | kvy claude` (non-TTY):
+  `kvy: not logged in, and there's no terminal here to sign in from.` /
+  `Run 'kvy auth login' on a machine with a browser, then try again.` — exit 1.
 
 **Minor observation (not scored):** on this real Chrome (not a headless/CI sandbox), a
 platform authenticator genuinely is available, so `KeyProtectionChoice` rendered its full
@@ -93,10 +93,10 @@ Low severity, but worth a look since it'll frustrate real users too.
   (`/pair/#<ephPub>`), no re-opening the link by hand.
 - E2E-2.4 — PASS. Approve card showed **Machine** = `Trans-MacBook-Pro.local`, **Folder** =
   the exact `cwd` the CLI was run from, **Requested** = `2m ago`, and the exact warning
-  *"Only approve this if you just ran `falcon` yourself."*
+  *"Only approve this if you just ran `kvy` yourself."*
 - E2E-2.5 — PASS. After Approve: **"Connected — Trans-MacBook-Pro.local is connected. Go
   back to your terminal — your session is starting."**
-- E2E-2.6 — PASS. `/pair#notavalidkey` → **"This link is out of date. Run `falcon` again on
+- E2E-2.6 — PASS. `/pair#notavalidkey` → **"This link is out of date. Run `kvy` again on
   your machine to get a fresh one."** No crash.
 - E2E-2.7 — PASS (partial evidence). The first pairing attempt's fragment was
   `Tvc9G-FFap1BlqOPD2VUEH-V3SoAuAfM6d83n_wbyhk` (contains both `-` and `_`), and it
@@ -110,7 +110,7 @@ Low severity, but worth a look since it'll frustrate real users too.
 
 ## 3. Zero-machine onboarding (Phase 3)
 
-**BLOCKED, all items.** Testing this requires a browser with zero prior Falcon state for a
+**BLOCKED, all items.** Testing this requires a browser with zero prior Kvy state for a
 brand-new account. I deliberately deferred it to preserve the already-paired browser+CLI
 session needed for the higher-priority Sections 4 and 6 (per the task's explicit priority
 order), and ran out of time to circle back with a second throwaway account before this
@@ -122,7 +122,7 @@ report was due. Not attempted; no evidence either way.
 
 ### 4.1 Setup: signed-in browser with no keys
 
-- **E2E-4.1 — FAIL/CRITICAL.** Deleted only `falcon-crypto-bridge` (kept `falcon-session`),
+- **E2E-4.1 — FAIL/CRITICAL.** Deleted only `kvy-crypto-bridge` (kept `kvy-session`),
   then reloaded `/dashboard/`. **Expected:** land on "One more step" with a 6-digit code.
   **Observed:** redirected to `/signin/?reason=expired` — signed all the way out. This is
   the checklist's explicitly-named failure mode: *"any redirect to sign-in... would mean the
@@ -133,8 +133,8 @@ report was due. Not attempted; no evidence either way.
   even attempts `POST /v1/auth/refresh` on a cold load — confirmed by clearing and
   re-checking network requests immediately after each reload: zero requests to
   `localhost:3005` of any kind fire before the redirect. This happens **despite** confirmed
-  valid data in both IndexedDB stores (`falcon-crypto-bridge` had a proper `v:2, mode:device`
-  record; `falcon-session` had a `sessionRecord`). I could not pin down with certainty
+  valid data in both IndexedDB stores (`kvy-crypto-bridge` had a proper `v:2, mode:device`
+  record; `kvy-session` had a `sessionRecord`). I could not pin down with certainty
   *why* `getSharedCryptoBridge()` (or the worker's `refreshSession()` call) fails to fire in
   time — my best-supported hypothesis is a React effect-ordering / worker-not-ready race
   between `useCryptoBridge()`'s acquire and `RequireAuth`'s own `ensureSession()` effect,
@@ -156,7 +156,7 @@ report was due. Not attempted; no evidence either way.
 
 ### 4.2 Approving from the CLI
 
-- E2E-4.4 — PASS. `falcon keys approve`:
+- E2E-4.4 — PASS. `kvy keys approve`:
   ```
   Signed in as   web
   Says it is     Chrome on Mac
@@ -225,13 +225,13 @@ own suggested approach)
 - E2E-5.3 — PASS. Stored record: `v:2`, `mode:"device"`, keys
   `["v","mode","wrapped","signPubKey","contentPubKey","wrapKey"]` — **no**
   `wrappedRefreshToken`.
-- E2E-5.4 — PASS. `falcon-session` exists as its own IndexedDB database, separate from
-  `falcon-crypto-bridge`.
+- E2E-5.4 — PASS. `kvy-session` exists as its own IndexedDB database, separate from
+  `kvy-crypto-bridge`.
 - **E2E-5.5 — FAIL, LOW/MEDIUM.** After "Log out" from the sidebar, `indexedDB.databases()`
-  still lists **both** `falcon-crypto-bridge` and `falcon-session`. I checked whether this
+  still lists **both** `kvy-crypto-bridge` and `kvy-session`. I checked whether this
   is a real credential leak: it is not — I read both object stores' actual contents
-  immediately after logout and they are empty (`falcon-crypto-bridge`'s `keys` store has no
-  `keyRecord`; `falcon-session`'s `session` store returns `[]`). So `clear()`
+  immediately after logout and they are empty (`kvy-crypto-bridge`'s `keys` store has no
+  `keyRecord`; `kvy-session`'s `session` store returns `[]`). So `clear()`
   (`worker-handler.ts`) does wipe the *data*, it just never calls
   `indexedDB.deleteDatabase(...)`, leaving an empty database shell that
   `indexedDB.databases()` continues to enumerate. Downgrading from the checklist's
@@ -259,15 +259,15 @@ own suggested approach)
   [token-provider] refresh token rejected — re-authentication required
   ```
   Immediate, not delayed.
-- **E2E-6.4 — FAIL, CRITICAL.** Ran `falcon claude --model haiku` again immediately after
+- **E2E-6.4 — FAIL, CRITICAL.** Ran `kvy claude --model haiku` again immediately after
   the revoke above (clean repro: exited the prior session, cleared the pane, confirmed no
   daemon entry active in Settings → Devices first). **Expected:** `Your session expired.
   Reconnecting…` followed by an inline re-pair (QR code), landing in a working session.
   **Observed, verbatim:**
   ```
     Your session expired. Reconnecting…
-  falcon: not logged in, and there's no terminal here to sign in from.
-  Run `falcon auth login` on a machine with a browser, then try again.
+  kvy: not logged in, and there's no terminal here to sign in from.
+  Run `kvy auth login` on a machine with a browser, then try again.
   ```
   The correct message prints, but it is immediately followed by the exact hard-fail the
   whole Phase 1 restructure exists to eliminate — in a fully interactive tmux TTY, with a
@@ -310,7 +310,7 @@ source, see below) — mark those two **BLOCKED** for a live-render check.
   `/reset-keys/`/OAuth-callback specifically.
 - E2E-7.2 — PASS for what was seen: every error state I hit (`/pair#notavalidkey`, the
   expired-CLI-pairing message, the session-expired banner) offered a real next step
-  ("Run `falcon` again…", a link, a button) rather than only "go run this command." (Note:
+  ("Run `kvy` again…", a link, a button) rather than only "go run this command." (Note:
   the CLI's own E2E-6.4 hard-fail message *is* exactly the "go run this command" pattern the
   plan bans for the interactive case — see the FAIL above; that's a regression, not a
   screen I'm scoring as a copy pass.)
@@ -368,8 +368,8 @@ source, see below) — mark those two **BLOCKED** for a live-render check.
 the mere presence of a credentials file on disk, never checking whether the refresh token
 inside it is actually still alive. The moment a session is revoked from the web (Settings →
 Devices → Log out — the *normal*, documented way to kick a stolen or lost device), the next
-`falcon claude` invocation prints the correct "Your session expired. Reconnecting…" message
-and then immediately hard-fails with "falcon: not logged in, and there's no terminal here to
+`kvy claude` invocation prints the correct "Your session expired. Reconnecting…" message
+and then immediately hard-fails with "kvy: not logged in, and there's no terminal here to
 sign in from" — in a fully interactive terminal, with no QR code ever shown. This is exactly
 the failure mode (a red error telling the user to run a second command) that Phase 1 of this
 entire overhaul was built to eliminate, and it reproduces 100% of the time. It also means
@@ -385,11 +385,11 @@ attempts its one network call before redirecting. This is a bigger blast radius 
 calling E2E-6.4 the single most serious finding because it defeats a *named, designed-for*
 security control (remote device revocation) rather than a UX convenience — a user who
 revokes a lost laptop's access has no working way to get a replacement device signed back in
-without deleting `~/.falcon` by hand and re-pairing as if brand new.
+without deleting `~/.kvy` by hand and re-pairing as if brand new.
 
 ## Did the three original complaints actually get fixed?
 
-1. **"`falcon claude` no longer shows a red error on first run"** — **Yes, for first run.**
+1. **"`kvy claude` no longer shows a red error on first run"** — **Yes, for first run.**
    E2E-1.1 through E2E-1.6 all passed cleanly; the welcome/QR/waiting flow is exactly as
    designed and the non-interactive hard-fail is the one correct exception. **However**, the
    *closely related* dead-refresh-token case (a previously-paired machine whose session gets
@@ -399,7 +399,7 @@ without deleting `~/.falcon` by hand and re-pairing as if brand new.
    two "first run" scenarios this phase was meant to cover.
 2. **"the pairing link no longer dead-ends on a confusing message"** — **Yes.** E2E-2.1
    through E2E-2.7 all passed: signed-out visitors land on a clear "Connect your machine"
-   screen, malformed links get an honest "run `falcon` again" message, and a successful
+   screen, malformed links get an honest "run `kvy` again" message, and a successful
    approval reads clearly. No dead ends found.
 3. **"a web-first user with no CLI gets real onboarding"** — **Not verified.** Section 3 is
    entirely BLOCKED in this run (see above) — I did not test any part of the zero-machine

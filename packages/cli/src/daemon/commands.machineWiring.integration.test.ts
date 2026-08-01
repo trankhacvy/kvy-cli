@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { PGlite } from "@electric-sql/pglite";
-import { deriveKeyTree, encodeBase64, getRandomBytes, open, seal, unwrapDek } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { deriveKeyTree, encodeBase64, getRandomBytes, open, seal, unwrapDek } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import type { FastifyInstance } from "fastify";
 import { type Socket as ClientSocket, io as ioClient } from "socket.io-client";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 // Cross-package source import (test-only) — same convention as
-// `session/bootstrap.integration.test.ts`: `@falcon/server` is a private,
+// `session/bootstrap.integration.test.ts`: `@kvy/server` is a private,
 // unpublished app package with no built subpath for its test utilities, so
 // this reaches its TS source directly. Declared as a devDependency in
 // package.json for workspace-graph clarity even though the import itself is
@@ -39,7 +39,7 @@ const execFileAsync = promisify(execFile);
  * `machineClient.ts` + `machineRpc.ts` into a live boot (this task) rather
  * than leaving the old "not implemented yet" stub reachable — `spawn`,
  * `resumeSession`, `adopt.take`, and `git.status` are called for real, over
- * a real Socket.IO `rpc-call` round trip, against a real `@falcon/server`
+ * a real Socket.IO `rpc-call` round trip, against a real `@kvy/server`
  * app (real Fastify routes, real in-memory Postgres — same "real server,
  * not a mock" posture as `session/bootstrap.integration.test.ts`).
  *
@@ -47,7 +47,7 @@ const execFileAsync = promisify(execFile);
  * `resumeSessionOverrides` swap in a fake process launcher that mints a pid
  * and, shortly after, self-reports via the *real* `notify.ts` client hitting
  * the daemon's own *real* control server `/session-started` endpoint —
- * exactly what a real `falcon claude --starting-mode remote` process would
+ * exactly what a real `kvy claude --starting-mode remote` process would
  * do. That, in turn, exercises the real `spawnAwaiter`/`onSessionStarted`
  * wiring this task added to `runDaemonStartSync`, not just the RPC decrypt/
  * validate/handle/seal pipeline in isolation.
@@ -99,8 +99,8 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   });
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-wiring-int-"));
-    workspaceDir = await mkdtemp(path.join(tmpdir(), "falcon-machine-wiring-ws-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-wiring-int-"));
+    workspaceDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-wiring-ws-"));
     await execFileAsync("git", ["init"], { cwd: workspaceDir });
 
     masterSecret = getRandomBytes(32);

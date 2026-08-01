@@ -1,4 +1,4 @@
-import { PROVIDER_IDS } from "@falcon/wire";
+import { PROVIDER_IDS } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { PROVIDER_REGISTRY, providerIdForSubcommand } from "./registry.js";
 
@@ -12,9 +12,9 @@ describe("PROVIDER_REGISTRY", () => {
 });
 
 describe("providerIdForSubcommand", () => {
-  it("round-trips every registered falconSubcommand back to its ProviderId", () => {
+  it("round-trips every registered kvySubcommand back to its ProviderId", () => {
     for (const id of PROVIDER_IDS) {
-      const subcommand = PROVIDER_REGISTRY[id].falconSubcommand;
+      const subcommand = PROVIDER_REGISTRY[id].kvySubcommand;
       expect(providerIdForSubcommand(subcommand)).toBe(id);
     }
   });

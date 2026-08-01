@@ -45,7 +45,7 @@ export interface ComposerState {
 }
 
 /**
- * The `Composer`'s TanStack Query mutations (falcon-system-design.md §9.1;
+ * The `Composer`'s TanStack Query mutations (kvy-system-design.md §9.1;
  * plan.md §16 "2.4 Web control surface": "TanStack Query mutation calling
  * session RPC `message`"), factored out of the component so `Timeline` and
  * `Composer` can share the same merged/reconciled item list without lifting

@@ -25,8 +25,8 @@
  * after a successful-but-unacked request just replays the same `seq`). Only
  * a 2xx response dequeues the batch.
  */
-import { seal } from "@falcon/crypto";
-import type { SessionEnvelope } from "@falcon/wire";
+import { seal } from "@kvy/crypto";
+import type { SessionEnvelope } from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import type { Logger } from "../logger.js";
 import type { OutboxHttpClient } from "./httpClient.js";
@@ -49,7 +49,7 @@ export interface OutboxOptions {
   /** Data-encryption key this session's batches are sealed under. */
   dek: Uint8Array;
   http: OutboxHttpClient;
-  /** `~/.falcon` (or `FALCON_HOME_DIR`) — the disk queue lives under `<homeDir>/outbox/`. */
+  /** `~/.kvy` (or `KVY_HOME_DIR`) — the disk queue lives under `<homeDir>/outbox/`. */
   homeDir: string;
   logger: Logger;
   /** Coalescing time threshold in ms. Default 150 (plan.md §6.5/W4.1). */

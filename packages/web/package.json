@@ -1,9 +1,9 @@
 {
-  "name": "@falcon/web",
+  "name": "@kvy/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "falcon-web — Next.js PWA (App Router, static export). Statically exported and served from a separate origin than the API (design §5.3, §9): the server never renders user content, it's ciphertext to it anyway. Crypto worker bridge, the transcript reducer, apiSocket (the user-scoped WS client), and the sync engine (headerSeq/msgSeq fast-path, src/sync/) are wired up; auth pages are still planned.",
+  "description": "kvy-web — Next.js PWA (App Router, static export). Statically exported and served from a separate origin than the API (design §5.3, §9): the server never renders user content, it's ciphertext to it anyway. Crypto worker bridge, the transcript reducer, apiSocket (the user-scoped WS client), and the sync engine (headerSeq/msgSeq fast-path, src/sync/) are wired up; auth pages are still planned.",
   "scripts": {
     "build": "node scripts/build-worker.mjs && next build && node scripts/build-sw-precache.mjs && node scripts/build-seo-static.mjs",
     "dev": "node scripts/build-worker.mjs && next dev",
@@ -11,8 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@falcon/crypto": "workspace:*",
-    "@falcon/wire": "workspace:*",
+    "@kvy/crypto": "workspace:*",
+    "@kvy/wire": "workspace:*",
     "@git-diff-view/react": "^0.1.7",
     "@radix-ui/react-collapsible": "^1.1.16",
     "@radix-ui/react-dialog": "^1.1.19",

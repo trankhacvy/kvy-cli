@@ -32,7 +32,7 @@ describe("previewTunnel", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-preview-tunnel-test-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-preview-tunnel-test-"));
   });
 
   afterEach(async () => {

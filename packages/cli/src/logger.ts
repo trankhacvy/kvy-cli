@@ -6,11 +6,11 @@ import { resolveHomeDir } from "./home.js";
  * File-only logger.
  *
  * This module MUST NEVER write to stdout/stderr. Once local-mode session
- * spawning lands (plan.md §6.3), the falcon process inherits its stdio
+ * spawning lands (plan.md §6.3), the kvy process inherits its stdio
  * (`stdio: ['inherit','inherit','inherit','pipe']`) into the real Claude
- * Code / Codex child process — any stray write from Falcon on those file
+ * Code / Codex child process — any stray write from Kvy on those file
  * descriptors would land inside the provider's TUI and corrupt its
- * rendering. So all internal diagnostics go to `~/.falcon/logs/` instead.
+ * rendering. So all internal diagnostics go to `~/.kvy/logs/` instead.
  *
  * This is distinct from ordinary CLI output (help text, `--version`, error
  * messages) — those are legitimate user-facing writes to stdout/stderr made
@@ -30,16 +30,16 @@ export interface Logger {
 }
 
 export interface CreateLoggerOptions {
-  /** Overrides the resolved `~/.falcon` (or `FALCON_HOME_DIR`) directory. */
+  /** Overrides the resolved `~/.kvy` (or `KVY_HOME_DIR`) directory. */
   homeDir?: string;
-  /** Overrides FALCON_DEBUG-derived level gating. */
+  /** Overrides KVY_DEBUG-derived level gating. */
   debug?: boolean;
   env?: NodeJS.ProcessEnv;
 }
 
 function logFilePath(homeDir: string, now: Date): string {
   const stamp = now.toISOString().slice(0, 10); // YYYY-MM-DD — one file per day
-  return path.join(homeDir, "logs", `falcon-${stamp}.log`);
+  return path.join(homeDir, "logs", `kvy-${stamp}.log`);
 }
 
 function formatLine(level: LogLevel, message: string, meta?: Record<string, unknown>): string {
@@ -55,7 +55,7 @@ function formatLine(level: LogLevel, message: string, meta?: Record<string, unkn
 export function createLogger(options: CreateLoggerOptions = {}): Logger {
   const env = options.env ?? process.env;
   const homeDir = options.homeDir ?? resolveHomeDir(env);
-  const minLevel: LogLevel = (options.debug ?? env.FALCON_DEBUG === "1") ? "debug" : "info";
+  const minLevel: LogLevel = (options.debug ?? env.KVY_DEBUG === "1") ? "debug" : "info";
   let logsDirEnsured = false;
 
   function write(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
@@ -64,7 +64,7 @@ export function createLogger(options: CreateLoggerOptions = {}): Logger {
     // Best-effort: logging is a diagnostic side channel, never load-bearing
     // for the CLI's actual behavior. A permission error, read-only/missing
     // home dir, full disk, or non-serializable `meta` must never crash the
-    // primary command (e.g. `falcon --help`) — swallow and move on instead
+    // primary command (e.g. `kvy --help`) — swallow and move on instead
     // of throwing out of `main()`.
     try {
       const logsDir = path.join(homeDir, "logs");

@@ -1,6 +1,6 @@
 "use client";
 
-import { PROVIDER_IDS } from "@falcon/wire";
+import { PROVIDER_IDS } from "@kvy/wire";
 import {
   MachineBadge,
   type SessionListMachine,

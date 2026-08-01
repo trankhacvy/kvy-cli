@@ -2,7 +2,7 @@ import type { AdoptMode, AdoptTakeOutcome } from "./types";
 
 /**
  * `TakeOverDialog`'s local phase machine, kept as a pure module so the
- * choose -> confirm -> success/error transitions (falcon-system-design.md
+ * choose -> confirm -> success/error transitions (kvy-system-design.md
  * §10.4/§11 UC9, plan.md §16 "3.3 Session adoption (UC9)") are testable
  * without mounting the component — same precedent as
  * `features/session-control/perm-card-state.ts` /

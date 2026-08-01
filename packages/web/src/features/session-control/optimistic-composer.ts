@@ -1,10 +1,10 @@
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import { type FileItem, type RenderItem, stableSortByTime, type TextItem } from "@/sync/reducer";
 import type { MessageRpcResult } from "@/sync/sessionRpc";
 
 /**
  * A composer message sent but not yet confirmed by the canonical transcript
- * (falcon-system-design.md §9.1: "optimistic timeline insert reconciled by
+ * (kvy-system-design.md §9.1: "optimistic timeline insert reconciled by
  * echo update"; plan.md §16 "2.4 Web control surface"). `queued` mirrors the
  * `message` RPC's own `queued: boolean` field (design §4.4) — true while the
  * session process is still finishing a turn, so the composer can show
@@ -88,7 +88,7 @@ function hasTurnClosedSince(items: RenderItem[], sentAt: number): boolean {
  * `(role: user, text)` content when the id doesn't match — a defense-in-depth
  * borrowed from Omnara's `web_ui_messages` content-set (their CLI wrapper
  * has no id-threading step to drop in the first place, since it injects web
- * text straight into the same PTY the local process reads from; Falcon's
+ * text straight into the same PTY the local process reads from; Kvy's
  * dual local/remote-mode design has several hops — RPC handler, local
  * pub-sub, the mode loop, the SDK wrapper — any one of which silently
  * dropping the id would otherwise leave a permanent duplicate on screen

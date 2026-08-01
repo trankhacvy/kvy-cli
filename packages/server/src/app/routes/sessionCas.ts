@@ -1,4 +1,4 @@
-import { type EncryptedBox, EncryptedBoxSchema } from "@falcon/wire";
+import { type EncryptedBox, EncryptedBoxSchema } from "@kvy/wire";
 import { and, eq, sql } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";

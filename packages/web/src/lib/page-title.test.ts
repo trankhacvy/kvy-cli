@@ -8,13 +8,13 @@ describe("titleForPath", () => {
   });
 
   it("returns route-specific titles for public pages", () => {
-    expect(titleForPath("/signin/")).toBe("Sign in · Falcon");
-    expect(titleForPath("/privacy")).toBe("Privacy · Falcon");
-    expect(titleForPath("/terms/")).toBe("Terms · Falcon");
+    expect(titleForPath("/signin/")).toBe("Sign in · Kvy");
+    expect(titleForPath("/privacy")).toBe("Privacy · Kvy");
+    expect(titleForPath("/terms/")).toBe("Terms · Kvy");
   });
 
-  it("falls back to Falcon for app routes", () => {
-    expect(titleForPath("/dashboard/")).toBe("Falcon");
-    expect(titleForPath("/dashboard/session/abc/")).toBe("Falcon");
+  it("falls back to Kvy for app routes", () => {
+    expect(titleForPath("/dashboard/")).toBe("Kvy");
+    expect(titleForPath("/dashboard/session/abc/")).toBe("Kvy");
   });
 });

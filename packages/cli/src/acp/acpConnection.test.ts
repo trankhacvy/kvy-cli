@@ -43,7 +43,7 @@ function createConnection(
     {
       adapterId: "claude-code",
       homeDir,
-      clientInfo: { name: "falcon-test", version: "0.0.0" },
+      clientInfo: { name: "kvy-test", version: "0.0.0" },
       envOverrides: mode ? { FAKE_ACP_MODE: mode } : undefined,
     },
     deps,
@@ -51,7 +51,7 @@ function createConnection(
 }
 
 beforeEach(async () => {
-  homeDir = await mkdtemp(path.join(tmpdir(), "falcon-acp-connection-"));
+  homeDir = await mkdtemp(path.join(tmpdir(), "kvy-acp-connection-"));
 });
 
 afterEach(async () => {
@@ -81,7 +81,7 @@ describe("AcpConnection.connect", () => {
   // auto-installs (via the real install pipeline's seam, faked here to
   // avoid a real `npm install`/network call) and then connects successfully
   // — a daemon-initiated spawn no longer has to fail once just to trigger a
-  // manual `falcon adapters install` before it can ever work.
+  // manual `kvy adapters install` before it can ever work.
   it("auto-installs the adapter when verification reports not-installed, then connects", async () => {
     const entry = ADAPTER_MANIFEST["claude-code"];
     const installAdapterSpy = vi.fn(async () => {
@@ -151,7 +151,7 @@ describe("AcpConnection.connect", () => {
     expect(connection.getState()).toBe("closed");
   });
 
-  // Same scoping decision for a version bump: `falcon adapters upgrade` is
+  // Same scoping decision for a version bump: `kvy adapters upgrade` is
   // the intended, visible path for this, not a silent background reinstall
   // triggered by a daemon spawn.
   it("still fails loudly on a version mismatch, without attempting an auto-reinstall", async () => {

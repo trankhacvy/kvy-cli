@@ -1,12 +1,12 @@
 /**
- * Machine-scoped WS client for the Falcon daemon.
+ * Machine-scoped WS client for the Kvy daemon.
  *
  * Ported, with changes, from Happy's `ApiMachineClient`
  * (happy-cli/src/api/apiMachine.ts, MIT) per plan.md §1.5 / design §7.1, §8:
  *
  *  - **Registration/CAS is HTTP, not WS.** Happy's client drives two
  *    separate WS acks (`machine-update-metadata`/`machine-update-state`)
- *    with a generic backoff-retry. Falcon's write path is HTTP-only end to
+ *    with a generic backoff-retry. Kvy's write path is HTTP-only end to
  *    end (design DELTA D1) — both fields are CAS'd together in one
  *    already-merged route, `POST /v1/machines`
  *    (`packages/server/src/app/routes/machines.ts`), and the retry is a
@@ -27,8 +27,8 @@
  */
 
 import { homedir, hostname, platform } from "node:os";
-import { encodeBase64, encrypt } from "@falcon/crypto";
-import { type EncryptedBox, EphemeralSchema, type MachineRow } from "@falcon/wire";
+import { encodeBase64, encrypt } from "@kvy/crypto";
+import { type EncryptedBox, EphemeralSchema, type MachineRow } from "@kvy/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
 import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
@@ -398,7 +398,7 @@ export async function startMachineClient(
         const token = await deps.tokenProvider.getAccessToken();
         if (!token) {
           deps.logger.warn(
-            "[machine-client] could not obtain an access token to renew — re-authentication required, run `falcon auth login`",
+            "[machine-client] could not obtain an access token to renew — re-authentication required, run `kvy auth login`",
           );
           return;
         }
@@ -456,13 +456,13 @@ export async function startMachineClient(
 
   // AX-4.17: the daemon holds the master secret, so it can answer a key request even
   // when no browser is open — but it never auto-approves. Surfacing the request in the
-  // log is what tells the user to run `falcon keys approve`; approving it silently would
+  // log is what tells the user to run `kvy keys approve`; approving it silently would
   // hand full read access to anyone holding a stolen account session.
   socket.on("ephemeral", (payload: unknown) => {
     const parsed = EphemeralSchema.safeParse(payload);
     if (!parsed.success || parsed.data.t !== "key-request") return;
     deps.logger.info(
-      "[machine-client] a device is asking for your keys — run `falcon keys approve` to review it",
+      "[machine-client] a device is asking for your keys — run `kvy keys approve` to review it",
       { label: parsed.data.label },
     );
   });
@@ -481,7 +481,7 @@ export async function startMachineClient(
     // one instead of the same dead credential the old fixed-token client looped on
     // forever (known-issues.md #4). If the refresh token itself is dead,
     // `tokenProvider.isDead` will be true and every subsequent handshake keeps failing
-    // with a clear "run falcon auth login" log line rather than a silent retry storm.
+    // with a clear "run kvy auth login" log line rather than a silent retry storm.
     if (/authentication token|Session revoked/i.test(error.message)) {
       void deps.tokenProvider.forceRefresh();
     }

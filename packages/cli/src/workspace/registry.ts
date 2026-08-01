@@ -1,7 +1,7 @@
 /**
  * Workspace registry — "which workspace directories does this machine know
  * about" (plan.md §16 "3.1 Remote spawn" / "3.3 Session adoption (UC9)",
- * falcon-system-design.md §12: "spawn params validated against registered
+ * kvy-system-design.md §12: "spawn params validated against registered
  * workspace paths"). Several already-landed tasks
  * (`daemon/workspacePath.ts`'s `WorkspaceRootLookup`,
  * `daemon/transcriptIndexer.ts`'s `listWorkspaces`,
@@ -11,7 +11,7 @@
  * `./adapters.ts` for real implementations of the first two seams built on
  * top of it.
  *
- * Persisted at `~/.falcon/workspaces.json` — a dedicated file, not a new
+ * Persisted at `~/.kvy/workspaces.json` — a dedicated file, not a new
  * field on `persistence.ts`'s `settings.json`. Several sibling tasks touch
  * `settings.json`/`workspaceConfig.ts` already (`adoptedSessions`,
  * per-workspace git config); this task's brief asks for a self-contained,
@@ -44,7 +44,7 @@ import path from "node:path";
 import { resolveHomeDir } from "../home.js";
 
 export interface RegistryOptions {
-  /** Overrides the resolved `~/.falcon` (or `FALCON_HOME_DIR`) directory. */
+  /** Overrides the resolved `~/.kvy` (or `KVY_HOME_DIR`) directory. */
   homeDir?: string;
   env?: NodeJS.ProcessEnv;
 }
@@ -151,7 +151,7 @@ async function acquireLock(lockFile: string): Promise<FileHandle> {
 
 /**
  * Atomically read-modify-write `workspaces.json`, safe against concurrent
- * `falcon` invocations: an exclusive lock file guards the critical section,
+ * `kvy` invocations: an exclusive lock file guards the critical section,
  * and the write itself lands via tmp-file + rename (atomic on POSIX), so a
  * concurrent reader never observes a half-written file.
  */

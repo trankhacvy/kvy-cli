@@ -5,7 +5,7 @@
  * live schemas against this fixture on every run, so regenerating it is how
  * you tell CI "these fields are now the frozen baseline."
  *
- * Usage: pnpm --filter @falcon/wire exec tsx scripts/snapshot-shapes.ts
+ * Usage: pnpm --filter @kvy/wire exec tsx scripts/snapshot-shapes.ts
  */
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";

@@ -45,7 +45,7 @@ describe("RunPanelBody", () => {
       baseProps({ config: { runScript: undefined, setupScript: "npm install" } }),
     );
     expect(html).toContain("No run script configured");
-    expect(html).toContain("falcon workspace config --run-script");
+    expect(html).toContain("kvy workspace config --run-script");
     expect(html).toMatch(/<button[^>]*disabled[^>]*>[\s\S]*Play/);
   });
 
@@ -94,7 +94,7 @@ describe("RunPanelBody", () => {
       baseProps({ config: { runScript: "npm run dev", setupScript: undefined } }),
     );
     expect(html).toContain("No setup script configured");
-    expect(html).toContain("falcon workspace config --setup-script");
+    expect(html).toContain("kvy workspace config --setup-script");
   });
 });
 

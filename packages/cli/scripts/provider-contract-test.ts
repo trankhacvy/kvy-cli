@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Provider contract test (falcon-system-design.md §13 item 2, plan.md §16
+ * Provider contract test (kvy-system-design.md §13 item 2, plan.md §16
  * "4.4 Hardening & release gate"): runs the actual, latest-installed Claude
  * Code CLI against a small fixture-prompt corpus and asserts three things
- * Falcon's code depends on but does not control:
+ * Kvy's code depends on but does not control:
  *
  *  1. **Transcript JSONL shape** — every non-internal line Claude Code
  *     writes to its `~/.claude/projects/<project>/<sessionId>.jsonl`
@@ -24,7 +24,7 @@
  * pipeline (every commit, every contributor's machine). It is invoked only
  * by `.github/workflows/provider-contract.yml`'s daily cron job, where the
  * CLI is guaranteed to be installed and authenticated. Run locally via
- * `pnpm --filter falcon run contract:provider` once `claude` is on PATH and
+ * `pnpm --filter kvy run contract:provider` once `claude` is on PATH and
  * `ANTHROPIC_API_KEY` (or another supported auth method) is set.
  *
  * Any contract violation throws and `main()`'s `.catch` turns it into a
@@ -203,12 +203,12 @@ async function main(): Promise<void> {
   const version = checkClaudeInstalled();
   console.log(`[provider-contract] claude --version: ${version}`);
 
-  const timeoutMs = process.env.FALCON_PROVIDER_CONTRACT_TIMEOUT_MS
-    ? Number(process.env.FALCON_PROVIDER_CONTRACT_TIMEOUT_MS)
+  const timeoutMs = process.env.KVY_PROVIDER_CONTRACT_TIMEOUT_MS
+    ? Number(process.env.KVY_PROVIDER_CONTRACT_TIMEOUT_MS)
     : DEFAULT_TURN_TIMEOUT_MS;
 
-  const workingDirectory = mkdtempSync(join(tmpdir(), "falcon-provider-contract-"));
-  const hookDir = join(workingDirectory, ".falcon-hooks");
+  const workingDirectory = mkdtempSync(join(tmpdir(), "kvy-provider-contract-"));
+  const hookDir = join(workingDirectory, ".kvy-hooks");
 
   let currentTurn = -1;
   const sessionIdEvents: { turn: number; sessionId: string }[] = [];
@@ -264,7 +264,7 @@ async function main(): Promise<void> {
       const turnSessionEvents = sessionIdEvents.filter((event) => event.turn === index);
       assertContract(
         turnSessionEvents.length >= 1,
-        `turn ${index} (${fixture.name}): the SessionStart hook never fired — Falcon's hook-based ` +
+        `turn ${index} (${fixture.name}): the SessionStart hook never fired — Kvy's hook-based ` +
           `session-id discovery (claude/hookServer.ts) depends on this firing at least once per turn`,
       );
       const sessionId = turnSessionEvents[turnSessionEvents.length - 1]?.sessionId;
@@ -287,7 +287,7 @@ async function main(): Promise<void> {
       const turnAttention = attentionEvents.filter((event) => event.turn === index);
       assertContract(
         turnAttention.some((event) => event.kind === "done"),
-        `turn ${index} (${fixture.name}): the Stop hook never fired "done" — Falcon's local-mode ` +
+        `turn ${index} (${fixture.name}): the Stop hook never fired "done" — Kvy's local-mode ` +
           `attention signal (claude/hookServer.ts) depends on this firing once the turn completes`,
       );
 

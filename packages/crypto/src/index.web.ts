@@ -1,5 +1,5 @@
 /**
- * @falcon/crypto — browser entry point ("@falcon/crypto/web"). libsodium-wrappers
+ * @kvy/crypto — browser entry point ("@kvy/crypto/web"). libsodium-wrappers
  * + WebCrypto AES-GCM. Call `await ready` once before using anything else from
  * this module (libsodium's WASM module needs to initialize) — see encryption.web.ts.
  *

@@ -48,7 +48,7 @@ describe("codex effort (window.localStorage present)", () => {
   });
 
   it("ignores a garbage stored value rather than throwing", () => {
-    window.localStorage.setItem("falcon:codex-effort", "ultra");
+    window.localStorage.setItem("kvy:codex-effort", "ultra");
     expect(getCodexEffort()).toBe(DEFAULT_CODEX_EFFORT);
   });
 });

@@ -36,7 +36,7 @@ export async function wrapBytes(key: CryptoKey, data: Uint8Array): Promise<Wrapp
 }
 
 /** Never throws — a corrupt blob or a foreign key resolves `null`, matching
- * `@falcon/crypto`'s own never-throw contract. */
+ * `@kvy/crypto`'s own never-throw contract. */
 export async function unwrapBytes(key: CryptoKey, blob: WrappedBytes): Promise<Uint8Array | null> {
   try {
     const plain = await crypto.subtle.decrypt(

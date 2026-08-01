@@ -1,12 +1,12 @@
-const SHELL_CACHE = "falcon-shell-v1";
+const SHELL_CACHE = "kvy-shell-v1";
 const PRECACHE_URL = "/precache-manifest.json";
 const OFFLINE_URL = "/offline.html";
 
 const KIND_LABELS = {
-  perm: "Falcon needs your permission",
-  question: "Falcon has a question for you",
-  done: "Falcon finished a task",
-  failed: "A Falcon session failed",
+  perm: "Kvy needs your permission",
+  question: "Kvy has a question for you",
+  done: "Kvy finished a task",
+  failed: "A Kvy session failed",
 };
 
 const BASE_SHELL = [
@@ -144,7 +144,7 @@ self.addEventListener("push", (event) => {
 
   const sessionId = payload && typeof payload.sessionId === "string" ? payload.sessionId : null;
   const kind = payload && typeof payload.kind === "string" ? payload.kind : null;
-  const title = (kind && KIND_LABELS[kind]) || "Falcon";
+  const title = (kind && KIND_LABELS[kind]) || "Kvy";
   const url = sessionId ? `/dashboard/session/${sessionId}/` : "/dashboard/";
 
   event.waitUntil(
@@ -152,7 +152,7 @@ self.addEventListener("push", (event) => {
       body: "Tap to open the session.",
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      tag: sessionId || "falcon-notification",
+      tag: sessionId || "kvy-notification",
       data: { url },
     }),
   );

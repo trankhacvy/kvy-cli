@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { SleepInhibitMode, SleepInhibitState } from "@falcon/wire";
+import type { SleepInhibitMode, SleepInhibitState } from "@kvy/wire";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import { readSettings, updateSettings } from "../persistence.js";
@@ -65,7 +65,7 @@ describe("daemon commands", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-daemon-commands-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-daemon-commands-"));
   });
 
   afterEach(async () => {
@@ -87,7 +87,7 @@ describe("daemon commands", () => {
 
       expect(result).toEqual({
         code: 0,
-        message: "falcon daemon: already running (pid " + process.pid + ", port 4242)\n",
+        message: "kvy daemon: already running (pid " + process.pid + ", port 4242)\n",
       });
       expect(spawnStartSync).not.toHaveBeenCalled();
     });
@@ -120,7 +120,7 @@ describe("daemon commands", () => {
 
       expect(result).toEqual({
         code: 0,
-        message: `falcon daemon: started (pid ${process.pid}, port 5000)\n`,
+        message: `kvy daemon: started (pid ${process.pid}, port 5000)\n`,
       });
     });
 
@@ -337,7 +337,7 @@ describe("daemon commands", () => {
 
       const result = await runDaemonStop(deps);
 
-      expect(result).toEqual({ code: 0, message: "falcon daemon: not running\n" });
+      expect(result).toEqual({ code: 0, message: "kvy daemon: not running\n" });
     });
 
     it("clears stale state when the pid is already dead", async () => {
@@ -348,7 +348,7 @@ describe("daemon commands", () => {
 
       expect(result).toEqual({
         code: 0,
-        message: "falcon daemon: not running (stale state cleared)\n",
+        message: "kvy daemon: not running (stale state cleared)\n",
       });
       expect(await readDaemonState(homeDir)).toBeNull();
     });
@@ -369,7 +369,7 @@ describe("daemon commands", () => {
 
       const result = await runDaemonStop(deps);
 
-      expect(result).toEqual({ code: 0, message: `falcon daemon: stopped (pid ${process.pid})\n` });
+      expect(result).toEqual({ code: 0, message: `kvy daemon: stopped (pid ${process.pid})\n` });
       expect(fetchImpl).toHaveBeenCalledWith(
         "http://127.0.0.1:4242/stop",
         expect.objectContaining({ method: "POST" }),
@@ -427,7 +427,7 @@ describe("daemon commands", () => {
 
       const result = await runDaemonStatus(deps);
 
-      expect(result).toEqual({ code: 1, message: "falcon daemon: not running\n" });
+      expect(result).toEqual({ code: 1, message: "kvy daemon: not running\n" });
     });
 
     it("clears and reports not running when the pid is dead", async () => {
@@ -438,7 +438,7 @@ describe("daemon commands", () => {
 
       expect(result).toEqual({
         code: 1,
-        message: "falcon daemon: not running (stale state cleared)\n",
+        message: "kvy daemon: not running (stale state cleared)\n",
       });
       expect(await readDaemonState(homeDir)).toBeNull();
     });
@@ -471,7 +471,7 @@ describe("daemon commands", () => {
 
       expect(result).toEqual({
         code: 0,
-        message: `falcon daemon: running (pid ${process.pid}, port 4242, version 0.9.9)\n`,
+        message: `kvy daemon: running (pid ${process.pid}, port 4242, version 0.9.9)\n`,
       });
     });
   });

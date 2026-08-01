@@ -54,7 +54,7 @@ export function OfflineBanner() {
 
   const message = !online
     ? "You're offline. Changes will sync once your connection returns."
-    : "Reconnecting to Falcon…";
+    : "Reconnecting to Kvy…";
 
   return (
     <div

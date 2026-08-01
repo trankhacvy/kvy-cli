@@ -1,5 +1,5 @@
 /**
- * Pluggable blob storage driver contract (falcon-system-design.md §6.5:
+ * Pluggable blob storage driver contract (kvy-system-design.md §6.5:
  * "Prod: … S3/R2 … Self-host: … optional minio; blobs fall back to local
  * disk when unset"; plan.md §16 "4.3 Distribution & self-host": "S3/
  * local-disk drivers"). Both drivers below (`s3Driver.ts`, `localDriver.ts`)
@@ -32,7 +32,7 @@ export interface BlobStorageDriver {
   /**
    * `key` is the owning `blobs.id` row — stable, unguessable (cuid2),
    * already unique, so it doubles as the storage object key/filename with
-   * no extra mapping table needed. `baseUrl` (e.g. `https://api.falcon.dev`,
+   * no extra mapping table needed. `baseUrl` (e.g. `https://api.kvy.dev`,
    * no trailing slash) is only consumed by the local driver, which has to
    * build a URL pointing back at this same server; the S3 driver ignores it
    * entirely (its URL points at the S3-compatible endpoint instead).

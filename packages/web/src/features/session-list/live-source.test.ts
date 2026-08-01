@@ -1,4 +1,4 @@
-import { createEnvelope, type MachineRow, type SessionRow } from "@falcon/wire";
+import { createEnvelope, type MachineRow, type SessionRow } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { reduceEnvelopes } from "@/sync/reducer";
 import type { MessagesQueryData } from "@/sync/types";
@@ -252,11 +252,11 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
   });
 
   it("derives a workspace's display name from the basename of its id/path", () => {
-    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/falcon" });
+    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/kvy" });
 
     const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
 
-    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/falcon", name: "falcon" }]);
+    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/kvy", name: "kvy" }]);
   });
 
   it("dedupes multiple sessions sharing the same workspaceId into one workspace entry", () => {
@@ -286,10 +286,10 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
   });
 
   it("strips a trailing slash before deriving the basename", () => {
-    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/falcon/" });
+    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/kvy/" });
 
     const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
 
-    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/falcon/", name: "falcon" }]);
+    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/kvy/", name: "kvy" }]);
   });
 });

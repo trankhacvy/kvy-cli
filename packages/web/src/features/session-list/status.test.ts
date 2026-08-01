@@ -1,4 +1,4 @@
-import { createEnvelope } from "@falcon/wire";
+import { createEnvelope } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { reduceEnvelopes } from "@/sync/reducer";
 import { deriveSessionStatus } from "./status";

@@ -7,11 +7,11 @@ import type { UseUnmanagedActions, UseUnmanagedSessionsSnapshot } from "../types
 import { UnmanagedSessionCard } from "./unmanaged-session-card";
 
 /**
- * The unmanaged-session section (falcon-system-design.md §9.2 "Home" row:
- * `UnmanagedSection`; falcon-prd.md §5.9/UC9 "session adoption"). Rendered
+ * The unmanaged-session section (kvy-system-design.md §9.2 "Home" row:
+ * `UnmanagedSection`; kvy-prd.md §5.9/UC9 "session adoption"). Rendered
  * on the Home screen alongside `SessionList`'s workspace groups — these
  * rows come from `unmanagedSessions` (the daemon transcript indexer's
- * upserts, design §8), a wholly separate track from Falcon-managed
+ * upserts, design §8), a wholly separate track from Kvy-managed
  * `sessions` rows, so it stays its own section rather than folding into a
  * workspace group.
  *

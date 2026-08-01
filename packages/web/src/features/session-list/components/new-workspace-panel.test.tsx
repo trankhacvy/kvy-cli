@@ -1,4 +1,4 @@
-import type { MachineRow } from "@falcon/wire";
+import type { MachineRow } from "@kvy/wire";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

@@ -107,7 +107,7 @@ infinite loop**, not just an expensive one. See [§3.1](#31-problem).
   deps/options parameter, or faked with a hand-written class/factory: `FakeSocket` +
   `baseHandlerDeps()` + `register()` + `callAndAwaitAck()` in
   `packages/cli/src/daemon/machineRpc.test.ts` (which uses **real** `seal`/`open` from
-  `@falcon/crypto`, not mocked crypto); `fakePanel(overrides)` / `fakeRpc(call)` /
+  `@kvy/crypto`, not mocked crypto); `fakePanel(overrides)` / `fakeRpc(call)` /
   `fakeActions(overrides)` / `makeMachine(overrides)` in web. Factory shape is always
   `function fakeX(overrides: Partial<T> = {}): T { return { ...defaults, ...overrides }; }`
   with `vi.fn()` for every callback. Test names are full sentences stating the invariant,
@@ -131,7 +131,7 @@ infinite loop**, not just an expensive one. See [§3.1](#31-problem).
   `workspace.unregister`, `workspace.setConfig` are all absent from
   `schemaRegistry.ts:10-112`) — `additiveOnly.test.ts` only warns about that, it does not
   fail. New schemas **should** still be added to the registry and the fixture regenerated
-  via `pnpm --filter @falcon/wire exec tsx scripts/snapshot-shapes.ts`.
+  via `pnpm --filter @kvy/wire exec tsx scripts/snapshot-shapes.ts`.
 
 ---
 
@@ -153,7 +153,7 @@ The *only* action offered there is **"Remove this workspace"**
 (`GitStatusError.tsx:50-59` → `panel.removeWorkspace` → `use-git-panel.ts:134-136` →
 `live-actions.ts:72-77` → `workspace.unregister`). For `workspace-not-a-repo` that is
 close to the worst possible affordance: the user's folder is fine, it is just not a repo
-yet, and the one button on screen deletes Falcon's knowledge of it.
+yet, and the one button on screen deletes Kvy's knowledge of it.
 
 Two additional wrinkles found while reading:
 - The same `GitStatusError` renders in **both** entry points —
@@ -286,7 +286,7 @@ export type GitInitResult = z.infer<typeof GitInitResultSchema>;
 // boundary `workspace.setConfig` keeps for script strings).
 //
 // `url` is passed as its own argv element and is validated only for the
-// argv-injection hazard (a leading `-`), NOT for reachability: Falcon manages
+// argv-injection hazard (a leading `-`), NOT for reachability: Kvy manages
 // no git credentials (see `GitPushParamsSchema`'s own note), so whether the
 // URL actually works is git's business at push time, not this RPC's.
 export const GitSetRemoteParamsSchema = z.object({
@@ -313,8 +313,8 @@ Register all four in `packages/wire/src/__tests__/schemaRegistry.ts` (alongside
 `GitRenameBranch*` at `:42-43`) and regenerate the fixture:
 
 ```bash
-pnpm --filter @falcon/wire exec tsx scripts/snapshot-shapes.ts
-pnpm --filter @falcon/wire run lint:additive   # what CI runs against the base branch
+pnpm --filter @kvy/wire exec tsx scripts/snapshot-shapes.ts
+pnpm --filter @kvy/wire run lint:additive   # what CI runs against the base branch
 ```
 
 **Additive-safety note for reviewers.** New *exports* can never fail `lint:additive` —
@@ -363,7 +363,7 @@ converting `state` to `z.literal([...])` later, or making `existingRoot` require
  */
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import type { GitInitParams, GitInitResult } from "@falcon/wire";
+import type { GitInitParams, GitInitResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 import { assertSafeBranchName } from "./gitWorktree.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";
@@ -463,11 +463,11 @@ export async function handleGitInit(
  * hazard the same way `gitPush.ts`'s `assertSafeRefName` guards its own
  * remote/branch (a `--config=...`-shaped "url" would otherwise be parsed as a
  * `git remote` option). The URL is NOT validated for scheme, host or
- * reachability: Falcon manages no git credentials (`gitPush.ts`'s doc
+ * reachability: Kvy manages no git credentials (`gitPush.ts`'s doc
  * comment), so "does this remote actually work" is answered by the user's own
  * next push, with git's own stderr — not fabricated here.
  */
-import type { GitSetRemoteParams, GitSetRemoteResult } from "@falcon/wire";
+import type { GitSetRemoteParams, GitSetRemoteResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";
 
@@ -527,7 +527,7 @@ Five mechanical edits, each mirroring `git.commit`'s existing lines:
    import { handleGitInit as handleGitInitDefault } from "./gitInit.js";
    import { handleGitSetRemote as handleGitSetRemoteDefault } from "./gitSetRemote.js";
    ```
-   plus the four new wire types/schemas in the `@falcon/wire` import block.
+   plus the four new wire types/schemas in the `@kvy/wire` import block.
 2. `MACHINE_RPC_METHODS` (`:313-347`) — add `"git.init"`, `"git.setRemote"` after
    `"git.renameBranch"`.
 3. `MachineRpcDeps` (after `:380`):
@@ -582,8 +582,8 @@ Three parallel additions — `MachineRpcParams` (`:213`), `MachineRpcResults` (`
 "git.init": GitInitParams;
 "git.setRemote": GitSetRemoteParams;
 // ...
-"git.init": import("@falcon/wire").GitInitResult;
-"git.setRemote": import("@falcon/wire").GitSetRemoteResult;
+"git.init": import("@kvy/wire").GitInitResult;
+"git.setRemote": import("@kvy/wire").GitSetRemoteResult;
 // ...
 "git.init": GitInitResultSchema,
 "git.setRemote": GitSetRemoteResultSchema,
@@ -635,12 +635,12 @@ Pure, no React — the house pattern for anything that needs real assertions in 
 package (`git-diff-query.ts`, `git-toolbar-state.ts`, `inline-spawn.ts`).
 
 ```ts
-import type { GitRemoteInfo, GitStatusResult } from "@falcon/wire";
+import type { GitRemoteInfo, GitStatusResult } from "@kvy/wire";
 
 /**
  * Whether the Git panel's Push button can possibly succeed, derived — never
  * stored — from data the panel already holds (design principle #3). Modeled
- * on `@falcon/wire`'s `GithubChecksResult.state`: every distinct empty/blocked
+ * on `@kvy/wire`'s `GithubChecksResult.state`: every distinct empty/blocked
  * case is its own value so the UI renders derived copy instead of
  * string-matching git's stderr (`GitToolbar.tsx` prints `pushError` verbatim
  * today, which is the right behaviour for a CREDENTIAL failure and the wrong
@@ -812,7 +812,7 @@ export function GitStatusError({ panel }: { panel: GitPanelState }) {
           >
             {isRemoveWorkspacePending
               ? "Removing…"
-              : "Forget this project — Falcon stops tracking the folder, nothing on disk changes"}
+              : "Forget this project — Kvy stops tracking the folder, nothing on disk changes"}
           </button>
         )}
       </div>
@@ -920,7 +920,7 @@ Daemon (`vitest`, injectable fakes only — no real git, no real filesystem, mat
 
   **Optional, and worth it:** `machineRpc.test.ts` has a "with the real default (no
   mocked-away side effect)" nested-`describe` precedent (the `workspace.register` block)
-  that points `FALCON_HOME_DIR` at a `mkdtemp` directory and exercises the real, injected-
+  that points `KVY_HOME_DIR` at a `mkdtemp` directory and exercises the real, injected-
   dep-free handler, asserting the durable side effect rather than "some function got
   called". `git.init` is a good candidate: register a temp directory as a workspace, call
   the RPC with **no** `gitInit` override, and assert a real `.git` directory now exists.
@@ -979,7 +979,7 @@ Web:
 
 ### 1.7 Rollout / risk notes
 
-- **No env flag.** The `FALCON_PTY_SETMODE`/`FALCON_PTY_SETMODEL` precedent
+- **No env flag.** The `KVY_PTY_SETMODE`/`KVY_PTY_SETMODEL` precedent
   (`packages/cli/src/commands/start.ts:216,227`) exists for *version-coupled, keystroke-
   driven TUI behaviour that cannot be verified deterministically*. `git init` and
   `git remote add` are ordinary argv `execFile` calls with deterministic exit codes,
@@ -992,7 +992,7 @@ Web:
   (`machineRpc.ts:871-875`) surfaced as `MachineRpcError`. Acceptable, but the copy
   should not read like a bug. Suggested: `use-git-panel.ts`'s `initRepoError` mapping
   special-cases the literal `"unknown-method"` into *"This machine is running an older
-  version of Falcon — update it there and try again."* (`inline-spawn.ts`'s
+  version of Kvy — update it there and try again."* (`inline-spawn.ts`'s
   `translateSpawnError` is the existing precedent for message translation.)
 - **`git init` is not reversible from the UI** — there is deliberately no "undo" RPC.
   It is close to harmless (an empty `.git` with no commits), but the button copy should
@@ -1168,7 +1168,7 @@ export interface MachineOnlineState {
 
 const UNAVAILABLE_COPY: Record<Exclude<MachineStatus, "online">, string> = {
   offline: "This project's machine is offline right now.",
-  "needs-reauth": "This project's machine needs to sign in again. Run `falcon auth login` there.",
+  "needs-reauth": "This project's machine needs to sign in again. Run `kvy auth login` there.",
 };
 
 export function useMachineOnline(machineId: string | null | undefined): MachineOnlineState {
@@ -1458,10 +1458,10 @@ Adopt three libraries; delete the corresponding hand-rolled code.
 
 - `@git-diff-view/react` consumes **raw unified-diff text**, which is exactly what
   `GitDiffResult.inline` is. `react-diff-viewer-continued` wants the **old and new full
-  file contents** and diffs them itself — Falcon does not have those, and obtaining them
+  file contents** and diffs them itself — Kvy does not have those, and obtaining them
   would mean two extra `fs.read` calls per file plus a client-side diff, on data the
   daemon already diffed correctly.
-- It handles split/unified toggle, renames and binary files natively. Falcon's own
+- It handles split/unified toggle, renames and binary files natively. Kvy's own
   `lib/unifiedDiff.ts:31-42` already models `binary` and `oldPath`/`newPath` but
   `UnifiedDiffViewer.tsx:87-89` only renders "Binary file — no diff to show." and never
   special-cases renames (its own doc comment at `lib/unifiedDiff.ts:8-12` admits this).
@@ -1605,7 +1605,7 @@ virtualizer already knows the visible range).
 #### Phase 3 — virtualization
 
 ```bash
-pnpm --filter @falcon/web add @tanstack/react-virtual react-arborist
+pnpm --filter @kvy/web add @tanstack/react-virtual react-arborist
 ```
 
 New shared component `packages/web/src/components/virtual-line-list.tsx`:
@@ -1700,7 +1700,7 @@ than the other two surfaces and should be its own PR.
 #### Phase 4 — `@git-diff-view/react`
 
 ```bash
-pnpm --filter @falcon/web add @git-diff-view/react
+pnpm --filter @kvy/web add @git-diff-view/react
 ```
 
 `UnifiedDiffViewer.tsx` becomes a thin adapter: feed it `diff.inline`, map its theme onto
@@ -1776,11 +1776,11 @@ markup, and be explicit about what is only verifiable by hand.
 - **Phase 1 ships alone and immediately.** It is a bug fix with no dependency change, no
   UX change, and it is the fix for the reported freeze. Do not hold it behind the rest.
 - **Flag the Timeline virtualization, and only that.** This is where the
-  `FALCON_PTY_SETMODE` precedent genuinely applies in spirit: a behaviour that is hard to
+  `KVY_PTY_SETMODE` precedent genuinely applies in spirit: a behaviour that is hard to
   verify deterministically (scroll position, stick-to-bottom, "Load earlier" interaction)
   and whose failure mode is a visibly broken primary surface. The CLI's env-var mechanism
   does not exist in a statically-exported PWA, so the web equivalent is a build-time
-  `NEXT_PUBLIC_FALCON_VIRTUAL_TIMELINE` read once into a module constant, defaulting off,
+  `NEXT_PUBLIC_KVY_VIRTUAL_TIMELINE` read once into a module constant, defaulting off,
   with `Timeline.tsx` keeping both code paths until it has soaked. File-line, diff-line and
   file-tree virtualization do **not** need this — their failure modes are visible in one
   glance and they have no scroll-anchoring contract.
@@ -1818,11 +1818,11 @@ markup, and be explicit about what is only verifiable by hand.
 
 > B5 (new-session-from-web redesign …): the old standalone "New session" wizard/route is
 > retired — a session now always starts from the `+` on an existing `WorkspaceSection` row
-> …, since a workspace only exists server-side once `falcon` has actually run there once.
+> …, since a workspace only exists server-side once `kvy` has actually run there once.
 > That leaves one genuine gap this screen still has to cover honestly: an account with
 > machines but literally zero sessions ever run has no workspace row to put a `+` on yet.
 
-That gap is rendered at `:127-138` as static copy telling the user to go run `falcon` in a
+That gap is rendered at `:127-138` as static copy telling the user to go run `kvy` in a
 terminal. This directly violates CLAUDE.md auth/UX rule #1: *"Never print 'run X' when you
 can run X."* The daemon can create the folder and register it; the web just never asks.
 
@@ -1851,17 +1851,17 @@ documented reason: for their entry points the approval branch *should* be unreac
 
 Add a **"New project"** entry point that never needs a cross-platform filesystem browser:
 
-- **Fixed, visible base directory: `~/falcon-workspaces/`.** Not inside `~/.falcon/` —
+- **Fixed, visible base directory: `~/kvy-workspaces/`.** Not inside `~/.kvy/` —
   that is reserved for app state (`workspace/registry.ts:16` puts `workspaces.json` there;
-  `runStateStore.ts` puts `run-state.json` there; `~/.falcon/access.key` holds key
+  `runStateStore.ts` puts `run-state.json` there; `~/.kvy/access.key` holds key
   material). A user's source code does not belong in an app-state directory, and
-  `docs/uninstall.md` tells people to `rm -rf ~/.falcon`.
+  `docs/uninstall.md` tells people to `rm -rf ~/.kvy`.
 - **A generated, memorable, editable folder name**, validated as a single safe path
   segment: no `/`, no `\`, no `..`, no leading `.`, no NUL, length-capped. The repo already
   has `features/new-session/auto-branch.ts`'s `generateBranchName()` producing
   memorable names for branches — reuse that generator's word lists rather than inventing a
   second style.
-- **The full resulting path is shown read-only**: `~/falcon-workspaces/<name>`. The user
+- **The full resulting path is shown read-only**: `~/kvy-workspaces/<name>`. The user
   edits only the last segment. This is what makes a filesystem browser unnecessary.
 - **Reuse the existing approval loop unchanged.** `runSpawnFlow` is called with a
   `confirmApproval` that returns `true` for both actions (after the user has already
@@ -1877,7 +1877,7 @@ Add a **"New project"** entry point that never needs a cross-platform filesystem
 `fs.list` with `path` omitted returns `homedir()` and echoes the resolved absolute path
 back (`fsBrowse.ts:36`, `FsListResultSchema.path` at `rpc.ts:502-508`). So: one
 `browseDirectory()` call with no argument yields the home path, and the panel appends
-`falcon-workspaces/<name>`. This is the *only* use of `fs.list` in the flow — no browsing
+`kvy-workspaces/<name>`. This is the *only* use of `fs.list` in the flow — no browsing
 UI, one call, purely to learn where home is.
 
 ### 4.3 Wire protocol changes
@@ -1930,15 +1930,15 @@ Both calls are idempotent by contract (`fsBrowse.ts:70`, `workspaceRegisterRpc.t
  * entirely — the user names a folder, sees exactly where it will be, and
  * that's the whole decision.
  *
- * WHY NOT `~/.falcon/`: that directory is app state, not user data —
+ * WHY NOT `~/.kvy/`: that directory is app state, not user data —
  * `workspace/registry.ts` keeps `workspaces.json` there, `runStateStore.ts`
  * keeps `run-state.json`, the CLI keeps `access.key`, and
- * `docs/uninstall.md` tells people to `rm -rf ~/.falcon` to uninstall.
+ * `docs/uninstall.md` tells people to `rm -rf ~/.kvy` to uninstall.
  * Putting source code there would make uninstalling delete the user's work.
  */
 
 /** The single, visible base directory every web-created project lands in, relative to the machine's home directory. */
-export const WORKSPACE_BASE_DIR = "falcon-workspaces";
+export const WORKSPACE_BASE_DIR = "kvy-workspaces";
 
 export type WorkspaceNameError =
   | "empty"
@@ -1950,7 +1950,7 @@ export type WorkspaceNameError =
 
 /**
  * Validates a folder name as ONE safe path segment. Rejects anything that
- * could escape `~/falcon-workspaces/` or confuse a shell/filesystem. This is
+ * could escape `~/kvy-workspaces/` or confuse a shell/filesystem. This is
  * defense in depth, not the security boundary: `fs.mkdir` requires an
  * absolute path (`fsBrowse.ts`) and `spawn` validates against the registry
  * (`workspacePath.ts`) — but an escaping name would produce a genuinely
@@ -2024,7 +2024,7 @@ import type { SpawnRequest } from "./types";
  *
  * Adds NO new RPC: `fs.mkdir` (`create-directory`) and `workspace.register`
  * (`register-workspace`) are the exact two approval branches `spawn` already
- * defines (`@falcon/wire`'s `SpawnResult.requiresApproval`), and
+ * defines (`@kvy/wire`'s `SpawnResult.requiresApproval`), and
  * `spawn-flow.ts`'s `runSpawnFlow` already orchestrates them. The only thing
  * missing was a caller willing to APPROVE: the two existing call sites
  * (`use-inline-spawn.ts`, `use-review-spawn.ts`) both hard-decline, correctly,
@@ -2132,7 +2132,7 @@ Structurally a sibling of `new-session-panel.tsx`: a `Dialog` with
 #### Entry points
 
 1. `session-list-screen.tsx:127-138` — the "No sessions yet" branch. Replace the static
-   *"Run `falcon` from a project"* copy with the panel's trigger **plus** the existing copy
+   *"Run `kvy` from a project"* copy with the panel's trigger **plus** the existing copy
    as a secondary path. Both are legitimate; only one of them is clickable today.
 2. `session-list-screen.tsx:141-149` — add a "New project" button next to "Completed" in
    the header, so the flow is reachable once workspaces exist too.
@@ -2145,12 +2145,12 @@ Structurally a sibling of `new-session-panel.tsx`: a `Dialog` with
   `validateWorkspaceName`: `""`/whitespace → `"empty"`; `"a/b"` and `"a\\b"` →
   `"has-separator"`; `".."`, `"a..b"` → `"traversal"`; `".hidden"` → `"hidden"`; 65 chars →
   `"too-long"`; `"a\u0000b"` and `'a"b'` → `"invalid-char"`; ordinary names → `null`.
-  `buildWorkspacePath("/Users/me", " my app ")` → `"/Users/me/falcon-workspaces/my app"`;
+  `buildWorkspacePath("/Users/me", " my app ")` → `"/Users/me/kvy-workspaces/my app"`;
   a trailing-slash home is normalized; `displayWorkspacePath` always renders the `~` form.
   Assert `WORKSPACE_NAME_ERROR_COPY` has an entry for every `WorkspaceNameError` (a
   `Record` already type-enforces it; the test guards against the union growing).
   Assert `WORKSPACE_BASE_DIR` does **not** start with `.` — a direct regression test for
-  the "don't hide it in `~/.falcon`" decision.
+  the "don't hide it in `~/.kvy`" decision.
 - **`packages/web/src/features/new-session/__tests__/use-new-workspace.test.ts`** (new) —
   the `renderToStaticMarkup` capture harness from `use-git-panel.test.ts:36-48` with a
   fully faked `NewSessionActions` (`vi.fn` per method, as
@@ -2165,7 +2165,7 @@ Structurally a sibling of `new-session-panel.tsx`: a `Dialog` with
 - **`packages/web/src/features/session-list/components/new-workspace-panel.test.tsx`**
   (new) — `renderToStaticMarkup` with the `defaultOpen` escape hatch
   (`new-session-panel.tsx:62-64`'s documented precedent): the read-only path line renders
-  the `~/falcon-workspaces/<name>` form; an invalid name renders its copy and a disabled
+  the `~/kvy-workspaces/<name>` form; an invalid name renders its copy and a disabled
   Create button; an offline machine renders the notice and a disabled button.
 - **`packages/web/src/features/session-list/session-list-screen.test.ts`** (extend) — the
   zero-sessions branch renders the new trigger; the zero-*machines* branch still renders
@@ -2175,7 +2175,7 @@ Structurally a sibling of `new-session-panel.tsx`: a `Dialog` with
   every call this flow makes.
 - **One end-to-end manual step** (the runbook in `CLAUDE.md` §"Testing the app end-to-end"):
   fresh account → pair CLI → create a project from the web with no terminal → confirm
-  `~/falcon-workspaces/<name>` exists on disk, appears in `~/.falcon/workspaces.json`, and
+  `~/kvy-workspaces/<name>` exists on disk, appears in `~/.kvy/workspaces.json`, and
   the session starts. Then open its Git tab and confirm Feature 1's "Set up git here"
   appears (the intended composition).
 
@@ -2184,11 +2184,11 @@ Structurally a sibling of `new-session-panel.tsx`: a `Dialog` with
 **Explicitly not required for the MVP of this feature.** Sketched here so the MVP's shape
 does not foreclose it.
 
-Paste a repo URL → the daemon clones into `~/falcon-workspaces/<derived-name>` → register →
-spawn. Reuses `gitExec.ts`'s `runGit` and the `~/falcon-workspaces` base from the MVP.
+Paste a repo URL → the daemon clones into `~/kvy-workspaces/<derived-name>` → register →
+spawn. Reuses `gitExec.ts`'s `runGit` and the `~/kvy-workspaces` base from the MVP.
 
 **The one genuinely new problem is progress reporting.** A clone can take minutes.
-`@falcon/wire`'s `rpc.ts:23-27` and the 64KB control-plane budget (`gitDiff.ts:44-45`,
+`@kvy/wire`'s `rpc.ts:23-27` and the 64KB control-plane budget (`gitDiff.ts:44-45`,
 `fsRead.ts:41-42`) make the RPC layer a *control plane*, and `gitExec.ts:38` caps any
 single `git` invocation at `GIT_EXEC_TIMEOUT_MS = 15_000`. A synchronous request/response
 `git.clone` is therefore doubly wrong: it would blow the 15s exec timeout and the relay's
@@ -2196,7 +2196,7 @@ own 30s `RPC_CALL_TIMEOUT_MS` (`rpcHandler.ts:23`) on any real repository.
 
 **Recommendation: fire-and-poll, mirroring `run.status` exactly.** `runProcess.ts` already
 solves this shape — `run.start` returns immediately (`handleRunStart` → `{started:true, pid, method}`),
-state is persisted in `~/.falcon/run-state.json` (`runStateStore.ts`), and `run.status`
+state is persisted in `~/.kvy/run-state.json` (`runStateStore.ts`), and `run.status`
 (`handleRunStatus`, `runProcess.ts:297-336`) is polled by the web at 5s while active
 (`use-run-panel.ts:31-35`). A clone is structurally the same thing: a long child process
 whose output goes to a log file and whose state is a small persisted record.
@@ -2272,12 +2272,12 @@ Additional notes for whoever builds it:
   `fs.list`'s returned home path contains a `\`.
 - **Name collision:** `fs.mkdir` is `mkdir -p`, so creating a project whose name already
   exists silently reuses the existing folder — which may already contain someone's work.
-  The MVP should call `fs.list` on `~/falcon-workspaces` before creating and warn on a
+  The MVP should call `fs.list` on `~/kvy-workspaces` before creating and warn on a
   collision. That is one extra RPC call, no new schema, and it prevents a genuinely
   confusing outcome.
 - **Phase 2's `git.clone` is a real write primitive** and should be reviewed as one, not
   as a UI convenience. It is the only part of this plan that would warrant a
-  `FALCON_*` env flag daemon-side.
+  `KVY_*` env flag daemon-side.
 
 ---
 

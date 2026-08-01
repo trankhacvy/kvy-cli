@@ -39,7 +39,7 @@ export async function sendTelegramMessage(chatId: string, text: string): Promise
 }
 
 /**
- * Falcon-add fallback channel (plan.md §10, falcon-system-design.md §6.4:
+ * Kvy-add fallback channel (plan.md §10, kvy-system-design.md §6.4:
  * "iOS reality" — Web Push on iOS Safari requires an installed PWA and is
  * unreliable, and the notification IS the product). `endpoint` holds the
  * Telegram chat id captured by the bot's `/start` deep-link pairing flow

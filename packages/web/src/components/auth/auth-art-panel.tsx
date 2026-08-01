@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FalconMark } from "@/components/falcon-mark";
+import { KvyMark } from "@/components/kvy-mark";
 
 // TODO(art): replace this hotlinked placeholder with a generated local asset under
 // /public before launch — a third-party image URL on an auth screen leaks visitor
@@ -22,11 +22,11 @@ export function AuthArtPanel({ caption }: { caption: string }) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10" />
         <Link
           href="/"
-          aria-label="Falcon home"
+          aria-label="Kvy home"
           className="absolute top-5 left-5 flex items-center gap-2.5 rounded-full bg-black/40 px-3.5 py-2 text-white backdrop-blur-sm transition-colors hover:bg-black/55"
         >
-          <FalconMark className="size-6" />
-          <span className="text-sm font-semibold tracking-tight">Falcon</span>
+          <KvyMark className="size-6" />
+          <span className="text-sm font-semibold tracking-tight">Kvy</span>
         </Link>
         <p className="absolute inset-x-0 bottom-6 text-center font-medium text-sm text-white/85">
           {caption}

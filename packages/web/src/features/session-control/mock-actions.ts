@@ -1,4 +1,4 @@
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision } from "@kvy/wire";
 import type { SessionControlActions, UseSessionControl } from "./types";
 
 const LATENCY_MS = 350;

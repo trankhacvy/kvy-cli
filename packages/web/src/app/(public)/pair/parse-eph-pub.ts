@@ -1,4 +1,4 @@
-import { decodeBase64, encodeBase64 } from "@falcon/crypto/web";
+import { decodeBase64, encodeBase64 } from "@kvy/crypto/web";
 
 const X25519_PUBLIC_KEY_BYTES = 32;
 

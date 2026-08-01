@@ -15,7 +15,7 @@ export function buildLoggerOptions(): LoggerOptions {
     level: env.LOG_LEVEL,
     redact: {
       // Every bearer/session credential this server ever sees on a request, scrubbed
-      // before it can reach a log line (falcon-system-design.md §12: "logs scrub
+      // before it can reach a log line (kvy-system-design.md §12: "logs scrub
       // tokens", plan.md §16 "4.4 Hardening": "token-scrubbing in logs" — one of the
       // reported Happy vuln classes). Covers both header-level credentials (the
       // `Authorization: Bearer <jwt>` every authenticated route reads, the session

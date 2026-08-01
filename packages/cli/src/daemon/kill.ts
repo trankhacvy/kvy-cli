@@ -1,8 +1,8 @@
 /**
- * `falcon kill daemon|sessions|all|all-force` (plan.md §7.2/§7.4).
+ * `kvy kill daemon|sessions|all|all-force` (plan.md §7.2/§7.4).
  *
- * The escape hatch for a wedged daemon (falcon-system-design.md §11:
- * "Wedged provider process ... SIGKILL fallback; `falcon kill sessions`
+ * The escape hatch for a wedged daemon (kvy-system-design.md §11:
+ * "Wedged provider process ... SIGKILL fallback; `kvy kill sessions`
  * escape hatch"): targets are discovered purely by scanning the OS process
  * list (`processScan.ts` + `markers.ts`), never by reading
  * `daemon.state.json` or calling `controlServer.ts`'s loopback API —
@@ -11,19 +11,19 @@
  * Non-force variants (`daemon`, `sessions`, `all`) send SIGTERM to every
  * target, wait up to `gracefulTimeoutMs` (default 5s — the same
  * SIGTERM-then-wait-then-SIGKILL grace period used elsewhere in the design,
- * e.g. `adopt.take`'s takeover, falcon-system-design.md §7.8), then SIGKILL
+ * e.g. `adopt.take`'s takeover, kvy-system-design.md §7.8), then SIGKILL
  * anything still alive. `all-force` SIGKILLs every target immediately, no
  * grace period.
  *
  * The discovery this composes (`processScan.ts` + `markers.ts`) mirrors
  * Happy's `daemon/doctor.ts` (`findAllHappyProcesses`) —
  * https://github.com/slopus/happy (MIT); the SIGTERM-then-SIGKILL escalation
- * policy above is Falcon-specific (falcon-system-design.md §11), not present
+ * policy above is Kvy-specific (kvy-system-design.md §11), not present
  * in Happy's doctor.ts.
  */
 
 import type { Logger } from "../logger.js";
-import { type ClassifiedProcess, classifyProcesses, type FalconProcessKind } from "./markers.js";
+import { type ClassifiedProcess, classifyProcesses, type KvyProcessKind } from "./markers.js";
 import { listProcesses, type ProcessEntry } from "./processScan.js";
 
 export type KillSignal = "SIGTERM" | "SIGKILL";
@@ -31,14 +31,14 @@ export type KillSignal = "SIGTERM" | "SIGKILL";
 export interface KillOutcome {
   pid: number;
   command: string;
-  kind: FalconProcessKind;
+  kind: KvyProcessKind;
   /** The last signal actually sent to this pid, or "none" if sending failed outright. */
   signal: KillSignal | "none";
   error?: string;
 }
 
 export interface KillSummary {
-  /** Falcon processes matched before any signal was sent. */
+  /** Kvy processes matched before any signal was sent. */
   targeted: ClassifiedProcess[];
   outcomes: KillOutcome[];
 }
@@ -158,7 +158,7 @@ async function killForce(targets: ClassifiedProcess[], deps: KillDeps): Promise<
 /**
  * SIGTERM-then-wait-then-SIGKILL escalation over `targets`. Exported (in
  * addition to the `killDaemon`/`killSessions`/`killAll` convenience
- * wrappers below) so `doctor.ts`'s `falcon doctor clean` can reuse the exact
+ * wrappers below) so `doctor.ts`'s `kvy doctor clean` can reuse the exact
  * same escalation logic against its own, narrower "runaway process" target
  * set rather than duplicating it.
  */
@@ -218,10 +218,7 @@ export async function killGraceful(
   });
 }
 
-async function findTargets(
-  deps: KillDeps,
-  kinds: FalconProcessKind[],
-): Promise<ClassifiedProcess[]> {
+async function findTargets(deps: KillDeps, kinds: KvyProcessKind[]): Promise<ClassifiedProcess[]> {
   const processes = await deps.listProcesses();
   return classifyProcesses(processes, deps.currentPid).filter((p) => kinds.includes(p.kind));
 }
@@ -257,15 +254,15 @@ export async function killAllForce(deps: KillDeps = createKillDeps()): Promise<K
 
 export type KillTarget = "daemon" | "sessions" | "all" | "all-force";
 
-/** Renders a `KillSummary` as user-facing CLI text for `falcon kill <target>`. */
+/** Renders a `KillSummary` as user-facing CLI text for `kvy kill <target>`. */
 export function describeKillSummary(target: KillTarget, summary: KillSummary): string {
   if (summary.targeted.length === 0) {
-    return `falcon kill ${target}: no matching processes found\n`;
+    return `kvy kill ${target}: no matching processes found\n`;
   }
   const succeeded = summary.outcomes.filter((o) => o.error === undefined).length;
   const lines = summary.outcomes.map((o) => {
     const status = o.error !== undefined ? `FAILED (${o.error})` : o.signal;
     return `  pid ${o.pid} [${o.kind}] ${status} - ${o.command}`;
   });
-  return `falcon kill ${target}: ${succeeded}/${summary.targeted.length} process(es) terminated\n${lines.join("\n")}\n`;
+  return `kvy kill ${target}: ${succeeded}/${summary.targeted.length} process(es) terminated\n${lines.join("\n")}\n`;
 }

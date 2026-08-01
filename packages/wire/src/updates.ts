@@ -98,7 +98,7 @@ export const EphemeralSchema = z.discriminatedUnion("t", [
     // AH8 "machine-status-reauth": set (true) only on the live disconnect path
     // when the server infers this machine's `cli-daemon` device session was
     // revoked (auth-ux-hardening-plan.md item 8) — distinguishes "needs
-    // `falcon auth login`" from a plain power-off/asleep machine. Optional so
+    // `kvy auth login`" from a plain power-off/asleep machine. Optional so
     // an old web client that doesn't know the field yet degrades to the
     // pre-existing boolean-only "Offline" reading (design §5.3 additive-only).
     needsReauth: z.boolean().optional(),

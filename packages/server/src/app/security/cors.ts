@@ -1,4 +1,4 @@
-// Explicit CORS allowlist (falcon-system-design.md §12, plan.md §16 "4.4 Hardening":
+// Explicit CORS allowlist (kvy-system-design.md §12, plan.md §16 "4.4 Hardening":
 // "wildcard-CORS removal" — one of the reported Happy vuln classes). Socket.IO's `cors`
 // option previously used `origin: "*"` — permitting `credentials: true` connections from
 // *any* web origin, which defeats the point of an origin check entirely (browsers refuse
@@ -16,7 +16,7 @@ export type CorsOriginCallback = (err: Error | null, allow?: boolean) => void;
  * A request with no `Origin` header (same-origin browser navigation, or any non-browser
  * client — CLI/daemon machine sockets never send one) is allowed through: `Origin` is a
  * browser-enforced signal for cross-origin *browser* requests, not a general access
- * control mechanism, and Falcon's daemon/machine sockets authenticate via bearer token
+ * control mechanism, and Kvy's daemon/machine sockets authenticate via bearer token
  * (`socket.handshake.auth.token`, checked in `socket.ts`'s `io.use` middleware) regardless
  * of this check.
  */

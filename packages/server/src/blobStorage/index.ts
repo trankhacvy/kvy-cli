@@ -1,5 +1,5 @@
 /**
- * Driver selection (falcon-system-design.md §6.5: "self-host … blobs fall
+ * Driver selection (kvy-system-design.md §6.5: "self-host … blobs fall
  * back to local disk when unset"). `env.S3_BUCKET` set ⇒ S3-compatible
  * driver (real AWS S3/R2 in prod, MinIO in self-host); unset ⇒ local-disk
  * driver. `config.ts`'s own refine already guarantees a set `S3_BUCKET`
@@ -15,7 +15,7 @@ import type { BlobStorageDriver } from "./types.js";
 export function resolveLocalDriverConfig(env: Env): LocalDriverConfig {
   return {
     dir: env.BLOB_LOCAL_DIR,
-    tokenSecret: env.BLOB_LOCAL_TOKEN_SECRET ?? env.FALCON_MASTER_SECRET,
+    tokenSecret: env.BLOB_LOCAL_TOKEN_SECRET ?? env.KVY_MASTER_SECRET,
     urlExpirySeconds: env.BLOB_URL_EXPIRY_SECONDS,
   };
 }

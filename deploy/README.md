@@ -1,14 +1,14 @@
-# Self-hosting Falcon
+# Self-hosting Kvy
 
-`deploy/docker-compose.yml` runs the whole Falcon backend on your own
-infrastructure (falcon-system-design.md §6.5, plan.md §16 "4.3 Distribution &
+`deploy/docker-compose.yml` runs the whole Kvy backend on your own
+infrastructure (kvy-system-design.md §6.5, plan.md §16 "4.3 Distribution &
 self-host"):
 
-- **`server`** — `@falcon/server`, the Fastify API + Socket.IO stream.
+- **`server`** — `@kvy/server`, the Fastify API + Socket.IO stream.
 - **`postgres`** — Postgres 16, the one and only supported dialect (prod and
   self-host both run Drizzle against Postgres — no embedded-DB fork to
   maintain).
-- **`web`** — the `@falcon/web` static export, served by its own nginx
+- **`web`** — the `@kvy/web` static export, served by its own nginx
   container **on a separate origin** from the API, with a strict
   Content-Security-Policy and Subresource Integrity on every JS/CSS asset.
 - **`minio`** (optional, `--profile minio`) — an S3-compatible target for the
@@ -23,7 +23,7 @@ migration step to remember (see "Migrate on boot" below).
 ```bash
 cd deploy
 cp .env.example .env
-# edit .env: at minimum, set FALCON_MASTER_SECRET
+# edit .env: at minimum, set KVY_MASTER_SECRET
 #   openssl rand -base64 32
 
 docker compose up -d --build
@@ -77,7 +77,7 @@ Two things make that split-origin shape safe:
    a bundle without the browser refusing to run it.
 
 **Rebuild `web` whenever the API origin changes** — `NEXT_PUBLIC_API_URL`/
-`NEXT_PUBLIC_FALCON_API_URL` are inlined into the static bundle at build
+`NEXT_PUBLIC_KVY_API_URL` are inlined into the static bundle at build
 time (there's no server at request time to read env from), so
 `docker compose up -d --build` (not just `up -d`) after editing
 `PUBLIC_API_ORIGIN` in `.env`.
@@ -143,7 +143,7 @@ SELECT count(*) FROM auth_identities WHERE kind = 'password';
 env: `S3_BUCKET` set ⇒ S3-compatible driver (works unmodified against real
 AWS S3/R2 or MinIO); unset ⇒ local-disk driver, writing under
 `BLOB_LOCAL_DIR` (`/data/blobs` in this compose file, on the
-`falcon-server-data` volume). Leave it unset unless you specifically want
+`kvy-server-data` volume). Leave it unset unless you specifically want
 S3-compatible storage — local disk is the zero-config default.
 
 If you do enable `--profile minio`: `S3_ENDPOINT` must be an address
@@ -165,7 +165,7 @@ rationale for each; this file just wires them into the containers.
 ## Troubleshooting
 
 - **Server container exits immediately on boot in production** — almost
-  always a missing/too-short `FALCON_MASTER_SECRET`; `config.ts` refuses to
+  always a missing/too-short `KVY_MASTER_SECRET`; `config.ts` refuses to
   boot with the dev-only default once `NODE_ENV=production`, and
   `docker-compose.yml` itself fails the same way at `docker compose up` time
   if `.env` doesn't set it at all.

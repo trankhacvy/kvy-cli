@@ -35,8 +35,8 @@ import { applyUpdate } from "./applyUpdate.js";
 import { downloadAndVerify } from "./downloadAndVerify.js";
 import { fetchLatestVersion } from "./fetchLatestVersion.js";
 
-const REPO = "falcon-dev/falcon";
-const ASSET_NAME = "falcon-darwin-arm64";
+const REPO = "kvy-dev/kvy";
+const ASSET_NAME = "kvy-darwin-arm64";
 const BINARY_PAYLOAD = Buffer.from("totally-real-binary-bytes-for-the-integration-test");
 const BINARY_DIGEST = createHash("sha256").update(BINARY_PAYLOAD).digest("hex");
 
@@ -158,8 +158,8 @@ describe("update engine — real localhost HTTP round trip", () => {
     let execPath: string;
 
     beforeEach(async () => {
-      dir = await mkdtemp(path.join(tmpdir(), "falcon-live-apply-update-"));
-      execPath = path.join(dir, "falcon");
+      dir = await mkdtemp(path.join(tmpdir(), "kvy-live-apply-update-"));
+      execPath = path.join(dir, "kvy");
       await writeFile(execPath, "old binary contents");
     });
 

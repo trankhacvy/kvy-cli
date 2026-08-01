@@ -11,7 +11,7 @@
  * remote twice (fetch + push); a remote with distinct fetch/push URLs still
  * only needs its one canonical (fetch) URL here.
  */
-import type { GitRemoteInfo, GitRemotesParams, GitRemotesResult } from "@falcon/wire";
+import type { GitRemoteInfo, GitRemotesParams, GitRemotesResult } from "@kvy/wire";
 import { type GitExec, runGit } from "./gitExec.js";
 import { assertWorkspaceStillValid } from "./workspacePath.js";
 

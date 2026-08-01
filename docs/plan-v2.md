@@ -11,10 +11,10 @@ Every snippet below was written against the actual source as it exists on
 (A1…E41), the files it touches, the design, code snippets for the load-bearing parts,
 and the tests to add. Waves are ordered by dependency; within a wave items are mostly
 independent. `pnpm build && pnpm typecheck && pnpm test && pnpm lint` green is the exit
-gate for every item; the CLI must be rebuilt (`pnpm --filter falcon build`) before any
-live re-test because `bin/falcon.mjs` runs `dist/`.
+gate for every item; the CLI must be rebuilt (`pnpm --filter kvy build`) before any
+live re-test because `bin/kvy.mjs` runs `dist/`.
 
-**Wire policy reminder:** `@falcon/wire` is additive-only forever (design §5.3,
+**Wire policy reminder:** `@kvy/wire` is additive-only forever (design §5.3,
 `packages/wire/src/reserved.ts`, enforced by `additiveOnly.test.ts`). Every wire change
 below is a new optional field, new enum member, or new schema — never a retype.
 
@@ -26,12 +26,12 @@ These de-risk the two biggest design bets before any implementation.
 
 ### [ ] W0.1 Live-test the PTY branch baseline (prior session's blocker)
 
-Stack up (postgres 5433 → server `:3005` w/ `FALCON_DEV_AUTH=1` → web `:3000` w/
-`NEXT_PUBLIC_FALCON_DEV_AUTH=1` → `falcon auth login` → `falcon daemon stop && start`
-from the env-exported shell). Then verify: `falcon claude` renders the normal TUI
+Stack up (postgres 5433 → server `:3005` w/ `KVY_DEV_AUTH=1` → web `:3000` w/
+`NEXT_PUBLIC_KVY_DEV_AUTH=1` → `kvy auth login` → `kvy daemon stop && start`
+from the env-exported shell). Then verify: `kvy claude` renders the normal TUI
 (spawn-helper exec bit is currently intact), typing works, a web message injects
 without takeover, a web-initiated Bash routes a PermCard to the web, a locally-typed
-Bash prompts instantly at the terminal. Diagnose from `~/.falcon/logs/`.
+Bash prompts instantly at the terminal. Diagnose from `~/.kvy/logs/`.
 
 ### [x] W0.2 Probe: deny-with-answer steering for AskUserQuestion (gates Wave 2.1)
 
@@ -39,7 +39,7 @@ Bash prompts instantly at the terminal. Diagnose from `~/.falcon/logs/`.
 > model consumed the deny-reason answer ("Blue") and continued the same turn
 > perfectly, no re-ask. W2.1/U2.1 primary path confirmed.
 
-10 minutes, no Falcon code. Scratch settings file with a PreToolUse hook that denies
+10 minutes, no Kvy code. Scratch settings file with a PreToolUse hook that denies
 `AskUserQuestion` with an answer-shaped reason:
 
 ```jsonc
@@ -88,7 +88,7 @@ Read that auto-allows; (b) `/tmp/permreq-payload.json` shows the stdin shape
 (`tool_name`, `tool_input`, expected also `permission_suggestions`); (c) the deny is
 honored and the TUI dialog never renders; (d) with the hook exiting 0 with no output,
 the normal dialog renders. **Pass → Wave 1.1 plan A** (PermissionRequest).
-**Fail/absent on our version → Wave 1.1 plan B** (keep PreToolUse, add Falcon-side
+**Fail/absent on our version → Wave 1.1 plan B** (keep PreToolUse, add Kvy-side
 auto-allow rules — snippet included in W1.1).
 
 ---
@@ -250,8 +250,8 @@ handlePermissionRequest(
             behavior,
             message:
               decision.kind === "deny"
-                ? (decision.message ?? "Denied from the Falcon web UI.")
-                : `Allowed from the Falcon web UI.`,
+                ? (decision.message ?? "Denied from the Kvy web UI.")
+                : `Allowed from the Kvy web UI.`,
           },
         },
       });
@@ -556,7 +556,7 @@ const reportStatusOnce = async (
 };
 
 // Signal handlers: SIGINT reaches the child via the PTY (raw mode forwards
-// Ctrl-C bytes), but SIGTERM/SIGHUP on the falcon process itself must still
+// Ctrl-C bytes), but SIGTERM/SIGHUP on the kvy process itself must still
 // end the session honestly.
 const onSignal = (signal: NodeJS.Signals) => {
   logger.info("[start-claude] signal — ending session", { signal });
@@ -805,7 +805,7 @@ export function composeAskAnswerReason(
 ): string {
   const lines = questions.map((q) => `- ${q.question}\n  → ${answers[q.question] ?? "(no answer)"}`);
   return [
-    "The user answered via the Falcon web UI:",
+    "The user answered via the Kvy web UI:",
     ...lines,
     "Proceed using these answers. Do not call AskUserQuestion again for these questions.",
   ].join("\n");
@@ -1138,20 +1138,20 @@ the 3-minute `lastSeenAt` heuristic (`:61,183-185`).
   original session was daemon-spawned/headless; a resumed terminal session (no
   controlling TTY available to the daemon) must still spawn headless — so the real
   fix is: keep remote for daemon resume, and implement terminal resume as
-  `falcon claude --resume`-equivalent: `bootstrap.ts` honors
-  `FALCON_RECONNECT_SESSION_ID`/`FALCON_RECONNECT_PROVIDER_SESSION_ID` env
+  `kvy claude --resume`-equivalent: `bootstrap.ts` honors
+  `KVY_RECONNECT_SESSION_ID`/`KVY_RECONNECT_PROVIDER_SESSION_ID` env
   (`resumeSession.ts:177-186` contract, currently consumed by nothing):
 
 ```ts
 // session/bootstrap.ts — before minting a fresh tag/nonce
-const reconnectSessionId = env.FALCON_RECONNECT_SESSION_ID;
+const reconnectSessionId = env.KVY_RECONNECT_SESSION_ID;
 if (reconnectSessionId) {
   // Re-attach: fetch the existing row + wrapped DEK instead of create-or-get.
   return reattachSession(deps, { sessionId: reconnectSessionId, contentKeyPair });
 }
 ```
 
-- `start.ts:436`: pass `providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID ?? null`
+- `start.ts:436`: pass `providerSessionId: env.KVY_RECONNECT_PROVIDER_SESSION_ID ?? null`
   so the PTY spawn resumes the provider transcript (`resolveSessionFlags` already
   handles `--resume` composition, `ptyClaudeSession.ts:341-352`).
 
@@ -1254,7 +1254,7 @@ freeform widget, and it's verifiable. Keep behind a config flag until soak-teste
 ### [ ] W4.4 (A8) Same-directory duplicate session lock
 
 `bootstrap.ts` (`:120-132`): before minting a fresh nonce, take a
-`~/.falcon/locks/session-<sha256(machineId|path)>.lock` (the existing lock-file
+`~/.kvy/locks/session-<sha256(machineId|path)>.lock` (the existing lock-file
 pattern from `persistence.ts`); if held by a live pid, print the existing session id +
 "attach from the web, or run in another directory" and exit 1. Overridable with
 `--force-new-session`.
@@ -1263,7 +1263,7 @@ pattern from `persistence.ts`); if held by a live pid, print the existing sessio
 
 `start.ts` after bootstrap: call the existing `notifyDaemonSessionStarted`
 (`daemon/notify.ts` — built + tested, zero callers) with pid/sessionId/wrapped-DEK so
-`falcon doctor`/`falcon kill sessions`/durability see terminal sessions. Best-effort:
+`kvy doctor`/`kvy kill sessions`/durability see terminal sessions. Best-effort:
 daemon absent → log and continue.
 
 ### [ ] W4.6 (C21+C22) Usage + compact markers (wire-additive)
@@ -1336,12 +1336,12 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
 ### Phase 0 — environment + probes `[human]` *(gate for everything live)*
 
 - [ ] **U0.1 `[human]`** Dev stack up: postgres 5433 → server `:3005`
-      (`FALCON_DEV_AUTH=1`) → web `:3000` (`NEXT_PUBLIC_FALCON_DEV_AUTH=1`) →
-      `falcon auth login` (fresh boot = old token dead) → daemon restart from the
+      (`KVY_DEV_AUTH=1`) → web `:3000` (`NEXT_PUBLIC_KVY_DEV_AUTH=1`) →
+      `kvy auth login` (fresh boot = old token dead) → daemon restart from the
       env-exported shell → spawn-helper exec bit check
 - [ ] **U0.2 `[human]`** (W0.1) Live PTY baseline: TUI renders, typing works, web
       message injects, web-turn PermCard, local-turn terminal prompt; diagnose from
-      `~/.falcon/logs/`
+      `~/.kvy/logs/`
 - [x] **U0.3 `[human]`** (W0.2) Deny-with-answer probe → **PASS** (2026-07-18,
       claude 2.1.214) — W2.1 primary path confirmed
 - [x] **U0.4 `[human]`** (W0.3) `PermissionRequest` hook probe → **PASS, plan A**
@@ -1400,7 +1400,7 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
         `{items,error}` + banner + retry-invalidate
   - [x] Tests: redirect; boundary; decrypt-fail banner
 - [ ] **U1.7 `[human]`** Wave-1 exit: full live checklist ("Testing & verification"
-      § Wave 1); `pnpm --filter falcon build` first
+      § Wave 1); `pnpm --filter kvy build` first
 
 ### Phase 2 — approved features
 
@@ -1451,10 +1451,10 @@ branch is ancestry-proven (`git merge-base --is-ancestor <tip> <branch>` — the
   - [x] W3.10: unmanaged rows live (read-only, actions disabled)
   - [x] Tests: status derivation fixtures
 - [x] **U3.5 `[solo]` "pty-resume"** (W3.7 — bootstrap/resume, risky)
-  - [x] `bootstrap.ts` `FALCON_RECONNECT_SESSION_ID` re-attach; `start.ts` provider
+  - [x] `bootstrap.ts` `KVY_RECONNECT_SESSION_ID` re-attach; `start.ts` provider
         id from env; `resumeSession.ts` headless-vs-terminal decision
   - [x] Tests: re-attach; env consumption
-  - [ ] `[human]` live: `falcon resume` continues session + transcript
+  - [ ] `[human]` live: `kvy resume` continues session + transcript
 - [x] **U3.6 `[bundle]` "tailer-and-loss"** (W3.8+W3.9 — scanner +
       injectionController + start.ts)
   - [x] W3.8: final `syncNow()` in cleanup; new-file rotation fallback →

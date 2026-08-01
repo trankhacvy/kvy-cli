@@ -1,5 +1,5 @@
 export const meta = {
-  name: 'falcon-dev-loop',
+  name: 'kvy-dev-loop',
   description: 'plan-v2.md executor: unit-finder → sized pipelines (inline batch | bundle | solo) → real worktree merge with ancestry proof; dedupes across cycles, backs off on rate limits',
   phases: [
     { title: 'Task Discovery', detail: 'Find 1-2 unclaimed execution units from plan-v2.md Master TODO' },
@@ -74,7 +74,7 @@ while (cycleCount < MAX_CYCLES) {
   phase('Task Discovery');
 
   const discovery = await retryAgent(
-    `You are the unit-finder for the Falcon project, branch ${TARGET_BRANCH}.
+    `You are the unit-finder for the Kvy project, branch ${TARGET_BRANCH}.
 
 1. Read plan-v2.md — ONLY the "Master TODO checklist (execution units)" section is
    your task source (the wave sections above it are the design detail each unit
@@ -172,7 +172,7 @@ while (cycleCount < MAX_CYCLES) {
   phase('Worktree Setup');
 
   const setup = await retryAgent(
-    `You set up git worktrees for the Falcon repo (repo root = cwd).
+    `You set up git worktrees for the Kvy repo (repo root = cwd).
 
 For EACH of these units, run exactly:
   git worktree add -B wf/<unit_id> ${WORKTREE_ROOT}/<unit_id> ${TARGET_BRANCH}
@@ -235,7 +235,7 @@ pipeline will resume. Only create fresh when absent. Report per unit.`,
     if (!pipelineResults[i]) { recordFailure(u.unit_id, 'pipeline failed'); continue; }
 
     const verify = await retryAgent(
-      `Independently verify Falcon unit ${u.unit_id} ("${u.title}") in worktree ${u.wtPath}
+      `Independently verify Kvy unit ${u.unit_id} ("${u.title}") in worktree ${u.wtPath}
 before it merges to ${TARGET_BRANCH}.
 
 1. cd ${u.wtPath}
@@ -272,7 +272,7 @@ Report honestly; do NOT fix anything.`,
   const mergedUnits = [];
   for (const u of verifiedUnits) {
     const merge = await retryAgent(
-      `Merge verified Falcon unit ${u.unit_id} into the real ${TARGET_BRANCH} ref.
+      `Merge verified Kvy unit ${u.unit_id} into the real ${TARGET_BRANCH} ref.
 Work from the MAIN repo root (cwd), NOT the worktree.
 
 1. git checkout ${TARGET_BRANCH}  (confirm with git branch --show-current)
@@ -315,7 +315,7 @@ Work from the MAIN repo root (cwd), NOT the worktree.
   // ---- PHASE 8: Cleanup & Progress ----
   phase('Cleanup & Progress');
   await retryAgent(
-    `Falcon cycle ${cycleCount} bookkeeping, on branch ${TARGET_BRANCH} (repo root).
+    `Kvy cycle ${cycleCount} bookkeeping, on branch ${TARGET_BRANCH} (repo root).
 
 MERGED units (ancestry-proven): ${JSON.stringify(mergedUnits.map((u) => ({ id: u.unit_id, sha: u.mergeSha })))}
 FAILED/PARKED this cycle: ${JSON.stringify([...parked])}
@@ -362,7 +362,7 @@ return { cycles: cycleCount, parked: [...parked] };
 async function runInlineUnit(u) {
   phase('Implementation');
   const result = await retryAgent(
-    `You are implementing Falcon inline unit ${u.unit_id} ("${u.title}") — a batch of
+    `You are implementing Kvy inline unit ${u.unit_id} ("${u.title}") — a batch of
 micro-tasks — in worktree ${u.wtPath}. ALL work in the worktree (cd first).
 
 SUB-TASKS (do every one; each cites its design section in plan-v2.md — read it):
@@ -403,7 +403,7 @@ async function runFullPipeline(u) {
   try {
     phase('Implementation');
     const impl = await retryAgent(
-      `You are implementing Falcon ${u.kind} unit ${u.unit_id} ("${u.title}") in
+      `You are implementing Kvy ${u.kind} unit ${u.unit_id} ("${u.title}") in
 worktree ${u.wtPath}. ALL work in the worktree (cd first).
 
 SUB-TASKS (all of them — they share files on purpose, one coherent change):
@@ -411,7 +411,7 @@ ${u.tasks.map((t, i) => `${i + 1}. ${t}`).join('\n')}
 
 Context: read plan-v2.md's matching wave section FIRST (it contains the settled
 design + code snippets grounded in the real source), then CLAUDE.md and the files
-themselves. falcon-system-design.md for architecture questions.
+themselves. kvy-system-design.md for architecture questions.
 PRIOR ATTEMPT: first run \`git log ${TARGET_BRANCH}..HEAD --oneline\` in the
 worktree. If commits exist, this unit was partially built before — read
 task-summary/${u.unit_id}.md and the diff, verify each sub-task against the
@@ -444,7 +444,7 @@ Do NOT merge or push.`,
 
     phase('Testing');
     const test = await retryAgent(
-      `Test Falcon unit ${u.unit_id} in worktree ${u.wtPath} (cd first).
+      `Test Kvy unit ${u.unit_id} in worktree ${u.wtPath} (cd first).
 Files changed: ${impl.files_created.concat(impl.files_modified).join(', ')}
 Sub-tasks it claims to implement: ${JSON.stringify(u.tasks)}
 
@@ -474,7 +474,7 @@ do NOT fix implementation code.`,
     phase('Review & Fix');
     if (test.issues_found.length > 0) {
       const fix = await retryAgent(
-        `Fix these issues in Falcon unit ${u.unit_id}, worktree ${u.wtPath} (cd first):
+        `Fix these issues in Kvy unit ${u.unit_id}, worktree ${u.wtPath} (cd first):
 ${test.issues_found.map((x, i) => `${i + 1}. ${x}`).join('\n')}
 Root-cause each, fix, re-run affected tests + pnpm typecheck.
 Commit: "fix: ${u.unit_id} — resolve test issues". Report anything unfixable.
@@ -504,7 +504,7 @@ pressure, stale daemons — go in environment_notes and do NOT block the unit.`,
     }
 
     const review = await retryAgent(
-      `Code-review Falcon unit ${u.unit_id} in worktree ${u.wtPath} (cd first).
+      `Code-review Kvy unit ${u.unit_id} in worktree ${u.wtPath} (cd first).
 Diff scope: git diff ${TARGET_BRANCH}...HEAD
 Check: correctness vs the unit's sub-tasks (${JSON.stringify(u.tasks)}); no
 silent failures; additive-only wire changes; injection/PTY code never writes to

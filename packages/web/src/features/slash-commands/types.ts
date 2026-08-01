@@ -1,13 +1,13 @@
-import type { SlashCommandInfo } from "@falcon/wire";
+import type { SlashCommandInfo } from "@kvy/wire";
 
 /**
  * View-model types for "/" slash-command autocomplete
- * (docs/competitive-notes-omnara.md #18; falcon-system-design.md §4.4
+ * (docs/competitive-notes-omnara.md #18; kvy-system-design.md §4.4
  * `commands.list`). Surfaces the project's *actual custom* Claude Code
  * slash commands, read live from `.claude/commands/` in the session's
  * worktree — not a fixed built-in list.
  *
- * `SlashCommand` is re-exported straight off `@falcon/wire` rather than
+ * `SlashCommand` is re-exported straight off `@kvy/wire` rather than
  * redeclared — same precedent as `features/git-diff/types.ts`'s
  * `GitStatusSnapshot`: the RPC result is already exactly what the
  * autocomplete menu wants to render.

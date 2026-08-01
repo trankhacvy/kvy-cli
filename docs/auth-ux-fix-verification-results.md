@@ -7,7 +7,7 @@
 after re-pairing does NOT decrypt in the web. Fix 5 confirmed PASS. Fix 4's account-scoping
 mechanism confirmed PASS but its logout/re-login interaction with Fix 5 uncovered a new,
 serious hang bug (F4.3). Fix 8 and Fix 9 confirmed PASS. Fix 10 BLOCKED by an unrelated CLI
-bug (`falcon keys approve` fails against a home dir `auth status` reports as logged in).
+bug (`kvy keys approve` fails against a home dir `auth status` reports as logged in).
 
 ---
 
@@ -32,7 +32,7 @@ after a same-browser account swap + logout) triggered a genuine renderer hang, d
 - ⚠️ F10.1–F10.3 — attempted, blocked by a CLI bug unrelated to Fix 10 itself.
 - ⚠️ F7 — inconclusive best-effort observation only (nested-TUI ambiguity, see below).
 - ⏳ F6, R1 (carried over from prior pass), R2, R4 — not reached this pass (time).
-- ❌ R3 (`falcon keys approve` regression check) — **FAIL**, see Fix 10 / new-issues section.
+- ❌ R3 (`kvy keys approve` regression check) — **FAIL**, see Fix 10 / new-issues section.
 
 ---
 
@@ -48,21 +48,21 @@ after a same-browser account swap + logout) triggered a genuine renderer hang, d
 | **F3.3** | ❌ **FAIL** | New messages sent from the re-paired CLI never render in the web timeline. Console: `decryptMessageBatches: failed to decrypt message batch seq=1/2/3`, reproduced on every fresh client-side navigation into the session. See § 1 below for full evidence. |
 | **F4.1** | ✅ PASS | Account A signs up cleanly, lands on its own dashboard |
 | **F4.2** | ✅ PASS | Account B signs up on the same browser (A's keys still in IndexedDB, not logged out) — B gets its own fresh identity, no cross-contamination, no error |
-| **F4.3** | ❌ **FAIL (new bug)** | Logging out of B (wipes DBs per Fix 5), then signing back in as A (whose local key slot no longer exists — it was overwritten by B's signup, then wiped by B's logout) causes the tab to hang indefinitely on "Please wait…" — confirmed via a genuine CDP `Runtime.evaluate` timeout ("renderer may be frozen or unresponsive"), specifically on any code path touching `falcon-crypto-bridge`'s IndexedDB. Never resolved; recovered only by closing the tab. |
-| **F4.4** | ✅ PASS | `falcon-crypto-bridge`'s stored record carries `accountId` (confirmed via direct IndexedDB dump, matched to the signed-in account's short ID) |
+| **F4.3** | ❌ **FAIL (new bug)** | Logging out of B (wipes DBs per Fix 5), then signing back in as A (whose local key slot no longer exists — it was overwritten by B's signup, then wiped by B's logout) causes the tab to hang indefinitely on "Please wait…" — confirmed via a genuine CDP `Runtime.evaluate` timeout ("renderer may be frozen or unresponsive"), specifically on any code path touching `kvy-crypto-bridge`'s IndexedDB. Never resolved; recovered only by closing the tab. |
+| **F4.4** | ✅ PASS | `kvy-crypto-bridge`'s stored record carries `accountId` (confirmed via direct IndexedDB dump, matched to the signed-in account's short ID) |
 | **F5.1** | ✅ PASS | Logged out via sidebar |
-| **F5.2** | ✅ PASS | `indexedDB.databases()` returned `[]` immediately after logout — neither `falcon-crypto-bridge` nor `falcon-session` present |
+| **F5.2** | ✅ PASS | `indexedDB.databases()` returned `[]` immediately after logout — neither `kvy-crypto-bridge` nor `kvy-session` present |
 | **F6.1–F6.3** | ⏳ NOT REACHED | Time constraints this pass; see prior pass's observation (unmanaged sessions appear on dashboard) |
 | **F7.1–F7.3** | ⚠️ INCONCLUSIVE | No banner text and no tmux bell-flag registered on the active CLI window during a live key request from a second browser context — but that window is a nested Claude Code TUI, which may swallow BEL/OSC9 sequences before tmux sees them, so this is not a clean negative. See notes below. |
 | **F8.1** | ⏳ NOT REACHED | Requires a fresh CLI pairing continuation opened in a signed-out browser; not attempted this pass (time) |
 | **F8.2** | ✅ PASS | Visiting `/password/` directly with no pending pair context defaults to "Create your account" (signup) — reasonable given no pairing context |
 | **F9.1** | ✅ PASS | Exact copy captured, quoted in full below — explains why, what happens next, and the mismatch check |
 | **F10.1** | ✅ PASS | Set up correctly: signed into an account with no local keys on this browser → "One more step" screen appeared with a live verification code |
-| **F10.2** | ❌ **BLOCKED** | Could not approve the key request from the CLI daemon — `falcon keys approve` fails with a misleading "not logged in" message even though `falcon auth status` on the same home dir reports "Logged in." Root cause traced to the server rejecting `POST /v1/auth/refresh` with 401 for that home dir's stored refresh token. The request eventually surfaced "The request timed out. Reload this page to try again." — a graceful timeout, not a silent stall, but the continuation itself was never exercised. |
+| **F10.2** | ❌ **BLOCKED** | Could not approve the key request from the CLI daemon — `kvy keys approve` fails with a misleading "not logged in" message even though `kvy auth status` on the same home dir reports "Logged in." Root cause traced to the server rejecting `POST /v1/auth/refresh` with 401 for that home dir's stored refresh token. The request eventually surfaced "The request timed out. Reload this page to try again." — a graceful timeout, not a silent stall, but the continuation itself was never exercised. |
 | **F10.3** | ⏳ BLOCKED (depends on F10.2) | Could not reach the pairing-approval card since F10.2 never completed |
 | **R1** | ✅ PASS (carried over) | First-run CLI flow confirmed working in the prior pass; not re-tested this pass |
 | **R2** | ⏳ NOT RE-VERIFIED | Not independently re-tested this pass |
-| **R3** | ❌ **FAIL (new finding)** | `falcon keys approve` does NOT "work exactly as before" — see F10.2 |
+| **R3** | ❌ **FAIL (new finding)** | `kvy keys approve` does NOT "work exactly as before" — see F10.2 |
 | **R4** | ⏳ NOT RE-VERIFIED | Not independently re-tested this pass |
 | **R5** | ⚠️ PARTIAL | Settings → Devices correctly lists "CLI daemon" and "Web browser (This device)" with working per-row Log out buttons; did not click a device-row Log out to verify its confirm-step specifically (time) |
 
@@ -89,7 +89,7 @@ after a same-browser account swap + logout) triggered a genuine renderer hang, d
 - ✅ Daemon logs show: "[token-provider] refresh token rejected — re-authentication required"
 - ✅ CLI immediately printed: **"Your session expired. Reconnecting…"** (exact expected message)
 - ✅ Fresh QR code appeared (new ephPub: `FJ89OkbKtlzTPLl81o1EQM5YjrCsJaTtbeDsXD8Gyw4`)
-- ✅ Not a hard-fail (original bug was: "falcon: not logged in, and there's no terminal here to sign in from")
+- ✅ Not a hard-fail (original bug was: "kvy: not logged in, and there's no terminal here to sign in from")
 - ✅ Re-pairing approval succeeded from browser
 - ✅ CLI output: **"✓ Connected as e2e-fix-e0bc07cc@example.com"**
 
@@ -105,7 +105,7 @@ clean, reproducible **FAIL**.
 
 ### Setup reused from the prior pass
 
-- tmux session `falcon-e2e-test`, window `0` (pane `node-`) is the already-paired, already
+- tmux session `kvy-e2e-test`, window `0` (pane `node-`) is the already-paired, already
   re-paired CLI session for account `e2e-fix-e0bc07cc@example.com`, session id
   `btf7s0pd78bwha218rmxxu7p`. This is a live interactive Claude Code (haiku) TUI — once
   paired, typing text into that pane sends it as a user turn to the running session, exactly
@@ -121,7 +121,7 @@ clean, reproducible **FAIL**.
 2. Opened that exact session's timeline in the web via genuine **in-app client-side link
    clicks**: Sessions list → click the "cli" session row (`ref` link click, not a URL bar
    navigation, not a reload). Confirmed via `read_page`/`get_page_text` that this was a
-   client-side transition (`Falcon` → `● cli — Falcon`, same tab, no full page load).
+   client-side transition (`Kvy` → `● cli — Kvy`, same tab, no full page load).
 3. The timeline showed only the same **two old "Permission requested" cards** that predate
    this test (a Bash + Read permission request from much earlier) — no trace of "CONFIRM77" or
    its reply anywhere on the page.
@@ -141,7 +141,7 @@ clean, reproducible **FAIL**.
    http://localhost:3005/v1/sessions/btf7s0pd78bwha218rmxxu7p/messages` returns **200** every
    time — the server is serving the (encrypted) data just fine; this is purely a client-side
    decrypt failure, not a missing-data problem.
-7. Checked the server's own request log (`tmux capture-pane -t falcon-server:0`) for the same
+7. Checked the server's own request log (`tmux capture-pane -t kvy-server:0`) for the same
    session id — nothing server-side logs plaintext or errors; consistent with the design (the
    server never sees plaintext), and rules out a server-side bug.
 8. The batch count stayed fixed at exactly 3 failing batches across both the CONFIRM77 and the
@@ -176,7 +176,7 @@ and could not complete. It is now verified, and it fails.
   JSON.stringify(dbs.map(d => d.name));
   // => "[]"
   ```
-- **Neither `falcon-crypto-bridge` nor `falcon-session` appears at all** — not just emptied,
+- **Neither `kvy-crypto-bridge` nor `kvy-session` appears at all** — not just emptied,
   genuinely absent from `indexedDB.databases()`. This matches the fix's intent exactly and is a
   clean PASS. The browser was also correctly redirected to `/signin/`.
 
@@ -193,7 +193,7 @@ different, equally valid route (an account still technically signed in, not yet 
 
 **F4.1 — PASS.** Signed up `e2e-fix4-a-9931@example.com` fresh (chose "Stay signed in" / device
 mode). Landed cleanly on the empty "Connect your first machine" dashboard. Confirmed
-`falcon-crypto-bridge` + `falcon-session` both present in IndexedDB afterward.
+`kvy-crypto-bridge` + `kvy-session` both present in IndexedDB afterward.
 
 **F4.2 — PASS.** Without logging out of A, navigated directly to `/password/` (still rendered
 the sign-up form, did not force a redirect to A's dashboard) and signed up a brand-new
@@ -202,7 +202,7 @@ device" screen, chose "Stay signed in", and landed on B's own fresh "Connect you
 dashboard — no "Something went wrong," no sign of A's data, no console errors during the whole
 flow.
 
-**F4.4 — PASS.** Directly dumped the `falcon-crypto-bridge` object store's contents via
+**F4.4 — PASS.** Directly dumped the `kvy-crypto-bridge` object store's contents via
 `indexedDB`:
 ```json
 {
@@ -227,14 +227,14 @@ redirect to `/signin/`, and per Fix 5 this wipes both databases). Signed back in
 the UI never advanced past a "Please wait…" button state. Waited over 30 seconds total. A direct
 probe confirmed this was a genuine hang, not just a slow render:
 - A trivial JS expression (`1+1`) evaluated fine via `javascript_tool` at first, but a **second**
-  probe that opened `falcon-crypto-bridge` and read from it via `indexedDB.open(...)` **timed
+  probe that opened `kvy-crypto-bridge` and read from it via `indexedDB.open(...)` **timed
   out the CDP `Runtime.evaluate` call after 45000ms**, with the tool reporting *"The renderer may
   be frozen or unresponsive."*
 - Network log showed the sign-in's own `keys/challenge` → `keys/bind` round trip had already
   completed successfully (200s, twice — consistent with A getting freshly re-provisioned keys,
   since A's old key slot had been overwritten by B's signup and then wiped by B's logout), but
   the tab never proceeded past "Please wait…" afterward.
-- The hang was specific to `falcon-crypto-bridge`: a later, simpler probe (`document.title` +
+- The hang was specific to `kvy-crypto-bridge`: a later, simpler probe (`document.title` +
   reading a button's text) executed instantly, while any probe that opened an
   `indexedDB` transaction against that same database hung again for the same ~45s. This points
   at an unreleased/blocked IndexedDB transaction (likely something the sign-in flow itself holds
@@ -303,22 +303,22 @@ context with no local keys → landed on the "One more step" screen above with a
 code (`404 750`), confirming the requester side of the detour renders correctly.
 
 **F10.2 — BLOCKED**, and this surfaced a genuine, separate bug. To approve the pending key
-request, tried `falcon keys approve` from the paired CLI daemon's home dir
-(`/tmp/falcon-e2e-test-01`, account `e2e-fix-e0bc07cc@example.com`, already confirmed actively
+request, tried `kvy keys approve` from the paired CLI daemon's home dir
+(`/tmp/kvy-e2e-test-01`, account `e2e-fix-e0bc07cc@example.com`, already confirmed actively
 running a live session). Result, reproduced **4 times in a row, 100% of attempts**:
 
 ```
-$ pnpm --filter falcon dev -- keys approve
-falcon: not logged in, and there's no terminal here to sign in from.
-Run `falcon auth login` on a machine with a browser, then try again.
+$ pnpm --filter kvy dev -- keys approve
+kvy: not logged in, and there's no terminal here to sign in from.
+Run `kvy auth login` on a machine with a browser, then try again.
 ```
 
 But run immediately before or after, in the same shell, on the same home dir:
 
 ```
-$ pnpm --filter falcon dev -- auth status
+$ pnpm --filter kvy dev -- auth status
 Logged in.
-  Credentials file: /tmp/falcon-e2e-test-01/access.key
+  Credentials file: /tmp/kvy-e2e-test-01/access.key
   Key material: device-key-protected (OS Keychain)
   Account key: dbe5d230b065b0a9…
   Refresh token: present (60-day absolute lifetime; no local expiry to show)
@@ -334,23 +334,23 @@ Checked the Fastify server's own request log for the actual attempt and found th
 ```
 
 `POST /v1/auth/refresh` is rejected with **401** for this home dir's stored refresh token, even
-though the exact same home dir is actively driving a live, working `falcon claude` session in
+though the exact same home dir is actively driving a live, working `kvy claude` session in
 another tmux pane at the same time. `keysApprove.ts`'s `resolveAccessToken` treats a failed
 refresh as "not logged in" and prints the generic `NO_TTY_CANNOT_SIGN_IN` message — the same
 message used for an actual missing-credentials case — even though a real TTY is present and the
 user is, in every meaningful sense, logged in. Unlike `runPreflightWithReauth` (Fix 3's own
-re-pair path for `falcon claude`), `runKeysApproveCommand` has no dead-token → re-pair handling
+re-pair path for `kvy claude`), `runKeysApproveCommand` has no dead-token → re-pair handling
 at all, so this is a hard, unrecoverable dead end from this command alone.
 
 The most likely root cause: this home dir's refresh token is being **rotated** by the actively-running
 daemon's own silent-refresh cycle, and a second, independent process (`keys approve`) reading the
 same `access.key` file races against that rotation and loses — the copy on disk it reads is
 already one generation behind by the time it tries to use it. This is not a contrived test
-artifact: running a second `falcon` command in a second terminal on the same machine while
-`falcon claude` is active in another is exactly the real-world scenario Fix 7 and `falcon keys
+artifact: running a second `kvy` command in a second terminal on the same machine while
+`kvy claude` is active in another is exactly the real-world scenario Fix 7 and `kvy keys
 approve` exist to support (per this repo's own `docs/auth-ux-overhaul-plan.md`: *"in the browser,
-or via `falcon keys approve` on a machine that has the keys"*), and on a real machine both
-terminals would naturally share the default `~/.falcon` home dir — so ordinary concurrent CLI
+or via `kvy keys approve` on a machine that has the keys"*), and on a real machine both
+terminals would naturally share the default `~/.kvy` home dir — so ordinary concurrent CLI
 usage on one machine may hit this every time.
 
 Because the key request could never be approved, it eventually surfaced its own timeout on the
@@ -362,7 +362,7 @@ This is a reasonably graceful failure (not a silent infinite spinner), but it me
 F10.3 could not be completed live** — the "does the browser auto-continue past the key-request
 screen once keys arrive" mechanism was never exercised, because keys never arrived.
 
-**This also answers R3 (regression check) as a FAIL**: `falcon keys approve` does not "work
+**This also answers R3 (regression check) as a FAIL**: `kvy keys approve` does not "work
 exactly as before" — it fails outright in this (realistic) concurrent-usage scenario.
 
 ---
@@ -379,7 +379,7 @@ While the F10 key request above was live, checked the actively-running CLI's tmu
 This leans FAIL, but is reported as **inconclusive** rather than a clean fail: window 0 is a
 nested interactive Claude Code (haiku) TUI, not a plain shell, and that TUI's own raw-mode
 terminal handling may consume or swallow a BEL/OSC9 escape sequence before tmux's bell-tracking
-ever sees it. A clean test would need a plain shell running `falcon claude` directly (no nested
+ever sees it. A clean test would need a plain shell running `kvy claude` directly (no nested
 TUI) with a key request raised against it, which was not set up this pass.
 
 ---
@@ -430,8 +430,8 @@ This proves Fix 2's build-time assertion is in place and working correctly.
 - Account created successfully → landed on `/dashboard/`
 
 **CLI Pairing:** ✅ SUCCESSFUL (after workaround)
-- Fresh `FALCON_HOME_DIR=/tmp/falcon-e2e-test-01`
-- Command: `pnpm --filter falcon dev -- claude --model haiku`
+- Fresh `KVY_HOME_DIR=/tmp/kvy-e2e-test-01`
+- Command: `pnpm --filter kvy dev -- claude --model haiku`
 - CLI displayed QR code and waited for approval
 - Pairing URL extracted via AppleScript: `http://localhost:3000/pair/#jqqhbIAKS8h2CXqwfmlz1r87CGK3pOfodUGENQB_4Bg`
 - Pairing approval screen showed:
@@ -474,7 +474,7 @@ Fix 2 is working correctly. The original bug (E2E-4.1) was that hard reloads wou
 - Integration tests across multiple devices, key-sharing flows, etc.
 
 **⚠️ Observations:**
-- Unmanaged sessions appear on dashboard — should verify against pre-Falcon history scoping (Fix 6)
+- Unmanaged sessions appear on dashboard — should verify against pre-Kvy history scoping (Fix 6)
 - First-run flow works correctly (regression check R1)
 
 ## To Complete Full Verification
@@ -482,7 +482,7 @@ Fix 2 is working correctly. The original bug (E2E-4.1) was that hard reloads wou
 The critical path for remaining tests:
 
 1. **Fix 3 Testing:** Settings → Devices → "Log out" on the CLI session to revoke it
-   - Then run `falcon claude` in the same terminal
+   - Then run `kvy claude` in the same terminal
    - Verify: "Your session expired. Reconnecting…" message appears
    - Verify: Fresh QR code appears (not a hard-fail)
    - Approve pairing in browser
@@ -527,8 +527,8 @@ pass — only F3.3, the missing piece, was completed, and it fails.
 | Fix 5 (logout deletes DBs) | **PASS** — clean, unambiguous |
 | Fix 8 (`/password/` default) | **PASS** for the case tested (F8.2); F8.1 not reached |
 | Fix 9 ("One more step" copy) | **PASS** — exact copy captured and matches intent |
-| Fix 10 (key-fetch detour) | **BLOCKED** — not the detour's own fault; blocked by an unrelated, newly-found bug in `falcon keys approve` |
-| R3 (`keys approve` regression) | **FAIL** — new finding, `falcon keys approve` breaks against a home dir actively driving a live session |
+| Fix 10 (key-fetch detour) | **BLOCKED** — not the detour's own fault; blocked by an unrelated, newly-found bug in `kvy keys approve` |
+| R3 (`keys approve` regression) | **FAIL** — new finding, `kvy keys approve` breaks against a home dir actively driving a live session |
 
 ### New issues found, not on the original checklist
 
@@ -537,12 +537,12 @@ pass — only F3.3, the missing piece, was completed, and it fails.
    material was overwritten by a different account's sign-up and then wiped by that account's
    logout — the tab hangs indefinitely on "Please wait…" instead of reaching the expected
    "needs your keys" screen. Recoverable only by closing the tab.
-3. **`falcon keys approve` fails with a misleading "not logged in" message** (§ 6) against a
+3. **`kvy keys approve` fails with a misleading "not logged in" message** (§ 6) against a
    home dir that is simultaneously, verifiably logged in and actively running a session —
    traced to the server rejecting that home dir's stored refresh token with 401, most likely a
    rotation race between the active daemon and the second `keys approve` invocation reading a
    stale copy of the same credentials file. This is a plausible everyday scenario (two terminals
-   on one machine sharing the default `~/.falcon`), not a test artifact.
+   on one machine sharing the default `~/.kvy`), not a test artifact.
 
 ### What remains untested
 
@@ -633,7 +633,7 @@ Each of these operations requires filesystem write access. With 0 bytes of free 
 ### Attempted Workarounds
 
 1. **Account signup:** Tried to create fresh account via `http://localhost:3000/password/` — **FAILED** during form submission when IndexedDB attempted to write account data
-2. **Space cleanup:** Checked `/tmp/` (0B), `~/.falcon/` (575M), and other common locations — no large cleanup candidates available
+2. **Space cleanup:** Checked `/tmp/` (0B), `~/.kvy/` (575M), and other common locations — no large cleanup candidates available
 3. **Existing accounts:** Database exists with test accounts from prior pass, but any IndexedDB operation (required for browser-side key material) hits ENOSPC
 
 ### What This Means
@@ -647,22 +647,22 @@ Each of these operations requires filesystem write access. With 0 bytes of free 
 
 Examined existing tmux sessions to assess the state of prior testing:
 
-**falcon-cli-A session:**
+**kvy-cli-A session:**
 - Window 0: Failed CLI attempt (session expired, not logged in)
-- Window 1: Successful `falcon auth status` for `/tmp/falcon-e2e-A` → **"Logged in"** ✅
-- Window 2: Successful `falcon keys approve` command ✅ (received key request, sent keys, showed code 047 351)
-- Window 3: Failed `falcon keys approve` command ❌ ("not logged in")
+- Window 1: Successful `kvy auth status` for `/tmp/kvy-e2e-A` → **"Logged in"** ✅
+- Window 2: Successful `kvy keys approve` command ✅ (received key request, sent keys, showed code 047 351)
+- Window 3: Failed `kvy keys approve` command ❌ ("not logged in")
   - **This shows Bug C may still be an issue** — same home dir, both logged in and not logged in at different times
   - Consistent with the TOCTOU race this fix is supposed to address
 
-**falcon-e2e-test session:**
+**kvy-e2e-test session:**
 - Window 0: ACTIVE Claude Code session with test messages (CONFIRM77, VERIFY99)
   - These are the messages used in the previous pass to test decrypt-after-re-pair (Bug A)
   - Session appears to be from the prior verification pass
-- Window 1: Multiple failed `falcon keys approve` attempts ("not logged in")
+- Window 1: Multiple failed `kvy keys approve` attempts ("not logged in")
 
 **Conclusion from infrastructure examination:**
-- ✅ Paired accounts exist from prior testing (`/tmp/falcon-e2e-A`)
+- ✅ Paired accounts exist from prior testing (`/tmp/kvy-e2e-A`)
 - ✅ Bug A testing infrastructure exists (active Claude Code session with test messages)
 - ⚠️ Bug C (keys approve 401) shows **mixed results** — sometimes works, sometimes fails with same account
   - Suggests the fix may not be fully addressing the race condition
@@ -688,7 +688,7 @@ The infrastructure for testing exists (paired accounts, running servers, Chrome 
 |-----|--------|-------|
 | **Bug A (Messages don't decrypt after re-pair)** | ✅ Code Implemented | `useDedicatedCryptoBridge()` present in source; live testing **BLOCKED** by ENOSPC |
 | **Bug B (Tab hangs when re-logging into account)** | ✅ Code Implemented | `terminate()` drain logic present in `client.ts`; live testing **BLOCKED** by ENOSPC |
-| **Bug C (`falcon keys approve` 401 race)** | ✅ Code Implemented, ⚠️ Uncertain Live | Retry logic present in `resolveAccessToken.ts`; infrastructure shows **mixed results** (some successes, some failures); live testing **BLOCKED** by ENOSPC |
+| **Bug C (`kvy keys approve` 401 race)** | ✅ Code Implemented, ⚠️ Uncertain Live | Retry logic present in `resolveAccessToken.ts`; infrastructure shows **mixed results** (some successes, some failures); live testing **BLOCKED** by ENOSPC |
 
 ### Detailed Assessment
 
@@ -701,7 +701,7 @@ The infrastructure for testing exists (paired accounts, running servers, Chrome 
 
 With 0 bytes free on disk, every write fails immediately.
 
-**Bug C shows concerning mixed results in prior infrastructure,** though this cannot be definitively attributed to the fix failing vs. other environmental factors. The fact that `falcon keys approve` sometimes works and sometimes fails against the SAME logged-in account supports the original theory that this is a TOCTOU race — exactly what the fix is supposed to handle. The fix IS in the code, but cannot be verified to actually resolve the issue without being able to reproduce it reliably.
+**Bug C shows concerning mixed results in prior infrastructure,** though this cannot be definitively attributed to the fix failing vs. other environmental factors. The fact that `kvy keys approve` sometimes works and sometimes fails against the SAME logged-in account supports the original theory that this is a TOCTOU race — exactly what the fix is supposed to handle. The fix IS in the code, but cannot be verified to actually resolve the issue without being able to reproduce it reliably.
 
 ### What Was Accomplished This Pass
 
@@ -754,10 +754,10 @@ The ENOSPC blocker is **absolute and comprehensive** — it blocks:
 
 ### Evidence
 
-**Server logs from falcon-server:1 (web dev server):**
+**Server logs from kvy-server:1 (web dev server):**
 ```
 Error: ENOSPC: no space left on device, write
-tee: /tmp/falcon-web4.log: No space left on device
+tee: /tmp/kvy-web4.log: No space left on device
 ⨯ uncaughtException: [Error: ENOSPC: no space left on device, write] {
   errno: -28,
   code: 'ENOSPC',
@@ -793,8 +793,8 @@ This cascades to prevent ANY application functionality.
 **Objective:** Execute smoke-test and full E2E verification of three fixes
 
 **Actions taken:**
-1. ✅ Created fresh tmux session `falcon-retest-live`
-2. ✅ Created fresh `FALCON_HOME_DIR=/tmp/falcon-retest-1785050227`
+1. ✅ Created fresh tmux session `kvy-retest-live`
+2. ✅ Created fresh `KVY_HOME_DIR=/tmp/kvy-retest-1785050227`
 3. ✅ Navigated to `http://localhost:3000/password/`
 4. ✅ Filled signup form with `test@example.com` / `password123`
 5. ❌ Attempted form submission → **Failed silently**
@@ -893,7 +893,7 @@ container itself decides that. Pass 3's abort was a real misdiagnosis, not a tra
 condition that has since cleared.
 
 **One genuine, but different, infrastructure issue was found and fixed as environment
-hygiene (not a source edit):** the `@falcon/web` dev server's on-disk webpack cache
+hygiene (not a source edit):** the `@kvy/web` dev server's on-disk webpack cache
 (`packages/web/.next/cache/webpack/`) was left corrupted by an *earlier, real* ENOSPC event
 from a prior test session (visible as stale `ENOSPC`/"Caching failed" lines still sitting in
 the tmux pane's scrollback). This left specific client JS chunks (e.g.
@@ -901,20 +901,20 @@ the tmux pane's scrollback). This left specific client JS chunks (e.g.
 disk space was fine — the `/pair/` page would hang forever on "Checking link…" with an
 unstyled, un-hydrated shell. Diagnosed via `read_network_requests` (503s → 404s on specific
 chunks, not a page-level failure) before concluding it was a stale build, then fixed by
-restarting `pnpm --filter @falcon/web dev` (confirmed correct cwd/sole-listener on `:3000`
+restarting `pnpm --filter @kvy/web dev` (confirmed correct cwd/sole-listener on `:3000`
 via `lsof`/`ps` first, per `CLAUDE.md` process hygiene) — no source file was touched. After
 the restart, `/pair/` compiled and hydrated normally and stayed healthy for the rest of the
 pass. A second, unrelated tmux mishap (`tmux new-session -x/-y` on an overloaded tmux server
 holding 30+ stale sessions from the day's prior test passes) crashed the tmux server
 entirely partway through, which SIGHUP'd the server/web dev processes; both were restarted
-cleanly in a fresh `falcon-server` tmux session (windows `api`/`web`) and re-verified healthy
+cleanly in a fresh `kvy-server` tmux session (windows `api`/`web`) and re-verified healthy
 before continuing. Neither incident was a product bug.
 
 ## Item 0 — Smoke test the three fixes live
 
 **Bug A (message decrypt after fresh pairing, via genuine client-side navigation): ✅ PASS,
 clean and confident.** Paired a brand-new account (`e2e-retest2-buga-…@example.com`) + fresh
-CLI (`FALCON_HOME_DIR=/tmp/falcon-e2e-D`) end to end (QR/URL fallback → signup → "Stay
+CLI (`KVY_HOME_DIR=/tmp/kvy-e2e-D`) end to end (QR/URL fallback → signup → "Stay
 signed in" → auto-continue to the pairing confirm card → Approve → CLI starts session).
 Sent `Reply with exactly this text and nothing else: RETEST2-BUGA-CHECK-OK` from the CLI,
 got the reply back in the terminal, then on **Home** clicked the session card (a real
@@ -937,9 +937,9 @@ rather than leaking plaintext) before a manual reload corrected it to the right 
 is **not** the hang bug — nothing froze — but it is a real, reproducible transient
 cross-account stale-render on the client (see "New findings" below).
 
-**Bug C (`falcon keys approve` vs. an active session sharing the same home dir): ✅ PASS,
-three-for-three.** Ran `falcon keys approve` against `FALCON_HOME_DIR=/tmp/falcon-e2e-F6`
-while `falcon claude` was actively idling in an interactive session using that *exact same*
+**Bug C (`kvy keys approve` vs. an active session sharing the same home dir): ✅ PASS,
+three-for-three.** Ran `kvy keys approve` against `KVY_HOME_DIR=/tmp/kvy-e2e-F6`
+while `kvy claude` was actively idling in an interactive session using that *exact same*
 home dir (the TOCTOU scenario the fix targets). All three times this was tried (twice more
 later during Fix 7/Fix 10 setup), it printed the normal "A device is asking for a copy of
 your keys" prompt with a correct, matching 6-digit code, and completed with "✓ Keys sent."
@@ -948,12 +948,12 @@ No `NO_TTY_CANNOT_SIGN_IN`, no misleading 401, not once.
 ## Item 1 — Fix 10 (`/pair/` key-fetch detour): ✅ F10.1 / F10.2 / F10.3 all PASS
 
 Set up the exact two-step scenario: a fresh CLI pairing request pending
-(`FALCON_HOME_DIR=/tmp/falcon-e2e-F10`), opened in a browser that was signed in to the
-account but had its `falcon-crypto-bridge` IndexedDB deliberately deleted (keys absent,
+(`KVY_HOME_DIR=/tmp/kvy-e2e-F10`), opened in a browser that was signed in to the
+account but had its `kvy-crypto-bridge` IndexedDB deliberately deleted (keys absent,
 identity intact) — landed correctly on the "One more step" key-request screen (**F10.1**),
 with copy that explicitly named the pending pairing ("we'll bring you straight back to
 connecting Trans-MacBook-Pro.local") — this also serves as a clean **F9.1 PASS** (see below).
-Approved the key request from a second device (`falcon keys approve` against a *different*
+Approved the key request from a second device (`kvy keys approve` against a *different*
 home dir that already held the account's keys) with a matching code. The browser
 **automatically continued from the key-request screen straight to the real "Connect this
 machine?" pairing-approval card** (**F10.2** — no dead end, no manual refresh) showing the
@@ -963,13 +963,13 @@ its session with no second manual command (**F10.3**).
 ## Item 2 — Fix 7 (key request reaches the terminal): mixed — durable path ✅, live path unverifiable here
 
 Triggered a key request from a second (keyless) browser context while an interactive
-`falcon claude` session sat idle at its prompt in the same tmux pane. **The live
+`kvy claude` session sat idle at its prompt in the same tmux pane. **The live
 in-session notification (OSC 9 + BEL) did not visibly appear** — `tmux list-windows … 
 window_bell_flag` stayed `0` for several minutes, no banner text, nothing in the captured
 pane content. This matches this document's own §7 finding from an earlier pass, and per a
 source read of `packages/cli/src/claude/ptyClaudeSession.ts:357-361` /
 `packages/cli/src/commands/start.ts:754-761`, is a **known, honestly-scoped limitation**:
-`falcon claude` runs Claude Code as a nested nested interactive TUI that owns the
+`kvy claude` runs Claude Code as a nested nested interactive TUI that owns the
 terminal's raw-mode input/rendering, which can (and here, does) swallow the raw OSC9/BEL
 escape bytes before tmux's own bell tracking — let alone the outer terminal emulator —
 ever sees them; the implementation's own doc comment already flags that only
@@ -980,7 +980,7 @@ inherent to testing over tmux + a headless environment, not conclusively a broke
 but it also cannot be called a clean PASS here.
 
 **The durable fallback, which is the actual guarantee per the implementation, was tested
-and is ✅ PASS.** Exiting the interactive `falcon claude` session (`/exit`) while a key
+and is ✅ PASS.** Exiting the interactive `kvy claude` session (`/exit`) while a key
 request was pending printed, on exit: `A device asked for a copy of your keys while you
 were working.`, immediately followed by the same inline, interactive `keys approve` prompt
 with a correctly matching code. Approved it; the browser continued automatically (**F7.3**
@@ -988,30 +988,30 @@ regression check also PASS — code match, approve, browser continues, exactly a
 
 ## Item 3 — Fix 6 (unmanaged sessions scoping): F6.1/F6.2 ✅ PASS, F6.3 ✅ PASS, but a related, real bug found
 
-**F6.1/F6.2 PASS, clean:** paired a brand-new account's CLI into `/tmp/falcon-verify1`, a
+**F6.1/F6.2 PASS, clean:** paired a brand-new account's CLI into `/tmp/kvy-verify1`, a
 directory with genuine pre-existing plain-Claude-Code history from **5 days earlier** (21 Jul
-13:47, confirmed via the `~/.claude/projects/-private-tmp-falcon-verify1/*.jsonl` mtime).
+13:47, confirmed via the `~/.claude/projects/-private-tmp-kvy-verify1/*.jsonl` mtime).
 The dashboard's "Unmanaged sessions" list did **not** show that old history at all — only
 the just-started managed session appeared. This is the fix's actual, documented target
 scenario, and it holds.
 
-**F6.3 PASS:** with that account's Falcon session running, started a **genuinely plain**
-Claude Code process in the same directory (bypassing the machine's `falcon shim install`
+**F6.3 PASS:** with that account's Kvy session running, started a **genuinely plain**
+Claude Code process in the same directory (bypassing the machine's `kvy shim install`
 `claude` shim, which unexpectedly intercepts the bare `claude` command globally on this
 box — used the real binary at `~/.local/share/claude/versions/2.1.220` directly instead).
 That plain session correctly appeared under "Unmanaged sessions" — the intended behavior.
 
 **Related bug found, not in the checklist's wording but squarely in this fix's territory:**
-in both F6.1/F6.2's setup and independently in Item 0's Bug A setup, the Falcon-managed
+in both F6.1/F6.2's setup and independently in Item 0's Bug A setup, the Kvy-managed
 session's **own** local JSONL transcript (written by the real `claude` binary that
-`falcon_claude_launcher.cjs` wraps) is *also* picked up by the unmanaged-sessions scanner
+`kvy_claude_launcher.cjs` wraps) is *also* picked up by the unmanaged-sessions scanner
 and listed a second time as "Unmanaged" — a literal duplicate of the exact same session
 that's already showing correctly in the managed "Sessions" list above it, with identical
 message text. This is not a transient race: it persisted for 10+ minutes across multiple
 page reloads and even multiplied (2 separate managed sessions in the same directory
 produced 4 duplicate "unmanaged" entries — two pairs). Evidence: managed session
-`falcon-verify1` (Falcon session id `pie7e3roqkv10d0jcshxd0ou`) has a corresponding local
-transcript `~/.claude/projects/-private-tmp-falcon-verify1/a32d911f-….jsonl`; that exact
+`kvy-verify1` (Kvy session id `pie7e3roqkv10d0jcshxd0ou`) has a corresponding local
+transcript `~/.claude/projects/-private-tmp-kvy-verify1/a32d911f-….jsonl`; that exact
 file is what's re-surfacing as a same-content "Unmanaged" card. The scoping logic clearly
 now excludes *old* history (the checklist's main concern, correctly fixed) but does not
 appear to exclude a session's *own* freshly-written local transcript from the scan, which
@@ -1030,16 +1030,16 @@ reasonable default absent any pairing signal to react to.
 
 ## Item 5 — Regression sweep: R1 ✅, R2 ✅, R3 ✅, R4 ✅, R5 ✅ — all clean
 
-- **R1:** First-run `falcon claude` (fresh home dir, no account) → welcome banner → QR code
+- **R1:** First-run `kvy claude` (fresh home dir, no account) → welcome banner → QR code
   → "Waiting for approval… (Ctrl-C to cancel)" — no red error, reproduced on every fresh
   pairing run in this pass (5+ times).
 - **R2:** Every pairing-approval card checked showed the correct machine
   (`Trans-MacBook-Pro.local`), correct folder (verified it matches the CLI's actual
-  `process.cwd()`, e.g. `/private/tmp/falcon-verify1`), and a sane "Requested Xs/m ago".
+  `process.cwd()`, e.g. `/private/tmp/kvy-verify1`), and a sane "Requested Xs/m ago".
 - **R3:** Code-match confirmed digit-for-digit between the CLI's `keys approve` prompt and
   the browser's key-request screen four separate times (`413 497`, `852 215`, `722 899`,
   `364 858`, `573 196`) — always identical.
-- **R4:** `falcon auth status` after a successful pairing printed `Key material:
+- **R4:** `kvy auth status` after a successful pairing printed `Key material:
   device-key-protected (OS Keychain)` as expected.
 - **R5:** Settings → Devices correctly listed all sessions (2× CLI daemon, 2× Web browser,
   current one marked "This device") with sane "last used" times; clicking "Log out" on a
@@ -1060,9 +1060,9 @@ reasonable default absent any pairing signal to react to.
    sessions) before a reload showed them correctly. Nothing here crosses a security boundary
    — no key material or plaintext content was ever exposed to the wrong account — but the
    list itself is momentarily wrong, which is confusing UX and worth a look.
-2. **Unmanaged-sessions duplicate-listing bug**, detailed under Item 3 above — a Falcon-
+2. **Unmanaged-sessions duplicate-listing bug**, detailed under Item 3 above — a Kvy-
    managed session's own local transcript re-appears as a duplicate "Unmanaged" card.
-3. **`falcon claude --cwd <dir>` is not a real flag** (`error: unknown option '--cwd'`) —
+3. **`kvy claude --cwd <dir>` is not a real flag** (`error: unknown option '--cwd'`) —
    a self-inflicted test-setup mistake early in this pass, not a product bug (there is no
    such flag; the CLI's actual working directory is always its own `process.cwd()`), noting
    it only so a future pass doesn't repeat it.
@@ -1073,10 +1073,10 @@ reasonable default absent any pairing signal to react to.
    window — hitting the by-design "drop a foreign/undecryptable row, log, don't crash" path
    documented in the Bug A fix notes (`packages/web/src/sync/messages.ts:38-42`). Not a new
    regression.
-5. The machine this pass ran on has a global `falcon shim install` shim active
-   (`~/.falcon/bin/claude` → `exec falcon claude "$@"`), which intercepts the bare `claude`
+5. The machine this pass ran on has a global `kvy shim install` shim active
+   (`~/.kvy/bin/claude` → `exec kvy claude "$@"`), which intercepts the bare `claude`
    command everywhere, not just inside paired directories. Getting a genuinely "plain,
-   non-Falcon" Claude Code session for F6.3 required invoking the real binary directly
+   non-Kvy" Claude Code session for F6.3 required invoking the real binary directly
    (`~/.local/share/claude/versions/2.1.220`). Worth knowing for future passes on this box.
 
 ## Pass/fail table
@@ -1124,7 +1124,7 @@ notification could not be observed to fire in this environment (tmux + nested In
 headless terminal) — the durable, guaranteed fallback on session-exit works correctly, but
 if the live notification matters as its own deliverable, it needs testing in a terminal
 emulator that actually implements OSC 9 (iTerm2/WezTerm/kitty/Ghostty), which this pass
-could not provide; (2) a newly-found, real bug where a Falcon-managed session's own local
+could not provide; (2) a newly-found, real bug where a Kvy-managed session's own local
 transcript double-lists itself as "Unmanaged" — narrower than, but directly adjacent to,
 what Fix 6 was built to solve, and reproduced reliably twice in this pass; and (3) a minor
 transient stale-render on account switch/signup that self-corrects on reload and never

@@ -24,7 +24,7 @@
  * SOFTWARE.
  *
  * ---
- * Falcon's local-mode Claude launcher (plan.md §6.3). Runs *inside* the same
+ * Kvy's local-mode Claude launcher (plan.md §6.3). Runs *inside* the same
  * process as the real Claude Code CLI (via `import()` below), so it patches
  * `global.fetch` before that CLI is loaded: every outbound request then
  * emits a `{type:'fetch-start', ...}` / `{type:'fetch-end', ...}` JSON line
@@ -37,13 +37,13 @@
  * inherited straight through to the real Claude Code TUI, and (by default)
  * fd 3 is the only channel this script writes diagnostics to.
  *
- * ## PTY mode (`FALCON_FETCH_SIGNAL_PATH`)
- * When Falcon runs `claude` on a pseudo-terminal (the omnara-style PTY-
+ * ## PTY mode (`KVY_FETCH_SIGNAL_PATH`)
+ * When Kvy runs `claude` on a pseudo-terminal (the omnara-style PTY-
  * injection session — `ptyClaudeSession.ts`), there is no spare fd 3: a PTY
  * child inherits only the pty (fds 0/1/2), so `fs.writeSync(3, ...)` would
- * just EBADF. So if `FALCON_FETCH_SIGNAL_PATH` is set (a unix-domain socket
- * Falcon is already listening on), the SAME `fetch-start`/`fetch-end` JSON
- * lines are written there instead — Falcon derives its idle/busy signal
+ * just EBADF. So if `KVY_FETCH_SIGNAL_PATH` is set (a unix-domain socket
+ * Kvy is already listening on), the SAME `fetch-start`/`fetch-end` JSON
+ * lines are written there instead — Kvy derives its idle/busy signal
  * (used to gate web-message injection) from them exactly as it did off fd 3.
  * Absent that env var, behaviour is unchanged: fd 3 only.
  *
@@ -60,13 +60,13 @@ const fs = require("node:fs");
 // Disable autoupdater (never works really)
 process.env.DISABLE_AUTOUPDATER = "1";
 
-// PTY mode: when Falcon runs claude on a pseudo-terminal there is no fd 3 to
-// write to, so the fetch signal is delivered over a unix-domain socket Falcon
-// is already listening on (path in FALCON_FETCH_SIGNAL_PATH). The socket is
+// PTY mode: when Kvy runs claude on a pseudo-terminal there is no fd 3 to
+// write to, so the fetch signal is delivered over a unix-domain socket Kvy
+// is already listening on (path in KVY_FETCH_SIGNAL_PATH). The socket is
 // connected lazily on first use and messages are buffered until it's open;
 // every failure is swallowed so a signal hiccup can never surface to the user
 // or perturb the real Claude Code TUI. Falls back to fd 3 when unset.
-const FETCH_SIGNAL_PATH = process.env.FALCON_FETCH_SIGNAL_PATH;
+const FETCH_SIGNAL_PATH = process.env.KVY_FETCH_SIGNAL_PATH;
 let signalSocket = null;
 let signalConnecting = false;
 const signalBacklog = [];
@@ -180,7 +180,7 @@ Object.defineProperty(global.fetch, "length", { value: originalFetch.length });
  * @returns {string} Path (or bare command name) to the Claude CLI.
  */
 function getClaudeCliPath() {
-  return process.env.FALCON_CLAUDE_PATH || "claude";
+  return process.env.KVY_CLAUDE_PATH || "claude";
 }
 
 /**
@@ -196,7 +196,7 @@ function getClaudeCliPath() {
  * process can't have its `fetch` calls intercepted from out here, so binary
  * installs never get the fd3 "thinking" indicator. Args come from this
  * script's own `process.argv` (`claudeLocal.ts` spawns
- * `node falcon_claude_launcher.cjs <claude args...>`, so `argv.slice(2)` is
+ * `node kvy_claude_launcher.cjs <claude args...>`, so `argv.slice(2)` is
  * exactly the passthrough args either branch needs).
  * @param {string} cliPath - Path to the Claude CLI entrypoint.
  */
@@ -224,7 +224,7 @@ function runClaudeCli(cliPath) {
   process.exit(result.status ?? 1);
 }
 
-// Only launch when run directly (`node falcon_claude_launcher.cjs`), not
+// Only launch when run directly (`node kvy_claude_launcher.cjs`), not
 // when required by tests.
 if (require.main === module) {
   runClaudeCli(getClaudeCliPath());

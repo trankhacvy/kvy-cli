@@ -71,7 +71,7 @@ something an automated workflow can produce or check off.
 `:614-616` (`notePermissionMode`), `:677`/`:789` (`handlePreToolUse`/`handlePermissionRequest`,
 the only two callers of `cachePermissionMode`), `packages/cli/src/claude/ptyClaudeSession.ts:212-216`
 (`MODE_STATUS_PATTERNS`), `:381` (`waitForModeStatus`), `packages/cli/src/commands/start.ts:1148-1192`
-(`setMode` RPC handler, `raceModeConfirmation`), `:215` (`PTY_SET_MODE_ENV_VAR = "FALCON_PTY_SETMODE"`
+(`setMode` RPC handler, `raceModeConfirmation`), `:215` (`PTY_SET_MODE_ENV_VAR = "KVY_PTY_SETMODE"`
 constant), `:1149` (the CLI-side gate check, `!= "1"` → off), `packages/web/src/components/timeline/mode-switch-state.ts:19`
 (`canMutateMode`), `packages/web/src/lib/config.ts:75` (`PTY_SET_MODE_ENABLED = ... === "1"`,
 confirmed off by default).
@@ -104,19 +104,19 @@ agreement every time.
   output detector into that path too (an always-on watcher, not just a `setMode`-targeted one)
   was scoped out of the 2026-07-28 fix as a larger, separate change.
 - **Read-only selector by default.** The web's mode control only becomes a real, interactive
-  dropdown for a local/PTY session when `NEXT_PUBLIC_FALCON_PTY_SETMODE=1` is set
+  dropdown for a local/PTY session when `NEXT_PUBLIC_KVY_PTY_SETMODE=1` is set
   (`canMutateMode`) — off by default, pending the still-unchecked `docs/plan-v2.md` U4.5
   `[human]` live-soak task (20 real-world switches, no TUI corruption) — the 2026-07-28 fix
   substantially de-risks that soak but doesn't substitute for it.
 
 (Bypass-permissions not appearing in a Shift+Tab cycle is genuine Claude Code CLI behavior —
 live-reconfirmed during the 2026-07-28 fix (cycling past `plan` prints "auto mode unavailable
-for this model" and falls back to `default`) — unrelated to Falcon, not a bug here.)
+for this model" and falls back to `default`) — unrelated to Kvy, not a bug here.)
 
 **Status:** partially fixed — the `setMode` RPC reliability half is done and live-verified; the
 local-Shift+Tab-detection-latency half and the default-off decision remain open. Re-verified
-2026-07-28 against current code: both flags (`NEXT_PUBLIC_FALCON_PTY_SETMODE` web-side,
-`FALCON_PTY_SETMODE` CLI-side) are still off by default, `cachePermissionMode` is still only
+2026-07-28 against current code: both flags (`NEXT_PUBLIC_KVY_PTY_SETMODE` web-side,
+`KVY_PTY_SETMODE` CLI-side) are still off by default, `cachePermissionMode` is still only
 reachable from hook input handlers, and no code has landed since the fix commit (`d6bc2b9`)
 touching any of the five referenced files — everything above still holds exactly as written.
 
@@ -145,7 +145,7 @@ dropdown, and the model chip falls back to "Model unknown" instead of silently d
 when `metadata.model` is unset. Codex (`startCodex.ts`) has no PTY to inject into and reports
 `{ok:false}` honestly rather than pretending support.
 
-Verified live end-to-end against a real `falcon claude` PTY session running the actual Claude
+Verified live end-to-end against a real `kvy claude` PTY session running the actual Claude
 Code CLI (server → RPC → PTY keystrokes → transcript detection → metadata persisted → web chip
 updates), including one confirmed live occurrence of the "Switch model?" dialog. The
 auto-confirm fix for that dialog is covered by unit tests against the exact captured dialog
@@ -155,8 +155,8 @@ same-shape repro attempts afterward didn't reproduce it), so treat that specific
 unit-tested, not live-reverified.
 
 **What's still open:** same rollout question issue #11 already raises for `setMode` — the web
-selector only appears once `NEXT_PUBLIC_FALCON_PTY_SETMODEL=1` is set on the web build *and*
-`FALCON_PTY_SETMODEL=1` is set on the CLI process (defaults off, off by default until
+selector only appears once `NEXT_PUBLIC_KVY_PTY_SETMODEL=1` is set on the web build *and*
+`KVY_PTY_SETMODEL=1` is set on the CLI process (defaults off, off by default until
 live-soaked, same double-flag-gating precedent `setMode` uses). A decision on when/whether to
 flip that default on is still open.
 
@@ -236,7 +236,7 @@ stack, real paired machine, real web UI) — not caught by any test in the repo.
 **What's open:** clicking a workspace row's `+` and submitting "Start session" against a real
 paired machine reproducibly fails after ~1 second, every time (3/3 attempts). The web UI
 correctly shows the honest, translated error this session's own Phase B4 work added —
-*"The session process exited before it could start. Check that machine's `falcon` logs for
+*"The session process exited before it could start. Check that machine's `kvy` logs for
 what went wrong"* — which is a real improvement over the old generic 15s-timeout message, but
 following that instruction leads nowhere: the daemon's own log only records the fact of the
 fast exit, not why:
@@ -255,7 +255,7 @@ Confirmed via direct investigation:
   other concurrently-running session in the same repo — confirmed via code read, not just
   assumption.
 - The daemon process's own environment was directly inspected (`ps eww <daemon-pid>`) and
-  correctly has `FALCON_HOME_DIR`/`FALCON_BACKEND_URL`/`FALCON_FRONTEND_URL` set, ruling out
+  correctly has `KVY_HOME_DIR`/`KVY_BACKEND_URL`/`KVY_FRONTEND_URL` set, ruling out
   an obvious env-inheritance gap for the daemon itself.
 - **Root cause not fully isolated, because tmux itself makes this undebuggable in
   production today.** `processLauncher.ts`'s `trySpawnViaTmux` never sets
@@ -263,7 +263,7 @@ Confirmed via direct investigation:
   session/pane along with any stdout/stderr it produced — there is no way, in the current
   code, to recover *why* a tmux-spawned remote session died fast, whether from a real daemon
   spawn or from manual reproduction of the identical `tmux new-session` invocation.
-- A **manual, non-tmux** reproduction of the exact same `falcon claude --starting-mode remote
+- A **manual, non-tmux** reproduction of the exact same `kvy claude --starting-mode remote
   --started-by daemon` invocation (run directly, cwd'd into the same worktree) got further —
   it reached the ACP adapter connection/auto-install stage before eventually failing there
   (see issue #14) — meaning the tmux path is failing at some EARLIER step than the non-tmux
@@ -287,11 +287,11 @@ not root-caused; the `remain-on-exit`/diagnostic-trail fix above is still the ne
 
 **Update (2026-07-31) — root cause identified: this was issue #20's auth-token race, not a
 tmux/spawn-path bug at all.** `runPreflight` (`commands/startPreflight.ts`) is the *first* thing
-any `falcon claude` process does, daemon-spawned or not — before touching the ACP adapter,
+any `kvy claude` process does, daemon-spawned or not — before touching the ACP adapter,
 before the session bootstrap, before anything that could ever report `/session-started`, it
 calls `createTokenProviderForCredentials(...).getAccessToken()`, which POSTs to
 `/v1/auth/refresh` using the shared, single-use, rotating refresh token in
-`~/.falcon/access.key`. That file is shared with the daemon's own long-lived `TokenProvider`
+`~/.kvy/access.key`. That file is shared with the daemon's own long-lived `TokenProvider`
 (`daemon/machineIntegration.ts`). Per issue #20 (found via code-read 2026-07-30, in the SAME
 file this issue's own doc comment already flagged as a hazard): if the daemon's token provider
 rotates that shared token at nearly the same moment a sibling process presents it, the server's
@@ -318,7 +318,7 @@ Live re-verification against a real local stack (fresh account, paired daemon, `
 scenario — existing git repo, spawn into a new branch/worktree via the web's "New Session"
 dialog — **3 times in a row, all 3 succeeded**: `[spawn-engine] launched provider process` →
 tmux pid alive → `[session-client] connected` within ~1-2s each time, dialog showed "Session
-started.", all three processes still running minutes later (`falcon doctor`). A 4th attempt
+started.", all three processes still running minutes later (`kvy doctor`). A 4th attempt
 (plain repo-root spawn, no branch) also succeeded. Zero reproductions in 4/4 tries.
 
 Separately, the **"re-reproduced 2026-07-30" update above was likely a different, unrelated
@@ -428,7 +428,7 @@ added alongside issue #17's neighboring race-condition fix), `packages/web/src/f
 `deriveDefaultBaseBranch` (prefers a configured `baseRef` over the current-checked-out branch).
 
 **What's open:** an earlier E2E pass found the `+` spawn panel's base-branch picker ignoring a
-workspace's configured `baseRef` (`falcon workspace config --base-ref main`) and always
+workspace's configured `baseRef` (`kvy workspace config --base-ref main`) and always
 falling back to the current-checked-out branch instead — isolated with a differentiating test
 (checked out a throwaway branch, confirmed the picker followed it, not the configured `main`).
 The most likely cause was the same "`actions` starts as a permanently-rejecting stub until this
@@ -461,7 +461,7 @@ a sibling process) — retrying once"`). Exact token-rotation code path not trac
 this entry documents the confirmed symptom and repro, not the internals.
 
 **What's open:** during session-panel-workflow-plan.md's E2E test pass (2026-07-29), an
-interrupted/restarted test-agent run repeatedly left the previous run's `falcon claude`
+interrupted/restarted test-agent run repeatedly left the previous run's `kvy claude`
 processes (and their ACP adapter subprocesses) alive rather than terminated. On daemon
 restart, `sessionRegistry.ts` re-adopts these as live tracked sessions instead of reaping them.
 With several such orphaned processes accumulating under one account, the daemon log showed
@@ -501,7 +501,7 @@ scopes an existing-machine registration to the CALLER's own `accountId`; the `!m
 branch (line 79-113) is the only path that inserts a fresh row under a new `accountId`. Root
 cause not fully isolated — see below.
 
-**What's open:** ran `falcon auth login` a second time against a daemon whose
+**What's open:** ran `kvy auth login` a second time against a daemon whose
 `daemon.state.json` already carried a `machineId` from an earlier pairing to Account A, while
 approving from a browser signed into a different Account B. The CLI reported `"auth login:
 succeeded"`, the browser's approval screen showed "Connected," and the daemon's own
@@ -522,7 +522,7 @@ would see it. Not confirmed by tracing that exact call site — flagging the mec
 most likely one, not a verified root cause.
 
 **What a real fix needs:** (1) root-cause which call actually re-registers the machine after
-`falcon auth login` succeeds, and what it does when the existing `machineId` doesn't belong to
+`kvy auth login` succeeds, and what it does when the existing `machineId` doesn't belong to
 the authenticating account; (2) either make cross-account re-pairing of an existing machine
 identity work (transfer ownership, with whatever confirmation that deserves) or make it fail
 loudly (`auth login` itself should error, not report success) — the current silent-mismatch

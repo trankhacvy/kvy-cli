@@ -37,7 +37,7 @@ export interface SessionStorage {
   destroy(): Promise<void>;
 }
 
-const DB_NAME = "falcon-session";
+const DB_NAME = "kvy-session";
 const DB_VERSION = 1;
 const STORE_NAME = "session";
 const RECORD_KEY = "sessionRecord";

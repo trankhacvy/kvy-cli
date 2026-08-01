@@ -150,6 +150,6 @@ describe("runSessionsListCommand", () => {
     );
 
     expect(code).toBe(0);
-    expect(written.join("")).toContain("could not reach the Falcon server");
+    expect(written.join("")).toContain("could not reach the Kvy server");
   });
 });

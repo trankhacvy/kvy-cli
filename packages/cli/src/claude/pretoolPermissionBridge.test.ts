@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import {
   ASK_FALLBACK_REASON,
@@ -823,7 +823,7 @@ describe("composeAskAnswerReason", () => {
     ];
     expect(composeAskAnswerReason(questions, { "Which color?": "Blue" })).toBe(
       [
-        "The user answered via the Falcon web UI:",
+        "The user answered via the Kvy web UI:",
         "- Which color?\n  → Blue",
         "Proceed using these answers. Do not call AskUserQuestion again for these questions.",
       ].join("\n"),
@@ -839,7 +839,7 @@ describe("composeAskAnswerReason", () => {
       composeAskAnswerReason(questions, { "Which color?": "Blue", "Which size?": "Large" }),
     ).toBe(
       [
-        "The user answered via the Falcon web UI:",
+        "The user answered via the Kvy web UI:",
         "- Which color?\n  → Blue",
         "- Which size?\n  → Large",
         "Proceed using these answers. Do not call AskUserQuestion again for these questions.",

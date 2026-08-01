@@ -10,12 +10,12 @@ import path from "node:path";
 import type { AdapterId } from "./manifest.js";
 import { ADAPTER_MANIFEST } from "./manifest.js";
 
-/** `~/.falcon/adapters/` — Falcon's own npm prefix for managed ACP adapter installs. */
+/** `~/.kvy/adapters/` — Kvy's own npm prefix for managed ACP adapter installs. */
 export function adaptersDir(homeDir: string): string {
   return path.join(homeDir, "adapters");
 }
 
-/** The root `package.json` Falcon writes/maintains inside `adaptersDir()` — never hand-edited. */
+/** The root `package.json` Kvy writes/maintains inside `adaptersDir()` — never hand-edited. */
 export function adaptersPackageJsonPath(homeDir: string): string {
   return path.join(adaptersDir(homeDir), "package.json");
 }

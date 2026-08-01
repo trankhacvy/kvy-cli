@@ -10,7 +10,7 @@ import { adapterEntryPath, adaptersPackageJsonPath } from "./paths.js";
 let homeDir: string;
 
 beforeEach(async () => {
-  homeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-install-"));
+  homeDir = await mkdtemp(path.join(tmpdir(), "kvy-adapters-install-"));
 });
 
 afterEach(async () => {
@@ -160,7 +160,7 @@ describe("installAdapter", () => {
   });
 
   it("does NOT dedupe calls for different homeDirs — concurrent installs for different test fixtures (or, in production, this never happens since one daemon process only ever has one homeDir) stay independent", async () => {
-    const otherHomeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-install-other-"));
+    const otherHomeDir = await mkdtemp(path.join(tmpdir(), "kvy-adapters-install-other-"));
     try {
       const runNpmA = fakeNpmInstall();
       const runNpmB = fakeNpmInstall();

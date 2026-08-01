@@ -4,7 +4,7 @@
  * plan-v2.md Wave 1.1).
  *
  * ## The problem this solves
- * In the new `falcon claude` model the real `claude` TUI stays live at the
+ * In the new `kvy claude` model the real `claude` TUI stays live at the
  * terminal and web-sent messages are injected into it (PTY-injection input
  * path — a separate concern, built elsewhere). When a web-injected message
  * makes Claude want to run a tool that needs approval, the permission prompt
@@ -13,7 +13,7 @@
  * Claude Code's hooks run a command around tool execution and their stdout
  * JSON can approve/deny/defer the call. This bridge is the decision-routing
  * core behind both hooks: it takes the hook's tool payload, runs it through
- * Falcon's EXISTING permission pipeline (a `perm-request` envelope for the
+ * Kvy's EXISTING permission pipeline (a `perm-request` envelope for the
  * web PermCard, the first-wins `perm.answer` RPC, a `perm-resolve`
  * envelope), and translates the answer back into each hook's own output
  * contract — all while the TUI stays live and normal.
@@ -176,7 +176,7 @@ import {
   type PermDecision,
   type PermissionMode,
   type SessionEnvelope,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import type {
   AgentStateCompletedRequest,
@@ -230,7 +230,7 @@ export function composeAskAnswerReason(
     (q) => `- ${q.question}\n  → ${answers[q.question] ?? "(no answer)"}`,
   );
   return [
-    "The user answered via the Falcon web UI:",
+    "The user answered via the Kvy web UI:",
     ...lines,
     "Proceed using these answers. Do not call AskUserQuestion again for these questions.",
   ].join("\n");
@@ -870,10 +870,10 @@ export class PreToolPermissionBridge {
         const behavior = decision.kind === "deny" ? "deny" : "allow";
         const message =
           decision.kind === "deny"
-            ? appendDenyGuard(decision.message ?? "Denied from the Falcon web UI.")
+            ? appendDenyGuard(decision.message ?? "Denied from the Kvy web UI.")
             : decision.kind === "mode"
-              ? `Switched permission mode to "${decision.mode}" and allowed from the Falcon web UI.`
-              : "Allowed from the Falcon web UI.";
+              ? `Switched permission mode to "${decision.mode}" and allowed from the Kvy web UI.`
+              : "Allowed from the Kvy web UI.";
         resolvePromise({
           hookSpecificOutput: {
             hookEventName: "PermissionRequest",
@@ -1094,13 +1094,10 @@ export class PreToolPermissionBridge {
             { toolName: pending.toolName },
           );
         }
-        return output("allow", `Allowed from the Falcon web UI (${decision.scope}).`);
+        return output("allow", `Allowed from the Kvy web UI (${decision.scope}).`);
       }
       case "deny":
-        return output(
-          "deny",
-          appendDenyGuard(decision.message ?? "Denied from the Falcon web UI."),
-        );
+        return output("deny", appendDenyGuard(decision.message ?? "Denied from the Kvy web UI."));
       case "mode": {
         // Choosing a mode is itself the resolving action (mirrors the ACP
         // handler's rule). The live TUI's mode isn't changed by this hook;

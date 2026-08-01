@@ -5,7 +5,7 @@ import {
   getRandomBytes,
   libsodiumDecryptWithSecretKey,
   wrapDek,
-} from "@falcon/crypto/web";
+} from "@kvy/crypto/web";
 import { describe, expect, it } from "vitest";
 import { createCryptoBridgeClient } from "../client.js";
 import { createMemoryKeyStorage } from "../key-storage.js";

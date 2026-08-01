@@ -22,7 +22,7 @@
  * to the caller (`oauth-callback-page.tsx`) to persist via `bridge.setRefreshToken`
  * once its own post-login unlock step confirms the worker is unlocked.
  */
-import { getRandomBytes, ready } from "@falcon/crypto/web";
+import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
 import { keysBind, keysChallenge, register } from "./api.js";
 import { consumePendingPair } from "./pending-pair.js";

@@ -13,8 +13,8 @@ describe("parsePsOutput", () => {
     const fixture = [
       "    1     0 /sbin/launchd",
       "  501     1 /usr/sbin/syslogd",
-      " 4242     1 node /Users/dev/falcon/packages/cli/dist/index.mjs daemon start-sync",
-      " 4300  4242 falcon claude --starting-mode remote --started-by daemon",
+      " 4242     1 node /Users/dev/kvy/packages/cli/dist/index.mjs daemon start-sync",
+      " 4300  4242 kvy claude --starting-mode remote --started-by daemon",
     ].join("\n");
 
     expect(parsePsOutput(fixture)).toEqual([
@@ -23,19 +23,19 @@ describe("parsePsOutput", () => {
       {
         pid: 4242,
         ppid: 1,
-        command: "node /Users/dev/falcon/packages/cli/dist/index.mjs daemon start-sync",
+        command: "node /Users/dev/kvy/packages/cli/dist/index.mjs daemon start-sync",
       },
       {
         pid: 4300,
         ppid: 4242,
-        command: "falcon claude --starting-mode remote --started-by daemon",
+        command: "kvy claude --starting-mode remote --started-by daemon",
       },
     ]);
   });
 
   it("skips blank lines and lines that don't start with pid/ppid", () => {
-    const fixture = "\n  \n  99    1  falcon kill all\n garbage line without leading numbers\n";
-    expect(parsePsOutput(fixture)).toEqual([{ pid: 99, ppid: 1, command: "falcon kill all" }]);
+    const fixture = "\n  \n  99    1  kvy kill all\n garbage line without leading numbers\n";
+    expect(parsePsOutput(fixture)).toEqual([{ pid: 99, ppid: 1, command: "kvy kill all" }]);
   });
 
   it("returns an empty array for empty output", () => {
@@ -46,11 +46,11 @@ describe("parsePsOutput", () => {
 describe("listProcesses", () => {
   it("parses stdout from the mocked ps invocation", async () => {
     execFileMock.mockImplementation((_cmd, _args, _opts, callback) => {
-      callback(null, "  10   1  falcon daemon start-sync\n", "");
+      callback(null, "  10   1  kvy daemon start-sync\n", "");
     });
 
     const result = await listProcesses();
-    expect(result).toEqual([{ pid: 10, ppid: 1, command: "falcon daemon start-sync" }]);
+    expect(result).toEqual([{ pid: 10, ppid: 1, command: "kvy daemon start-sync" }]);
     expect(execFileMock).toHaveBeenCalledWith(
       "ps",
       ["-axo", "pid=,ppid=,command="],

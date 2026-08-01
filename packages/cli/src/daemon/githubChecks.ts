@@ -5,7 +5,7 @@
  * remote → owner/repo, the current branch, the open PR for that branch
  * head, and the PR head commit's check-runs — authenticated with a
  * machine-local GitHub token (`../github/githubAuth.js`) that never
- * reaches the Falcon server (design §5.3/§6.1).
+ * reaches the Kvy server (design §5.3/§6.1).
  *
  * Modeled on `gitStatus.ts`/`gitBranches.ts`'s injectable-deps shape: same
  * `git?: GitExec` seam (defaulting to `gitExec.ts`'s real `runGit`), same
@@ -16,17 +16,12 @@
  *
  * The token value is read fresh on every call (`deps.readToken`, default
  * `githubAuth.ts`'s `readGithubToken`) — never cached across calls — so a
- * `falcon github login` run while the daemon is already up takes effect on
+ * `kvy github login` run while the daemon is already up takes effect on
  * this RPC's very next call, no daemon restart needed. It is passed only
  * into the `Authorization` header below and is never logged or included in
  * the returned `GithubChecksResult` (verified by githubChecks.test.ts).
  */
-import type {
-  CheckRun,
-  GithubChecksParams,
-  GithubChecksResult,
-  PullRequestInfo,
-} from "@falcon/wire";
+import type { CheckRun, GithubChecksParams, GithubChecksResult, PullRequestInfo } from "@kvy/wire";
 import { readGithubToken } from "../github/githubAuth.js";
 import { readWorkspaceGitConfig } from "../workspaceConfig.js";
 import { type GitExec, runGit } from "./gitExec.js";

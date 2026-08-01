@@ -9,7 +9,7 @@
  * is — Next prerenders these routes at build time (static export).
  */
 
-const PREFIX = "falcon:last-seen:";
+const PREFIX = "kvy:last-seen:";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";

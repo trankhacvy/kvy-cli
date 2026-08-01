@@ -24,10 +24,10 @@ export const CODEX_EFFORT_OPTIONS: CodexEffortOption[] = [
   { value: "max", label: "Max" },
 ];
 
-/** Falcon's default effort level when no preference has ever been saved. */
+/** Kvy's default effort level when no preference has ever been saved. */
 export const DEFAULT_CODEX_EFFORT: CodexEffort = "medium";
 
-const CODEX_EFFORT_STORAGE_KEY = "falcon:codex-effort";
+const CODEX_EFFORT_STORAGE_KEY = "kvy:codex-effort";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";

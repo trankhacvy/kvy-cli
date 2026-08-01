@@ -1,4 +1,4 @@
-import { RUNNING_SESSION_MODEL_ALIASES } from "@falcon/wire";
+import { RUNNING_SESSION_MODEL_ALIASES } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import {
   CUSTOM_MODEL_VALUE,
@@ -46,7 +46,7 @@ describe("MODEL_OPTIONS", () => {
     expect(MODEL_OPTIONS.codex.some((o) => o.value.includes("1m"))).toBe(false);
   });
 
-  it("claude-code's non-default aliases exactly match @falcon/wire's RUNNING_SESSION_MODEL_ALIASES (issue #12 — the web running-session model selector reuses these same short names, and the wire enum is the keystroke-injection allowlist enforcing them server/CLI-side)", () => {
+  it("claude-code's non-default aliases exactly match @kvy/wire's RUNNING_SESSION_MODEL_ALIASES (issue #12 — the web running-session model selector reuses these same short names, and the wire enum is the keystroke-injection allowlist enforcing them server/CLI-side)", () => {
     const nonDefaultValues = MODEL_OPTIONS["claude-code"]
       .map((o) => o.value)
       .filter((v) => v !== DEFAULT_MODEL_VALUE)

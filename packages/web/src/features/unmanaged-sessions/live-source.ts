@@ -1,7 +1,7 @@
 "use client";
 
-import { decodeBase64 } from "@falcon/crypto/web";
-import type { MachineRow, UnmanagedSessionRow } from "@falcon/wire";
+import { decodeBase64 } from "@kvy/crypto/web";
+import type { MachineRow, UnmanagedSessionRow } from "@kvy/wire";
 import { useEffect, useMemo, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
 import {
@@ -20,7 +20,7 @@ import type {
 } from "./types";
 
 /**
- * The Home screen's real `UseUnmanagedSessionsSnapshot` (falcon-system-design.md
+ * The Home screen's real `UseUnmanagedSessionsSnapshot` (kvy-system-design.md
  * §9.2 "Home" row: `UnmanagedSection`; plan.md §16 W3.10 "Unmanaged sessions
  * -> live"). Same seam/shape as `features/session-list/live-source.ts`'s
  * `useLiveSessionListSnapshot` — reads the same `['sync']` account snapshot

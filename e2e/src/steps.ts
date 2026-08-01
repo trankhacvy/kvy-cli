@@ -8,7 +8,7 @@
  * and reports PASS/FAIL for all 20 without stopping early where it's safe
  * to continue (see that file for the exact policy).
  */
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import type { CanUseToolResult } from "./fakeSessionProcess.js";
 import type { TestStack } from "./testStack.js";
 import { fetchEnvelopes, waitForEnvelope, waitForPendingPermRequest } from "./transcript.js";

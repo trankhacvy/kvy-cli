@@ -22,7 +22,7 @@
  * key material — fenced by a real step-up proof (password re-entry) and the
  * "other devices online" 409 interlock (`keys/bind`'s own check).
  */
-import { getRandomBytes, ready } from "@falcon/crypto/web";
+import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
 import { ApiError, keysBind, keysChallenge, passwordLogin, passwordRegister } from "./api.js";
 import { consumePendingPair } from "./pending-pair.js";

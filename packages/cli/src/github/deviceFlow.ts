@@ -1,5 +1,5 @@
 /**
- * GitHub OAuth **device authorization flow** (`falcon github login`,
+ * GitHub OAuth **device authorization flow** (`kvy github login`,
  * docs/features/github-pr-ci.md "GITHUB AUTH"): the CLI has no browser
  * redirect target of its own, so it mints a device code, shows the user a
  * short verification URL + code to enter on github.com, then polls until
@@ -25,7 +25,7 @@ export interface DeviceCodeResponse {
 
 export interface RequestDeviceCodeOptions {
   clientId: string;
-  /** Space-separated OAuth scopes; defaults to `"repo"` (falcon-prd.md/design's "elevated `repo`/`read:checks` scope" — GitHub's `repo` scope already covers check-run reads). */
+  /** Space-separated OAuth scopes; defaults to `"repo"` (kvy-prd.md/design's "elevated `repo`/`read:checks` scope" — GitHub's `repo` scope already covers check-run reads). */
   scope?: string;
   fetchImpl?: typeof fetch;
 }

@@ -1,6 +1,6 @@
 /**
  * Maps the running process's platform/arch to the exact asset-name
- * convention `scripts/build-binaries.sh` publishes (`falcon-$platform-$arch`
+ * convention `scripts/build-binaries.sh` publishes (`kvy-$platform-$arch`
  * — see that script and `scripts/install.sh`'s matching `uname`-based
  * detection). Kept as its own tiny pure function rather than duplicated
  * inline so `applyUpdate.ts` and its tests share one source of truth for
@@ -10,7 +10,7 @@
 export interface PlatformAsset {
   platform: "darwin" | "linux";
   arch: "arm64" | "x64";
-  /** e.g. "falcon-darwin-arm64" — matches `build-binaries.sh`'s `TARGETS` suffixes exactly. */
+  /** e.g. "kvy-darwin-arm64" — matches `build-binaries.sh`'s `TARGETS` suffixes exactly. */
   assetName: string;
 }
 
@@ -27,5 +27,5 @@ export function detectPlatformAsset(
   if (arch !== "arm64" && arch !== "x64") return null;
   if (platform === "linux" && arch === "arm64") return null; // no linux-arm64 binary published yet
 
-  return { platform, arch, assetName: `falcon-${platform}-${arch}` };
+  return { platform, arch, assetName: `kvy-${platform}-${arch}` };
 }

@@ -34,7 +34,7 @@ type Status =
  * protects keys at rest; a returning one loads them with no interaction at all.
  */
 function decodeAccountLabel(): string {
-  return getAccountId() ?? "Falcon";
+  return getAccountId() ?? "Kvy";
 }
 
 export function OAuthCallbackPage({
@@ -49,7 +49,7 @@ export function OAuthCallbackPage({
   const [status, setStatus] = useState<Status>({ kind: "working" });
 
   useEffect(() => {
-    setTitleOverride("oauth-callback", "Signing in · Falcon");
+    setTitleOverride("oauth-callback", "Signing in · Kvy");
     return () => clearTitleOverride("oauth-callback");
   }, []);
 

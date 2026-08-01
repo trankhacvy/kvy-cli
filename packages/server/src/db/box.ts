@@ -1,8 +1,8 @@
-import type { EncryptedBox } from "@falcon/wire";
+import type { EncryptedBox } from "@kvy/wire";
 
 /**
  * Codec between an `EncryptedBox` (the wire-visible `{t, v, c}` envelope,
- * see `@falcon/wire`'s `box.ts`) and the raw `bytea` bytes every encrypted
+ * see `@kvy/wire`'s `box.ts`) and the raw `bytea` bytes every encrypted
  * column in `db/schema.ts` actually stores.
  *
  * The *whole* envelope round-trips through `bytea` — not just the inner

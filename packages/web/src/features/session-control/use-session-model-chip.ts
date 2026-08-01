@@ -1,6 +1,6 @@
 "use client";
 
-import type { EncryptedBox } from "@falcon/crypto/web";
+import type { EncryptedBox } from "@kvy/crypto/web";
 import { useEffect, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";

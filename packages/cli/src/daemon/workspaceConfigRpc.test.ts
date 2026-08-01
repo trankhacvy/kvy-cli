@@ -12,9 +12,9 @@ let homeDir: string;
 let workspaceRoot: string;
 
 beforeEach(async () => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-rpc-test-home-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-workspace-config-rpc-test-home-"));
   workspaceRoot = await realpath(
-    mkdtempSync(path.join(tmpdir(), "falcon-workspace-config-rpc-test-repo-")),
+    mkdtempSync(path.join(tmpdir(), "kvy-workspace-config-rpc-test-repo-")),
   );
 });
 

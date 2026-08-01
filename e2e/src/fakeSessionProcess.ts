@@ -1,5 +1,5 @@
 /**
- * The conformance harness's stand-in for a real `falcon claude
+ * The conformance harness's stand-in for a real `kvy claude
  * --starting-mode remote` session process (design §7.4 "Remote mode" / §7.6
  * "Permission pipeline" / §4.4's "Session RPCs" table).
  *
@@ -33,10 +33,10 @@
 // Cross-package source imports (harness-only, same convention
 // `packages/cli/src/daemon/commands.machineWiring.integration.test.ts` and
 // `packages/cli/src/session/bootstrap.integration.test.ts` already
-// established): `falcon` (the CLI package) is a private, unpublished
+// established): `kvy` (the CLI package) is a private, unpublished
 // package with no subpath `exports` for its internals, so this reaches its
 // TS source directly rather than through a built `dist/` entry point.
-// `falcon` is declared as a devDependency in package.json for
+// `kvy` is declared as a devDependency in package.json for
 // workspace-graph clarity even though these imports are relative paths, not
 // the package name.
 
@@ -50,7 +50,7 @@ import {
   type PermDecision,
   type PermissionMode,
   type SessionEnvelope,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { io as ioClientDefault, type Socket } from "socket.io-client";
 import {
   AcpPermissionHandler,

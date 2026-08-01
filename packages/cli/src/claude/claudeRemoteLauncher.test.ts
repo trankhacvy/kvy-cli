@@ -1,4 +1,4 @@
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { AcpRemoteHandle, AcpRemoteOptions } from "../acp/acpRemote.js";
 import type { MessageBuffer } from "../remote/messageBuffer.js";
@@ -54,7 +54,7 @@ function baseOptions(
   return {
     workingDirectory: "/tmp/work",
     permissionMode: "default",
-    homeDir: "/tmp/falcon-home",
+    homeDir: "/tmp/kvy-home",
     onEnvelopes: () => {},
     dedupe: new ModeSwitchDedupe(),
     ...overrides,

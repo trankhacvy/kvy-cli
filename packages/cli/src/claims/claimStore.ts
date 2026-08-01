@@ -8,8 +8,8 @@
  * (`claimMessageSend`/`completeMessageSend`,
  * apps/mobvibe-cli/src/wal/wal-store.ts): INSERT-OR-IGNORE the claim, then
  * verify-claimId-then-record-result atomically. mobvibe backs this with a
- * SQLite WAL and a real transaction; Falcon's design instead calls for a
- * plain per-session JSON file (`~/.falcon/claims/<sessionId>.json`, design
+ * SQLite WAL and a real transaction; Kvy's design instead calls for a
+ * plain per-session JSON file (`~/.kvy/claims/<sessionId>.json`, design
  * §7.2/§7.10) under the same O_CREAT|O_EXCL lock-file + tmp-write-then-rename
  * pattern `persistence.ts`/`workspace/registry.ts` already use — so this is
  * a port-with-changes: the tri-state claim semantics are faithful, but the
@@ -44,7 +44,7 @@ import path from "node:path";
 import { resolveHomeDir } from "../home.js";
 
 export interface ClaimStoreOptions {
-  /** Overrides the resolved `~/.falcon` (or `FALCON_HOME_DIR`) directory. */
+  /** Overrides the resolved `~/.kvy` (or `KVY_HOME_DIR`) directory. */
   homeDir?: string;
   env?: NodeJS.ProcessEnv;
   /** Injectable clock, mirroring `sessionsStore.ts`'s `now` param — tests use this to control retention pruning without real sleeps. */

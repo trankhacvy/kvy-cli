@@ -1,6 +1,6 @@
 /**
  * Maps ACP (`@agentclientprotocol/sdk`) `session/update` notifications onto
- * `@falcon/wire`'s `SessionEnvelope` stream — the single, provider-agnostic
+ * `@kvy/wire`'s `SessionEnvelope` stream — the single, provider-agnostic
  * mapper design §7.3 calls for: "The ACP -> `SessionEnvelope` mapper
  * (`acpToEnvelope`) is likewise single and shared: ACP `session/update`
  * notification kinds map 1:1 onto the existing envelope events
@@ -39,7 +39,7 @@
  *    kind) -> logged and dropped. None of these has a `SessionEventSchema`
  *    equivalent; in particular ACP's `current_mode_update` (a permission-mode
  *    change inside one ACP session) must NOT be folded into the wire's
- *    `mode-switch` event, which means something unrelated (Falcon's own
+ *    `mode-switch` event, which means something unrelated (Kvy's own
  *    local<->remote control handoff, design §7.5).
  *
  * `session/prompt`'s call/return boundary is not a `session/update`
@@ -126,7 +126,7 @@
  * once its input was fully assembled.
  */
 
-import { createEnvelope, type SessionEnvelope, type SessionEvent } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope, type SessionEvent } from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import type { Logger } from "../logger.js";
 

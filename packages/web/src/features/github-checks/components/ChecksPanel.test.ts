@@ -25,7 +25,7 @@ describe("ChecksBody", () => {
       checks: undefined,
     });
     expect(html).toContain("doesn&#x27;t support CI checks yet");
-    expect(html).toContain("Update falcon and restart");
+    expect(html).toContain("Update kvy and restart");
   });
 
   it("shows a generic error message for any other error", () => {
@@ -45,7 +45,7 @@ describe("ChecksBody", () => {
       checks: MOCK_GITHUB_CHECKS_FIXTURES["no-token"],
     });
     expect(html).toContain("GitHub is not connected on this machine");
-    expect(html).toContain("falcon github login");
+    expect(html).toContain("kvy github login");
   });
 
   it("state: unsupported-remote — shows the result's own message", () => {

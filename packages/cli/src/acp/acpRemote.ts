@@ -57,21 +57,21 @@
  *
  * ## Known v2 delta: AskUserQuestion
  * The adapter disables the `AskUserQuestion` tool when the client doesn't
- * advertise form-elicitation capability (Falcon doesn't yet — see
+ * advertise form-elicitation capability (Kvy doesn't yet — see
  * `ACP_CLIENT_CAPABILITIES`). The model falls back to asking questions as
  * plain transcript text answered via the composer — functional, just not a
  * structured card. v1's structured flow depended on `updatedInput`, which
  * ACP's permission outcome cannot carry either way. Revisit with elicitation
  * support if the UX gap matters in practice.
  */
-import type { PermissionMode, SessionEnvelope } from "@falcon/wire";
-import { createEnvelope } from "@falcon/wire";
+import type { PermissionMode, SessionEnvelope } from "@kvy/wire";
+import { createEnvelope } from "@kvy/wire";
 import type { AdapterId } from "../adapters/index.js";
 import type {
   ReportSessionAttentionDeps,
   reportSessionAttention as reportSessionAttentionDefault,
 } from "../api/sessionNotify.js";
-import { FALCON_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
+import { KVY_SYSTEM_PROMPT } from "../claude/claudeLocal.js";
 import type { Logger } from "../logger.js";
 import { OrderedEnvelopeQueue } from "../remote/outgoingQueue.js";
 import type { AcpConnectionError, PermissionRequestHandler } from "./acpConnection.js";
@@ -116,7 +116,7 @@ export interface AcpRemoteOptions {
   resume?: string | null;
   permissionMode: PermissionMode;
   model?: string;
-  /** `~/.falcon` (or override) — for the adapter manager's verify-before-spawn. */
+  /** `~/.kvy` (or override) — for the adapter manager's verify-before-spawn. */
   homeDir: string;
   /** Every envelope this session produces, already strict-ordered. */
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
@@ -125,7 +125,7 @@ export interface AcpRemoteOptions {
   /** Fires when a turn's `session/prompt` RESOLVED — the claim-completion hook (file header). */
   onTurnSettled?: (info: { messageId?: string; status: SessionTurnEndStatus }) => void;
   /**
-   * Falcon session id + backend/auth config for the session-attention
+   * Kvy session id + backend/auth config for the session-attention
    * notify POST (docs/plan-flows-3-4-5.md Flow 5's ACP wiring,
    * `api/sessionNotify.ts`), threaded straight into the `AcpPermissionHandler`
    * this module owns (`perm`/`question` kinds) and consulted again at this
@@ -197,7 +197,7 @@ const noopLogger: Logger = {
   error: () => {},
 };
 
-const DEFAULT_CLIENT_INFO = { name: "falcon", version: "0.0.0" };
+const DEFAULT_CLIENT_INFO = { name: "kvy", version: "0.0.0" };
 
 interface QueuedTurn {
   text: string;
@@ -271,7 +271,7 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
   const sessionMeta: Record<string, unknown> | null =
     adapterId === "claude-code"
       ? {
-          systemPrompt: { type: "preset", preset: "claude_code", append: FALCON_SYSTEM_PROMPT },
+          systemPrompt: { type: "preset", preset: "claude_code", append: KVY_SYSTEM_PROMPT },
           claudeCode: {
             options: {
               ...(opts.resume ? { resume: opts.resume } : {}),

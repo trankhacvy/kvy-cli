@@ -14,8 +14,8 @@ copy, exact repro steps, log lines) and move on. Do not edit any source file.
   rebuilt `crypto-worker.js`, verify the worker bundle's `API_URL` fallback is present:
   `grep -o 'API_URL??"http://localhost:3005"' packages/web/public/crypto-worker.js` should
   match).
-- Use a **fresh** `FALCON_HOME_DIR` (e.g. `/tmp/falcon-e2e-B`) for the CLI — do not reuse
-  `/tmp/falcon-e2e-A`, it's left in a dead-token state from prior testing.
+- Use a **fresh** `KVY_HOME_DIR` (e.g. `/tmp/kvy-e2e-B`) for the CLI — do not reuse
+  `/tmp/kvy-e2e-A`, it's left in a dead-token state from prior testing.
 - Use throwaway emails (`e2e-fix-<timestamp>@example.com`). The DB is a shared hosted Neon
   instance — don't delete data you didn't create.
 - Chrome MCP for the web half, tmux for the CLI half, same pattern as the original E2E pass.
@@ -37,10 +37,10 @@ These were the most severe original findings. Test them first and thoroughly.
 - **F2.3** Revoke the CLI's session from Settings → Devices → Log out (on the daemon row).
   Confirm the daemon log shows an immediate disconnect (this part already passed originally
   — just confirm it still does).
-- **F3.1** With that CLI session now dead, run `falcon claude` again in the same interactive
+- **F3.1** With that CLI session now dead, run `kvy claude` again in the same interactive
   terminal. **PASS:** prints `Your session expired. Reconnecting…`, then actually shows a
   fresh QR code / pairing flow (not an immediate hard-fail). **FAIL:** the old
-  `falcon: not logged in, and there's no terminal here to sign in from` hard-fail without
+  `kvy: not logged in, and there's no terminal here to sign in from` hard-fail without
   ever attempting to re-pair.
 - **F3.2** Approve that re-pair from the browser. Confirm the CLI continues into a working
   session with no second manual command.
@@ -52,8 +52,8 @@ These were the most severe original findings. Test them first and thoroughly.
 
 ## 2. Fix 4 — account-bound key material
 
-- **F4.1** Sign up Account A on a fresh browser (or after clearing `falcon-crypto-bridge` +
-  `falcon-session` IndexedDB). Complete signup normally, confirm dashboard loads.
+- **F4.1** Sign up Account A on a fresh browser (or after clearing `kvy-crypto-bridge` +
+  `kvy-session` IndexedDB). Complete signup normally, confirm dashboard loads.
 - **F4.2** Without wiping anything, log out, then sign up a **brand-new** Account B on the
   *same* browser (so it still has Account A's leftover key material in IndexedDB).
   **PASS:** Account B gets its own fresh key material; signup completes normally into
@@ -62,45 +62,45 @@ These were the most severe original findings. Test them first and thoroughly.
 - **F4.3** Log out of B, log back in as **Account A** on that same browser. **PASS:**
   Account A's own dashboard/messages work correctly (its keys should still be intact and
   correctly scoped, not overwritten by B's signup in F4.2).
-- **F4.4** Check `falcon-crypto-bridge`'s stored record via devtools/console — does it now
+- **F4.4** Check `kvy-crypto-bridge`'s stored record via devtools/console — does it now
   carry some form of account identifier alongside the key material? Note what you find.
 
 ## 3. Fix 5 — logout deletes databases
 
 - **F5.1** While signed in with valid keys, log out via the sidebar.
 - **F5.2** Check `indexedDB.databases()` immediately after. **PASS:** neither
-  `falcon-crypto-bridge` nor `falcon-session` appears in the list at all (not just empty —
+  `kvy-crypto-bridge` nor `kvy-session` appears in the list at all (not just empty —
   actually gone). **FAIL:** either still listed (the original bug).
 
-## 4. Fix 6 — unmanaged sessions no longer backfill pre-Falcon history
+## 4. Fix 6 — unmanaged sessions no longer backfill pre-Kvy history
 
 - **F6.1** Pick a project directory that has **pre-existing** plain `claude` / Claude Code
   history on this machine from before this test (there should be plenty from prior sessions
-  today). Pair a **brand-new** account's CLI to run `falcon claude` in that same directory
+  today). Pair a **brand-new** account's CLI to run `kvy claude` in that same directory
   for the first time.
 - **F6.2** Check the dashboard's "Unmanaged sessions" list. **PASS:** it does NOT show old,
   pre-existing transcripts from hours/days ago under the new account — only sessions from
   at or after this account's own pairing (allowing for whatever grace window the fix
   documents). **FAIL:** old unrelated history still appears (the original bug).
-- **F6.3** Run a **second** `falcon claude` message in a plain (non-Falcon) `claude` session
+- **F6.3** Run a **second** `kvy claude` message in a plain (non-Kvy) `claude` session
   in that same directory, then check whether it now correctly appears (or correctly doesn't,
   per whatever the fix's intended scoping is) — report exactly what you see either way.
 
 ## 5. Fix 7 — key request reaches the terminal
 
-- **F7.1** With a paired CLI actively running an interactive `falcon claude` session, trigger
+- **F7.1** With a paired CLI actively running an interactive `kvy claude` session, trigger
   a key request from a second (keyless) browser context for the same account.
 - **F7.2** Watch the **active CLI terminal** (not the log file) for any visible indication
   that a device is requesting keys. **PASS:** something visible appears in the terminal
   (bell, OSC9 notification, banner line — whatever the fix implemented) without needing to
   tail log files. **FAIL:** nothing visible changes in the terminal at all (matches the
   original bug — note which terminal emulator you're using, since OSC9 support varies).
-- **F7.3** Confirm `falcon keys approve` still works exactly as before (code match, approve,
+- **F7.3** Confirm `kvy keys approve` still works exactly as before (code match, approve,
   browser continues automatically) — this is a regression check, not new behavior.
 
 ## 6. Fix 8 — `/password/` default mode on a pairing continuation
 
-- **F8.1** Start a CLI pairing (`falcon claude` on a fresh home dir), open the printed URL in
+- **F8.1** Start a CLI pairing (`kvy claude` on a fresh home dir), open the printed URL in
   a signed-out browser, click through to `/password/`. **PASS:** lands on (or clearly
   defaults toward) **sign-in**, not "Create your account," given this is a pairing
   continuation. Note the exact default you see.
@@ -129,11 +129,11 @@ These were the most severe original findings. Test them first and thoroughly.
 
 ## 9. Regression sweep (quick pass — these already passed originally, just confirm no new breakage)
 
-- **R1** First-run CLI (`falcon claude`, no account, fresh home dir): welcome → QR → waiting,
+- **R1** First-run CLI (`kvy claude`, no account, fresh home dir): welcome → QR → waiting,
   no red error.
 - **R2** Pairing approval card shows correct machine/folder/requested-time, approve works.
 - **R3** Key-sharing code match: CLI-printed code === browser-shown code, digit for digit.
-- **R4** `falcon auth status` after a successful pairing shows `device-key-protected`.
+- **R4** `kvy auth status` after a successful pairing shows `device-key-protected`.
 - **R5** Settings → Devices lists sessions correctly, "Log out" works with a confirm step.
 
 ---

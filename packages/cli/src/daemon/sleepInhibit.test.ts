@@ -207,7 +207,7 @@ describe("createSleepInhibitManager", () => {
     // `wrapChildProcess` that only listened to "exit" would silently never
     // invoke its `onExit` callback in this case, permanently reporting
     // `active: true` for a caffeinate that never ran.
-    const realChild = spawn("falcon-sleep-inhibit-definitely-not-a-real-binary", [], {
+    const realChild = spawn("kvy-sleep-inhibit-definitely-not-a-real-binary", [], {
       stdio: "ignore",
     });
     const wrapped = wrapChildProcess(realChild);
@@ -233,7 +233,7 @@ describe("createSleepInhibitManager", () => {
     // path) still drives the single-respawn-then-give-up guard and
     // eventually active:false, rather than active staying true forever.
     const spawnChild = (_argv: string[]): SleepInhibitChild => {
-      const realChild = spawn("falcon-sleep-inhibit-definitely-not-a-real-binary", [], {
+      const realChild = spawn("kvy-sleep-inhibit-definitely-not-a-real-binary", [], {
         stdio: "ignore",
       });
       return wrapChildProcess(realChild);

@@ -1,7 +1,7 @@
 /**
  * Worktree authorization for the *mutating* git machine RPCs
  * (`gitCommit.ts`/`gitPush.ts`/`gitRenameBranch.ts`, docs/features/
- * git-write-actions.md Phase 2; falcon-system-design.md §12: "no
+ * git-write-actions.md Phase 2; kvy-system-design.md §12: "no
  * arbitrary-directory execution from remote").
  *
  * `git.status`/`git.diff`/`git.branches` today run `git` in whatever
@@ -12,7 +12,7 @@
  * flagged gap rather than fixed here. For commit/push/force-push it's a
  * genuinely different risk — an authenticated device could otherwise run
  * real git *writes* in any directory on the machine, not just ones the
- * user actually designated as a Falcon workspace — so the mutating
+ * user actually designated as a Kvy workspace — so the mutating
  * handlers gate on `isWithinRegisteredWorkspace` before touching git at
  * all. Extending the read RPCs to the same gate is a deliberate follow-up,
  * not done here, so existing panels pointed at an unregistered worktree

@@ -43,7 +43,7 @@ import type {
   RunStatusResult,
   RunStopParams,
   RunStopResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";
 import { isWithinRegisteredWorkspace, type RegistryOptions } from "../workspace/registry.js";
@@ -90,7 +90,7 @@ export async function resolveRunContext(
 }
 
 export interface RunProcessDeps {
-  /** Defaults to the real `resolveHomeDir(process.env)` (`~/.falcon` or `FALCON_HOME_DIR`) — same fallback as every other homeDir-scoped module in this package. */
+  /** Defaults to the real `resolveHomeDir(process.env)` (`~/.kvy` or `KVY_HOME_DIR`) — same fallback as every other homeDir-scoped module in this package. */
   homeDir?: string;
   logger?: Logger;
   /** Forwarded to `resolveRunContext`'s registry lookup; defaults to `{homeDir}`. */
@@ -151,7 +151,7 @@ async function isRunEntryLive(entry: RunEntry, deps: RunProcessDeps): Promise<bo
   return isAlive(entry.pid);
 }
 
-/** SIGTERM, wait up to 5s, then SIGKILL if still alive — mirrors `kill.ts`'s escalation policy (falcon-system-design.md §11) at the scale of a single run entry, plus a best-effort `tmux kill-session` for the tmux method. */
+/** SIGTERM, wait up to 5s, then SIGKILL if still alive — mirrors `kill.ts`'s escalation policy (kvy-system-design.md §11) at the scale of a single run entry, plus a best-effort `tmux kill-session` for the tmux method. */
 async function defaultKillRunEntry(entry: RunEntry, deps: RunProcessDeps): Promise<void> {
   const isAlive = deps.isAlive ?? defaultIsAlive;
 

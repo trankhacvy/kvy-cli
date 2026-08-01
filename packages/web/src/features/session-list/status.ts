@@ -3,8 +3,8 @@ import type { AttentionKind, SessionListSession } from "./types";
 import type { MachineStatus } from "./use-machine-presence";
 
 /**
- * The Home screen's per-session status dot (falcon-prd.md FR-7.1,
- * falcon-system-design.md §9.2 "Home" row). Design principle #3: this is
+ * The Home screen's per-session status dot (kvy-prd.md FR-7.1,
+ * kvy-system-design.md §9.2 "Home" row). Design principle #3: this is
  * *computed*, every call, from the session's reduced event stream plus live
  * presence/attention signals — never a stored flag that can go stale.
  */
@@ -124,7 +124,7 @@ function hasEverHadTurn(items: RenderItem[]): boolean {
  * wire's `SessionEvent` union has no "agent asked a question" variant yet)
  * and "the last turn finished but nobody has looked" (`"done"`), which turns
  * an otherwise-idle closed turn into a `completed` badge until viewed
- * (falcon-prd.md FR-8.1 "completed-and-unseen"). A turn that closed with
+ * (kvy-prd.md FR-8.1 "completed-and-unseen"). A turn that closed with
  * `status: "failed"` is always shown as `failed`, seen or not — unlike a
  * clean completion, an error is actionable until the user starts a new turn.
  */
@@ -185,7 +185,7 @@ export const SESSION_STATUS_META: Record<SessionListStatus, SessionStatusMeta> =
  * docs/auth-ux-hardening-plan.md item 8) — a distinct third state alongside
  * `online`/`offline` (`MachineBadge`'s own component, not `SessionCard`'s
  * per-session dot above): a daemon that's running but can't authenticate
- * (refresh token revoked) needs `falcon auth login`, not "wake the machine",
+ * (refresh token revoked) needs `kvy auth login`, not "wake the machine",
  * so it gets its own amber "Needs re-authentication" chip rather than
  * collapsing into the same grey "Offline" a genuinely powered-off machine
  * shows.

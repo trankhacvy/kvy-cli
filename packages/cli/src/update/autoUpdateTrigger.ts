@@ -2,12 +2,12 @@
  * Auto-update-on-start (plan.md §16 "4.3 Distribution & self-host":
  * "check a cli-latest rolling tag/version endpoint ... download and
  * atomically replace the running binary/npm install, respect
- * FALCON_NO_UPDATE ... fail safe — never block a session start on a
+ * KVY_NO_UPDATE ... fail safe — never block a session start on a
  * failed update check").
  *
  * The actual network check + download + apply all happen in a **detached,
- * unref'd child process** (`falcon update`, re-invoked with
- * `FALCON_UPDATE_SILENT=1`) — mirroring `daemon/commands.ts`'s
+ * unref'd child process** (`kvy update`, re-invoked with
+ * `KVY_UPDATE_SILENT=1`) — mirroring `daemon/commands.ts`'s
  * `defaultSpawnStartSync()`, the existing precedent for "re-launch this
  * same entrypoint as a background process". This function itself only
  * touches the filesystem (a rate-limit timestamp) and spawns that child;
@@ -42,7 +42,7 @@ function defaultSpawnBackgroundUpdate(): void {
   const child = spawn(process.execPath, [...process.execArgv, entry, "update"], {
     detached: true,
     stdio: "ignore",
-    env: { ...process.env, FALCON_UPDATE_SILENT: "1" },
+    env: { ...process.env, KVY_UPDATE_SILENT: "1" },
   });
   child.unref();
 }
@@ -56,7 +56,7 @@ export async function maybeTriggerAutoUpdate(
 ): Promise<void> {
   try {
     if (isUpdateOptedOut(options.env)) {
-      options.logger.debug("auto-update: skipped (FALCON_NO_UPDATE set)");
+      options.logger.debug("auto-update: skipped (KVY_NO_UPDATE set)");
       return;
     }
 
@@ -82,7 +82,7 @@ export async function maybeTriggerAutoUpdate(
     // Record the attempt before spawning, not after it completes: this
     // caps how often a background child gets spawned to once per interval
     // even if the check itself hangs or fails, rather than retrying on
-    // every single `falcon` invocation in the meantime.
+    // every single `kvy` invocation in the meantime.
     await updateSettings((current) => ({ ...current, lastUpdateCheckAt: now() }), {
       homeDir: options.homeDir,
     });

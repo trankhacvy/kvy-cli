@@ -54,23 +54,21 @@ describe("telegramChannel", () => {
       "https://api.telegram.org/bottest-token/sendMessage",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ chat_id: "12345", text: "Falcon needs your permission" }),
+        body: JSON.stringify({ chat_id: "12345", text: "Kvy needs your permission" }),
       }),
     );
   });
 
   it("appends a deep link when PUBLIC_WEB_ORIGIN is configured", async () => {
     process.env.TELEGRAM_BOT_TOKEN = "test-token";
-    process.env.PUBLIC_WEB_ORIGIN = "https://app.falcon.dev";
+    process.env.PUBLIC_WEB_ORIGIN = "https://app.kvy.dev";
     fetchMock.mockResolvedValue(new Response("{}", { status: 200 }));
     const { telegramChannel } = await import("./telegram.js");
 
     await telegramChannel.send(fakeSubscription(), { sessionId: "sess_1", kind: "done" });
 
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
-    expect(body.text).toBe(
-      "Falcon finished a task\nhttps://app.falcon.dev/dashboard/session/sess_1/",
-    );
+    expect(body.text).toBe("Kvy finished a task\nhttps://app.kvy.dev/dashboard/session/sess_1/");
   });
 
   it("maps a 400/403 (gone chat) onto statusCode 410 for dispatch.ts's pruning rule", async () => {

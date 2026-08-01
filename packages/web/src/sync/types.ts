@@ -4,12 +4,12 @@ import type {
   SessionRow,
   UnmanagedSessionRow,
   WorkspaceRow,
-} from "@falcon/wire";
+} from "@kvy/wire";
 
 /**
  * One row from `GET /v1/sessions/:id/messages` (mirrors `MessageItemSchema`
  * in `packages/server/src/app/routes/messages.ts` field-for-field). Not
- * exported from `@falcon/wire` because it's an HTTP response shape, not a
+ * exported from `@kvy/wire` because it's an HTTP response shape, not a
  * wire envelope — `content` is still the untouched `EncryptedBox` the server
  * sent; decryption is a later boundary (crypto-bridge worker, design §5.3),
  * out of scope for the sync engine itself.

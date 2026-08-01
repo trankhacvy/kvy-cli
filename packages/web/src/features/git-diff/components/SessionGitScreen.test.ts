@@ -1,4 +1,4 @@
-import type { EncryptedBox, SessionRow } from "@falcon/wire";
+import type { EncryptedBox, SessionRow } from "@kvy/wire";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";

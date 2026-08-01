@@ -15,17 +15,17 @@ import type { LifecycleKind, PresencePort, PushDispatcherPort } from "./types.js
  * (`sessionStatus.ts`'s `failed` transition, `sessionNotify.ts`'s `perm`/
  * `question`/`done`).
  *
- * Falcon add vs. Happy: presence suppression here also require the session's
+ * Kvy add vs. Happy: presence suppression here also require the session's
  * room to be joined (`PresencePort.hasActiveVisibleClient`), not just "any
  * non-machine client connected" — see `eventRouter.ts`'s implementation and
  * its comment on how that room-scoping degrades gracefully today.
  *
- * Falcon add vs. Happy: `pushSubscriptions.channel` fans out to a pluggable
+ * Kvy add vs. Happy: `pushSubscriptions.channel` fans out to a pluggable
  * `channels` registry (`webpush` | `telegram` | `ntfy`) instead of a single
  * hardcoded Expo sender — iOS Web Push is unreliable and the notification
  * IS the product (plan.md §10).
  *
- * Falcon add — quiet controls (PRD FR-8.3, plan.md §10 "Per-session mute +
+ * Kvy add — quiet controls (PRD FR-8.3, plan.md §10 "Per-session mute +
  * mute-all"): checked right alongside presence, before any channel fan-out.
  * An explicit user setting, so it applies uniformly to every channel and
  * every follow-up re-notify attempt — there's no "mute Telegram but not
@@ -38,7 +38,7 @@ import type { LifecycleKind, PresencePort, PushDispatcherPort } from "./types.js
  * this fire-and-forget (`void dispatcher.dispatch(...)`), same as Happy's
  * `void dispatchSessionEventPush(...)`.
  *
- * Falcon add — re-notify scheduling (design §6.4, plan.md §10's "Server
+ * Kvy add — re-notify scheduling (design §6.4, plan.md §10's "Server
  * dispatch" bullet): a `perm`/`question` dispatch is a request awaiting a
  * human answer, so after the initial attempt this arms up to two follow-up
  * attempts at +5 min and +10 min (max 3 notifications total) via

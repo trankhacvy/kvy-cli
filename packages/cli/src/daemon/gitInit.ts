@@ -33,7 +33,7 @@
  */
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import type { GitInitParams, GitInitResult } from "@falcon/wire";
+import type { GitInitParams, GitInitResult } from "@kvy/wire";
 import { type GitExec, runGit } from "./gitExec.js";
 import { assertSafeBranchName } from "./gitWorktree.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";

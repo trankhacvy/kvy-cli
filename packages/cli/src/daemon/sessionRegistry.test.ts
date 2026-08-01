@@ -17,7 +17,7 @@ describe("sessionRegistry", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-session-registry-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-session-registry-"));
   });
 
   afterEach(async () => {
@@ -78,13 +78,13 @@ describe("sessionRegistry", () => {
 
   it("trackSpawned records a spawned pid's directory, queryable via getSessions before any webhook arrives (plan.md §16 'Flow 3 — spawn-directory-dedup')", () => {
     const registry = createSessionRegistry({ homeDir });
-    registry.trackSpawned(4242, "/Users/vy/projects/falcon");
+    registry.trackSpawned(4242, "/Users/vy/projects/kvy");
 
     const [tracked] = registry.getSessions();
     expect(tracked).toMatchObject({
       startedBy: "daemon",
       pid: 4242,
-      directory: "/Users/vy/projects/falcon",
+      directory: "/Users/vy/projects/kvy",
     });
     // No sessionId yet — the webhook hasn't landed — matching
     // `spawnEngine.ts`'s dedup scan intentionally not matching a
@@ -94,7 +94,7 @@ describe("sessionRegistry", () => {
 
   it("a spawned pid's directory survives onSessionStarted's merge once the webhook lands", () => {
     const registry = createSessionRegistry({ homeDir });
-    registry.trackSpawned(4242, "/Users/vy/projects/falcon");
+    registry.trackSpawned(4242, "/Users/vy/projects/kvy");
 
     registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
 
@@ -102,12 +102,12 @@ describe("sessionRegistry", () => {
     expect(tracked).toMatchObject({
       startedBy: "daemon",
       sessionId: "sess_1",
-      directory: "/Users/vy/projects/falcon",
+      directory: "/Users/vy/projects/kvy",
     });
   });
 
   it("a session's spawn directory survives a daemon restart end-to-end, so spawn-dedup matches it again (plan.md §16 'Flow 3 — spawn-directory-dedup')", async () => {
-    const realDirectory = "/Users/vy/projects/falcon";
+    const realDirectory = "/Users/vy/projects/kvy";
 
     // --- daemon instance #1: a daemon-spawned session, tracked with its
     //     directory, whose /session-started webhook lands and persists it ---
@@ -253,7 +253,7 @@ describe("sessionRegistry", () => {
   });
 
   it("readoptLiveSessions re-adds a still-live orphaned session into the live map after a restart, without dropping the durable resumable record", async () => {
-    const realDirectory = "/Users/vy/projects/falcon";
+    const realDirectory = "/Users/vy/projects/kvy";
 
     // --- daemon instance #1: spawns a session, its webhook lands, it persists
     //     with a pid — then the daemon "restarts" without the process dying ---
@@ -272,7 +272,7 @@ describe("sessionRegistry", () => {
         {
           pid: 51245,
           ppid: 1,
-          command: "falcon claude --starting-mode remote --started-by daemon",
+          command: "kvy claude --starting-mode remote --started-by daemon",
         },
       ],
       resolveCwd: async () => realDirectory,
@@ -295,7 +295,7 @@ describe("sessionRegistry", () => {
       sessionId: "sess_1",
       encryption: ENCRYPTION,
       savedAt: Date.now(),
-      directory: "/Users/vy/projects/falcon",
+      directory: "/Users/vy/projects/kvy",
       pid: 99999,
     });
     const registry = createSessionRegistry({ homeDir });

@@ -1,7 +1,7 @@
 /**
  * `resumeSession` RPC's core (design §4.4: `'resumeSession'({sessionId}) →
  * { ok }               // re-spawn w/ reconnect env`; plan.md §16 "3.2
- * Durability": "`resumeSession` RPC: re-spawn with `FALCON_RECONNECT_*` env
+ * Durability": "`resumeSession` RPC: re-spawn with `KVY_RECONNECT_*` env
  * re-attaching to the same server session row").
  *
  * Ported, with changes, from Happy's `resumeSession` closure in
@@ -17,7 +17,7 @@
  *    remote" concern is about a *caller-supplied* directory; here the
  *    directory comes from what this daemon already recorded for this
  *    session, so `workspacePath.ts`'s validation doesn't apply.
- *  - The child is handed `FALCON_RECONNECT_*` env instead of nothing —
+ *  - The child is handed `KVY_RECONNECT_*` env instead of nothing —
  *    the wrapped DEK + seq + version counters the session process needs to
  *    keep writing into its *existing* server-side session row rather than
  *    minting a new one.
@@ -32,7 +32,7 @@
  * window where both could otherwise be alive at once.
  */
 import { realpath } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { defaultKvyEntrypoint } from "../kvyEntrypoint.js";
 import type { Logger } from "../logger.js";
 import { PROVIDER_REGISTRY } from "../provider/registry.js";
 import {
@@ -79,12 +79,12 @@ export interface ResumeSessionDeps {
   resolveDirectory: (
     session: PersistedSession,
   ) => string | null | undefined | Promise<string | null | undefined>;
-  /** Extra env vars merged in ahead of the `FALCON_RECONNECT_*` set (rare; mirrors `spawnEngine.ts`'s shape). */
+  /** Extra env vars merged in ahead of the `KVY_RECONNECT_*` set (rare; mirrors `spawnEngine.ts`'s shape). */
   baseEnv?: NodeJS.ProcessEnv;
   launchProcess?: typeof launchProviderProcessDefault;
   launchDeps?: LaunchProcessDeps;
-  /** Returns the argv that re-invokes this same falcon binary. Injectable for tests. */
-  falconEntrypoint?: () => string[];
+  /** Returns the argv that re-invokes this same kvy binary. Injectable for tests. */
+  kvyEntrypoint?: () => string[];
   logger?: Logger;
   /** Liveness probe for the old process's pid while waiting for it to exit. Injectable for tests; defaults to `kill(pid, 0)`. */
   isAlive?: (pid: number) => boolean;
@@ -106,11 +106,6 @@ const noopLogger: Logger = {
   warn: () => {},
   error: () => {},
 };
-
-function defaultFalconEntrypoint(): string[] {
-  const entry = process.argv[1] ?? fileURLToPath(import.meta.url);
-  return [process.execPath, ...process.execArgv, entry];
-}
 
 const DEFAULT_STOP_TIMEOUT_MS = 5000;
 const STOP_POLL_INTERVAL_MS = 200;
@@ -178,14 +173,14 @@ async function waitForOldProcessToExit(
   }
 }
 
-/** The `FALCON_RECONNECT_*` env contract a resumed session process reads to re-attach to its existing server-side session row instead of bootstrapping a new one. */
+/** The `KVY_RECONNECT_*` env contract a resumed session process reads to re-attach to its existing server-side session row instead of bootstrapping a new one. */
 function buildReconnectEnv(sessionId: string, session: PersistedSession): NodeJS.ProcessEnv {
   return {
-    FALCON_RECONNECT_SESSION_ID: sessionId,
-    FALCON_RECONNECT_ENCRYPTION_KEY: session.encryption.encryptionKey,
-    FALCON_RECONNECT_SEQ: String(session.encryption.seq),
-    FALCON_RECONNECT_METADATA_VERSION: String(session.encryption.metadataVersion),
-    FALCON_RECONNECT_AGENT_STATE_VERSION: String(session.encryption.agentStateVersion),
+    KVY_RECONNECT_SESSION_ID: sessionId,
+    KVY_RECONNECT_ENCRYPTION_KEY: session.encryption.encryptionKey,
+    KVY_RECONNECT_SEQ: String(session.encryption.seq),
+    KVY_RECONNECT_METADATA_VERSION: String(session.encryption.metadataVersion),
+    KVY_RECONNECT_AGENT_STATE_VERSION: String(session.encryption.agentStateVersion),
   };
 }
 
@@ -232,9 +227,9 @@ export async function resumeSession(
     );
   }
 
-  const [command, ...prefixArgs] = deps.falconEntrypoint?.() ?? defaultFalconEntrypoint();
+  const [command, ...prefixArgs] = deps.kvyEntrypoint?.() ?? defaultKvyEntrypoint();
   if (!command) {
-    throw new ResumeSessionError("could not resolve the falcon entrypoint to re-invoke");
+    throw new ResumeSessionError("could not resolve the kvy entrypoint to re-invoke");
   }
 
   // Headless-vs-terminal decision (plan-v2.md W3.7): this module ALWAYS
@@ -243,16 +238,16 @@ export async function resumeSession(
   // TTY to hand a re-spawned process — there is no terminal here to run a
   // PTY-injection session on — so "headless" is the only honest choice for
   // *this* relaunch path. A resumed *terminal* session (a human re-running
-  // `falcon claude` themselves) is a different call path entirely and is not
+  // `kvy claude` themselves) is a different call path entirely and is not
   // routed through here: it goes straight through `commands/start.ts`'s PTY
-  // flow, which re-attaches via the `FALCON_RECONNECT_SESSION_ID`/
-  // `FALCON_RECONNECT_ENCRYPTION_KEY` env this function already sets below
+  // flow, which re-attaches via the `KVY_RECONNECT_SESSION_ID`/
+  // `KVY_RECONNECT_ENCRYPTION_KEY` env this function already sets below
   // (honored by `session/bootstrap.ts`) plus, when available,
-  // `FALCON_RECONNECT_PROVIDER_SESSION_ID` to resume the provider transcript
+  // `KVY_RECONNECT_PROVIDER_SESSION_ID` to resume the provider transcript
   // itself — this module has no provider session id to offer (persisted
   // sessions only carry the opaque `metadata` blob), so it doesn't set that
   // one.
-  const providerCliName = PROVIDER_REGISTRY[persisted.provider ?? "claude-code"].falconSubcommand;
+  const providerCliName = PROVIDER_REGISTRY[persisted.provider ?? "claude-code"].kvySubcommand;
   const args = [
     ...prefixArgs,
     providerCliName,

@@ -267,7 +267,7 @@ describe("POST /v1/auth/oauth/github/exchange", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/auth/oauth/github/exchange",
-      payload: { code: "valid-code", redirectUri: "https://app.falcon.dev/auth/callback/github" },
+      payload: { code: "valid-code", redirectUri: "https://app.kvy.dev/auth/callback/github" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -278,7 +278,7 @@ describe("POST /v1/auth/oauth/github/exchange", () => {
     const response = await app.inject({
       method: "POST",
       url: "/v1/auth/oauth/github/exchange",
-      payload: { code: "bad-code", redirectUri: "https://app.falcon.dev/auth/callback/github" },
+      payload: { code: "bad-code", redirectUri: "https://app.kvy.dev/auth/callback/github" },
     });
 
     expect(response.statusCode).toBe(401);

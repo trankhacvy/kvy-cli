@@ -5,7 +5,7 @@ import type { Database } from "../db/types.js";
 /**
  * AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): the
  * minimum-viable server-inferred signal for "this machine needs
- * `falcon auth login` again" — no CLI change, no schema change. A daemon
+ * `kvy auth login` again" — no CLI change, no schema change. A daemon
  * whose refresh token was revoked (a rotate, "log out other devices", or a
  * password reset's blanket revoke) can't tell the server anything over its
  * now-dead socket, so the server infers it from what it already knows: the

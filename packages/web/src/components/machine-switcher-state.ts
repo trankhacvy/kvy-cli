@@ -1,6 +1,6 @@
 import type { SessionListMachine } from "@/features/session-list";
 
-const KEY = "falcon:sidebar-selected-machine";
+const KEY = "kvy:sidebar-selected-machine";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";

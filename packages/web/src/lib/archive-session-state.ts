@@ -1,4 +1,4 @@
-import type { WorktreeRemoveResult } from "@falcon/wire";
+import type { WorktreeRemoveResult } from "@kvy/wire";
 
 /**
  * `useArchiveSession`'s phase machine — the single Archive action's whole

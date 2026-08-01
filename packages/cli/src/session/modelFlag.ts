@@ -1,6 +1,6 @@
 /**
  * Pulls a `--model <value>` (or `--model=value`) override out of a
- * passthrough args array (`falcon claude [args...]`/`falcon codex
+ * passthrough args array (`kvy claude [args...]`/`kvy codex
  * [args...]`'s full flag passthrough, `CLAUDE.md`'s "CLI skeleton" bullet) —
  * used only to record the chosen model into the session's own metadata
  * (`session/bootstrap.ts`'s `SessionMetadataInput.model`) for the web

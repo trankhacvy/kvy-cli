@@ -1,6 +1,6 @@
 /**
  * Node entry point for PIN-wrapping the client's `masterSecret` at rest
- * (falcon-issue-4-plan.md §6.1). One KDF on both platforms — argon2id, same
+ * (kvy-issue-4-plan.md §6.1). One KDF on both platforms — argon2id, same
  * params, same 16-byte salt length as libsodium's `crypto_pwhash` — so a
  * wrapped blob is byte-portable between node (`@node-rs/argon2`) and the
  * browser build (`pin.web.ts`, libsodium-wrappers-sumo). See `pin.test.ts`

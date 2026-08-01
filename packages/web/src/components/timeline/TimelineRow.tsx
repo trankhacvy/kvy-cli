@@ -10,7 +10,7 @@ import { ToolCard } from "./tool-cards/registry";
 import { UsageChip } from "./UsageChip";
 
 /** Dispatches a single `RenderItem` to its component, by `kind` (the
- * reducer's discriminated union — falcon-system-design.md §9.1). Every kind
+ * reducer's discriminated union — kvy-system-design.md §9.1). Every kind
  * has a branch; the `never` check below is a compile-time guarantee that a
  * future `RenderItem` variant can't silently render nothing. */
 export function TimelineRow({ item }: { item: RenderItem }) {

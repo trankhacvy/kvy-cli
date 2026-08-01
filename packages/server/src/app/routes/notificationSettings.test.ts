@@ -1,5 +1,5 @@
-import { encodeBase64, getRandomBytes } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { encodeBase64, getRandomBytes } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { EmitUpdateParams } from "../events/eventRouter.js";

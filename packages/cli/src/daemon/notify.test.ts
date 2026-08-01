@@ -11,7 +11,7 @@ describe("notifyDaemonSessionStarted", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-notify-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-notify-"));
   });
 
   afterEach(async () => {
@@ -137,7 +137,7 @@ describe("reportSessionStartFailed", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-notify-fail-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-notify-fail-"));
   });
 
   afterEach(async () => {

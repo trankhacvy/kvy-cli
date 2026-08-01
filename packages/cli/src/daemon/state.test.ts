@@ -8,7 +8,7 @@ describe("daemon state", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-daemon-state-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-daemon-state-"));
   });
 
   afterEach(async () => {

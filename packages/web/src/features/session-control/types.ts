@@ -3,7 +3,7 @@ import type {
   PermissionMode,
   RunningSessionModelAlias,
   SessionEnvelope,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type {
   InterruptResult,
   MessageRpcResult,

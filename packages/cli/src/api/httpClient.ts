@@ -5,7 +5,7 @@
  * duplicate `localId`) isn't consumed here; message ordering is derived from
  * the `update` stream, not the POST response.
  */
-import type { EncryptedBox } from "@falcon/wire";
+import type { EncryptedBox } from "@kvy/wire";
 
 export interface OutboxPostResult {
   ok: boolean;
@@ -20,7 +20,7 @@ export interface OutboxHttpClient {
 }
 
 export interface CreateHttpClientOptions {
-  /** Falcon server origin, e.g. `https://api.falcon.dev` (no trailing slash required). */
+  /** Kvy server origin, e.g. `https://api.kvy.dev` (no trailing slash required). */
   serverUrl: string;
   /**
    * Static headers merged into every request (e.g. `{ Authorization: "Bearer ..." }`).

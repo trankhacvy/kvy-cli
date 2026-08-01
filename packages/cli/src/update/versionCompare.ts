@@ -5,7 +5,7 @@
  * (`package.json`'s `"0.1.0"`, GitHub tags' `"v0.1.0"`), tolerating a
  * missing/malformed component as `0` rather than throwing — a corrupt or
  * unexpected version string on either side should never crash the update
- * check, just compare as sanely as possible (falcon-system-design.md §13,
+ * check, just compare as sanely as possible (kvy-system-design.md §13,
  * plan.md §16 "4.3 Distribution & self-host": self-update must fail safe).
  */
 

@@ -1,4 +1,4 @@
-import type { ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderUsageMeter } from "@kvy/wire";
 
 /**
  * Display formatting for Settings → Providers (docs/competitive-notes-omnara.md

@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type {
   ReportSessionAttentionDeps,
@@ -142,7 +142,7 @@ function harness(
       resume: opts.resume,
       model: opts.model,
       permissionMode: "default",
-      homeDir: "/tmp/falcon-home",
+      homeDir: "/tmp/kvy-home",
       sessionId: opts.sessionId,
       attention: opts.attention,
       onEnvelopes: (batch) => envelopes.push(...batch),
@@ -169,7 +169,7 @@ describe("session startup", () => {
       systemPrompt: {
         type: "preset",
         preset: "claude_code",
-        append: expect.stringContaining("Falcon"),
+        append: expect.stringContaining("Kvy"),
       },
       claudeCode: {
         options: { resume: "prior-uuid", model: "claude-x", permissionMode: "default" },

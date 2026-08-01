@@ -1,4 +1,4 @@
-import type { ProviderId } from "@falcon/wire";
+import type { ProviderId } from "@kvy/wire";
 import { runStartClaudeCommand } from "../commands/start.js";
 import { runStartCodexCommand } from "../commands/startCodex.js";
 import type { Logger } from "../logger.js";

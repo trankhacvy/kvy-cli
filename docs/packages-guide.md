@@ -1,36 +1,36 @@
-# Falcon packages — detailed guide
+# Kvy packages — detailed guide
 
 Complete overview of each package's internals. Start with CLAUDE.md's quick reference; this file is for deep dives.
 
-## packages/wire — @falcon/wire
+## packages/wire — @kvy/wire
 
 Zod schemas — the shared wire protocol contract. Built first (everything else depends on it).
 
-## packages/crypto — @falcon/crypto
+## packages/crypto — @kvy/crypto
 
 E2E encryption primitives, isomorphic (node + browser builds).
 
-## packages/cli — falcon
+## packages/cli — kvy
 
-CLI skeleton with hand-rolled arg parsing (`falcon` / `falcon claude [args...]` / `falcon codex [args...]` with full flag passthrough), file-only logger (`~/.falcon/logs/`, never stdout/stderr).
+CLI skeleton with hand-rolled arg parsing (`kvy` / `kvy claude [args...]` / `kvy codex [args...]` with full flag passthrough), file-only logger (`~/.kvy/logs/`, never stdout/stderr).
 
 ### Daemon (`src/daemon/`)
 
-Singleton lock (atomic hard-link + stale-PID detection), `daemon.state.json` read/write helpers, and a Fastify control server (`/session-started`, `/list`, `/stop-session`, `/spawn-session`, `/stop`). Process-scan-based `falcon kill daemon/sessions/all/all-force` and `falcon doctor [clean]` (process discovery/categorization, runaway-kill).
+Singleton lock (atomic hard-link + stale-PID detection), `daemon.state.json` read/write helpers, and a Fastify control server (`/session-started`, `/list`, `/stop-session`, `/spawn-session`, `/stop`). Process-scan-based `kvy kill daemon/sessions/all/all-force` and `kvy doctor [clean]` (process discovery/categorization, runaway-kill).
 
-**Daemon lifecycle:** `falcon daemon start/start-sync/stop/status`, `ensureDaemonRunning()` (auto-start wiring called from `start`/`auth`/`sessions`/`resume`, respects `FALCON_NO_SERVICE=1`).
+**Daemon lifecycle:** `kvy daemon start/start-sync/stop/status`, `ensureDaemonRunning()` (auto-start wiring called from `start`/`auth`/`sessions`/`resume`, respects `KVY_NO_SERVICE=1`).
 
 **Machine connection:** Machine-scoped WebSocket client (`daemon/machineClient.ts`): `registerOrResumeMachine`/CAS-retry sync against `POST /v1/machines`, `startMachineClient` opening `/v1/stream` as `clientType: "machine-scoped"` with a 60s heartbeat.
 
-**Session tracking:** Adoption Tier-1 transcript indexer (`daemon/transcriptIndexer.ts`): fs-watches every registered workspace's Claude Code project transcript dir, debounced 2s per session file, parses title/last-activity, derives a best-effort "running?" liveness signal from `processScan.ts`'s `resolveProcessCwd` + `markers.ts`'s Falcon-process classifier, and upserts via `daemon/unmanagedSessionClient.ts` against `POST /v1/unmanaged-sessions`. `listWorkspaces`/`isManaged` are injectable seams with no real default yet.
+**Session tracking:** Adoption Tier-1 transcript indexer (`daemon/transcriptIndexer.ts`): fs-watches every registered workspace's Claude Code project transcript dir, debounced 2s per session file, parses title/last-activity, derives a best-effort "running?" liveness signal from `processScan.ts`'s `resolveProcessCwd` + `markers.ts`'s Kvy-process classifier, and upserts via `daemon/unmanagedSessionClient.ts` against `POST /v1/unmanaged-sessions`. `listWorkspaces`/`isManaged` are injectable seams with no real default yet.
 
-**Durability:** `daemon/sessionsStore.ts` (`~/.falcon/sessions.json` — wrapped DEK + seq + versions, tmp-write + rename, in-process write-queue serialized per homeDir, 14-day expiry) and `daemon/sessionRegistry.ts` (pid → TrackedSession + durable-by-sessionId bookkeeping, restored from `sessions.json` on `daemon start-sync` boot). `daemon/resumeSession.ts` re-spawns a persisted/tracked session with `FALCON_RECONNECT_*` env. `daemon/selfUpdate.ts` (installed-bundle mtime capture/diff) and `start-sync`'s own heartbeat (dead-session pruning + restart logic) are wired end-to-end.
+**Durability:** `daemon/sessionsStore.ts` (`~/.kvy/sessions.json` — wrapped DEK + seq + versions, tmp-write + rename, in-process write-queue serialized per homeDir, 14-day expiry) and `daemon/sessionRegistry.ts` (pid → TrackedSession + durable-by-sessionId bookkeeping, restored from `sessions.json` on `daemon start-sync` boot). `daemon/resumeSession.ts` re-spawns a persisted/tracked session with `KVY_RECONNECT_*` env. `daemon/selfUpdate.ts` (installed-bundle mtime capture/diff) and `start-sync`'s own heartbeat (dead-session pruning + restart logic) are wired end-to-end.
 
-**Admin tools:** `daemon/doctor.ts` backs `falcon doctor` (process discovery/categorization report) and `falcon doctor clean` (SIGTERM→SIGKILL of runaway daemon). Chaos test suite (`daemon/durability.chaos.test.ts`) exercises failure matrix against the real registry/store/resume modules with injected process fakes.
+**Admin tools:** `daemon/doctor.ts` backs `kvy doctor` (process discovery/categorization report) and `kvy doctor clean` (SIGTERM→SIGKILL of runaway daemon). Chaos test suite (`daemon/durability.chaos.test.ts`) exercises failure matrix against the real registry/store/resume modules with injected process fakes.
 
-**Session adoption:** Tier 2/3 — `daemon/adoptTake.ts` (`handleAdoptTake`: mode:'takeover' finds the live owning claude pid via `adopt/liveness.ts`, SIGTERM≤5s→SIGKILL it, then spawns a continuation; mode:'fork' skips the kill) and `daemon/transcriptMirror.ts` (`handleAdoptMirror`: reads unmanaged session's transcript in ≤64KB, line-boundary-safe chunks via byte cursor). Both RPCs registered in `daemon/machineRpc.ts` alongside `spawn`/`resumeSession`/`fs.list`/`fs.mkdir`. Terminal-side half: `falcon adopt [--remote] [--list]` + `falcon --continue` alias (`commands/adopt.ts`).
+**Session adoption:** Tier 2/3 — `daemon/adoptTake.ts` (`handleAdoptTake`: mode:'takeover' finds the live owning claude pid via `adopt/liveness.ts`, SIGTERM≤5s→SIGKILL it, then spawns a continuation; mode:'fork' skips the kill) and `daemon/transcriptMirror.ts` (`handleAdoptMirror`: reads unmanaged session's transcript in ≤64KB, line-boundary-safe chunks via byte cursor). Both RPCs registered in `daemon/machineRpc.ts` alongside `spawn`/`resumeSession`/`fs.list`/`fs.mkdir`. Terminal-side half: `kvy adopt [--remote] [--list]` + `kvy --continue` alias (`commands/adopt.ts`).
 
-**Local state:** `src/persistence.ts` — `~/.falcon/` holds schema-versioned `settings.json` (atomic lock-file-guarded read-modify-write) and 0600-permissioned `access.key` credentials, both tmp-write + rename.
+**Local state:** `src/persistence.ts` — `~/.kvy/` holds schema-versioned `settings.json` (atomic lock-file-guarded read-modify-write) and 0600-permissioned `access.key` credentials, both tmp-write + rename.
 
 ### ACP remote layer (v2)
 
@@ -42,11 +42,11 @@ Remote mode for both providers runs through shared stack in `src/acp/`. `acpConn
 
 ### Adapter manager
 
-`src/adapters/` — pinned-version manifest + integrity verify + `~/.falcon/adapters/` npm-prefix install. `manifest.ts`'s `ADAPTER_MANIFEST` pins each official ACP adapter's exact npm-scoped package name, version, and npm-registry `dist.integrity` hash. `install.ts` runs a real `npm install <pkg>@<exact version>` into `~/.falcon/adapters/` and re-verifies. `verify.ts` reads npm's own `node_modules/.package-lock.json` and compares version + integrity. `spawn.ts`'s `resolveAdapterSpawn` is the verify-before-spawn seam. Wired as `falcon adapters install|upgrade` (`commands/adapters.ts`).
+`src/adapters/` — pinned-version manifest + integrity verify + `~/.kvy/adapters/` npm-prefix install. `manifest.ts`'s `ADAPTER_MANIFEST` pins each official ACP adapter's exact npm-scoped package name, version, and npm-registry `dist.integrity` hash. `install.ts` runs a real `npm install <pkg>@<exact version>` into `~/.kvy/adapters/` and re-verifies. `verify.ts` reads npm's own `node_modules/.package-lock.json` and compares version + integrity. `spawn.ts`'s `resolveAdapterSpawn` is the verify-before-spawn seam. Wired as `kvy adapters install|upgrade` (`commands/adapters.ts`).
 
 ### Claim store
 
-`src/claims/claimStore.ts` — send-idempotency claim store (`~/.falcon/claims/<sessionId>.json`, claim → tri-state (`queued`/`duplicate`/`outcome-unknown`) → complete).
+`src/claims/claimStore.ts` — send-idempotency claim store (`~/.kvy/claims/<sessionId>.json`, claim → tri-state (`queued`/`duplicate`/`outcome-unknown`) → complete).
 
 ### Git panel
 
@@ -56,17 +56,17 @@ Automatic per-session git worktree isolation: `gitWorktree.ts`'s `ensureBranchWo
 
 ### Workspace management
 
-`src/workspaceConfig.ts` — `~/.falcon/settings.json`'s `workspaces` map, keyed by real/symlink-resolved directory path. Backs `git.diff`'s base-ref fallback and `falcon workspace config [--base-ref --remote --directory]` command.
+`src/workspaceConfig.ts` — `~/.kvy/settings.json`'s `workspaces` map, keyed by real/symlink-resolved directory path. Backs `git.diff`'s base-ref fallback and `kvy workspace config [--base-ref --remote --directory]` command.
 
-`src/workspace/registry.ts` — persisted at `~/.falcon/workspaces.json` (register/list/unregister/`isWithinRegisteredWorkspace`). `src/workspace/adapters.ts` wires it into daemon seams. `commands/workspaceRegister.ts` backs `falcon workspace register [--directory --name]` / `list` / `unregister`.
+`src/workspace/registry.ts` — persisted at `~/.kvy/workspaces.json` (register/list/unregister/`isWithinRegisteredWorkspace`). `src/workspace/adapters.ts` wires it into daemon seams. `commands/workspaceRegister.ts` backs `kvy workspace register [--directory --name]` / `list` / `unregister`.
 
 ### GitHub integration
 
-`daemon/githubChecks.ts`'s `getGithubChecks` resolves workspace's remote → owner/repo, current branch, open PR, and PR head commit's check-runs via GitHub REST API. Authenticated with machine-local GitHub token (`github/githubAuth.ts`'s `~/.falcon/github.key`, 0600). `falcon github login [--token] [--client-id <id>] | logout | status` command uses GitHub OAuth device authorization flow (`github/deviceFlow.ts`).
+`daemon/githubChecks.ts`'s `getGithubChecks` resolves workspace's remote → owner/repo, current branch, open PR, and PR head commit's check-runs via GitHub REST API. Authenticated with machine-local GitHub token (`github/githubAuth.ts`'s `~/.kvy/github.key`, 0600). `kvy github login [--token] [--client-id <id>] | logout | status` command uses GitHub OAuth device authorization flow (`github/deviceFlow.ts`).
 
 ### Preview tunnels
 
-`daemon/portScan.ts` (`lsof -nP -iTCP -sTCP:LISTEN` parsed into listening-port list) and `daemon/cloudflaredResolve.ts` (cloudflared version detection). `daemon/tunnelRegistry.ts` — in-memory `TunnelRegistry` plus durable `~/.falcon/tunnels.json` pid journal. `daemon/previewTunnel.ts`'s `handlePreviewOpen` spawns `cloudflared tunnel --url http://localhost:<port> --no-autoupdate`. All four `preview.*` RPCs (`ports`/`tunnels`/`open`/`close`) registered in `machineRpc.ts`. Wired into `machineIntegration.ts`.
+`daemon/portScan.ts` (`lsof -nP -iTCP -sTCP:LISTEN` parsed into listening-port list) and `daemon/cloudflaredResolve.ts` (cloudflared version detection). `daemon/tunnelRegistry.ts` — in-memory `TunnelRegistry` plus durable `~/.kvy/tunnels.json` pid journal. `daemon/previewTunnel.ts`'s `handlePreviewOpen` spawns `cloudflared tunnel --url http://localhost:<port> --no-autoupdate`. All four `preview.*` RPCs (`ports`/`tunnels`/`open`/`close`) registered in `machineRpc.ts`. Wired into `machineIntegration.ts`.
 
 ### Sleep inhibit
 
@@ -74,15 +74,15 @@ Automatic per-session git worktree isolation: `gitWorktree.ts`'s `ensureBranchWo
 
 ### Setup/Run scripts
 
-Per-workspace store gains `setupScript`/`runScript` fields, surfaced via `falcon workspace config --setup-script/--run-script <script>`. Script DEFINITION stays CLI-only (design §12's local-consent boundary).
+Per-workspace store gains `setupScript`/`runScript` fields, surfaced via `kvy workspace config --setup-script/--run-script <script>`. Script DEFINITION stays CLI-only (design §12's local-consent boundary).
 
-`gitWorktree.ts`'s `ensureBranchWorkspace` reports `createdWorktree: boolean`. `spawnEngine.ts` uses it to fire-and-forget `daemon/setupScript.ts`'s `runSetupScript` (cross-spawn under `daemon/shellCommand.ts`'s `buildShellInvocation` — `/bin/sh -c`/`cmd.exe /c` — with stdout/stderr to `~/.falcon/logs/setup-<hash>.log`).
+`gitWorktree.ts`'s `ensureBranchWorkspace` reports `createdWorktree: boolean`. `spawnEngine.ts` uses it to fire-and-forget `daemon/setupScript.ts`'s `runSetupScript` (cross-spawn under `daemon/shellCommand.ts`'s `buildShellInvocation` — `/bin/sh -c`/`cmd.exe /c` — with stdout/stderr to `~/.kvy/logs/setup-<hash>.log`).
 
-`daemon/runStateStore.ts` (`~/.falcon/run-state.json`, same durability pattern) persists setup outcome and run state, keyed by worktree's real path. `daemon/runProcess.ts` is the subsystem's core: `resolveRunContext` (design-§12 auth gate + config-key resolver) backs `handleRunStart`/`handleRunStop`/`handleRunStatus`/`handleRunSetup`. `run.start` reuses `processLauncher.ts`'s `launchProviderProcess` (tmux-preferred), wrapping script with log-redirect. Liveness probed lazily via `tmux has-session`/`process.kill(pid,0)`.
+`daemon/runStateStore.ts` (`~/.kvy/run-state.json`, same durability pattern) persists setup outcome and run state, keyed by worktree's real path. `daemon/runProcess.ts` is the subsystem's core: `resolveRunContext` (design-§12 auth gate + config-key resolver) backs `handleRunStart`/`handleRunStop`/`handleRunStatus`/`handleRunSetup`. `run.start` reuses `processLauncher.ts`'s `launchProviderProcess` (tmux-preferred), wrapping script with log-redirect. Liveness probed lazily via `tmux has-session`/`process.kill(pid,0)`.
 
 `daemon/workspaceConfigRpc.ts`'s `handleWorkspaceGetConfig` is the read-only surface for web Workspace Settings UI.
 
-## packages/server — @falcon/server
+## packages/server — @kvy/server
 
 Fastify 5 app skeleton (zod type-provider, /health, pino logging) + Drizzle ORM schema (`src/db/schema.ts`) and migrations (`drizzle/`). Migration-on-boot runner.
 
@@ -96,7 +96,7 @@ Fastify 5 app skeleton (zod type-provider, /health, pino logging) + Drizzle ORM 
 
 **Unmanaged sessions:** `POST /v1/unmanaged-sessions` (`src/app/routes/unmanagedSessions.ts` — adoption Tier 1): upsert-by-`(machineId, providerRef)` for daemon transcript indexer.
 
-## packages/web — @falcon/web
+## packages/web — @kvy/web
 
 Next.js PWA (App Router, static export). Tailwind + shadcn/ui, dark default theme.
 

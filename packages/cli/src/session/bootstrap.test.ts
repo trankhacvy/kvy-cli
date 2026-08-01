@@ -6,8 +6,8 @@ import {
   open,
   unwrapDek,
   wrapDek,
-} from "@falcon/crypto";
-import type { EncryptedBox, SessionRow } from "@falcon/wire";
+} from "@kvy/crypto";
+import type { EncryptedBox, SessionRow } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import {
   type BootstrapSessionDeps,
@@ -260,7 +260,7 @@ describe("bootstrapSession", () => {
     await expect(bootstrapSession(deps, params)).rejects.toThrow(/could not unwrap/);
   });
 
-  describe("FALCON_RECONNECT_SESSION_ID re-attach (plan-v2.md W3.7)", () => {
+  describe("KVY_RECONNECT_SESSION_ID re-attach (plan-v2.md W3.7)", () => {
     it("re-attaches to the existing session by unwrapping the reconnect DEK, with no network call", async () => {
       const contentKeyPair = deriveKeyTree(getRandomBytes(32)).content;
       const originalDek = getRandomBytes(32);
@@ -274,8 +274,8 @@ describe("bootstrapSession", () => {
       const params = baseParams({
         contentKeyPair,
         env: {
-          FALCON_RECONNECT_SESSION_ID: "sess_existing",
-          FALCON_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
+          KVY_RECONNECT_SESSION_ID: "sess_existing",
+          KVY_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
         },
       });
 
@@ -302,8 +302,8 @@ describe("bootstrapSession", () => {
       const params = baseParams({
         contentKeyPair,
         env: {
-          FALCON_RECONNECT_SESSION_ID: "sess_existing",
-          FALCON_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
+          KVY_RECONNECT_SESSION_ID: "sess_existing",
+          KVY_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
         },
       });
 
@@ -312,17 +312,17 @@ describe("bootstrapSession", () => {
       expect(getAuthToken).not.toHaveBeenCalled();
     });
 
-    it("throws when FALCON_RECONNECT_SESSION_ID is set without FALCON_RECONNECT_ENCRYPTION_KEY", async () => {
+    it("throws when KVY_RECONNECT_SESSION_ID is set without KVY_RECONNECT_ENCRYPTION_KEY", async () => {
       const fetchImpl = vi.fn() as unknown as typeof fetch;
       const deps: BootstrapSessionDeps = {
         serverUrl: "http://server.test",
         fetchImpl,
         getAuthToken: () => "test-token",
       };
-      const params = baseParams({ env: { FALCON_RECONNECT_SESSION_ID: "sess_existing" } });
+      const params = baseParams({ env: { KVY_RECONNECT_SESSION_ID: "sess_existing" } });
 
       await expect(bootstrapSession(deps, params)).rejects.toThrow(
-        /without FALCON_RECONNECT_ENCRYPTION_KEY/,
+        /without KVY_RECONNECT_ENCRYPTION_KEY/,
       );
       expect(fetchImpl).not.toHaveBeenCalled();
     });
@@ -335,7 +335,7 @@ describe("bootstrapSession", () => {
         getAuthToken: () => "test-token",
         logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: errorLog },
       };
-      const params = baseParams({ env: { FALCON_RECONNECT_SESSION_ID: "sess_existing" } });
+      const params = baseParams({ env: { KVY_RECONNECT_SESSION_ID: "sess_existing" } });
 
       await expect(bootstrapSession(deps, params)).rejects.toThrow();
 
@@ -353,16 +353,16 @@ describe("bootstrapSession", () => {
       };
       const params = baseParams({
         env: {
-          FALCON_RECONNECT_SESSION_ID: "sess_existing",
-          FALCON_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
+          KVY_RECONNECT_SESSION_ID: "sess_existing",
+          KVY_RECONNECT_ENCRYPTION_KEY: encodeBase64(wrappedDek),
         },
       });
 
       await expect(bootstrapSession(deps, params)).rejects.toThrow(/could not unwrap/);
     });
 
-    it("takes the ordinary create-or-get path when FALCON_RECONNECT_SESSION_ID is whitespace-only", async () => {
-      const params = baseParams({ env: { FALCON_RECONNECT_SESSION_ID: "   " } });
+    it("takes the ordinary create-or-get path when KVY_RECONNECT_SESSION_ID is whitespace-only", async () => {
+      const params = baseParams({ env: { KVY_RECONNECT_SESSION_ID: "   " } });
       const row = fakeSessionRow({ tag: buildSessionTag(params) });
       const fetchImpl = fakeFetch({ status: 201, body: row });
       const deps: BootstrapSessionDeps = {

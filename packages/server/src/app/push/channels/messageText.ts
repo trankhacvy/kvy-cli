@@ -10,10 +10,10 @@ import type { LifecycleKind } from "../types.js";
  * kept identical by convention, not by import.
  */
 const KIND_LABELS: Record<LifecycleKind, string> = {
-  perm: "Falcon needs your permission",
-  question: "Falcon has a question for you",
-  done: "Falcon finished a task",
-  failed: "A Falcon session failed",
+  perm: "Kvy needs your permission",
+  question: "Kvy has a question for you",
+  done: "Kvy finished a task",
+  failed: "A Kvy session failed",
 };
 
 export function notificationLabel(kind: LifecycleKind): string {

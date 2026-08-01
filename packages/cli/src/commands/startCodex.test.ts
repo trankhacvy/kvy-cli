@@ -2,12 +2,12 @@ import { mkdtempSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getRandomBytes } from "@falcon/crypto";
-import { createEnvelope } from "@falcon/wire";
+import { getRandomBytes } from "@kvy/crypto";
+import { createEnvelope } from "@kvy/wire";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AcpRemoteHandle } from "../acp/acpRemote.js";
 import { Outbox } from "../api/outbox.js";
-import type { FalconCredentials } from "../auth/credentials.js";
+import type { KvyCredentials } from "../auth/credentials.js";
 import { plaintextFallbackKeyMaterial } from "../auth/keyMaterial.js";
 import type { ProviderDetectionResult } from "../codex/index.js";
 import type {
@@ -21,7 +21,7 @@ import type { SessionClientHandle } from "../session/sessionClient.js";
 import type { registerWorkspace as registerWorkspaceType } from "../workspace/registry.js";
 import { runStartCodexCommand, type StartCodexCommandDeps } from "./startCodex.js";
 
-function fakeCredentials(overrides: Partial<FalconCredentials> = {}): FalconCredentials {
+function fakeCredentials(overrides: Partial<KvyCredentials> = {}): KvyCredentials {
   return {
     refreshToken: "test-refresh-token",
     keyMaterial: plaintextFallbackKeyMaterial(getRandomBytes(32)),
@@ -103,7 +103,7 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
   // write for every test, not just the ones that already opted into a real
   // homeDir — so `baseDeps()` needs one too instead of the placeholder
   // `/fake/home` that used to be safe when nothing ever actually wrote to it.
-  const homeDir = mkdtempSync(path.join(tmpdir(), "falcon-codex-basedeps-"));
+  const homeDir = mkdtempSync(path.join(tmpdir(), "kvy-codex-basedeps-"));
   baseDepsHomeDirs.push(homeDir);
 
   const written: string[] = [];
@@ -500,7 +500,7 @@ describe("runStartCodexCommand", () => {
   });
 
   it("routes a message RPC: claims, sends to the remote, and reports the tri-state status", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-test-"));
     try {
       let handlers: SessionRpcHandlers | null = null;
       const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
@@ -544,7 +544,7 @@ describe("runStartCodexCommand", () => {
   });
 
   it("stop RPC requests exit (ending the run without waitForExit ever resolving) and stops the remote", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-stop-test-"));
     try {
       let handlers: SessionRpcHandlers | null = null;
       const registerSessionRpcHandlers = vi.fn((d: { handlers: SessionRpcHandlers }) => {
@@ -574,7 +574,7 @@ describe("runStartCodexCommand", () => {
   });
 
   it("stop RPC with force schedules a process exit after the grace period", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-stop-force-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-stop-force-test-"));
     vi.useFakeTimers();
     const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
     try {
@@ -614,7 +614,7 @@ describe("runStartCodexCommand", () => {
   });
 
   it("completes the send claim once the turn settles (a later duplicate then reports 'duplicate')", async () => {
-    const homeDir = await mkdtemp(path.join(tmpdir(), "falcon-codex-test-"));
+    const homeDir = await mkdtemp(path.join(tmpdir(), "kvy-codex-test-"));
     try {
       let handlers: SessionRpcHandlers | null = null;
       const { deps, fakeRemote, releaseExit } = baseDeps({

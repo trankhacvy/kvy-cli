@@ -1,4 +1,4 @@
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { reduceEnvelopes } from "./reduce.js";
 import type { PermPlaceholderItem, RenderItem, SubagentGroupItem, ToolItem } from "./types.js";

@@ -14,7 +14,7 @@ const result = spawnSync(process.execPath, ["--no-warnings", entry, ...process.a
 });
 
 if (result.error) {
-  process.stderr.write(`falcon: failed to start (${result.error.message})\n`);
+  process.stderr.write(`kvy: failed to start (${result.error.message})\n`);
   process.exit(1);
 }
 

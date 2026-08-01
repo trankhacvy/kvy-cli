@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { consumeGithubCallback, consumeGoogleCallback } from "../oauth.js";
 import { createMemoryStorage } from "./test-storage.js";
 
-const STATE_KEY = "falcon:oauth:state";
+const STATE_KEY = "kvy:oauth:state";
 
 /**
  * Covers the CSRF/replay-guard logic in `consumeGoogleCallback` /
@@ -76,7 +76,7 @@ describe("consumeGithubCallback", () => {
     sessionStorage = createMemoryStorage();
     (globalThis as { window?: unknown }).window = {
       sessionStorage,
-      location: { origin: "https://app.falcon.dev" },
+      location: { origin: "https://app.kvy.dev" },
     };
   });
 
@@ -89,7 +89,7 @@ describe("consumeGithubCallback", () => {
     const result = consumeGithubCallback("?code=abc123&state=state-xyz");
     expect(result).toEqual({
       ok: true,
-      value: { code: "abc123", redirectUri: "https://app.falcon.dev/auth/callback/github/" },
+      value: { code: "abc123", redirectUri: "https://app.kvy.dev/auth/callback/github/" },
     });
   });
 

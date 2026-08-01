@@ -3,7 +3,7 @@ import {
   SessionRowSchema,
   UnmanagedSessionRowSchema,
   WorkspaceRowSchema,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";

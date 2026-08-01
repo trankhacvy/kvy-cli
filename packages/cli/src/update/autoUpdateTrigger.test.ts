@@ -14,19 +14,19 @@ describe("maybeTriggerAutoUpdate", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-auto-update-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-auto-update-"));
   });
 
   afterEach(async () => {
     await rm(homeDir, { recursive: true, force: true });
   });
 
-  it("skips and never spawns when FALCON_NO_UPDATE is set", async () => {
+  it("skips and never spawns when KVY_NO_UPDATE is set", async () => {
     const spawnBackgroundUpdate = vi.fn();
     await maybeTriggerAutoUpdate({
       isCompiledBinary: true,
       bundlePath: "/nonexistent",
-      env: { FALCON_NO_UPDATE: "1" },
+      env: { KVY_NO_UPDATE: "1" },
       homeDir,
       logger: fakeLogger(),
       spawnBackgroundUpdate,

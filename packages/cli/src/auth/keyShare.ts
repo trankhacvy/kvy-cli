@@ -7,7 +7,7 @@
  * byte-compatible in `keyShare.test.ts`; changing one side without the other silently
  * breaks cross-platform key sharing.
  */
-import { decodeBase64, encodeBase64, libsodiumEncryptForPublicKey } from "@falcon/crypto";
+import { decodeBase64, encodeBase64, libsodiumEncryptForPublicKey } from "@kvy/crypto";
 
 const X25519_PUBLIC_KEY_BYTES = 32;
 export const KEY_SHARE_PAYLOAD_VERSION = 0x02;

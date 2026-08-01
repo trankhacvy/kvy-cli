@@ -34,7 +34,7 @@ describe("password auth routes — NODE_ENV=production (production gate, item 3)
     process.env = {
       ...ORIGINAL_ENV,
       NODE_ENV: "production",
-      FALCON_MASTER_SECRET: "a".repeat(32),
+      KVY_MASTER_SECRET: "a".repeat(32),
     };
     vi.resetModules();
     const { buildServer } = await import("../server.js");

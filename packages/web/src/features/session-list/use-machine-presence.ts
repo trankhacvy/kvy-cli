@@ -1,13 +1,13 @@
 "use client";
 
-import type { MachineRow } from "@falcon/wire";
+import type { MachineRow } from "@kvy/wire";
 import { useEffect, useState } from "react";
 import type { EphemeralSource } from "@/features/session-control";
 import { apiSocket } from "@/sync";
 
 /**
  * Live machine online/offline (+ AH8 "machine-status-reauth" needs-reauth)
- * signal from the `machine-presence` ephemeral (falcon-system-design.md
+ * signal from the `machine-presence` ephemeral (kvy-system-design.md
  * §4.3, plan.md §16 W3.6 "Home screen real status dots + presence").
  * Shared between `features/session-list`'s own `live-source.ts` and
  * `features/unmanaged-sessions`' — both screens render machine badges for

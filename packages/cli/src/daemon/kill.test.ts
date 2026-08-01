@@ -12,10 +12,10 @@ import type { ProcessEntry } from "./processScan.js";
 
 const FIXTURE_PROCESSES: ProcessEntry[] = [
   { pid: 1, ppid: 0, command: "/sbin/launchd" },
-  { pid: 100, ppid: 1, command: "falcon daemon start-sync" },
-  { pid: 200, ppid: 100, command: "falcon claude --starting-mode remote --started-by daemon" },
-  { pid: 300, ppid: 1, command: "falcon claude --resume abc" },
-  { pid: 999, ppid: 1, command: "falcon kill all" }, // the invoking process
+  { pid: 100, ppid: 1, command: "kvy daemon start-sync" },
+  { pid: 200, ppid: 100, command: "kvy claude --starting-mode remote --started-by daemon" },
+  { pid: 300, ppid: 1, command: "kvy claude --resume abc" },
+  { pid: 999, ppid: 1, command: "kvy kill all" }, // the invoking process
 ];
 
 /** Builds a fake clock + no-op sleep pair: `sleep(ms)` advances the fake clock instead of waiting for real time. */
@@ -51,7 +51,7 @@ describe("killDaemon", () => {
     expect(deps.killPid).toHaveBeenCalledTimes(1);
     expect(deps.killPid).toHaveBeenCalledWith(100, "SIGTERM");
     expect(summary.outcomes).toEqual([
-      { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
+      { pid: 100, command: "kvy daemon start-sync", kind: "daemon", signal: "SIGTERM" },
     ]);
   });
 
@@ -62,7 +62,7 @@ describe("killDaemon", () => {
     expect(deps.killPid).toHaveBeenNthCalledWith(1, 100, "SIGTERM");
     expect(deps.killPid).toHaveBeenNthCalledWith(2, 100, "SIGKILL");
     expect(summary.outcomes).toEqual([
-      { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGKILL" },
+      { pid: 100, command: "kvy daemon start-sync", kind: "daemon", signal: "SIGKILL" },
     ]);
   });
 });
@@ -104,7 +104,7 @@ describe("killAll", () => {
     const daemonOutcome = summary.outcomes.find((o) => o.pid === 100);
     expect(daemonOutcome).toEqual({
       pid: 100,
-      command: "falcon daemon start-sync",
+      command: "kvy daemon start-sync",
       kind: "daemon",
       signal: "none",
       error: "EPERM",
@@ -178,7 +178,7 @@ describe("createKillDeps default isAlive", () => {
 describe("describeKillSummary", () => {
   it("reports 'no matching processes' when nothing was targeted", () => {
     expect(describeKillSummary("sessions", { targeted: [], outcomes: [] })).toBe(
-      "falcon kill sessions: no matching processes found\n",
+      "kvy kill sessions: no matching processes found\n",
     );
   });
 
@@ -188,16 +188,14 @@ describe("describeKillSummary", () => {
         {
           pid: 100,
           ppid: 1,
-          command: "falcon daemon start-sync",
+          command: "kvy daemon start-sync",
           kind: "daemon",
           spawnedByDaemon: false,
         },
       ],
-      outcomes: [
-        { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
-      ],
+      outcomes: [{ pid: 100, command: "kvy daemon start-sync", kind: "daemon", signal: "SIGTERM" }],
     });
-    expect(text).toContain("falcon kill daemon: 1/1 process(es) terminated");
-    expect(text).toContain("pid 100 [daemon] SIGTERM - falcon daemon start-sync");
+    expect(text).toContain("kvy kill daemon: 1/1 process(es) terminated");
+    expect(text).toContain("pid 100 [daemon] SIGTERM - kvy daemon start-sync");
   });
 });

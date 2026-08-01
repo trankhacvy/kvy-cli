@@ -28,9 +28,9 @@
  * (`packages/cli/src/daemon/machineRpc.ts`) already serves both; this is
  * just the caller-side typing for `features/unmanaged-sessions/`.
  *
- * `adopt.list` (falcon-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9) is the New Session
+ * `adopt.list` (kvy-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9) is the New Session
  * wizard's session-import step's data source (`features/new-session/`).
- * `@falcon/wire`'s `rpc.ts` defines its params/result schemas but, unlike
+ * `@kvy/wire`'s `rpc.ts` defines its params/result schemas but, unlike
  * every sibling method here, doesn't export paired `AdoptListParams`/
  * `AdoptListResult` type aliases — so those two are derived locally via
  * `z.infer` instead of imported, same values either way.
@@ -60,9 +60,9 @@
  * `resumeSession` (docs/features/session-lifecycle-actions.md Phase 6 —
  * Restart) drives the daemon's `resumeSession` RPC (`daemon/resumeSession.ts`
  * — kills any still-live process for the session, then re-spawns it with
- * `FALCON_RECONNECT_*` env). The daemon side has been registered since the
+ * `KVY_RECONNECT_*` env). The daemon side has been registered since the
  * spawn-RPC task; this is only the caller-side registry entry, structural
- * clone of `spawn`'s own listing above. Like `adopt.list`, `@falcon/wire`
+ * clone of `spawn`'s own listing above. Like `adopt.list`, `@kvy/wire`
  * exports no paired `ResumeSessionParams`/`ResumeSessionResult` type
  * aliases — derived locally via `z.infer` instead.
  *
@@ -154,7 +154,7 @@ import {
   WorkspaceUnregisterResultSchema,
   type WorktreeRemoveParams,
   WorktreeRemoveResultSchema,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { ZodType, z } from "zod";
 import type { ApiSocket } from "./apiSocket.js";
 
@@ -242,42 +242,42 @@ export interface MachineRpcParams {
 
 /** Result shape per method, matching `packages/cli/src/daemon/machineRpc.ts`'s method table. */
 export interface MachineRpcResults {
-  spawn: import("@falcon/wire").SpawnResult;
-  "fs.list": import("@falcon/wire").FsListResult;
-  "fs.mkdir": import("@falcon/wire").FsMkdirResult;
-  "workspace.register": import("@falcon/wire").WorkspaceRegisterResult;
-  "workspace.unregister": import("@falcon/wire").WorkspaceUnregisterResult;
+  spawn: import("@kvy/wire").SpawnResult;
+  "fs.list": import("@kvy/wire").FsListResult;
+  "fs.mkdir": import("@kvy/wire").FsMkdirResult;
+  "workspace.register": import("@kvy/wire").WorkspaceRegisterResult;
+  "workspace.unregister": import("@kvy/wire").WorkspaceUnregisterResult;
   "adopt.list": AdoptListResult;
-  "adopt.take": import("@falcon/wire").AdoptTakeResult;
-  "adopt.mirror": import("@falcon/wire").AdoptMirrorResult;
-  "git.status": import("@falcon/wire").GitStatusResult;
-  "git.diff": import("@falcon/wire").GitDiffResult;
-  "git.branches": import("@falcon/wire").GitBranchesResult;
-  "git.remotes": import("@falcon/wire").GitRemotesResult;
-  "git.commit": import("@falcon/wire").GitCommitResult;
-  "git.push": import("@falcon/wire").GitPushResult;
-  "git.renameBranch": import("@falcon/wire").GitRenameBranchResult;
-  "git.init": import("@falcon/wire").GitInitResult;
-  "git.setRemote": import("@falcon/wire").GitSetRemoteResult;
-  "github.checks": import("@falcon/wire").GithubChecksResult;
-  "commands.list": import("@falcon/wire").SlashCommandsListResult;
-  "git.files": import("@falcon/wire").GitFilesResult;
-  "fs.read": import("@falcon/wire").FsReadResult;
-  "provider.account": import("@falcon/wire").ProviderAccountResult;
-  "preview.ports": import("@falcon/wire").PreviewPortsResult;
-  "preview.tunnels": import("@falcon/wire").PreviewTunnelsResult;
-  "preview.open": import("@falcon/wire").PreviewOpenResult;
-  "preview.close": import("@falcon/wire").PreviewCloseResult;
+  "adopt.take": import("@kvy/wire").AdoptTakeResult;
+  "adopt.mirror": import("@kvy/wire").AdoptMirrorResult;
+  "git.status": import("@kvy/wire").GitStatusResult;
+  "git.diff": import("@kvy/wire").GitDiffResult;
+  "git.branches": import("@kvy/wire").GitBranchesResult;
+  "git.remotes": import("@kvy/wire").GitRemotesResult;
+  "git.commit": import("@kvy/wire").GitCommitResult;
+  "git.push": import("@kvy/wire").GitPushResult;
+  "git.renameBranch": import("@kvy/wire").GitRenameBranchResult;
+  "git.init": import("@kvy/wire").GitInitResult;
+  "git.setRemote": import("@kvy/wire").GitSetRemoteResult;
+  "github.checks": import("@kvy/wire").GithubChecksResult;
+  "commands.list": import("@kvy/wire").SlashCommandsListResult;
+  "git.files": import("@kvy/wire").GitFilesResult;
+  "fs.read": import("@kvy/wire").FsReadResult;
+  "provider.account": import("@kvy/wire").ProviderAccountResult;
+  "preview.ports": import("@kvy/wire").PreviewPortsResult;
+  "preview.tunnels": import("@kvy/wire").PreviewTunnelsResult;
+  "preview.open": import("@kvy/wire").PreviewOpenResult;
+  "preview.close": import("@kvy/wire").PreviewCloseResult;
   resumeSession: ResumeSessionResult;
-  "sleepInhibit.get": import("@falcon/wire").SleepInhibitState;
-  "sleepInhibit.set": import("@falcon/wire").SleepInhibitState;
-  "workspace.getConfig": import("@falcon/wire").WorkspaceGetConfigResult;
-  "workspace.setConfig": import("@falcon/wire").WorkspaceSetConfigResult;
-  "run.start": import("@falcon/wire").RunStartResult;
-  "run.stop": import("@falcon/wire").RunStopResult;
-  "run.status": import("@falcon/wire").RunStatusResult;
-  "run.setup": import("@falcon/wire").RunSetupResult;
-  "worktree.remove": import("@falcon/wire").WorktreeRemoveResult;
+  "sleepInhibit.get": import("@kvy/wire").SleepInhibitState;
+  "sleepInhibit.set": import("@kvy/wire").SleepInhibitState;
+  "workspace.getConfig": import("@kvy/wire").WorkspaceGetConfigResult;
+  "workspace.setConfig": import("@kvy/wire").WorkspaceSetConfigResult;
+  "run.start": import("@kvy/wire").RunStartResult;
+  "run.stop": import("@kvy/wire").RunStopResult;
+  "run.status": import("@kvy/wire").RunStatusResult;
+  "run.setup": import("@kvy/wire").RunSetupResult;
+  "worktree.remove": import("@kvy/wire").WorktreeRemoveResult;
 }
 
 export type MachineRpcMethod = keyof MachineRpcParams;
@@ -345,8 +345,8 @@ export class MachineRpcError extends Error {
 
 /** The narrow slice of a crypto-bridge client this needs — real `CryptoBridgeClient` (`@/crypto`) satisfies this structurally once it holds the target machine's unwrapped DEK (loaded the same way a session DEK is, via `setSessionKey(machineRow.dek)` — the wrap format is identical, only the row it came from differs). Declared locally so this module has no compile-time dependency on `@/crypto`, mirroring `sessionRpc.ts`'s `SessionRpcCrypto` seam. */
 export interface MachineRpcCrypto {
-  seal(data: unknown): Promise<import("@falcon/wire").EncryptedBox>;
-  open<T = unknown>(box: import("@falcon/wire").EncryptedBox): Promise<T | null>;
+  seal(data: unknown): Promise<import("@kvy/wire").EncryptedBox>;
+  open<T = unknown>(box: import("@kvy/wire").EncryptedBox): Promise<T | null>;
 }
 
 export interface MachineRpcDeps {
@@ -403,7 +403,7 @@ export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
       // `safeParse` here would always fail (an error box never matches a
       // result schema) and replace the handler's real message — e.g. a
       // `GitExecError`'s git stderr, the whole point of docs/features/
-      // git-write-actions.md's "not a Falcon abstraction" credential-failure
+      // git-write-actions.md's "not a Kvy abstraction" credential-failure
       // UX — with a useless generic "failed schema validation" string.
       if (isHandlerErrorBox(opened)) {
         throw new MachineRpcError(opened.error, "handler-error", opened.code);

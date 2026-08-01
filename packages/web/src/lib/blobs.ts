@@ -1,6 +1,6 @@
 /**
  * Encrypted attachment upload/download orchestration for the composer's
- * attach-file path (falcon-system-design.md §6.2, §5.1; plan.md §16 "4.3
+ * attach-file path (kvy-system-design.md §6.2, §5.1; plan.md §16 "4.3
  * Distribution & self-host": "encrypted attachment path in the web
  * composer"). Ties together three pieces that each already know only their
  * own slice: the crypto worker (`sealBlob`/`openBlob`, encrypt/decrypt under
@@ -23,7 +23,7 @@ async function sha256Hex(bytes: Uint8Array): Promise<string> {
 /**
  * Encrypts `plaintext` under the active session's blob key and uploads it,
  * returning the resulting `blobId` — what a `file` `SessionEvent`'s `ref`
- * field carries (`@falcon/wire`'s `SessionEventSchema`). Throws on any
+ * field carries (`@kvy/wire`'s `SessionEventSchema`). Throws on any
  * failure (network, rejected upload) — unlike the daemon's own best-effort
  * `blobClient.ts`, a composer attachment the user explicitly chose to send
  * has no silent-fallback path to degrade to, so the caller surfaces the

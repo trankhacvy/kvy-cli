@@ -2,17 +2,17 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type FalconCredentials, writeCredentials } from "./credentials.js";
+import { type KvyCredentials, writeCredentials } from "./credentials.js";
 import { resolveAccessToken } from "./resolveAccessToken.js";
 
 let homeDir: string;
 
-const keyMaterial: FalconCredentials["keyMaterial"] = {
+const keyMaterial: KvyCredentials["keyMaterial"] = {
   mode: "plaintext-fallback",
   bundle: "s",
 };
 
-function credentialsWith(refreshToken: string): FalconCredentials {
+function credentialsWith(refreshToken: string): KvyCredentials {
   return { refreshToken, keyMaterial };
 }
 
@@ -24,7 +24,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-resolve-access-token-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-resolve-access-token-test-"));
 });
 
 afterEach(() => {
@@ -48,7 +48,7 @@ describe("resolveAccessToken", () => {
 
   it("re-reads access.key and retries once when the refresh token already rotated on disk", async () => {
     // Simulates another process (the daemon's machineClient.ts, or a long-running
-    // `falcon claude` session) having already rotated the refresh token and persisted
+    // `kvy claude` session) having already rotated the refresh token and persisted
     // the new one to access.key between when THIS process read its stale copy and when
     // it presents it to the server.
     const staleCredentials = credentialsWith("rt-stale");

@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -211,7 +211,7 @@ export function NotificationsSection() {
     <div className="flex flex-col gap-8">
       <p className="text-sm text-muted-foreground">
         Get a push when a session needs your permission, asks a question, finishes, or fails,
-        nothing else. Falcon never pushes on every message.
+        nothing else. Kvy never pushes on every message.
       </p>
 
       <section className="flex flex-col items-start gap-3">
@@ -219,7 +219,7 @@ export function NotificationsSection() {
 
         {status === "unsupported" && (
           <p className="text-sm text-muted-foreground">
-            This browser doesn't support Web Push. On iOS, install Falcon to your home screen first
+            This browser doesn't support Web Push. On iOS, install Kvy to your home screen first
             (Share → Add to Home Screen).
           </p>
         )}
@@ -292,7 +292,7 @@ export function NotificationsSection() {
               type="text"
               value={ntfyTopic}
               onChange={(e) => setNtfyTopic(e.target.value)}
-              placeholder="my-falcon-topic"
+              placeholder="my-kvy-topic"
               className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <Button type="submit" variant="outline" disabled={ntfyWorking || !ntfyTopic.trim()}>

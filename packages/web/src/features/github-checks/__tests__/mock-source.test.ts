@@ -1,4 +1,4 @@
-import { GithubChecksResultSchema } from "@falcon/wire";
+import { GithubChecksResultSchema } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { createMockGithubChecksActions, MOCK_GITHUB_CHECKS_FIXTURES } from "../mock-source";
 

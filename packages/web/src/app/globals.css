@@ -6,7 +6,7 @@
  * Tailwind v4 + shadcn/ui theme tokens.
  *
  * `.dark` drives dark mode via a class on <html> (set in layout.tsx — dark is
- * Falcon's default theme, design §9 stack table) rather than the
+ * Kvy's default theme, design §9 stack table) rather than the
  * `prefers-color-scheme` media query, so a future appearance toggle (design
  * §9.2 Settings screen) only has to flip the class.
  */

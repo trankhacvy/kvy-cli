@@ -1,8 +1,8 @@
-# @falcon/web — self-host static build + nginx runtime (falcon-system-design.md
+# @kvy/web — self-host static build + nginx runtime (kvy-system-design.md
 # §5.3/§9, plan.md §16 "4.3 Distribution & self-host": statically exported,
 # served from an origin separate from the API, strict CSP + SRI).
 #
-# `@falcon/web` reads its API origin (and a few optional public OAuth/VAPID
+# `@kvy/web` reads its API origin (and a few optional public OAuth/VAPID
 # ids) from `NEXT_PUBLIC_*` env vars *inlined at build time* — there is no
 # server at request time for a static export to read env from (see
 # packages/web/src/lib/config.ts). That means this image must be rebuilt
@@ -12,7 +12,7 @@
 # Build from the repo root (docker-compose.yml's `build.context: ..` does
 # this automatically):
 #   docker build -f deploy/web.Dockerfile \
-#     --build-arg API_ORIGIN=https://api.example.com -t falcon-web .
+#     --build-arg API_ORIGIN=https://api.example.com -t kvy-web .
 
 FROM node:20-slim AS deps
 
@@ -25,7 +25,7 @@ COPY scripts ./scripts
 
 # pnpm-lock.yaml's workspace importers cover every packages/* member — a
 # `pnpm install --frozen-lockfile` needs each one's package.json present
-# (even ones this image never runs, e.g. @falcon/cli/@falcon/server) or it
+# (even ones this image never runs, e.g. @kvy/cli/@kvy/server) or it
 # refuses to proceed. Full source for those is never copied into this image.
 RUN mkdir -p packages/crypto packages/wire packages/server packages/cli packages/web
 COPY packages/crypto/package.json packages/crypto/
@@ -35,13 +35,13 @@ COPY packages/cli/package.json packages/cli/
 COPY packages/web/package.json packages/web/
 
 # `--ignore-scripts`: the lockfile's `onlyBuiltDependencies: ["node-pty"]`
-# (root package.json) is only there for @falcon/cli's PTY sessions — this
+# (root package.json) is only there for @kvy/cli's PTY sessions — this
 # image never runs cli, but pnpm still resolves its package.json (workspace
 # completeness, comment above) and would otherwise try to compile node-pty's
 # native addon here. node-pty ships prebuilt binaries for darwin/win32 only,
 # NOT linux, so that build falls back to node-gyp — which needs
 # python3/make/g++, none of which `node:20-slim` has.
-RUN SKIP_FALCON_WIRE_BUILD=1 pnpm install --frozen-lockfile --ignore-scripts
+RUN SKIP_KVY_WIRE_BUILD=1 pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder
 
@@ -52,7 +52,7 @@ ARG VAPID_PUBLIC_KEY=""
 
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_API_URL=$API_ORIGIN
-ENV NEXT_PUBLIC_FALCON_API_URL=$API_ORIGIN
+ENV NEXT_PUBLIC_KVY_API_URL=$API_ORIGIN
 ENV NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID=$GOOGLE_OAUTH_CLIENT_ID
 ENV NEXT_PUBLIC_GITHUB_OAUTH_CLIENT_ID=$GITHUB_OAUTH_CLIENT_ID
 ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$VAPID_PUBLIC_KEY
@@ -62,11 +62,11 @@ COPY packages/wire ./packages/wire
 COPY packages/crypto ./packages/crypto
 COPY packages/web ./packages/web
 
-# turbo resolves the @falcon/wire -> @falcon/crypto -> @falcon/web build
+# turbo resolves the @kvy/wire -> @kvy/crypto -> @kvy/web build
 # order from each package's `dependsOn: ["^build"]` (turbo.json). `next
-# build` (invoked by @falcon/web's own `build` script) writes the static
+# build` (invoked by @kvy/web's own `build` script) writes the static
 # export to packages/web/out/ per next.config.ts's `output: "export"`.
-RUN pnpm exec turbo run build --filter=@falcon/web...
+RUN pnpm exec turbo run build --filter=@kvy/web...
 
 FROM nginx:1.27-alpine AS runner
 

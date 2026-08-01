@@ -95,7 +95,7 @@ export function SleepInhibitCard({
             <p className="text-xs text-muted-foreground">
               While on Power holds the Mac awake only on AC power. Always also prevents idle sleep
               on battery. Neither can keep a MacBook awake with the lid closed on battery power, and
-              Always will drain the battery while the Falcon daemon runs.
+              Always will drain the battery while the Kvy daemon runs.
             </p>
           </>
         )}

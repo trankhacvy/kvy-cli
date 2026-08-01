@@ -195,7 +195,7 @@ describe("startTranscriptIndexer", () => {
     expect(byRef.get("sess-new")?.summary.running).toBe(true);
   });
 
-  it("never reports running for a Falcon-managed `falcon claude` process (only bare `claude`)", async () => {
+  it("never reports running for a Kvy-managed `kvy claude` process (only bare `claude`)", async () => {
     await writeFile(join(projectDir, "sess-1.jsonl"), userLine("hi"));
 
     const upserts: UpsertUnmanagedSessionParams[] = [];
@@ -203,7 +203,7 @@ describe("startTranscriptIndexer", () => {
       baseDeps({
         upsert: async (params) => (upserts.push(params), true),
         listProcesses: async () => [
-          { pid: 111, ppid: 1, command: "falcon claude --starting-mode remote" },
+          { pid: 111, ppid: 1, command: "kvy claude --starting-mode remote" },
         ],
         resolveProcessCwd: async () => workspacePath,
       }),
@@ -252,13 +252,13 @@ describe("startTranscriptIndexer", () => {
     expect(upserts.some((u) => u.providerRef === "sess-late")).toBe(true);
   }, 10_000);
 
-  // auth-ux-overhaul-fix-plan.md Fix 6: a brand-new account's first `falcon claude` was
+  // auth-ux-overhaul-fix-plan.md Fix 6: a brand-new account's first `kvy claude` was
   // uploading the machine's ENTIRE prior Claude Code history for that folder as unmanaged
   // sessions. Gate on the workspace's `registeredAt` (with a grace window for the "just
-  // exited a plain `claude` session, then reached for Falcon" case falcon-prd.md:221
+  // exited a plain `claude` session, then reached for Kvy" case kvy-prd.md:221
   // describes) so only transcripts touched since (or shortly before) registration surface.
   describe("registeredAt gating (Fix 6)", () => {
-    it("upserts nothing for a transcript untouched since long before registeredAt (pre-Falcon history)", async () => {
+    it("upserts nothing for a transcript untouched since long before registeredAt (pre-Kvy history)", async () => {
       await writeFile(join(projectDir, "sess-history.jsonl"), userLine("months-old chat"));
       // Registered two hours "from now" relative to the file's real write time — well
       // outside the one-hour first-registration grace window.

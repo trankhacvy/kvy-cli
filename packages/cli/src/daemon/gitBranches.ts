@@ -26,7 +26,7 @@
  * entry (e.g. `origin/main`) is marked `remote: true`; the remote's own
  * `<name>/HEAD` symbolic ref is dropped, since it isn't a branch.
  */
-import type { GitBranchesParams, GitBranchesResult, GitBranchInfo } from "@falcon/wire";
+import type { GitBranchesParams, GitBranchesResult, GitBranchInfo } from "@kvy/wire";
 import { type GitExec, runGit } from "./gitExec.js";
 import { assertWorkspaceStillValid } from "./workspacePath.js";
 

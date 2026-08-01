@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import type { PermissionInfo } from "@/sync/reducer";
 
-/** Read-only permission status indicator (falcon-prd.md FR-7.2 "permission
+/** Read-only permission status indicator (kvy-prd.md FR-7.2 "permission
  * events"). No Allow/Deny actions here — the interactive `PermCard` is
  * Phase 2 (plan.md §8.4); this just shows what already happened. */
 export function PermissionBadge({ permission }: { permission: PermissionInfo }) {

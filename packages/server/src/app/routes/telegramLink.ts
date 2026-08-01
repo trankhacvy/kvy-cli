@@ -1,4 +1,4 @@
-import { encodeBase64Url, getRandomBytes } from "@falcon/crypto";
+import { encodeBase64Url, getRandomBytes } from "@kvy/crypto";
 import { eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
@@ -34,7 +34,7 @@ const TelegramUpdateSchema = z
 
 /**
  * `POST /v1/push/telegram/link` + `POST /v1/push/telegram/webhook` —
- * Telegram bot `/start` deep-link pairing (falcon-system-design.md §6.4,
+ * Telegram bot `/start` deep-link pairing (kvy-system-design.md §6.4,
  * plan.md §10: "Telegram bot `/start` pairing"). Two-step flow:
  *
  *  1. The signed-in web client calls `/link`; the server mints a short-lived,
@@ -78,7 +78,7 @@ export function buildTelegramLinkRoutes(db: Database): FastifyPluginAsyncZod {
     );
 
     // No `app.authenticate` here — this is called by Telegram's servers, not
-    // a signed-in Falcon client. `TELEGRAM_WEBHOOK_SECRET` (when configured)
+    // a signed-in Kvy client. `TELEGRAM_WEBHOOK_SECRET` (when configured)
     // is the actual access control, mirroring Telegram's own `secret_token`
     // convention for `setWebhook`.
     app.post(
@@ -115,7 +115,7 @@ export function buildTelegramLinkRoutes(db: Database): FastifyPluginAsyncZod {
         if (!linkRequest || linkRequest.expiresAt < new Date()) {
           await sendTelegramMessage(
             String(chatId),
-            "This link has expired — generate a new one from Falcon's notification settings.",
+            "This link has expired — generate a new one from Kvy's notification settings.",
           ).catch((err) => {
             console.error({ module: "push", channel: "telegram" }, `webhook reply failed: ${err}`);
           });
@@ -141,7 +141,7 @@ export function buildTelegramLinkRoutes(db: Database): FastifyPluginAsyncZod {
 
         await sendTelegramMessage(
           endpoint,
-          "You're linked! Falcon will message you here for permission requests, questions, and completed/failed sessions.",
+          "You're linked! Kvy will message you here for permission requests, questions, and completed/failed sessions.",
         ).catch((err) => {
           console.error({ module: "push", channel: "telegram" }, `webhook reply failed: ${err}`);
         });

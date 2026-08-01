@@ -1,5 +1,5 @@
-import { open, seal } from "@falcon/crypto";
-import { createEnvelope, type EncryptedBox } from "@falcon/wire";
+import { open, seal } from "@kvy/crypto";
+import { createEnvelope, type EncryptedBox } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import { registerSessionRpcHandlers, type SessionRpcHandlers } from "./sessionRpc.js";
 

@@ -1,13 +1,13 @@
 /**
- * Daemon-local types (not part of the `@falcon/wire` protocol — these never
+ * Daemon-local types (not part of the `@kvy/wire` protocol — these never
  * cross a network boundary, they're the shape of the daemon's own in-memory
  * bookkeeping). Adapted from happy-cli/src/daemon/types.ts (MIT).
  */
-import type { PermissionMode, ProviderId } from "@falcon/wire";
+import type { PermissionMode, ProviderId } from "@kvy/wire";
 
 /**
  * Encryption material a spawned session reports back to the daemon via the
- * `/session-started` webhook (falcon-system-design.md §7, §10.1). Durability
+ * `/session-started` webhook (kvy-system-design.md §7, §10.1). Durability
  * (§7.4, a separate task) persists exactly this shape to `sessions.json` so
  * resume survives a daemon restart without re-deriving keys.
  */

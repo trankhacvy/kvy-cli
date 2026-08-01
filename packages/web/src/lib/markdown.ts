@@ -26,7 +26,7 @@ import { CodeBlock } from "@/components/timeline/CodeBlock";
  * `remark-rehype` before `rehype-react` ever sees it. Combined with
  * `rehype-react` (which only ever produces real React elements, whose text
  * children React escapes on render, exactly like everywhere else in this
- * app), there is no HTML-injection surface here at all: `md` (Falcon's own
+ * app), there is no HTML-injection surface here at all: `md` (Kvy's own
  * decrypted-but-still-adversary-controlled transcript content, design §5.3)
  * can influence *which* elements render, never inject raw markup.
  *

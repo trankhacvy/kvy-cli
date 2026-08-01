@@ -7,7 +7,7 @@ import { getAdoptionLineage, recordAdoptionLineage } from "./lineage.js";
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-lineage-test-"));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-lineage-test-"));
 });
 
 afterEach(() => {
@@ -44,7 +44,7 @@ describe("recordAdoptionLineage / getAdoptionLineage", () => {
     expect(await getAdoptionLineage("old-2", { homeDir })).toEqual(["old-2", "new-2"]);
   });
 
-  it("extends the original chain across 3+ adoption generations, matching the real `falcon adopt` call pattern (each call keyed on the most-recently-active transcript, not the original root)", async () => {
+  it("extends the original chain across 3+ adoption generations, matching the real `kvy adopt` call pattern (each call keyed on the most-recently-active transcript, not the original root)", async () => {
     // Real invocation pattern: `commands/adopt.ts` always passes
     // `listAdoptableSessions()`'s pick as `old`, which is B after the
     // first adopt, C after the second, etc. — never the original root A.

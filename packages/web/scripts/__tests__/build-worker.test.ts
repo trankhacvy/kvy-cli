@@ -40,7 +40,7 @@ describe("build-worker.mjs", () => {
   });
 
   afterAll(() => {
-    // `public/crypto-worker.js` is the same gitignored file `pnpm --filter @falcon/web dev`
+    // `public/crypto-worker.js` is the same gitignored file `pnpm --filter @kvy/web dev`
     // rebuilds on every start — restoring its pre-test content just avoids leaving a
     // test-run artefact behind for a dev server that happens to be running concurrently.
     if (originalOutput !== null) {
@@ -54,8 +54,8 @@ describe("build-worker.mjs", () => {
   });
 
   it("inlines an explicitly-set NEXT_PUBLIC_API_URL verbatim", () => {
-    const emitted = runBuild({ NEXT_PUBLIC_API_URL: "https://api.falcon.dev" });
-    expect(emitted).toContain(JSON.stringify("https://api.falcon.dev"));
+    const emitted = runBuild({ NEXT_PUBLIC_API_URL: "https://api.kvy.dev" });
+    expect(emitted).toContain(JSON.stringify("https://api.kvy.dev"));
   });
 
   it("treats an explicit empty string the same as unset, not as a literal empty API base", () => {

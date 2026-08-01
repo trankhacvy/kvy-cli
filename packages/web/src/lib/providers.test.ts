@@ -1,4 +1,4 @@
-import { PROVIDER_IDS } from "@falcon/wire";
+import { PROVIDER_IDS } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_MODEL_VALUE, getProviderMeta, PROVIDER_META } from "./providers";
 

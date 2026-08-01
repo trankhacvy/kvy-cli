@@ -15,10 +15,8 @@ let homeDir: string;
 let workspaceDir: string;
 
 beforeEach(async () => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-workspace-registry-home-"));
-  workspaceDir = await realpath(
-    mkdtempSync(path.join(tmpdir(), "falcon-workspace-registry-repo-")),
-  );
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-workspace-registry-home-"));
+  workspaceDir = await realpath(mkdtempSync(path.join(tmpdir(), "kvy-workspace-registry-repo-")));
 });
 
 afterEach(() => {
@@ -46,9 +44,9 @@ describe("registerWorkspace", () => {
 
   // Load-bearing for auth-ux-overhaul-fix-plan.md Fix 6: `transcriptIndexer.ts`'s watch-window
   // gate trusts `registeredAt` as a stable "first registration" timestamp to filter
-  // pre-Falcon history against. If re-registration ever bumped it, every already-registered
+  // pre-Kvy history against. If re-registration ever bumped it, every already-registered
   // workspace's pre-existing transcripts would become eligible again on the next
-  // `falcon claude` in that folder — reopening the exact over-upload bug the gate exists to
+  // `kvy claude` in that folder — reopening the exact over-upload bug the gate exists to
   // close.
   it("is idempotent: re-registering the same directory doesn't duplicate or change registeredAt", async () => {
     const first = await registerWorkspace(workspaceDir, {}, { homeDir });
@@ -69,7 +67,7 @@ describe("registerWorkspace", () => {
   });
 
   it("resolves a symlinked directory to its real path before storing", async () => {
-    const link = path.join(tmpdir(), `falcon-workspace-registry-link-${Date.now()}`);
+    const link = path.join(tmpdir(), `kvy-workspace-registry-link-${Date.now()}`);
     const { symlink, unlink } = await import("node:fs/promises");
     await symlink(workspaceDir, link);
     try {
@@ -186,7 +184,7 @@ describe("unregisterWorkspace", () => {
 
 describe("resolveWorkspacePath", () => {
   it("resolves symlinks", async () => {
-    const link = path.join(tmpdir(), `falcon-workspace-registry-resolve-link-${Date.now()}`);
+    const link = path.join(tmpdir(), `kvy-workspace-registry-resolve-link-${Date.now()}`);
     const { symlink, unlink } = await import("node:fs/promises");
     await symlink(workspaceDir, link);
     try {
@@ -220,7 +218,7 @@ describe("isWithinRegisteredWorkspace", () => {
 
   it("returns null for a directory outside every registered root", async () => {
     await registerWorkspace(workspaceDir, {}, { homeDir });
-    const outside = mkdtempSync(path.join(tmpdir(), "falcon-workspace-registry-outside-"));
+    const outside = mkdtempSync(path.join(tmpdir(), "kvy-workspace-registry-outside-"));
     try {
       expect(await isWithinRegisteredWorkspace(outside, { homeDir })).toBeNull();
     } finally {

@@ -20,7 +20,7 @@ import path from "node:path";
  * across install methods (P)").
  *
  * Deltas from the Happy source this was ported from:
- *  - `HAPPY_CLAUDE_PATH` → `FALCON_CLAUDE_PATH` (env var override).
+ *  - `HAPPY_CLAUDE_PATH` → `KVY_CLAUDE_PATH` (env var override).
  *  - `runClaudeCli`/`getClaudeCliPath` (which spawn the CLI and print
  *    install instructions to the terminal) are intentionally omitted here —
  *    that belongs to the local-mode launcher (a separate, not-yet-built
@@ -28,7 +28,7 @@ import path from "node:path";
  *    never runs it or writes to stdout/stderr (see `logger.ts`'s
  *    file-only-logging rule, which the same reasoning extends to here).
  *  - The `/goal` Stop-hook JSON-validation version warning is Happy-specific
- *    product copy with no Falcon equivalent; dropped rather than ported
+ *    product copy with no Kvy equivalent; dropped rather than ported
  *    unused.
  *
  * Supports:
@@ -42,7 +42,7 @@ import path from "node:path";
  */
 
 export type ClaudeInstallSource =
-  | "FALCON_CLAUDE_PATH"
+  | "KVY_CLAUDE_PATH"
   | "PATH"
   | "npm"
   | "Bun"
@@ -415,16 +415,16 @@ export function findNativeInstallerCliPath(): string | null {
 
 /**
  * Find path to the globally installed Claude Code CLI.
- * Priority: `FALCON_CLAUDE_PATH` > PATH > npm > Bun > Homebrew > Native installer.
+ * Priority: `KVY_CLAUDE_PATH` > PATH > npm > Bun > Homebrew > Native installer.
  */
 export function findGlobalClaudeCliPath(
   env: NodeJS.ProcessEnv = process.env,
 ): ClaudeCliLocation | null {
   // 1. Environment variable (explicit override).
-  const envPath = env.FALCON_CLAUDE_PATH;
+  const envPath = env.KVY_CLAUDE_PATH;
   if (envPath && existsSync(envPath)) {
     const resolved = resolvePathSafe(envPath) ?? envPath;
-    return { path: resolved, source: "FALCON_CLAUDE_PATH" };
+    return { path: resolved, source: "KVY_CLAUDE_PATH" };
   }
 
   // 2. Check PATH (respects the user's shell config).

@@ -1,5 +1,5 @@
 /**
- * S3-compatible blob driver (falcon-system-design.md §3 "Blobs |
+ * S3-compatible blob driver (kvy-system-design.md §3 "Blobs |
  * S3-compatible (MinIO in dev/self-host, R2/S3 in prod)"). Presigned PUT/GET
  * only — the server itself never touches blob bytes, it just asks the S3
  * SDK to sign a time-limited URL the caller talks to directly. Works

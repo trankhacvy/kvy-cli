@@ -1,10 +1,10 @@
-# Continuation brief: Falcon PTY-injection + remote-control UX
+# Continuation brief: Kvy PTY-injection + remote-control UX
 
 Paste the prompt at the bottom into a new session. Read this whole file first, then
-`CLAUDE.md`, `falcon-system-design.md` (v0.3 = ACP), and `plan.md` §17. Don't trust this
+`CLAUDE.md`, `kvy-system-design.md` (v0.3 = ACP), and `plan.md` §17. Don't trust this
 brief for implementation detail — only for the narrative of how we got here and what's next.
 
-Falcon = E2E-encrypted "mission control" for coding-agent sessions (wraps Claude Code /
+Kvy = E2E-encrypted "mission control" for coding-agent sessions (wraps Claude Code /
 Codex, mirrors sessions to a web/mobile dashboard, lets you steer them remotely).
 
 ## Repo state (as of this brief)
@@ -34,7 +34,7 @@ always, no mode switch.
 
 ## What the `v2-pty-injection` branch does
 
-**Terminal `falcon claude` (default) → new PTY-injection model:**
+**Terminal `kvy claude` (default) → new PTY-injection model:**
 - `claude/ptyClaudeSession.ts` — spawns `claude` on a `node-pty` pseudo-terminal (normal TUI
   always); real stdin passes through (typing/slash-commands unchanged); PTY output → stdout;
   resize propagated. Transcript tailer still mirrors to web, unchanged.
@@ -42,7 +42,7 @@ always, no mode switch.
   PTY only when idle (250ms submit delay + post-submit cooldown); queues if mid-turn.
 - `claude/ptyFetchSignal.ts` — receives the launcher's `fetch-start`/`fetch-end` idle signal
   over a unix socket (a PTY child has no fd 3), debounced into a busy/idle edge.
-- `scripts/falcon_claude_launcher.cjs` — when `FALCON_FETCH_SIGNAL_PATH` is set, writes the
+- `scripts/kvy_claude_launcher.cjs` — when `KVY_FETCH_SIGNAL_PATH` is set, writes the
   fetch signal to that socket instead of fd 3 (fd 3 still the default).
 
 **Remote permissions without a takeover → PreToolUse hook:**
@@ -72,7 +72,7 @@ Verified independently: build/typecheck/1215 tests/lint green.
 
 ## CRITICAL live-test blocker we hit and fixed (must make permanent)
 
-`falcon claude` failed with `[pty-session] setup failed: posix_spawnp failed.` — on the REAL
+`kvy claude` failed with `[pty-session] setup failed: posix_spawnp failed.` — on the REAL
 terminal, not just the sandbox. **Cause:** pnpm's content-addressable store strips the
 execute bit off node-pty's prebuilt `spawn-helper`, so `pty.fork()` can't exec it. **Manual
 fix applied to the current node_modules** (not committed):
@@ -85,7 +85,7 @@ source and the path differs). The helper is unsigned + only `com.apple.provenanc
 fine for local dev; the exec bit was the whole problem.
 
 After the chmod, the user was about to retry — **the real PTY spawn + TUI render is still
-UNCONFIRMED**. First job in the new session: confirm `falcon claude` brings up the normal
+UNCONFIRMED**. First job in the new session: confirm `kvy claude` brings up the normal
 Claude TUI and that a web message injects into it without takeover.
 
 ## Open problems (in priority order)
@@ -137,24 +137,24 @@ mapping/wiring gap (tailer envelope emission or reducer/timeline live-wiring), n
 
 ## Dev environment + the gotchas we hit (save yourself the pain)
 
-- Postgres: Docker container `falcon-postgres`, port **5433** (5432 taken by native pg).
-- Server: `DATABASE_URL=postgres://falcon:falcon@localhost:5433/falcon FALCON_DEV_AUTH=1
-  pnpm --filter @falcon/server dev` → `:3005`.
-- Web: `NEXT_PUBLIC_FALCON_DEV_AUTH=1 pnpm --filter @falcon/web dev` → `:3000`. **The
+- Postgres: Docker container `kvy-postgres`, port **5433** (5432 taken by native pg).
+- Server: `DATABASE_URL=postgres://kvy:kvy@localhost:5433/kvy KVY_DEV_AUTH=1
+  pnpm --filter @kvy/server dev` → `:3005`.
+- Web: `NEXT_PUBLIC_KVY_DEV_AUTH=1 pnpm --filter @kvy/web dev` → `:3000`. **The
   "Continue without OAuth (dev only)" login button only renders when the web was started with
-  `NEXT_PUBLIC_FALCON_DEV_AUTH=1`.**
-- CLI: run every `falcon` command with `FALCON_BACKEND_URL=http://localhost:3005
-  FALCON_FRONTEND_URL=http://localhost:3000` exported.
+  `NEXT_PUBLIC_KVY_DEV_AUTH=1`.**
+- CLI: run every `kvy` command with `KVY_BACKEND_URL=http://localhost:3005
+  KVY_FRONTEND_URL=http://localhost:3000` exported.
 - **Daemon registration gotcha (cost us several rounds):** the daemon registers its machine
-  against whatever `FALCON_BACKEND_URL` the shell that *starts* it carries. If it auto-starts
+  against whatever `KVY_BACKEND_URL` the shell that *starts* it carries. If it auto-starts
   from a shell without the var, it registers against prod, never gets a `machineId`, and
-  `falcon claude` says "this machine hasn't finished registering." Fix: export the vars, then
-  `falcon daemon stop && falcon daemon start` from that shell.
+  `kvy claude` says "this machine hasn't finished registering." Fix: export the vars, then
+  `kvy daemon stop && kvy daemon start` from that shell.
 - **Auth token doesn't survive a server restart** (dev server signs with a per-boot secret):
   after restarting the server you get `HTTP 401` on machine register → no machineId. Fix:
-  re-run `falcon auth login` against the running server, then restart the daemon.
-- **`bin/falcon.mjs` runs `dist/`**, not source → `pnpm --filter falcon build` after every
-  CLI change. Logs are file-only in `~/.falcon/logs/` (never stdout — would corrupt the TUI).
+  re-run `kvy auth login` against the running server, then restart the daemon.
+- **`bin/kvy.mjs` runs `dist/`**, not source → `pnpm --filter kvy build` after every
+  CLI change. Logs are file-only in `~/.kvy/logs/` (never stdout — would corrupt the TUI).
 
 ## Reference codebases at repo root (gitignored, read-only)
 
@@ -167,7 +167,7 @@ mapping/wiring gap (tailer envelope emission or reducer/timeline live-wiring), n
 1. Confirm the node-pty spawn-helper still has +x (`ls -l
    node_modules/.pnpm/node-pty@1.1.0/node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper`);
    re-chmod if a `pnpm install` happened. Add the permanent postinstall guard.
-2. Live-test `falcon claude` on `v2-pty-injection`: normal TUI renders, typing works, a web
+2. Live-test `kvy claude` on `v2-pty-injection`: normal TUI renders, typing works, a web
    message injects without takeover, a web-initiated tool routes a PermCard to the web, a
    locally-typed tool prompts instantly at the terminal.
 3. Fix the smaller web bugs (#2) — likely quick wins that make the mirror look right.

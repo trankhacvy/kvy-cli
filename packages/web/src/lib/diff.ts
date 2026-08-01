@@ -7,7 +7,7 @@ export interface DiffLine {
 
 /**
  * Line-level diff between two strings, computed via a classic LCS backtrack
- * (falcon-system-design.md §9.2 "diffs via ... a custom unified renderer").
+ * (kvy-system-design.md §9.2 "diffs via ... a custom unified renderer").
  * This is a readable line diff, not a shortest-edit-script guarantee —
  * that's all the read-only `Edit`/`Write`/`MultiEdit` tool cards need.
  *

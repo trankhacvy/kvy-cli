@@ -1,4 +1,4 @@
-import type { EncryptedBox } from "@falcon/wire";
+import type { EncryptedBox } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import type { ApiSocket, RpcCallResult } from "../apiSocket.js";
 import { createSessionRpcClient, type SessionRpcCrypto, SessionRpcError } from "../sessionRpc.js";

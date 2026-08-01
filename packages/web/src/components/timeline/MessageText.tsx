@@ -4,7 +4,7 @@ import { Markdown } from "./Markdown";
 import { ThinkingBlock } from "./ThinkingBlock";
 
 /** A `text` render item: either a normal chat message or (when `thinking`)
- * a collapsible reasoning block (falcon-prd.md FR-7.2).
+ * a collapsible reasoning block (kvy-prd.md FR-7.2).
  *
  * Layout follows the Cursor/ChatGPT chat pattern: the user's message is a
  * bordered, muted rounded box (visually distinct but not a loud filled

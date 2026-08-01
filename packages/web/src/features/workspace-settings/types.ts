@@ -3,7 +3,7 @@ import type {
   GitRemoteInfo,
   WorkspaceGetConfigResult,
   WorkspaceSetConfigResult,
-} from "@falcon/wire";
+} from "@kvy/wire";
 
 /**
  * View-model types for the Workspace Settings dialog's Git tab. Structural
@@ -12,7 +12,7 @@ import type {
 export type WorkspaceGitConfig = WorkspaceGetConfigResult;
 
 /** A patch to `baseRef`/`remote` only — never `setupScript`/`runScript`, see
- * `workspace.setConfig`'s own doc comment in `@falcon/wire`'s `rpc.ts`. */
+ * `workspace.setConfig`'s own doc comment in `@kvy/wire`'s `rpc.ts`. */
 export interface WorkspaceGitConfigPatch {
   baseRef?: string;
   remote?: string;

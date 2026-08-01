@@ -1,7 +1,7 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Counter, collectDefaultMetrics, Gauge, Histogram, register } from "prom-client";
 
-// Prometheus scrape endpoint (falcon-system-design.md §6.2: "GET /health GET
+// Prometheus scrape endpoint (kvy-system-design.md §6.2: "GET /health GET
 // /metrics (bind-local)", plan.md §16 "4.4 Hardening & release gate":
 // "Prometheus metrics + /metrics"). Exposes request rates, WS connection
 // counts, RPC latency, and error rates as counters/histograms — never user

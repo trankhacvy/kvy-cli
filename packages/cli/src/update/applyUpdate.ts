@@ -45,7 +45,7 @@ function defaultRunNpmInstall(packageSpec: string): Promise<void> {
   });
 }
 
-/** Downloads the platform binary, verifies it, and atomically replaces `execPath` (write to a sibling tmp file, chmod +x, then `rename` over the target — `rename` is atomic on POSIX, so a concurrently-starting `falcon` process never observes a half-written executable, and the *currently running* process is unaffected since it already holds the old inode open). */
+/** Downloads the platform binary, verifies it, and atomically replaces `execPath` (write to a sibling tmp file, chmod +x, then `rename` over the target — `rename` is atomic on POSIX, so a concurrently-starting `kvy` process never observes a half-written executable, and the *currently running* process is unaffected since it already holds the old inode open). */
 async function applyStandaloneBinaryUpdate(
   options: ApplyUpdateOptions,
 ): Promise<ApplyUpdateResult> {
@@ -54,7 +54,7 @@ async function applyStandaloneBinaryUpdate(
     return {
       applied: false,
       reason:
-        "no standalone binary published for this platform/architecture. Run 'npm install -g falcon' instead",
+        "no standalone binary published for this platform/architecture. Run 'npm install -g kvy' instead",
     };
   }
 
@@ -74,7 +74,7 @@ async function applyStandaloneBinaryUpdate(
 
 async function applyNpmUpdate(options: ApplyUpdateOptions): Promise<ApplyUpdateResult> {
   const runNpmInstall = options.runNpmInstall ?? defaultRunNpmInstall;
-  await runNpmInstall(`falcon@${options.version}`);
+  await runNpmInstall(`kvy@${options.version}`);
   return { applied: true, installKind: "npm" };
 }
 

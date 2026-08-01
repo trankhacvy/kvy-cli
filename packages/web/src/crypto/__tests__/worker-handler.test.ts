@@ -10,7 +10,7 @@ import {
   ready,
   wrapDek,
   wrapWithPin,
-} from "@falcon/crypto/web";
+} from "@kvy/crypto/web";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type AnyStoredKeyRecord,
@@ -350,7 +350,7 @@ describe("createCryptoWorkerHandler", () => {
     });
 
     // auth-ux-overhaul-fix-plan.md Fix 5 / E2E-5.5: `clear()` only emptied the object
-    // store, leaving `falcon-crypto-bridge`/`falcon-session` enumerable by
+    // store, leaving `kvy-crypto-bridge`/`kvy-session` enumerable by
     // `indexedDB.databases()` after logout. The `"clear"` RPC must call `destroy()` on
     // both stores (which removes the database itself), not `clear()`.
     it('the "clear" RPC calls destroy() on both stores, not clear()', async () => {

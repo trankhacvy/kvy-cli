@@ -26,10 +26,10 @@ export function seal(data: unknown, dek: Uint8Array): EncryptedBox {
  * Open an EncryptedBox with `dek`. Returns `null` on any failure — never throws.
  *
  * IMPORTANT: this deliberately does NOT validate `box.t`/`box.v` — it only ever
- * reads `box.c`. @falcon/crypto has no dependency on @falcon/wire (see types.ts),
+ * reads `box.c`. @kvy/crypto has no dependency on @kvy/wire (see types.ts),
  * so `EncryptedBox` here is structurally identical to `EncryptedBoxSchema` by
  * convention only, not by enforced coupling. Callers MUST validate `box.t === 'enc'`
- * and `box.v === 1` (e.g. via @falcon/wire's `EncryptedBoxSchema.parse`) BEFORE
+ * and `box.v === 1` (e.g. via @kvy/wire's `EncryptedBoxSchema.parse`) BEFORE
  * calling `open()` — this function provides no defense against a well-formed-but-
  * wrong-shaped box as long as `box.c` happens to decrypt under `dek`.
  */

@@ -1,16 +1,16 @@
 {
-  "name": "falcon",
+  "name": "kvy",
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "description": "falcon — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework, matching Happy's approach), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
+  "description": "kvy — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework, matching Happy's approach), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/falcon-dev/falcon.git",
+    "url": "git+https://github.com/kvy-dev/kvy.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/falcon-dev/falcon#readme",
-  "bugs": "https://github.com/falcon-dev/falcon/issues",
+  "homepage": "https://github.com/kvy-dev/kvy#readme",
+  "bugs": "https://github.com/kvy-dev/kvy/issues",
   "keywords": [
     "cli",
     "claude-code",
@@ -19,7 +19,7 @@
     "ai"
   ],
   "bin": {
-    "falcon": "./bin/falcon.mjs"
+    "kvy": "./bin/kvy.mjs"
   },
   "main": "./dist/index.mjs",
   "files": [
@@ -43,8 +43,8 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.2.1",
-    "@falcon/crypto": "workspace:*",
-    "@falcon/wire": "workspace:*",
+    "@kvy/crypto": "workspace:*",
+    "@kvy/wire": "workspace:*",
     "@napi-rs/keyring": "^1.3.0",
     "@paralleldrive/cuid2": "^2.2.2",
     "cross-spawn": "^7.0.6",
@@ -60,11 +60,12 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@falcon/server": "workspace:*",
+    "@kvy/server": "workspace:*",
     "@types/cross-spawn": "^6.0.6",
     "@types/node": "^22.10.0",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/react": "^19.2.0",
+    "esbuild": "^0.25.12",
     "pkgroll": "^2.14.2",
     "shx": "^0.3.4",
     "socket.io": "^4.8.1",

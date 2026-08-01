@@ -23,7 +23,7 @@ describe("acquireCredentialsLock", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-credentials-lock-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-credentials-lock-"));
   });
 
   afterEach(async () => {
@@ -123,7 +123,7 @@ describe("withCredentialsLock", () => {
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-credentials-lock-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-credentials-lock-"));
   });
 
   afterEach(async () => {

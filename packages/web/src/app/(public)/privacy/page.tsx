@@ -4,7 +4,7 @@ import { SUPPORT_EMAIL } from "@/lib/config";
 
 export const metadata: Metadata = {
   description:
-    "How Falcon handles account data, end-to-end encryption, and what the server can and cannot see.",
+    "How Kvy handles account data, end-to-end encryption, and what the server can and cannot see.",
   alternates: { canonical: "/privacy/" },
   robots: { index: true, follow: true },
 };
@@ -15,7 +15,7 @@ export default function PrivacyPage() {
       <main className="mx-auto w-full max-w-2xl px-4 py-16 sm:px-6">
         <p className="text-muted-foreground text-sm">
           <Link href="/" className="hover:text-foreground">
-            Falcon
+            Kvy
           </Link>
           <span aria-hidden="true"> · </span>
           Privacy
@@ -25,9 +25,9 @@ export default function PrivacyPage() {
 
         <div className="mt-10 space-y-6 text-sm leading-relaxed text-foreground/90">
           <section className="space-y-2">
-            <h2 className="font-medium text-base">What Falcon is</h2>
+            <h2 className="font-medium text-base">What Kvy is</h2>
             <p>
-              Falcon is end-to-end encrypted mission control for coding agents. Session transcripts,
+              Kvy is end-to-end encrypted mission control for coding agents. Session transcripts,
               titles, and related agent content are encrypted on your devices before they reach our
               servers. The server stores ciphertext it cannot read.
             </p>
@@ -65,8 +65,8 @@ export default function PrivacyPage() {
           <section className="space-y-2">
             <h2 className="font-medium text-base">Self-hosting</h2>
             <p>
-              If you run Falcon yourself, this policy describes the hosted product defaults. Your
-              own deployment is under your control and your operators&apos; policies.
+              If you run Kvy yourself, this policy describes the hosted product defaults. Your own
+              deployment is under your control and your operators&apos; policies.
             </p>
           </section>
 

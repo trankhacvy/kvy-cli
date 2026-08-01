@@ -12,7 +12,7 @@ import type {
   PushSubscribeBody,
   SessionRow,
   WorkspaceRow,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { MessagesPage, SyncSnapshot } from "@/sync";
 import { API_URL } from "./config.js";
 
@@ -43,7 +43,7 @@ async function request<T>(
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   } catch {
-    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+    throw new ApiError("Could not reach the Kvy server. Check your connection.", 0);
   }
 
   let json: unknown;
@@ -355,7 +355,7 @@ export async function putSessionMetadataCas(
       body: JSON.stringify(body),
     });
   } catch {
-    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+    throw new ApiError("Could not reach the Kvy server. Check your connection.", 0);
   }
 
   if (response.ok) {
@@ -411,7 +411,7 @@ export async function putWorkspaceMetadataCas(
       body: JSON.stringify(body),
     });
   } catch {
-    throw new ApiError("Could not reach the Falcon server. Check your connection.", 0);
+    throw new ApiError("Could not reach the Kvy server. Check your connection.", 0);
   }
 
   if (response.ok) {

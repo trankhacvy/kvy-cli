@@ -2,7 +2,7 @@ import { z } from "zod";
 
 /**
  * `POST /v1/blobs/request-upload` / `POST /v1/blobs/request-download`
- * (falcon-system-design.md §6.2, §6.5; plan.md §16 "4.3 Distribution &
+ * (kvy-system-design.md §6.2, §6.5; plan.md §16 "4.3 Distribution &
  * self-host"). The server never sees blob plaintext — callers encrypt with
  * `encryptBlob`/a session-or-machine-DEK-derived blob key
  * (`deriveBlobKey`, design §5.1) *before* requesting an upload target, and

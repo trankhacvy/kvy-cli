@@ -1,4 +1,4 @@
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   notifyTerminal,
@@ -189,7 +189,7 @@ function makeHarness(): Harness {
   const createFetchSignalServer = vi.fn(
     async (opts: { onEvent: (e: { type: "fetch-start" | "fetch-end"; id: number }) => void }) => {
       fetchOnEvent = opts.onEvent;
-      return { path: "/tmp/falcon-fetch.sock", close: fetchClose };
+      return { path: "/tmp/kvy-fetch.sock", close: fetchClose };
     },
   ) as unknown as NonNullable<PtyClaudeSessionDeps["createFetchSignalServer"]>;
 
@@ -233,14 +233,14 @@ function makeHarness(): Harness {
 function baseOptions(overrides: Partial<PtyClaudeSessionOptions> = {}): PtyClaudeSessionOptions {
   return {
     workingDirectory: "/work",
-    launcherPath: "/falcon/launcher.cjs",
+    launcherPath: "/kvy/launcher.cjs",
     claudeCliPath: "/usr/local/bin/claude",
     claudeArgs: [],
     providerSessionId: null,
-    homeDir: "/home/.falcon",
+    homeDir: "/home/.kvy",
     env: { PATH: "/usr/bin" },
-    settingsPath: "/home/.falcon/tmp/hooks/session-hook.json",
-    settingsEnv: { FALCON_HOOK_SETTINGS_PATH: "/home/.falcon/tmp/hooks/session-hook.json" },
+    settingsPath: "/home/.kvy/tmp/hooks/session-hook.json",
+    settingsEnv: { KVY_HOOK_SETTINGS_PATH: "/home/.kvy/tmp/hooks/session-hook.json" },
     onEnvelopes: () => {},
     ...overrides,
   };
@@ -263,19 +263,19 @@ describe("startPtyClaudeSession", () => {
       { cwd: string; env: NodeJS.ProcessEnv; cols: number; rows: number },
     ];
     expect(file).toBe("node");
-    expect(args[0]).toBe("/falcon/launcher.cjs");
+    expect(args[0]).toBe("/kvy/launcher.cjs");
     expect(args).toContain("--append-system-prompt");
     expect(args).toContain("--model");
     expect(args).toContain("opus");
     // The --settings path comes from the caller's single shared hook server.
-    expect(args.slice(-2)).toEqual(["--settings", "/home/.falcon/tmp/hooks/session-hook.json"]);
+    expect(args.slice(-2)).toEqual(["--settings", "/home/.kvy/tmp/hooks/session-hook.json"]);
     expect(options.cwd).toBe("/work");
     expect(options.cols).toBe(120);
     expect(options.rows).toBe(40);
-    expect(options.env.FALCON_CLAUDE_PATH).toBe("/usr/local/bin/claude");
+    expect(options.env.KVY_CLAUDE_PATH).toBe("/usr/local/bin/claude");
     // The hook settings env is merged onto the spawned claude's environment.
-    expect(options.env.FALCON_HOOK_SETTINGS_PATH).toBe("/home/.falcon/tmp/hooks/session-hook.json");
-    expect(options.env.FALCON_FETCH_SIGNAL_PATH).toBe("/tmp/falcon-fetch.sock");
+    expect(options.env.KVY_HOOK_SETTINGS_PATH).toBe("/home/.kvy/tmp/hooks/session-hook.json");
+    expect(options.env.KVY_FETCH_SIGNAL_PATH).toBe("/tmp/kvy-fetch.sock");
 
     handle.stop();
   });
@@ -294,7 +294,7 @@ describe("startPtyClaudeSession", () => {
       { env: NodeJS.ProcessEnv },
     ];
     expect(args).not.toContain("--settings");
-    expect(options.env.FALCON_HOOK_SETTINGS_PATH).toBeUndefined();
+    expect(options.env.KVY_HOOK_SETTINGS_PATH).toBeUndefined();
 
     handle.stop();
   });

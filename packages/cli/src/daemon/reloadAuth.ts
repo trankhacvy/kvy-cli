@@ -7,7 +7,7 @@
  * inline re-pair (`commands/startPreflight.ts`) the daemon is still holding the
  * old, now-revoked device session. This asks it to re-read `access.key` and
  * restart its machine integration in place, instead of making the user run
- * `falcon` a second time.
+ * `kvy` a second time.
  *
  * Best-effort, same contract as `notify.ts`: never throws. No daemon, a wedged
  * daemon, or a non-2xx response all collapse to `false`.

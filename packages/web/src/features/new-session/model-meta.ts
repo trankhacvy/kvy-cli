@@ -1,4 +1,4 @@
-import { PROVIDER_IDS } from "@falcon/wire";
+import { PROVIDER_IDS } from "@kvy/wire";
 import { DEFAULT_MODEL_VALUE, type ModelOption, PROVIDER_META } from "@/lib/providers";
 import type { NewSessionProvider } from "./types";
 

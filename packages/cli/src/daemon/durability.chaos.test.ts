@@ -1,7 +1,7 @@
 /**
  * Chaos test suite for daemon durability (plan.md §16 "3.2 Durability":
  * "Chaos test suite: kill daemon mid-turn, kill session process, sleep/wake,
- * server restart — all recover per failure matrix"; falcon-system-design.md
+ * server restart — all recover per failure matrix"; kvy-system-design.md
  * §11's Failure Modes & Recovery Matrix).
  *
  * This is a package-local integration suite (`packages/cli/src/daemon/`),
@@ -76,7 +76,7 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
   let homeDir: string;
 
   beforeEach(async () => {
-    homeDir = await mkdtemp(path.join(tmpdir(), "falcon-chaos-durability-"));
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-chaos-durability-"));
   });
 
   afterEach(async () => {
@@ -167,7 +167,7 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
           ? String((session.metadata as { path: unknown }).path)
           : null,
       launchProcess,
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
       baseEnv: {},
     });
 
@@ -176,9 +176,9 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
       expect.objectContaining({
         cwd: "/tmp/proj",
         env: expect.objectContaining({
-          FALCON_RECONNECT_SESSION_ID: "sess_1",
-          FALCON_RECONNECT_ENCRYPTION_KEY: ENCRYPTION.encryptionKey,
-          FALCON_RECONNECT_SEQ: String(ENCRYPTION.seq),
+          KVY_RECONNECT_SESSION_ID: "sess_1",
+          KVY_RECONNECT_ENCRYPTION_KEY: ENCRYPTION.encryptionKey,
+          KVY_RECONNECT_SEQ: String(ENCRYPTION.seq),
         }),
       }),
       undefined,
@@ -206,7 +206,7 @@ describe("chaos: daemon durability recovery (failure matrix, design §11)", () =
         pid: 200,
         watchExit: () => () => {},
       })),
-      falconEntrypoint: () => ["/usr/bin/node", "/opt/falcon/dist/index.mjs"],
+      kvyEntrypoint: () => ["/usr/bin/node", "/opt/kvy/dist/index.mjs"],
     });
 
     // The resumed process reports back exactly like any other session start.

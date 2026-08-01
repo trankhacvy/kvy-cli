@@ -2,11 +2,11 @@ import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 /**
- * `~/.falcon/daemon.state.json` — the daemon's published identity (design
+ * `~/.kvy/daemon.state.json` — the daemon's published identity (design
  * §7.2, plan.md line 691). Written once by the daemon after it binds its
  * control port and successfully acquires the singleton lock (see `lock.ts`);
- * read by any `falcon` command that needs to find the running daemon (e.g.
- * `ensureDaemonRunning()`, `falcon daemon status` — both later bullets).
+ * read by any `kvy` command that needs to find the running daemon (e.g.
+ * `ensureDaemonRunning()`, `kvy daemon status` — both later bullets).
  *
  * This module only owns the read/write helpers for that file. It is
  * deliberately dumb: no locking, no staleness logic — `lock.ts` is the
@@ -34,7 +34,7 @@ export interface DaemonState {
   machineId?: string;
   /**
    * This machine's DEK, wrapped to the account's content public key (base64
-   * — `@falcon/crypto`'s `wrapDek`), once minted (`machineIntegration.ts`).
+   * — `@kvy/crypto`'s `wrapDek`), once minted (`machineIntegration.ts`).
    * `POST /v1/machines`'s CAS-update path never re-sends or rotates `dek`
    * (see `machines.ts`'s own doc comment) — it's only consumed server-side
    * on a brand new machine's first registration. Round-tripping the same
@@ -86,7 +86,7 @@ export async function readDaemonState(homeDir: string): Promise<DaemonState | nu
 }
 
 /**
- * Removes `daemon.state.json`, if present. Used by `falcon daemon stop` (and
+ * Removes `daemon.state.json`, if present. Used by `kvy daemon stop` (and
  * by the daemon's own shutdown path) once the daemon is confirmed gone —
  * a missing file is treated as already-cleared, matching every other
  * "safe to call more than once" cleanup helper in this package (see

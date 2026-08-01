@@ -1,7 +1,7 @@
-import type { FsReadResult } from "@falcon/wire";
+import type { FsReadResult } from "@kvy/wire";
 
 /**
- * View-model types for the Repo Files panel (falcon-system-design.md §4.4
+ * View-model types for the Repo Files panel (kvy-system-design.md §4.4
  * `git.files`/`fs.read`; docs/competitive-notes-omnara.md #5 "Full repo
  * file browser": "browses and displays any file in the repo (full
  * syntax-highlighted viewer, line numbers), not just files with diffs — a

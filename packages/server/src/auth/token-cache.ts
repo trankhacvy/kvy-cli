@@ -1,13 +1,13 @@
 import type { VerifiedToken } from "./tokens.js";
 
-// falcon-plan.md §16 "0.4 Server foundation": "token cache" — the JWT signature check
-// itself (jose/HS256) is cheap, but Falcon expects every request on a hot session to
+// kvy-plan.md §16 "0.4 Server foundation": "token cache" — the JWT signature check
+// itself (jose/HS256) is cheap, but Kvy expects every request on a hot session to
 // carry the same bearer token, so re-running verification on every single request is
 // wasted work at scale. This cache lets the auth preHandler skip re-verification for a
 // token it has already validated, until that token's own `exp` claim passes.
 //
 // In-memory only (per task scope — "in-memory (or equivalent)"): this is a single-process
-// MVP server (falcon-plan.md §16), so a process-local cache is sufficient; it simply
+// MVP server (kvy-plan.md §16), so a process-local cache is sufficient; it simply
 // empties on restart, which is always safe (worst case: one extra verify per token).
 export interface TokenCacheOptions {
   /** Upper bound on cached entries, oldest-inserted evicted first once exceeded. */

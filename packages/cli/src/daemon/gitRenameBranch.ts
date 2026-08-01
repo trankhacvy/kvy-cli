@@ -21,7 +21,7 @@
  * once rely on git's own ref-lock serialization; whichever loses gets a
  * `GitExecError` with git's own stderr.
  */
-import type { GitRenameBranchParams, GitRenameBranchResult } from "@falcon/wire";
+import type { GitRenameBranchParams, GitRenameBranchResult } from "@kvy/wire";
 import { type GitExec, runGit } from "./gitExec.js";
 import { assertSafeBranchName } from "./gitWorktree.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";

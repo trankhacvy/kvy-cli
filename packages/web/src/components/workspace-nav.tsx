@@ -69,8 +69,8 @@ export function WorkspaceNav() {
           </SidebarMenu>
         ) : stableGroups.length === 0 ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-            No workspaces yet. Run <code className="rounded bg-muted px-1 py-0.5">falcon</code> from
-            a project to see it here.
+            No workspaces yet. Run <code className="rounded bg-muted px-1 py-0.5">kvy</code> from a
+            project to see it here.
           </p>
         ) : (
           <SidebarMenu>

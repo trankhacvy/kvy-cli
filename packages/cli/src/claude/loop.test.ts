@@ -1,4 +1,4 @@
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import type { ClaudeLocalLauncherDeps } from "./claudeLocalLauncher.js";
 import type { ClaudeRemoteLauncherDeps } from "./claudeRemoteLauncher.js";
@@ -125,7 +125,7 @@ function baseLoopOptions(overrides: Partial<LoopOptions> = {}): {
   const options: LoopOptions = {
     workingDirectory: "/tmp/work",
     permissionMode: "default",
-    homeDir: "/tmp/falcon-home",
+    homeDir: "/tmp/kvy-home",
     onEnvelopes: (envs) => envelopes.push(...envs),
     onModeChange: (mode) => modeChanges.push(mode),
     onMessage: messageTrigger.register,

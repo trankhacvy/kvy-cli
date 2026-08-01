@@ -14,11 +14,11 @@
  *    restart would just hand back a dead link. A restart cleanly drops every
  *    tracked tunnel; `reapOrphanedTunnels` below is what stops the
  *    now-orphaned child processes themselves from leaking.
- *  - **Durable pid journal** (`~/.falcon/tunnels.json`) — a flat
+ *  - **Durable pid journal** (`~/.kvy/tunnels.json`) — a flat
  *    `{pid, port, startedAt}[]`, no URLs. This exists purely so a daemon
  *    that crashes/SIGKILLs doesn't leak `cloudflared` children forever:
  *    `kill.ts`/`markers.ts`'s argv-marker process discovery can never find a
- *    `cloudflared` child (it carries no Falcon marker), so without this
+ *    `cloudflared` child (it carries no Kvy marker), so without this
  *    journal there is no way for `reapOrphanedTunnels` (called at daemon
  *    boot) to even know a tunnel process might still be alive. Same
  *    tmp-write + rename atomicity convention as `sessionsStore.ts`/
@@ -96,7 +96,7 @@ export function createTunnelRegistry(): TunnelRegistry {
 }
 
 // ---------------------------------------------------------------------------
-// Durable pid journal (~/.falcon/tunnels.json)
+// Durable pid journal (~/.kvy/tunnels.json)
 // ---------------------------------------------------------------------------
 
 export interface TunnelJournalEntry {

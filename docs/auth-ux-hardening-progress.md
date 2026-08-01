@@ -15,7 +15,7 @@ AH12 in `docs/auth-ux-hardening-plan.md`. Worktrees `.worktrees/AH10`, `.worktre
 **Parked units this cycle:** none.
 
 **`pnpm typecheck` on `v2-pty-injection`:** passed (11/11 tasks successful, full turbo;
-`@falcon/web:build` ran clean, `@falcon/web:typecheck` was a cache hit).
+`@kvy/web:build` ran clean, `@kvy/web:typecheck` was a cache hit).
 
 **Sequencing gates re-confirmed:** AH11 required AH1 merged+verified — AH1 was already
 `[x]` before ticking AH11. AH2-before-AH3 gate not implicated this cycle (both already

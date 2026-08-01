@@ -1,14 +1,14 @@
 /**
  * Git worktree/branch setup for the daemon `spawn` RPC's optional `branch`
- * field (`@falcon/wire`'s `SpawnParams.branch: {name, createWorktree, from}`,
- * falcon-prd.md FR-1.2 "`falcon -b <branch>`" / FR-4.3, plan.md §16 "3.1
+ * field (`@kvy/wire`'s `SpawnParams.branch: {name, createWorktree, from}`,
+ * kvy-prd.md FR-1.2 "`kvy -b <branch>`" / FR-4.3, plan.md §16 "3.1
  * Remote spawn" — "Branch/worktree option (-b): `git worktree add` via
  * daemon"). Called from `spawnEngine.ts` after workspace-path validation,
  * before the provider process is launched.
  *
  * `createWorktree: true` creates a fresh worktree at
  * `<repoDirectory>/.worktrees/<branch>` — the same sibling-directory
- * convention this monorepo's own Falcon dev loop uses for isolated task
+ * convention this monorepo's own Kvy dev loop uses for isolated task
  * branches — and the session launches there instead of in `repoDirectory`
  * itself, so a remote spawn on a new branch never touches the caller's
  * existing checkout. `createWorktree: false` just checks out (creating if
@@ -59,7 +59,7 @@
 import { execFile } from "node:child_process";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { SpawnParams } from "@falcon/wire";
+import type { SpawnParams } from "@kvy/wire";
 
 export class GitWorktreeError extends Error {
   constructor(message: string) {

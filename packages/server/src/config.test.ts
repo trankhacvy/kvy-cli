@@ -6,13 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // next import re-runs the top-level `EnvSchema.parse(process.env)` instead
 // of returning the cached module from a previous test.
 //
-// config.ts's own dotenv load is guarded by a `FALCON_DOTENV_LOADED` sentinel so it
+// config.ts's own dotenv load is guarded by a `KVY_DOTENV_LOADED` sentinel so it
 // only reads the real root `.env.local` once per process — but every test below resets
 // process.env to this ORIGINAL_ENV snapshot, so the sentinel must already be baked into
 // it, otherwise each fresh import would see the sentinel missing and re-read `.env.local`,
 // silently reintroducing real secrets (OAuth client ids, etc.) into whatever env a test
 // deliberately left unset.
-process.env.FALCON_DOTENV_LOADED = "1";
+process.env.KVY_DOTENV_LOADED = "1";
 const ORIGINAL_ENV = { ...process.env };
 
 async function importFreshConfig() {
@@ -36,7 +36,7 @@ describe("config env parsing", () => {
     delete process.env.HOST;
     delete process.env.LOG_LEVEL;
     delete process.env.DATABASE_URL;
-    delete process.env.FALCON_MASTER_SECRET;
+    delete process.env.KVY_MASTER_SECRET;
     delete process.env.GOOGLE_OAUTH_CLIENT_ID;
     delete process.env.GITHUB_OAUTH_CLIENT_ID;
     delete process.env.GITHUB_OAUTH_CLIENT_SECRET;
@@ -67,11 +67,11 @@ describe("config env parsing", () => {
     expect(env.PORT).toBe(3005);
     expect(env.HOST).toBe("0.0.0.0");
     expect(env.LOG_LEVEL).toBe("info");
-    expect(env.DATABASE_URL).toBe("postgres://falcon:falcon@localhost:5432/falcon");
-    expect(env.FALCON_MASTER_SECRET).toBe("dev-only-insecure-master-secret-change-me!!");
+    expect(env.DATABASE_URL).toBe("postgres://kvy:kvy@localhost:5432/kvy");
+    expect(env.KVY_MASTER_SECRET).toBe("dev-only-insecure-master-secret-change-me!!");
     expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
     expect(env.VAPID_PRIVATE_KEY).toBeUndefined();
-    expect(env.VAPID_SUBJECT).toBe("mailto:support@falcon.dev");
+    expect(env.VAPID_SUBJECT).toBe("mailto:support@kvy.dev");
     expect(env.TELEGRAM_BOT_TOKEN).toBeUndefined();
     expect(env.TELEGRAM_BOT_USERNAME).toBeUndefined();
     expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();
@@ -81,7 +81,7 @@ describe("config env parsing", () => {
     expect(env.S3_BUCKET).toBeUndefined();
     expect(env.S3_REGION).toBe("auto");
     expect(env.S3_FORCE_PATH_STYLE).toBe(false);
-    expect(env.BLOB_LOCAL_DIR).toContain(".falcon/server/blobs");
+    expect(env.BLOB_LOCAL_DIR).toContain(".kvy/server/blobs");
     expect(env.BLOB_LOCAL_TOKEN_SECRET).toBeUndefined();
     expect(env.BLOB_URL_EXPIRY_SECONDS).toBe(300);
     expect(env.BLOB_MAX_SIZE_BYTES).toBe(64 * 1024 * 1024);
@@ -108,18 +108,18 @@ describe("config env parsing", () => {
     process.env.PORT = "4321";
     process.env.HOST = "127.0.0.1";
     process.env.LOG_LEVEL = "warn";
-    process.env.DATABASE_URL = "postgres://user:pass@db.internal:5432/falcon_prod";
-    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+    process.env.DATABASE_URL = "postgres://user:pass@db.internal:5432/kvy_prod";
+    process.env.KVY_MASTER_SECRET = "a".repeat(32);
     process.env.VAPID_PUBLIC_KEY = "test-vapid-public-key";
     process.env.VAPID_PRIVATE_KEY = "test-vapid-private-key";
-    process.env.VAPID_SUBJECT = "mailto:ops@falcon.dev";
+    process.env.VAPID_SUBJECT = "mailto:ops@kvy.dev";
     process.env.TELEGRAM_BOT_TOKEN = "test-bot-token";
-    process.env.TELEGRAM_BOT_USERNAME = "FalconNotifyBot";
+    process.env.TELEGRAM_BOT_USERNAME = "KvyNotifyBot";
     process.env.TELEGRAM_WEBHOOK_SECRET = "test-webhook-secret";
     process.env.NTFY_BASE_URL = "https://ntfy.internal";
-    process.env.PUBLIC_WEB_ORIGIN = "https://app.falcon.dev";
-    process.env.PUBLIC_API_ORIGIN = "https://api.falcon.dev";
-    process.env.S3_BUCKET = "falcon-blobs-prod";
+    process.env.PUBLIC_WEB_ORIGIN = "https://app.kvy.dev";
+    process.env.PUBLIC_API_ORIGIN = "https://api.kvy.dev";
+    process.env.S3_BUCKET = "kvy-blobs-prod";
     process.env.S3_REGION = "us-east-1";
     process.env.S3_ENDPOINT = "https://s3.us-east-1.amazonaws.com";
     process.env.S3_ACCESS_KEY_ID = "test-access-key-id";
@@ -129,7 +129,7 @@ describe("config env parsing", () => {
     process.env.BLOB_LOCAL_TOKEN_SECRET = "test-blob-token-secret";
     process.env.BLOB_URL_EXPIRY_SECONDS = "120";
     process.env.BLOB_MAX_SIZE_BYTES = "1048576";
-    process.env.CORS_ALLOWED_ORIGINS = "https://app.falcon.dev, https://staging.falcon.dev";
+    process.env.CORS_ALLOWED_ORIGINS = "https://app.kvy.dev, https://staging.kvy.dev";
     process.env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT = "25";
 
     const { env } = await importFreshConfig();
@@ -139,18 +139,18 @@ describe("config env parsing", () => {
       PORT: 4321,
       HOST: "127.0.0.1",
       LOG_LEVEL: "warn",
-      DATABASE_URL: "postgres://user:pass@db.internal:5432/falcon_prod",
-      FALCON_MASTER_SECRET: "a".repeat(32),
+      DATABASE_URL: "postgres://user:pass@db.internal:5432/kvy_prod",
+      KVY_MASTER_SECRET: "a".repeat(32),
       VAPID_PUBLIC_KEY: "test-vapid-public-key",
       VAPID_PRIVATE_KEY: "test-vapid-private-key",
-      VAPID_SUBJECT: "mailto:ops@falcon.dev",
+      VAPID_SUBJECT: "mailto:ops@kvy.dev",
       TELEGRAM_BOT_TOKEN: "test-bot-token",
-      TELEGRAM_BOT_USERNAME: "FalconNotifyBot",
+      TELEGRAM_BOT_USERNAME: "KvyNotifyBot",
       TELEGRAM_WEBHOOK_SECRET: "test-webhook-secret",
       NTFY_BASE_URL: "https://ntfy.internal",
-      PUBLIC_WEB_ORIGIN: "https://app.falcon.dev",
-      PUBLIC_API_ORIGIN: "https://api.falcon.dev",
-      S3_BUCKET: "falcon-blobs-prod",
+      PUBLIC_WEB_ORIGIN: "https://app.kvy.dev",
+      PUBLIC_API_ORIGIN: "https://api.kvy.dev",
+      S3_BUCKET: "kvy-blobs-prod",
       S3_REGION: "us-east-1",
       S3_ENDPOINT: "https://s3.us-east-1.amazonaws.com",
       S3_ACCESS_KEY_ID: "test-access-key-id",
@@ -160,7 +160,7 @@ describe("config env parsing", () => {
       BLOB_LOCAL_TOKEN_SECRET: "test-blob-token-secret",
       BLOB_URL_EXPIRY_SECONDS: 120,
       BLOB_MAX_SIZE_BYTES: 1048576,
-      CORS_ALLOWED_ORIGINS: ["https://app.falcon.dev", "https://staging.falcon.dev"],
+      CORS_ALLOWED_ORIGINS: ["https://app.kvy.dev", "https://staging.kvy.dev"],
       MAX_ACTIVE_SESSIONS_PER_ACCOUNT: 25,
     });
   });
@@ -171,11 +171,11 @@ describe("config env parsing", () => {
   });
 
   it("trims whitespace and drops empty entries from CORS_ALLOWED_ORIGINS", async () => {
-    process.env.CORS_ALLOWED_ORIGINS = " https://a.falcon.dev ,, https://b.falcon.dev ";
+    process.env.CORS_ALLOWED_ORIGINS = " https://a.kvy.dev ,, https://b.kvy.dev ";
 
     const { env } = await importFreshConfig();
 
-    expect(env.CORS_ALLOWED_ORIGINS).toEqual(["https://a.falcon.dev", "https://b.falcon.dev"]);
+    expect(env.CORS_ALLOWED_ORIGINS).toEqual(["https://a.kvy.dev", "https://b.kvy.dev"]);
   });
 
   it("throws when DATABASE_URL is an empty string", async () => {
@@ -184,8 +184,8 @@ describe("config env parsing", () => {
     await expect(importFreshConfig()).rejects.toThrow();
   });
 
-  it("throws when FALCON_MASTER_SECRET is shorter than 32 characters", async () => {
-    process.env.FALCON_MASTER_SECRET = "too-short";
+  it("throws when KVY_MASTER_SECRET is shorter than 32 characters", async () => {
+    process.env.KVY_MASTER_SECRET = "too-short";
 
     await expect(importFreshConfig()).rejects.toThrow();
   });
@@ -220,16 +220,16 @@ describe("config env parsing", () => {
     await expect(importFreshConfig()).rejects.toThrow();
   });
 
-  it("throws when NODE_ENV=production and FALCON_MASTER_SECRET is left at its dev-only default", async () => {
+  it("throws when NODE_ENV=production and KVY_MASTER_SECRET is left at its dev-only default", async () => {
     process.env.NODE_ENV = "production";
-    delete process.env.FALCON_MASTER_SECRET;
+    delete process.env.KVY_MASTER_SECRET;
 
-    await expect(importFreshConfig()).rejects.toThrow(/FALCON_MASTER_SECRET/);
+    await expect(importFreshConfig()).rejects.toThrow(/KVY_MASTER_SECRET/);
   });
 
-  it("allows NODE_ENV=production when FALCON_MASTER_SECRET is overridden", async () => {
+  it("allows NODE_ENV=production when KVY_MASTER_SECRET is overridden", async () => {
     process.env.NODE_ENV = "production";
-    process.env.FALCON_MASTER_SECRET = "a".repeat(32);
+    process.env.KVY_MASTER_SECRET = "a".repeat(32);
 
     const { env } = await importFreshConfig();
 
@@ -237,7 +237,7 @@ describe("config env parsing", () => {
   });
 
   it("throws when S3_BUCKET is set without S3 credentials (half-configured S3 driver)", async () => {
-    process.env.S3_BUCKET = "falcon-blobs";
+    process.env.S3_BUCKET = "kvy-blobs";
     delete process.env.S3_ACCESS_KEY_ID;
     delete process.env.S3_SECRET_ACCESS_KEY;
 
@@ -247,13 +247,13 @@ describe("config env parsing", () => {
   });
 
   it("allows S3_BUCKET when both credentials are set", async () => {
-    process.env.S3_BUCKET = "falcon-blobs";
+    process.env.S3_BUCKET = "kvy-blobs";
     process.env.S3_ACCESS_KEY_ID = "key";
     process.env.S3_SECRET_ACCESS_KEY = "secret";
 
     const { env } = await importFreshConfig();
 
-    expect(env.S3_BUCKET).toBe("falcon-blobs");
+    expect(env.S3_BUCKET).toBe("kvy-blobs");
   });
 
   it("treats DATABASE_URL_UNPOOLED='' as unset, matching the other optional keys", async () => {
@@ -265,11 +265,11 @@ describe("config env parsing", () => {
   });
 
   it("keeps a set DATABASE_URL_UNPOOLED distinct from DATABASE_URL", async () => {
-    process.env.DATABASE_URL = "postgres://user:pass@db-pooler.internal:5432/falcon";
-    process.env.DATABASE_URL_UNPOOLED = "postgres://user:pass@db.internal:5432/falcon";
+    process.env.DATABASE_URL = "postgres://user:pass@db-pooler.internal:5432/kvy";
+    process.env.DATABASE_URL_UNPOOLED = "postgres://user:pass@db.internal:5432/kvy";
 
     const { env } = await importFreshConfig();
 
-    expect(env.DATABASE_URL_UNPOOLED).toBe("postgres://user:pass@db.internal:5432/falcon");
+    expect(env.DATABASE_URL_UNPOOLED).toBe("postgres://user:pass@db.internal:5432/kvy");
   });
 });

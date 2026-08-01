@@ -1,5 +1,5 @@
 /**
- * `falcon keys approve` — answer another device's request for a copy of this account's
+ * `kvy keys approve` — answer another device's request for a copy of this account's
  * keys (docs/auth-ux-overhaul-plan.md AX-4.19).
  *
  * Deliberately a command a human runs, not a silent auto-approval: a device asking for
@@ -106,13 +106,13 @@ export async function runKeysApproveCommand(deps: KeysApproveDeps = {}): Promise
       headers: { authorization: `Bearer ${token}` },
     });
     if (!res.ok) {
-      writeError("falcon: couldn't reach the Falcon server. Try again.\n");
+      writeError("kvy: couldn't reach the Kvy server. Try again.\n");
       return 1;
     }
     const body = (await res.json()) as { requests?: PendingKeyRequest[] };
     requests = body.requests ?? [];
   } catch {
-    writeError("falcon: couldn't reach the Falcon server. Try again.\n");
+    writeError("kvy: couldn't reach the Kvy server. Try again.\n");
     return 1;
   }
 

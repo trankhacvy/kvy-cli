@@ -17,8 +17,8 @@ import { buildInlineSpawnRequest, type InlineSpawnForm, translateSpawnError } fr
  * directory doesn't exist — `workspacePath.ts`'s `"not-found"` validation
  * reason) and `"register-workspace"` (the workspace id is unregistered —
  * `"unknown-workspace"`). Both preconditions require BOTH of: (a) the
- * workspace registered from a terminal (`falcon workspace register`/an
- * implicit register on first `falcon` run there — `workspace/registry.ts`)
+ * workspace registered from a terminal (`kvy workspace register`/an
+ * implicit register on first `kvy` run there — `workspace/registry.ts`)
  * and (b) its directory still existing on disk. This panel only ever
  * renders for a workspace group that has at least one real session that
  * already ran there (`features/session-list/group.ts`'s own grouping
@@ -30,7 +30,7 @@ import { buildInlineSpawnRequest, type InlineSpawnForm, translateSpawnError } fr
  * `validateSpawnWorkspace` yourself to confirm before trusting this comment.
  *
  * That said, "registered once" is not "still registered/still on disk right
- * now" — a user could `falcon workspace unregister` it or delete the
+ * now" — a user could `kvy workspace unregister` it or delete the
  * directory out from under a live account between that prior session and
  * this `+` click. Rather than either (a) silently building the old wizard's
  * full approval-confirm UI back in for a case that should never happen, or
@@ -86,7 +86,7 @@ export function useInlineSpawn(machineId: string): InlineSpawnController {
           setState({
             phase: "error",
             message:
-              "This workspace couldn't be confirmed on that machine. It may have been removed or its folder deleted. Try running falcon there again.",
+              "This workspace couldn't be confirmed on that machine. It may have been removed or its folder deleted. Try running kvy there again.",
           });
         })
         .catch((err: unknown) => {

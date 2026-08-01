@@ -82,7 +82,7 @@ const defaultFetchUser = (token: string): Promise<Response> =>
   fetch("https://api.github.com/user", {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "falcon-server",
+      "User-Agent": "kvy-server",
       Accept: "application/vnd.github+json",
     },
   });
@@ -97,7 +97,7 @@ const defaultFetchEmails = (token: string): Promise<Response> =>
   fetch("https://api.github.com/user/emails", {
     headers: {
       Authorization: `Bearer ${token}`,
-      "User-Agent": "falcon-server",
+      "User-Agent": "kvy-server",
       Accept: "application/vnd.github+json",
     },
   });

@@ -1,7 +1,7 @@
 /**
- * Unverified JWT payload decoding for display purposes only (`falcon auth
+ * Unverified JWT payload decoding for display purposes only (`kvy auth
  * status`). The CLI has no way to verify the server's HS256 signature (it
- * doesn't hold `FALCON_MASTER_SECRET`, and rightly so) — this only reads the
+ * doesn't hold `KVY_MASTER_SECRET`, and rightly so) — this only reads the
  * `sub`/`exp` claims to show the user something informative. It must NEVER
  * be used to make an authorization decision; the server is the only party
  * that verifies tokens (`packages/server/src/auth/tokens.ts`).

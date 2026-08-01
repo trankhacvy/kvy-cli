@@ -1,4 +1,4 @@
-import type { CheckRun } from "@falcon/wire";
+import type { CheckRun } from "@kvy/wire";
 
 /**
  * Synthetic `role: "user"` prompts sent to a session's agent from a UI

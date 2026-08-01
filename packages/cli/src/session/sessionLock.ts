@@ -2,8 +2,8 @@
  * Same-directory duplicate session lock (plan-v2.md Wave 4 W4.4, design §7.4
  * durability neighbor): before `commands/start.ts` mints a fresh session
  * nonce, it takes an exclusive, per-`(machineId, workspacePath)` lock file at
- * `~/.falcon/locks/session-<sha256(machineId|path)>.lock` — if a *live* pid
- * already holds it, a second `falcon claude` in the same directory refuses to
+ * `~/.kvy/locks/session-<sha256(machineId|path)>.lock` — if a *live* pid
+ * already holds it, a second `kvy claude` in the same directory refuses to
  * start a second, independent PTY writing into the same workspace (the two
  * processes would otherwise silently fork the transcript). `--force-new-session`
  * bypasses the check entirely.

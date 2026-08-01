@@ -1,4 +1,4 @@
-import type { ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderUsageMeter } from "@kvy/wire";
 import { cn } from "@/lib/utils";
 import { formatUsageMeterLabel } from "../format";
 

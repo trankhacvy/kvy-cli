@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { getRandomBytes } from "@falcon/crypto";
+import { getRandomBytes } from "@kvy/crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { writeCredentials } from "./credentials.js";
 import { plaintextFallbackKeyMaterial } from "./keyMaterial.js";
@@ -14,12 +14,12 @@ function joinedOutput(stdout: { mock: { calls: unknown[][] } }): string {
 }
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-status-test-"));
-  process.env.FALCON_HOME_DIR = homeDir;
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-status-test-"));
+  process.env.KVY_HOME_DIR = homeDir;
 });
 
 afterEach(() => {
-  delete process.env.FALCON_HOME_DIR;
+  delete process.env.KVY_HOME_DIR;
   rmSync(homeDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
@@ -32,7 +32,7 @@ describe("runAuthStatus", () => {
 
     expect(code).toBe(0);
     expect(joinedOutput(stdout)).toContain("Not logged in.");
-    expect(joinedOutput(stdout)).toContain("falcon auth login");
+    expect(joinedOutput(stdout)).toContain("kvy auth login");
   });
 
   it("reports logged in, the credentials path, derived account key, key material mode, and a present refresh token", () => {

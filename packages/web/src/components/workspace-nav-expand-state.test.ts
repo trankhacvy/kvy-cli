@@ -42,7 +42,7 @@ describe("workspace-nav-expand-state (window.localStorage present)", () => {
   });
 
   it("returns an empty set when localStorage holds unparseable JSON", () => {
-    window.localStorage.setItem("falcon:sidebar-expanded-workspaces", "not json");
+    window.localStorage.setItem("kvy:sidebar-expanded-workspaces", "not json");
     expect(getExpandedWorkspaces()).toEqual(new Set());
   });
 });

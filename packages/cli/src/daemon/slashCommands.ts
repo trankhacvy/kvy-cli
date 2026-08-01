@@ -25,11 +25,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type {
-  SlashCommandInfo,
-  SlashCommandsListParams,
-  SlashCommandsListResult,
-} from "@falcon/wire";
+import type { SlashCommandInfo, SlashCommandsListParams, SlashCommandsListResult } from "@kvy/wire";
 
 const COMMANDS_DIRNAME = path.join(".claude", "commands");
 const COMMAND_EXTENSION = ".md";

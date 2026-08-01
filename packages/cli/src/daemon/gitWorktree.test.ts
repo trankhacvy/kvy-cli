@@ -8,7 +8,7 @@ describe("ensureBranchWorkspace", () => {
   let root: string;
 
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), "falcon-git-worktree-"));
+    root = await mkdtemp(path.join(tmpdir(), "kvy-git-worktree-"));
   });
 
   afterEach(async () => {

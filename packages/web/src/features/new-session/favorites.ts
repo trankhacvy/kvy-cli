@@ -1,4 +1,4 @@
-import { PROVIDER_IDS } from "@falcon/wire";
+import { PROVIDER_IDS } from "@kvy/wire";
 import type { NewSessionProvider } from "./types";
 
 /**
@@ -22,9 +22,9 @@ import type { NewSessionProvider } from "./types";
  * so a star set from either place is honored by the other.
  */
 
-const MACHINE_KEY = "falcon:new-session-favorite-machine";
-const PROVIDER_KEY = "falcon:new-session-favorite-provider";
-const MODEL_KEY_PREFIX = "falcon:new-session-favorite-model:";
+const MACHINE_KEY = "kvy:new-session-favorite-machine";
+const PROVIDER_KEY = "kvy:new-session-favorite-provider";
+const MODEL_KEY_PREFIX = "kvy:new-session-favorite-model:";
 
 function hasLocalStorage(): boolean {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";

@@ -1,11 +1,11 @@
 /**
- * `falcon doctor` (+ `falcon doctor clean`) — process discovery,
+ * `kvy doctor` (+ `kvy doctor clean`) — process discovery,
  * categorization, and runaway-process cleanup. Ported, with changes, from
  * Happy's `daemon/doctor.ts` (https://github.com/slopus/happy, MIT); plan.md
- * §16 "3.2 Durability": "`falcon doctor` (+ `clean`): process discovery,
+ * §16 "3.2 Durability": "`kvy doctor` (+ `clean`): process discovery,
  * categorization, runaway kill".
  *
- * `falcon doctor` is purely diagnostic: it reports every Falcon-owned
+ * `kvy doctor` is purely diagnostic: it reports every Kvy-owned
  * process currently visible to `ps` (via `processScan.ts` + `markers.ts`'s
  * classifier — the exact same discovery mechanism `kill.ts` uses, so this
  * never depends on `daemon.state.json`/the control server being reachable
@@ -13,39 +13,39 @@
  * resumable from `sessions.json`. It never sends a signal to anything.
  *
  * It also reports ACP adapter health and provider CLI detection (design
- * §7.9: "`falcon doctor` reports adapter presence/version/integrity and the
+ * §7.9: "`kvy doctor` reports adapter presence/version/integrity and the
  * underlying provider CLI detection (`claude` binary, `codex` binary)") —
  * `checkAllAdaptersHealth` (`../adapters/health.ts`) re-verifies every
  * pinned adapter's install against `ADAPTER_MANIFEST`, and
  * `detectClaudeCode`/`detectCodex` (the same `ProviderAdapter.detect()`
- * implementations `falcon claude`/`falcon codex` themselves use) report
+ * implementations `kvy claude`/`kvy codex` themselves use) report
  * whether the underlying provider CLI is even findable.
  *
  * A `preview` section (docs/features/dev-server-preview.md) joins these:
  * `cloudflared` detection (`cloudflaredResolve.ts`'s `detectCloudflared`,
  * same as the `preview.ports` RPC uses) plus every entry in the durable
  * `tunnels.json` pid journal (`tunnelRegistry.ts`), each marked live/dead by
- * a fresh `isProcessAlive` check. `falcon doctor` runs as its OWN process —
+ * a fresh `isProcessAlive` check. `kvy doctor` runs as its OWN process —
  * it has no visibility into a live daemon's in-memory tunnel registry, only
  * whatever the journal says, so a `starting` tunnel whose daemon just
  * crashed before writing anything further still shows up here as a
  * (possibly still-alive) journaled pid, never as a richer "active" state
  * only the daemon's own memory would know.
  *
- * `falcon doctor clean` is the destructive half: it targets **runaway**
+ * `kvy doctor clean` is the destructive half: it targets **runaway**
  * processes — every daemon-classified process (`kind: "daemon"`) plus every
  * daemon-*spawned* session (`kind: "session"` with `spawnedByDaemon: true`)
  * — and kills them SIGTERM-then-SIGKILL, reusing `kill.ts`'s exact
- * escalation logic (`killGraceful`). Deliberately narrower than `falcon kill
+ * escalation logic (`killGraceful`). Deliberately narrower than `kvy kill
  * all`: a session the user started directly from a terminal is not
  * "runaway" just because a daemon happens to be running too, so plain
- * terminal sessions (`spawnedByDaemon: false`) are left alone — `falcon
+ * terminal sessions (`spawnedByDaemon: false`) are left alone — `kvy
  * kill sessions`/`all` remain the blunter, "kill everything" escape hatches
  * for that case.
  *
- * `falcon doctor clean` also reaps orphaned `cloudflared` tunnels
+ * `kvy doctor clean` also reaps orphaned `cloudflared` tunnels
  * (`tunnelRegistry.ts`'s `reapOrphanedTunnels`) alongside its runaway-process
- * kill — `cloudflared` children carry no Falcon argv marker
+ * kill — `cloudflared` children carry no Kvy argv marker
  * `markers.ts`/`kill.ts` could ever classify, so the pid journal is the only
  * way `doctor clean` can find (and verify-before-kill) them, same as a live
  * daemon's own boot-time reap.
@@ -106,7 +106,7 @@ export interface DoctorDeps {
   listProcesses: () => Promise<ProcessEntry[]>;
   isProcessAlive: (pid: number) => boolean;
   currentPid: number;
-  /** Defaults to `checkAllAdaptersHealth` — injectable so tests never touch a real `~/.falcon/adapters` install. */
+  /** Defaults to `checkAllAdaptersHealth` — injectable so tests never touch a real `~/.kvy/adapters` install. */
   checkAdapters?: (homeDir: string) => Promise<AdapterHealth[]>;
   /** Defaults to `detectClaudeCode` — injectable so tests never shell out to a real `claude` on PATH. */
   detectClaudeProvider?: () => Promise<ProviderDetectionResult>;
@@ -185,9 +185,9 @@ export function describeDoctorReport(report: DoctorReport): string {
   lines.push("");
 
   if (report.processes.length === 0) {
-    lines.push("no falcon-owned processes found");
+    lines.push("no kvy-owned processes found");
   } else {
-    lines.push(`falcon-owned processes (${report.processes.length}):`);
+    lines.push(`kvy-owned processes (${report.processes.length}):`);
     for (const p of report.processes) {
       const marker = p.spawnedByDaemon ? " [daemon-spawned]" : "";
       lines.push(`  pid ${p.pid} [${p.kind}]${marker} - ${p.command}`);
@@ -253,7 +253,7 @@ export async function runDoctorClean(
   const outcomes = await killGraceful(targeted, deps, gracefulTimeoutMs);
 
   // Orphaned `cloudflared` tunnels (docs/features/dev-server-preview.md)
-  // aren't `ClassifiedProcess`es at all — they carry no Falcon argv marker
+  // aren't `ClassifiedProcess`es at all — they carry no Kvy argv marker
   // for `markers.ts` to find — so they're swept separately here via the
   // same journal-driven, verify-before-kill reap a live daemon runs at its
   // own boot (`tunnelRegistry.ts`'s `reapOrphanedTunnels`), reusing this
@@ -265,12 +265,12 @@ export async function runDoctorClean(
 
 export function describeDoctorCleanSummary(summary: DoctorCleanSummary): string {
   if (summary.targeted.length === 0) {
-    return "falcon doctor clean: no runaway processes found\n";
+    return "kvy doctor clean: no runaway processes found\n";
   }
   const succeeded = summary.outcomes.filter((o) => o.error === undefined).length;
   const lines = summary.outcomes.map((o) => {
     const status = o.error !== undefined ? `FAILED (${o.error})` : o.signal;
     return `  pid ${o.pid} [${o.kind}] ${status} - ${o.command}`;
   });
-  return `falcon doctor clean: ${succeeded}/${summary.targeted.length} runaway process(es) terminated\n${lines.join("\n")}\n`;
+  return `kvy doctor clean: ${succeeded}/${summary.targeted.length} runaway process(es) terminated\n${lines.join("\n")}\n`;
 }

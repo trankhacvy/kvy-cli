@@ -1,6 +1,6 @@
 /**
  * `git.status` machine RPC handler (design §4.4: `'git.status'({worktree})
- * → { branch, ahead, behind, files: FileStatus[] }`; falcon-prd.md FR-7.7
+ * → { branch, ahead, behind, files: FileStatus[] }`; kvy-prd.md FR-7.7
  * "Git panel"; plan.md §16 "4.1 Git panel"). Backs the web changed-files
  * list (conductor.build-style: everything different from the workspace's
  * base branch, not just uncommitted edits).
@@ -41,7 +41,7 @@
  * to show a real diff for an untracked file on click, rather than the
  * folder-name-only badge with no stat this had before.
  */
-import type { FileStatus, GitStatusParams, GitStatusResult } from "@falcon/wire";
+import type { FileStatus, GitStatusParams, GitStatusResult } from "@kvy/wire";
 import { resolveDiffBaseline, resolveEffectiveBaseRef } from "./gitBaseRef.js";
 import { type GitExec, runGit, runGitDiffNoIndex } from "./gitExec.js";
 import { parseUntrackedPath } from "./gitUntracked.js";
@@ -52,7 +52,7 @@ export interface GitStatusDeps {
   git?: GitExec;
   /** Injectable for tests; defaults to `gitExec.ts`'s real `runGitDiffNoIndex` (an untracked file's own `+N`/`-M` stat). */
   noIndexDiff?: GitExec;
-  /** Injectable for tests; defaults to `workspaceConfig.ts`'s real `~/.falcon/settings.json`-backed lookup. */
+  /** Injectable for tests; defaults to `workspaceConfig.ts`'s real `~/.kvy/settings.json`-backed lookup. */
   resolveConfiguredBaseRef?: (worktree: string) => Promise<string | undefined>;
   /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (known-issues.md #3 — a real filesystem check, so tests exercising the porcelain-parsing logic against a fake `worktree` path must override this). */
   assertWorkspaceValid?: (directory: string) => Promise<void>;
@@ -62,7 +62,7 @@ const UNMERGED_RE = /^u (\S\S) \S+ \S+ \S+ \S+ \S+ \S+ \S+ \S+ (.+)$/;
 const BRANCH_HEAD_RE = /^# branch\.head (.+)$/;
 const BRANCH_AB_RE = /^# branch\.ab \+(\d+) -(\d+)$/;
 
-/** Maps a `git diff --name-status` letter to Falcon's `FileStatus.status` enum. `--no-renames` means `R`/`C` never appear here. */
+/** Maps a `git diff --name-status` letter to Kvy's `FileStatus.status` enum. `--no-renames` means `R`/`C` never appear here. */
 function statusFromNameStatusLetter(letter: string): FileStatus["status"] {
   if (letter.startsWith("A")) return "added";
   if (letter.startsWith("D")) return "deleted";

@@ -1,6 +1,6 @@
-import { getProviderCapabilities, type ProviderId } from "@falcon/wire";
+import { getProviderCapabilities, type ProviderId } from "@kvy/wire";
 
-export type { ProviderCapabilities } from "@falcon/wire";
+export type { ProviderCapabilities } from "@kvy/wire";
 export { getProviderCapabilities };
 
 export interface ModelOption {

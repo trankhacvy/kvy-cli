@@ -1,6 +1,6 @@
 /**
  * Transcript indexer — adoption Tier 1 (plan.md §16 "3.3 Session adoption
- * (UC9)", falcon-system-design.md §8 "Transcript indexer (adoption Tier
+ * (UC9)", kvy-system-design.md §8 "Transcript indexer (adoption Tier
  * 1)" / §11 "Session adoption — UC9"): fs-watches every registered
  * workspace's Claude Code project transcript directory
  * (`../claude/scanner.js`'s `getProjectPath`) and upserts an
@@ -9,14 +9,14 @@
  * one active turn produces one upsert, not dozens. Liveness ("is this
  * specific transcript's session still running?") is a best-effort signal
  * derived from `processScan.ts` + `markers.ts` — a plain `claude` process
- * (never a Falcon-managed one) whose cwd resolves to the workspace path,
+ * (never a Kvy-managed one) whose cwd resolves to the workspace path,
  * matched against whichever transcript file in that workspace was most
  * recently modified.
  *
  * New code (N) — no direct Happy equivalent (Happy's `sessionScanner.ts`
  * this borrows `getProjectPath` from watches a *specific* session id
- * already known to a running `falcon claude` process; this watches an
- * entire *directory* for sessions Falcon never started).
+ * already known to a running `kvy claude` process; this watches an
+ * entire *directory* for sessions Kvy never started).
  *
  * Scope note: this module only owns discovery + upsert. Two seams are
  * intentionally left to later, not-yet-built work rather than stubbed out
@@ -28,17 +28,17 @@
  *    spawn-RPC task, plan.md §16 "3.1 Remote spawn", which is what actually
  *    knows a workspace's path/id at the point a session is spawned into
  *    it). Callers must supply it.
- *  - `isManaged` (skip a `providerRef` that's actually a Falcon-managed
+ *  - `isManaged` (skip a `providerRef` that's actually a Kvy-managed
  *    session's lineage) defaults to "nothing is managed yet" — the
  *    lineage store it would consult (`providerSessionLineage`) is built by
- *    the *other* half of §3.3 (`adopt.take` + `falcon adopt`), explicitly
+ *    the *other* half of §3.3 (`adopt.take` + `kvy adopt`), explicitly
  *    out of scope for this task.
  */
 import { readdir, readFile, stat, watch } from "node:fs/promises";
 import path, { resolve as resolvePath } from "node:path";
 import { getProjectPath } from "../claude/scanner.js";
 import type { Logger } from "../logger.js";
-import { classifyFalconCommand } from "./markers.js";
+import { classifyKvyCommand } from "./markers.js";
 import {
   listProcesses as listProcessesDefault,
   type ProcessEntry,
@@ -63,9 +63,9 @@ export interface RegisteredWorkspace {
   path: string;
   /**
    * ISO-8601 first-registration time, from `workspace/registry.ts`. Transcripts whose files
-   * haven't been touched since then are pre-Falcon history, not "the session the user just
-   * left" (falcon-prd.md FR-9.1), and are not indexed — a brand-new account's first
-   * `falcon claude` was otherwise uploading the machine's entire prior Claude Code archive
+   * haven't been touched since then are pre-Kvy history, not "the session the user just
+   * left" (kvy-prd.md FR-9.1), and are not indexed — a brand-new account's first
+   * `kvy claude` was otherwise uploading the machine's entire prior Claude Code archive
    * for that folder as unmanaged sessions.
    *
    * Optional: absent means index everything, which keeps the daemon's default
@@ -75,8 +75,8 @@ export interface RegisteredWorkspace {
 }
 
 /**
- * How far back a workspace's FIRST registration reaches. falcon-prd.md:221's canonical entry
- * path is "run plain `claude`, work a while, THEN reach for Falcon", so the session the user
+ * How far back a workspace's FIRST registration reaches. kvy-prd.md:221's canonical entry
+ * path is "run plain `claude`, work a while, THEN reach for Kvy", so the session the user
  * just left is minutes older than `registeredAt` — a strict `mtime >= registeredAt` gate would
  * drop precisely the transcript Tier 1 exists to catch. One hour is long enough for "I just
  * finished that" and far short of the days-old archive that made a brand-new account show 11
@@ -97,7 +97,7 @@ export interface TranscriptIndexerDeps {
   listWorkspaces: () => Promise<RegisteredWorkspace[]>;
   /** Persists one unmanaged-session row. Failures must be handled internally (logged), never thrown — see `unmanagedSessionClient.ts`'s own contract. */
   upsert: (params: UpsertUnmanagedSessionParams) => Promise<boolean>;
-  /** True if `providerRef` is already known to be a Falcon-managed session (lineage lookup) and should never be surfaced as unmanaged. */
+  /** True if `providerRef` is already known to be a Kvy-managed session (lineage lookup) and should never be surfaced as unmanaged. */
   isManaged: (providerRef: string) => boolean | Promise<boolean>;
   listProcesses: () => Promise<ProcessEntry[]>;
   resolveProcessCwd: (pid: number) => Promise<string | null>;
@@ -217,9 +217,9 @@ export function parseTranscript(contents: string): ParsedTranscript | null {
   return { title, lastActivity };
 }
 
-/** True for a bare `claude` invocation's command line — false for anything Falcon itself launched (`falcon claude ...`), so a managed session's own process is never mistaken for an unmanaged one. */
+/** True for a bare `claude` invocation's command line — false for anything Kvy itself launched (`kvy claude ...`), so a managed session's own process is never mistaken for an unmanaged one. */
 function isPlainClaudeCommand(command: string): boolean {
-  if (classifyFalconCommand(command)) return false;
+  if (classifyKvyCommand(command)) return false;
   const tokens = command
     .trim()
     .split(/\s+/)
@@ -231,7 +231,7 @@ function isPlainClaudeCommand(command: string): boolean {
 }
 
 /**
- * Best-effort "is *some* live, non-Falcon `claude` process's cwd this
+ * Best-effort "is *some* live, non-Kvy `claude` process's cwd this
  * workspace, and is `sessionId` the most-recently-modified transcript in it"
  * check. Both conditions are required: a live process alone doesn't tell
  * you *which* transcript in a workspace directory (which may hold many

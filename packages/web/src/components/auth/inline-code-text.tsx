@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 
 /**
- * Renders plain text with backtick-delimited segments (`` `falcon` ``) as real
+ * Renders plain text with backtick-delimited segments (`` `kvy` ``) as real
  * `<code>` chips instead of literal backtick characters — copy.ts strings use
  * backticks to mark a literal command name, but a bare `{copy.pair.approveWarning}`
  * text node prints them as-is rather than styling them. No markdown lib: this only

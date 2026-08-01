@@ -48,20 +48,20 @@ describe("performCreateWorkspace", () => {
 
     const result = await performCreateWorkspace(
       actions,
-      "/Users/me/falcon-workspaces/my-app",
+      "/Users/me/kvy-workspaces/my-app",
       request,
       () => {},
     );
 
     expect(calls).toEqual([
-      "createDirectory:/Users/me/falcon-workspaces/my-app",
-      "registerWorkspace:/Users/me/falcon-workspaces/my-app",
-      "spawn:/Users/me/falcon-workspaces/my-app",
+      "createDirectory:/Users/me/kvy-workspaces/my-app",
+      "registerWorkspace:/Users/me/kvy-workspaces/my-app",
+      "spawn:/Users/me/kvy-workspaces/my-app",
     ]);
     expect(result).toEqual({
       outcome: "success",
       sessionId: "sess-1",
-      directory: "/Users/me/falcon-workspaces/my-app",
+      directory: "/Users/me/kvy-workspaces/my-app",
     });
   });
 
@@ -69,7 +69,7 @@ describe("performCreateWorkspace", () => {
     const steps: string[] = [];
     const actions = fakeActions();
 
-    await performCreateWorkspace(actions, "/Users/me/falcon-workspaces/app", request, (step) =>
+    await performCreateWorkspace(actions, "/Users/me/kvy-workspaces/app", request, (step) =>
       steps.push(step),
     );
 
@@ -81,12 +81,12 @@ describe("performCreateWorkspace", () => {
       spawn: vi.fn(async () => ({
         type: "requiresApproval" as const,
         action: "create-directory" as const,
-        directory: "/Users/me/falcon-workspaces/app",
+        directory: "/Users/me/kvy-workspaces/app",
       })),
     });
 
     await expect(
-      performCreateWorkspace(actions, "/Users/me/falcon-workspaces/app", request, () => {}),
+      performCreateWorkspace(actions, "/Users/me/kvy-workspaces/app", request, () => {}),
     ).rejects.toThrow(/still reported missing|still unregistered/);
   });
 
@@ -98,7 +98,7 @@ describe("performCreateWorkspace", () => {
     });
 
     await expect(
-      performCreateWorkspace(actions, "/Users/me/falcon-workspaces/app", request, () => {}),
+      performCreateWorkspace(actions, "/Users/me/kvy-workspaces/app", request, () => {}),
     ).rejects.toThrow("fatal: permission denied");
     expect(actions.registerWorkspace).not.toHaveBeenCalled();
     expect(actions.spawn).not.toHaveBeenCalled();
@@ -112,7 +112,7 @@ describe("performCreateWorkspace", () => {
     });
 
     await expect(
-      performCreateWorkspace(actions, "/Users/me/falcon-workspaces/app", request, () => {}),
+      performCreateWorkspace(actions, "/Users/me/kvy-workspaces/app", request, () => {}),
     ).rejects.toThrow("failed to acquire workspace registry lock");
     expect(actions.spawn).not.toHaveBeenCalled();
   });

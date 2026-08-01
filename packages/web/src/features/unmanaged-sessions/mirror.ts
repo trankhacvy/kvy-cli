@@ -17,7 +17,7 @@ const MAX_CHUNKS = 4096;
  * offset into one read, not a tail/follow position, so "live" here means
  * "re-read the current file state on an interval", the same tradeoff the
  * design doc's "bandwidth + privacy frugality" note accepts for an
- * on-demand mirror (falcon-system-design.md §8).
+ * on-demand mirror (kvy-system-design.md §8).
  */
 export async function fetchFullTranscript(
   actions: Pick<UnmanagedActions, "mirror">,

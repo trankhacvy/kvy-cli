@@ -1,11 +1,11 @@
-import { encodeBase64 } from "@falcon/crypto";
+import { encodeBase64 } from "@kvy/crypto";
 import type {
   MachineRow,
   SessionRow,
   SessionStatus,
   UnmanagedSessionRow,
   WorkspaceRow,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import { decodeBox } from "../../db/box.js";
 import type { machines, sessions, unmanagedSessions, workspaces } from "../../db/schema.js";
 

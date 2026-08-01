@@ -1,12 +1,12 @@
 # Production Deployment Runbook
 
-Falcon on production: `@falcon/server` + Postgres on your infrastructure (Docker or VPS), web app on Vercel, blobs on Cloudflare R2.
+Kvy on production: `@kvy/server` + Postgres on your infrastructure (Docker or VPS), web app on Vercel, blobs on Cloudflare R2.
 
 ## Pre-Deployment Checklist
 
 ### 1. Secrets & Keys
 
-- [ ] Generate `FALCON_MASTER_SECRET` (HMAC key for auth JWTs)
+- [ ] Generate `KVY_MASTER_SECRET` (HMAC key for auth JWTs)
   ```bash
   openssl rand -base64 32
   ```
@@ -14,7 +14,7 @@ Falcon on production: `@falcon/server` + Postgres on your infrastructure (Docker
 - [ ] OAuth apps: Register Google OIDC app, GitHub OAuth app (if needed)
 - [ ] VAPID keypair for push notifications (if needed)
   ```bash
-  pnpm --filter @falcon/server exec web-push generate-vapid-keys
+  pnpm --filter @kvy/server exec web-push generate-vapid-keys
   ```
 - [ ] TLS certificates (Let's Encrypt via reverse proxy, or platform-managed)
 
@@ -29,7 +29,7 @@ Falcon on production: `@falcon/server` + Postgres on your infrastructure (Docker
 ### 3. Config Files
 
 - [ ] **Server `.env`** (`deploy/.env.prod`): Fill in all REQUIRED fields
-  - `FALCON_MASTER_SECRET`
+  - `KVY_MASTER_SECRET`
   - `PUBLIC_WEB_ORIGIN` (Vercel domain)
   - `PUBLIC_API_ORIGIN` (your API domain)
   - R2 credentials (`S3_*`)
@@ -76,13 +76,13 @@ falling back — a misconfigured value is a new way to fail, not a new way to si
 ```bash
 # 1. Install Node.js 20+, Postgres 16, npm/pnpm
 
-# 2. Build @falcon/server
+# 2. Build @kvy/server
 pnpm install --frozen-lockfile
 pnpm build
-pnpm --filter @falcon/server build
+pnpm --filter @kvy/server build
 
-# 3. Set env (e.g., /etc/falcon/env)
-FALCON_MASTER_SECRET=...
+# 3. Set env (e.g., /etc/kvy/env)
+KVY_MASTER_SECRET=...
 DATABASE_URL=postgres://...
 # ... (all other vars from .env.prod)
 
@@ -99,14 +99,14 @@ Use the provided `deploy/server.Dockerfile`:
 
 ```bash
 # Build
-docker build -f deploy/server.Dockerfile -t falcon-server:latest .
+docker build -f deploy/server.Dockerfile -t kvy-server:latest .
 
 # Push to registry (AWS ECR, Docker Hub, etc.)
-docker push <registry>/falcon-server:latest
+docker push <registry>/kvy-server:latest
 
 # Deploy via platform's native orchestration
 # Pass env vars via platform secrets manager (AWS Secrets Manager, K8s Secrets, etc.)
-# DATABASE_URL, FALCON_MASTER_SECRET, S3_*, etc.
+# DATABASE_URL, KVY_MASTER_SECRET, S3_*, etc.
 ```
 
 ## Post-Deployment
@@ -219,7 +219,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Support & Links
 
-- **Falcon system design:** `falcon-system-design.md`
+- **Kvy system design:** `kvy-system-design.md`
 - **Build plan:** `plan.md`
 - **Auth hardening:** `docs/auth-ux-hardening-plan.md`
 - **Vercel deployment:** `docs/VERCEL_DEPLOYMENT.md`

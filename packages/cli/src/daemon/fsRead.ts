@@ -29,7 +29,7 @@ import {
   stat as statNode,
 } from "node:fs/promises";
 import path from "node:path";
-import type { FsReadParams, FsReadResult } from "@falcon/wire";
+import type { FsReadParams, FsReadResult } from "@kvy/wire";
 
 export class FsReadError extends Error {
   constructor(message: string) {

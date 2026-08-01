@@ -72,7 +72,7 @@ export default function ResetKeysPage() {
   }, []);
 
   useEffect(() => {
-    setTitleOverride("reset-keys", "Reset your keys · Falcon");
+    setTitleOverride("reset-keys", "Reset your keys · Kvy");
     return () => clearTitleOverride("reset-keys");
   }, []);
 
@@ -108,7 +108,7 @@ export default function ResetKeysPage() {
       setPhase({ kind: "error", message: copy.reset.signedOutMidFlow });
       return;
     }
-    const protection = await provisionKeyProtection(mode, "Falcon");
+    const protection = await provisionKeyProtection(mode, "Kvy");
 
     async function attempt(): Promise<void> {
       // Both re-checked here (already guaranteed non-null by the outer early-returns above)

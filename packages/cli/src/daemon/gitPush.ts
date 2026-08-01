@@ -8,17 +8,17 @@
  * `params.force: true` maps ONLY to `--force-with-lease`, never the raw
  * `--force` flag — the raw flag is deliberately unreachable from this
  * handler's argv construction (a data-loss containment decision; see
- * `@falcon/wire`'s `GitPushParamsSchema` doc comment). A force-push-with-
+ * `@kvy/wire`'s `GitPushParamsSchema` doc comment). A force-push-with-
  * lease can still fail (safely, refusing to push) when the local
  * remote-tracking ref is stale, which is the whole point of `--lease`
  * over raw `--force`.
  *
  * No credential management: push auth is whatever the machine's ambient
- * git credential helper / SSH agent already provides — Falcon manages
+ * git credential helper / SSH agent already provides — Kvy manages
  * none of it. A machine with no configured credentials just gets git's own
  * error surfaced through `GitExecError`.
  */
-import type { GitPushParams, GitPushResult } from "@falcon/wire";
+import type { GitPushParams, GitPushResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 import { createRegistryWorktreeAuthorizer, type WorktreeAuthorizer } from "./gitWriteGuard.js";
 

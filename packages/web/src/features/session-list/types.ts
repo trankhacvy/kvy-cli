@@ -1,10 +1,10 @@
-import type { Ephemeral, SessionRow } from "@falcon/wire";
+import type { Ephemeral, SessionRow } from "@kvy/wire";
 import type { RenderItem } from "@/sync/reducer";
 import type { MachineStatus } from "./use-machine-presence";
 
 /**
  * View-model types for the Home / session-list screen (design §9.2 "Home"
- * row, falcon-prd.md FR-7.1). Field values here are already decrypted where
+ * row, kvy-prd.md FR-7.1). Field values here are already decrypted where
  * the underlying wire row carries an `EncryptedBox` (`SessionRow.metadata`,
  * `MachineRow.metadata`) — the crypto bridge that produces that plaintext is
  * a separate, not-yet-landed concern (design §5.3). Everything else
@@ -17,7 +17,7 @@ import type { MachineStatus } from "./use-machine-presence";
  * `Ephemeral` union, `t: "attention"`) — the one status input that isn't
  * recoverable by replaying `RenderItem[]` alone, since the wire's
  * `SessionEvent` union has no "agent asked a question" variant yet
- * (falcon-prd.md FR-8.1/FR-8.2 leave that inference to the session process).
+ * (kvy-prd.md FR-8.1/FR-8.2 leave that inference to the session process).
  * `null` means "no outstanding attention signal for this session". */
 export type AttentionKind = Extract<Ephemeral, { t: "attention" }>["kind"];
 
@@ -68,7 +68,7 @@ export interface SessionListSession {
    * field set, same as the CLI's `normalizeMetadata` treats a missing
    * `pinned` key as "not pinned" rather than "unknown". */
   pinned: boolean;
-  /** This session's reduced transcript (`@falcon/web`'s sync reducer output)
+  /** This session's reduced transcript (`@kvy/web`'s sync reducer output)
    * — the event-stream input `deriveSessionStatus` walks to find an open
    * turn or an unresolved permission (design principle #3: derived, never
    * stored). `null` means "this session's message page hasn't decrypted /

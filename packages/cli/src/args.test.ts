@@ -31,7 +31,7 @@ describe("parseArgs — default start (no explicit provider)", () => {
     });
   });
 
-  it("extracts -b <branch> as a Falcon-level flag, not provider passthrough", () => {
+  it("extracts -b <branch> as a Kvy-level flag, not provider passthrough", () => {
     expect(parseArgs(["-b", "feature/x"])).toEqual({
       type: "start",
       provider: "claude",
@@ -56,7 +56,7 @@ describe("parseArgs — default start (no explicit provider)", () => {
 });
 
 describe("parseArgs — provider passthrough (claude/codex)", () => {
-  it("passes every flag through verbatim for `falcon claude [args...]`", () => {
+  it("passes every flag through verbatim for `kvy claude [args...]`", () => {
     expect(
       parseArgs(["claude", "--resume", "abc123", "--model", "opus", "--some-unknown-flag"]),
     ).toEqual({
@@ -66,7 +66,7 @@ describe("parseArgs — provider passthrough (claude/codex)", () => {
     });
   });
 
-  it("passes every flag through verbatim for `falcon codex [args...]`", () => {
+  it("passes every flag through verbatim for `kvy codex [args...]`", () => {
     expect(parseArgs(["codex", "-r", "--continue"])).toEqual({
       type: "start",
       provider: "codex",
@@ -75,8 +75,8 @@ describe("parseArgs — provider passthrough (claude/codex)", () => {
   });
 
   it("does not intercept -b when it appears after an explicit provider name", () => {
-    // -b is only a Falcon flag in the default-start form; once `claude` is
-    // named explicitly, Falcon must not touch any of its args.
+    // -b is only a Kvy flag in the default-start form; once `claude` is
+    // named explicitly, Kvy must not touch any of its args.
     expect(parseArgs(["claude", "-b", "feature/x"])).toEqual({
       type: "start",
       provider: "claude",
@@ -84,7 +84,7 @@ describe("parseArgs — provider passthrough (claude/codex)", () => {
     });
   });
 
-  it("forwards --help to the provider instead of showing Falcon's help", () => {
+  it("forwards --help to the provider instead of showing Kvy's help", () => {
     expect(parseArgs(["claude", "--help"])).toEqual({
       type: "start",
       provider: "claude",
@@ -308,7 +308,7 @@ describe("parseArgs — workspace", () => {
 });
 
 describe("parseArgs — adopt", () => {
-  it("parses a bare `falcon adopt` as local, non-list", () => {
+  it("parses a bare `kvy adopt` as local, non-list", () => {
     expect(parseArgs(["adopt"])).toEqual({ type: "adopt", list: false, remote: false });
   });
 
@@ -342,17 +342,17 @@ describe("parseArgs — adapters", () => {
 });
 
 describe("parseArgs — update", () => {
-  it("parses `falcon update`", () => {
+  it("parses `kvy update`", () => {
     expect(parseArgs(["update"])).toEqual({ type: "update" });
   });
 });
 
 describe("parseArgs — --continue alias", () => {
-  it("aliases a bare `falcon --continue` to adopt (local, non-list)", () => {
+  it("aliases a bare `kvy --continue` to adopt (local, non-list)", () => {
     expect(parseArgs(["--continue"])).toEqual({ type: "adopt", list: false, remote: false });
   });
 
-  it("composes with --remote/--list the same way `falcon adopt` does", () => {
+  it("composes with --remote/--list the same way `kvy adopt` does", () => {
     expect(parseArgs(["--continue", "--remote"])).toEqual({
       type: "adopt",
       list: false,
@@ -387,9 +387,9 @@ describe("parseArgs — notify", () => {
 });
 
 describe("parseArgs — stray leading `--` (pnpm script-arg passthrough)", () => {
-  // `pnpm --filter falcon dev -- <args...>` (CLAUDE.md's documented dev
+  // `pnpm --filter kvy dev -- <args...>` (CLAUDE.md's documented dev
   // invocation) forwards a literal leading "--" into the script's argv,
-  // unlike `npm run <script> -- <args...>`, which strips it. Falcon must
+  // unlike `npm run <script> -- <args...>`, which strips it. Kvy must
   // tolerate that stray token for every subcommand, not just claude/codex
   // passthrough — otherwise it silently misroutes into starting a claude
   // session instead of running the intended subcommand.
@@ -423,7 +423,7 @@ describe("parseArgs — stray leading `--` (pnpm script-arg passthrough)", () =>
   });
 });
 
-describe("falcon keys", () => {
+describe("kvy keys", () => {
   it("parses the approve action", () => {
     expect(parseArgs(["keys", "approve"])).toEqual({ type: "keys", action: "approve" });
   });
@@ -435,7 +435,7 @@ describe("falcon keys", () => {
         throw new Error("expected parseArgs to throw");
       } catch (error) {
         expect(error).toBeInstanceOf(ArgParseError);
-        expect((error as ArgParseError).usage).toBe("falcon keys approve");
+        expect((error as ArgParseError).usage).toBe("kvy keys approve");
       }
     }
   });
@@ -448,7 +448,7 @@ describe("ArgParseError", () => {
       throw new Error("expected parseArgs to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(ArgParseError);
-      expect((error as ArgParseError).usage).toBe("falcon resume <session-id>");
+      expect((error as ArgParseError).usage).toBe("kvy resume <session-id>");
     }
   });
 });

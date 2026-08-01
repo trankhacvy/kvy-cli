@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermissionMode, SessionRow } from "@falcon/wire";
+import type { PermissionMode, SessionRow } from "@kvy/wire";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -41,8 +41,8 @@ import { TimelineSkeleton } from "./TimelineSkeleton";
 import { WorkingDirectoryChip } from "./WorkingDirectoryChip";
 
 /**
- * Session timeline screen (falcon-system-design.md §9.2 "Session" row,
- * falcon-prd.md FR-7.2/FR-7.3/FR-7.4). Renders the reducer's `RenderItem[]`
+ * Session timeline screen (kvy-system-design.md §9.2 "Session" row,
+ * kvy-prd.md FR-7.2/FR-7.3/FR-7.4). Renders the reducer's `RenderItem[]`
  * output as a structured chat transcript plus the full control surface
  * (plan.md §16 "2.4 Web control surface"): `Composer` (queue-aware follow-up
  * input + footer session chips), interactive `PermCard`s inline in the
@@ -117,7 +117,7 @@ export function SessionTimelineScreen({
   // online/offline boolean.
   const machineAvailability = useMachineOnline(machineId);
 
-  // Viewing the screen counts as "seen" for this device (falcon-prd.md
+  // Viewing the screen counts as "seen" for this device (kvy-prd.md
   // FR-8.1's per-device last-seen timestamp) — marked once per session id,
   // not on every render, so a completed-turn-while-open doesn't immediately
   // re-flag "done" the instant it lands.

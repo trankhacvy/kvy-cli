@@ -1,6 +1,6 @@
 "use client";
 
-import type { PermDecision } from "@falcon/wire";
+import type { PermDecision } from "@kvy/wire";
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";

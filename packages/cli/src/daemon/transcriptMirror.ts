@@ -27,7 +27,7 @@
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { AdoptMirrorParams, AdoptMirrorResult } from "@falcon/wire";
+import type { AdoptMirrorParams, AdoptMirrorResult } from "@kvy/wire";
 import { getProjectPath } from "../claude/scanner.js";
 import type { Logger } from "../logger.js";
 import type { ProviderSessionResolver } from "./providerSessionResolver.js";

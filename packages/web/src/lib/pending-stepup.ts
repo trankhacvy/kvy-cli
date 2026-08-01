@@ -12,7 +12,7 @@
  * plus a provider tag and a timestamp.
  */
 
-const PENDING_STEPUP_KEY = "falcon:pendingStepUp";
+const PENDING_STEPUP_KEY = "kvy:pendingStepUp";
 const PENDING_STEPUP_TTL_MS = 5 * 60_000; // an OAuth consent round trip; abandoned attempts expire
 
 export type StepUpProvider = "google" | "github";

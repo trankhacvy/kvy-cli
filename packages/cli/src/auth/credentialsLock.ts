@@ -1,7 +1,7 @@
 /**
- * known-issues.md #20: the daemon and a foreground `falcon claude`/`falcon codex`
+ * known-issues.md #20: the daemon and a foreground `kvy claude`/`kvy codex`
  * session each run their own `TokenProvider` against the SAME on-disk
- * `~/.falcon/access.key` refresh token. Without coordination, both can call
+ * `~/.kvy/access.key` refresh token. Without coordination, both can call
  * `/v1/auth/refresh` around the same moment — whichever loses the race gets back a
  * benign-looking 200 that doesn't actually advance its refresh token, and if that
  * stale token is presented again later (past the server's grace window),

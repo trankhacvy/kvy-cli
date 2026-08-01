@@ -1,9 +1,9 @@
 /**
- * `falcon adapters install|upgrade` (design §7.9, plan.md §16 "Phase 2.0 —
- * foundation": "`falcon adapters install|upgrade` command"). Terminal-side
+ * `kvy adapters install|upgrade` (design §7.9, plan.md §16 "Phase 2.0 —
+ * foundation": "`kvy adapters install|upgrade` command"). Terminal-side
  * surface for `../adapters/install.ts`. No daemon interaction — same
  * rationale as `workspace register`/`workspace config`: this is a local
- * npm-prefix install under `~/.falcon/adapters/`, not something the daemon
+ * npm-prefix install under `~/.kvy/adapters/`, not something the daemon
  * mediates.
  *
  * `install` is idempotent (skips an adapter that's already pinned-version-
@@ -42,18 +42,18 @@ async function runAdapters(
     { force: action === "upgrade" },
   );
 
-  write(`falcon adapters ${action}:\n`);
+  write(`kvy adapters ${action}:\n`);
   for (const outcome of outcomes) write(`${describeOutcome(outcome)}\n`);
 
   return outcomes.some((o) => !o.ok) ? 1 : 0;
 }
 
-/** Runs `falcon adapters install`. */
+/** Runs `kvy adapters install`. */
 export async function runAdaptersInstallCommand(deps: AdaptersCommandDeps): Promise<number> {
   return runAdapters("install", deps);
 }
 
-/** Runs `falcon adapters upgrade`. */
+/** Runs `kvy adapters upgrade`. */
 export async function runAdaptersUpgradeCommand(deps: AdaptersCommandDeps): Promise<number> {
   return runAdapters("upgrade", deps);
 }

@@ -9,7 +9,7 @@ describe("selfUpdate", () => {
   let bundlePath: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "falcon-self-update-"));
+    dir = await mkdtemp(path.join(tmpdir(), "kvy-self-update-"));
     bundlePath = path.join(dir, "index.mjs");
     await writeFile(bundlePath, "v1");
   });

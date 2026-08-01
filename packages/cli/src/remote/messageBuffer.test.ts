@@ -1,4 +1,4 @@
-import { createEnvelope } from "@falcon/wire";
+import { createEnvelope } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { MessageBuffer, pushEnvelopeToBuffer, summarizeEnvelope } from "./messageBuffer.js";
 

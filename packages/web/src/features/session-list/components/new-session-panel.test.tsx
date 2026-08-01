@@ -41,14 +41,14 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
 
 function singleMachineGroup(): WorkspaceGroup {
   return {
-    workspace: { id: "/repo/falcon", name: "falcon" },
+    workspace: { id: "/repo/kvy", name: "kvy" },
     sessions: [session({ id: "a", machineId: "m1", updatedAt: 10 })],
   };
 }
 
 function multiMachineGroup(): WorkspaceGroup {
   return {
-    workspace: { id: "/repo/falcon", name: "falcon" },
+    workspace: { id: "/repo/kvy", name: "kvy" },
     sessions: [
       session({ id: "a", machineId: "m1", updatedAt: 100 }),
       session({ id: "b", machineId: "m2", updatedAt: 10 }),
@@ -74,7 +74,7 @@ describe("NewSessionTrigger", () => {
     const html = render(
       <NewSessionTrigger group={singleMachineGroup()} machinesById={machinesById([])} />,
     );
-    expect(html).toContain("Start a new session in falcon");
+    expect(html).toContain("Start a new session in kvy");
     expect(html).toContain('aria-expanded="false"');
     // The panel body's own fields must not be present while closed.
     expect(html).not.toContain("new-session-branch-name");

@@ -1,9 +1,9 @@
 /**
  * Process-scan primitive: enumerate the OS process list via `ps`.
  *
- * This exists as the discovery mechanism for `falcon kill *` (plan.md
- * §7.2/§7.4, falcon-system-design.md §11 "Wedged provider process ...
- * `falcon kill sessions` escape hatch"): it has to work even when the
+ * This exists as the discovery mechanism for `kvy kill *` (plan.md
+ * §7.2/§7.4, kvy-system-design.md §11 "Wedged provider process ...
+ * `kvy kill sessions` escape hatch"): it has to work even when the
  * daemon itself is wedged, so it deliberately never reads
  * `daemon.state.json` and never calls into `controlServer.ts`'s loopback
  * HTTP API — both may be exactly what's broken. It only looks at what the
@@ -70,7 +70,7 @@ function runPs(args: string[]): Promise<string> {
 /**
  * Lists every process currently visible to this OS user. Best-effort: if
  * `ps` is unavailable or fails, returns an empty list rather than throwing
- * — callers (the `falcon kill` commands) treat "found nothing" as a safe,
+ * — callers (the `kvy kill` commands) treat "found nothing" as a safe,
  * honest outcome, never a crash. This mirrors the rest of the design's
  * "no silent failures, but also no crashing the escape hatch" stance —
  * the caller surfaces "0 processes found" to the user either way.

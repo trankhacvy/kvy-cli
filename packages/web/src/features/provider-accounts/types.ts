@@ -1,4 +1,4 @@
-import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@falcon/wire";
+import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@kvy/wire";
 
 /**
  * View-model types for Settings → Providers (docs/competitive-notes-omnara.md
@@ -10,7 +10,7 @@ import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@fal
  * machine RPC (`packages/cli/src/daemon/providerAccountInfo.ts`).
  *
  * `ProviderAccountSnapshot`/`ProviderUsageMeter` are re-exported straight off
- * `@falcon/wire` rather than redeclared — same "the RPC result is already
+ * `@kvy/wire` rather than redeclared — same "the RPC result is already
  * exactly what this screen wants to render" precedent as `features/git-diff/
  * types.ts`'s `GitStatusSnapshot`.
  */

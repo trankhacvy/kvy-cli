@@ -37,7 +37,7 @@ const sessions: UnmanagedSessionItem[] = [
   {
     id: "u-idle",
     machineId: "m-laptop",
-    workspaceId: "w-falcon",
+    workspaceId: "w-kvy",
     providerRef: "prov-idle-1",
     title: "Quick fix for the CLI arg parser",
     lastActivityAt: NOW - 45 * MIN,

@@ -11,10 +11,8 @@ let homeDir: string;
 let workspaceRoot: string;
 
 beforeEach(async () => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-setup-script-test-home-"));
-  workspaceRoot = await realpath(
-    mkdtempSync(path.join(tmpdir(), "falcon-setup-script-test-repo-")),
-  );
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-setup-script-test-home-"));
+  workspaceRoot = await realpath(mkdtempSync(path.join(tmpdir(), "kvy-setup-script-test-repo-")));
 });
 
 afterEach(() => {

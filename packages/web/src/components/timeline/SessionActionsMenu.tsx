@@ -1,6 +1,6 @@
 "use client";
 
-import type { SessionRow } from "@falcon/wire";
+import type { SessionRow } from "@kvy/wire";
 import { Archive, MoreHorizontal, Pencil, Pin } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";

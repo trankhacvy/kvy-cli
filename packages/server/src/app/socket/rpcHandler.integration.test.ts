@@ -10,7 +10,7 @@ import { createTestDb } from "../routes/testHelpers.js";
 import { buildServer } from "../server.js";
 
 // RPC integration tests (plan.md §16 "4.4 Hardening & release gate": "RPC integration
-// tests: dead-daemon fast-fail <2s, reconnect storm, double-takeover race"; falcon-
+// tests: dead-daemon fast-fail <2s, reconnect storm, double-takeover race"; kvy-
 // system-design.md §13 item 5: "dead-peer fast-fail (<2s), reconnect grace, presence
 // flap"). `rpcHandler.test.ts` already covers the room-registration/forwarding/
 // rate-limit unit surface; this file is dedicated to the two server-side scenarios that

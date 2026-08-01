@@ -1,20 +1,20 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { SessionEnvelopeSchema } from "@falcon/wire";
+import { SessionEnvelopeSchema } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { reduceEnvelopes } from "./reduce.js";
 
 /**
- * Golden-trace reducer tests (plan.md §8.2, §14.1; falcon-system-design.md
+ * Golden-trace reducer tests (plan.md §8.2, §14.1; kvy-system-design.md
  * §9.1, §13): every `__testdata__/trace_*.json` fixture pairs a recorded (or
  * hand-built, representative) `SessionEnvelope[]` with the exact
  * `RenderItem[]` the reducer must produce for it. This is Happy's
  * `trace_*.json` convention, ported — grow this directory with every new
  * provider quirk found, per plan.md's cross-cutting rule.
  *
- * The `trace_acp_*.json` fixtures (plan.md §17 Phase 2.0, falcon-system-design.md
+ * The `trace_acp_*.json` fixtures (plan.md §17 Phase 2.0, kvy-system-design.md
  * §7.3, docs/acp-delta-proposal.md §3 A4) double as the verification that the
- * ACP `session/update` → `SessionEnvelope` mapping needs no new `@falcon/wire`
+ * ACP `session/update` → `SessionEnvelope` mapping needs no new `@kvy/wire`
  * envelope types: each fixture models the envelopes the future
  * `acpToEnvelope` mapper (Phase 2.1) will emit for a given ACP update kind,
  * built entirely from variants `SessionEventSchema` already defines, and

@@ -7,7 +7,7 @@ import { runAdaptersInstallCommand, runAdaptersUpgradeCommand } from "./adapters
 let homeDir: string;
 
 beforeEach(async () => {
-  homeDir = await mkdtemp(path.join(tmpdir(), "falcon-adapters-cmd-"));
+  homeDir = await mkdtemp(path.join(tmpdir(), "kvy-adapters-cmd-"));
 });
 
 afterEach(async () => {
@@ -34,7 +34,7 @@ describe("runAdaptersInstallCommand", () => {
 
     expect(code).toBe(1);
     const output = lines.join("");
-    expect(output).toContain("falcon adapters install:");
+    expect(output).toContain("kvy adapters install:");
     expect(output).toContain("claude-code: FAILED");
     expect(output).toContain("codex: FAILED");
   });

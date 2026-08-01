@@ -1,9 +1,9 @@
 import type { SessionListMachine } from "@/features/session-list";
 
 /**
- * View-model types for the unmanaged-session section (falcon-system-design.md
+ * View-model types for the unmanaged-session section (kvy-system-design.md
  * §9.2 "Home" row: `UnmanagedSection`; §11/§10.4 UC9 "Session adoption").
- * `UnmanagedSessionItem` mirrors `@falcon/wire`'s `UnmanagedSessionRow` with
+ * `UnmanagedSessionItem` mirrors `@kvy/wire`'s `UnmanagedSessionRow` with
  * its `summary` `EncryptedBox` already decrypted — same convention as
  * `features/session-list/types.ts`'s `SessionListSession` (decrypted
  * upstream of these screens, a separate not-yet-wired crypto-bridge
@@ -14,7 +14,7 @@ export interface UnmanagedSessionItem {
   machineId: string;
   workspaceId: string;
   /** The provider's own session id (`AdoptTakeParams`/`AdoptMirrorParams`'s
-   * `providerSessionId`) — distinct from `id` (this row's Falcon-side id) —
+   * `providerSessionId`) — distinct from `id` (this row's Kvy-side id) —
    * every `adopt.*` RPC call addresses the provider session directly. */
   providerRef: string;
   /** Decrypted `UnmanagedSessionSummary.title`
@@ -39,7 +39,7 @@ export interface UnmanagedSessionsSnapshot {
  * `features/session-list`'s `UseSessionListSnapshot` seam. */
 export type UseUnmanagedSessionsSnapshot = () => UnmanagedSessionsSnapshot;
 
-/** One chunk of a transcript mirror read (mirrors `@falcon/wire`'s
+/** One chunk of a transcript mirror read (mirrors `@kvy/wire`'s
  * `AdoptMirrorResult`, minus the not-yet-wired `blobRef` fallback field —
  * this screen only ever exercises the inline-chunk path). */
 export interface MirrorChunk {
@@ -50,7 +50,7 @@ export interface MirrorChunk {
 
 export type AdoptMode = "takeover" | "fork";
 
-/** Mirrors `@falcon/wire`'s `AdoptTakeResult`. */
+/** Mirrors `@kvy/wire`'s `AdoptTakeResult`. */
 export interface AdoptTakeOutcome {
   sessionId: string;
   warning?: string;

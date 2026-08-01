@@ -50,7 +50,7 @@
  * **Idempotency-key replay** (design: "an RPC retry must NEVER
  * double-spawn"; the same rationale extends to `adopt.take`'s kill+spawn
  * side effect and to `adopt.mirror`'s file read — "or re-reading a file
- * mid-write twice", per `@falcon/wire`'s own `rpc.ts` doc comment):
+ * mid-write twice", per `@kvy/wire`'s own `rpc.ts` doc comment):
  * `spawn` wraps `deps.spawnSession` in a `Map<idempotencyKey, SpawnResult>`
  * — a retried call with the same key replays the prior *successful* result
  * instead of spawning again. A failed attempt is not cached: the actual
@@ -83,7 +83,7 @@
  * `git.renameBranch` below, there's no "mint a second one" side effect to
  * guard against. `fs.read` is the
  * one exception in this read-only cluster that *does* carry the same
- * mid-write hazard `@falcon/wire`'s own `rpc.ts` doc comment calls out for
+ * mid-write hazard `@kvy/wire`'s own `rpc.ts` doc comment calls out for
  * `adopt.mirror` ("or re-reading a file mid-write twice") — but a re-read
  * simply returns whatever the file currently contains, which is still a
  * valid (if possibly different) answer, not a corrupted one, so no
@@ -141,7 +141,7 @@
  * joins that same in-flight attempt and gets its exact result (including any
  * mid-turn `warning`) instead of racing its own independent kill+spawn.
  */
-import { open, seal } from "@falcon/crypto";
+import { open, seal } from "@kvy/crypto";
 import {
   type AdoptMirrorParams,
   AdoptMirrorParamsSchema,
@@ -281,7 +281,7 @@ import {
   WorktreeRemoveParamsSchema,
   type WorktreeRemoveResult,
   WorktreeRemoveResultSchema,
-} from "@falcon/wire";
+} from "@kvy/wire";
 import type { Socket } from "socket.io-client";
 import type { ZodType } from "zod";
 import type { Logger } from "../logger.js";
@@ -499,7 +499,7 @@ function unwiredSleepInhibitState(): SleepInhibitState {
  * re-running the handler. Never caches a rejected call.
  *
  * Keyed on `idempotencyKey` + a JSON snapshot of `params` (both methods'
- * params are plain JSON-safe primitives — see `@falcon/wire`'s `rpc.ts`),
+ * params are plain JSON-safe primitives — see `@kvy/wire`'s `rpc.ts`),
  * not on `idempotencyKey` alone: `adopt.mirror`'s result is a transcript
  * chunk addressed by `cursor`, so a caller that (incorrectly) reused one
  * `idempotencyKey` across a paginated sequence of different cursors must
@@ -596,7 +596,7 @@ function withPortGuard(
  * `fs.mkdir`/`workspace.register`/`adopt.take`/`adopt.mirror` RPCs: joins
  * `m:<machineId>:<method>`
  * for each on every (re)connect, and answers `rpc-request` by decrypting
- * params, validating against the method's `@falcon/wire` schema, running
+ * params, validating against the method's `@kvy/wire` schema, running
  * (or, where applicable, replaying) the handler, and sealing the result
  * back for the server's `emitWithAck` to relay to the caller.
  */
@@ -949,7 +949,7 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       // stderr) rather than a flat "handler-error" placeholder — the git
       // write-action toolbar (docs/features/git-write-actions.md Phase 5)
       // depends on the real message reaching the user for its
-      // credential-failure UX ("git's own stderr, not a Falcon
+      // credential-failure UX ("git's own stderr, not a Kvy
       // abstraction"), and every other handler benefits the same way (e.g.
       // "fatal: not a git repository" instead of an opaque placeholder).
       const message = error instanceof Error ? error.message : String(error);

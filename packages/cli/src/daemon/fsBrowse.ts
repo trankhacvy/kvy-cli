@@ -1,6 +1,6 @@
 /**
  * Directory browsing/creation for the daemon's `fs.list`/`fs.mkdir` machine
- * RPCs (falcon-prd.md FR-7.5 "workspace/directory picker (daemon-
+ * RPCs (kvy-prd.md FR-7.5 "workspace/directory picker (daemon-
  * provided)"; plan.md §16 "3.1 Remote spawn"). Backs the web New Session
  * flow's directory picker and its 409-equivalent create-directory approval
  * loop (`spawnEngine.ts`'s `requiresApproval` result).
@@ -16,13 +16,7 @@
 import { mkdir, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
-import type {
-  FsEntry,
-  FsListParams,
-  FsListResult,
-  FsMkdirParams,
-  FsMkdirResult,
-} from "@falcon/wire";
+import type { FsEntry, FsListParams, FsListResult, FsMkdirParams, FsMkdirResult } from "@kvy/wire";
 
 export class FsBrowseError extends Error {
   constructor(message: string) {

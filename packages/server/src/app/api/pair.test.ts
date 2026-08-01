@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { decodeBase64, encodeBase64 } from "@falcon/crypto";
+import { decodeBase64, encodeBase64 } from "@kvy/crypto";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";

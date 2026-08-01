@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { PGlite } from "@electric-sql/pglite";
-import { getRandomBytes } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { getRandomBytes } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import { eq } from "drizzle-orm";
 import type { FastifyReply } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";

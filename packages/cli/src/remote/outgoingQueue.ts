@@ -22,7 +22,7 @@
  *    `queueMicrotask` batching (rather than `setTimeout(…, 0)`) is enough to
  *    coalesce a burst of synchronous `push()` calls into one drain pass.
  */
-import type { SessionEnvelope } from "@falcon/wire";
+import type { SessionEnvelope } from "@kvy/wire";
 
 /** Tool-start release delay — same constant Happy used (250ms). */
 export const DEFAULT_TOOL_START_DELAY_MS = 250;

@@ -52,7 +52,7 @@ describe("getGitFiles", () => {
   });
 
   it("the real fallback walk lists files recursively and skips node_modules/.git", async () => {
-    const dir = await mkdtemp(path.join(tmpdir(), "falcon-gitfiles-"));
+    const dir = await mkdtemp(path.join(tmpdir(), "kvy-gitfiles-"));
     try {
       await writeFile(path.join(dir, "README.md"), "hi");
       await mkdir(path.join(dir, "src"));

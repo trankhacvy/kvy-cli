@@ -1,7 +1,7 @@
 # Codex end-to-end test checklist
 
-Real-CLI, real-web, real-Codex-CLI test plan for `falcon codex` — the manual runbook
-CLAUDE.md's "Testing the app end-to-end" section describes for `falcon claude`, extended
+Real-CLI, real-web, real-Codex-CLI test plan for `kvy codex` — the manual runbook
+CLAUDE.md's "Testing the app end-to-end" section describes for `kvy claude`, extended
 for Codex's very different architecture. Not unit tests, not mocked e2e — this is the
 "drive the actual product like a user would" checklist, written after a full code read of
 the Codex path (`packages/cli/src/commands/startCodex.ts`, `packages/cli/src/codex/`,
@@ -18,7 +18,7 @@ rather than deleted, so the "what broke and how it was proven fixed" trail survi
 
 ## Why Codex needs its own plan, not a rerun of the Claude runbook
 
-| | Claude (`falcon claude`) | Codex (`falcon codex`) |
+| | Claude (`kvy claude`) | Codex (`kvy codex`) |
 |---|---|---|
 | Transport | Local PTY (real terminal) + separate ACP remote path | ACP only, always — `codex app-server` has no local TUI |
 | Control model | Local↔remote handoff loop, emits `mode-switch` envelopes | Remote for its entire life, **never emits `mode-switch`** |
@@ -33,25 +33,25 @@ rather than deleted, so the "what broke and how it was proven fixed" trail survi
 
 - [ ] `codex --version` works on PATH (real install: `npm install -g @openai/codex` or the
       brew cask) and you're logged into Codex itself (`codex login` / `OPENAI_API_KEY`)
-      outside Falcon.
-- [ ] Delete/rename `~/.falcon/adapters` (or use a fresh `FALCON_HOME_DIR`) once, then run
-      `falcon codex` — confirm the `@agentclientprotocol/codex-acp@1.1.4` adapter
+      outside Kvy.
+- [ ] Delete/rename `~/.kvy/adapters` (or use a fresh `KVY_HOME_DIR`) once, then run
+      `kvy codex` — confirm the `@agentclientprotocol/codex-acp@1.1.4` adapter
       auto-installs (pinned version + integrity hash in `adapters/manifest.ts`) rather than
       silently failing.
-- [ ] Uninstall the Codex CLI temporarily, run `falcon codex` — expect the exact
+- [ ] Uninstall the Codex CLI temporarily, run `kvy codex` — expect the exact
       `CODEX_NOT_INSTALLED_MESSAGE` (install instructions), exit code 1, not a stack trace.
-- [ ] `falcon doctor` reports Codex adapter health correctly (installed/version/integrity).
+- [ ] `kvy doctor` reports Codex adapter health correctly (installed/version/integrity).
 
-## 1. Starting a local `falcon codex` session
+## 1. Starting a local `kvy codex` session
 
-- [ ] `falcon codex` in a real project dir prints the honest `CODEX_NO_LOCAL_MODE_NOTE`
+- [ ] `kvy codex` in a real project dir prints the honest `CODEX_NO_LOCAL_MODE_NOTE`
       ("no local terminal mode... driven remotely from the start") — confirm this actually
       appears, not just in source.
 - [ ] Session appears on web Home within a few seconds, title = directory basename.
-- [ ] `falcon codex --model <alias>` — confirm `extractModelFlag` actually threads the
+- [ ] `kvy codex --model <alias>` — confirm `extractModelFlag` actually threads the
       model into session metadata and it displays correctly on web (chip shows the real
       model, not "Model unknown").
-- [ ] `falcon codex -b <branch>` — worktree gets created via the shared
+- [ ] `kvy codex -b <branch>` — worktree gets created via the shared
       `ensureBranchWorkspace` (`index.ts`), same as Claude's local worktree-parity path.
       Confirm the codex session actually starts inside that worktree, not the bare repo.
 
@@ -174,9 +174,9 @@ pass a `resume` value into `startAcpRemote(...)`.
       `session/load`) when the adapter reports `agentCapabilities.loadSession: true`,
       falling back to `createSession` otherwise.
 - [x] Live-verified with a definitive, airtight test: told a fresh session a secret code,
-      killed the process, resumed a brand-new Falcon session row via
+      killed the process, resumed a brand-new Kvy session row via
       `--continue-from <real-acp-id>`, and confirmed the secret code was correctly
-      recalled — with zero Falcon-side transcript history available to have leaked it
+      recalled — with zero Kvy-side transcript history available to have leaked it
       from, proving the underlying Codex conversation was genuinely resumed, not just a
       directory re-attach.
 - [x] `PROVIDER_CAPABILITIES.codex.supportsResume` flipped from `false` to verified-`true`.
@@ -204,6 +204,6 @@ Codex shares the exact same `TokenProvider`/`credentialsLock.ts` machinery via
 
 - [ ] Settings → Providers shows Codex as installed/"authenticated" purely mirroring
       `installed` (no real credential check exists) — confirm the copy doesn't overclaim
-      ("authenticated" when Falcon genuinely can't verify that).
+      ("authenticated" when Kvy genuinely can't verify that).
 - [ ] New-session wizard: Codex option shows the beta banner ("no local TUI attach,
       feature parity may lag") — confirm it's visible and accurate, not stale copy.

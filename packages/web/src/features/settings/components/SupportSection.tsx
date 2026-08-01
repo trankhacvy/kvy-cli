@@ -21,7 +21,7 @@ export function SupportSection() {
         <div>
           <h3 className="text-sm font-medium">Community</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Join the Falcon Discord to chat with other users and the team.
+            Join the Kvy Discord to chat with other users and the team.
           </p>
         </div>
         <Button asChild variant="outline">

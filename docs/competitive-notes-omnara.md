@@ -4,14 +4,14 @@ Live walkthrough of Omnara's dashboard (`remote.omnara.com`, 2026-07-22) — the
 wizard, all 9 settings tabs (General, Git, Agent, Providers, Machines, Completed Chats,
 Support, Cloud Billing, Desktop App), and a live session's detail view (composer, right
 sidebar's Changes/Repo Files/Checks tabs, Setup/Run panel, Preview tunnel). This is a raw
-feature inventory — everything Omnara has that Falcon doesn't yet, ordered by how much it's
+feature inventory — everything Omnara has that Kvy doesn't yet, ordered by how much it's
 worth building, not a build plan. No effort/feasibility estimates below; that's a follow-up
 exercise once priorities are picked.
 
 ## Effort tags
 
 Each item is tagged `[quick]` or `[deep: <slug>]` — read directly by
-`.claude/workflows/falcon-feature-workflow.js` (invoke as `/falcon-feature-loop <item number or
+`.claude/workflows/kvy-feature-workflow.js` (invoke as `/kvy-feature-loop <item number or
 title>`) to pick the pipeline: `[quick]` gets one Sonnet 5 agent, worktree-isolated, that does
 the whole implement → test → verify → merge cycle itself; `[deep: <slug>]` gets the full
 Opus 4.8 (solution) → Fable 5 (plan) → Sonnet 5 (implement) → Sonnet 5 (independent test/review)
@@ -24,15 +24,15 @@ plan first — not raw size.
 1. **Cloud Sandbox (hosted execution).** **[deep: cloud-sandbox]** A selectable "machine" in the New Session wizard
    that isn't a registered machine at all — Omnara runs the session on managed cloud infra
    instead of requiring you to bring your own daemon. Has its own metered credits + billing
-   (Settings → Cloud Billing: "$0.00 remaining · Add credits"). Falcon requires a registered
+   (Settings → Cloud Billing: "$0.00 remaining · Add credits"). Kvy requires a registered
    machine with a running daemon for every session, full stop.
 2. **Automatic per-session git worktree isolation.** **[deep: worktree-isolation]** Starting a new session offers "A new
    branch" (auto-generated name or custom, creates an isolated worktree for that session) vs
    "Repo root" (work directly in the main checkout) — and you can also target an *existing*
    branch (e.g. a stale `wf/...` branch) and get a fresh worktree for it. Configurable as a
-   global default too (Settings → Git: "New worktree (Recommended)" vs "Repo root"). Falcon's
+   global default too (Settings → Git: "New worktree (Recommended)" vs "Repo root"). Kvy's
    wizard always spawns directly in the picked directory — no worktree option at all.
-3. **Real git write actions in the session sidebar.** **[deep: git-write-actions]** Falcon's git panel (`falcon-prd.md`
+3. **Real git write actions in the session sidebar.** **[deep: git-write-actions]** Kvy's git panel (`kvy-prd.md`
    FR-7.7) is explicitly read-only for the MVP. Omnara's sidebar has one-click **Commit**,
    **Push**, and **Force Push**, inline branch rename (click the branch name, it becomes an
    editable field), and a "Compare against" selector accepting *any* branch, tag, commit SHA,
@@ -54,7 +54,7 @@ plan first — not raw size.
    session/worktree creation, feeding directly into the Preview tunnel above.
 8. **Native desktop apps.** **[deep: desktop-apps]** Mac (Apple Silicon `.dmg`), Windows x64 (`.exe`), Windows ARM64
    (`.exe`) — described in-app as "Parallel agents in isolated worktrees, inline Git diffs,
-   and system notifications — no browser tab required." Falcon is CLI + web/PWA only.
+   and system notifications — no browser tab required." Kvy is CLI + web/PWA only.
 9. **Provider account inspection + usage metering.** **[quick]** Settings → Providers shows live,
    refreshable account metadata per machine: provider, auth type, email, organization,
    billing type (e.g. "Stripe Subscription"), org role, last-refreshed timestamp — plus a

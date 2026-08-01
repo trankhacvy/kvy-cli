@@ -1,5 +1,5 @@
 /**
- * `falcon claude [args...]` (plan.md §16 "1.3 CLI skeleton + local mode" /
+ * `kvy claude [args...]` (plan.md §16 "1.3 CLI skeleton + local mode" /
  * "2.2 Mode switching"; plan.md §17) — the first real (non-stub) provider
  * spawn. Every piece this wires together already existed and was already
  * unit-tested in isolation (`session/bootstrap.ts`, `api/outbox.ts`,
@@ -22,7 +22,7 @@
  * ## Two flows (`detectStartingMode()` picks the branch)
  *
  * v3 (PTY injection — the omnara model): a human-run, terminal-attached
- * `falcon claude` no longer drives the local↔remote mode-switch loop at all.
+ * `kvy claude` no longer drives the local↔remote mode-switch loop at all.
  * It runs `claude` on a pseudo-terminal (`ptyClaudeSession.ts`): the normal
  * TUI stays live, and a web-sent `message` is TYPED INTO that same PTY when
  * the session is idle — no mode switch, no process kill, no Ink takeover.
@@ -58,14 +58,14 @@
  * `raceModeConfirmation` below) — plan-v2.md W4.3, extended after a
  * live-reproduced bug where an idle session (no upcoming tool call to carry
  * a hook echo) always reported a genuinely-successful switch as
- * `{ok:false}`. Flag-gated behind `FALCON_PTY_SETMODE=1`
+ * `{ok:false}`. Flag-gated behind `KVY_PTY_SETMODE=1`
  * (`PTY_SET_MODE_ENV_VAR` below) until live-soaked, since it's the one
  * deliberately-keystroke, version-coupled feature on this path; unset, it
  * stays the prior honest `{ok:false}` ("the live TUI owns its own permission
  * mode").
  *
  * The legacy `loop()` path (with the ACP remote transport) is kept ONLY for
- * the daemon-spawned, no-terminal `falcon claude --starting-mode remote`
+ * the daemon-spawned, no-terminal `kvy claude --starting-mode remote`
  * flow, which genuinely starts headless and has no live TUI: there
  * `interrupt`/`setMode`/`perm.answer` reach the live remote turn via
  * `loop()`'s `onRemoteActive`, and there is no PTY injection and no hook
@@ -81,11 +81,11 @@
  * logical send.
  *
  * Resume (plan-v2.md W3.7): both flows share one `bootstrapSession()` call,
- * which itself honors `FALCON_RECONNECT_SESSION_ID`/
- * `FALCON_RECONNECT_ENCRYPTION_KEY` (re-attaching to the existing
+ * which itself honors `KVY_RECONNECT_SESSION_ID`/
+ * `KVY_RECONNECT_ENCRYPTION_KEY` (re-attaching to the existing
  * server-side session row instead of minting a fresh one — see
  * `session/bootstrap.ts`'s doc comment). The terminal PTY flow additionally
- * reads `FALCON_RECONNECT_PROVIDER_SESSION_ID` to resume the underlying
+ * reads `KVY_RECONNECT_PROVIDER_SESSION_ID` to resume the underlying
  * `claude` provider transcript itself (`--resume`, composed by
  * `resolveSessionFlags`/`ptyClaudeSession.ts`) — absent on an ordinary fresh
  * start, so both env reads are no-ops unless a caller arranged them ahead of
@@ -107,8 +107,8 @@
  * termination, no JS-level `finally` blocks run at all) to any signal with no
  * registered listener, so an unhandled `SIGINT` reaching this process at any
  * point ends it instantly and leaves the lock file behind naming a pid that's
- * now dead — exactly the stale "a Falcon session is already running" report
- * a later `falcon claude` in the same directory would otherwise have to wait
+ * now dead — exactly the stale "a Kvy session is already running" report
+ * a later `kvy claude` in the same directory would otherwise have to wait
  * out (docs/known-issues.md). `SIGINT` (Ctrl-C) reaching the PTY child
  * directly — raw mode forwards the byte to the foreground process group,
  * `stdin.setRawMode(true)` in `ptyClaudeSession.ts` — only starts applying
@@ -130,8 +130,8 @@
  */
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { encodeBase64, wrapDek } from "@falcon/crypto";
-import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@falcon/wire";
+import { encodeBase64, wrapDek } from "@kvy/crypto";
+import { createEnvelope, type PermissionMode, type SessionEnvelope } from "@kvy/wire";
 import { createId } from "@paralleldrive/cuid2";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox, type OutboxOptions } from "../api/outbox.js";
@@ -146,7 +146,7 @@ import {
 } from "../api/sessionStatus.js";
 import { resolveBackendUrl, resolveFrontendUrl } from "../auth/config.js";
 import {
-  type FalconCredentials,
+  type KvyCredentials,
   readCredentials as readCredentialsDefault,
 } from "../auth/credentials.js";
 import { ensureLoggedIn as ensureLoggedInDefault } from "../auth/login.js";
@@ -223,7 +223,7 @@ import { runPreflightWithReauth } from "./startPreflight.js";
  * live-soaked (plan-v2.md U4.5's `[human]` sub-task); unset/anything else
  * keeps the prior honest `{ok:false}` behavior.
  */
-const PTY_SET_MODE_ENV_VAR = "FALCON_PTY_SETMODE";
+const PTY_SET_MODE_ENV_VAR = "KVY_PTY_SETMODE";
 /** Max wait for the next hook input's `permission_mode` echo before treating a mode switch as unverified. */
 const PTY_SET_MODE_VERIFY_TIMEOUT_MS = 5000;
 
@@ -234,7 +234,7 @@ const PTY_SET_MODE_VERIFY_TIMEOUT_MS = 5000;
  * behind a flag until live-soaked" rationale as `PTY_SET_MODE_ENV_VAR`
  * above; unset/anything else keeps the honest `{ok:false}` behavior.
  */
-const PTY_SET_MODEL_ENV_VAR = "FALCON_PTY_SETMODEL";
+const PTY_SET_MODEL_ENV_VAR = "KVY_PTY_SETMODEL";
 /**
  * Max wait for the next "Set model to ..." transcript echo
  * (`claude/modelChange.ts`) before treating a model switch as unverified.
@@ -255,12 +255,12 @@ export interface StartClaudeCommandDeps {
   homeDir: string;
   workingDirectory: string;
   claudeArgs: string[];
-  /** Resolved path to `scripts/falcon_claude_launcher.cjs` — see `index.ts`'s `resolveClaudeLauncherPath()`. */
+  /** Resolved path to `scripts/kvy_claude_launcher.cjs` — see `index.ts`'s `resolveClaudeLauncherPath()`. */
   launcherPath: string;
   env?: NodeJS.ProcessEnv;
   backendUrl?: string;
-  /** Injectable for tests; defaults to `auth/credentials.ts`'s real, `~/.falcon/access.key`-backed reader. */
-  readCredentials?: (homeDir: string) => FalconCredentials | null;
+  /** Injectable for tests; defaults to `auth/credentials.ts`'s real, `~/.kvy/access.key`-backed reader. */
+  readCredentials?: (homeDir: string) => KvyCredentials | null;
   /** Injectable for tests; defaults to `daemon/state.ts`'s real `daemon.state.json` reader. */
   readDaemonState?: (homeDir: string) => Promise<DaemonState | null>;
   /** Injectable for tests; defaults to the global `fetch`. */
@@ -321,7 +321,7 @@ export interface StartClaudeCommandDeps {
   reportSessionStartFailed?: typeof reportSessionStartFailedDefault;
   /**
    * Injectable for tests; defaults to the real `registerWorkspace()`
-   * (`workspace/registry.ts`). A bare terminal `falcon claude` run — unlike
+   * (`workspace/registry.ts`). A bare terminal `kvy claude` run — unlike
    * the web "New Session" wizard's `spawn` RPC, which already registers a
    * workspace before launching — never designated its `workingDirectory` as
    * a registered workspace, so `bootstrapSession()` always recorded a `null`
@@ -411,7 +411,7 @@ async function hasGitDirDefault(directory: string): Promise<boolean> {
   );
 }
 
-/** Runs `falcon claude [args...]`. Returns the process exit code. */
+/** Runs `kvy claude [args...]`. Returns the process exit code. */
 export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promise<number> {
   const write = deps.write ?? ((text: string) => process.stdout.write(text));
   const writeError = deps.writeError ?? ((text: string) => process.stderr.write(text));
@@ -438,7 +438,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const checkHasGitDir = deps.hasGitDir ?? hasGitDirDefault;
   const doDisplayQrCode = deps.displayQrCode ?? displayQrCodeDefault;
 
-  // W4.4: `--force-new-session` is Falcon's own flag, never Claude Code's —
+  // W4.4: `--force-new-session` is Kvy's own flag, never Claude Code's —
   // strip it out of the passthrough args before they ever reach the real
   // `claude` CLI (same "intercept our own flags" precedent as
   // `claudeLocal.ts`'s `resolveSessionFlags`, just for a flag that isn't
@@ -449,7 +449,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // 9. Fail honestly, not silently, when the real `claude` CLI can't be found.
   const location = locate(env);
   if (!location) {
-    writeError(`falcon claude: ${CLAUDE_NOT_INSTALLED_MESSAGE}\n`);
+    writeError(`kvy claude: ${CLAUDE_NOT_INSTALLED_MESSAGE}\n`);
     return 1;
   }
   // Capture the narrowed path in a plain const — the null-guard's narrowing of
@@ -502,7 +502,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
 
   // W4.4 (same-directory duplicate session lock): before minting a fresh
   // nonce (below), refuse to start a second, independent PTY session in a
-  // directory a *live* Falcon session already occupies — two such processes
+  // directory a *live* Kvy session already occupies — two such processes
   // would silently fork the transcript. `--force-new-session` bypasses this
   // entirely (skips taking the lock at all, so it never contends with, or
   // steals, whatever the existing session holds). A stale lock (owner
@@ -524,13 +524,13 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       if (lockResult.reason === "held-by-running-process") {
         const { existing } = lockResult;
         writeError(
-          `falcon claude: a Falcon session is already running in this directory ` +
+          `kvy claude: a Kvy session is already running in this directory ` +
             `(${existing.sessionId ?? "unknown session id"}, pid ${existing.pid}), ` +
             "attach from the web, or run in another directory. Pass --force-new-session to start a second one anyway.\n",
         );
       } else {
         writeError(
-          "falcon claude: could not acquire the per-directory session lock (contended), try again\n",
+          "kvy claude: could not acquire the per-directory session lock (contended), try again\n",
         );
       }
       return 1;
@@ -571,7 +571,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error("[start-claude] bootstrapSession failed", { message });
-    writeError(`falcon claude: failed to start session: ${message}\n`);
+    writeError(`kvy claude: failed to start session: ${message}\n`);
     // A4: best-effort self-report to the daemon (never throws, absent/
     // unreachable daemon is a silent no-op) so a daemon-initiated spawn's
     // `spawnAwaiter` can reject with THIS real message instead of only ever
@@ -592,7 +592,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
 
   // W4.5: self-report to the daemon (best-effort — `notifyDaemonSessionStarted`
   // never throws, so a daemon that's absent or unreachable never blocks
-  // session startup) so `falcon doctor`/`falcon kill sessions`/durability can
+  // session startup) so `kvy doctor`/`kvy kill sessions`/durability can
   // see this terminal-started session too, not just daemon-spawned ones.
   // `seq`/`metadataVersion`/`agentStateVersion` start at 0 — the server-side
   // defaults for a freshly created (or freshly reattached) row; later
@@ -625,7 +625,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // PTY flow's `onSessionId` hook, below) — the FIRST self-report above
   // fires before Claude Code has reported one, so its `metadata` never
   // carries `providerSessionId`. Without this second report the daemon's
-  // local session registry never learns which transcript file this Falcon
+  // local session registry never learns which transcript file this Kvy
   // session actually backs, and `transcriptIndexer.ts`'s `isManaged` lineage
   // lookup (`daemon/machineIntegration.ts`) can never recognize this
   // session's own transcript as already managed — it would otherwise get
@@ -649,7 +649,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
   }
 
-  write(`falcon claude: starting session ${bootstrap.sessionId}\n`);
+  write(`kvy claude: starting session ${bootstrap.sessionId}\n`);
   const sessionUrl = `${frontendUrl}/dashboard/session/${bootstrap.sessionId}/`;
   write(webUrlLine(sessionUrl));
   if (process.stdin.isTTY === true) {
@@ -710,7 +710,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // run — which is exactly how the per-directory session lock (`session/
   // sessionLock.ts`, acquired above) was observed going stale: the wrapper
   // process is gone, but its lock file still names that now-dead pid, and
-  // the next `falcon claude` in the same directory has to wait out (or
+  // the next `kvy claude` in the same directory has to wait out (or
   // manually reclaim) a lock its true owner never got to release.
   //
   // Critically, this must NOT call `process.exit()` directly — that would
@@ -938,7 +938,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           // Best-effort, live half of the notification — a terminal without OSC 9
           // support just ignores this. The guarantee is the exit-path review below.
           if (process.stdout.isTTY) {
-            notifyTerminal(write, "Falcon: a device is asking for your keys");
+            notifyTerminal(write, "Kvy: a device is asking for your keys");
           }
         },
       },
@@ -1004,7 +1004,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   };
 
   /**
-   * The terminal-attached flow (the common human-run `falcon claude`): run
+   * The terminal-attached flow (the common human-run `kvy claude`): run
    * `claude` on a PTY and type web messages into it. No mode switch ever.
    *
    * Installs the SINGLE hook server (`installRemotePermissionHook()`, owning
@@ -1087,7 +1087,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // is a harmless side-signal, and the server's own presence
         // suppression already avoids over-notifying an actively-watching tab.
         onPendingAttention: (kind) => reportAttention(kind),
-        // Real two-way remote control (the point of `falcon claude`): a web
+        // Real two-way remote control (the point of `kvy claude`): a web
         // decision on a locally-typed turn's permission dialog actually
         // drives the live PTY, not just a read-only mirror. `ptyHandle` is
         // assigned once `runPtySession` returns below — safe to reference
@@ -1127,7 +1127,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // `--resume` composition from this) — set only when a caller
         // arranged the reconnect env ahead of this spawn (plan-v2.md W3.7);
         // ordinarily absent, i.e. a fresh provider session.
-        providerSessionId: env.FALCON_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
+        providerSessionId: env.KVY_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
         homeDir: deps.homeDir,
         env,
         // The single shared hook server's `--settings` file + env — so the
@@ -1217,7 +1217,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       // menu (recoverable) — plan-v2.md W1.5.
       interrupt: async () => ({ ok: ptySession.sendInterrupt() }),
       // Real PTY setMode (plan-v2.md W4.3), flag-gated behind
-      // `FALCON_PTY_SETMODE=1` (see the module-level doc comment on
+      // `KVY_PTY_SETMODE=1` (see the module-level doc comment on
       // `PTY_SET_MODE_ENV_VAR`). Computes the forward Shift+Tab press count
       // from the bridge's cached `permission_mode` (the live TUI's own,
       // authoritative state — there is no other channel to ask it) to the
@@ -1279,7 +1279,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         return { ok: false, observedMode: observedMode ?? current };
       },
       // Real PTY setModel (docs/known-issues.md issue #12), flag-gated
-      // behind `FALCON_PTY_SETMODEL=1` — see `PTY_SET_MODEL_ENV_VAR`'s doc
+      // behind `KVY_PTY_SETMODEL=1` — see `PTY_SET_MODEL_ENV_VAR`'s doc
       // comment. Types `/model <alias>` into the live PTY via
       // `ptySession.sendModelChange` (same idle/no-prompt gate message
       // injection uses), then verifies via the transcript's own "Set model
@@ -1459,7 +1459,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           permissionMode,
           homeDir: deps.homeDir,
           claudeArgs,
-          claudeEnvVars: { FALCON_CLAUDE_PATH: claudeCliPath },
+          claudeEnvVars: { KVY_CLAUDE_PATH: claudeCliPath },
           onEnvelopes: (envelopes) => {
             handlePossibleModelChange(envelopes);
             outbox.enqueue(envelopes);
@@ -1512,7 +1512,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
 
     // Fix 7: the durable half of the key-request notification, and — when a human is
     // actually here to answer it — the review itself, run inline rather than telling the
-    // user to go run `falcon keys approve` (principle 1). Safe to open a `readline` on
+    // user to go run `kvy keys approve` (principle 1). Safe to open a `readline` on
     // stdin here: both flows above have already restored raw mode as part of their own
     // teardown by the time their awaited promise resolves.
     if (pendingKeyRequestLabel !== undefined) {
@@ -1536,9 +1536,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
 }
 
 /**
- * A daemon-spawned, no-terminal session is invoked as `falcon claude
+ * A daemon-spawned, no-terminal session is invoked as `kvy claude
  * --starting-mode remote ...` (see `daemon/spawnEngine.ts`). Everything else
- * — a human running `falcon claude` in their terminal — is the PTY-injection
+ * — a human running `kvy claude` in their terminal — is the PTY-injection
  * flow. The flag reaches here verbatim (it is passthrough `providerArgs`), so
  * this is where the two flows fork.
  */

@@ -22,8 +22,8 @@ let homeDir: string;
 let workspaceRoot: string;
 
 beforeEach(async () => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-run-process-test-home-"));
-  workspaceRoot = await realpath(mkdtempSync(path.join(tmpdir(), "falcon-run-process-test-repo-")));
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-run-process-test-home-"));
+  workspaceRoot = await realpath(mkdtempSync(path.join(tmpdir(), "kvy-run-process-test-repo-")));
 });
 
 afterEach(() => {
@@ -79,7 +79,7 @@ describe("handleRunStart", () => {
     const launched: LaunchedProcess = {
       method: "tmux",
       pid: 555,
-      tmuxSessionName: "falcon-run-x",
+      tmuxSessionName: "kvy-run-x",
       watchExit: () => () => {},
     };
     const launchProcess = vi.fn(async () => launched);
@@ -93,7 +93,7 @@ describe("handleRunStart", () => {
       started: true,
       method: "tmux",
       pid: 555,
-      tmuxSessionName: "falcon-run-x",
+      tmuxSessionName: "kvy-run-x",
     });
     expect(launchProcess).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ cwd: workspaceRoot }),
@@ -101,7 +101,7 @@ describe("handleRunStart", () => {
     );
 
     const state = await readDirectoryRunState(homeDir, workspaceRoot);
-    expect(state?.run).toMatchObject({ pid: 555, method: "tmux", tmuxSessionName: "falcon-run-x" });
+    expect(state?.run).toMatchObject({ pid: 555, method: "tmux", tmuxSessionName: "kvy-run-x" });
   });
 
   it("wraps the script with a log-redirect and builds it through /bin/sh -c on POSIX", async () => {
@@ -219,7 +219,7 @@ describe("handleRunStop", () => {
       run: {
         pid: 555,
         method: "tmux",
-        tmuxSessionName: "falcon-run-x",
+        tmuxSessionName: "kvy-run-x",
         startedAt: 1,
         logFile: path.join(homeDir, "logs", "run-x.log"),
         script: "npm run dev",
@@ -237,7 +237,7 @@ describe("handleRunStop", () => {
 
     expect(result).toEqual({ stopped: true, wasRunning: true });
     expect(killRunEntry).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ pid: 555, tmuxSessionName: "falcon-run-x" }),
+      expect.objectContaining({ pid: 555, tmuxSessionName: "kvy-run-x" }),
     );
     expect((await readDirectoryRunState(homeDir, workspaceRoot))?.run).toBeUndefined();
   });
@@ -428,7 +428,7 @@ describe("daemon-restart durability (a fresh runStateStore read over the same ho
     const launchProcess = vi.fn(async () => ({
       method: "tmux" as const,
       pid: 321,
-      tmuxSessionName: "falcon-run-y",
+      tmuxSessionName: "kvy-run-y",
       watchExit: () => () => {},
     }));
     await setWorkspaceGitConfig(workspaceRoot, { runScript: "npm run dev" }, { homeDir });

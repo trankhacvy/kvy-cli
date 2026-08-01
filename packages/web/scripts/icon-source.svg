@@ -1,7 +1,7 @@
 <!--
-  The brand mark is now the falcon-head glyph traced from
+  The brand mark is now the kvy-head glyph traced from
   `../src/app/apple-icon.png` (the source of truth — black mark on white),
-  not this file. `falcon-mark-512.png` in this directory is a white-on-transparent
+  not this file. `kvy-mark-512.png` in this directory is a white-on-transparent
   master cut from it; every raster icon (icon-192/512, web-app-manifest-*,
   apple-touch-icon, favicon.ico, og.png, screenshots) and `../public/icon.svg`
   (a `<image>`-embedded variant) are derived from that master via a one-off
@@ -10,7 +10,7 @@
   ever lost; it is not wired into the build.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <title>Falcon</title>
+  <title>Kvy</title>
   <rect width="512" height="512" rx="96" fill="#0b0f19"/>
   <text
     x="256"

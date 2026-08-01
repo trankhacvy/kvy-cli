@@ -1,4 +1,4 @@
-import type { ProviderId } from "@falcon/wire";
+import type { ProviderId } from "@kvy/wire";
 import { codexProvider } from "../codex/index.js";
 import { claudeCodeProvider } from "./claudeProviderAdapter.js";
 
@@ -11,7 +11,7 @@ export interface ProviderDetectionResult {
 
 export interface ProviderRegistryEntry {
   id: ProviderId;
-  falconSubcommand: string;
+  kvySubcommand: string;
   accountConfigPath: (homeDir: string) => string;
   detect: () => Promise<ProviderDetectionResult>;
 }
@@ -19,19 +19,19 @@ export interface ProviderRegistryEntry {
 export const PROVIDER_REGISTRY: Record<ProviderId, ProviderRegistryEntry> = {
   "claude-code": {
     id: "claude-code",
-    falconSubcommand: "claude",
+    kvySubcommand: "claude",
     accountConfigPath: () => "~/.claude.json",
     detect: claudeCodeProvider.detect,
   },
   codex: {
     id: "codex",
-    falconSubcommand: "codex",
+    kvySubcommand: "codex",
     accountConfigPath: () => "~/.codex/auth.json",
     detect: codexProvider.detect,
   },
 };
 
 export function providerIdForSubcommand(subcommand: string): ProviderId | null {
-  const entry = Object.values(PROVIDER_REGISTRY).find((e) => e.falconSubcommand === subcommand);
+  const entry = Object.values(PROVIDER_REGISTRY).find((e) => e.kvySubcommand === subcommand);
   return entry?.id ?? null;
 }

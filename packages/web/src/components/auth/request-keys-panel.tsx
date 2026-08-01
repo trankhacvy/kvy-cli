@@ -80,7 +80,7 @@ export function RequestKeysPanel({
         try {
           const result = await claimKeyRequest(token, ephPub);
           if (result.state === "ready") {
-            const protection = await provisionKeyProtection("prf", getAccountId() ?? "Falcon");
+            const protection = await provisionKeyProtection("prf", getAccountId() ?? "Kvy");
             const accepted = await bridge.acceptKeyResponse(result.response, protection);
             if (accepted) {
               onReadyRef.current();
@@ -158,7 +158,7 @@ export function RequestKeysPanel({
           {/* Always shown, not just when the device list is empty — a listed web device
            *  doesn't mean the CLI isn't faster/easier to reach right now. */}
           <p className="text-xs text-muted-foreground">
-            {copy.keys.noOtherDevicesHint("falcon keys approve")}
+            {copy.keys.noOtherDevicesHint("kvy keys approve")}
           </p>
         </>
       )}

@@ -1,5 +1,5 @@
 /**
- * CI lint: fails if any @falcon/wire schema that already existed on the base
+ * CI lint: fails if any @kvy/wire schema that already existed on the base
  * branch has lost a field or had a field retyped in a way that violates
  * additive-only-forever (design §5.3 — "the server can never migrate
  * ciphertext... payload schemas are additive-only, forever").
@@ -16,7 +16,7 @@
  * point is always the real base branch, not whatever JSON happens to be on
  * disk.
  *
- * Usage: pnpm --filter @falcon/wire run lint:additive
+ * Usage: pnpm --filter @kvy/wire run lint:additive
  *
  * Base ref resolution (first one `git rev-parse` accepts, in order):
  *   1. $WIRE_LINT_BASE_REF        (explicit override)
@@ -135,7 +135,7 @@ async function main() {
 
   if (violations.length > 0) {
     console.error(
-      `[wire-additive-lint] FAILED — non-additive change(s) to @falcon/wire vs ${baseRef}:\n`,
+      `[wire-additive-lint] FAILED — non-additive change(s) to @kvy/wire vs ${baseRef}:\n`,
     );
     for (const v of violations) console.error(`  - ${v}`);
     console.error(
@@ -149,7 +149,7 @@ async function main() {
   }
 
   console.error(
-    `[wire-additive-lint] OK — @falcon/wire is additive-only vs ${baseRef} ` +
+    `[wire-additive-lint] OK — @kvy/wire is additive-only vs ${baseRef} ` +
       `(${Object.keys(baseRegistry).length} schema(s) checked).`,
   );
 }

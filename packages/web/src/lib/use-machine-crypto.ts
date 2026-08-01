@@ -1,6 +1,6 @@
 "use client";
 
-import { decodeBase64 } from "@falcon/crypto/web";
+import { decodeBase64 } from "@kvy/crypto/web";
 import { useEffect, useState } from "react";
 import type { CryptoBridgeClient } from "@/crypto";
 import { useDedicatedCryptoBridge } from "./use-crypto-bridge";

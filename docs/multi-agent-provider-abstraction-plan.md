@@ -60,7 +60,7 @@ packages/cli/src/args.ts:18   type Provider = "claude" | "codex"
 packages/cli/src/args.ts:64   const PROVIDERS = new Set<Provider>(["claude", "codex"])
 ```
 
-A new provider can't even be **typed as a command** (`falcon opencode ...`) without
+A new provider can't even be **typed as a command** (`kvy opencode ...`) without
 editing this file. Any plan that doesn't mention `args.ts` is incomplete.
 
 **Duplicated maps (the same map, written twice — worth fixing on its own):**
@@ -145,7 +145,7 @@ each only add fields that are truly private to their own side.
 ┌───────────────────────────────┐
 │ packages/cli/src/provider/     │
 │ dispatch.ts (BEHAVIOR)         │
-│ "Actually run `falcon codex`"  │
+│ "Actually run `kvy codex`"  │
 └───────────────────────────────┘
 ```
 
@@ -158,7 +158,7 @@ this was another real problem the review found.
 import { z } from "zod";
 
 /**
- * Every coding agent Falcon can drive. Add a new agent by adding ONE line
+ * Every coding agent Kvy can drive. Add a new agent by adding ONE line
  * here — every zod schema and TypeScript union in the app derives from this
  * array, so nothing else needs a hand-written union of provider strings.
  */
@@ -203,7 +203,7 @@ export const PROVIDER_CAPABILITIES: Record<ProviderId, ProviderCapabilities> = {
   },
 };
 
-/** Safe accessor for an unknown/old/free-form provider string (`SessionRow.provider` is `z.string()`, not this enum) — never throws, never crashes on a session created by a future Falcon version this build doesn't know about yet. */
+/** Safe accessor for an unknown/old/free-form provider string (`SessionRow.provider` is `z.string()`, not this enum) — never throws, never crashes on a session created by a future Kvy version this build doesn't know about yet. */
 export function getProviderCapabilities(provider: string): ProviderCapabilities {
   return (
     PROVIDER_CAPABILITIES[provider as ProviderId] ?? {
@@ -257,7 +257,7 @@ a string. So:
 **`packages/cli/src/provider/registry.ts` (NEW FILE) — data only, safe for anything to import:**
 
 ```ts
-import type { ProviderId } from "@falcon/wire";
+import type { ProviderId } from "@kvy/wire";
 import { codexProvider } from "../codex/index.js";
 import { claudeCodeProvider } from "./claudeProviderAdapter.js";
 
@@ -270,8 +270,8 @@ export interface ProviderDetectionResult {
 
 export interface ProviderRegistryEntry {
   id: ProviderId;
-  /** The word typed after `falcon` — `falcon claude`, `falcon codex`. NOT the same thing as the real binary on PATH (Claude's real binary path is resolved dynamically by `claudeCliLocator.ts`, never hardcoded as a flat string — codex's happens to be the same word today, but that's a coincidence, not a rule). Used by `spawnEngine.ts`/`resumeSession.ts` to build a respawn argv. */
-  falconSubcommand: string;
+  /** The word typed after `kvy` — `kvy claude`, `kvy codex`. NOT the same thing as the real binary on PATH (Claude's real binary path is resolved dynamically by `claudeCliLocator.ts`, never hardcoded as a flat string — codex's happens to be the same word today, but that's a coincidence, not a rule). Used by `spawnEngine.ts`/`resumeSession.ts` to build a respawn argv. */
+  kvySubcommand: string;
   /** Local auth/config file this provider's account-info reads from. */
   accountConfigPath: (homeDir: string) => string;
   detect: (options?: unknown) => Promise<ProviderDetectionResult>;
@@ -280,21 +280,21 @@ export interface ProviderRegistryEntry {
 export const PROVIDER_REGISTRY: Record<ProviderId, ProviderRegistryEntry> = {
   "claude-code": {
     id: "claude-code",
-    falconSubcommand: "claude",
+    kvySubcommand: "claude",
     accountConfigPath: () => "~/.claude.json",
     detect: claudeCodeProvider.detect,
   },
   codex: {
     id: "codex",
-    falconSubcommand: "codex",
+    kvySubcommand: "codex",
     accountConfigPath: () => "~/.codex/auth.json",
     detect: codexProvider.detect,
   },
 };
 
-/** Falcon subcommand string ("claude"/"codex", `args.ts`'s `Provider` type) -> the real `ProviderId`. Small and explicit on purpose — the two are different domains (CLI word vs. provider id) that happen to look similar for codex today. */
+/** Kvy subcommand string ("claude"/"codex", `args.ts`'s `Provider` type) -> the real `ProviderId`. Small and explicit on purpose — the two are different domains (CLI word vs. provider id) that happen to look similar for codex today. */
 export function providerIdForSubcommand(subcommand: string): ProviderId | null {
-  const entry = Object.values(PROVIDER_REGISTRY).find((e) => e.falconSubcommand === subcommand);
+  const entry = Object.values(PROVIDER_REGISTRY).find((e) => e.kvySubcommand === subcommand);
   return entry?.id ?? null;
 }
 ```
@@ -309,8 +309,8 @@ const PROVIDERS = new Set<Provider>(["claude", "codex"]);
 
 // after
 import { PROVIDER_REGISTRY } from "./provider/registry.js";
-export type Provider = string; // any registered falconSubcommand
-const PROVIDERS = new Set(Object.values(PROVIDER_REGISTRY).map((e) => e.falconSubcommand));
+export type Provider = string; // any registered kvySubcommand
+const PROVIDERS = new Set(Object.values(PROVIDER_REGISTRY).map((e) => e.kvySubcommand));
 ```
 
 `spawnEngine.ts`/`resumeSession.ts` drop their copy-pasted maps:
@@ -325,17 +325,17 @@ const providerCliName = PROVIDER_CLI_NAME[params.provider];
 
 // after
 import { PROVIDER_REGISTRY } from "../provider/registry.js";
-const providerCliName = PROVIDER_REGISTRY[params.provider].falconSubcommand;
+const providerCliName = PROVIDER_REGISTRY[params.provider].kvySubcommand;
 ```
 
 Same change in `resumeSession.ts:52` and its use at line 259
 (`PROVIDER_CLI_NAME[persisted.provider ?? "claude-code"]` becomes
-`PROVIDER_REGISTRY[persisted.provider ?? "claude-code"].falconSubcommand`).
+`PROVIDER_REGISTRY[persisted.provider ?? "claude-code"].kvySubcommand`).
 
 **`packages/cli/src/provider/dispatch.ts` (NEW FILE) — behavior, only imported by `index.ts`:**
 
 ```ts
-import type { ProviderId } from "@falcon/wire";
+import type { ProviderId } from "@kvy/wire";
 import { runStartClaudeCommand } from "../commands/start.js";
 import { runStartCodexCommand } from "../commands/startCodex.js";
 import type { Logger } from "../logger.js";
@@ -372,7 +372,7 @@ export function runStart(id: ProviderId, deps: StartCommandDeps): Promise<number
 ```
 
 `packages/cli/src/index.ts:393` stops being an `if/else`. Note `command.provider` here is
-the falcon-subcommand string (`args.ts`'s `Provider`, e.g. `"claude"`), not a `ProviderId`
+the kvy-subcommand string (`args.ts`'s `Provider`, e.g. `"claude"`), not a `ProviderId`
 (`"claude-code"`) — the first draft's code sample skipped this mapping and would not have
 compiled. Fixed:
 
@@ -389,7 +389,7 @@ import { runStart } from "./provider/dispatch.js";
 
 const providerId = providerIdForSubcommand(command.provider);
 if (!providerId) {
-  process.stderr.write(`falcon: unknown provider "${command.provider}"\n`);
+  process.stderr.write(`kvy: unknown provider "${command.provider}"\n`);
   return 1;
 }
 return runStart(providerId, {
@@ -405,11 +405,11 @@ return runStart(providerId, {
 This merges what today is spread across `new-session/provider-meta.ts`,
 `new-session/model-meta.ts`, `session-list/components/agent-icon.tsx`, and
 `provider-accounts/types.ts`. Capabilities are NOT redeclared here — they're imported
-from `@falcon/wire` (§3.1), fixing the review's duplication finding. The "Provider
+from `@kvy/wire` (§3.1), fixing the review's duplication finding. The "Provider
 default" sentinel option that the first draft accidentally dropped is kept.
 
 ```ts
-import { getProviderCapabilities, type ProviderId } from "@falcon/wire";
+import { getProviderCapabilities, type ProviderId } from "@kvy/wire";
 
 export interface ModelOption {
   value: string;
@@ -487,7 +487,7 @@ export const PROVIDER_META: Record<ProviderId, WebProviderMeta> = {
 };
 
 /**
- * Safe accessor. `SessionRow.provider` (`@falcon/wire`) is a free `z.string()`,
+ * Safe accessor. `SessionRow.provider` (`@kvy/wire`) is a free `z.string()`,
  * not this file's `ProviderId` enum — a session from an old build, or a
  * provider this particular web build doesn't know about yet, must render
  * SOMETHING instead of crashing on `.capabilities` / `.label`.
@@ -496,7 +496,7 @@ export function getProviderMeta(provider: string): WebProviderMeta {
   return PROVIDER_META[provider as ProviderId] ?? { ...UNKNOWN_PROVIDER_META, label: provider || "Agent" };
 }
 
-export { getProviderCapabilities } from "@falcon/wire";
+export { getProviderCapabilities } from "@kvy/wire";
 ```
 
 `agent-icon.tsx` becomes a thin wrapper (kept, because its own doc comment already
@@ -522,7 +522,7 @@ export function agentIconSrc(provider: string): string | null {
   needs things the CLI never does (icon path, display label, beta banner text). Mixing
   them would force browser code to import Node-only CLI modules. Capabilities are the one
   thing genuinely shared, so — after the review's correction — they live in exactly one
-  place (`@falcon/wire`), and CLI/web each only add fields truly private to their side.
+  place (`@kvy/wire`), and CLI/web each only add fields truly private to their side.
 - Splitting `registry.ts` (data) from `dispatch.ts` (behavior) on the CLI side isn't
   extra ceremony for its own sake — it's the direct fix for a real coupling bug the review
   found: without the split, the **daemon** (`spawnEngine.ts`, `resumeSession.ts`) would
@@ -554,7 +554,7 @@ third part would have shipped a new dead button).
 
 ```ts
 // packages/cli/src/session/announceRemoteControl.ts (NEW FILE)
-import { createEnvelope, type SessionEnvelope } from "@falcon/wire";
+import { createEnvelope, type SessionEnvelope } from "@kvy/wire";
 
 /**
  * Providers with no local terminal mode (`capabilities.hasLocalMode === false`)
@@ -789,7 +789,7 @@ was a no-op. Everything below was re-verified by reading the code again.**
    first draft claimed `adopt.ts` "consumes" it — wrong; it's a producer, on a different
    spawn path than the one that would need to read it.)
 2. `args.ts:105-107` forwards *everything* after the provider name to `providerArgs`
-   verbatim and Falcon "never interprets provider flags" by design — so a consumer has to
+   verbatim and Kvy "never interprets provider flags" by design — so a consumer has to
    be added deliberately, it won't happen by accident.
 3. `AcpRemoteOptions.resume` (`acpRemote.ts:96`) IS real, but only for `claude-code`: it
    flows into `_meta.claudeCode.options.resume` (`acpRemote.ts:245-261`), which only the
@@ -944,7 +944,7 @@ detection/auth, which the review flagged.
    PTY path (if it has a real TUI — closer to `start.ts`'s shape, and a bigger lift, per
    step 1's note).
 4. **`packages/cli/src/provider/registry.ts`** — add one entry to `PROVIDER_REGISTRY`
-   (`falconSubcommand`, `accountConfigPath`, `detect`).
+   (`kvySubcommand`, `accountConfigPath`, `detect`).
 5. **`packages/cli/src/provider/dispatch.ts`** — add one entry to `RUN_START`.
 6. **`packages/cli/src/adapters/manifest.ts`** — if ACP-based: add OpenCode's npm package
    name, pinned version, and integrity hash, same shape as the existing `codex` entry —
@@ -1012,7 +1012,7 @@ plan worked.
   function — keep unit-testing them the way this codebase already does (see
   `mode-switch-state.test.ts`'s existing precedent), no new test infrastructure needed.
 - §5.4, §5.1, and §5.5 should be **re-verified live** the same way they were found: real
-  `falcon codex` process, real web browser, not just `pnpm test` passing. This project's
+  `kvy codex` process, real web browser, not just `pnpm test` passing. This project's
   own `CLAUDE.md` rule applies directly here: "reproduce the bug in an E2E setting... this
   makes sure your fix actually solves it." §5.5 in particular must not be marked done off
   a unit test alone — see that section's own warning about a false-positive test shape.
@@ -1046,8 +1046,8 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       `doBootstrapSession(...)`; add `workspaceId` to the bootstrap params object
 - [x] Add test cases to `startCodex.test.ts`: workspaceId populated on success;
       workspaceId `null` on failure; `bootstrapSession` called with the right value
-- [x] `pnpm --filter falcon typecheck` and `pnpm --filter falcon test`
-- [x] **Live-verify**: real `falcon codex` session in a fresh directory — confirmed:
+- [x] `pnpm --filter kvy typecheck` and `pnpm --filter kvy test`
+- [x] **Live-verify**: real `kvy codex` session in a fresh directory — confirmed:
       the session now appears under "Workspaces" (not "Other sessions") on Home, and the
       session detail page's right panel switched from "no machine/workspace recorded
       yet" to actually attempting to load git status, instead of showing the gate
@@ -1073,7 +1073,7 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       dialogs' OPEN-state text isn't unit-testable in this package (no RTL/jsdom setup —
       Radix `Dialog` doesn't render closed content into static markup), so that's covered
       by live-verify instead, matching this codebase's existing testing conventions
-- [x] `pnpm --filter @falcon/web typecheck` and `pnpm --filter @falcon/web test`
+- [x] `pnpm --filter @kvy/web typecheck` and `pnpm --filter @kvy/web test`
 - [x] **Live-verify**: opened the stop-confirmation dialog on a real running codex
       session — confirmed it reads "Ends the CLI process on the machine. The terminal
       user will see Codex exit." (not "Claude")
@@ -1108,7 +1108,7 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       `ProvidersSettingsScreen.tsx:12`'s hardcoded `PROVIDERS` array to
       `[...PROVIDER_IDS]` while in the neighborhood — Phase 5's checklist item for this
       file is now just re-pointing its type imports at `lib/providers.ts`
-- [x] `pnpm --filter @falcon/wire build`, then `pnpm typecheck` on all 4 packages
+- [x] `pnpm --filter @kvy/wire build`, then `pnpm typecheck` on all 4 packages
       (wire/cli/server/web) — all clean
 - [x] Full `pnpm test` on all 4 packages: 193 (wire) + 2143 (cli) + 422 (server) + 1564
       (web) = 4322 tests, all green
@@ -1141,16 +1141,16 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       error path (structurally unreachable today since `args.ts` already validates, but
       no longer a silent type-level guarantee once `Provider` became `string`)
 - [x] Remove `PROVIDER_CLI_NAME` from `spawnEngine.ts`, use
-      `PROVIDER_REGISTRY[...].falconSubcommand`
+      `PROVIDER_REGISTRY[...].kvySubcommand`
 - [x] Remove `PROVIDER_CLI_NAME` from `resumeSession.ts` (both the definition at line 52
       and its use at line 259)
 - [x] Confirmed `spawnEngine.ts`/`resumeSession.ts`/`args.ts` only ever import
       `registry.ts`, never `dispatch.ts` (grep-verified directly, not just "it compiles")
 - [x] `index.test.ts`, `spawnEngine.test.ts`, `resumeSession.test.ts`, `args.test.ts` all
       still pass unmodified — the refactor preserved every existing observable behavior
-- [x] `pnpm --filter falcon typecheck` and `pnpm --filter falcon test`: 2149 tests green
-- [x] **Live-verify**: rebuilt the CLI, ran a real `falcon codex` session through the new
-      dispatch path (session started, ACP remote connected) and a real `falcon claude`
+- [x] `pnpm --filter kvy typecheck` and `pnpm --filter kvy test`: 2149 tests green
+- [x] **Live-verify**: rebuilt the CLI, ran a real `kvy codex` session through the new
+      dispatch path (session started, ACP remote connected) and a real `kvy claude`
       session (real Claude Code TUI rendered its trust-folder prompt) — both providers'
       startup routing confirmed working end to end through `registry.ts`/`dispatch.ts`
 
@@ -1189,7 +1189,7 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       than folded into `lib/providers.test.ts`, since they cover feature-specific
       contracts (`RUNNING_SESSION_MODEL_ALIASES` drift-guard, `PROVIDER_OPTIONS` ordering)
       `lib/providers.test.ts` doesn't need to know about
-- [x] `pnpm --filter @falcon/web typecheck` and `pnpm --filter @falcon/web test`: 1567
+- [x] `pnpm --filter @kvy/web typecheck` and `pnpm --filter @kvy/web test`: 1567
       tests green (1564 + 6 new in `providers.test.ts` − 3 removed with
       `provider-label.test.ts`)
 - [x] **Live-verify**: new-session wizard — provider picker shows "Claude Code"/"Codex
@@ -1232,8 +1232,8 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       for `SessionActionsMenu`)
 - [x] Added 3 new `ComposerControls.test.tsx` cases: mode selector interactive for
       codex, take-control absent for codex, model selector absent for codex
-- [x] `pnpm --filter falcon typecheck && pnpm --filter falcon test` (2152 tests) and
-      `pnpm --filter @falcon/web typecheck && pnpm --filter @falcon/web test` (1573 tests)
+- [x] `pnpm --filter kvy typecheck && pnpm --filter kvy test` (2152 tests) and
+      `pnpm --filter @kvy/web typecheck && pnpm --filter @kvy/web test` (1573 tests)
 - [x] **Live-verify**: confirmed the mode chip is now a real interactive dropdown for a
       codex session (not plain text) — **and this surfaced a genuine, previously
       unreachable bug**: switching modes failed with a JSON-RPC "Invalid params" error.
@@ -1286,19 +1286,19 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
       `FakeConnection`, 3 new tests (resumes via `session/load` when supported + resume
       id given; falls back to `session/new` when `loadSession` throws; goes straight to
       `session/new` when no resume id was given even if supported)
-- [x] **Real E2E resume check, live** (not just unit-tested): started a fresh `falcon
+- [x] **Real E2E resume check, live** (not just unit-tested): started a fresh `kvy
       codex` session, told it a secret code ("PINEAPPLE-7284") via the web composer,
       confirmed the ACK, grabbed the real ACP provider session id from the CLI's debug
-      log (`FALCON_DEBUG=1`), killed the CLI process outright, restarted `falcon codex
-      --continue-from <that-id>` (a genuinely new Falcon session row, empty transcript
+      log (`KVY_DEBUG=1`), killed the CLI process outright, restarted `kvy codex
+      --continue-from <that-id>` (a genuinely new Kvy session row, empty transcript
       of its own), then asked it "what was the secret code?" — it answered
       **"PINEAPPLE-7284"** correctly. Definitive proof the underlying Codex conversation
       was actually resumed, not just a directory re-attach.
 - [x] `PROVIDER_CAPABILITIES.codex.supportsResume` flipped to `true` (verified-true, not
       hoped-for) — updated its test in `providers.test.ts`
-- [x] `pnpm --filter falcon typecheck && pnpm --filter falcon test` (2167 tests) and
-      `pnpm --filter @falcon/wire build/test`, `pnpm --filter @falcon/web typecheck`,
-      `pnpm --filter @falcon/server typecheck` all clean
+- [x] `pnpm --filter kvy typecheck && pnpm --filter kvy test` (2167 tests) and
+      `pnpm --filter @kvy/wire build/test`, `pnpm --filter @kvy/web typecheck`,
+      `pnpm --filter @kvy/server typecheck` all clean
 
 ### Phase 8 — §5.6 plan/todo rendering (biggest, do last) — ✅ DONE
 
@@ -1342,8 +1342,8 @@ order from §7. Each phase is small enough to be its own PR. Check items off as 
 - [x] Added tests: `TimelineRow.test.ts` (dispatch), `RenderItemGroups.test.ts` (groups
       a `plan` item standalone between messages; actually renders step text into HTML
       via `renderToStaticMarkup`)
-- [x] `pnpm --filter @falcon/wire build && pnpm --filter falcon typecheck && pnpm --filter falcon test`
-      (2173 tests) and `pnpm --filter @falcon/web typecheck && pnpm --filter @falcon/web test`
+- [x] `pnpm --filter @kvy/wire build && pnpm --filter kvy typecheck && pnpm --filter kvy test`
+      (2173 tests) and `pnpm --filter @kvy/web typecheck && pnpm --filter @kvy/web test`
       (1578 tests) all clean (one unrelated, pre-existing timing-based flaky test in
       `transcriptIndexer.test.ts` observed once under heavy parallel load, confirmed
       passing reliably in isolation and on a clean full-suite retry — unrelated

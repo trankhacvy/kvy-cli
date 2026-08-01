@@ -1,5 +1,5 @@
-import { getRandomBytes, open, seal } from "@falcon/crypto";
-import type { EncryptedBox } from "@falcon/wire";
+import { getRandomBytes, open, seal } from "@kvy/crypto";
+import type { EncryptedBox } from "@kvy/wire";
 import { describe, expect, it } from "vitest";
 import { createSessionMetadataUpdater } from "./sessionMetadata.js";
 

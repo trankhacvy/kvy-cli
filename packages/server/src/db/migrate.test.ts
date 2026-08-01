@@ -10,7 +10,7 @@ vi.mock("drizzle-orm/postgres-js/migrator", () => ({ migrate: migrateMock }));
 vi.mock("drizzle-orm/postgres-js", () => ({ drizzle: drizzleMock }));
 vi.mock("postgres", () => ({ default: postgresMock }));
 vi.mock("../config.js", () => ({
-  env: { DATABASE_URL: "postgres://falcon:falcon@localhost:5432/falcon" },
+  env: { DATABASE_URL: "postgres://kvy:kvy@localhost:5432/kvy" },
 }));
 
 /**

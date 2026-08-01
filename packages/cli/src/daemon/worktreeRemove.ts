@@ -1,6 +1,6 @@
 /**
  * `worktree.remove` machine RPC handler (Phase C, new-session-from-web
- * redesign — see `@falcon/wire`'s `WorktreeRemoveParamsSchema` doc comment
+ * redesign — see `@kvy/wire`'s `WorktreeRemoveParamsSchema` doc comment
  * for the full "why"). A manual "clean up this session's worktree" action —
  * every session spawned via the workspace-row `+` flow now creates a fresh
  * `.worktrees/<branch>` directory (`gitWorktree.ts`'s `ensureBranchWorkspace`)
@@ -57,7 +57,7 @@
  */
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import type { WorktreeRemoveParams, WorktreeRemoveResult } from "@falcon/wire";
+import type { WorktreeRemoveParams, WorktreeRemoveResult } from "@kvy/wire";
 import { isWithinRegisteredWorkspace, type RegistryOptions } from "../workspace/registry.js";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 
@@ -68,7 +68,7 @@ function assertLooksLikeWorktreeDir(worktree: string): void {
   const segments = path.resolve(worktree).split(path.sep);
   if (!segments.includes(".worktrees")) {
     throw new GitExecError(
-      `refusing to remove "${worktree}": it doesn't look like a Falcon-managed .worktrees/ directory`,
+      `refusing to remove "${worktree}": it doesn't look like a Kvy-managed .worktrees/ directory`,
     );
   }
 }

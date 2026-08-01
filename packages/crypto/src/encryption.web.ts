@@ -2,7 +2,7 @@
  * Adapted from Happy — https://github.com/slopus/happy (MIT, see encryption.ts
  * for the full license header preserved on the node entry point this mirrors).
  *
- * Browser entry point (`@falcon/crypto/web`). Same wire formats as `encryption.ts`
+ * Browser entry point (`@kvy/crypto/web`). Same wire formats as `encryption.ts`
  * so ciphertext is interchangeable between platforms — see `cross-impl.test.ts`.
  * Two deliberate API differences from the node port, both forced by browser APIs:
  *

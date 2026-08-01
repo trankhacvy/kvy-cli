@@ -8,7 +8,7 @@
  * file plus every untracked file `.gitignore` doesn't exclude — exactly the
  * set a repo file browser wants to show (skip `node_modules`/build output/
  * anything else the repo itself says to ignore), without this handler
- * needing its own ignore-file parser. `falcon claude` also runs in folders
+ * needing its own ignore-file parser. `kvy claude` also runs in folders
  * that were never a git repo at all — for those, `ls-files` has nothing to
  * read, so this falls back to a plain recursive directory walk (skipping a
  * small hardcoded list of directories no one wants in a file browser) rather
@@ -18,7 +18,7 @@
  */
 import { readdir } from "node:fs/promises";
 import path from "node:path";
-import type { GitFilesParams, GitFilesResult } from "@falcon/wire";
+import type { GitFilesParams, GitFilesResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";
 
 const NOT_A_GIT_REPOSITORY_RE = /not a git repository/i;

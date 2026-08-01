@@ -1,6 +1,6 @@
 "use client";
 
-import type { MachineRow, SessionRow } from "@falcon/wire";
+import type { MachineRow, SessionRow } from "@kvy/wire";
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import {
   getSelectedMachineId,
