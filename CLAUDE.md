@@ -1,8 +1,10 @@
 # Kvy
 
 pnpm + Turborepo monorepo. This file documents commands and conventions only —
-for the "why", read `plan.md` (build plan + phase-by-phase TODO), `kvy-system-design.md`
-(architecture/protocol design), and `kvy-prd.md` (product requirements).
+for the "why", read `kvy-system-design.md` (architecture/protocol design) and
+`kvy-prd.md` (product requirements). The build plan (`plan.md`) was retired
+along with the other completed-phase planning docs — a fresh one will be
+started when the next major phase of work is scoped.
 
 ## Commands
 
@@ -89,17 +91,17 @@ pnpm --filter @vibe-oss/kvy dev -- claude --model haiku   # runs `kvy claude …
 `kvy` == `kvy claude [args…]`; flags pass straight through to Claude Code, so
 `--model haiku` selects the model (`extractModelFlag`, `commands/start.ts`).
 
-## Auth model (post issue-4) — what a test account needs
+## Auth model — what a test account needs
 
-Identity and the encryption key are **separate** now (see `docs/issue-4-plan.md`):
+Identity and the encryption key are **separate**:
 
 - **Identity** = email+password (or Google/GitHub). Sessions are long-lived: a short access
   token (15 min) auto-refreshed by a rotating refresh token; revocable per device.
 - **Key custody** = a client-held `masterSecret`, wrapped at rest (web: crypto worker +
   IndexedDB; CLI: `~/.kvy/access.key` under an OS-vault device key). **There is no PIN
   any more** — a browser reload loads the key with no prompt (`"device"` mode) or one
-  biometric tap (`"prf"` mode, a passkey-derived wrap key). See
-  docs/auth-ux-overhaul-plan.md Phase 5 for the honest threat table on that trade.
+  biometric tap (`"prf"` mode, a passkey-derived wrap key) — see `web/src/crypto/device-key.ts`'s
+  own docblock for the honest threat table on that trade.
 - **A browser with no keys is still signed in** — the refresh token lives in its own store
   (`crypto/session-storage.ts`), which is what lets it ask another device for a copy.
 - New devices get the key two ways, never by copying a secret: **CLI pairing**
@@ -153,7 +155,7 @@ prefer non-default ports when another worktree may be running its own stack.
 
 ## Auth & UX principles
 
-Seven rules every auth-adjacent change follows (docs/auth-ux-overhaul-plan.md):
+Seven rules every auth-adjacent change follows:
 
 1. **Never print "run X" when you can run X.** A missing login is a first run, not an error.
 2. **Identity first, crypto second.** Sign-in gates always run before key-material gates.
@@ -185,7 +187,6 @@ Seven rules every auth-adjacent change follows (docs/auth-ux-overhaul-plan.md):
 
 ## Docs
 
-- `plan.md` — the build plan and the authoritative phase/task checklist (§16).
 - `kvy-system-design.md` — architecture, protocol, and encryption design.
 - `kvy-prd.md` — product requirements.
 - `docs/protocol.md`, `docs/encryption.md` — short stubs pointing into the design doc.
