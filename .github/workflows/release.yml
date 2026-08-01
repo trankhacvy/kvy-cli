@@ -96,22 +96,32 @@ jobs:
       # new release to cut" is packages/cli/package.json's own version, not
       # anything changesets/npm reported. `scripts/install.sh`, the GitHub
       # Release, and the `cli-latest` rolling pointer all expect a plain
-      # `vX.Y.Z` tag — mint one only if this exact version hasn't already
-      # been tagged (covers both "no version bump since last release" and
-      # "this exact commit already got tagged by a prior run").
+      # `vX.Y.Z` tag.
+      #
+      # Checks for an actual GitHub RELEASE, not just the git tag: a
+      # cancelled or partially-failed prior run can leave the tag pushed
+      # with no release ever published for it (confirmed live — a stuck
+      # matrix leg got cancelled after this step had already run,
+      # orphaning a bare `v0.1.0` tag with no release behind it). Treating
+      # bare tag existence as "already released" would permanently wedge
+      # every future run on that version. `git tag`/`git push` below
+      # tolerate the tag already existing (`|| true`) for exactly that
+      # recovery case — reuse it rather than erroring.
       - name: Resolve whether kvy's version needs a new tag/release
         id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION=$(node -p "require('./packages/cli/package.json').version")
           TAG="v$VERSION"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "should_build=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$TAG"
-          git push origin "$TAG"
+          git tag "$TAG" 2>/dev/null || true
+          git push origin "$TAG" 2>/dev/null || true
           echo "should_build=true" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
