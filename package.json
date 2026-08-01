@@ -1,5 +1,5 @@
 {
-  "name": "falcon",
+  "name": "kvy",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,14 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "biome check . || (echo '[lint] first attempt failed (possibly transient OOM from biome/next resource contention) — retrying once...' >&2 && biome check .)",
-    "lint:fix": "biome check --write ."
+    "lint:fix": "biome check --write .",
+    "changeset": "changeset",
+    "version": "changeset version"
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
     "@biomejs/biome": "^2.5.4",
+    "@changesets/cli": "^2.31.1",
     "dotenv": "^17.4.2",
     "turbo": "^2.5.0",
     "typescript": "^5.9.0"
@@ -23,11 +26,17 @@
   "pnpm": {
     "overrides": {
       "@types/react": "^19.2.17",
-      "@types/react-dom": "^19.2.3"
+      "@types/react-dom": "^19.2.3",
+      "human-id": "4.0.0"
     },
     "onlyBuiltDependencies": [
       "node-pty"
-    ]
+    ],
+    "patchedDependencies": {
+      "node-pty": "patches/node-pty.patch",
+      "@napi-rs/keyring": "patches/@napi-rs__keyring.patch",
+      "@node-rs/argon2": "patches/@node-rs__argon2.patch"
+    }
   },
   "packageManager": "pnpm@10.15.0",
   "engines": {

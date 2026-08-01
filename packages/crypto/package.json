@@ -1,10 +1,12 @@
 {
-  "name": "@falcon/crypto",
+  "name": "@kvy/crypto",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "license": "MIT",
-  "description": "Falcon's E2E encryption primitives — ported from Happy (github.com/slopus/happy, MIT). Isomorphic: node build (tweetnacl + node:crypto) and browser build (libsodium-wrappers + WebCrypto AES-GCM).",
+  "description": "Kvy's E2E encryption primitives — ported from Happy (github.com/slopus/happy, MIT). Isomorphic: node build (tweetnacl + node:crypto) and browser build (libsodium-wrappers + WebCrypto AES-GCM).",
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": {
       "import": {
