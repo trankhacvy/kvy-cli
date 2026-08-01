@@ -27,28 +27,35 @@ No special-casing "bugfix" vs "feature" branches — same flow either way.
 
 ## Release CI (CLI only)
 
-`.github/workflows/release.yml` triggers on a `vX.Y.Z` tag push (or manual
-`workflow_dispatch`): builds Bun-compiled binaries (darwin-arm64/x64,
-linux-x64) → GitHub Release → rolling `cli-latest` tag (for `kvy update`)
-→ `npm publish`.
+`.github/workflows/release.yml` is Changesets-driven — it triggers on every
+push to `main`, not a manual tag:
 
-**Known broken as of 2026-08-01 — do not tag a release until both are
-fixed:**
+1. `changeset publish` decides whether anything is actually versioned to
+   publish. `kvy` is the only package this repo ever publishes to npm —
+   `@kvy/wire` and `@kvy/crypto` are `private: true` and bundled straight
+   into `kvy`'s own build output by pkgroll (they're `devDependencies` of
+   `kvy`, not `dependencies`, which is what makes pkgroll inline them
+   instead of leaving them as external runtime deps); `@kvy/server` /
+   `@kvy/web` / `@kvy/e2e` are deploy-only. All four are excluded via
+   `.changeset/config.json`'s `ignore`.
+2. If `kvy` was published, a resolver step mints the matching `vX.Y.Z` tag
+   (changesets' own tag is `kvy@X.Y.Z`; `scripts/install.sh` and the
+   GitHub Release/`cli-latest` rolling pointer expect the plain form).
+3. A real per-OS matrix (macOS/Linux/Windows × arm64/x64) compiles
+   standalone Node SEA binaries (`packages/cli/scripts/native/`,
+   `kvy-system-design.md` §3) and attaches them to that tag's GitHub
+   Release plus the rolling `cli-latest` pointer. Only macOS arm64 is
+   proven end-to-end as of 2026-08-01 — the rest is unverified until a
+   real release run exercises them.
 
-1. `scripts/build-binaries.sh` calls plain `bun build --compile` with no
-   handling for `node-pty` / `@napi-rs/keyring`'s native `.node` files. Fix:
-   same pattern proven working this session — patch `node-pty`'s loader,
-   embed `pty.node` / `spawn-helper` / `keyring.node` as build assets,
-   extract-and-load at startup. Proven under Node SEA; needs re-verifying
-   under Bun specifically since that's what this script actually uses.
-2. `publish-npm` will 404 on `@kvy/wire` / `@kvy/crypto` — they're
-   `workspace:*` deps of `kvy` but were never published to npm
-   themselves. Fix: either publish them alongside `kvy`, or bundle them
-   into `kvy`'s own build output so they're never an external runtime
-   dependency.
+The only manual step is running `pnpm changeset` on a PR that changes
+`kvy`'s published behavior (see Changesets below) — merging that PR's
+eventual "Version Packages" PR is what triggers the real publish.
 
-Once fixed: bump `packages/cli/package.json`'s version (via Changesets, see
-below), tag `vX.Y.Z`, push the tag. That's the only manual step.
+Needs an `NPM_TOKEN` repo secret (npm automation token with publish rights)
+for the `changesets/action` publish step to authenticate — without it the
+job fails with `ENEEDAUTH` (harmless: nothing gets published, just retry
+once the secret exists).
 
 ## Web / backend — redeploy, not "release"
 

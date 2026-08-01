@@ -4,14 +4,16 @@ name: release
 #   - pending changesets exist  -> open/update a "Version Packages" PR
 #     (see .changeset/README.md) — nothing published yet.
 #   - that PR was just merged  -> `pnpm changeset publish` runs for real,
-#     publishing whichever of @kvy/wire / @kvy/crypto / kvy were bumped.
-#     (@kvy/server / @kvy/web / @kvy/e2e are excluded — see
-#     .changeset/config.json — they're deployed, never versioned.)
+#     publishing `kvy` if it was bumped. @kvy/wire and @kvy/crypto are
+#     internal-only (private, bundled straight into kvy's own build output
+#     by pkgroll — see packages/cli/package.json's devDependencies) and
+#     @kvy/server / @kvy/web / @kvy/e2e are deployed, never versioned — all
+#     five are excluded via .changeset/config.json's `ignore`.
 #
-# Only when `kvy` itself is among the published packages does the rest of
-# this workflow run at all: a real per-OS matrix compiles standalone Node
-# SEA binaries (packages/cli/scripts/native/, kvy-system-design.md §3) and
-# attaches them to a `vX.Y.Z` GitHub Release for scripts/install.sh to fetch.
+# Once `kvy` is published, the rest of this workflow runs: a real per-OS
+# matrix compiles standalone Node SEA binaries
+# (packages/cli/scripts/native/, kvy-system-design.md §3) and attaches them
+# to a `vX.Y.Z` GitHub Release for scripts/install.sh to fetch.
 on:
   push:
     branches: [main]
@@ -52,7 +54,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build every publishable package
+      # kvy's own build bundles @kvy/wire + @kvy/crypto straight into its
+      # dist output (pkgroll treats devDependencies as inline-able, unlike
+      # dependencies) — both still need their own `dist/` built first so
+      # pkgroll has something to resolve and inline.
+      - name: Build kvy (bundles @kvy/wire + @kvy/crypto)
         run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter kvy build
 
       - name: Version or publish
@@ -82,8 +88,10 @@ jobs:
       # `<name>@<version>` (e.g. `kvy@0.2.0`) and pushed that — but
       # scripts/install.sh, the GitHub Release, and the `cli-latest` rolling
       # pointer all expect a plain `vX.Y.Z` tag. Mint that as a second alias
-      # on the same commit, only when `kvy` itself was actually published
-      # (a wire/crypto-only release publishes neither a binary nor this tag).
+      # on the same commit. kvy is the only package this repo ever publishes
+      # (@kvy/wire/@kvy/crypto are bundled in, not published separately —
+      # see .changeset/config.json's `ignore`), so "published" here always
+      # means kvy.
       - name: Resolve whether kvy was published, mint its vX.Y.Z tag
         id: resolve
         env:
