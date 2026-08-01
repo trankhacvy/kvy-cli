@@ -138,11 +138,15 @@ jobs:
           # docs/git-guide.md.
           - os: macos-14
             suffix: darwin-arm64
-          # Structurally identical to the target above — never independently
-          # verified on real x64 hardware, but no known reason it wouldn't
-          # work.
-          - os: macos-13
-            suffix: darwin-x64
+          # darwin-x64 (macos-13) is deliberately OMITTED, not broken: a
+          # real build was queued against it for 30+ minutes with no runner
+          # ever assigned, while every other label in this matrix scheduled
+          # within seconds — GitHub Actions bills macOS runner-minutes at
+          # 10x Linux's, so a spending/included-minutes limit most likely
+          # got hit and is silently queueing rather than erroring. Re-add
+          # this once that's confirmed/resolved (Settings > Billing >
+          # Actions) — it's a scheduling problem, not a code problem, so no
+          # build-side fix belongs here.
           # KNOWN BROKEN, not just unverified: node-pty@1.1.0 ships prebuilds
           # for darwin-arm64/darwin-x64/win32-arm64/win32-x64 only — no
           # linux-x64 or linux-arm64 at all (confirmed by inspecting the
