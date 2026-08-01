@@ -128,19 +128,30 @@ jobs:
           # docs/git-guide.md.
           - os: macos-14
             suffix: darwin-arm64
-          # Structurally identical to the target above, but UNVERIFIED —
-          # this matrix is the first real test of each. Node SEA has no
-          # cross-compilation, so there is no way to test these except on
-          # real hardware/runners of that exact platform; expect follow-up
-          # fixes, especially for Windows, which doesn't use node-pty's
-          # POSIX pty path at all (ConPTY instead — a genuinely different
-          # code path, never exercised).
+          # Structurally identical to the target above — never independently
+          # verified on real x64 hardware, but no known reason it wouldn't
+          # work.
           - os: macos-13
             suffix: darwin-x64
+          # KNOWN BROKEN, not just unverified: node-pty@1.1.0 ships prebuilds
+          # for darwin-arm64/darwin-x64/win32-arm64/win32-x64 only — no
+          # linux-x64 or linux-arm64 at all (confirmed by inspecting the
+          # installed package's own prebuilds/ directory). native-assets.mjs
+          # has nothing to embed here until node-pty either ships Linux
+          # prebuilds or this build learns to compile it from source
+          # (node-gyp) as a fallback. Left in the matrix (not removed)
+          # so this stays visible as a real gap rather than a silently
+          # dropped platform — github-release/publish-cli-latest below
+          # tolerate this leg failing and still ship every platform that did
+          # succeed.
           - os: ubuntu-latest
             suffix: linux-x64
           - os: ubuntu-24.04-arm
             suffix: linux-arm64
+          # First real run caught a genuine bug here (now fixed): the
+          # postject step shelled out to `npx` via `execFileSync`, which
+          # can't find `npx.cmd` without `shell: true` on Windows — see
+          # build.mjs's `run()` call for postject.
           - os: windows-latest
             suffix: win32-x64
           - os: windows-11-arm
@@ -178,7 +189,20 @@ jobs:
           if-no-files-found: error
 
   github-release:
+    # `build-native-binaries` is a matrix with fail-fast: false — some
+    # targets are still unverified (native prebuilds don't exist for every
+    # platform upstream, e.g. node-pty ships no Linux prebuilds at all as
+    # of 1.1.0) and are expected to fail independently of the others. A
+    # matrix job's overall conclusion is "failure" if ANY leg fails, so a
+    # plain `needs: build-native-binaries` would skip this — and every
+    # platform that DID succeed — over one that didn't. Proceed with
+    # whatever artifacts got uploaded instead (`!cancelled()`, not
+    # `always()`, so an actually-cancelled run still doesn't publish).
     needs: [resolve-native-release, build-native-binaries]
+    if: |
+      !cancelled() &&
+      needs.resolve-native-release.result == 'success' &&
+      needs.resolve-native-release.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -204,8 +228,13 @@ jobs:
     # (github.com/<repo>/releases/download/cli-latest/...) without needing
     # to know the exact vX.Y.Z tag ahead of time. Independent of
     # `github-release` (needs only `build-native-binaries`) so a failure in
-    # one doesn't block the other.
+    # one doesn't block the other. Same partial-matrix reasoning as
+    # `github-release` above: proceeds on whatever platforms succeeded.
     needs: [resolve-native-release, build-native-binaries]
+    if: |
+      !cancelled() &&
+      needs.resolve-native-release.result == 'success' &&
+      needs.resolve-native-release.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

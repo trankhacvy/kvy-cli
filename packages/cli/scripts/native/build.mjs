@@ -172,16 +172,27 @@ async function main() {
     run("codesign", ["--remove-signature", outfile]);
   }
 
-  run("npx", [
-    "--yes",
-    "postject",
-    outfile,
-    "NODE_SEA_BLOB",
-    blobPath,
-    "--sentinel-fuse",
-    "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
-    ...(process.platform === "darwin" ? ["--macho-segment-name", "NODE_SEA"] : []),
-  ]);
+  // `shell: true` on Windows only: `npx` there is `npx.cmd`, a shell shim,
+  // not a directly-executable binary — `execFileSync` without a shell hits
+  // `ENOENT` trying to spawn it by that exact name (confirmed against a
+  // real Windows runner). macOS/Linux resolve `npx` directly and don't need
+  // this; skip it there rather than pay the injection-surface cost for no
+  // reason (every arg here is a fixed literal, no untrusted input, so this
+  // is safe either way, but no shell is still the safer default).
+  run(
+    "npx",
+    [
+      "--yes",
+      "postject",
+      outfile,
+      "NODE_SEA_BLOB",
+      blobPath,
+      "--sentinel-fuse",
+      "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2",
+      ...(process.platform === "darwin" ? ["--macho-segment-name", "NODE_SEA"] : []),
+    ],
+    { shell: process.platform === "win32" },
+  );
 
   if (process.platform === "darwin") {
     // Ad-hoc signing only (`-`), not a real Apple Developer ID — deliberate,
