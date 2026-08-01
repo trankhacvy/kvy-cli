@@ -1,0 +1,21 @@
+diff --git a/lib/utils.js b/lib/utils.js
+index af7918b6902a105a7c49813bc0bb4d687d87a7d4..57d3bbb2fe637ffc4bfd9994e6397c633d7a7b77 100644
+--- a/lib/utils.js
++++ b/lib/utils.js
+@@ -15,6 +15,16 @@ function assign(target) {
+ }
+ exports.assign = assign;
+ function loadNativeModule(name) {
++    // Patched for Kvy's compiled (Node SEA) binary build: node-pty's stock relative-path
++    // probing (below) can't find its .node file inside a single-executable binary, where
++    // there's no real node_modules layout on disk to probe. When set, this override loads
++    // straight from an absolute directory the SEA bootstrap already extracted the embedded
++    // .node file to (see packages/cli/scripts/native/entry.cjs) — untouched for every other
++    // run mode (plain `node`, `tsx`, `bin/kvy.mjs`), where the env var is simply unset.
++    var overrideDir = process.env.KVY_PTY_NATIVE_DIR;
++    if (overrideDir) {
++        return { dir: overrideDir + "/", module: require(overrideDir + "/" + name + ".node") };
++    }
+     // Check build, debug, and then prebuilds.
+     var dirs = ['build/Release', 'build/Debug', "prebuilds/" + process.platform + "-" + process.arch];
+     // Check relative to the parent dir for unbundled and then the current dir for bundled

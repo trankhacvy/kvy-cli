@@ -5,13 +5,13 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runGit } from "./daemon/gitExec.js";
 
-// index.ts reads FALCON_HOME_DIR (via the module-scope logger) at import
+// index.ts reads KVY_HOME_DIR (via the module-scope logger) at import
 // time, so give it an isolated, disposable home directory before the first
 // import and reset the module registry between tests that care about it.
 //
 // `start`/`auth`/`sessions`/`resume` now call `ensureDaemonRunning()` first
 // (PRD FR-1.2), which — left unchecked — would spawn a real detached
-// `daemon start-sync` child process during every test run. `FALCON_NO_SERVICE=1`
+// `daemon start-sync` child process during every test run. `KVY_NO_SERVICE=1`
 // is the documented opt-out (see index.ts's help text / ensureDaemonRunning.ts),
 // so tests that aren't specifically exercising the daemon-auto-start wiring
 // set it to keep those subcommands side-effect-free; the dedicated tests below
@@ -19,26 +19,26 @@ import { runGit } from "./daemon/gitExec.js";
 //
 // `ensureDaemon()` also fires `maybeTriggerAutoUpdate()` (plan.md §16 "4.3
 // Distribution & self-host") right alongside it — left unchecked, that would
-// spawn a real detached `falcon update` child (and, past the rate-limit
+// spawn a real detached `kvy update` child (and, past the rate-limit
 // check, a real network call) during every test run here too.
-// `FALCON_NO_UPDATE=1` is that feature's own documented opt-out, set for the
-// same reason `FALCON_NO_SERVICE` is: no test in this file exercises the
+// `KVY_NO_UPDATE=1` is that feature's own documented opt-out, set for the
+// same reason `KVY_NO_SERVICE` is: no test in this file exercises the
 // auto-update trigger itself (see `update/autoUpdateTrigger.test.ts` for
 // that), so every test here should stay side-effect-free by default.
 let homeDir: string;
 
 beforeEach(() => {
-  homeDir = mkdtempSync(path.join(tmpdir(), "falcon-index-test-"));
-  process.env.FALCON_HOME_DIR = homeDir;
-  process.env.FALCON_NO_SERVICE = "1";
-  process.env.FALCON_NO_UPDATE = "1";
+  homeDir = mkdtempSync(path.join(tmpdir(), "kvy-index-test-"));
+  process.env.KVY_HOME_DIR = homeDir;
+  process.env.KVY_NO_SERVICE = "1";
+  process.env.KVY_NO_UPDATE = "1";
   vi.resetModules();
 });
 
 afterEach(() => {
-  delete process.env.FALCON_HOME_DIR;
-  delete process.env.FALCON_NO_SERVICE;
-  delete process.env.FALCON_NO_UPDATE;
+  delete process.env.KVY_HOME_DIR;
+  delete process.env.KVY_NO_SERVICE;
+  delete process.env.KVY_NO_UPDATE;
   rmSync(homeDir, { recursive: true, force: true });
 });
 
@@ -60,7 +60,7 @@ describe("main()", () => {
 
     expect(code).toBe(0);
     expect(stdout).toHaveBeenCalledTimes(1);
-    expect(stdout.mock.calls[0]?.[0]).toContain("falcon claude [args...]");
+    expect(stdout.mock.calls[0]?.[0]).toContain("kvy claude [args...]");
     stdout.mockRestore();
   });
 
@@ -71,39 +71,14 @@ describe("main()", () => {
     const code = await main(["--version"]);
 
     expect(code).toBe(0);
-    expect(stdout.mock.calls[0]?.[0]).toMatch(/^falcon \d+\.\d+\.\d+\n$/);
+    expect(stdout.mock.calls[0]?.[0]).toMatch(/^kvy \d+\.\d+\.\d+\n$/);
     stdout.mockRestore();
-  });
-
-  it("prefers a bun-compile-baked __FALCON_CLI_VERSION__ over reading package.json", async () => {
-    // scripts/build-binaries.sh bakes this identifier in via
-    // `bun build --compile --define:__FALCON_CLI_VERSION__=...` (see
-    // index.ts's readVersion() doc comment) since a compiled standalone
-    // binary has no on-disk package.json sibling to fall back to. Simulate
-    // that by defining the global the same way `--define` would splice a
-    // literal into the bundle, then confirm readVersion() takes the
-    // short-circuit branch instead of the filesystem read.
-    // biome-ignore lint/suspicious/noExplicitAny: test-only global stub
-    (globalThis as any).__FALCON_CLI_VERSION__ = "9.9.9-baked";
-    try {
-      const main = await importMain();
-      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-
-      const code = await main(["--version"]);
-
-      expect(code).toBe(0);
-      expect(stdout.mock.calls[0]?.[0]).toBe("falcon 9.9.9-baked\n");
-      stdout.mockRestore();
-    } finally {
-      // biome-ignore lint/performance/noDelete: restoring global test stub
-      delete (globalThis as any).__FALCON_CLI_VERSION__;
-    }
   });
 
   it("exits 1 with an honest not-logged-in error for a claude start when no credentials exist", async () => {
     // `runStart` now wires `claude` to `commands/start.js`'s real local-mode
     // launch (index.ts's `runStart` doc comment) instead of the old
-    // `describeStart` stub — this isolated `FALCON_HOME_DIR` has no
+    // `describeStart` stub — this isolated `KVY_HOME_DIR` has no
     // `access.key`, so it must fail fast on the credentials check (step 1)
     // rather than attempting any network call.
     const main = await importMain();
@@ -119,10 +94,10 @@ describe("main()", () => {
     stderr.mockRestore();
   });
 
-  it("routes `falcon codex` to the real remote-only Codex command (fails fast when not logged in)", async () => {
-    // v2 (ACP): `falcon codex` no longer prints a stub — it runs
-    // `runStartCodexCommand`, which (with an empty temp FALCON_HOME_DIR)
-    // fails the credentials pre-flight first, exactly like `falcon claude`.
+  it("routes `kvy codex` to the real remote-only Codex command (fails fast when not logged in)", async () => {
+    // v2 (ACP): `kvy codex` no longer prints a stub — it runs
+    // `runStartCodexCommand`, which (with an empty temp KVY_HOME_DIR)
+    // fails the credentials pre-flight first, exactly like `kvy claude`.
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -136,7 +111,7 @@ describe("main()", () => {
     stderr.mockRestore();
   });
 
-  it("fails `falcon claude` the same way when not logged in", async () => {
+  it("fails `kvy claude` the same way when not logged in", async () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
@@ -150,15 +125,15 @@ describe("main()", () => {
     stderr.mockRestore();
   });
 
-  it("prints a usage error and exits 1 for a malformed Falcon subcommand", async () => {
+  it("prints a usage error and exits 1 for a malformed Kvy subcommand", async () => {
     const main = await importMain();
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
 
     const code = await main(["resume"]);
 
     expect(code).toBe(1);
-    expect(stderr.mock.calls[0]?.[0]).toContain("falcon: ");
-    expect(stderr.mock.calls[1]?.[0]).toContain("usage: falcon resume <session-id>");
+    expect(stderr.mock.calls[0]?.[0]).toContain("kvy: ");
+    expect(stderr.mock.calls[1]?.[0]).toContain("usage: kvy resume <session-id>");
     stderr.mockRestore();
   });
 
@@ -171,17 +146,17 @@ describe("main()", () => {
           {
             pid: 100,
             ppid: 1,
-            command: "falcon daemon start-sync",
+            command: "kvy daemon start-sync",
             kind: "daemon",
             spawnedByDaemon: false,
           },
         ],
         outcomes: [
-          { pid: 100, command: "falcon daemon start-sync", kind: "daemon", signal: "SIGTERM" },
+          { pid: 100, command: "kvy daemon start-sync", kind: "daemon", signal: "SIGTERM" },
         ],
       })),
       killAllForce: vi.fn(),
-      describeKillSummary: vi.fn(() => "falcon kill all: 1/1 process(es) terminated\n"),
+      describeKillSummary: vi.fn(() => "kvy kill all: 1/1 process(es) terminated\n"),
     }));
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -191,7 +166,7 @@ describe("main()", () => {
     const code = await result;
 
     expect(code).toBe(0);
-    expect(stdout).toHaveBeenCalledWith("falcon kill all: 1/1 process(es) terminated\n");
+    expect(stdout).toHaveBeenCalledWith("kvy kill all: 1/1 process(es) terminated\n");
     stdout.mockRestore();
     vi.doUnmock("./daemon/kill.js");
   });
@@ -203,7 +178,7 @@ describe("main()", () => {
           {
             pid: 100,
             ppid: 1,
-            command: "falcon daemon start-sync",
+            command: "kvy daemon start-sync",
             kind: "daemon",
             spawnedByDaemon: false,
           },
@@ -211,7 +186,7 @@ describe("main()", () => {
         outcomes: [
           {
             pid: 100,
-            command: "falcon daemon start-sync",
+            command: "kvy daemon start-sync",
             kind: "daemon",
             signal: "none",
             error: "EPERM",
@@ -221,7 +196,7 @@ describe("main()", () => {
       killSessions: vi.fn(),
       killAll: vi.fn(),
       killAllForce: vi.fn(),
-      describeKillSummary: vi.fn(() => "falcon kill daemon: 0/1 process(es) terminated\n"),
+      describeKillSummary: vi.fn(() => "kvy kill daemon: 0/1 process(es) terminated\n"),
     }));
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
@@ -289,7 +264,7 @@ describe("main()", () => {
           {
             pid: 100,
             ppid: 1,
-            command: "falcon daemon start-sync",
+            command: "kvy daemon start-sync",
             kind: "daemon",
             spawnedByDaemon: false,
           },
@@ -297,7 +272,7 @@ describe("main()", () => {
         outcomes: [
           {
             pid: 100,
-            command: "falcon daemon start-sync",
+            command: "kvy daemon start-sync",
             kind: "daemon",
             signal: "none",
             error: "EPERM",
@@ -306,7 +281,7 @@ describe("main()", () => {
       })),
       describeDoctorReport: vi.fn(),
       describeDoctorCleanSummary: vi.fn(
-        () => "falcon doctor clean: 0/1 runaway process(es) terminated\n",
+        () => "kvy doctor clean: 0/1 runaway process(es) terminated\n",
       ),
     }));
     const doctorModule = await import("./daemon/doctor.js");
@@ -317,9 +292,7 @@ describe("main()", () => {
 
     expect(code).toBe(1);
     expect(doctorModule.runDoctorClean).toHaveBeenCalledOnce();
-    expect(stdout).toHaveBeenCalledWith(
-      "falcon doctor clean: 0/1 runaway process(es) terminated\n",
-    );
+    expect(stdout).toHaveBeenCalledWith("kvy doctor clean: 0/1 runaway process(es) terminated\n");
     stdout.mockRestore();
     vi.doUnmock("./daemon/doctor.js");
   });
@@ -374,7 +347,7 @@ describe("main()", () => {
     vi.doMock("./update/runUpdateCommand.js", () => ({
       runUpdateCommand: vi.fn(async () => ({
         code: 0,
-        message: "falcon: already up to date (0.1.0)\n",
+        message: "kvy: already up to date (0.1.0)\n",
       })),
     }));
     const updateModule = await import("./update/runUpdateCommand.js");
@@ -383,7 +356,7 @@ describe("main()", () => {
 
     expect(await main(["update"])).toBe(0);
     expect(updateModule.runUpdateCommand).toHaveBeenCalledOnce();
-    expect(stdout).toHaveBeenCalledWith("falcon: already up to date (0.1.0)\n");
+    expect(stdout).toHaveBeenCalledWith("kvy: already up to date (0.1.0)\n");
 
     stdout.mockRestore();
     vi.doUnmock("./update/runUpdateCommand.js");
@@ -401,14 +374,14 @@ describe("main()", () => {
     const main = await importMain();
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    process.env.FALCON_BACKEND_URL = "http://127.0.0.1:1";
+    process.env.KVY_BACKEND_URL = "http://127.0.0.1:1";
 
     await expect(main(["auth", "login"])).resolves.toBe(1);
     await expect(main(["daemon", "status"])).resolves.toBeTypeOf("number");
     await expect(main(["sessions", "list"])).resolves.toBeTypeOf("number");
     expect(() => main(["workspace", "sync"])).not.toThrow();
 
-    delete process.env.FALCON_BACKEND_URL;
+    delete process.env.KVY_BACKEND_URL;
     stdout.mockRestore();
     stderr.mockRestore();
   });
@@ -434,10 +407,10 @@ describe("main()", () => {
 
     it("calls ensureDaemonRunning before the start command, and proceeds when it succeeds", async () => {
       // `codex` here (not `claude`) deliberately: with an empty temp
-      // FALCON_HOME_DIR the real `runStartCodexCommand` still fails its own
+      // KVY_HOME_DIR the real `runStartCodexCommand` still fails its own
       // pre-flight (exit 1) — which proves the daemon check ran first and
       // control proceeded into the command, without needing a full stack.
-      delete process.env.FALCON_NO_SERVICE;
+      delete process.env.KVY_NO_SERVICE;
       mockSignedIn();
       const ensureDaemonRunning = vi.fn(async () => ({
         ok: true,
@@ -463,7 +436,7 @@ describe("main()", () => {
       // The daemon only attempts machine registration once, at its own startup, and only
       // if credentials already exist then — so `auth login` must complete (writing
       // credentials) before the daemon is ever started, not after.
-      delete process.env.FALCON_NO_SERVICE;
+      delete process.env.KVY_NO_SERVICE;
       const runAuthCommand = vi.fn(async () => 0);
       vi.doMock("./auth/index.js", () => ({ runAuthCommand }));
       const callOrder: string[] = [];
@@ -491,14 +464,14 @@ describe("main()", () => {
     });
 
     it("still reports exit 1 if the daemon fails to start after a successful `auth login`", async () => {
-      delete process.env.FALCON_NO_SERVICE;
+      delete process.env.KVY_NO_SERVICE;
       vi.doMock("./auth/index.js", () => ({ runAuthCommand: vi.fn(async () => 0) }));
       vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
         createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
         ensureDaemonRunning: vi.fn(async () => ({
           ok: false,
           reason: "start-failed",
-          message: "falcon daemon: timed out waiting for the daemon to become ready\n",
+          message: "kvy daemon: timed out waiting for the daemon to become ready\n",
         })),
       }));
       const main = await importMain();
@@ -515,14 +488,14 @@ describe("main()", () => {
     it("exits 1 and never describes the start when ensureDaemonRunning fails to bring up the daemon", async () => {
       // Auth runs before the daemon for every provider now (AX-1.1), so this has to
       // get past it to exercise the daemon-failure path it's actually about.
-      delete process.env.FALCON_NO_SERVICE;
+      delete process.env.KVY_NO_SERVICE;
       mockSignedIn();
       vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
         createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
         ensureDaemonRunning: vi.fn(async () => ({
           ok: false,
           reason: "start-failed",
-          message: "falcon daemon: timed out waiting for the daemon to become ready\n",
+          message: "kvy daemon: timed out waiting for the daemon to become ready\n",
         })),
       }));
       const main = await importMain();
@@ -538,7 +511,7 @@ describe("main()", () => {
       stderr.mockRestore();
     });
 
-    it("treats a 'disabled' result (FALCON_NO_SERVICE=1) the same as success for auth/sessions/resume", async () => {
+    it("treats a 'disabled' result (KVY_NO_SERVICE=1) the same as success for auth/sessions/resume", async () => {
       const ensureDaemonRunning = vi.fn(async () => ({ ok: false, reason: "disabled" }));
       vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
         createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
@@ -551,7 +524,7 @@ describe("main()", () => {
       expect(await main(["sessions", "list"])).toBe(0);
       // "disabled" only means "don't auto-start the daemon" — the command
       // still runs for real afterward; `abc123` isn't a local transcript nor
-      // a known daemon-managed session in this isolated FALCON_HOME_DIR, so
+      // a known daemon-managed session in this isolated KVY_HOME_DIR, so
       // it honestly fails (exit 1), rather than being blocked before it even
       // got a chance to run.
       expect(await main(["resume", "abc123"])).toBe(1);
@@ -579,7 +552,7 @@ describe("main()", () => {
       // The auto-update side effect fires from `ensureDaemon()` regardless of the
       // command that follows — the codex command then exits 1 against an empty temp
       // home, which is fine; we only assert the update trigger ran.
-      delete process.env.FALCON_NO_UPDATE;
+      delete process.env.KVY_NO_UPDATE;
       mockSignedIn();
       const maybeTriggerAutoUpdate = vi.fn(async () => {});
       vi.doMock("./update/autoUpdateTrigger.js", () => ({ maybeTriggerAutoUpdate }));
@@ -598,7 +571,7 @@ describe("main()", () => {
     it("never throws main() even if maybeTriggerAutoUpdate rejects unexpectedly", async () => {
       // Auth runs before `ensureDaemon()` (and thus before `maybeTriggerAutoUpdate`,
       // which lives inside it), so this has to get past auth to reach the rejection.
-      delete process.env.FALCON_NO_UPDATE;
+      delete process.env.KVY_NO_UPDATE;
       mockSignedIn();
       vi.doMock("./update/autoUpdateTrigger.js", () => ({
         maybeTriggerAutoUpdate: vi.fn(async () => {
@@ -780,7 +753,7 @@ describe("main()", () => {
 }, 15_000);
 
 // Real `git` binary, no mocks (same rationale as `daemon/gitExec.test.ts`):
-// this is the local `falcon -b <branch>` parity fix for known-issues.md #2's
+// this is the local `kvy -b <branch>` parity fix for known-issues.md #2's
 // first bullet — `ensureBranchWorkspace` itself is already covered against a
 // fake `GitExec` in `daemon/gitWorktree.test.ts`, so this only needs to prove
 // the thin composition in `index.ts` actually reaches it and surfaces a real
@@ -789,7 +762,7 @@ describe("resolveStartWorkingDirectory", () => {
   let repo: string;
 
   beforeEach(async () => {
-    repo = await mkdtemp(path.join(tmpdir(), "falcon-start-workdir-"));
+    repo = await mkdtemp(path.join(tmpdir(), "kvy-start-workdir-"));
     await runGit(["init"], repo);
     await runGit(["config", "user.email", "test@example.com"], repo);
     await runGit(["config", "user.name", "Test"], repo);
@@ -832,13 +805,13 @@ describe("resolveStartWorkingDirectory", () => {
 
     expect(result).toEqual({
       ok: false,
-      message: "falcon -b -x: unsafe branch name: -x",
+      message: "kvy -b -x: unsafe branch name: -x",
     });
     cwdSpy.mockRestore();
   });
 
   it("returns ok:false when cwd is not a git repository", async () => {
-    const notARepo = await mkdtemp(path.join(tmpdir(), "falcon-start-workdir-norepo-"));
+    const notARepo = await mkdtemp(path.join(tmpdir(), "kvy-start-workdir-norepo-"));
     try {
       const { resolveStartWorkingDirectory } = await import("./index.js");
       const cwdSpy = vi.spyOn(process, "cwd").mockReturnValue(notARepo);
@@ -847,7 +820,7 @@ describe("resolveStartWorkingDirectory", () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) throw new Error("unreachable");
-      expect(result.message).toContain("falcon -b feature/x:");
+      expect(result.message).toContain("kvy -b feature/x:");
       cwdSpy.mockRestore();
     } finally {
       await rm(notARepo, { recursive: true, force: true });
