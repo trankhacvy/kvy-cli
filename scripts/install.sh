@@ -11,14 +11,14 @@
 #   curl -fsSL https://<host>/install.sh | KVY_VERSION=v0.2.0 sh
 #
 # Env overrides:
-#   KVY_REPO      "owner/repo" on GitHub (default: kvy-dev/kvy)
+#   KVY_REPO      "owner/repo" on GitHub (default: trankhacvy/falcon-cli)
 #   KVY_VERSION   release tag to install, e.g. "v0.2.0" (default: latest)
 #   KVY_HOME_DIR  install root (default: $HOME/.kvy); binary lands in
 #                    $KVY_HOME_DIR/bin/kvy, matching `kvy shim`'s
 #                    own ~/.kvy/bin convention (src/shim/paths.ts).
 set -eu
 
-REPO="${KVY_REPO:-kvy-dev/kvy}"
+REPO="${KVY_REPO:-trankhacvy/falcon-cli}"
 HOME_DIR="${KVY_HOME_DIR:-$HOME/.kvy}"
 BIN_DIR="$HOME_DIR/bin"
 

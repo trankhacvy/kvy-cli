@@ -48,6 +48,28 @@ jobs:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: pnpm --filter @kvy/wire run lint:additive
 
+      - name: Changeset check (CLI/wire/crypto changes require a changeset)
+        # Skip on pushes to main and on the Changesets "Version Packages" PR itself.
+        if: |
+          github.event_name == 'pull_request' &&
+          !startsWith(github.head_ref, 'changeset-release/')
+        env:
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+        run: |
+          CHANGED=$(git diff --name-only origin/$GITHUB_BASE_REF...HEAD)
+          CLI_CHANGED=$(echo "$CHANGED" | grep -cE "^packages/(cli|wire|crypto)/" || true)
+          if [ "$CLI_CHANGED" -gt 0 ]; then
+            CHANGESET_ADDED=$(echo "$CHANGED" | grep -cE "^\.changeset/.+\.md$" || true)
+            if [ "$CHANGESET_ADDED" -eq 0 ]; then
+              echo "::error::This PR touches packages/cli, packages/wire, or packages/crypto but includes no changeset file."
+              echo "::error::Run 'pnpm changeset', answer the prompts, and commit the generated .md file alongside your changes."
+              exit 1
+            fi
+            echo "Changeset present — OK."
+          else
+            echo "No publishable packages changed — changeset not required."
+          fi
+
       - name: Typecheck
         run: pnpm typecheck
 
