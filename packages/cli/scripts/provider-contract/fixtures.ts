@@ -1,4 +1,3 @@
-
 export interface ContractFixturePrompt {
   /** Short identifier used in CI log output only. */
   name: string;

@@ -90,7 +90,10 @@ export function isCompatible(prev: ShapeDescriptor, next: ShapeDescriptor): bool
       const n = next as Extract<ShapeDescriptor, { kind: "object" }>;
       return Object.keys(prev.fields).every((key) => {
         const nextField = n.fields[key];
-        return nextField !== undefined && isCompatible(prev.fields[key]!, nextField);
+        const prevField = prev.fields[key];
+        return (
+          nextField !== undefined && prevField !== undefined && isCompatible(prevField, nextField)
+        );
       });
     }
     case "union": {

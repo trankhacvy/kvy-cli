@@ -21,8 +21,11 @@ describe("wire schema additive-only compat", () => {
     it(`${name} is a backward-compatible evolution of its frozen shape`, () => {
       const live = schemaRegistry[name];
       expect(live, `"${name}" is frozen but no longer exported`).toBeDefined();
-      const liveShape = describeShape(live!);
-      const ok = isCompatible(frozen[name]!, liveShape);
+      if (!live) return;
+      const liveShape = describeShape(live);
+      const frozenShape = frozen[name];
+      if (!frozenShape) return;
+      const ok = isCompatible(frozenShape, liveShape);
       expect(
         ok,
         `"${name}" lost or retyped a field the wire protocol already shipped (additive-only, forever)`,

@@ -67,6 +67,18 @@
       }
     }
   },
+  "overrides": [
+    {
+      "includes": ["packages/cli/scripts/**", "packages/cli/native/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "enabled": true,
     "actions": {
