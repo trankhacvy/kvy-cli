@@ -157,7 +157,6 @@ class EventRouter {
     }
   }
 
-
   /**
    * Every live socket for this account — the accessor `app/socket.ts`'s revoke routes
    * use to find and disconnect a specific `sessionId`'s live connection(s) immediately,

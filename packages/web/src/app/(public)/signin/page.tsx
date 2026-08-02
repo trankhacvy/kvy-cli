@@ -14,7 +14,6 @@ import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
 import { peekPendingPair } from "@/lib/pending-pair";
 import { isExpiredReason } from "./signin-gate";
 
-
 export default function SignInPage() {
   const router = useRouter();
   // docs/auth-ux-hardening-plan.md item 7: `RequireAuth` redirects a failed silent
