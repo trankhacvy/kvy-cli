@@ -22,6 +22,7 @@ WORKDIR /repo
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY scripts ./scripts
+COPY patches ./patches
 
 # pnpm-lock.yaml's workspace importers cover every packages/* member — a
 # `pnpm install --frozen-lockfile` needs each one's package.json present
