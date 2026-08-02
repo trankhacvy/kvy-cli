@@ -28,14 +28,14 @@ describe("highlightDiffLines", () => {
 
     expect(tokens).toHaveLength(2);
     for (let i = 0; i < lines.length; i++) {
-      const lineText = tokens[i]!.map((t) => t.content).join("");
+      const lineText = (tokens[i] ?? []).map((t) => t.content).join("");
       expect(lineText).toBe(lines[i]);
     }
     // Real shiki tokenization of a `const` declaration produces more than
     // one token per line (keyword vs identifier vs punctuation) — this is
     // the assertion that highlighting is actually happening, not just
     // passing text through.
-    expect(tokens[0]!.length).toBeGreaterThan(1);
+    expect(tokens[0]?.length ?? 0).toBeGreaterThan(1);
   });
 
   it("returns an empty array for no lines", async () => {
@@ -47,8 +47,8 @@ describe("highlightDiffLines", () => {
     const tokens = await highlightDiffLines(lines, "plaintext");
 
     expect(tokens).toHaveLength(2);
-    expect(tokens[0]!.map((t) => t.content).join("")).toBe(lines[0]);
-    expect(tokens[1]!.map((t) => t.content).join("")).toBe(lines[1]);
+    expect(tokens[0]?.map((t) => t.content).join("")).toBe(lines[0]);
+    expect(tokens[1]?.map((t) => t.content).join("")).toBe(lines[1]);
   });
 
   it("handles an empty line among non-empty ones without losing alignment", async () => {
@@ -56,6 +56,6 @@ describe("highlightDiffLines", () => {
     const tokens = await highlightDiffLines(lines, "typescript");
 
     expect(tokens).toHaveLength(3);
-    expect(tokens[1]!.map((t) => t.content).join("")).toBe("");
+    expect(tokens[1]?.map((t) => t.content).join("")).toBe("");
   });
 });

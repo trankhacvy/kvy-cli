@@ -241,7 +241,7 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
     });
 
     expect(render).toHaveBeenCalledOnce();
-    const [element, renderOptions] = render.mock.calls[0]!;
+    const [element, renderOptions] = render.mock.calls[0] ?? [];
     expect((element as { type: unknown }).type).toBe(RemoteModeDisplay);
     expect(renderOptions).toEqual({ exitOnCtrlC: false, patchConsole: false });
     expect(terminal.__calls.some((c) => c.name === "setRawMode" && c.args[0] === true)).toBe(true);
@@ -269,7 +269,7 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
       terminal,
     });
 
-    const [element] = render.mock.calls[0]!;
+    const [element] = render.mock.calls[0] ?? [];
     const props = (element as { props: { onSwitchToLocal: () => void } }).props;
     props.onSwitchToLocal(); // simulate the Ctrl-T/double-space gesture inside RemoteModeDisplay
 
@@ -294,7 +294,7 @@ describe("startClaudeRemoteLauncher — terminal UI (Ink), ported wiring", () =>
       terminal,
     });
 
-    const [element] = render.mock.calls[0]!;
+    const [element] = render.mock.calls[0] ?? [];
     const buffer = (element as { props: { messageBuffer: MessageBuffer } }).props.messageBuffer;
     // `run()` clears the buffer as part of terminal cleanup on settle, so
     // capture what was shown via the same subscription RemoteModeDisplay

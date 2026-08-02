@@ -7,5 +7,6 @@ export function agentIconSrc(provider: string): string | null {
 export function AgentIcon({ provider }: { provider: string }) {
   const src = agentIconSrc(provider);
   if (!src) return null;
+  // biome-ignore lint/performance/noImgElement: small provider icon, not a content image
   return <img src={src} alt="" className="size-4 shrink-0" />;
 }

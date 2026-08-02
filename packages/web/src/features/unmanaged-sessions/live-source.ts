@@ -19,7 +19,6 @@ import type {
   UseUnmanagedSessionsSnapshot,
 } from "./types";
 
-
 const UNTITLED = "(untitled session)";
 const UNNAMED_MACHINE = "(unnamed machine)";
 const EMPTY_ROWS: UnmanagedSessionRow[] = [];

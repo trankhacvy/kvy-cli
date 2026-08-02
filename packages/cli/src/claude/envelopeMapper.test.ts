@@ -409,7 +409,7 @@ describe("mapClaudeToEnvelopes — tool call lifecycle", () => {
     expect(startEnvelope?.ev.t).toBe("tool-start");
     const call = startEnvelope?.ev.t === "tool-start" ? startEnvelope.ev.call : undefined;
     expect(call).toBeDefined();
-    expect(isCuid(call!)).toBe(true);
+    expect(isCuid(call ?? "")).toBe(true);
     expect(call).not.toBe("toolu_bash_1"); // provider id must never cross the wire
 
     const ended = mapClaudeToEnvelopes(
@@ -577,7 +577,8 @@ describe("mapClaudeToEnvelopes — image blocks", () => {
     const fileEnvelope = envelopes.find((e) => e.ev.t === "file");
     expect(endIndex).toBeGreaterThanOrEqual(0);
     expect(fileEnvelope).toBeDefined();
-    expect(envelopes.indexOf(fileEnvelope!)).toBeGreaterThan(endIndex);
+    if (!fileEnvelope) throw new Error("expected file envelope");
+    expect(envelopes.indexOf(fileEnvelope)).toBeGreaterThan(endIndex);
     expect(fileEnvelope?.ev).toMatchObject({
       t: "file",
       ref: "inline:aGVsbG8=",
@@ -797,7 +798,7 @@ describe("mapClaudeToEnvelopes — Task subagent registration", () => {
     expect(child[1]?.ev).toEqual({ t: "text", md: "sidechain text" });
     const subagent = child[0]?.subagent;
     expect(subagent).toBeDefined();
-    expect(isCuid(subagent!)).toBe(true);
+    expect(isCuid(subagent ?? "")).toBe(true);
     expect(subagent).not.toBe("toolu_task_2");
     expect(child[1]?.subagent).toBe(subagent);
 
@@ -946,7 +947,7 @@ describe("mapClaudeToEnvelopes — Task subagent registration", () => {
     expect(root[1]?.ev).toEqual({ t: "text", md: prompt });
     const subagent = root[0]?.subagent;
     expect(subagent).toBeDefined();
-    expect(isCuid(subagent!)).toBe(true);
+    expect(isCuid(subagent ?? "")).toBe(true);
 
     const child = mapClaudeToEnvelopes(
       {
@@ -1083,7 +1084,7 @@ describe("golden fixtures — real Claude Code transcripts", () => {
         e.ev.md.startsWith("Search the web for information about TypeScript 5.6"),
     );
     expect(subagentRoot?.subagent).toBeDefined();
-    expect(isCuid(subagentRoot!.subagent!)).toBe(true);
+    expect(isCuid(subagentRoot?.subagent ?? "")).toBe(true);
     expect(subagentRoot?.subagent).not.toBe("toolu_01EmKA8FJ7B2Ah9seGxK1Wct");
 
     const subagentChild = envelopes.find(

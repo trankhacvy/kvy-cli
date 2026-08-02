@@ -135,6 +135,7 @@ export function startClaudeRemoteLauncher(
   let inkInstance: InkInstance | null = null;
 
   if (hasTTY) {
+    // biome-ignore lint/suspicious/noConsole: intentional terminal clear before remote UI renders
     console.clear();
     inkInstance = inkRender(
       React.createElement(RemoteModeDisplay, {

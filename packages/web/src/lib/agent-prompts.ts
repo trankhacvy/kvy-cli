@@ -1,6 +1,5 @@
 import type { CheckRun } from "@kvy/wire";
 
-
 export const CREATE_PR_PROMPT = `Please open a pull request for the current branch:
 1. Commit any pending changes with a clear, conventional commit message.
 2. Push the branch to origin.

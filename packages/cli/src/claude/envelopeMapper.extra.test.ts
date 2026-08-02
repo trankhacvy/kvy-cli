@@ -50,7 +50,7 @@ describe("mapClaudeToEnvelopes — nested ordinary tool call inside a subagent s
     const nestedStart = childStart.find((e) => e.ev.t === "tool-start");
     expect(nestedStart).toBeDefined();
     expect(nestedStart?.subagent).toBeDefined();
-    expect(isCuid(nestedStart!.subagent!)).toBe(true);
+    expect(isCuid(nestedStart?.subagent ?? "")).toBe(true);
     const subagent = nestedStart?.subagent;
 
     // The subagent's tool_result for that nested tool call arrives, also
