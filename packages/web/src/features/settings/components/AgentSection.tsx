@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   getFavoriteModel,
   getFavoriteProvider,
@@ -20,9 +21,10 @@ import {
   DEFAULT_MODEL_VALUE,
   MODEL_OPTIONS,
 } from "@/features/new-session/model-meta";
-import { PROVIDER_OPTIONS } from "@/features/new-session/provider-meta";
+import { PROVIDER_OPTIONS, shouldShowBetaBanner } from "@/features/new-session/provider-meta";
 import type { NewSessionProvider } from "@/features/new-session/types";
 import { INITIAL_FORM } from "@/features/new-session/wizard-state";
+import { AgentIcon } from "@/features/session-list/components/agent-icon";
 import {
   CODEX_EFFORT_OPTIONS,
   type CodexEffort,
@@ -32,26 +34,15 @@ import {
 
 /**
  * Settings → Agent: default settings for how agents run, independent of
- * which session you start. Moved verbatim out of the deleted
- * `app/(protected)/settings/agent/page.tsx` route when the settings catalog
- * became the dialog (`components/settings-dialog.tsx`) — only the page
- * chrome (`<main>` wrapper + h1) was dropped; every behavior below is
- * unchanged:
- *
- * - "Default provider" / "Default model" (docs/competitive-notes-omnara.md
- *   #15): a second, more prominent surface onto the same
- *   `features/new-session/favorites.ts` store the wizard's inline star
- *   buttons write to. Per-device localStorage convenience, never
- *   authoritative, safe to lose — same reasoning as
- *   `favorites.ts`/`use-theme.ts` (design principle #3).
- *
- *   Model dropdowns intentionally reuse `model-meta.ts`'s curated
- *   `MODEL_OPTIONS` only (no free-text "Custom…" escape hatch like the
- *   wizard's own Options step has).
- *
- * - "Codex effort" (docs/competitive-notes-omnara.md #14): a persisted
- *   global default for Codex's reasoning effort level, independent of any
- *   per-session model choice.
+ * which session you start. Provider picker is a tab list whose active tab
+ * IS the default provider (same `features/new-session/favorites.ts` store
+ * the wizard's star buttons write to) — each tab's pane scopes the model
+ * picker (and Codex's effort control) to that provider. Per-device
+ * localStorage convenience, never authoritative, safe to lose — same
+ * reasoning as `favorites.ts`/`use-theme.ts` (design principle #3). Model
+ * dropdowns intentionally reuse `model-meta.ts`'s curated `MODEL_OPTIONS`
+ * only (no free-text "Custom…" escape hatch like the wizard's own Options
+ * step has).
  */
 export function AgentSection() {
   // Lazy `useState` initializers — `getFavoriteProvider`/`getFavoriteModel`
@@ -100,76 +91,92 @@ export function AgentSection() {
         Default settings for how agents run, independent of which session you start.
       </p>
 
-      <section className="flex flex-col gap-3">
+      <section className="flex flex-col gap-2">
         <h3 className="text-sm font-medium">Default provider</h3>
-        <div className="flex gap-2">
+        <Tabs
+          value={provider}
+          onValueChange={(value) => selectProvider(value as NewSessionProvider)}
+          className="flex flex-col gap-4"
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            {PROVIDER_OPTIONS.map(([value, meta]) => (
+              <TabsTrigger key={value} value={value} className="gap-2">
+                <AgentIcon provider={value} />
+                {meta.label}
+                {meta.beta ? " (beta)" : ""}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
           {PROVIDER_OPTIONS.map(([value, meta]) => (
-            <Button
-              key={value}
-              type="button"
-              variant={provider === value ? "default" : "outline"}
-              aria-pressed={provider === value}
-              onClick={() => selectProvider(value)}
-            >
-              {meta.label}
-              {meta.beta ? " (beta)" : ""}
-            </Button>
+            <TabsContent key={value} value={value} className="flex flex-col gap-6">
+              {shouldShowBetaBanner(meta) && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+                  <Badge variant="warning">Beta</Badge>
+                  <p className="text-muted-foreground">{meta.betaNote}</p>
+                </div>
+              )}
+
+              <section className="flex flex-col gap-3">
+                <label
+                  className="flex flex-col gap-1.5 text-sm font-medium"
+                  htmlFor={`agent-default-model-${value}`}
+                >
+                  Default model
+                  <Select
+                    value={curatedModelSelectValue(modelByProvider[value])}
+                    onValueChange={(selectValue) => selectModel(value, selectValue)}
+                  >
+                    <SelectTrigger id={`agent-default-model-${value}`} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {MODEL_OPTIONS[value].map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  The model {meta.label} sessions start with by default.
+                </p>
+              </section>
+
+              {value === "codex" && (
+                <section className="flex flex-col gap-3">
+                  <div>
+                    <h3 className="text-sm font-medium">Codex effort</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      How much reasoning effort Codex sessions default to. Applies regardless of
+                      which model you pick when starting a session.
+                    </p>
+                  </div>
+
+                  <label
+                    className="flex flex-col gap-1.5 text-sm font-medium"
+                    htmlFor="codex-effort"
+                  >
+                    Effort
+                    <Select value={effort} onValueChange={handleEffortChange}>
+                      <SelectTrigger id="codex-effort" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CODEX_EFFORT_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </label>
+                </section>
+              )}
+            </TabsContent>
           ))}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <h3 className="text-sm font-medium">Default model</h3>
-        {PROVIDER_OPTIONS.map(([value, meta]) => (
-          <label
-            key={value}
-            className="flex flex-col gap-1.5 text-sm font-medium"
-            htmlFor={`agent-default-model-${value}`}
-          >
-            {meta.label}
-            <Select
-              value={curatedModelSelectValue(modelByProvider[value])}
-              onValueChange={(selectValue) => selectModel(value, selectValue)}
-            >
-              <SelectTrigger id={`agent-default-model-${value}`} className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODEL_OPTIONS[value].map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
-        ))}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <div>
-          <h3 className="text-sm font-medium">Codex effort</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            How much reasoning effort Codex sessions default to. Applies regardless of which model
-            you pick when starting a session.
-          </p>
-        </div>
-
-        <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="codex-effort">
-          Effort
-          <Select value={effort} onValueChange={handleEffortChange}>
-            <SelectTrigger id="codex-effort" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CODEX_EFFORT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </label>
+        </Tabs>
       </section>
     </div>
   );
