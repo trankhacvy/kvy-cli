@@ -22,10 +22,7 @@ function ensureVapidConfigured(): boolean {
 }
 
 /**
- * The `webpush` push channel (design §3 "Push | Web Push (VAPID) via
- * `web-push`", §6.4). Payload is deliberately generic — `{sessionId, kind}`
  * only, `PushPayloadSchema`-shaped — never session content: the server holds
- * no keys to decrypt it anyway (design §5.3), and the service worker renders
  * a fixed, kind-keyed title/body client-side (`public/sw.js`).
  */
 export const webpushChannel: PushChannel = {

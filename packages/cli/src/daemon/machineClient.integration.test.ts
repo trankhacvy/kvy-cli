@@ -11,18 +11,8 @@ import { startMachineClient } from "./machineClient.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
 /**
- * Integration test proving reconnect-after-drop re-registers cleanly
- * without duplicating the machine row (plan.md §1.5). Runs `machineClient.ts`
- * against:
- *  - a real `socket.io` server on `/v1/stream` (standing in for
- *    `packages/server`'s already-merged `startSocket`, exercised end to end
- *    in `packages/server/src/app/socket.test.ts`) — proves the handshake
- *    auth (`clientType: "machine-scoped"`, `machineId`) and reconnect
- *    actually round-trip over a real WebSocket, not a mock.
- *  - a minimal in-memory `POST /v1/machines` mock replicating just the CAS
- *    semantics of the already-merged `machines.ts` route (create-if-absent,
- *    update-with-expectedVersion, `409 {current}` on mismatch) — enough to
- *    prove this client never creates a second row after a reconnect.
+ * Integration test: reconnect-after-drop re-registers cleanly without
+ * duplicating the machine row.
  */
 
 interface StoredMachine {

@@ -25,7 +25,7 @@ describe("wire schema additive-only compat", () => {
       const ok = isCompatible(frozen[name]!, liveShape);
       expect(
         ok,
-        `"${name}" lost or retyped a field the wire protocol already shipped (see design §5.3: additive-only, forever)`,
+        `"${name}" lost or retyped a field the wire protocol already shipped (additive-only, forever)`,
       ).toBe(true);
     });
   }

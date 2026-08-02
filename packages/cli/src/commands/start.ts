@@ -1,6 +1,4 @@
 /**
- * `kvy claude [args...]` (plan.md §16 "1.3 CLI skeleton + local mode" /
- * "2.2 Mode switching"; plan.md §17) — the first real (non-stub) provider
  * spawn. Every piece this wires together already existed and was already
  * unit-tested in isolation (`session/bootstrap.ts`, `api/outbox.ts`,
  * `claude/loop.ts` + `claude/ptyClaudeSession.ts`,
@@ -26,13 +24,10 @@
  * It runs `claude` on a pseudo-terminal (`ptyClaudeSession.ts`): the normal
  * TUI stays live, and a web-sent `message` is TYPED INTO that same PTY when
  * the session is idle — no mode switch, no process kill, no Ink takeover.
- * Remote answering of the live TUI's tool-permission prompts (design §7.4/
- * §7.6) rides on a SINGLE hook server installed here via
  * `installRemotePermissionHook()`, which owns all five Claude Code hooks
  * (`SessionStart`/`Notification`/`Stop`/`PreToolUse`/`PermissionRequest` —
  * `PreToolUse` always defers to Claude Code's own permission engine;
  * `PermissionRequest` is where the web-vs-terminal fork actually lives,
- * plan-v2.md Wave 1.1 — as of docs/known-issues.md issue #5, both sides of
  * that fork emit a live `perm-request` so web always sees an actionable
  * card; the fork now only decides whether the hook blocks for a web answer
  * or hands off to the terminal immediately, tracking the latter via
@@ -43,19 +38,15 @@
  * fires the moment a web message is actually submitted into the PTY so that
  * turn's `PreToolUse` prompts route to the web PermCard (a locally-typed turn
  * shows the normal terminal prompt and clears it immediately via
- * `markLocalActivity()`, plan-v2.md W1.2; `markTurnEnd()` is fired
  * automatically by the composition off Claude Code's own `Stop` hook, and a
  * `WEB_TURN_MAX_MS` watchdog self-heals a flag left stuck by a missed `Stop`
  * hook). A web message is only ever typed in when the PTY session's
  * injection gate is idle AND no TUI dialog is known to be open
  * (`setPromptOpen`, fed by `onAttention`/`onPromptLikely` and cleared by the
- * tailer's next `tool-end` envelope or a 120s failsafe — plan-v2.md W1.3).
- * `interrupt` sends the TUI's own Escape cancel gesture (plan-v2.md W1.5);
  * `setMode` sends the live TUI's own Shift+Tab mode-cycle keystroke, gated
  * idle+no-prompt and verified by racing TWO independent signals — the
  * bridge's `permission_mode` hook echo AND `ptyClaudeSession.ts`'s
  * raw-PTY-output status-bar detector (`waitForModeStatus`,
- * `raceModeConfirmation` below) — plan-v2.md W4.3, extended after a
  * live-reproduced bug where an idle session (no upcoming tool call to carry
  * a hook echo) always reported a genuinely-successful switch as
  * `{ok:false}`. Flag-gated behind `KVY_PTY_SETMODE=1`
@@ -71,7 +62,6 @@
  * `loop()`'s `onRemoteActive`, and there is no PTY injection and no hook
  * server (ACP owns permissions agent-side).
  *
- * Send idempotency (design §7.10): the `message` RPC claims `(sessionId,
  * envelopeId)` in the on-disk claim store BEFORE emitting — a duplicate
  * whose claim already completed replies `duplicate`, one whose claim exists
  * with no result (crash mid-turn) replies `outcome-unknown`, and a fresh
@@ -80,7 +70,6 @@
  * on `onTurnSettled`). A retried RPC can never run the agent twice for one
  * logical send.
  *
- * Resume (plan-v2.md W3.7): both flows share one `bootstrapSession()` call,
  * which itself honors `KVY_RECONNECT_SESSION_ID`/
  * `KVY_RECONNECT_ENCRYPTION_KEY` (re-attaching to the existing
  * server-side session row instead of minting a fresh one — see
@@ -91,7 +80,6 @@
  * start, so both env reads are no-ops unless a caller arranged them ahead of
  * this spawn.
  *
- * Session lifecycle status (plan-v2.md W1.4+B15; PRD FR-3.7): `reportStatusOnce`
  * best-effort reports the session's terminal status to the server exactly
  * once, whichever exit path reaches it first — a clean process exit (either
  * flow's own exit code, mapped 0 ⇒ `ended` / non-zero ⇒ `failed`), or a
@@ -216,11 +204,9 @@ import { runKeysApproveCommand as runKeysApproveCommandDefault } from "./keysApp
 import { runPreflightWithReauth } from "./startPreflight.js";
 
 /**
- * `setMode` on the PTY path (plan-v2.md W4.3 "Real setMode for the PTY
  * path") is version-coupled TUI behavior — a Shift+Tab keystroke cycle whose
  * exact effect depends on the pinned Claude Code build matching what this
  * bridge verified against. Kept behind this flag until the feature has been
- * live-soaked (plan-v2.md U4.5's `[human]` sub-task); unset/anything else
  * keeps the prior honest `{ok:false}` behavior.
  */
 const PTY_SET_MODE_ENV_VAR = "KVY_PTY_SETMODE";
@@ -302,12 +288,10 @@ export interface StartClaudeCommandDeps {
   reportSessionAttention?: typeof reportSessionAttentionDefault;
   /**
    * Injectable for tests; defaults to the real `acquireSessionLock()`
-   * (plan-v2.md W4.4 — same-directory duplicate session lock).
    */
   acquireSessionLock?: typeof acquireSessionLockDefault;
   /**
    * Injectable for tests; defaults to the real `notifyDaemonSessionStarted()`
-   * (plan-v2.md W4.5 — best-effort daemon self-report; never throws).
    */
   notifyDaemonSessionStarted?: typeof notifyDaemonSessionStartedDefault;
   /**
@@ -342,7 +326,6 @@ export interface StartClaudeCommandDeps {
    * latter would otherwise get two contradictory answers.
    */
   ensureLoggedIn?: typeof ensureLoggedInDefault;
-  /** Injectable for tests; defaults to the real `reloadDaemonAuth()` (AX-1.6). */
   reloadDaemonAuth?: (homeDir: string) => Promise<boolean>;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -464,7 +447,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   const frontendUrl = deps.frontendUrl ?? resolveFrontendUrl(env);
 
   // 1. Resolve credentials, key material, machineId and an access token as ONE
-  // restartable unit (AX-1.3/AX-1.5). A dead refresh token re-pairs inline and
   // re-runs the whole thing — re-deriving `contentKeyPair` in the process, since a
   // fresh pairing can land on a different key epoch.
   const preflightResult = await runPreflightWithReauth({
@@ -657,7 +639,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     doDisplayQrCode(sessionUrl);
   }
 
-  // Session lifecycle status (plan-v2.md W1.4+B15; PRD FR-3.7, design §7.5):
   // best-effort report the session's terminal status to the server exactly
   // once, from whichever exit path reaches it first (normal child exit,
   // SIGTERM/SIGHUP/SIGINT, or — in `runRemoteLoop` — the mode loop's own exit
@@ -915,13 +896,11 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
   };
 
-  // Fix 7 (auth-ux-overhaul-fix-plan.md): a key request raised on another device while
   // this session runs must reach the person at THIS terminal, not just a log file nobody
   // tails. `undefined` means "none seen"; once set, the exit path below runs the review.
   let pendingKeyRequestLabel: string | null | undefined;
 
   // The session-scoped `/v1/stream` connection `message`/`interrupt`/
-  // `takeControl`/`setMode`/`perm.answer` arrive over (design §4.4). Without
   // this, nothing on the CLI side ever joins the `s:<sessionId>:<method>`
   // room the server's RPC relay looks up.
   const sessionClient = startSessionClient(
@@ -945,7 +924,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     ),
   );
 
-  // Send-idempotency claim bookkeeping (design §7.10): envelopeId -> claimId,
   // so the completion hook can complete exactly the claim its `message`
   // handler opened. Cleared once completed. Shared by both flows.
   const openClaims = new Map<string, string>();
@@ -964,7 +942,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   };
 
   // Claim a send BEFORE it reaches the agent — a retried/duplicated RPC must
-  // never run the agent twice (design §7.10). Returns either the text to
   // deliver (fresh claim) or the honest tri-state RPC response to send back.
   type MessageEnvelope = Parameters<SessionRpcHandlers["message"]>[0]["envelope"];
   type MessageResult = Awaited<ReturnType<SessionRpcHandlers["message"]>>;
@@ -1125,7 +1102,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // Resumes the provider transcript on the terminal PTY flow
         // (`resolveSessionFlags`/`ptyClaudeSession.ts` already handle
         // `--resume` composition from this) — set only when a caller
-        // arranged the reconnect env ahead of this spawn (plan-v2.md W3.7);
         // ordinarily absent, i.e. a fresh provider session.
         providerSessionId: env.KVY_RECONNECT_PROVIDER_SESSION_ID?.trim() || null,
         homeDir: deps.homeDir,
@@ -1137,7 +1113,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         onEnvelopes: (envelopes) => {
           // The tailer's next tool-result is the precise "the dialog that was
           // open is gone" signal — clears the gate the attention/onPromptLikely
-          // wiring above set (plan-v2.md W1.3).
           if (envelopes.some((e) => e.ev.t === "tool-end")) ptyHandle?.setPromptOpen(false);
           // The same tool-start/tool-end pair is also the "resolved locally"
           // signal for a permission-gated tool call (docs/known-issues.md
@@ -1171,7 +1146,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           completeClaim(id, { status: "injected" });
           permHook?.markWebTurnStart();
         },
-        // No silent message loss (plan-v2.md W3.9): a message that will now
         // never be injected (session ending with it still queued, or its
         // submit skipped because the child exited mid-injection) still had a
         // send-claim opened for it — complete it as a terminal, honest
@@ -1182,7 +1156,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           for (const m of messages) completeClaim(m.id, { status: "dropped-session-ended" });
         },
         // A locally-typed Enter at the real keyboard is the human reclaiming
-        // the turn — clear the web-turn flag immediately (plan-v2.md W1.2).
         onLocalSubmit: () => permHook?.markLocalActivity(),
         logger,
       },
@@ -1196,7 +1169,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     requestGracefulStop = () => ptySession.stop();
 
     // A lifecycle moment the web timeline should see even though nothing in
-    // the Claude Code transcript itself says it (plan-v2.md W3.3) — the PTY
     // is spawned (or, if `runPtySession`'s own setup failed, about to report
     // that below via a non-zero `done` exit code; `ptyClaudeSession.ts`'s
     // `done` never rejects, so a spawn failure is only observable that way).
@@ -1214,9 +1186,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
       takeControl: async () => ({ ok: true }),
       // Escape is safe to send regardless of TUI state: mid-turn it cancels
       // the turn, at an idle prompt it's a no-op, inside a menu it closes the
-      // menu (recoverable) — plan-v2.md W1.5.
       interrupt: async () => ({ ok: ptySession.sendInterrupt() }),
-      // Real PTY setMode (plan-v2.md W4.3), flag-gated behind
       // `KVY_PTY_SETMODE=1` (see the module-level doc comment on
       // `PTY_SET_MODE_ENV_VAR`). Computes the forward Shift+Tab press count
       // from the bridge's cached `permission_mode` (the live TUI's own,
@@ -1306,14 +1276,12 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         return { ok: false };
       },
       // Remote answering of the live TUI's tool-permission prompt (design
-      // §7.6): route into the `PreToolUse` hook bridge (first-wins). Only when
       // the hook server failed to install is this honestly not-supported.
       permAnswer: async ({ reqId, decision }) => {
         if (permHook) return permHook.resolvePermission({ reqId, decision });
         logger.debug("[start-claude] perm.answer RPC — no live permission hook to route to");
         return { ok: false };
       },
-      // "End session" from the web (plan-v2.md W2.3): report "ended" FIRST
       // (landing before the WS drops, so a stop that races the disconnect
       // still surfaces — U1.4's additive `"ended"` transition makes this
       // honest), then SIGTERM the PTY child. `force` doesn't SIGKILL the
@@ -1429,7 +1397,6 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         if (!activeRemote) return { ok: false };
         return activeRemote.resolvePermission({ reqId, decision });
       },
-      // "End session" from the web (plan-v2.md W2.3): routes through
       // `loop()`'s own double-Ctrl-C "exit the whole client" trigger
       // (`onExitRequested` below), which asks the live remote launcher to
       // exit. Same not-yet-landed status-reporting caveat as `runLocalPty`'s

@@ -1,11 +1,8 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Counter, collectDefaultMetrics, Gauge, Histogram, register } from "prom-client";
 
-// Prometheus scrape endpoint (kvy-system-design.md §6.2: "GET /health GET
-// /metrics (bind-local)", plan.md §16 "4.4 Hardening & release gate":
 // "Prometheus metrics + /metrics"). Exposes request rates, WS connection
 // counts, RPC latency, and error rates as counters/histograms — never user
-// content (design §13 "Observability": "No content, ever").
 //
 // "(bind-local)" in the design doc is a deployment-network concern, not
 // something this route enforces itself: Fastify has no notion of "reachable
@@ -19,7 +16,6 @@ import { Counter, collectDefaultMetrics, Gauge, Histogram, register } from "prom
 // `app/socket/rpcHandler.ts` already registers `rpc_calls_total` /
 // `rpc_call_duration_seconds` / `rpc_lookup_retries` /
 // `rpc_fetchsockets_timeouts_total` against (the RPC-latency metrics this
-// task's plan.md line calls out), so one scrape of this endpoint picks up
 // every metric registered anywhere in the process, not just the ones
 // defined here.
 

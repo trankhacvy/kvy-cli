@@ -1,5 +1,4 @@
 /**
- * `kvy sessions list` (kvy-prd.md §5.3, plan.md §16 "4.2 Adoption Tier
  * 3 + polish"). Lists the account's sessions from two independent sources —
  * neither one alone answers "what can I `kvy resume`":
  *
@@ -7,10 +6,8 @@
  *    building block `kvy adopt --list` already uses) — plain (unmanaged)
  *    Claude Code transcripts for cwd's workspace, on this machine only, not
  *    yet known to the server at all.
- *  - **Remote**: `GET /v1/sessions` (design §4.3/§6.2, already landed in
  *    `server/src/app/routes/sessions.ts`) — every session row this account
  *    owns, on any machine. Only `tag`/`provider`/`status`/timestamps are
- *    plaintext on the wire (design §5.3: `metadata` stays an opaque
  *    encrypted box the server never reads) — decrypting a session's title
  *    needs the per-session DEK-unwrap machinery the web client carries
  *    (`crypto/worker-handler.ts`'s `unwrapDek`, keyed off the account's

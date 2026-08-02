@@ -38,7 +38,7 @@ describe("readCredentials", () => {
     expect(readCredentials(homeDir)).toBeNull();
   });
 
-  it("returns null for a legacy (pre-§6.1) flat masterSecretOrContentBundle shape", () => {
+  it("returns null for a legacy flat masterSecretOrContentBundle shape", () => {
     const file = credentialsPath(homeDir);
     writeFileSync(file, JSON.stringify({ refreshToken: "t", masterSecretOrContentBundle: "s" }));
     expect(readCredentials(homeDir)).toBeNull();

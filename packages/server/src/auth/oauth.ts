@@ -2,7 +2,6 @@ import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
 import { env } from "../config.js";
 
 /**
- * OAuth is a first-class login identity now (issue-4-plan.md §5.5), resolved by
  * `(kind, identifier)` in `auth_identities` — this is that `kind` column's value space.
  * The schema column itself has no enum constraint, but every writer (only
  * `buildOAuthRoutes`, see routes/oauth.ts) goes through this module, so this union is

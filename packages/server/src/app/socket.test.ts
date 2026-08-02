@@ -17,7 +17,6 @@ function fakeBox() {
   return { t: "enc" as const, v: 1 as const, c: encodeBase64(getRandomBytes(16)) };
 }
 
-// Integration tests for the `/v1/stream` handshake + connection lifecycle (plan.md §4.1).
 // Runs a real listening server (Socket.IO needs a real HTTP server to attach to) rather
 // than fastify.inject(), and connects real socket.io-client sockets against it.
 
@@ -28,10 +27,8 @@ describe("startSocket (/v1/stream handshake)", () => {
   let url: string;
   const clients: ClientSocket[] = [];
 
-  // issue-4-plan.md §4.5a: the connect handshake now looks up a real `device_sessions` row
   // to check `revokedAt`/`expiresAt`, so a token minted here needs a real account +
   // issued session behind it, not just a well-formed JWT — a bare `mintAccessToken` call
-  // (no DB row) would be rejected as "Session revoked" the moment §4.5a landed. Explicit
   // `id` on the insert lets every existing call site's literal `"acct_1"`-style id keep
   // working unchanged.
   async function mintToken(accountId: string): Promise<string> {
@@ -400,7 +397,6 @@ describe("startSocket (/v1/stream handshake)", () => {
   });
 });
 
-// Design §6.3's write-behind `lastSeenAt` presence cache (socket.ts's `machine-alive`
 // handler) — a real DB round-trip, so this needs the pglite-backed `db` (unlike the
 // describe block above, whose tests never touch persisted state).
 describe("machine-alive heartbeat persists machines.lastSeenAt", () => {
@@ -515,9 +511,8 @@ describe("machine-alive heartbeat persists machines.lastSeenAt", () => {
     expect(stillStale?.lastSeenAt?.getTime()).toBe(staleLastSeenAt.getTime());
   });
 
-  // issue-4-plan.md §4.5: revocation is immediate on a live WebSocket, not bounded only
   // by the (now 15m) access token TTL.
-  describe("revocation (§4.5)", () => {
+  describe("revocation", () => {
     it("rejects connect for a revoked session, even with an otherwise-valid access token", async () => {
       const accountId = "acct_revoke_connect";
       await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();

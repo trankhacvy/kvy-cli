@@ -1,17 +1,10 @@
 /**
- * Sealed-box DEK wrap/unwrap — kvy-system-design.md §5.1:
+ * Sealed-box DEK wrap/unwrap.
  *
- *   wrapped DEK = sealed-box(contentPubKey, DEK) = [ephPub32 | nonce24 | ct]
- *   stored server-side as opaque `dek` column: [0x00 | sealedBox]
+ * Wire format: wrapped DEK = [0x00 | ephPub32 | nonce24 | ct]
  *
- * New code. `unwrapDek` never throws — returns `null` on any failure (wrong
- * key, corrupt bytes, unknown version byte), same contract as `box.open()`.
- *
- * Not itself a Happy port — this wrap/unwrap scheme is Kvy's DEK-column
- * design (kvy-system-design.md §5.1), built on `libsodiumEncryptForPublicKey`/
- * `libsodiumDecryptWithSecretKey`, which are adapted from Happy —
- * https://github.com/slopus/happy (MIT); see `encryption.ts`'s header for the
- * full license text those primitives carry.
+ * `unwrapDek` never throws — returns `null` on any failure (wrong key,
+ * corrupt bytes, unknown version byte).
  */
 import { libsodiumDecryptWithSecretKey, libsodiumEncryptForPublicKey } from "./encryption.js";
 

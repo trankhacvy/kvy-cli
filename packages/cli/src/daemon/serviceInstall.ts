@@ -1,21 +1,9 @@
 /**
- * `kvy daemon service install/uninstall/status` — registers the daemon
- * as a login-managed OS service so it auto-starts and is supervised
- * (kvy-prd.md FR-4.1 "installable as a login service (launchd /
- * systemd-user) [P1]"; kvy-system-design.md §8 "Service install (P1)";
- * plan.md §16 "4.3 Distribution & self-host").
+ * `kvy daemon service install/uninstall/status` — registers the daemon as a
+ * login-managed OS service (launchd on macOS, systemd-user on Linux).
  *
- * macOS: writes a launchd plist to `~/Library/LaunchAgents` and registers
- * it via `launchctl bootstrap gui/<uid>` (the modern replacement for the
- * deprecated `launchctl load`). Linux: writes a systemd `--user` unit to
- * `~/.config/systemd/user` and registers it via `systemctl --user enable
- * --now`. Both point straight at `kvy daemon start-sync`
- * (`serviceInstallTemplates.ts`) — see that module's doc comment for why.
- *
- * Every `launchctl`/`systemctl` invocation is injectable (`ServiceExec`),
- * same hand-wrapped-`execFile` shape as `gitExec.ts`'s `runGit`/
- * `processScan.ts`'s `runPs` — mockable in tests without a real service
- * manager, since neither launchd nor systemd exists in CI.
+ * Every `launchctl`/`systemctl` invocation is injectable (`ServiceExec`) so
+ * tests can run without a real service manager.
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";

@@ -80,7 +80,6 @@ describe("runSessionsListCommand", () => {
     expect(written.join("")).toContain("not logged in");
   });
 
-  // issue-4-plan.md §6.6: `readCredentials` now only stores a `refreshToken` — resolving
   // an access token means the command's own `fetchImpl` first sees a `/v1/auth/refresh`
   // call (via `resolveAccessToken`) before the actual `/v1/sessions` request.
   function fakeRefresh(accessToken: string) {

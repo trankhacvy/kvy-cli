@@ -13,11 +13,8 @@ const pageSource = readFileSync(
   "utf-8",
 );
 
-describe("pair/page.tsx — gate order (docs/auth-ux-overhaul-plan.md AX-2.2)", () => {
+describe("pair/page.tsx — gate order", () => {
   it("checks sign-in BEFORE key material", () => {
-    // The bug this locks: the effect used to bail on `bridgeStatus.kind !== "ready"` as
-    // its first statement, so a signed-out visitor hit a crypto dead end before the
-    // sign-in redirect could ever run.
     const signInIndex = pageSource.indexOf("isSignedIn()");
     const identityIndex = pageSource.indexOf("bridge.getIdentity");
     expect(signInIndex).toBeGreaterThan(-1);
@@ -50,10 +47,7 @@ describe("pair/page.tsx — gate order (docs/auth-ux-overhaul-plan.md AX-2.2)", 
   });
 });
 
-// auth-ux-overhaul-fix-plan.md Fix 11: the Approve button looked and behaved as clickable
-// while the crypto worker was still booting — `approve()` returned silently, a literal
-// swallowed first click on the single most important button in the pairing flow.
-describe("pair/page.tsx — Approve button disabled state (Fix 11)", () => {
+describe("pair/page.tsx — Approve button disabled state", () => {
   it("derives its disabled prop from bridgeStatus, not just a pending flag", () => {
     const buttonIndex = pageSource.indexOf("onClick={() => void approve(gate.ephPub");
     expect(buttonIndex).toBeGreaterThan(-1);

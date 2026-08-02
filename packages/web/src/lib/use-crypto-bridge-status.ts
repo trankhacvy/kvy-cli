@@ -17,17 +17,14 @@ export type BridgeStatus =
   | { kind: "ready"; bridge: CryptoBridgeClient };
 
 /**
- * The unlock state machine every key-dependent surface needs
- * (docs/auth-ux-overhaul-plan.md AX-5.9).
+ * The unlock state machine every key-dependent surface needs.
  *
- * Readiness comes from `describeStorage()` + `ensureLoaded()`, deliberately NOT from
- * `getIdentity()`: identity reads the plaintext public keys, which a v1 record still has,
- * so a not-yet-migrated browser would report "ready" over a worker that can decrypt
- * nothing.
+ * Readiness comes from `describeStorage()` + `ensureLoaded()`, NOT from `getIdentity()`:
+ * identity reads plaintext public keys (which a v1 record still has), so a not-yet-migrated
+ * browser would falsely report "ready" over a worker that can decrypt nothing.
  *
- * `accountId` scopes both calls (auth-ux-overhaul-fix-plan.md Fix 4) — without it, a
- * browser that already holds ANY account's key material reports "ready" no matter which
- * account is actually signed in, silently loading the wrong key tree.
+ * `accountId` scopes both calls - without it, a browser holding ANY account's key material
+ * reports "ready" regardless of which account is signed in, silently loading the wrong tree.
  */
 export function useCryptoBridgeStatus(accountId: string | null): {
   status: BridgeStatus;

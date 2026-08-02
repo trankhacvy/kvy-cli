@@ -1,26 +1,12 @@
 /**
- * `notifyDaemonSessionStarted` — the CLI-side client half of the
- * `/session-started` self-report webhook (design §7.1, plan.md line 697).
+ * CLI-side client for the `/session-started` self-report webhook.
  *
- * A freshly-started session process discovers the running daemon's control
- * server via `daemon.state.json` (`state.ts`) and POSTs its `sessionId` +
- * encryption material to it, so the daemon can track/persist/resume the
- * session (§7.4). This is **best-effort**: a session must work fine
- * standalone with no daemon present at all, so nothing here ever throws —
- * every outcome (no daemon, daemon unreachable, success) is a typed result
- * the caller can log and move past without blocking session startup.
+ * Best-effort: a session must work standalone with no daemon present, so
+ * nothing here ever throws — every outcome is a typed result the caller
+ * can log and move past.
  *
- * The server-side contract (`SessionStartedBodySchema` in `controlServer.ts`)
- * is load-bearing and out of scope to change here — this module only shapes
- * its request to match that schema.
- *
- * `pid` defaults to this process's own pid (`process.pid`) when not given
- * explicitly — it's how a daemon-spawned session's webhook gets matched back
- * to the `spawn` RPC call that launched it (`spawnAwaiter.ts`, plan.md §16
- * "3.1 Remote spawn"). Sending it unconditionally (not just when
- * daemon-spawned) is harmless: a terminal-started session has no pending
- * spawn awaiter for its pid, so `resolve()` on the daemon side is simply a
- * no-op for it.
+ * `pid` defaults to `process.pid`. A terminal-started session has no pending
+ * spawn awaiter for its pid, so `resolve()` on the daemon side is a no-op.
  */
 
 import { resolveHomeDir } from "../home.js";
@@ -69,7 +55,6 @@ export function createNotifyDaemonSessionStartedDeps(
  * Best-effort self-report to the daemon's control server. Never throws:
  * every failure mode (no daemon running, stale state, unreachable control
  * server, non-2xx response, network error) collapses to a typed result
- * instead of an exception, per design §7.1 — a session must work fine
  * standalone with no daemon present at all.
  */
 export async function notifyDaemonSessionStarted(

@@ -7,7 +7,6 @@ import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { startSessionClient } from "./sessionClient.js";
 
-/** issue-4-plan.md §6.6: a fake `TokenProvider` that always resolves the same access
  * token — this suite exercises the transport/reconnect behavior, not token renewal
  * (see `sessionClient.test.ts` for the renew-token unit tests), so a fixed token with
  * a `renewIntervalMs` well outside each test's runtime keeps it out of the way. */
@@ -25,7 +24,6 @@ function fakeTokenProvider(accessToken = "test-token"): TokenProvider {
 
 /**
  * Integration test proving the `alive` keepalive and reconnect-after-drop
- * behavior actually round-trip over a real WebSocket (plan.md §16 Phase 1.4
  * line 688), not just a mocked `Socket`. Runs `sessionClient.ts` against a
  * real `socket.io` server on `/v1/stream` standing in for `packages/server`'s
  * already-merged `startSocket` (exercised end to end in

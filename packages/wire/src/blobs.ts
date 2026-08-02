@@ -2,10 +2,8 @@ import { z } from "zod";
 
 /**
  * `POST /v1/blobs/request-upload` / `POST /v1/blobs/request-download`
- * (kvy-system-design.md §6.2, §6.5; plan.md §16 "4.3 Distribution &
  * self-host"). The server never sees blob plaintext — callers encrypt with
  * `encryptBlob`/a session-or-machine-DEK-derived blob key
- * (`deriveBlobKey`, design §5.1) *before* requesting an upload target, and
  * decrypt after downloading. These two routes only hand out short-lived
  * upload/download targets and record accounting metadata (`blobs` table:
  * size, contentHash, owner) — same "bookkeeping only" posture as every

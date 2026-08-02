@@ -24,8 +24,6 @@ function findSection(id: SettingsSectionId | null) {
   return SETTINGS_SECTIONS.find((section) => section.id === id);
 }
 
-/** Desktop rendering: left section nav + right content pane showing the
- * active section's real settings UI. */
 function SettingsDialogDesktop({
   open,
   onOpenChange,
@@ -84,10 +82,6 @@ function SettingsDialogDesktop({
   );
 }
 
-/** Mobile rendering: bottom sheet. The root view is the section list;
- * tapping a section pushes its settings UI inside the same sheet (back
- * button returns to the list) — an iOS-Settings-style drill-in, not a route
- * navigation. */
 function SettingsSheetMobile({
   open,
   onOpenChange,
@@ -153,14 +147,9 @@ function SettingsSheetMobile({
 }
 
 /**
- * Settings dialog, opened from the sidebar's account menu (`nav-user.tsx`) —
- * the only home of the settings catalog since the `/settings/*` routes were
- * removed and the sidebar's Settings group went with them. Controlled — the
- * trigger lives inside a dropdown menu, so open state has to sit above both.
- * Renders as a wide dialog on desktop and as a drill-in bottom sheet on
- * mobile (`useIsMobile`, same breakpoint the sidebar itself uses).
- * `activeId` is shared across both renderings; `null` (the mobile root
- * list) falls back to the first section on desktop.
+ * Controlled — the trigger lives inside a dropdown menu, so open state has
+ * to sit above both. `activeId` is shared across both renderings; `null`
+ * (the mobile root list) falls back to the first section on desktop.
  */
 export function SettingsDialog({
   open,

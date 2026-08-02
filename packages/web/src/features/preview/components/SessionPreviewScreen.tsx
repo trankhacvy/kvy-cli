@@ -11,7 +11,6 @@ import { PreviewPanel } from "./PreviewPanel";
  * SessionGitScreen.tsx` / `features/github-checks/components/
  * SessionChecksScreen.tsx`: resolves the session's real (plaintext)
  * `machineId` off the live `['sync']` snapshot (`SessionRow.machineId` — the
- * server is allowed to see this, design §5.3) so the route itself stays a
  * thin static-export shell. Unlike the Git/Checks panels, `PreviewPanel`
  * only needs `machineId` (ports/tunnels are machine-scoped, not tied to any
  * one worktree — same `git.*`/`provider.account` precedent), so no

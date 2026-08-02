@@ -1,23 +1,15 @@
 /**
- * Client-only OAuth redirect flows for the two providers `POST
- * /v1/auth/register` accepts (design §5.2 "Sign-up"). Both are pure browser
- * navigations — no popup, no third-party SDK script (kvy-system-design.md
- * §12: "strict CSP … no third-party scripts") — chosen specifically because
- * this is a static export with no server of its own to complete a flow on
- * its behalf:
+ * Client-only OAuth redirect flows. Pure browser navigations - no popup, no
+ * third-party SDK script.
  *
- *  - **Google**: OpenID Connect implicit flow (`response_type=id_token`).
- *    Google redirects back with a signed ID token in the URL *fragment*
- *    (never sent to any server) — that token is used as-is as `oauthProof`.
- *  - **GitHub**: standard authorization-code flow. GitHub's token endpoint
- *    requires the app's client secret and has no browser CORS allowance, so
- *    the resulting `code` is hosted through the Kvy server's
- *    `/v1/auth/oauth/github/exchange` proxy to obtain the access token used
- *    as `oauthProof` (see packages/server/src/auth/oauth.ts).
+ * - Google: OIDC implicit flow (`response_type=id_token`). Google redirects back
+ *   with a signed ID token in the URL fragment (never sent to any server).
+ * - GitHub: authorization-code flow. GitHub's token endpoint requires a client
+ *   secret and has no CORS allowance, so the `code` goes through the server's
+ *   `/v1/auth/oauth/github/exchange` proxy.
  *
- * `state` (both) and `nonce` (Google only, embedded in the ID token) guard
- * against CSRF/replay; both are one-time values round-tripped through
- * `sessionStorage`, cleared on first use.
+ * `state` (both flows) and `nonce` (Google only) guard against CSRF/replay;
+ * both are one-time values round-tripped through `sessionStorage`.
  */
 import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "./config.js";
 

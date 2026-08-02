@@ -1,47 +1,3 @@
-/**
- * ACP transport core (design §7.3 "single `AcpRemote`", §7.4 "Remote mode
- * (v0.3 — ACP)", §7.9 "adapter manager", §7.10; plan.md §16 "17. v2 — ACP
- * migration / Phase 2.1 — ACP core").
- *
- * Spawns the managed ACP adapter child (resolved through the already-landed
- * adapter manager's verify-before-spawn seam, `../adapters/spawn.ts` —
- * never `node_modules` paths touched directly, never `npx`) and drives it
- * via `@agentclientprotocol/sdk`'s `client()` builder over NDJSON stdio.
- * Provider-agnostic on purpose: the only Claude/Codex-specific pieces (the
- * `_meta.systemPrompt`/`_meta.claudeCode.options.resume` payload Claude
- * needs at `session/new`, wiring this into `claudeRemoteLauncher.ts`, and
- * the ACP → `SessionEnvelope` mapper) are later Phase 2.1/2.2 tasks — this
- * module only owns the transport: connect, session lifecycle, prompt/cancel/
- * set_mode, and the permission-request handler seam.
- *
- * Ported (adapted, P) from mobvibe's `apps/mobvibe-cli/src/acp/
- * acp-connection.ts` (Apache-2.0) — same overall shape (spawn → `client()`
- * builder → `initialize` → session lifecycle → prompt/cancel), but with its
- * `fs`/`terminal` client-capability handlers dropped entirely (design:
- * "client capabilities (no fs, no terminal initially)") and its deep
- * recursive `_meta` payload sanitizer (`sanitizeAcpMessageMeta`/
- * `sanitizeAcpMeta`, a full bounded JSON-clone walker) replaced by a single
- * cheap byte-size bounds check (`boundMeta` below) — the load-bearing
- * "don't let a misbehaving adapter hand us an unbounded blob" property,
- * without the walker's depth/key/array-shape breadth.
- *
- * Two additions beyond mobvibe's own shape, both called out explicitly by
- * plan.md's task description:
- *  - **Exactly one `session/prompt` in flight per session**: `prompt()`
- *    throws if a previous call for the same `sessionId` hasn't settled yet,
- *    rather than mobvibe's `Set<AbortController>` (which tolerates several
- *    concurrent turns per session — ACP only allows one).
- *  - **Pre-ready session-update buffering**: the SDK's own
- *    `onNotification(session.update, ...)` handler is wired before any
- *    session is created (structurally guaranteed by the `client()` builder
- *    requiring every handler before `.connect()`), but `session/update`
- *    notifications can still arrive before *this class's own caller* has
- *    had a chance to call `onSessionUpdate()` (e.g. between `createSession()`
- *    resolving and the caller's next tick). Updates are buffered until the
- *    first `onSessionUpdate()` subscriber attaches, then flushed in order
- *    and delivered live from then on — see `emitSessionUpdate`/
- *    `onSessionUpdate` below.
- */
 import type {
   ChildProcess,
   ChildProcessWithoutNullStreams,
@@ -76,14 +32,15 @@ import type {
 import { installAdapter, resolveAdapterSpawn } from "../adapters/index.js";
 import type { Logger } from "../logger.js";
 
-/** Design: "initialize handshake declaring client capabilities (no fs, no terminal initially)". `fs` stays unset (no filesystem capability advertised at all); `terminal` is explicit `false` for clarity. */
+// fs stays unset (not advertised at all); terminal is explicit false for clarity.
 const ACP_CLIENT_CAPABILITIES: ClientCapabilities = {
   terminal: false,
 };
 
 const MAX_STDERR_LINES = 20;
 const MAX_BUFFERED_SESSION_UPDATES = 500;
-/** Cheap bound on inbound `_meta` payloads (design intent: never let an untrusted adapter process hand this transport an unbounded blob). Deliberately just a serialized byte-size check — see file header for what was dropped from mobvibe's much deeper sanitizer. */
+// Prevents an untrusted adapter process from sending an unbounded _meta payload.
+// Byte-size check only — not a deep structural walker.
 const META_MAX_BYTES = 16 * 1024;
 
 export type AcpConnectionState = "idle" | "connecting" | "ready" | "closed";
@@ -91,7 +48,6 @@ export type AcpConnectionState = "idle" | "connecting" | "ready" | "closed";
 export type SpawnFn = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
 
 export interface AcpConnectionOptions {
-  /** Which managed adapter to spawn — resolved via `resolveAdapterSpawn` (design §7.9). */
   adapterId: AdapterId;
   /** `~/.kvy` (or override) — passed straight through to `resolveAdapterSpawn`. */
   homeDir: string;
@@ -108,16 +64,17 @@ export interface AcpConnectionDeps {
     homeDir: string,
     execPath?: string,
   ) => Promise<ResolveAdapterSpawnResult>;
-  /** Injectable for tests; defaults to `node:child_process`'s `spawn`. The adapter manager's spawn spec's `command` is always `process.execPath` (a plain `node <entry>` invocation, never a shell command), so no `cross-spawn` shim resolution is needed here. */
+  /**
+   * Injectable for tests; defaults to `node:child_process`'s `spawn`. The spawn spec's
+   * `command` is always `process.execPath` (a plain `node <entry>` invocation, never a
+   * shell command), so no cross-spawn shim is needed here.
+   */
   spawn?: SpawnFn;
   /** Injectable for tests; defaults to `process.execPath`. */
   execPath?: string;
   /**
-   * Injectable for tests; defaults to the real adapter-manager `installAdapter`
-   * (A2 — auto-install fallback, design §7.9). Only ever invoked when
-   * `resolveSpawn` reports `reason: "not-installed"` — see `connect()`'s doc
-   * comment for why the other verify-failure reasons are deliberately NOT
-   * auto-remediated here.
+   * Injectable for tests; defaults to the real adapter-manager `installAdapter`.
+   * Only ever invoked when `resolveSpawn` reports `reason: "not-installed"`.
    */
   installAdapter?: (
     id: AdapterId,
@@ -135,7 +92,7 @@ const noopLogger: Logger = {
   error: () => {},
 };
 
-/** Thrown/emitted for connect failures, adapter-unavailable refusals, and unexpected post-ready closes — always carries the ring-buffered stderr tail (design §7.4: "Adapter stderr is ring-buffered and attached to connect/exit errors so spawn failures surface legibly"). */
+/** Thrown for connect failures, adapter-unavailable refusals, and unexpected post-ready closes. Always carries the ring-buffered stderr tail. */
 export class AcpConnectionError extends Error {
   readonly stderrTail?: string;
 
@@ -161,21 +118,13 @@ function hasPipedStdio(child: ChildProcess): child is ChildProcessWithoutNullStr
 }
 
 /**
- * Cheap `_meta` bounds check (file header) — drops (never throws on) anything that isn't a
- * plausibly-small plain object, logging once per call site. `undefined`/`null` pass through
- * unchanged since both are valid "no metadata" per the ACP schema.
+ * `_meta` bounds check — drops (never throws on) anything that isn't a plausibly-small
+ * plain object, logging once per call site. `undefined`/`null` pass through unchanged.
  *
- * Exported (only) so `acpConnection.test.ts` can exercise the "not a plain object" and
- * "unserializable" drop paths directly — neither is reachable end-to-end through a real
- * spawned adapter: the "unserializable" path needs a value that fails `JSON.stringify` (a
- * circular reference, a `BigInt`), and `_meta` here only ever arrives already round-tripped
- * through `JSON.parse`, which can't produce either. The "not a plain object" path needs a
- * non-record `_meta` (e.g. an array) to reach this function at all, but
- * `@agentclientprotocol/sdk`'s own generated zod schemas already validate every `_meta` field
- * as `z.record(z.string(), z.unknown()).nullish()` and default a non-conforming value to
- * `undefined` *before* `emitSessionUpdate`/`handlePermissionRequest` ever call `boundMeta` —
- * so both branches are real defensive code for future non-wire-sourced callers, verified by a
- * direct unit test rather than an integration one.
+ * Exported so tests can exercise the "not a plain object" and "unserializable" drop paths
+ * directly — both are unreachable end-to-end through a real adapter: `_meta` only arrives
+ * already round-tripped through `JSON.parse`, and the SDK's own zod schemas default a
+ * non-record `_meta` to `undefined` before `boundMeta` is ever called.
  */
 export function boundMeta(
   meta: unknown,
@@ -209,10 +158,8 @@ export function boundMeta(
 }
 
 /**
- * Handler seam for `session/request_permission` (design §7.6: "to be wired
- * to the existing permission pipeline by a later task"). Returning
- * `undefined` leaves the request unanswered forever — callers must always
- * settle it one way or another; the default (no handler set) auto-cancels.
+ * Handler seam for `session/request_permission`. The default (no handler set)
+ * auto-cancels; callers must always settle a request one way or another.
  */
 export type PermissionRequestHandler = (
   params: RequestPermissionRequest,
@@ -275,10 +222,8 @@ export class AcpConnection {
   }
 
   /**
-   * Subscribes to `session/update` notifications. The first subscriber
-   * receives any notifications buffered since `connect()` (pre-ready
-   * buffering — see file header) before starting to receive live ones.
-   * Returns an unsubscribe function.
+   * The first subscriber receives any notifications buffered since `connect()` before
+   * starting to receive live ones. Returns an unsubscribe function.
    */
   onSessionUpdate(listener: SessionUpdateListener): () => void {
     if (!this.hasSessionUpdateSubscriber) {
@@ -290,7 +235,7 @@ export class AcpConnection {
     return () => this.sessionUpdateListeners.delete(listener);
   }
 
-  /** Fires on connect failure surfaced asynchronously (n/a — `connect()` rejects directly) and on unexpected post-ready adapter exit/connection close. Always carries the stderr tail. */
+  /** Fires on unexpected post-ready adapter exit/connection close. Always carries the stderr tail. */
   onError(listener: (error: AcpConnectionError) => void): () => void {
     this.errorListeners.add(listener);
     return () => this.errorListeners.delete(listener);
@@ -310,40 +255,15 @@ export class AcpConnection {
     const logger = this.logger;
     let spawnResult = await resolveSpawn(this.options.adapterId, this.options.homeDir, execPath);
 
-    // A2 (design §7.9): a daemon-initiated spawn used to report "started"
-    // (via the notify self-report `start.ts`/`startCodex.ts` fire right
-    // after `bootstrapSession()`) long before this connect() ever ran — the
-    // ACP connection only opens later inside `runRemoteLoop()`. If the
-    // adapter was simply never installed (the clean, common first-run case —
-    // `kvy adapters install` was never run and no prior spawn attempt
-    // installed it either), a web user would see a session that looked live
-    // and then silently broke. Auto-install once, here, so the first
-    // daemon-initiated spawn just works.
-    //
-    // Deliberately scoped to ONLY `reason === "not-installed"`. The other
-    // verify-failure reasons are left alone and still fail loudly:
-    //   - "version-mismatch": the manifest was bumped since the last
-    //     install. Silently reinstalling here would mask a real upgrade
-    //     event behind an opaque connect failure/retry; the explicit
-    //     `kvy adapters upgrade` path exists precisely so a version
-    //     change is a visible, intentional action, not something that
-    //     happens invisibly on a background daemon spawn.
-    //   - "integrity-mismatch": the installed bytes don't match the pinned
-    //     hash — this is exactly the "corrupted/tampered/downgraded
-    //     install" case `verify.ts`'s own doc comment calls out as real,
-    //     load-bearing verification. Auto-reinstalling over it would
-    //     silently paper over a signal that something on disk doesn't match
-    //     what Kvy shipped a hash for, which defeats the point of having
-    //     the check at all — this must surface to a human (or `kvy
-    //     doctor`), not be quietly "fixed".
-    //   - "entry-missing": lock says the right version+integrity is present
-    //     but the spawn entrypoint file itself is gone (e.g. a partially
-    //     deleted `node_modules`). This is arguably as safe to
-    //     auto-remediate as "not-installed", but it's a rare enough state
-    //     (and cheap enough to diagnose via `kvy doctor`/`adapters
-    //     install`) that treating it the same as a real mismatch — fail
-    //     loudly rather than silently reinstall — was chosen to keep this
-    //     auto-install path narrow and easy to reason about.
+    // Auto-install only for "not-installed" — the clean first-run case where the adapter
+    // was simply never installed. The other failure reasons are deliberately left to fail loudly:
+    //   - "version-mismatch": the manifest was bumped; `kvy adapters upgrade` is the intended path.
+    //     Silently reinstalling would mask a real upgrade event behind an opaque connect failure.
+    //   - "integrity-mismatch": installed bytes don't match the pinned hash — silently
+    //     reinstalling would paper over a signal that something doesn't match what Kvy shipped,
+    //     defeating the purpose of the check.
+    //   - "entry-missing": treated as a mismatch rather than auto-remediated, to keep
+    //     this auto-install path narrow and easy to reason about.
     if (!spawnResult.ok && spawnResult.reason === "not-installed") {
       logger.info(
         `[acp-connection] adapter "${this.options.adapterId}" is not installed — auto-installing before spawn`,
@@ -508,7 +428,7 @@ export class AcpConnection {
     });
   }
 
-  /** Exactly one `session/prompt` in flight per session (design/plan.md) — throws if the previous call for this `sessionId` hasn't settled yet. The request's `cancellationSignal` is wired to `cancel()`'s abort below. */
+  /** Exactly one `session/prompt` in-flight per session — throws if the previous call for this `sessionId` hasn't settled yet. */
   async prompt(sessionId: string, prompt: ContentBlock[]): Promise<PromptResponse> {
     const connection = this.requireReady();
     if (this.promptControllers.has(sessionId)) {
@@ -527,7 +447,7 @@ export class AcpConnection {
     }
   }
 
-  /** Aborts the in-flight prompt's cancellation signal (if any — cooperative, the agent's eventual response still settles the `prompt()` promise) and sends the protocol-level `session/cancel` notification. */
+  /** Aborts the in-flight prompt's cancellation signal (cooperative — the agent's response still settles the `prompt()` promise) and sends `session/cancel`. */
   async cancel(sessionId: string): Promise<void> {
     const connection = this.requireReady();
     this.promptControllers.get(sessionId)?.abort(new Error("Prompt cancelled by Kvy client"));

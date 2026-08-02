@@ -1,15 +1,10 @@
 import type { PermDecision, PermissionMode, SessionRole } from "@kvy/wire";
 
 /**
- * Render items — the output of the reducer (kvy-system-design.md §9.1,
- * plan.md §8.2). `SessionEnvelope[]` in, an ordered `RenderItem[]` out, ready
  * for a (later, out of scope here) timeline UI to map 1:1 onto components.
  *
- * Ported from Happy's `happy-app/sources/sync/reducer/reducer.ts` — logic
- * only. Happy's client renders a nested-content-block message model; Kvy's
  * wire protocol is a flatter discriminated-union event stream
  * (`SessionEvent`), so the shapes below are a fresh design that preserves the
- * four load-bearing behaviors plan.md calls out: permission-placeholder ↔
  * tool-use matching by name+args, subagent/sidechain linking, dedupe by
  * envelope id, and turn/tool pairing into a stable ordered list.
  */
@@ -64,7 +59,6 @@ export interface ModeSwitchItem extends RenderItemBase {
   by: "terminal" | "client";
 }
 
-/** The live permission mode is now `mode` (docs/bug-fix-plan.md §5) — a
  * standalone fact distinct from `mode-switch`'s local↔remote control handoff.
  * `source: "terminal"` is the live TUI's Shift+Tab cycling reported via the
  * CLI's hook bridge; `source: "client"` is reserved for a future web-initiated
@@ -83,7 +77,6 @@ export interface SubStopItem extends RenderItemBase {
   kind: "sub-stop";
 }
 
-/** Per-message token usage (plan-v2.md W4.6, AI Elements `Context` pattern)
  * — one per assistant transcript record that reported `usage`, rendered as
  * a quiet per-turn token chip. `costUsd` is optional: no provider surfaces
  * it in Kvy's transcript source today, so it's always absent for now,
@@ -144,7 +137,6 @@ export interface ToolItem extends RenderItemBase {
   output?: unknown;
   permission?: PermissionInfo;
   /** Linked sidechain/subagent scope — envelopes whose `subagent` field
-   * equals this tool's `call` id (plan.md §8.2 "subagent/sidechain linking"). */
   subagent?: RenderItem[];
 }
 

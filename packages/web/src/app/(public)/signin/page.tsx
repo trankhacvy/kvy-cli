@@ -14,17 +14,6 @@ import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
 import { peekPendingPair } from "@/lib/pending-pair";
 import { isExpiredReason } from "./signin-gate";
 
-// Sign-in / sign-up page (design §5.2, §9.2 "Home" is gated behind this).
-// A lost or wiped browser recovers by asking one of the account's other devices for a
-// copy of its keys (docs/auth-ux-overhaul-plan.md Phase 4), not by rotating and erasing.
-// OAuth here is a straightforward "authenticate with the provider, then the callback page
-// sets this browser up" flow, same as email+password at `/password/`.
-//
-// Layout follows the ui8-brainwave sign-in reference: a narrow, card-less centered
-// column (one heading, full-width provider buttons with real brand marks, a plain-text
-// divider) beside `AuthArtPanel` — the full-height rounded art panel shared with every
-// other unprotected auth screen. Providers whose client id isn't configured are hidden,
-// not disabled — an unconfigured provider is an admin setup concern, not an end-user error.
 
 export default function SignInPage() {
   const router = useRouter();
@@ -45,8 +34,6 @@ export default function SignInPage() {
     if (peekPendingPair()) setBanner("pair");
   }, []);
 
-  // Per-screen tab title (kvy-prd.md FR-7.9), same set-on-mount/clear-on-unmount
-  // pattern as `useTabAttention`.
   useEffect(() => {
     setTitleOverride("signin", "Sign in · Kvy");
     return () => clearTitleOverride("signin");

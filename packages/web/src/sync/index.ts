@@ -3,7 +3,6 @@
  * plus the sync engine that reconciles it into a TanStack Query cache.
  *
  * `apiSocket` is the singleton app code imports. Call `.connect(token)` once
- * auth completes (design §9.1), then wire the engine up once:
  *
  *   const engine = createSyncEngine(queryClient, apiSocket);
  *   apiSocket.on('ephemeral', (e) => { ... activity/attention/presence ... });
@@ -15,7 +14,6 @@
  * structurally, so no adapter is needed between the two. On document
  * visibility change `apiSocket` also reports `app-state` to the server so
  * the push pipeline can suppress notifications for a foregrounded tab
- * (§6.4).
  *
  * See `engine.ts` for the fast-path/gap-invalidation design and
  * `queryKeys.ts` for the Query key contract shared with whatever hooks own
@@ -27,7 +25,6 @@ import { createApiSocket } from "./apiSocket.js";
 import { createSocketFactory } from "./socket-factory.js";
 import { createBrowserVisibilitySource } from "./visibility.js";
 
-// issue-4-plan.md §4.5/§6.4: `apiSocket`'s own proactive renew-token timer and
 // connect_error recovery both go through `lib/session.ts`'s `silentRefresh()` — the
 // same one `require-auth.tsx` uses on page load — so a live socket survives an
 // access-token boundary the same way a fresh page load would, without ever forcing

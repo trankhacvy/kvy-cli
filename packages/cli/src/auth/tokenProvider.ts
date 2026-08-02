@@ -1,23 +1,9 @@
-/**
- * issue-4-plan.md §6.6: replaces the static `token: string` every daemon/CLI network
- * client used to be handed — that fixed 1h JWT was the root cause of "daemon silently
- * dies after 1h" (known-issues.md #4): once it expired, `machineClient.ts` retried the
- * dead credential forever with no way to mint a fresh one.
- *
- * `TokenProvider` mints access tokens from a persistent refresh token
- * (`POST /v1/auth/refresh`), caches the current one until shortly before its own `exp`
- * claim, and persists each rotation back to disk via the injected `onRotate`. A refresh
- * that comes back definitively rejected (401) means the credential is dead — callers
- * should stop retrying and tell the user to run `kvy auth login` again, not loop
- * forever on a corpse the way the old fixed-token path did.
- */
 import { z } from "zod";
 import type { Logger } from "../logger.js";
 import { decodeTokenClaimsUnverified } from "./jwt.js";
 
-// Refresh proactively before the access token actually expires — mirrors the server's
-// own §4.5 in-band `renew-token` timing (~1m headroom) so a caller never observes a
-// token that's valid-on-paper but about to be rejected mid-request.
+// Refresh proactively ~1m before expiry so a caller never observes a token
+// that's valid-on-paper but about to be rejected mid-request.
 const REFRESH_SKEW_MS = 60_000;
 
 export interface TokenProviderDeps {
@@ -46,10 +32,9 @@ export interface TokenProviderDeps {
   /**
    * Serializes a refresh attempt (network call + `onRotate` persist) against sibling
    * processes sharing the same on-disk refresh token, so at most one of them is ever
-   * actually rotating it at a time (known-issues.md #20: two siblings racing on
-   * `/v1/auth/refresh` is what causes a benign same-machine race to look like token
-   * theft and revoke the whole device family). Optional: omitted means no
-   * coordination, matching this module's previous behavior.
+   * actually rotating it at a time. Two siblings racing on `/v1/auth/refresh` can
+   * cause a benign same-machine race to look like token theft and revoke the whole
+   * device family. Optional: omitted means no coordination.
    */
   withCredentialsLock?: <T>(fn: () => Promise<T>) => Promise<T>;
 }
@@ -63,9 +48,6 @@ export interface TokenProvider {
   readonly isDead: boolean;
 }
 
-// Reviewer nit (security review, closing before merge): parse-don't-trust, matching
-// this codebase's own convention (`auth/pair.ts`, `auth/credentials.ts`) instead of a
-// bare `as RefreshResponse` type assertion over an untyped `res.json()`.
 const RefreshResponseSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
@@ -81,12 +63,10 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
   async function doRefresh(retriedStaleToken = false): Promise<string | null> {
     if (dead) return null;
 
-    // Proactive resync (known-issues.md #20): before presenting a token over the
-    // network at all, check whether a sibling process already rotated it out from
-    // under us — the common case in practice, not just a millisecond-level race. A
-    // stale-by-one token that only gets caught reactively on a 401 may already have
-    // been outside the server's grace window by then, which revokes the whole device
-    // family instead of just failing this one request.
+    // Before presenting a token over the network, check whether a sibling process
+    // (daemon vs. a `kvy claude` session) already rotated it — the common case in
+    // practice. A stale-by-one token that only gets caught reactively on a 401 may
+    // already be outside the server's grace window, revoking the whole device family.
     if (!retriedStaleToken) {
       const onDisk = deps.readCurrentRefreshToken?.() ?? null;
       if (onDisk && onDisk !== refreshToken) {
@@ -105,12 +85,10 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
       });
 
       if (res.status === 401) {
-        // Stale-by-one mitigation (issue #2, docs/known-issues-cliweb-sync-test.md):
-        // before condemning this instance forever, check whether a sibling process
-        // (the daemon vs. a `kvy claude` session, both reading/writing the same
-        // `~/.kvy/access.key`) already rotated the single-use refresh token out from
-        // under us. Only retried once — if the disk copy is unchanged, or the retry
-        // itself 401s, the token really is dead.
+        // Before condemning this instance forever, check whether a sibling process
+        // (daemon vs. a `kvy claude` session, both sharing `~/.kvy/access.key`)
+        // already rotated the single-use refresh token. Only retried once — if the
+        // disk copy is unchanged, or the retry itself 401s, the token is dead.
         if (!retriedStaleToken) {
           const onDisk = deps.readCurrentRefreshToken?.() ?? null;
           if (onDisk && onDisk !== refreshToken) {
@@ -141,12 +119,11 @@ export function createTokenProvider(deps: TokenProviderDeps): TokenProvider {
         return null;
       }
       const body = parsed.data;
-      // known-issues.md #20: on a benign same-family race, the server can't hand back
-      // the real current refresh token (it only stores a hash) — it echoes back
-      // whatever this call presented, unchanged. That's not a rotation; persisting it
-      // would just rewrite disk with the same already-superseded value, potentially
-      // clobbering a sibling's genuinely newer one. Only treat this as a rotation (and
-      // only then persist) when the token actually changed.
+      // On a benign same-family race, the server can't hand back the real current
+      // refresh token (it only stores a hash) — it echoes back whatever this call
+      // presented, unchanged. That's not a rotation; persisting it would rewrite disk
+      // with the same already-superseded value, clobbering a sibling's newer one.
+      // Only treat this as a rotation (and only then persist) when the token changed.
       const rotated = body.refreshToken !== refreshToken;
       refreshToken = body.refreshToken;
       cachedAccessToken = body.accessToken;

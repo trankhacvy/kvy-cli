@@ -1,12 +1,3 @@
-/**
- * Shared types for @kvy/crypto.
- *
- * Deliberately zod-free and dependency-free: @kvy/crypto has no dependency
- * on @kvy/wire so it can be built fully in parallel with it. The shape
- * here is structurally identical to `EncryptedBoxSchema` in @kvy/wire —
- * that's a convention, not a coupling.
- */
-
 /** The versioned, opaque envelope every encrypted payload travels in over the wire / in Postgres. */
 export interface EncryptedBox {
   t: "enc";
@@ -27,10 +18,7 @@ export interface SignKeyPair {
   secretKey: Uint8Array;
 }
 
-/**
- * The key hierarchy derived from a client-held masterSecret.
- * See kvy-system-design.md §5.1.
- */
+/** The key hierarchy derived from a client-held masterSecret. */
 export interface KeyTree {
   /** Ed25519 signing keypair — server auth challenge (HKDF("kvy-auth")). */
   signing: SignKeyPair;
@@ -43,8 +31,7 @@ export interface KeyTree {
 }
 
 /**
- * A `masterSecret` (or, for the daemon's reduced-custody mode, a content
- * bundle) PIN-wrapped at rest (issue-4-plan.md §6.1). All fields are base64.
+ * A `masterSecret` PIN-wrapped at rest. All fields are base64.
  * `kdf` is carried explicitly so a future KDF change is a versioned,
  * detectable migration rather than a silent parameter drift.
  */

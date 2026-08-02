@@ -126,7 +126,6 @@ export function ChecksBody({
 }
 
 /**
- * The "Checks" tab (kvy-system-design.md §4.4 `github.checks`;
  * docs/features/github-pr-ci.md "GitHub PR/CI integration";
  * docs/competitive-notes-omnara.md #4): PR header (when one exists) plus its
  * check-run list, or a derived empty-state message otherwise (`ChecksBody`

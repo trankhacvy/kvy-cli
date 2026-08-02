@@ -41,20 +41,12 @@ import { TimelineSkeleton } from "./TimelineSkeleton";
 import { WorkingDirectoryChip } from "./WorkingDirectoryChip";
 
 /**
- * Session timeline screen (kvy-system-design.md §9.2 "Session" row,
- * kvy-prd.md FR-7.2/FR-7.3/FR-7.4). Renders the reducer's `RenderItem[]`
- * output as a structured chat transcript plus the full control surface
- * (plan.md §16 "2.4 Web control surface"): `Composer` (queue-aware follow-up
- * input + footer session chips), interactive `PermCard`s inline in the
- * transcript, live working/attention indicators, and a tab title + favicon
- * reflecting the max attention state.
+ * Session timeline screen. Renders the reducer's `RenderItem[]` as a chat transcript plus
+ * control surface: `Composer`, interactive `PermCard`s, live working/attention indicators,
+ * and a tab title reflecting max attention state.
  *
- * `items`/`useControl` both come from the real sync engine + session-scoped
- * crypto worker by default (`useLiveRenderItems`/`useLiveSessionControl`,
- * `features/session-control/use-session-crypto.ts`). `useControl` stays an
- * injectable prop, mirroring `features/session-list`'s
- * `UseSessionListSnapshot` seam, so a test can still swap in
- * `useMockSessionControl` without touching `Composer`/`PermCard`.
+ * `useControl` is injectable so tests can swap in `useMockSessionControl` without touching
+ * `Composer`/`PermCard`.
  */
 export function SessionTimelineScreen({
   sessionId,
@@ -77,13 +69,9 @@ export function SessionTimelineScreen({
   const retryDecrypt = () =>
     queryClient.invalidateQueries({ queryKey: messagesQueryKey(sessionId) });
 
-  // The session row's own lifecycle `status` (plan-v2.md W1.4+B15, design
-  // §7.5's mode state machine) — read straight off the same `['sync']`
-  // account snapshot `features/session-list/live-source.ts` already reads,
-  // rather than threading a second fetch through this screen. `undefined`
-  // until the snapshot has loaded or this session id isn't (yet) present in
-  // it; treated the same as `"active"` below (the default a fresh session
-  // row is created with) — never as "ended"/"failed" by absence alone.
+  // Read straight off the `['sync']` snapshot rather than a second fetch. `undefined` until
+  // the snapshot loads or the session isn't present; treated as `"active"` (never as
+  // "ended"/"failed" by absence alone).
   const syncSnapshot = useSyncSnapshotQuery().data;
   const session = syncSnapshot?.sessions.find((s) => s.id === sessionId);
   // A reset-keys rotation (`/reset-keys/`) throws away the old key entirely — a session
@@ -97,10 +85,8 @@ export function SessionTimelineScreen({
     session.keyEpoch < syncSnapshot.accountKeyEpoch;
   const sessionStatus: SessionRow["status"] = session?.status ?? "active";
   const provider = session?.provider ?? "";
-  // `workspaceId` (when set) *is* the workspace's real absolute directory
-  // path — same plaintext-on-the-row convention `SessionGitScreen` already
-  // relies on (design §5.3: the server is allowed to see this field, unlike
-  // `metadata`'s encrypted title, so no decrypt is needed here either).
+  // `workspaceId` is the workspace's real absolute path — stored plaintext on the row
+  // (the server may see it, unlike `metadata`'s encrypted title), so no decrypt needed.
   const workspacePath = session?.workspaceId ?? null;
   // The session's owning machine (`SessionRow.machineId`, same plaintext-on-
   // the-row convention as `workspacePath` above) — `null` until the row has
@@ -117,10 +103,8 @@ export function SessionTimelineScreen({
   // online/offline boolean.
   const machineAvailability = useMachineOnline(machineId);
 
-  // Viewing the screen counts as "seen" for this device (kvy-prd.md
-  // FR-8.1's per-device last-seen timestamp) — marked once per session id,
-  // not on every render, so a completed-turn-while-open doesn't immediately
-  // re-flag "done" the instant it lands.
+  // Marked once per session id (not on every render) so a completed-turn-while-open
+  // doesn't re-flag "done" the instant it lands.
   useEffect(() => {
     markSeenNow(sessionId);
   }, [sessionId]);

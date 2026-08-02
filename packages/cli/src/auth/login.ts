@@ -1,15 +1,3 @@
-/**
- * `kvy auth login` — port of Happy's `doWebAuth`/`waitForAuthentication`
- * (`happy-cli/src/ui/auth.ts`), collapsed onto Kvy's single web-app
- * pairing target (kvy-plan.md §5/§2.2): the CLI always prints the pairing
- * URL and a QR code, and *additionally* tries to open it in a browser
- * automatically — the "OAuth browser flow" is just that URL, since the web
- * app (not the CLI) is what talks to Google/GitHub and already holds the
- * account's keys once signed in there. Opening the browser is best-effort;
- * the printed URL/QR is the fallback that always works, including headless
- * environments (matches Happy's "I changed this to always show the URL"
- * fix for devcontainers).
- */
 import os from "node:os";
 import { z } from "zod";
 import { resolveHomeDir } from "../home.js";
@@ -39,12 +27,10 @@ import { resolveAccessToken } from "./resolveAccessToken.js";
 const SessionsResponseSchema = z.object({ email: z.string().nullable() });
 
 /**
- * The account this device just joined, for the "✓ Connected as …" line.
- *
- * Deliberately read from the AUTHENTICATED `GET /v1/auth/sessions` (which already
- * returns it) rather than from the unauthenticated pairing routes: anyone holding a
- * pairing URL could otherwise read the account's email off `/v1/auth/pair/status`
- * without ever proving they hold the matching ephemeral secret key.
+ * Deliberately reads account email from the AUTHENTICATED `GET /v1/auth/sessions`
+ * rather than the unauthenticated pairing routes: anyone holding a pairing URL could
+ * otherwise read the account's email off `/v1/auth/pair/status` without proving they
+ * hold the matching ephemeral secret key.
  *
  * Best-effort — a failure just drops the name from one success line.
  */
@@ -67,23 +53,11 @@ async function fetchAccountEmail(
 }
 
 /**
- * First-run UX (plan.md §16 PRD FR-1.2's "no separate setup steps" goal, extended to
- * auth): `kvy claude` shouldn't hard-fail with an instruction to run a second command
- * when nobody's logged in yet — if a human is actually present at this terminal (a real
- * TTY), just run the same pairing flow `kvy auth login` uses, inline, then let the
- * caller continue straight into the session. A non-interactive invocation (CI, a
- * headless script) has no one to show a QR code to, so that case keeps the old, honest
- * hard-fail instead of hanging.
- */
-/**
- * `force: true` means the CALLER has already proved this machine's stored refresh token is
- * dead (a real 401 from `POST /v1/auth/refresh` — see `startPreflight.ts`'s `isDead` check),
- * so the credentials file on disk is worthless and must not be mistaken for being signed in.
- *
- * Revocation from Settings → Devices is server-side only: `access.key` survives it untouched.
- * Without this flag, the first line below short-circuits and the entire "dead token → inline
- * re-pair" path (AX-1.5) never runs — auth-ux-overhaul-e2e-results.md E2E-6.4, which
- * reproduced 100% of the time.
+ * `force: true` means the caller has already proved this machine's stored refresh token
+ * is dead (a real 401 from `POST /v1/auth/refresh`), so the credentials file on disk is
+ * worthless and must not be mistaken for being signed in. Revocation from Settings →
+ * Devices is server-side only: `access.key` survives it untouched. Without this flag,
+ * the existing-credentials check short-circuits and the inline re-pair path never runs.
  */
 export interface EnsureLoggedInOptions {
   force?: boolean;
@@ -106,8 +80,6 @@ export async function ensureLoggedIn(
   if (options.force) clearCredentials(homeDir);
 
   const code = await runAuthLogin(logger, homeDir);
-  // `runAuthLogin` already wrote a full explanation of what went wrong to stdout —
-  // nothing further to say here, just propagate the failure.
   return code === 0 ? { ok: true } : { ok: false, message: "" };
 }
 
@@ -160,9 +132,8 @@ export async function runAuthLogin(
       return 1;
     }
 
-    // issue-4-plan.md §6.1/§6.5, revised: always device-key wrap — no PIN prompt for the
-    // CLI, interactive or not. Works unattended (the daemon needs exactly that) and
-    // avoids asking a human to type a PIN on every future `kvy claude` invocation.
+    // Always device-key wrap — no PIN prompt. Works unattended (the daemon needs this)
+    // and avoids prompting for a PIN on every `kvy claude` invocation.
     const keyMaterial = await wrapNewKeyMaterial(outcome.result.masterSecret, homeDir);
     const credentials: KvyCredentials = {
       refreshToken: outcome.result.refreshToken,

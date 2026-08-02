@@ -1,6 +1,5 @@
 /**
  * Per-device "last seen" timestamps, one per session — the missing half of
- * FR-8.1's attention derivation ("computed from event stream vs per-device
  * last-seen timestamps"). `localStorage` is the right store here (unlike
  * the master secret in `@/crypto`): it's inherently per-device, and losing
  * it just means a completed turn briefly re-shows as unseen — never a

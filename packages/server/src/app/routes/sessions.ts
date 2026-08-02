@@ -35,7 +35,6 @@ const ListSessionsResponseSchema = z.object({
 });
 
 /**
- * `POST /v1/sessions` + `GET /v1/sessions` (design §4.3/§6.2, plan.md §16
  * "1.2 Server write path").
  *
  * `db`/`eventRouter` are injected (not the module singletons) so tests can
@@ -66,7 +65,6 @@ export function buildSessionsRoutes(
         const accountId = req.accountId;
         const { tag, provider, workspaceId, machineId, executionTarget, metadata, dek } = req.body;
 
-        // AX-7.1: concurrent-session quota. Checked before the insert, and deliberately
         // NOT inside the transaction — this route is idempotent by (accountId, tag), so a
         // retry of an already-created session must never be refused for being over quota.
         if (env.MAX_ACTIVE_SESSIONS_PER_ACCOUNT > 0) {
@@ -86,7 +84,6 @@ export function buildSessionsRoutes(
           }
         }
 
-        // Create-or-get by (accountId, tag) — idempotent (design §4.3). The
         // unique index on (account_id, tag) is the actual dedup mechanism
         // under concurrency; `onConflictDoNothing` + re-select turns a lost
         // race into the same 200-replay a sequential retry would get.

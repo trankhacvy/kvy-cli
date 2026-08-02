@@ -1,9 +1,3 @@
-/**
- * GitHub's official mark (the "Octocat" silhouette) for the sign-in button —
- * `fill="currentColor"` so it follows the button's text color across light
- * and dark themes. Decorative like `GoogleIcon`: the button label carries the
- * meaning, so `aria-hidden` is baked in.
- */
 export function GithubIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="currentColor">

@@ -3,7 +3,6 @@ import { type DaemonState, readDaemonState } from "./state.js";
 
 /**
  * `ensureDaemonRunning()` — auto-start wiring for every agent-invoking
- * `kvy` subcommand (plan.md §16 1.5, design §7.2/§8; PRD FR-1.2: "First
  * run of `kvy` triggers ... daemon auto-start — no separate setup
  * steps").
  *

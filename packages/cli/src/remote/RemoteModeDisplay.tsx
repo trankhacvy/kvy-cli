@@ -1,6 +1,5 @@
 /**
  * Ported (adapted) from Happy — https://github.com/slopus/happy
- * Original: happy-cli/src/ui/ink/RemoteModeDisplay.tsx (MIT)
  *
  * MIT License
  * Copyright (c) 2026 Happy Coder Contributors
@@ -24,13 +23,10 @@
  * SOFTWARE.
  *
  * ---
- * Remote-mode Ink status view (plan.md §16 "2.1 Remote mode": "Ink
  * `RemoteModeDisplay`: status view, streamed message summaries, keypress
- * handling"; design §7.4: `the terminal shows the Ink status view
  * ("controlled from web — Ctrl-T to take back")`).
  *
  * Keypress interpretation itself lives in `remoteModeKeypress.ts` (ported
- * verbatim from Happy's own "extracted so we can unit-test the reduce-style
  * logic without Ink/React" pure function) — same three gestures the
  * task/plan call out:
  *   - double-space within 15s confirms switching back to local/terminal

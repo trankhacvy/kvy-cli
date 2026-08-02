@@ -42,19 +42,8 @@ function formatRelative(iso: string | null): string {
   return `${Math.round(diffSeconds / 3600)}h ago`;
 }
 
-/**
- * CLI pairing approval: the CLI prints `app.kvy.dev/pair#<ephPub>` and polls while this
- * already-authenticated browser approves it.
- *
- * docs/auth-ux-overhaul-plan.md AX-2.2: the gate order is IDENTITY FIRST, crypto second.
- * This page used to check the crypto bridge before checking whether the visitor was even
- * signed in, so a fresh browser hit a "no key material … reopen this pairing link" dead
- * end while still signed out.
- *
- * Layout shares `/signin`'s shell (`AuthArtPanel`, `AuthBrandMark`) so a page whose whole
- * job is "prove to the user this approval request is legit" doesn't show up unbranded —
- * see docs' review notes on this page for why that matters more here than anywhere else.
- */
+/** CLI pairing approval: the CLI prints `app.kvy.dev/pair#<ephPub>` and polls while this
+ * already-authenticated browser approves it. Gate order: IDENTITY FIRST, crypto second. */
 export default function PairPage() {
   const router = useRouter();
   /** `null` until step 2 below confirms identity — `useCryptoBridgeStatus` stays
@@ -73,17 +62,15 @@ export default function PairPage() {
     let cancelled = false;
 
     (async () => {
-      // 1. A bad link is a bad link regardless of auth state.
       const ephPub = parseEphPubFromHash(window.location.hash);
       if (!ephPub) {
         setGate({ kind: "invalid-link" });
         return;
       }
 
-      // 2. Identity. A signed-out visitor never sees a crypto screen. The pairing is
-      // stashed so sign-in can return here. `!== "ok"` (not a truthiness check): an
-      // "unreachable" outcome must NOT be treated as signed in — that would skip the
-      // stash + bounce and fall through to `fetchPairDetails` with no token at all.
+      // The pairing is stashed so sign-in can return here. `!== "ok"` (not a truthiness
+      // check): an "unreachable" outcome must NOT be treated as signed in — that would
+      // skip the stash + bounce and fall through to `fetchPairDetails` with no token.
       if (!isSignedIn() && (await silentRefresh()) !== "ok") {
         if (cancelled) return;
         stashPendingPair(ephPub);
@@ -92,7 +79,6 @@ export default function PairPage() {
       }
       if (!cancelled) setAccountId(getAccountId());
 
-      // 3. What are we approving?
       const details = await fetchPairDetails(ephPub).catch(() => null);
       if (cancelled) return;
 
@@ -110,16 +96,12 @@ export default function PairPage() {
     };
   }, [router]);
 
-  // 4. Crypto, second: approving needs the master secret, so a browser without keys is
-  // routed to fetch them rather than dead-ended. The detour is REVERSIBLE — see
-  // `nextGate`'s docblock for why the demotion needed an inverse.
+  // Approving needs the master secret, so a browser without keys is routed to fetch
+  // them rather than dead-ended. The detour is REVERSIBLE via `nextGate`.
   useEffect(() => {
     setGate((current) => nextGate(current, bridgeStatus.kind, pairDetails));
   }, [bridgeStatus, pairDetails]);
 
-  // 5. Once approved, the CLI is already unblocked (it picked up the sealed box the moment
-  // `approvePairing` settled) — this browser has nothing further to do here, so send it on
-  // to the dashboard rather than leaving it stranded on a static success card.
   useEffect(() => {
     if (gate.kind !== "approved") return;
     const timer = setTimeout(() => router.replace("/dashboard/"), APPROVED_REDIRECT_MS);
@@ -143,9 +125,8 @@ export default function PairPage() {
     }
 
     try {
-      // Mint the new device's session server-side FIRST — the resulting refresh token has
-      // to reach the crypto worker so it can be sealed alongside the master secret,
-      // rather than relayed to the server in plaintext.
+      // Mint the new device's session server-side FIRST so the refresh token can be
+      // sealed alongside the master secret, never relayed to the server in plaintext.
       const { refreshToken } = await mintPairSession(token, ephPub);
       const sealed = await bridge.sealForPeer(ephPub, refreshToken);
       await approvePairing(token, { ephPub, response: sealed });

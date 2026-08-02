@@ -3,21 +3,15 @@ import type { RenderItem } from "@/sync/reducer";
 import type { MachineStatus } from "./use-machine-presence";
 
 /**
- * View-model types for the Home / session-list screen (design §9.2 "Home"
- * row, kvy-prd.md FR-7.1). Field values here are already decrypted where
  * the underlying wire row carries an `EncryptedBox` (`SessionRow.metadata`,
  * `MachineRow.metadata`) — the crypto bridge that produces that plaintext is
- * a separate, not-yet-landed concern (design §5.3). Everything else
  * (`id`, `workspaceId`, `machineId`, `status`, `lastSeenAt`, ...) is a
  * pass-through of the plaintext routing metadata the server is allowed to
- * see (design §5.3 "what the server can see").
  */
 
-/** The server-computed, never-persisted signal for a session (design §4.3
  * `Ephemeral` union, `t: "attention"`) — the one status input that isn't
  * recoverable by replaying `RenderItem[]` alone, since the wire's
  * `SessionEvent` union has no "agent asked a question" variant yet
- * (kvy-prd.md FR-8.1/FR-8.2 leave that inference to the session process).
  * `null` means "no outstanding attention signal for this session". */
 export type AttentionKind = Extract<Ephemeral, { t: "attention" }>["kind"];
 
@@ -34,7 +28,6 @@ export interface SessionListMachine {
    * resolved placeholder string (Issue #13: don't flash a placeholder while
    * decryption is still in flight). */
   name: string | null;
-  /** Live presence (design §4.3 `machine-presence` ephemeral / `lastSeenAt`
    * heartbeat) — never persisted as a flag, always a snapshot of "right now".
    * Kept alongside `status` (AH8 "machine-status-reauth") rather than
    * replaced by it — every existing consumer (restart-eligibility checks,
@@ -89,7 +82,6 @@ export interface SessionListSnapshot {
   machines: SessionListMachine[];
   sessions: SessionListSession[];
   /** `true` while the initial `['sync']` account snapshot is still in
-   * flight and nothing has ever landed in cache yet (plan-v2.md W4.2
    * "skeletons for Home … initial loads") — optional and defaulted to
    * `false`-ish (`undefined`) by every fixture source (`mock-source.ts`,
    * `buildSnapshot` in tests) that has no async loading phase to model. */

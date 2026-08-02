@@ -1,11 +1,7 @@
 import type { Ephemeral, Update } from "@kvy/wire";
 import type { Server, Socket } from "socket.io";
 
-// Ported from Happy's `happy-server/sources/app/events/eventRouter.ts` (room scheme,
-// recipient filters, emitUpdate/emitEphemeral) — plan.md §4.1 "port verbatim". Adapted:
 // `userId` -> `accountId` (Kvy's identity anchor), and payload shapes come from
-// `@kvy/wire`'s `Update`/`Ephemeral` (design §4.3) instead of Happy's Prisma-shaped
-// event unions. Ephemeral backpressure coalescing (§4.3, marked (N) in plan.md) is new —
 // Happy has no equivalent.
 
 // === CONNECTION TYPES ===
@@ -62,7 +58,6 @@ export interface EmitEphemeralParams {
 /**
  * The fan-out seam the HTTP write path (task 1.2, `app/routes/*`) depends
  * on: every write route calls `emitUpdate`/`emitEphemeral` post-commit
- * (never from inside a transaction — design §6.1) instead of talking to
  * Socket.IO rooms directly. Narrowed to just the two emit methods (not the
  * full `EventRouter` surface below, which also owns connection/room
  * bookkeeping that only `socket.ts` needs) so route tests can inject a
@@ -73,7 +68,6 @@ export interface EventRouterPort {
   emitEphemeral(params: EmitEphemeralParams): void;
 }
 
-// === EPHEMERAL BACKPRESSURE (design §4.3, plan.md 1.1 item 5 — marked (N)) ===
 //
 // Persistent `update`s are never dropped (a slow client falls back to the HTTP
 // refetch path). Ephemeral `activity`/`attention` events are droppable by design,
@@ -163,7 +157,6 @@ class EventRouter {
     }
   }
 
-  // === REVOCATION (issue-4-plan.md §4.5) ===
 
   /**
    * Every live socket for this account — the accessor `app/socket.ts`'s revoke routes
@@ -216,9 +209,7 @@ class EventRouter {
   }
 
   /**
-   * Push-suppression check (design §6.4: "skip if any user-scoped connection
    * reports `app-state: active` **and** has the session's room joined
-   * (visible)"). Kvy add vs. Happy's `isUserActive` (account-wide only,
    * see `happy-server/sources/app/push/pushDispatch.ts`): scoped to the
    * rooms a given session's traffic actually reaches
    * (`all-interested-in-session`'s room set — session-scoped room ∪
@@ -265,7 +256,6 @@ class EventRouter {
   }
 
   // Local socket lookup for the ephemeral backpressure path (single-process at MVP —
-  // design kvy-system-design.md §6.4: "Redis cluster adapter reserved behind an env
   // flag"; cross-replica delivery for these events is deferred alongside that flag).
   private socketsInRooms(rooms: string[]): Socket[] {
     const ids = new Set<string>();
@@ -319,7 +309,6 @@ class EventRouter {
 
 export const eventRouter = new EventRouter();
 
-// issue-4-plan.md §4.5c: the revoke routes' actual "make it immediate" step — finds this
 // account's live socket(s) for exactly `sessionId` (a revoke only ever kills ONE device
 // session, never every connection the account happens to have open) and disconnects
 // them right now, rather than waiting for the access token's own TTL to lapse.
@@ -341,7 +330,6 @@ export function disconnectSession(router: EventRouter, accountId: string, sessio
  * assertions rely on this exact shape).
  */
 /**
- * docs/auth-ux-overhaul-plan.md Phase 4: pushed to every authenticated connection of the
  * account so a holder device can offer to approve a key request without polling. Carries
  * no secret — only the requester's ephemeral PUBLIC key and an untrusted display label.
  */
@@ -363,10 +351,8 @@ export function buildMachinePresenceEphemeral(
  * The `activity` ephemeral a session-scoped socket's `alive` keepalive
  * (`packages/cli/src/session/sessionClient.ts`) turns into server-side:
  * relayed to whoever's watching the session (its own session-scoped room
- * plus the account's user-scoped clients — design §4.3's `ClientEmit`
  * `{ e: 'alive'; sessionId; working }` becomes this `Update`-sibling
  * `Ephemeral` fan-out). This is a pure live relay with no durable cache
- * behind it, deliberately — unlike machine presence (design §6.3, now backed
  * by a real `machines.lastSeenAt` write-behind cache, see `socket.ts`'s
  * `machine-alive` handler), a session's "is it actively working" state is
  * already sourced from persisted turn-start/turn-end envelopes

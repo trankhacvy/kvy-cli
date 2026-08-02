@@ -27,7 +27,7 @@ describe("mintAccessToken / verifyToken", () => {
     expect(result?.expiresAt).toBeLessThanOrEqual(before + ACCESS_TOKEN_TTL_SECONDS + 5);
   });
 
-  it("defaults to a 15-minute TTL (issue-4-plan.md §4.1/§8 Phase 6 flip)", () => {
+  it("defaults to a 15-minute TTL", () => {
     expect(ACCESS_TOKEN_TTL_SECONDS).toBe(900);
   });
 

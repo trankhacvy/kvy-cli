@@ -1,6 +1,5 @@
 /**
  * Sync reducer — folds `SessionEnvelope[]` into ordered render items
- * (kvy-system-design.md §9.1, plan.md §8.2). Pure, dependency-free logic
  * over `@kvy/wire`'s `SessionEnvelope`/`SessionEvent` schemas; not wired
  * into the sync engine or timeline UI yet (later plan bullets).
  */

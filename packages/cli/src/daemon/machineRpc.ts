@@ -1,145 +1,16 @@
 /**
- * Machine-scoped RPC registration for the daemon (design §4.4's "Machine
- * RPCs — registered by the daemon" table; plan.md §16 "3.1 Remote spawn" /
- * "3.3 Session adoption (UC9)").
+ * Machine-scoped RPC dispatch for the daemon.
  *
- * Mirrors `rpc/sessionRpc.ts`'s registration/decrypt/validate/seal shape
- * (same `rpc-register`/`rpc-request` wire contract, same `EncryptedBox`
- * params/results sealed under the owning DEK), adapted to the
- * machine-scoped `m:<machineId>:<method>` target namespace. `spawn`,
- * `resumeSession`, the New Session directory picker's `fs.list`/`fs.mkdir`,
- * that same flow's `workspace.register` (plan.md §16 "Flow 3 —
- * spawn-fresh-folder-register (Piece A)"), session adoption's
- * `adopt.take`/`adopt.mirror`, and the Git panel's `git.status`/`git.diff`
- * (plan.md §16 "4.1 Git panel") — plus `git.branches` (docs/features/
- * worktree-isolation.md, the New Session wizard's existing-branch worktree
- * picker), `git.commit`/`git.push`/`git.renameBranch` (docs/features/
- * git-write-actions.md — the first *mutating* git RPCs; `git.status`/
- * `git.diff`/`git.branches` above are read-only) which round out the Git
- * panel's RPC surface, `github.checks` (docs/features/github-pr-ci.md,
- * the "Checks" tab's PR/CI status), `commands.list` ("/" slash-command
- * autocomplete, docs/competitive-notes-omnara.md #18), `git.files`/
- * `fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file browser" —
- * the Repo Files sidebar tab's file-tree listing and file-content fetch),
- * `provider.account` (docs/competitive-notes-omnara.md #9 "Provider
- * account inspection + usage metering" — Settings → Providers' per-machine
- * account card, `providerAccountInfo.ts`'s local-config read), plus
- * `preview.ports`/`preview.tunnels`/`preview.open`/`preview.close`
- * (docs/features/dev-server-preview.md — "Live dev-server preview via
- * secure tunnel", docs/competitive-notes-omnara.md #6: machine-wide
- * listening-port enumeration + a daemon-managed `cloudflared` quick-tunnel
- * registry),
- * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
- * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control" — Settings →
- * Machines' per-machine Off/While-on-Power/Always policy, enforced by
- * `daemon/sleepInhibit.ts`'s `caffeinate`-owning manager), and
- * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
- * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts" —
- * the Setup/Run scripts subsystem's read-only config surface and
- * long-lived, remotely start/stop-able `run.*` process, `runProcess.ts`/
- * `workspaceConfigRpc.ts`) — are in
- * scope here — as is `worktree.remove` (Phase C, new-session-from-web
- * redesign — `worktreeRemove.ts`'s own doc comment): the manual "clean up
- * this session's worktree" action, since every session spawned via the
- * workspace-row `+` flow now creates a fresh `.worktrees/<branch>`
- * directory with nothing that ever cleans it up automatically.
- * `stopSession`/`listSessions`/`adopt.list` are separate, later plan
- * bullets (§3.2) and can be added to `MACHINE_RPC_METHODS`/`methods` the
- * same way without touching this module's dispatch shape.
- *
- * **Idempotency-key replay** (design: "an RPC retry must NEVER
- * double-spawn"; the same rationale extends to `adopt.take`'s kill+spawn
- * side effect and to `adopt.mirror`'s file read — "or re-reading a file
- * mid-write twice", per `@kvy/wire`'s own `rpc.ts` doc comment):
- * `spawn` wraps `deps.spawnSession` in a `Map<idempotencyKey, SpawnResult>`
- * — a retried call with the same key replays the prior *successful* result
- * instead of spawning again. A failed attempt is not cached: the actual
- * non-idempotent side effect is the process spawn itself, so only a result
- * that means a spawn genuinely happened is worth replaying — a validation
- * or timeout failure is safe, and correct, to retry from scratch.
- * `adopt.take`/`adopt.mirror` use the same never-cache-a-failure replay
- * pattern via `withIdempotencyCache` (keyed on `idempotencyKey` + a JSON
- * snapshot of `params` — see that helper's own doc comment for why).
- * `fs.list`/`fs.mkdir` need no such cache — listing is naturally
- * idempotent, and `mkdir -p` succeeds identically on retry.
- * `workspace.register` needs none either, for the same reason as
- * `fs.mkdir`: registering an already-registered directory is a no-op
- * (`workspace/registry.ts`'s own idempotent contract). `git.status`/
- * `git.diff`/`git.branches`/`github.checks`/`git.files` need none either,
- * for the same reason as `fs.list`: they only read current repository (or,
- * for `github.checks`, GitHub API) state, so a retry just re-reads it —
- * unlike `adopt.mirror`'s "re-reading a file mid-write twice" hazard,
- * there's no mid-write file here to race. `commands.list` needs none for
- * the same reason again — it only reads the current `.claude/commands/`
- * tree. `provider.account` joins this same no-cache group for the same
- * reason again — it only reads whatever's currently on disk in the local
- * CLI's own config files, so a retry is just another read. `sleepInhibit.get`
- * joins it too — it's a pure read of the manager's current state.
- * `sleepInhibit.set` also needs no cache, but for the idempotent-effect
- * reason rather than the pure-read one: applying the same mode twice
- * converges to the exact same single caffeinate child (`sleepInhibit.ts`'s
- * `applyMode` is itself a no-op on an unchanged, healthy mode), so a lost-ack
- * retry re-running the handler is harmless — unlike `git.commit`/`git.push`/
- * `git.renameBranch` below, there's no "mint a second one" side effect to
- * guard against. `fs.read` is the
- * one exception in this read-only cluster that *does* carry the same
- * mid-write hazard `@kvy/wire`'s own `rpc.ts` doc comment calls out for
- * `adopt.mirror` ("or re-reading a file mid-write twice") — but a re-read
- * simply returns whatever the file currently contains, which is still a
- * valid (if possibly different) answer, not a corrupted one, so no
- * idempotency cache is needed for it either. All of these still carry
- * `idempotencyKey` on the wire (design: "every caller-retriable machine RPC
- * carries a caller-minted key") for uniformity with the rest of this RPC
- * family, it's just unused by these handlers. `preview.ports`/
- * `preview.tunnels` join this same no-cache group — pure reads (listening
- * ports, the current tunnel registry) with nothing to replay. `preview.close`
- * needs none either, for the same reason as `fs.mkdir`: closing an
- * already-closed (or never-existent) `tunnelId` is a no-op `{ok:true}` by
- * construction (`previewTunnel.ts`'s own doc comment). `preview.open` is the
- * opposite — like `spawn`/`adopt.take`, its whole point is a side effect (a
- * `cloudflared` child spawn), so it DOES need `withIdempotencyCache` PLUS
- * its own resource-keyed guard (`withPortGuard` below, a structural clone of
- * `withProviderSessionGuard`, keyed on `params.port` instead of
- * `providerSessionId`) — two devices opening a tunnel for the same port
- * with two different `idempotencyKey`s must still collapse into one
- * in-flight spawn, not race two `cloudflared` children for the same port.
- * `git.commit`/`git.push`/`git.renameBranch` (docs/features/
- * git-write-actions.md) are the opposite of their read-only siblings just
- * above — they're the first git RPCs whose whole point IS a side effect, so
- * (like `spawn`/`adopt.take`/`adopt.mirror`) they DO need
- * `withIdempotencyCache`: a lost-ack retry of `git.commit` must replay the
- * prior commit's SHA rather than mint a second commit, and likewise for a
- * repeated `git.push`/`git.renameBranch`.
- * `resumeSession`'s wire contract (design §4.4: `'resumeSession'({sessionId})
- * → {ok}`) carries no `idempotencyKey` at all either — unlike `spawn`, a
- * retried resume of the same session is not a "double spawn" risk:
- * `resumeSession.ts` itself always stops any still-live process for that
- * session before relaunching, so a second call just relaunches again rather
- * than creating a duplicate.
- *
- * **Concurrency, not just retry-after-the-fact** (plan.md §16 "4.4
- * Hardening": "double-takeover race"): both the idempotency cache above and
- * `handleSpawn`'s own cache key on *settled* results, not in-flight
- * attempts. Two calls with the same `idempotencyKey` that arrive back to
- * back — before the first has finished running — must still collapse into a
- * single real attempt with both callers sharing its outcome, not just a
- * retry *after* the first one already resolved. Every cache in this module
- * therefore stores the in-flight `Promise` itself (set synchronously, before
- * any `await`), not the eventual value — the second caller finds the first
- * caller's promise already in the map and joins it. A rejected attempt is
- * still evicted (never cached), same as before.
- *
- * That covers same-key concurrency, but `adopt.take`'s divergence guard
- * (design FR-9.4: "never two live continuations of the same history") needs
- * one more guard: two *different* devices adopting the same
- * `providerSessionId` mint two different `idempotencyKey`s, so the
- * idempotency cache alone never sees them as the same call.
- * `withProviderSessionGuard` below adds a second, resource-keyed (not
- * request-keyed) in-flight map on top: whichever `adopt.take` call reaches a
- * given `providerSessionId` first "owns" the takeover; any concurrent call
- * for the same `providerSessionId` — regardless of its `idempotencyKey` —
- * joins that same in-flight attempt and gets its exact result (including any
- * mid-turn `warning`) instead of racing its own independent kill+spawn.
+ * Key invariants:
+ * - `spawn`/`adopt.take`/`adopt.mirror`/`git.commit`/`git.push`/`git.renameBranch`
+ *   cache in-flight `Promise`s (not settled values), keyed on `idempotencyKey`,
+ *   so concurrent retries collapse into a single attempt. Failed attempts are
+ *   evicted from the cache — never replayed.
+ * - `adopt.take` additionally has a resource-keyed guard (`withProviderSessionGuard`)
+ *   so two devices adopting the same `providerSessionId` with different keys
+ *   join the same in-flight takeover rather than racing.
+ * - Read-only RPCs (`fs.list`, `git.status`, `git.diff`, etc.) need no cache:
+ *   a retry is just another read.
  */
 import { open, seal } from "@kvy/crypto";
 import {
@@ -372,73 +243,68 @@ export interface MachineRpcDeps {
   listDirectory?: (params: FsListParams) => Promise<FsListResult>;
   /** Backs the `fs.mkdir` create-directory-approval RPC. Injectable for tests; defaults to `fsBrowse.ts`'s real `mkdir -p`. Throws on failure. */
   createDirectory?: (params: FsMkdirParams) => Promise<FsMkdirResult>;
-  /** Backs the `workspace.register` register-workspace-approval RPC (plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)"). Injectable for tests; defaults to `workspaceRegisterRpc.ts`'s real, already-idempotent `registerWorkspace`. Throws on failure. */
+  /** Backs the `workspace.register` RPC. Injectable for tests; defaults to `workspaceRegisterRpc.ts`. Throws on failure. */
   registerWorkspace?: (params: WorkspaceRegisterParams) => Promise<WorkspaceRegisterResult>;
-  /** Backs the `workspace.unregister` RPC (known-issues.md #3 — the Git panel's "Remove this workspace" action once a folder is confirmed gone/no-longer-a-repo). Injectable for tests; defaults to `workspaceRegisterRpc.ts`'s real, already-idempotent `unregisterWorkspace`. Throws on failure. */
+  /** Backs the `workspace.unregister` RPC. Injectable for tests; defaults to `workspaceRegisterRpc.ts`. Throws on failure. */
   unregisterWorkspace?: (params: WorkspaceUnregisterParams) => Promise<WorkspaceUnregisterResult>;
-  /** Backs the `git.status` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitStatus.ts`'s real `git status --porcelain=v2` parse. Throws on failure (e.g. `worktree` isn't a git repo). */
+  /** Backs the `git.status` RPC. Injectable for tests; defaults to `gitStatus.ts`. Throws on failure. */
   getGitStatus?: (params: GitStatusParams) => Promise<GitStatusResult>;
-  /** Backs the `git.diff` RPC (Git panel, design §4.4). Injectable for tests; defaults to `gitDiff.ts`'s real `git diff` against the resolved base ref. Throws on failure. */
+  /** Backs the `git.diff` RPC. Injectable for tests; defaults to `gitDiff.ts`. Throws on failure. */
   getGitDiff?: (params: GitDiffParams) => Promise<GitDiffResult>;
-  /** Backs the `git.branches` RPC (New Session wizard's existing-branch worktree picker, docs/features/worktree-isolation.md). Injectable for tests; defaults to `gitBranches.ts`'s real `git for-each-ref` parse. Throws on failure. */
+  /** Backs the `git.branches` RPC. Injectable for tests; defaults to `gitBranches.ts`. Throws on failure. */
   getGitBranches?: (params: GitBranchesParams) => Promise<GitBranchesResult>;
-  /** Backs the `git.remotes` RPC (Workspace Settings Git tab's remote-name autofill). Injectable for tests; defaults to `gitRemotes.ts`'s real `git remote -v` parse. Throws on failure. */
+  /** Backs the `git.remotes` RPC. Injectable for tests; defaults to `gitRemotes.ts`. Throws on failure. */
   getGitRemotes?: (params: GitRemotesParams) => Promise<GitRemotesResult>;
-  /** Backs the `git.commit` RPC (docs/features/git-write-actions.md — the first *mutating* git RPC). Injectable for tests; defaults to `gitCommit.ts`'s real `git add`/`git commit`, gated on the registered-workspace authorizer. Throws on failure. */
+  /** Backs the `git.commit` RPC. Injectable for tests; defaults to `gitCommit.ts`, gated on the registered-workspace authorizer. Throws on failure. */
   gitCommit?: (params: GitCommitParams) => Promise<GitCommitResult>;
-  /** Backs the `git.push` RPC (docs/features/git-write-actions.md). Injectable for tests; defaults to `gitPush.ts`'s real `git push` (`force` maps to `--force-with-lease` only), gated on the registered-workspace authorizer. Throws on failure. */
+  /** Backs the `git.push` RPC. Injectable for tests; defaults to `gitPush.ts` (`force` maps to `--force-with-lease`), gated on the registered-workspace authorizer. Throws on failure. */
   gitPush?: (params: GitPushParams) => Promise<GitPushResult>;
-  /** Backs the `git.renameBranch` RPC (docs/features/git-write-actions.md). Injectable for tests; defaults to `gitRenameBranch.ts`'s real `git branch -m`, gated on the registered-workspace authorizer. Throws on failure. */
+  /** Backs the `git.renameBranch` RPC. Injectable for tests; defaults to `gitRenameBranch.ts`, gated on the registered-workspace authorizer. Throws on failure. */
   gitRenameBranch?: (params: GitRenameBranchParams) => Promise<GitRenameBranchResult>;
-  /** Backs the `git.init` RPC (docs/web-ux-improvements-plan.md Feature 1). Injectable for tests; defaults to `gitInit.ts`'s real `git init`, gated on the registered-workspace authorizer. Throws on failure; an already-initialized/nested directory resolves as a result `state`, not a throw. */
+  /** Backs the `git.init` RPC. Injectable for tests; defaults to `gitInit.ts`. Throws on failure; an already-initialized/nested directory resolves as a result `state`, not a throw. */
   gitInit?: (params: GitInitParams) => Promise<GitInitResult>;
-  /** Backs the `git.setRemote` RPC (docs/web-ux-improvements-plan.md Feature 1). Injectable for tests; defaults to `gitSetRemote.ts`'s real `git remote add`/`set-url`, gated on the registered-workspace authorizer. Throws on failure. */
+  /** Backs the `git.setRemote` RPC. Injectable for tests; defaults to `gitSetRemote.ts`. Throws on failure. */
   gitSetRemote?: (params: GitSetRemoteParams) => Promise<GitSetRemoteResult>;
-  /** Backs the `github.checks` RPC (Checks tab, docs/features/github-pr-ci.md). Injectable for tests; defaults to `githubChecks.ts`'s real PR/CI resolution against a machine-local GitHub token. Throws on an unexpected failure (a handled "nothing to show yet" case is a `GithubChecksResult.state`, not a throw). */
+  /** Backs the `github.checks` RPC. Injectable for tests; defaults to `githubChecks.ts`. A handled "nothing to show yet" case is a result `state`, not a throw. */
   getGithubChecks?: (params: GithubChecksParams) => Promise<GithubChecksResult>;
-  /** Backs the `commands.list` RPC ("/" slash-command autocomplete, docs/competitive-notes-omnara.md #18). Injectable for tests; defaults to `slashCommands.ts`'s real `.claude/commands/` walk. Never throws — see that module's own doc comment. */
+  /** Backs the `commands.list` RPC. Injectable for tests; defaults to `slashCommands.ts`. Never throws. */
   listSlashCommands?: (params: SlashCommandsListParams) => Promise<SlashCommandsListResult>;
-  /** Backs the `git.files` RPC (Repo Files sidebar tab's file tree, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `gitFiles.ts`'s real `git ls-files` listing. Throws on failure (e.g. `worktree` isn't a git repo). */
+  /** Backs the `git.files` RPC. Injectable for tests; defaults to `gitFiles.ts`. Throws on failure. */
   getGitFiles?: (params: GitFilesParams) => Promise<GitFilesResult>;
-  /** Backs the `fs.read` RPC (Repo Files sidebar tab's file-content fetch, docs/competitive-notes-omnara.md #5). Injectable for tests; defaults to `fsRead.ts`'s real, worktree-contained file read. Throws on failure (missing/escaping/binary/directory target). */
+  /** Backs the `fs.read` RPC. Injectable for tests; defaults to `fsRead.ts`. Throws on failure (missing/escaping/binary/directory target). */
   readFile?: (params: FsReadParams) => Promise<FsReadResult>;
-  /** Backs the `provider.account` RPC (Settings → Providers, docs/competitive-notes-omnara.md #9). Injectable for tests; defaults to `providerAccountInfo.ts`'s real local-config read. Never throws (see that module's own doc comment). */
+  /** Backs the `provider.account` RPC. Injectable for tests; defaults to `providerAccountInfo.ts`. Never throws. */
   getProviderAccountInfo?: (params: ProviderAccountParams) => Promise<ProviderAccountResult>;
-  /** Backs the `sleepInhibit.get` RPC (docs/features/sleep-inhibit.md, docs/competitive-notes-omnara.md #12). Injectable for tests; defaults to an honest "no manager wired" stub reporting `{supported:false, platform: process.platform, mode:"off", active:false}` — indistinguishable from "unsupported platform" until `machineIntegration.ts`/`commands.ts` thread through the real `sleepInhibit.ts` manager. Never throws. */
+  /**
+   * Backs the `sleepInhibit.get` RPC. Injectable for tests; defaults to a stub reporting
+   * `{supported:false, mode:"off", active:false}` — indistinguishable from "unsupported
+   * platform" until the real `sleepInhibit.ts` manager is threaded through. Never throws.
+   */
   getSleepInhibit?: (params: SleepInhibitGetParams) => Promise<SleepInhibitState>;
-  /** Backs the `sleepInhibit.set` RPC. Same honest default as `getSleepInhibit` above (a `set` against no wired manager reports the same unsupported stub rather than throwing or silently no-opping). Never throws. */
+  /** Backs the `sleepInhibit.set` RPC. Same stub default as `getSleepInhibit`. Never throws. */
   setSleepInhibit?: (params: SleepInhibitSetParams) => Promise<SleepInhibitState>;
   /** Performs a takeover/fork adoption (`daemon/adoptTake.ts`'s `handleAdoptTake`, typically) — throws on failure. */
   adoptTake: (params: AdoptTakeParams) => Promise<AdoptTakeResult>;
   /** Reads one chunk of an unmanaged session's transcript (`daemon/transcriptMirror.ts`'s `handleAdoptMirror`, typically) — throws on failure. */
   adoptMirror: (params: AdoptMirrorParams) => Promise<AdoptMirrorResult>;
-  /**
-   * Backs `preview.ports`/`preview.tunnels`/`preview.open`/`preview.close`
-   * (docs/features/dev-server-preview.md — `daemon/previewTunnel.ts`'s
-   * `handlePreviewPorts`/`handlePreviewTunnels`/`handlePreviewOpen`/
-   * `handlePreviewClose`, typically). Required (no context-free default
-   * here), same reasoning as `adoptTake`/`adoptMirror` above: these close
-   * over a shared, per-daemon `tunnelRegistry.ts` instance that only the
-   * caller (`machineIntegration.ts`) can construct — `machineRpc.ts` has no
-   * registry of its own to default to. Throws on failure.
-   */
+  /** Backs `preview.ports`. Closes over a per-daemon `tunnelRegistry.ts` instance — no default. Throws on failure. */
   previewPorts: (params: PreviewPortsParams) => Promise<PreviewPortsResult>;
   previewTunnels: (params: PreviewTunnelsParams) => Promise<PreviewTunnelsResult>;
   previewOpen: (params: PreviewOpenParams) => Promise<PreviewOpenResult>;
   previewClose: (params: PreviewCloseParams) => Promise<PreviewCloseResult>;
-  /** Backs the `workspace.getConfig` RPC (docs/features/setup-run-scripts.md). Injectable for tests; defaults to `workspaceConfigRpc.ts`'s real read, gated on the registered-workspace authorizer. Throws on an unauthorized worktree. */
+  /** Backs the `workspace.getConfig` RPC. Injectable for tests; defaults to `workspaceConfigRpc.ts`. Throws on an unauthorized worktree. */
   getWorkspaceConfig?: (params: WorkspaceGetConfigParams) => Promise<WorkspaceGetConfigResult>;
-  /** Backs the `workspace.setConfig` RPC (Workspace Settings Git tab's save action) — `baseRef`/`remote` only, see `workspaceConfigRpc.ts`'s doc comment for why scripts never reach this. Injectable for tests; defaults to `workspaceConfigRpc.ts`'s real write, gated on the registered-workspace authorizer. Throws on an unauthorized worktree. */
+  /** Backs the `workspace.setConfig` RPC (`baseRef`/`remote` only). Injectable for tests; defaults to `workspaceConfigRpc.ts`. Throws on an unauthorized worktree. */
   setWorkspaceConfig?: (params: WorkspaceSetConfigParams) => Promise<WorkspaceSetConfigResult>;
-  /** Backs the `run.start` RPC (docs/features/setup-run-scripts.md). Injectable for tests; defaults to `runProcess.ts`'s real handler (tmux-preferred launch, gated on the registered-workspace authorizer). Throws on an unauthorized worktree or an unconfigured `runScript`. */
+  /** Backs the `run.start` RPC. Injectable for tests; defaults to `runProcess.ts`. Throws on an unauthorized worktree or an unconfigured `runScript`. */
   runStart?: (params: RunStartParams) => Promise<RunStartResult>;
-  /** Backs the `run.stop` RPC. Injectable for tests; defaults to `runProcess.ts`'s real handler. Throws on an unauthorized worktree. */
+  /** Backs the `run.stop` RPC. Injectable for tests; defaults to `runProcess.ts`. Throws on an unauthorized worktree. */
   runStop?: (params: RunStopParams) => Promise<RunStopResult>;
-  /** Backs the `run.status` RPC — read-only. Injectable for tests; defaults to `runProcess.ts`'s real handler. Throws on an unauthorized worktree. */
+  /** Backs the `run.status` RPC. Injectable for tests; defaults to `runProcess.ts`. Throws on an unauthorized worktree. */
   runStatus?: (params: RunStatusParams) => Promise<RunStatusResult>;
-  /** Backs the `run.setup` RPC ("Re-run setup"). Injectable for tests; defaults to `runProcess.ts`'s real handler, which itself delegates to `setupScript.ts`. Throws on an unauthorized worktree. */
+  /** Backs the `run.setup` RPC. Injectable for tests; defaults to `runProcess.ts`. Throws on an unauthorized worktree. */
   runSetup?: (params: RunSetupParams) => Promise<RunSetupResult>;
-  /** Backs the `worktree.remove` RPC (Phase C, new-session-from-web redesign — manual "clean up this session's worktree" action). Injectable for tests; defaults to `worktreeRemove.ts`'s real handler (gated on the registered-workspace authorizer plus its own `.worktrees/` structural safety check). Throws on an unauthorized/non-worktree path or an unexpected git failure. */
+  /** Backs the `worktree.remove` RPC. Injectable for tests; defaults to `worktreeRemove.ts`. Throws on an unauthorized/non-worktree path or a git failure. */
   removeWorktree?: (params: WorktreeRemoveParams) => Promise<WorktreeRemoveResult>;
   logger?: Logger;
 }
@@ -532,7 +398,6 @@ function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
 
 /**
  * Resource-keyed in-flight guard, generalized from what was originally
- * `adopt.take`-only (design FR-9.4: "never two live continuations of the
  * same history"). Unlike `withIdempotencyCache` above (keyed on the
  * *request* — `idempotencyKey`), this is keyed on the *target* — whatever
  * `keyOf` extracts from `params` (`providerSessionId` for `adopt.take`,
@@ -568,14 +433,9 @@ function withProviderSessionGuard(
 }
 
 /**
- * Resource-keyed in-flight guard for `preview.open` (docs/features/
- * dev-server-preview.md) — a structural clone of `withProviderSessionGuard`
- * above, keyed on `params.port` instead of `providerSessionId`: two
- * `preview.open` calls for the same port that arrive concurrently, even
- * with two different `idempotencyKey`s (two devices both clicking "Open" on
- * the same port), join the same in-flight `cloudflared` spawn attempt and
- * both get its exact result rather than each racing its own independent
- * spawn for that port. Never caches a rejected attempt.
+ * Resource-keyed in-flight guard for `preview.open`, keyed on `params.port`.
+ * Two concurrent open requests for the same port join a single `cloudflared`
+ * spawn rather than racing independent spawns. Never caches a rejected attempt.
  */
 function withPortGuard(
   fn: (params: PreviewOpenParams) => Promise<PreviewOpenResult>,
@@ -630,13 +490,10 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const cachedGitRenameBranch = withIdempotencyCache(
     deps.gitRenameBranch ?? handleGitRenameBranchDefault,
   );
-  // `git.init`/`git.setRemote` (docs/web-ux-improvements-plan.md Feature 1)
-  // join `git.commit`/`git.push`/`git.renameBranch` as mutating git RPCs
-  // that need idempotency-key replay: a lost-ack retry must replay the prior
-  // result rather than re-run the effect. `git.init` also takes the
-  // worktree-keyed resource guard (generalized from `run.start`'s own,
-  // `withResourceGuard` above) so two devices clicking "Initialize git" at
-  // once collapse into a single `git init` attempt for that directory.
+  // `git.init`/`git.setRemote` are mutating git RPCs that need idempotency-key
+  // replay: a lost-ack retry must replay the prior result, not re-run the effect.
+  // `git.init` also gets a worktree-keyed resource guard so two concurrent calls
+  // for the same directory collapse into a single `git init` attempt.
   const cachedGitInit = withIdempotencyCache(
     withResourceGuard(deps.gitInit ?? handleGitInitDefault, (params) => params.worktree),
   );
@@ -647,15 +504,10 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const cachedPreviewOpen = withIdempotencyCache(withPortGuard(deps.previewOpen));
   const getWorkspaceConfig = deps.getWorkspaceConfig ?? handleWorkspaceGetConfigDefault;
   const setWorkspaceConfig = deps.setWorkspaceConfig ?? handleWorkspaceSetConfigDefault;
-  // `run.start`/`run.stop`/`run.setup` (docs/features/setup-run-scripts.md
-  // Phase 4) join `git.commit`/`git.push`/`git.renameBranch` as mutating
-  // RPCs that DO need idempotency-key replay caching. `run.start` ALSO gets
-  // the resource guard (keyed on `params.worktree`, generalized from
-  // `adopt.take`'s own `providerSessionId` guard above): two devices
-  // pressing play concurrently with two different `idempotencyKey`s must
-  // still join one launch attempt for the same directory, not race two
-  // independent `launchProviderProcess` calls. `run.status` stays uncached
-  // — read-only, same reasoning as `git.status`/`workspace.getConfig`.
+  // `run.start`/`run.stop`/`run.setup` are mutating RPCs that need
+  // idempotency-key replay. `run.start` also gets a worktree-keyed resource
+  // guard so two concurrent play presses collapse into one launch. `run.status`
+  // is read-only and needs no cache.
   const cachedRunStart = withIdempotencyCache(
     withResourceGuard(deps.runStart ?? handleRunStartDefault, (params) => params.worktree),
   );
@@ -946,12 +798,8 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       callback?.(seal(parsedResult.data, deps.dek));
     } catch (error) {
       // Forward the handler's own error message (e.g. `GitExecError`'s git
-      // stderr) rather than a flat "handler-error" placeholder — the git
-      // write-action toolbar (docs/features/git-write-actions.md Phase 5)
-      // depends on the real message reaching the user for its
-      // credential-failure UX ("git's own stderr, not a Kvy
-      // abstraction"), and every other handler benefits the same way (e.g.
-      // "fatal: not a git repository" instead of an opaque placeholder).
+      // stderr) rather than a generic placeholder — "fatal: not a git repository"
+      // is more actionable than an opaque error code.
       const message = error instanceof Error ? error.message : String(error);
       const code = error instanceof WorkspaceValidationError ? error.code : undefined;
       logger.error("[machine-rpc] handler threw", { method, error: message, code });

@@ -66,7 +66,7 @@ export interface CryptoBridgeClient {
   seal(data: unknown): Promise<EncryptedBox>;
   /** Open `box` with the active session key. Resolves `null` on any decryption failure. */
   open<T = unknown>(box: EncryptedBox): Promise<T | null>;
-  /** Encrypt binary `data` (e.g. a composer attachment) under the active session's blob key — the encrypted attachment path (kvy-system-design.md §5.1, plan.md §16 "4.3 Distribution & self-host"). Result is ready to `PUT` at a blob-storage upload target. */
+  /** Encrypt binary `data` (e.g. a composer attachment) under the active session's blob key. Result is ready to `PUT` at a blob-storage upload target. */
   sealBlob(data: Uint8Array): Promise<Uint8Array>;
   /** Decrypt a downloaded blob's bytes under the active session's blob key. Resolves `null` on any decryption failure. */
   openBlob(bundle: Uint8Array): Promise<Uint8Array | null>;
@@ -75,11 +75,10 @@ export interface CryptoBridgeClient {
   /** The account identity provisioned on this device, or `null` if none yet (or, when
    * `accountId` is given, none belonging to that account). Never requires an unlock. */
   getIdentity(accountId?: string): Promise<DeviceIdentity | null>;
-  /** Seal the master secret + the current session's refresh token to a pairing
-   * peer's ephemeral X25519 public key (base64) — issue-4-plan.md §6.3. Requires the
-   * worker to be unlocked. */
+  /** Seal the master secret + the current session's refresh token to a pairing peer's
+   * ephemeral X25519 public key (base64). Requires the worker to be unlocked. */
   sealForPeer(ephPub: string, refreshToken: string): Promise<string>;
-  /** Sign a server-issued `keys/bind` nonce (issue-4-plan.md §6.2). Rejects if not initialized/locked. */
+  /** Sign a server-issued `keys/bind` nonce. Rejects if not initialized/locked. */
   bindKeysProof(accountId: string, nonce: string): Promise<BindKeysProofResult>;
   /** Persist a freshly-issued or freshly-rotated refresh token. Needs no key material —
    * a signed-in browser with no keys must still be able to hold a session. */

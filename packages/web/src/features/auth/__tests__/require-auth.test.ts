@@ -97,7 +97,7 @@ describe("RequireAuth", () => {
 // `/reset-keys/` route instead of `/password/` (dev-only in production, per item 3).
 // Asserted against the shipped source text, same technique `signin/page.test.ts` and
 // `(protected)/layout.test.ts` use for hook-heavy JSX this vitest config can't render.
-describe("require-auth.tsx — key-state wiring (docs/auth-ux-overhaul-plan.md Phase 4a/5)", () => {
+describe("require-auth.tsx — key-state wiring", () => {
   const source = readFileSync(
     path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../require-auth.tsx"),
     "utf-8",

@@ -2,7 +2,6 @@ import type { SlashCommandInfo } from "@kvy/wire";
 
 /**
  * View-model types for "/" slash-command autocomplete
- * (docs/competitive-notes-omnara.md #18; kvy-system-design.md §4.4
  * `commands.list`). Surfaces the project's *actual custom* Claude Code
  * slash commands, read live from `.claude/commands/` in the session's
  * worktree — not a fixed built-in list.

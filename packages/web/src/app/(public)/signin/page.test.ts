@@ -3,18 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-/**
- * `page.tsx` can't be rendered directly under this package's `environment:
- * "node"` vitest config: it's a full page component using `next/navigation`'s
- * `useRouter` (throws outside an actual App Router context), neither of which
- * has a lightweight fake here. Asserting against the shipped source text is
- * the same technique `SessionTimelineScreen.test.tsx` uses for similarly
- * hook-heavy, non-pulled-out JSX.
- *
- * issue-4-plan.md §5.5/Phase 4: the legacy challenge-sign-in + recovery-code
- * restore paths are gone from this page — it's OAuth buttons plus a link to
- * `/password/`, nothing that reads local key material before a login click.
- */
+// Source-text technique: `page.tsx` uses `next/navigation`'s `useRouter` which throws
+// outside App Router context, so these assertions run against the shipped source text.
 const pageSource = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./page.tsx"),
   "utf-8",
@@ -72,8 +62,8 @@ describe("signin/page.tsx", () => {
     expect(pageSource).toContain("copy.signin.expiredBanner");
   });
 
-  // AX-2.5: a visitor bounced here mid-pairing is told why, instead of seeing a bare
-  // sign-in page. `peekPendingPair` reads WITHOUT consuming — only the pair page spends it.
+  // A visitor bounced here mid-pairing is told why. `peekPendingPair` reads WITHOUT
+  // consuming — only the pair page spends it.
   it("switches its heading when a pairing is waiting", () => {
     expect(pageSource).toContain("peekPendingPair()");
     expect(pageSource).toContain('setBanner("pair")');

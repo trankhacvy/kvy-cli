@@ -7,10 +7,6 @@ import type { DaemonState } from "./state.js";
  * Daemon singleton guard — atomic hard-link lock file with PID payload +
  * stale detection.
  *
- * Ported from Happy's daemon singleton pattern — https://github.com/slopus/happy
- * (MIT); original: happy-cli/src/daemon (`acquireDaemonLock`), referenced in
- * plan.md §7.4 ("Singleton via atomic lock file (Happy's acquireDaemonLock)")
- * and design §8, plan.md line 690.
  *
  * Why a hard link and not `open(O_CREAT|O_EXCL)` or a naive
  * read-then-write: `link(src, dest)` fails atomically with `EEXIST` if

@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { HourDivider } from "./HourDivider";
 
-/** Purely presentational (`Timeline.tsx`, plan-v2.md W4.2 "hourly
- * dividers") — no hooks, so it can be called directly and its returned
- * element tree inspected without a render environment, same technique
+/** No hooks, so it can be called directly and its returned element tree
+ * inspected without a render environment, same technique
  * `TimelineRow.test.ts`/`ToolCardShell.test.ts` use. */
 describe("HourDivider", () => {
   it("renders the given label", () => {

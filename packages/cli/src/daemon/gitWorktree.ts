@@ -1,7 +1,6 @@
 /**
  * Git worktree/branch setup for the daemon `spawn` RPC's optional `branch`
  * field (`@kvy/wire`'s `SpawnParams.branch: {name, createWorktree, from}`,
- * kvy-prd.md FR-1.2 "`kvy -b <branch>`" / FR-4.3, plan.md §16 "3.1
  * Remote spawn" — "Branch/worktree option (-b): `git worktree add` via
  * daemon"). Called from `spawnEngine.ts` after workspace-path validation,
  * before the provider process is launched.

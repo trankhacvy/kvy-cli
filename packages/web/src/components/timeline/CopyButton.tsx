@@ -12,13 +12,11 @@ export function copyButtonLabel(copied: boolean, restLabel: string): string {
 }
 
 /**
- * Generic "copy to clipboard" affordance shared by message text, markdown
- * code blocks, and Bash command blocks (plan-v2.md W4.2 "Copy buttons" —
- * `MessageText`, `CodeBlock`, `BashCard`). Takes a `getText` thunk rather
- * than a plain `text` prop so a caller whose content only exists as
- * rendered DOM (`CodeBlock`'s `pre.textContent`, after shiki's per-token
- * `<span>` tree) can defer reading it until the moment of the click,
- * instead of re-serializing that tree itself.
+ * Generic "copy to clipboard" affordance. Takes a `getText` thunk rather
+ * than a plain `text` prop so a caller whose content only exists as rendered
+ * DOM (`CodeBlock`'s `pre.textContent`, after shiki's per-token `<span>` tree)
+ * can defer reading it until the moment of the click, instead of
+ * re-serializing that tree itself.
  */
 export function CopyButton({
   getText,

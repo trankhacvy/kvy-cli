@@ -16,14 +16,9 @@ function getToolState(item: ToolItem): Parameters<typeof ToolHeader>[0]["state"]
   return item.ok === false ? "output-error" : "output-available";
 }
 
-/** Common chrome for every `ToolCard` registry entry: header (icon, name,
- * status, permission badge — read-only, same compact spot regardless of
- * decided/pending), a body slot for the tool-specific content, an
- * interactive `PermCard` action row while a decision is still pending
- * (plan.md §16 "2.4 Web control surface" — `showPreview={false}` since the
- * tool's own body, e.g. `EditCard`'s diff, already renders `args`), and —
- * generically, since the reducer can link a subagent scope onto *any* tool
- * call, not just `Task` — nested subagent activity. */
+/** Common chrome for every `ToolCard` registry entry: header, a body slot, an interactive
+ * `PermCard` row while a decision is pending (`showPreview={false}` since the tool body
+ * already renders `args`), and nested subagent activity when present. */
 export function ToolCardShell({
   item,
   icon,

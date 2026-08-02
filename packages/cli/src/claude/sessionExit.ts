@@ -1,12 +1,10 @@
 /**
- * Session exit/crash semantics (PRD FR-3.7; design §7.5's mode state
  * machine: "Exit paths: Ctrl-C/SIGTERM ⇒ session stays `active` (resumable).
  * ... Crash ⇒ status `failed` + error surfaced").
  *
  * This module owns exactly one judgment call — given how a local-mode
  * session process ended, was that a normal/resumable exit (do nothing; the
  * session row already defaults to, and stays, `active`) or an unexpected
- * crash (best-effort report `failed` to the server, per FR-3.7)? It does
  * not spawn or await the child process itself — see `claudeLocal.ts` for
  * that — callers wrap their own `claudeLocal(...)` call with a
  * `SessionExitTracker`:
@@ -40,7 +38,6 @@
  * process group — both this wrapper process AND the inherited-stdio child
  * (the actual Claude Code TUI) receive it directly from the OS, independent
  * of anything this module does. Claude Code's own TUI owns deciding what a
- * first-vs-second Ctrl-C means (FR-3.1: local mode must preserve every
  * provider keybinding untouched) — this module must not additionally force
  * the child down on the first signal, which would fight that native
  * behavior. Its only two jobs are:
@@ -108,7 +105,6 @@ export interface SessionExitTracker {
   /**
    * Classifies how the session process ended and, for a genuine crash,
    * best-effort reports it. Never throws — reporting failures are logged
-   * and swallowed (this is itself the "best-effort archive POST" FR-3.7
    * describes).
    */
   handleOutcome(sessionId: string | null, outcome: SessionOutcome): Promise<SessionExitReason>;

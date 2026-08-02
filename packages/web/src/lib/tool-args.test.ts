@@ -394,10 +394,8 @@ describe("parseAskQuestions", () => {
 });
 
 describe("parseAskAnswers", () => {
-  // Real Claude Code 2.1.218 tool_result `content` strings, captured from a
-  // live `kvy claude` session (docs/known-issues.md issue #5 track B) —
-  // not hand-guessed. Both a single- and a two-question call use this exact
-  // `"question"="answer"` shape.
+  // Real Claude Code 2.1.218 tool_result strings, captured from a live session.
+  // Both single- and two-question calls use this `"question"="answer"` shape.
   it("parses a real single-question tool_result string", () => {
     expect(
       parseAskAnswers(
@@ -437,12 +435,9 @@ describe("parseAskAnswers", () => {
     ).toEqual([{ question: "What is your favorite drink?", answer: "Hot chocolate" }]);
   });
 
-  // Kvy's own "deny-with-answer" reason text (`composeAskAnswerReason` in
-  // `packages/cli/src/claude/pretoolPermissionBridge.ts`) — the shape actually delivered
-  // for a web-answered question that couldn't be driven into a live terminal widget
-  // (docs/known-issues-cliweb-sync-test.md issue #4: a free-text answer, or any answer
-  // to a purely web-initiated turn). Distinct from the `"question"="answer"` shape above
-  // — no quotes, a `- question` / `  → answer` line pair instead.
+  // Kvy's own "deny-with-answer" reason text — the shape delivered for a web-answered
+  // question that couldn't be driven into a live terminal widget. Distinct from the
+  // `"question"="answer"` shape: uses `- question` / `  → answer` line pairs instead.
   it("parses Kvy's own deny-with-answer reason text (free-text web answer)", () => {
     expect(
       parseAskAnswers(
@@ -493,10 +488,9 @@ describe("parseAskAnswers", () => {
   });
 });
 
-// Real shapes below are taken verbatim from a captured live transcript
-// (`packages/cli/src/claude/__fixtures__/task-create-update-session.jsonl`,
-// bug-fix-plan.md #7) — every `TaskCreate` call in that session creates
-// exactly one task with this args shape.
+// Real shapes taken verbatim from a captured live transcript
+// (`packages/cli/src/claude/__fixtures__/task-create-update-session.jsonl`) —
+// every `TaskCreate` call creates exactly one task with this args shape.
 describe("parseTaskCreateArgs", () => {
   it("reads subject/description/activeForm from a real TaskCreate call", () => {
     expect(

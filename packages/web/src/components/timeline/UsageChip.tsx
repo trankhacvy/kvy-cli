@@ -4,12 +4,8 @@ import { formatTokenCount } from "@/lib/format";
 import type { UsageItem } from "@/sync/reducer";
 
 /**
- * Per-turn token-usage chip (plan-v2.md W4.6, AI Elements `Context` pattern)
- * — a quiet divider-style marker, same visual register as `ServiceLine`,
- * showing the input/output token counts the mapper read off the assistant
- * record this envelope was minted from (`envelopeMapper.ts`'s `pickUsage`).
- * `costUsd` renders alongside when a future adapter supplies it; no provider
- * does yet, so it's normally absent.
+ * Per-turn token-usage chip. `costUsd` renders alongside when a future
+ * adapter supplies it; no provider does yet, so it's normally absent.
  */
 export function UsageChip({ item }: { item: UsageItem }) {
   return (

@@ -42,7 +42,6 @@ export interface NewSessionForm {
    * git's own default of branching from whatever's currently checked out.
    */
   baseBranch: string;
-  /** The session-import step's pick (kvy-prd.md FR-7.8 UC7), or `null` to start fresh — the default, and always a valid choice (the step is optional). */
   importCandidate: ImportCandidate | null;
 }
 

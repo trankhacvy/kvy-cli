@@ -1,19 +1,12 @@
 /**
- * Adapted from Happy — https://github.com/slopus/happy (MIT, see encryption.ts
- * for the full license header preserved on the node entry point this mirrors).
+ * Browser entry point (`@kvy/crypto/web`). Wire formats are byte-identical to
+ * `encryption.ts` — a node-encrypted bundle decrypts fine here and vice versa.
  *
- * Browser entry point (`@kvy/crypto/web`). Same wire formats as `encryption.ts`
- * so ciphertext is interchangeable between platforms — see `cross-impl.test.ts`.
- * Two deliberate API differences from the node port, both forced by browser APIs:
- *
- *  1. `encryptWithDataKey` / `decryptWithDataKey` are `async` here because the
- *     Web Crypto API (`crypto.subtle`) has no synchronous variant. The wire
- *     bundle it produces — [version(1)|nonce(12)|ciphertext|tag(16)] — is byte
- *     identical to node's `createCipheriv('aes-256-gcm', ...)` output, so a
- *     node-encrypted bundle decrypts fine here and vice versa.
+ * Two API differences forced by browser APIs:
+ *  1. `encryptWithDataKey` / `decryptWithDataKey` are `async` — Web Crypto API
+ *     (`crypto.subtle`) has no synchronous variant.
  *  2. Every other function requires libsodium's WASM module to be initialized
- *     first: `await ready()` once at startup, then all sync calls below are
- *     safe. This matches libsodium-wrappers' own documented usage pattern.
+ *     first: `await ready()` once at startup, then all sync calls are safe.
  */
 import sodium from "libsodium-wrappers";
 import { decodeBase64, encodeBase64, encodeBase64Url } from "./base64.js";
@@ -70,7 +63,7 @@ export function libsodiumEncryptForPublicKey(
   return result;
 }
 
-/** Inverse of libsodiumEncryptForPublicKey — see encryption.ts for rationale. Never throws. */
+/** Inverse of libsodiumEncryptForPublicKey. Never throws — returns null on any failure. */
 export function libsodiumDecryptWithSecretKey(
   bundle: Uint8Array,
   recipientSecretKey: Uint8Array,
@@ -159,8 +152,8 @@ async function importAesGcmKey(dataKey: Uint8Array): Promise<CryptoKey> {
 }
 
 /**
- * Encrypt data using AES-256-GCM (WebCrypto) with the data encryption key.
- * Async — see module header. Bundle layout matches encryption.ts exactly.
+ * Encrypt data using AES-256-GCM (WebCrypto). Async — WebCrypto has no sync
+ * variant. Bundle layout is byte-identical to the node build's output.
  */
 export async function encryptWithDataKey(data: any, dataKey: Uint8Array): Promise<Uint8Array> {
   const nonce = getRandomBytes(12); // GCM uses 12-byte nonces
@@ -183,9 +176,9 @@ export async function encryptWithDataKey(data: any, dataKey: Uint8Array): Promis
 }
 
 /**
- * Decrypt data using AES-256-GCM (WebCrypto) with the data encryption key.
- * Async — see module header. Never rejects — resolves to null on any failure
- * (design principle #1: one corrupt record can't poison a sync batch).
+ * Decrypt data using AES-256-GCM (WebCrypto). Async — WebCrypto has no sync
+ * variant. Never rejects — resolves to null on any failure (one corrupt record
+ * can't poison a sync batch).
  */
 export async function decryptWithDataKey(
   bundle: Uint8Array,

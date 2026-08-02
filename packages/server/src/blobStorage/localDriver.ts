@@ -1,5 +1,4 @@
 /**
- * Local-disk blob driver (kvy-system-design.md §6.5: "self-host …
  * optional minio; blobs fall back to local disk when unset"). No S3-
  * compatible endpoint to presign against, so this driver builds a URL
  * pointing back at this same server's own `/v1/blobs/local/:id` sink

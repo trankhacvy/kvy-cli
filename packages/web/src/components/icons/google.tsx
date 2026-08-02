@@ -1,9 +1,3 @@
-/**
- * Google's official four-color "G" mark for the sign-in button — brand assets,
- * not lucide stand-ins (a shield/sparkle reads as a UI-kit placeholder and
- * violates Google's own button guidelines). Always decorative: the button's
- * text label carries the meaning, so `aria-hidden` is baked in.
- */
 export function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">

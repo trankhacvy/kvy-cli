@@ -1,7 +1,5 @@
 /**
- * Browser tab visibility -> `app-state` (design §9.1/§9.3: "`app-state`
  * reported on visibility/focus changes" — the input to the server's push
- * suppression logic, §6.4). Ported from Happy's React Native `AppState`
  * listener; the web equivalent is `document.visibilitychange`.
  *
  * Defensive against build-time evaluation: Next prerenders pages in a Node

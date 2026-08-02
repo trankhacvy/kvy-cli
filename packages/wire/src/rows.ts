@@ -3,7 +3,6 @@ import { EncryptedBoxSchema, VersionedSchema } from "./box";
 
 /**
  * Wire-visible row shapes for `session-new`/`machine-new`/`unmanaged-new`
- * updates (design §4.3, mirroring the Drizzle tables in §6.1). These are
  * the client-facing projections of the DB rows — every content field stays
  * an opaque `EncryptedBox`, the server never sends plaintext.
  */
@@ -25,14 +24,11 @@ export const SessionRowSchema = z.object({
   dek: z.string(), // opaque sealed-box wrap; server can route it but not open it
   // The account key epoch `dek` was wrapped under (mirrors `sessions.key_epoch` in the DB
   // schema). Optional/additive so an old client that doesn't know this field yet just
-  // ignores it (design §5.3 additive-only) — same precedent as `MachineRow.needsReauth`.
   // Lets the client tell "encrypted under a key I no longer have, after a reset" apart
   // from a genuine decrypt failure, instead of just failing to decrypt and guessing.
   keyEpoch: z.number().optional(),
   msgSeq: z.number(),
-  // Per-session "mute" quiet control (PRD FR-8.3, plan.md §10). Plaintext —
   // not part of `metadata` — because the server's push dispatcher reads it
-  // directly (design §5.3: it holds no keys to decrypt `metadata`).
   notificationsMuted: z.boolean(),
   createdAt: z.number(),
   updatedAt: z.number(),
@@ -50,7 +46,6 @@ export const MachineRowSchema = z.object({
   // `device_sessions` row for this machine is revoked" (auth-ux-hardening-plan.md
   // item 8) — the bootstrap/no-live-event path's source for "Needs
   // re-authentication" vs. plain "Offline". Additive/optional so an old client
-  // that doesn't know this field yet just ignores it (design §5.3 additive-only).
   needsReauth: z.boolean().optional(),
 });
 export type MachineRow = z.infer<typeof MachineRowSchema>;

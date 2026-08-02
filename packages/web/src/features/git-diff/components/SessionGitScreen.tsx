@@ -12,10 +12,8 @@ import { GitDiffPanel } from "./GitDiffPanel";
  * (`app/session/[id]/git/page.tsx`) stays a thin static-export shell.
  *
  * `machineId`/`worktree` used to be fabricated at the route (`mach-${id}` /
- * `/workspace/${id}`, plan.md's W3.5 note) — both are plaintext fields on
  * the session's own row (`SessionRow.machineId`/`.workspaceId`, `@kvy/
  * wire`'s `rows.ts` — unlike `metadata`'s title, the server is allowed to
- * see these, design §5.3), so no decrypt is needed to read them, only the
  * `['sync']` snapshot to have synced the row at all.
  */
 export function SessionGitScreen({ sessionId }: { sessionId: string }) {

@@ -6,7 +6,6 @@ import { resolveHomeDir } from "./home.js";
  * File-only logger.
  *
  * This module MUST NEVER write to stdout/stderr. Once local-mode session
- * spawning lands (plan.md §6.3), the kvy process inherits its stdio
  * (`stdio: ['inherit','inherit','inherit','pipe']`) into the real Claude
  * Code / Codex child process — any stray write from Kvy on those file
  * descriptors would land inside the provider's TUI and corrupt its
@@ -15,7 +14,6 @@ import { resolveHomeDir } from "./home.js";
  * This is distinct from ordinary CLI output (help text, `--version`, error
  * messages) — those are legitimate user-facing writes to stdout/stderr made
  * directly by command handlers, not logging, and are unaffected by this
- * rule (design §7.2: "logs/ … file-only logging; NEVER stdout").
  */
 
 export type LogLevel = "debug" | "info" | "warn" | "error";

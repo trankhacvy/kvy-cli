@@ -1,10 +1,3 @@
-/**
- * `POST /v1/auth/keys/challenge` + `POST /v1/auth/keys/bind` — issue-4-plan.md §6.2: binds
- * (or fenced-rotates) an account's key-custody material (`signPublicKey`/`contentPubKey`/
- * `keyEpoch`), now that identity (login) and key custody are separate. Both routes require
- * `app.authenticate` — key binding always happens as an already-logged-in account, never
- * as part of login itself.
- */
 import { randomBytes } from "node:crypto";
 import { decodeBase64 } from "@kvy/crypto";
 import { and, eq, gt, isNull, ne } from "drizzle-orm";
@@ -38,11 +31,8 @@ async function consumeNonce(db: Database, accountId: string, nonce: string): Pro
   return rows.length > 0;
 }
 
-/**
- * "Other devices are online" interlock (§6.2): a rotation while another session is
- * still healthy would race that session's next write under the old key — make the
- * user pair from one of those devices instead of rotating blind.
- */
+// A rotation while another session is still healthy would race that session's next
+// write under the old key — make the user pair from one of those devices instead.
 async function hasOtherHealthySessions(
   db: Database,
   accountId: string,
@@ -70,15 +60,9 @@ const StepUpProofSchema = z.discriminatedUnion("kind", [
 ]);
 type StepUpProof = z.infer<typeof StepUpProofSchema>;
 
-/**
- * Step-up verification for a destructive rotation (issue-4-plan.md §6.2): re-proves
- * account ownership through whichever login identity the account actually has, right
- * before a key rotation fences out every other session. A password account re-enters
- * its password (`auth/password.ts`'s own hash, not a fresh one); an OAuth-only account
- * re-does the OAuth round trip and the resulting identity must match one of the
- * account's own `auth_identities` rows — a valid Google/GitHub proof for a DIFFERENT
- * account must not step this one up.
- */
+// Re-proves account ownership before fencing out every other session on key rotation.
+// An OAuth proof must match one of THIS account's `auth_identities` rows — a valid
+// Google/GitHub proof for a different account must not step this one up.
 async function verifyStepUp(
   db: Database,
   verifier: OAuthVerifier,
@@ -226,7 +210,6 @@ export function buildKeysRoutes(
             .where(eq(accounts.id, request.accountId));
 
           if (!isFirstBind && !sameKey) {
-            // Fence the split-brain (§6.2): kill every OTHER session so a stale daemon
             // still holding the old masterSecret can't keep writing under the dead epoch.
             await tx
               .update(deviceSessions)

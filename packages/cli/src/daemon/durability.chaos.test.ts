@@ -1,11 +1,7 @@
 /**
- * Chaos test suite for daemon durability (plan.md §16 "3.2 Durability":
  * "Chaos test suite: kill daemon mid-turn, kill session process, sleep/wake,
- * server restart — all recover per failure matrix"; kvy-system-design.md
- * §11's Failure Modes & Recovery Matrix).
  *
  * This is a package-local integration suite (`packages/cli/src/daemon/`),
- * not a standalone `e2e/` package — the design's `e2e/` tree (§2's repo
  * layout) is reserved for the full scripted-agent conformance harness, which
  * doesn't exist yet either; nothing in this codebase stands that up yet, so
  * inventing the workspace/build wiring for it here would be scope creep for
@@ -72,7 +68,7 @@ async function waitForPersisted(
   }
 }
 
-describe("chaos: daemon durability recovery (failure matrix, design §11)", () => {
+describe("chaos: daemon durability recovery", () => {
   let homeDir: string;
 
   beforeEach(async () => {

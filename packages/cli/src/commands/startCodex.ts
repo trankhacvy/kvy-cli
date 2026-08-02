@@ -1,6 +1,4 @@
 /**
- * `kvy codex [args...]` (design §7.7 "Codex adapter (v0.3 — ACP)", plan.md
- * §17 Phase 2.3). Codex has no local-interactive TUI, so — unlike `kvy
  * claude`'s local↔remote mode loop (`commands/start.ts`) — a Codex session is
  * **remote from the start**: it drives one `AcpRemote` on the `codex-acp`
  * adapter for its whole lifetime, with no `loop()` and no local child.
@@ -14,7 +12,6 @@
  *
  * exec/patch approvals arrive through ACP's standard
  * `session/request_permission` → the same `AcpPermissionHandler` Claude uses
- * (design §7.6), so nothing Codex-specific is needed on the permission path.
  */
 import path from "node:path";
 import { encodeBase64, wrapDek } from "@kvy/crypto";
@@ -104,9 +101,7 @@ export interface StartCodexCommandDeps {
    * one-shot `SIGINT` listener.
    */
   waitForExit?: () => Promise<void>;
-  /** Injectable for tests; defaults to the real `ensureLoggedIn()` (AX-1.8). */
   ensureLoggedIn?: typeof ensureLoggedInDefault;
-  /** Injectable for tests; defaults to the real `reloadDaemonAuth()` (AX-1.6). */
   reloadDaemonAuth?: (homeDir: string) => Promise<boolean>;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -160,7 +155,6 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   const backendUrl = deps.backendUrl ?? resolveBackendUrl(env);
 
   // 2. Credentials, key material, machineId and an access token as one restartable
-  // unit — see `commands/startPreflight.ts` (AX-1.3/AX-1.8).
   const preflightResult = await runPreflightWithReauth({
     homeDir: deps.homeDir,
     backendUrl,
@@ -257,7 +251,6 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   // Re-notify the daemon once the real ACP provider session id is known
   // (`startAcpRemote`'s `onProviderSessionId`, below) — mirrors `start.ts`'s
   // `notifyDaemonProviderSessionId`. Without this, `providerSessionId` never
-  // reaches persisted session metadata, so a future `--continue-from` (§5.5)
   // has nothing to resume: the id this session ran under would be lost the
   // moment the process exits.
   function notifyDaemonProviderSessionId(providerSessionId: string): void {
@@ -308,10 +301,8 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
   );
 
   // envelopeId -> claimId, so the turn-settle hook completes exactly the
-  // claim its `message` handler opened (design §7.10).
   const openClaims = new Map<string, string>();
 
-  // "End session" from the web (plan-v2.md W2.3): there is no terminal-side
   // exit signal here (unlike `start.ts`'s `loop()`, which already has a
   // `requestExit()`-shaped hook) — Codex's whole lifetime is gated on
   // `waitForExit()` (SIGINT by default), so the `stop` RPC resolves a second,
@@ -391,13 +382,11 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     },
     // docs/known-issues.md issue #12's web model selector is PTY-only
     // (`start.ts`'s `runLocalPty`) — Codex has no live terminal to type
-    // `/model` into (design §7.7, same reasoning as `takeControl` below) and
     // ACP has no analogous model-change call. Honest not-supported.
     setModel: () => {
       logger.debug("[start-codex] setModel RPC — Codex has no PTY to inject a model switch into");
       return { ok: false };
     },
-    // Codex has no local terminal to hand control back to (design §7.7) —
     // honest not-supported rather than a fake success.
     takeControl: () => {
       logger.debug("[start-codex] takeControl RPC — Codex has no local mode to return to");
@@ -405,7 +394,6 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     },
     permAnswer: ({ reqId, decision }) => remote.resolvePermission({ reqId, decision }),
     // Same not-yet-landed status-reporting caveat as `start.ts`'s `stop`
-    // handlers (plan-v2.md U1.4 "lifecycle-status" hasn't landed on this
     // branch — see that comment). `force` doesn't kill anything directly;
     // it exits this whole CLI process after a grace period if `remote.stop()`
     // hasn't already ended the session by then.

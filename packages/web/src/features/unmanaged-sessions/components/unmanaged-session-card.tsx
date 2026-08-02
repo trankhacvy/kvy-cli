@@ -10,18 +10,11 @@ import { cn } from "@/lib/utils";
 import type { UnmanagedSessionItem, UseUnmanagedActions } from "../types";
 import { TakeOverDialog } from "./take-over-dialog";
 
-/** One unmanaged (plain claude/codex) session row (kvy-system-design.md
- * §9.2 "Home" row: `UnmanagedSection`; §11/§10.4 UC9). Mirrors
- * `features/session-list`'s `SessionCard` layout/spacing so both sections
- * read as one family of cards, distinguished by the "Unmanaged" badge and
- * the mirror/take-over actions in place of a status dot (there's no reduced
- * transcript to derive one from — this session was never Kvy-managed).
- *
- * `useActions` is called here, not by the caller (`UnmanagedSection`),
- * because it's a hook: each card is its own component instance, so calling
- * it once at this component's top level — one instance per rendered card —
- * satisfies the Rules of Hooks, where calling it from inside `.map()` in
- * the parent's own render body would not. */
+/**
+ * `useActions` is called here rather than by the parent (`UnmanagedSection`)
+ * because it's a hook: calling it per card instance satisfies the Rules of
+ * Hooks, whereas calling it inside `.map()` in the parent's render body would not.
+ */
 export function UnmanagedSessionCard({
   session,
   machine,
@@ -31,11 +24,9 @@ export function UnmanagedSessionCard({
   session: UnmanagedSessionItem;
   machine: SessionListMachine | null;
   useActions: UseUnmanagedActions;
-  /** True when `useActions` is still mock-backed against real (non-fixture)
-   * session data — mirror/take-over would silently pretend to succeed
-   * against a row the daemon actually owns, so the entry points are greyed
-   * out instead (plan.md §16 W3.10: "render read-only rows first"). Default
-   * `false` keeps existing mock-driven call sites fully interactive. */
+  /** True when `useActions` is still mock-backed against real session data -
+   * actions are greyed out so a mock silently succeeding against a real
+   * daemon-owned row is not possible. Default `false` keeps test call sites interactive. */
   actionsDisabled?: boolean;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);

@@ -19,11 +19,7 @@ type Phase =
   | { kind: "error"; message: string };
 
 /**
- * Shown wherever this browser is signed in but has no key material: it asks the account's
- * other devices for a copy instead of dead-ending on the destructive rotate flow, which
- * is demoted to `StartOverLink` below.
- *
- * Continues by itself — it polls `claim` until the sealed box appears, so the user never
+ * Continues by itself — polls `claim` until the sealed box appears, so the user never
  * reloads or re-opens a link. Polling (rather than relying only on the socket ephemeral)
  * is also what keeps this working against a stale, service-worker-cached build that can't
  * parse the new `key-request` payload.

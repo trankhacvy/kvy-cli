@@ -8,7 +8,6 @@ import { formatRelativeTime } from "@/features/session-list";
 import { cn } from "@/lib/utils";
 
 /**
- * "Continue from a recent CLI session" (kvy-prd.md FR-7.8 UC7) — the old
  * wizard's `ImportStep`'s new home (B5, new-session-from-web redesign, see
  * the task's own header comment). `ImportStep` itself wasn't actually
  * dependent on free-form directory *browsing* — it only ever needed an

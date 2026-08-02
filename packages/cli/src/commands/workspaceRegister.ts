@@ -3,7 +3,6 @@
  * `kvy workspace list`
  * `kvy workspace unregister [--directory <path>]`
  *
- * Terminal-side surface for `../workspace/registry.ts` (plan.md §16 "3.1
  * Remote spawn" / "3.3 Session adoption (UC9)"). `--directory` defaults to
  * the current working directory for both `register` and `unregister`,
  * matching Omnara's low-friction UX per the PRD — `kvy workspace

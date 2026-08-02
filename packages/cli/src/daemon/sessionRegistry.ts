@@ -1,28 +1,11 @@
 /**
- * Session registry — the daemon's `pid → TrackedSession` bookkeeping
- * (design §8: "Session registry: pid → TrackedSession; spawn↔self-report
- * matched by pid with 15 s awaiter; finished sessions persisted to
- * `sessions.json` including wrapped DEK + seq + versions so resume survives
- * daemon restarts"; plan.md §16 "3.2 Durability"). Adapted from Happy's
- * inline `pidToTrackedSession`/`sessionIdToFinishedSession` maps in
- * `daemon/run.ts` (https://github.com/slopus/happy, MIT), pulled out into
- * its own injectable module here rather than left inline, so `commands.ts`
- * and this module's own tests don't have to stand up a whole
- * `runDaemonStartSync` to exercise it.
+ * The daemon's `pid → TrackedSession` bookkeeping.
  *
- * Three responsibilities, matching `controlServer.ts`'s injected callback
- * shapes exactly (no adapter needed — same "structural fit" seam already
- * used elsewhere in this codebase):
- *
- *  - `getSessions()` / `stopSession()` — the live, pid-tracked half, fed
- *    straight into `ControlServerDeps`.
- *  - `onSessionStarted()` — the `/session-started` webhook handler: updates
- *    the live map and, whenever the report carries encryption material,
- *    persists it to `sessions.json` (`sessionsStore.ts`) so it survives a
- *    daemon crash.
- *  - `findResumable()` / `restore()` — the durable half: what `resumeSession`
- *    (`resumeSession.ts`) looks a session up by id against, seeded from disk
- *    once at boot and kept current as live sessions die (`pruneDeadSessions`).
+ * Three responsibilities:
+ * - `getSessions()` / `stopSession()` — live, pid-tracked half.
+ * - `onSessionStarted()` — webhook handler: updates the live map and persists
+ *   encryption material to `sessions.json` so resume survives daemon restarts.
+ * - `findResumable()` / `restore()` — durable half seeded from disk at boot.
  */
 import type { Logger } from "../logger.js";
 import { findLiveOrphanedSessions, type ReadoptProbeDeps } from "./readoptSessions.js";
@@ -50,14 +33,11 @@ export interface SessionRegistry {
    */
   readoptLiveSessions(probe: ReadoptProbeDeps): Promise<number>;
   /**
-   * Registers a pid this daemon just spawned, ahead of its
-   * `/session-started` webhook arriving — lets `onSessionStarted` recognize
-   * it as the same session rather than a fresh terminal-started one.
-   * `directory` (the resolved real path a `spawn`-launched pid was started
-   * in, plan.md §16 "Flow 3 — spawn-directory-dedup") is optional — a
-   * `resumeSession` relaunch calls this with no directory, since it isn't
-   * establishing a *new* live-directory fact, just re-tracking an existing
-   * session's pid.
+   * Registers a pid this daemon just spawned, ahead of its `/session-started`
+   * webhook — lets `onSessionStarted` recognize it as the same session rather
+   * than a fresh terminal-started one. `directory` is omitted for `resumeSession`
+   * relaunches, which re-track an existing session rather than establishing a new
+   * directory fact.
    */
   trackSpawned(pid: number, directory?: string): void;
   /** The `/session-started` webhook handler (`ControlServerDeps.onSessionStarted`'s exact shape). */
@@ -83,7 +63,6 @@ export interface SessionRegistry {
   /** A session resumable right now — live-tracked (if it still carries encryption data) or from the durable set — or `null` if this daemon has no record of it at all. */
   findResumable(sessionId: string): PersistedSession | null;
   /**
-   * Sweeps the live map for pids that are no longer alive (design §8:
    * "prunes dead session pids via `kill(pid,0)`"). Anything with encryption
    * material graduates into the resumable set first — a crashed session
    * must still be resumable, not just forgotten.
@@ -95,7 +74,6 @@ export interface SessionRegistry {
    * True if `providerSessionId` (a Claude Code/Codex transcript's own id —
    * the JSONL filename) is already tracked, live or durably persisted, as
    * one of THIS daemon's own Kvy-managed sessions — `transcriptIndexer.ts`'s
-   * `isManaged` lineage-lookup hook (kvy-system-design.md §8/§11 UC9): a
    * session's own local transcript must never be independently re-surfaced
    * as "unmanaged" while (or after) Kvy is already managing it. Checks
    * both `pidToSession` (live) and `resumable` (ended-but-still-tracked, and
@@ -153,7 +131,6 @@ export function createSessionRegistry(deps: SessionRegistryDeps): SessionRegistr
       metadata: session.metadata,
       savedAt: now(),
       // Carried through so spawn-directory-dedup survives a daemon restart
-      // (plan.md §16 "Flow 3 — spawn-directory-dedup"): a session restored
       // from disk and re-tracked by a `resumeSession` relaunch keeps the
       // directory `scanForLiveSessionInDirectory` matches against.
       directory: session.directory,

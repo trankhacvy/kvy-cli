@@ -1,6 +1,5 @@
 /**
- * A wrapping key derived from a passkey's WebAuthn PRF extension
- * (docs/auth-ux-overhaul-plan.md §5.2).
+ * A wrapping key derived from a passkey's WebAuthn PRF extension.
  *
  * Unlike `device-key.ts`'s stored `CryptoKey`, this key material never exists at rest:
  * it is re-derived per page-load from the authenticator, gated by a user-verification

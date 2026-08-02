@@ -34,7 +34,6 @@ export default defineConfig({
     // `scripts/**` is outside `src/`: it's build tooling (esbuild config for the
     // standalone crypto-worker bundle), not app code, but `scripts/build-worker.test.ts`
     // still needs to run as part of the normal suite — it's the regression test for
-    // auth-ux-overhaul-fix-plan.md Fix 2 (an empty inlined API_URL silently signed every
     // user out on reload).
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "scripts/**/*.test.ts"],
   },

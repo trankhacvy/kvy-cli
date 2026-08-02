@@ -1,16 +1,11 @@
 /**
- * `reloadDaemonAuth` — the CLI-side client half of the daemon's
- * `/reload-auth` control endpoint (docs/auth-ux-overhaul-plan.md AX-1.6).
+ * CLI-side client for the daemon's `/reload-auth` control endpoint.
  *
- * The daemon registers its machine exactly once, at startup, and only if
- * credentials existed at that moment (`machineIntegration.ts`). So after an
- * inline re-pair (`commands/startPreflight.ts`) the daemon is still holding the
- * old, now-revoked device session. This asks it to re-read `access.key` and
- * restart its machine integration in place, instead of making the user run
- * `kvy` a second time.
+ * After an inline re-pair, the daemon is still holding the old revoked device
+ * session. This asks it to re-read `access.key` and restart machine integration
+ * in place, rather than requiring a second `kvy` invocation.
  *
- * Best-effort, same contract as `notify.ts`: never throws. No daemon, a wedged
- * daemon, or a non-2xx response all collapse to `false`.
+ * Best-effort: never throws. No daemon, unreachable daemon, or non-2xx all collapse to `false`.
  */
 import { resolveHomeDir } from "../home.js";
 import type { Logger } from "../logger.js";

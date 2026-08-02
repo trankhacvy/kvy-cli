@@ -1,25 +1,9 @@
-/**
- * Watch a single file for changes, with a bounded give-up path for files
- * that never appear.
- *
- * Ported verbatim (behavior-for-behavior) from
- * happy-cli/src/modules/watcher/startFileWatcher.ts (MIT). `fs.watch()`
- * throws `ENOENT` synchronously for a path that does not exist, so a naive
- * "watch in a tight retry loop" turns a session whose transcript file never
- * gets created (e.g. a phantom/dead provider instance) into an infinite,
- * CPU-spinning, log-flooding retry loop — the "dead Happy instance" bug this
- * function exists to prevent (see scanner.ts's `deadSessions` guard, which
- * is the other half of the fix).
- *
- * This implementation:
- *  - backs off exponentially between retries (1s → 15s, capped),
- *  - distinguishes "file absent" (ENOENT) from transient watch errors,
- *  - gives up — instead of spinning forever — once the file has stayed
- *    absent past `missingFileTimeoutMs`, signalling the caller via
- *    `onGaveUp` so it can stop re-creating this watcher,
- *  - resets all failure state as soon as the file is observed, so a slow
- *    session start that eventually writes its transcript heals cleanly.
- */
+// `fs.watch()` throws `ENOENT` for a non-existent path, so a naive tight
+// retry loop turns a dead/phantom session into an infinite CPU-spinning loop.
+// This watcher backs off exponentially (1s → 15s, capped) and gives up once
+// the file has stayed absent past `missingFileTimeoutMs` — signalling the
+// caller via `onGaveUp` so the session is never re-watched. See
+// `scanner.ts`'s `deadSessions` guard for the other half of the fix.
 
 import { watch } from "node:fs/promises";
 import type { Logger } from "../logger.js";

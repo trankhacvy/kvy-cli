@@ -1,36 +1,4 @@
 #!/usr/bin/env node
-/**
- * ACP adapter contract test (kvy-system-design.md §13.2 v0.3, plan.md §17
- * Phase 2.4). The v2 sibling of `provider-contract-test.ts`: instead of the
- * local Claude Code transcript/hook/resume contract, this exercises Kvy's
- * REAL ACP stack (`src/acp/acpConnection.ts` + `acpToEnvelope.ts` +
- * `acpPermissionHandler.ts`) against the official `claude-agent-acp` adapter,
- * asserting the ACP-side behaviors Kvy's mapper depends on but does not
- * control:
- *
- *  1. **Handshake** — `initialize` returns an `agentInfo`, and `session/new`
- *     returns a UUID-shaped `sessionId` (the id Kvy reuses for the
- *     remote→local `claude --resume <id>` handoff — design §7.4).
- *  2. **Text turn** — a plain prompt produces `agent_message_chunk`
- *     notifications that the mapper coalesces into ≥1 `text` envelope, and
- *     `session/prompt` resolves with `stopReason: "end_turn"`.
- *  3. **Tool turn** — a Bash prompt produces a `tool_call` carrying
- *     `_meta.claudeCode.toolName` (mapper assumption 2) whose args stream in
- *     via refinements (deferred tool-start), mapped to a `tool-start` named
- *     for the real tool + a `tool-end`.
- *
- * It runs TWICE (design §13.2 "pinned + latest canary"):
- *  - **pinned** (`ADAPTER_MANIFEST`) — a failure here is a HARD failure
- *    (exit 1): Kvy ships against exactly this version.
- *  - **latest** (`@agentclientprotocol/claude-agent-acp@latest`, temp-installed
- *    only when it differs from the pin) — a failure here is a loud WARNING,
- *    not a red build: it means upstream drifted and Kvy should investigate
- *    before bumping its pin, not that Kvy is currently broken.
- *
- * Standalone, billed, live — never part of `pnpm test`. Invoked only by
- * `.github/workflows/provider-contract.yml`'s daily cron (Claude installed +
- * authenticated). Local run: `pnpm --filter @vibe-oss/kvy run contract:acp`.
- */
 
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -122,7 +90,7 @@ async function runContract(homeDir: string, label: string): Promise<void> {
     });
     assertContract(
       UUID_PATTERN.test(session.sessionId),
-      `[${label}] session/new returned a non-UUID sessionId "${session.sessionId}" — breaks the claude --resume handoff (design §7.4)`,
+      `[${label}] session/new returned a non-UUID sessionId "${session.sessionId}" — breaks the claude --resume handoff`,
     );
 
     // 1. Text turn.

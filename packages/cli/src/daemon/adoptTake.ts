@@ -1,27 +1,21 @@
 /**
- * Daemon-side core for the `adopt.take` machine RPC (design §7.8/§8/§10.4,
- * plan.md §16 "3.3 Session adoption (UC9)"): takeover vs fork of a plain
- * (unmanaged) `claude` session the transcript indexer has already surfaced.
+ * Daemon-side core for the `adopt.take` machine RPC: takeover vs fork of a
+ * plain (unmanaged) `claude` session the transcript indexer has already surfaced.
  *
- * - `mode: 'takeover'` — the divergence guard (design FR-9.4: "never two
- *   live continuations of the same history"). If a live, non-Kvy
- *   `claude` process still owns this transcript, SIGTERM it, wait up to
- *   `gracefulTimeoutMs` (default 5s), SIGKILL if it's still alive — then
- *   spawn a new managed session continuing from the same provider session
- *   id.
- * - `mode: 'fork'` — skips the kill entirely (the original process, if
- *   any, keeps running untouched) but still spawns the new continuation.
+ * - `mode: 'takeover'` — enforces "never two live continuations of the same
+ *   history". If a live, non-Kvy `claude` process still owns this transcript,
+ *   SIGTERM it, wait up to `gracefulTimeoutMs` (default 5s), SIGKILL if it's
+ *   still alive — then spawn a new managed session continuing from the same
+ *   provider session id.
+ * - `mode: 'fork'` — skips the kill entirely; the original process keeps running.
  *
- * Idempotency-key replay is the caller's responsibility (`machineRpc.ts`,
- * same convention as `spawn`) — this function always performs a real
- * attempt when called; it never caches results itself.
+ * Idempotency-key replay is the caller's responsibility — this function always
+ * performs a real attempt when called and never caches results itself.
  *
- * Mid-turn warning (design §10.4 / FR-9.3: "if the process is mid-turn,
- * show a warning"): when `mode: 'takeover'` actually found (and killed) a
- * live process, the result carries a human-readable `warning` — there is
- * no way to know from the transcript alone whether that process's *last*
- * turn had finished, so any live process is treated as "possibly mid-turn"
- * and the client is told plainly rather than guessing silently.
+ * When `mode: 'takeover'` finds and kills a live process, the result carries a
+ * human-readable `warning` — there is no way to know from the transcript alone
+ * whether that process's last turn had finished, so any live process is treated
+ * as "possibly mid-turn" rather than guessing silently.
  */
 import type { AdoptTakeParams, AdoptTakeResult, SpawnParams, SpawnResult } from "@kvy/wire";
 import {
@@ -58,7 +52,7 @@ export interface AdoptTakeDeps {
   logger?: Logger;
 }
 
-/** Fills in real OS-backed defaults (reusing `kill.ts`'s primitives) for anything not overridden — same shape as `createKillDeps`/`createLivenessDeps`. */
+/** Fills in real OS-backed defaults for anything not overridden, reusing `kill.ts`'s/`liveness.ts`'s primitives. */
 export function createAdoptTakeDeps(
   required: Pick<AdoptTakeDeps, "resolveProviderSession" | "spawnSession">,
   overrides: Partial<AdoptTakeDeps> = {},
@@ -90,7 +84,7 @@ async function waitForExit(
   return isAlive(pid);
 }
 
-/** SIGTERM, wait out the grace period, SIGKILL fallback — mirrors `kill.ts`'s `killGraceful` escalation policy for a single, already-identified pid. */
+/** SIGTERM, wait out the grace period, SIGKILL fallback — same escalation as `kill.ts`'s `killGraceful` for a single already-identified pid. */
 async function killGracefully(
   pid: number,
   deps: Required<
@@ -115,12 +109,8 @@ async function killGracefully(
 }
 
 /**
- * Runs one `adopt.take` attempt: optionally kills the owning process
- * (`mode: 'takeover'` only), then spawns a new managed session continuing
- * from `params.providerSessionId`. Throws (any `Error`) if the provider
- * session can't be resolved to a registered workspace, or if the
- * underlying spawn fails — both are real failures, not silently-swallowed
- * side channels.
+ * Throws if the provider session can't be resolved to a registered workspace,
+ * or if the underlying spawn fails — both are real failures, not silently swallowed.
  */
 export async function handleAdoptTake(
   params: AdoptTakeParams,
@@ -162,13 +152,12 @@ export async function handleAdoptTake(
     continueFrom: { providerSessionId: params.providerSessionId },
   });
 
-  // `spawnSession` can also resolve to `{requiresApproval}` (no `sessionId`)
-  // when the target directory doesn't exist yet (design's New Session
-  // directory-picker flow) — but an adopted provider session's directory is
-  // by definition one Claude Code was already running in, so this should
-  // never happen in practice. Still, `AdoptTakeResultSchema` requires a
-  // `sessionId`, so surface it as a real error rather than emitting a result
-  // that would fail its own result-schema validation one layer up.
+  // `spawnSession` can resolve to `{requiresApproval}` (no `sessionId`) when
+  // the target directory doesn't exist yet — but an adopted provider session's
+  // directory is by definition one Claude Code was already running in, so this
+  // should never happen. Still, `AdoptTakeResultSchema` requires a `sessionId`,
+  // so surface it as a real error rather than emitting a result that would fail
+  // its own schema validation one layer up.
   if (!spawnResult.sessionId) {
     throw new Error(
       `adopt.take: spawn did not return a sessionId for provider session "${params.providerSessionId}" (requiresApproval: ${JSON.stringify(

@@ -1,21 +1,9 @@
-/**
- * Path/label resolution for `kvy daemon service install/uninstall/status`
- * (kvy-prd.md FR-4.1 "installable as a login service (launchd /
- * systemd-user) [P1]"; kvy-system-design.md §8 "Service install (P1):
- * launchd plist / systemd-user unit / schtasks, all labeled
- * `dev.kvy.daemon`"; plan.md §16 "4.3 Distribution & self-host").
- *
- * macOS uses launchd (`~/Library/LaunchAgents`); Linux uses a systemd
- * `--user` unit (`~/.config/systemd/user`). Windows (`schtasks`) is out of
- * scope — kvy-prd.md FR-1.1 marks Windows support `[P2]`, unimplemented
- * anywhere else in the CLI yet either (`processScan.ts`, `gitExec.ts`).
- */
+/** Path/label resolution for `kvy daemon service install/uninstall/status`. */
 import { accessSync, constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { resolveHomeDir } from "../home.js";
 
-/** Every platform's service is registered under this one label (design §8). */
 export const SERVICE_LABEL = "dev.kvy.daemon";
 
 export type ServicePlatform = "launchd" | "systemd";
@@ -36,8 +24,7 @@ export class UnsupportedPlatformError extends Error {
   constructor(platform: string) {
     super(
       `kvy daemon service install/uninstall/status is not supported on "${platform}". ` +
-        "Only macOS (launchd) and Linux (systemd --user) are supported today. " +
-        "Windows support is a documented fast-follow (kvy-prd.md FR-1.1).",
+        "Only macOS (launchd) and Linux (systemd --user) are supported.",
     );
     this.name = "UnsupportedPlatformError";
   }

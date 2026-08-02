@@ -1,8 +1,6 @@
 /**
  * `kvy doctor` (+ `kvy doctor clean`) — process discovery,
  * categorization, and runaway-process cleanup. Ported, with changes, from
- * Happy's `daemon/doctor.ts` (https://github.com/slopus/happy, MIT); plan.md
- * §16 "3.2 Durability": "`kvy doctor` (+ `clean`): process discovery,
  * categorization, runaway kill".
  *
  * `kvy doctor` is purely diagnostic: it reports every Kvy-owned
@@ -13,7 +11,6 @@
  * resumable from `sessions.json`. It never sends a signal to anything.
  *
  * It also reports ACP adapter health and provider CLI detection (design
- * §7.9: "`kvy doctor` reports adapter presence/version/integrity and the
  * underlying provider CLI detection (`claude` binary, `codex` binary)") —
  * `checkAllAdaptersHealth` (`../adapters/health.ts`) re-verifies every
  * pinned adapter's install against `ADAPTER_MANIFEST`, and

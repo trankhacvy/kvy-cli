@@ -202,7 +202,7 @@ describe("apiSocket", () => {
     expect(sockets[0]?.connected).toBe(false);
   });
 
-  it("treats the server's 'Session revoked' connect_error the same as an auth-rejection (security review finding F2 — a revoked device must actually notice, not retry forever)", () => {
+  it("treats the server's 'Session revoked' connect_error the same as an auth-rejection (a revoked device must notice, not retry forever)", () => {
     const { factory, sockets } = createFakeSocketFactory();
     const { source } = createFakeVisibilitySource("active");
     const client = createApiSocket(factory, source);
@@ -410,7 +410,7 @@ describe("apiSocket", () => {
   });
 });
 
-describe("apiSocket — proactive renew-token + connect_error recovery (issue-4-plan.md §4.5/§6.4)", () => {
+describe("apiSocket — proactive renew-token + connect_error recovery", () => {
   it("proactively emits renew-token ~10 minutes after connect, re-arming on a successful ack", async () => {
     vi.useFakeTimers();
     try {

@@ -1,12 +1,3 @@
-/**
- * Verify-before-spawn resolution (design §7.9). This is the seam Phase
- * 2.1's `acpConnection.ts` spawns adapters through: it never spawns
- * `node <entrypoint>` directly off `paths.ts`, it calls
- * `resolveAdapterSpawn()` and only spawns on an `ok: true` result — the
- * same verification `verify.ts` runs (version + integrity against
- * `ADAPTER_MANIFEST`), returned already shaped as a ready-to-use
- * `{command, args}` pair.
- */
 import type { AdapterId } from "./manifest.js";
 import type { AdapterVerifyFailureReason } from "./verify.js";
 import { verifyAdapterInstall } from "./verify.js";

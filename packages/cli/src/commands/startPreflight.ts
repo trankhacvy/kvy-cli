@@ -1,6 +1,5 @@
 /**
  * Everything a provider command must resolve from stored credentials before a
- * session can start (docs/auth-ux-overhaul-plan.md AX-1.3).
  *
  * Extracted so the dead-refresh-token path can re-run it WHOLESALE after an
  * inline re-pair: a new pairing can change the account's key epoch, so

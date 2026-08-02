@@ -1,6 +1,5 @@
 /**
  * Ported (adapted) from Happy — https://github.com/slopus/happy
- * Original: happy/packages/happy-cli/src/persistence.ts
  *
  * MIT License
  * Copyright (c) 2026 Happy Coder Contributors
@@ -24,7 +23,6 @@
  * SOFTWARE.
  *
  * ---
- * `~/.kvy/` local state persistence (design §7.2, plan.md §16 "1.3 CLI
  * skeleton + local mode"):
  *
  *   settings.json   schema-versioned; atomic read-modify-write via an
@@ -36,7 +34,6 @@
  * actually defines (no `sandboxConfig`/`chromeMode` — Happy-specific
  * features with no Kvy equivalent); credentials narrowed to the single
  * `masterSecret` variant, since @kvy/crypto's `deriveKeyTree` (unlike
- * Happy's legacy-vs-dataKey split) only ever derives from one masterSecret.
  */
 
 import { existsSync, constants as fsConstants } from "node:fs";
@@ -87,17 +84,14 @@ export const SUPPORTED_SETTINGS_SCHEMA_VERSION = 1;
 export interface Settings {
   schemaVersion: number;
   onboardingCompleted: boolean;
-  /** Assigned once at first run; identifies this machine to the server (design §3.2, §7.2). */
   machineId?: string;
   /** Persisted override for KVY_BACKEND_URL (e.g. set once by `kvy auth login`). */
   backendUrl?: string;
   /** Persisted override for KVY_FRONTEND_URL. */
   frontendUrl?: string;
-  /** Whether `ensureDaemonRunning()` (plan.md §16 "1.5 Daemon v1") auto-starts the daemon. */
   daemonAutoStart?: boolean;
   /**
    * Old→new provider-session-id lineage recorded by `kvy adopt`
-   * (design §7.8 FR-9.5, plan.md §16 "3.3 Session adoption (UC9)"): keyed
    * by the original (oldest) provider session id, each value is the full
    * adoption chain in order, `[originalId, ...resumedIds]` — Claude Code's
    * `--resume` mints a brand-new session id every time, so this is how
@@ -108,12 +102,10 @@ export interface Settings {
   /**
    * Per-workspace settings written by `kvy workspace config
    * [--base-ref/--remote/--setup-script/--run-script/--directory]`
-   * (kvy-prd.md line 148, plan.md §16 "4.1 Git panel";
    * docs/features/setup-run-scripts.md) — keyed by the workspace's real
    * (symlink-resolved) absolute directory path, same key shape
    * `daemon/gitDiff.ts`'s `resolveConfiguredBaseRef` looks up when a
    * `git.diff` RPC omits an explicit `baseRef`. `remote` is stored for a
-   * future `git push`/PR fast-follow (kvy-prd.md FR-7.7) — unused by the
    * read-only MVP diff viewer. `setupScript`/`runScript`
    * (docs/features/setup-run-scripts.md) back the Setup/Run scripts
    * subsystem — `daemon/setupScript.ts` reads `setupScript` after a fresh
@@ -126,7 +118,6 @@ export interface Settings {
   >;
   /**
    * Epoch-ms timestamp of the last auto-update-on-start background check
-   * (`update/autoUpdateTrigger.ts`, plan.md §16 "4.3 Distribution &
    * self-host") — rate-limits how often `kvy` spawns a background
    * `kvy update` child so a stream of invocations doesn't hammer GitHub.
    */

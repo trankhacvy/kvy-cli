@@ -192,10 +192,6 @@ describe("createCryptoWorkerHandler", () => {
     });
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 4: a key store slot is single-tenant, but nothing
-  // recorded WHOSE keys were in it — signing into a second account on a browser that
-  // already held a first account's keys silently loaded the wrong key tree. These pin the
-  // account-scoped answers `describeStorage`/`getIdentity`/`ensureLoaded` now give.
   describe("account scoping (Fix 4)", () => {
     it("a record tagged for acct-A is invisible to acct-B: describeStorage, getIdentity, and ensureLoaded all refuse", async () => {
       const record: AnyStoredKeyRecord = {
@@ -297,8 +293,6 @@ describe("createCryptoWorkerHandler", () => {
         ok: true,
         result: { present: true, version: 1, mode: null, credentialId: null },
       });
-      // The trap this replaces: `getIdentity` answers for a v1 record too, so using it as
-      // the readiness check reported "ready" over a worker that could decrypt nothing.
       const identity = await handler.handle(req("2", { type: "getIdentity" }));
       expect(identity.ok && identity.result).not.toBeNull();
       expect(await handler.handle(req("3", { type: "ensureLoaded" }))).toMatchObject({
@@ -349,10 +343,9 @@ describe("createCryptoWorkerHandler", () => {
       expect(await sessions.load()).toBeNull();
     });
 
-    // auth-ux-overhaul-fix-plan.md Fix 5 / E2E-5.5: `clear()` only emptied the object
-    // store, leaving `kvy-crypto-bridge`/`kvy-session` enumerable by
-    // `indexedDB.databases()` after logout. The `"clear"` RPC must call `destroy()` on
-    // both stores (which removes the database itself), not `clear()`.
+    // `clear()` only emptied the object store, leaving `kvy-crypto-bridge`/`kvy-session`
+    // enumerable by `indexedDB.databases()` after logout. The `"clear"` RPC must call
+    // `destroy()` on both stores (removes the database itself), not `clear()`.
     it('the "clear" RPC calls destroy() on both stores, not clear()', async () => {
       await init("1");
       const storageDestroy = vi.spyOn(storage, "destroy");
@@ -511,13 +504,10 @@ describe("createCryptoWorkerHandler", () => {
     });
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 2: never a bare `string | null` — collapsing "no
-  // credential", "the server rejected it" and "the request never got anywhere" into one
-  // falsy value is what turned an empty worker `API_URL` into a total sign-out on every
-  // reload. There was previously NO test of `refreshSession` at all
-  // (Phase-4a's "works in a fresh worker with no key material" case was never implemented
-  // either — added below).
-  describe("refreshSession (Phase 4a / Fix 2 tri-state)", () => {
+  // `RefreshOutcome` uses a discriminated union instead of a bare `string | null`:
+  // collapsing "no credential", "server rejected it", and "request never arrived" into one
+  // falsy value can turn a transient config failure into a total sign-out on every reload.
+  describe("refreshSession (tri-state outcome)", () => {
     const originalFetch = globalThis.fetch;
 
     afterEach(() => {

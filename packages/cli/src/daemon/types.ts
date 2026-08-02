@@ -1,16 +1,5 @@
-/**
- * Daemon-local types (not part of the `@kvy/wire` protocol — these never
- * cross a network boundary, they're the shape of the daemon's own in-memory
- * bookkeeping). Adapted from happy-cli/src/daemon/types.ts (MIT).
- */
 import type { PermissionMode, ProviderId } from "@kvy/wire";
 
-/**
- * Encryption material a spawned session reports back to the daemon via the
- * `/session-started` webhook (kvy-system-design.md §7, §10.1). Durability
- * (§7.4, a separate task) persists exactly this shape to `sessions.json` so
- * resume survives a daemon restart without re-deriving keys.
- */
 export interface SessionEncryptionData {
   /** Base64-encoded wrapped data-encryption-key for this session. */
   encryptionKey: string;
@@ -36,26 +25,12 @@ export interface TrackedSession {
   pid: number;
   error?: string;
   /**
-   * The resolved real (symlink-followed) directory this pid was spawned
-   * into (plan.md §16 "Flow 3 — spawn-directory-dedup"). Populated by
-   * `sessionRegistry.ts`'s `trackSpawned` for a daemon-spawned session — fed
-   * from `spawnEngine.ts`'s own `spawnDirectory` right after launch — and
-   * carried through by `onSessionStarted`'s merge for that same pid. Absent
-   * for a terminal-started session the daemon only learned about via its
-   * `/session-started` self-report (no `trackSpawned` call preceded it, so
-   * there was nothing to record a directory against). This is exactly what
-   * lets `spawnSession` answer "is a session already live in this
-   * directory?" without a new registry lookup shape.
+   * The resolved real (symlink-followed) directory this pid was spawned into.
+   * Absent for terminal-started sessions (no `trackSpawned` call preceded them).
    */
   directory?: string;
 }
 
-/**
- * Options accepted by the injected `spawnSession` callback. The control
- * server only validates and forwards these — actual process spawning
- * (tmux, detached fallback, directory-creation approval) is §7.3, a
- * separate plan bullet implemented elsewhere.
- */
 export interface SpawnSessionOptions {
   directory: string;
   sessionId?: string;
@@ -71,12 +46,8 @@ export type SpawnSessionResult =
   | { type: "error"; errorMessage: string };
 
 /**
- * A launched process's terminal exit info (A3/A4, docs/known-issues.md —
- * "generic 15s timeout masks the real failure reason"). `code`/`signal`
- * mirror Node's own `child_process` `"exit"` event shape; a pid-poll-based
- * watcher (no direct child handle — e.g. the tmux pane process,
- * `processLauncher.ts`) can only ever observe "gone", so both fields are
- * `null` in that case.
+ * `code`/`signal` mirror Node's `child_process` `"exit"` event; a pid-poll-based
+ * watcher (no direct child handle) can only ever observe "gone", so both are `null`.
  */
 export interface ProcessExitInfo {
   code: number | null;

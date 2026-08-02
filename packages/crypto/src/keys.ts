@@ -1,5 +1,6 @@
 /**
- * Key hierarchy — kvy-system-design.md §5.1.
+ * Key derivation from a client-held masterSecret (HMAC-SHA512, BIP32-style
+ * master-seed expansion flattened to a single-level domain list):
  *
  * masterSecret (32B, generated client-side, never leaves clients unwrapped)
  *  ├─ HKDF("kvy-auth")        → ed25519 seed → signing keypair   (server auth challenge)
@@ -7,15 +8,9 @@
  *  ├─ HKDF("kvy-anon")        → anonId (16 hex)                  (analytics identity)
  *  └─ HKDF("kvy-blob-master") → legacy/global blob key           (rarely used)
  *
- * New code (not present in Happy), but the derivation primitive is adapted
- * verbatim from Happy — https://github.com/slopus/happy (MIT) —
- * `happy-app/sources/encryption/deriveKey.ts` (HMAC-SHA512 master-seed
- * expansion, the same construction BIP32 uses for its root key) — flattened
- * to Kvy's single-level domain list instead of a full child-key path
- * tree, and made synchronous (Node's `tweetnacl.hash`
- * SHA-512 is pure JS, so there's no async WASM/native boundary to cross).
- * Deliberately isomorphic and dependency-free of `./encryption(.web).ts` so
- * it needs no platform split — one file, one implementation, both targets.
+ * Synchronous because tweetnacl.hash (SHA-512) is pure JS — no async WASM/native
+ * boundary. Deliberately dependency-free of `./encryption(.web).ts` so it needs
+ * no platform split.
  */
 import tweetnacl from "tweetnacl";
 import type { KeyTree } from "./types.js";
@@ -69,7 +64,6 @@ function toHex(bytes: Uint8Array): string {
 }
 
 /**
- * Per-session/per-machine blob key — kvy-system-design.md §5.1:
  *
  *   • blob key: HKDF(DEK, "kvy-blobs")   → attachments isolated from text
  *
@@ -121,7 +115,6 @@ export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
 /**
  * Sign `message` with an Ed25519 secret key from `KeyTree.signing` — the
  * primitive the sign-in flow needs to turn a locally-generated challenge into
- * the `signature` field of `POST /v1/auth` (design §5.2 "Sign-in": "sign 32B
  * challenge with ed25519"). Colocated with `deriveKeyTree` (rather than
  * `encryption(.web).ts`) because both operate on the same tweetnacl-native
  * keypair format — `keys.test.ts` already proves `tweetnacl.sign.detached`

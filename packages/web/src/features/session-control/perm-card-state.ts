@@ -2,7 +2,6 @@ import type { PermDecision } from "@kvy/wire";
 
 /**
  * `PermCard`'s local phase machine, kept as a pure function so the "first
- * wins across devices" branch (kvy-system-design.md §7.6) is testable
  * without mounting the component. This is *optimistic* state only — once
  * the canonical `perm-resolve` envelope reaches the reducer, the item's own
  * `permission.decision` prop becomes authoritative and the card renders that
@@ -14,7 +13,6 @@ export type PermCardPhase =
   /** Our decision won the first-wins race — shown until the canonical
    * `permission.decision` prop catches up. */
   | { kind: "answered"; decision: PermDecision }
-  /** Someone else's decision won — design §7.6's "answered on another
    * device" case. `decision` is the winning one, so the UI can show what
    * actually happened rather than just "you lost". */
   | { kind: "lost-race"; decision: PermDecision }

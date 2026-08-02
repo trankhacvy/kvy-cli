@@ -2,7 +2,6 @@ import { cn } from "@/lib/utils";
 import { SESSION_STATUS_META, type SessionListStatus } from "../status";
 
 /**
- * The attention dot for one session (design §9.2 "Home" row: "attention
  * dots"). A plain colored dot rather than an icon set — legible at the small
  * size a dense session list needs, and language-independent.
  */

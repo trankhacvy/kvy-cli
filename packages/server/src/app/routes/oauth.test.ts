@@ -216,7 +216,6 @@ describe("POST /v1/auth/register", () => {
     expect(afterBackfill?.emailVerified).toBe(true);
 
     // A third login reporting a *different* email never overwrites the one on file —
-    // the backfill only fills an empty column (issue-6 §6g).
     await app.inject({
       method: "POST",
       url: "/v1/auth/register",

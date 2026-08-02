@@ -4,12 +4,8 @@ import { describe, expect, it } from "vitest";
 import { SessionControlProvider, useMockSessionControl } from "@/features/session-control";
 import { extractPlanMarkdown, isExitPlanTool, PermCard } from "./PermCard";
 
-/**
- * Covers the actual rendered placeholder text, not just that a lookup
- * function exists — this exact string regressed to a hardcoded "Claude"
- * once already (bug-fix-plan.md #2, fixed for the exit dialogs but missed
- * here), so the test needs to catch the real DOM output, not a helper.
- */
+// Renders to static markup to test the actual DOM output, not just that the helper exists
+// (the provider-aware label string can't be verified without rendering).
 function renderPermCard(provider: string) {
   const queryClient = new QueryClient();
   return renderToStaticMarkup(

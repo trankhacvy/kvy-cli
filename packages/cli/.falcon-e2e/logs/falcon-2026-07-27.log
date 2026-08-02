@@ -1,0 +1,4 @@
+{"time":"2026-07-27T15:36:26.653Z","level":"info","message":"[session-registry] restored persisted sessions","meta":{"count":0}}
+{"time":"2026-07-27T15:36:26.722Z","level":"info","message":"daemon start-sync: ready","meta":{"pid":33739,"port":49991}}
+{"time":"2026-07-27T15:36:26.723Z","level":"info","message":"[machine-integration] no stored credentials, skipping machine client (local-only mode)"}
+{"time":"2026-07-27T17:55:51.241Z","level":"info","message":"daemon start-sync: stopped"}

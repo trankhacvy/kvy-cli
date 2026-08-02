@@ -1,60 +1,3 @@
-/**
- * Unified ACP permission handler (design §7.6 "Permission pipeline (remote
- * mode)" v0.3, plan.md §17 "Phase 2.1 — ACP core": "Unified ACP permission
- * handler: `session/request_permission` → existing §7.6 pipeline
- * (auto-rules, first-wins `resolve()`, `perm.answer` RPC) → mapped ACP
- * option response; mode-switch decisions call `session/set_mode`").
- *
- * ONE handler for every provider: Claude and Codex `exec`/`patch` approvals
- * both arrive through ACP's `session/request_permission`, so the per-provider
- * handlers (`claude/permissionHandler.ts`, `codex/permissionHandler.ts`)
- * have no successor here — this class replaces both when Phases 2.2/2.3
- * delete them.
- *
- * What deliberately did NOT carry over from `claude/permissionHandler.ts`,
- * and why:
- *
- *  - **The mode auto-rule engine (bypass/acceptEdits/plan) and Bash/tool
- *    allow-lists.** Under ACP those rules run *inside the agent process*:
- *    the Claude adapter hands the SDK the session's `permissionMode` (synced
- *    via `session/set_mode`) and the SDK's own `canUseTool` auto-allows per
- *    mode before any request reaches Kvy; an `allow_always` option
- *    selection is likewise persisted agent-side. Kvy only ever sees the
- *    requests that genuinely need a human, so re-implementing the rules here
- *    would be dead code shadowing the agent's real behavior. (v1 needed the
- *    engine because Kvy itself *was* the `canUseTool` callback.)
- *  - **`updatedInput` on allow decisions.** ACP's `selected` outcome carries
- *    only an `optionId` — there is no channel for modified tool input. A
- *    decision carrying `updatedInput` still resolves as a plain allow, with
- *    a warn log so the degradation is visible (wire schema keeps the field;
- *    a future ACP extension could restore it).
- *
- * What did carry over, exactly: the pending-request map keyed by a minted
- * cuid2 `reqId`, `perm-request`/`perm-resolve` envelope emission via the
- * injected `emitEnvelope` (ordering/encryption stay the caller's job), the
- * `agentState` snapshot seam (`onAgentStateChange`), first-wins `resolve()`
- * for the `perm.answer` RPC (losers get `{ok:false, reason:
- * 'already-answered', decision}`), reset-on-mode-switch (`reset()` cancels
- * every in-flight request), and the "choosing a mode is itself the
- * resolving action" rule — a `{kind:'mode'}` decision fires `onModeChange`
- * (the caller syncs the live session via `session/set_mode` with its own
- * provider-specific mode-id mapping) and answers the request with an allow.
- *
- * `PermDecision` → ACP option mapping (`options` come from the agent, kinds
- * are ACP's `allow_once | allow_always | reject_once | reject_always`):
- *  - `{kind:'allow', scope:'once'}`    → `allow_once`   (fallback: `allow_always`)
- *  - `{kind:'allow', scope:'session'}` → `allow_always` (fallback: `allow_once`)
- *  - `{kind:'deny'}`                   → `reject_once`  (fallback: `reject_always`,
- *    else the `cancelled` outcome — an agent offering no reject option at all
- *    still must not see the request hang)
- *  - `{kind:'mode', mode}`             → `onModeChange(mode)` + allow (as above)
- *
- * No timeout, no default: ACP blocks a permission request until answered or
- * aborted (same as mobvibe's reference handler) — Kvy's re-notify policy
- * lives in the push pipeline (§6.4), driven by the `perm-request` envelope
- * this class emits, not here.
- */
-
 import type {
   PermissionOption,
   RequestPermissionRequest,
@@ -80,7 +23,7 @@ import { type AcpSessionUpdate, pickAcpToolArgs, pickAcpToolName } from "./acpTo
 
 export type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;
 
-/** One entry of `agentState.requests` (design §7.6 step 1) — same shape v1's handler published. */
+/** One entry in `agentState.requests`. */
 export interface AgentStateRequest {
   tool: string;
   arguments: Record<string, unknown>;
@@ -107,7 +50,7 @@ interface PendingAcpRequest {
 }
 
 export interface AcpPermissionHandlerDeps {
-  /** Emits a `perm-request`/`perm-resolve` envelope onto the session timeline (design §7.6). */
+  /** Emits a `perm-request`/`perm-resolve` envelope onto the session timeline. */
   emitEnvelope: (envelope: SessionEnvelope) => void;
   /** Fires with the full requests/completedRequests snapshot on every change. */
   onAgentStateChange?: (snapshot: AgentStateSnapshot) => void;
@@ -120,17 +63,12 @@ export interface AcpPermissionHandlerDeps {
   onModeChange?: (mode: PermissionMode) => void;
   logger?: Logger;
   /**
-   * Session-attention wiring (docs/plan-flows-3-4-5.md Flow 5's ACP
-   * correction): best-effort `POST /v1/sessions/:id/notify`
-   * (`api/sessionNotify.ts`) so a push notification reaches a user who's
-   * walked away from a headless/ACP session — the ACP-path equivalent of
-   * the terminal path's `pretoolPermissionBridge.ts`'s `onPendingAttention`
-   * / `start.ts`'s `reportAttention`. `sessionId` is Kvy's own session
-   * id (NOT the ACP/provider session id). Both `sessionId` and `attention`
-   * must be supplied for reporting to fire; either missing is treated as
-   * "no live caller has wired this yet" (same not-yet-connected-seam
-   * precedent as this package's other injectable deps) and reporting is a
-   * silent no-op — every other permission-decision behavior is unchanged.
+   * Best-effort `POST /v1/sessions/:id/notify` so a push notification reaches
+   * a user who's walked away from a headless/ACP session. `sessionId` is
+   * Kvy's own session id (NOT the ACP/provider session id). Both `sessionId`
+   * and `attention` must be supplied for reporting to fire; either missing is
+   * treated as "no live caller has wired this yet" and reporting is a silent
+   * no-op — every other permission-decision behavior is unchanged.
    */
   sessionId?: string;
   /** `reportSessionAttention`'s backend/auth config. See `sessionId` above. */
@@ -260,11 +198,11 @@ export class AcpPermissionHandler {
   }
 
   /**
-   * First-wins resolution for a `perm.answer` RPC call (design §7.6): an
-   * atomic check-and-delete on the pending map. The first caller to resolve
-   * a given `reqId` gets `{ok:true}`; every later caller for the same
-   * `reqId` gets `{ok:false, reason:'already-answered', decision}` with the
-   * decision that actually won.
+   * First-wins resolution for a `perm.answer` RPC call — atomic
+   * check-and-delete on the pending map. The first caller to resolve a given
+   * `reqId` gets `{ok:true}`; every later caller for the same `reqId` gets
+   * `{ok:false, reason:'already-answered', decision}` with the decision that
+   * won.
    */
   resolve(params: { reqId: string; decision: PermDecision }): PermAnswerResult {
     const pending = this.pending.get(params.reqId);
@@ -289,10 +227,10 @@ export class AcpPermissionHandler {
   }
 
   /**
-   * Resets all state on a remote→local mode switch or session stop (design:
-   * "reset-on-mode-switch"): every in-flight ACP request settles as
-   * `cancelled` (the agent moves on rather than hanging against a handler
-   * nobody will answer) and is surfaced as a denied `perm-resolve`.
+   * Resets all state on a remote→local mode switch or session stop: every
+   * in-flight ACP request settles as `cancelled` (the agent moves on rather
+   * than hanging against a handler nobody will answer) and is surfaced as a
+   * denied `perm-resolve`.
    */
   reset(reason = "Session switched to local mode"): void {
     for (const [reqId, pending] of this.pending.entries()) {
@@ -303,11 +241,8 @@ export class AcpPermissionHandler {
   }
 
   /**
-   * Reports the `done` attention kind for a completed turn (Flow 5's ACP
-   * wiring) — call from the session's turn-end path once a `session/prompt`
-   * call resolves (`acpRemote.ts`'s `drain()`, mirroring the terminal path's
-   * `Stop`-hook `reportAttention("done")` call). Kept as a method on this
-   * class (rather than a free function in the caller) so every
+   * Reports the `done` attention kind for a completed turn — call once a
+   * `session/prompt` resolves. Kept as a method on this class so every
    * `reportSessionAttention` call site shares the same session-id/backend
    * deps this handler already owns.
    */

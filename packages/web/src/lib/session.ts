@@ -1,24 +1,14 @@
 /**
  * Access-token storage.
  *
- * Security review finding F1: this used to also store the 60-day refresh token in
- * `localStorage` — fully XSS-readable, which undid the whole point of the 15-minute
- * access-token hardening (an XSS stealing a single `localStorage` read gets a
- * long-lived, full-account credential). Neither token lives in `localStorage` anymore:
+ * Neither token lives in `localStorage`:
  *
- *   - The refresh token only ever exists PIN-wrapped in IndexedDB (`crypto/key-storage.ts`'s
- *     `StoredKeyRecord.wrappedRefreshToken`) or, briefly, unwrapped in the crypto worker's
- *     own memory (`crypto/worker-handler.ts`) — never in this module, never on the main
- *     thread at all. Recovering it (via a PIN unlock) and minting a fresh access token from
- *     it both happen inside the worker (`refreshSession()`); only the resulting access
- *     token crosses back out.
- *   - The access token is kept here as a plain in-memory module variable — cheap to
- *     re-mint (15m TTL, `refreshSession()` handles it) and, being main-thread state, wiped
- *     by any full page reload the same way `localStorage` used to persist through. This is
- *     a real, accepted trade — a same-page XSS with arbitrary code execution can still read
- *     this variable (or simply hook `fetch`), same as it always could regardless of storage
- *     location — but it's no longer sitting somewhere that persists across reloads/sessions
- *     for a passive read to find, and it's never the 60-day credential.
+ * - The refresh token only exists PIN-wrapped in IndexedDB or briefly unwrapped in the
+ *   crypto worker's memory - never on the main thread. Recovering it and minting a fresh
+ *   access token both happen inside the worker; only the resulting access token crosses out.
+ * - The access token is kept as a plain in-memory module variable (cheap to re-mint at 15m
+ *   TTL). A same-page XSS can still read this variable, but it no longer persists across
+ *   reloads as `localStorage` did, and it is never the long-lived credential.
  */
 import { getSharedCryptoBridge } from "./use-crypto-bridge.js";
 
@@ -37,10 +27,8 @@ export function clearToken(): void {
 }
 
 /** Base64url-decodes a JWT's payload segment — no signature verification
- * (these are UX reads, not a security boundary; the server is the actual
- * authority, see docs/bug-fix-plan.md issue #9). Returns `null` for anything
- * that doesn't parse: not exactly 3 dot-separated segments, non-base64
- * payload, or non-JSON payload. */
+ * (UX reads only; the server is the security boundary). Returns `null` for
+ * anything that doesn't parse. */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split(".");
   const payloadPart = parts[1];
@@ -90,17 +78,12 @@ export function isSignedIn(): boolean {
 }
 
 /**
- * issue-4-plan.md §6.4 / security review F1: attempt one silent refresh via the crypto
- * worker's own (PIN-recovered, never-persisted-in-plaintext) refresh token —
- * `require-auth.tsx` calls this once the worker is confirmed unlocked, and
- * `apiSocket.ts` calls it on an auth `connect_error`, so a normal 15-minute
- * access-token boundary never forces a visible re-login.
+ * Attempt one silent refresh via the crypto worker's own refresh token.
  *
- * Tri-state, not a boolean — collapsing "the server rejected this credential" into the
- * same value as "the request never got anywhere" is what turned a bundler misconfiguration
- * (an empty worker `API_URL`) into a total sign-out for every user on every reload
- * (auth-ux-overhaul-e2e-results.md E2E-4.1). Only `"signed-out"` should ever redirect to
- * sign-in; `"unreachable"` means keep the session and let the caller retry.
+ * Tri-state, not boolean: collapsing "the server rejected the credential" with
+ * "the request never got anywhere" would turn a transient network failure into a
+ * sign-out. Only `"signed-out"` should redirect to sign-in; `"unreachable"` means
+ * keep the session and let the caller retry.
  */
 export type SilentRefreshResult = "ok" | "signed-out" | "unreachable";
 

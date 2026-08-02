@@ -3,7 +3,6 @@ import { parentWorktreePath } from "./worktree-path";
 
 /**
  * Builds the `spawn` request for the "Review" action (session-panel-workflow-
- * plan.md Phase 3): the review session gets its OWN worktree, as a sibling
  * of the coding session's, both hanging directly off the same repo root —
  * never the coding session's own worktree directory (`spawnEngine.ts`'s
  * directory-dedup guard would return the already-live coding session

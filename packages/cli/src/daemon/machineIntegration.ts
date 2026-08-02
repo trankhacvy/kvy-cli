@@ -1,89 +1,3 @@
-/**
- * Wires `machineClient.ts` + `machineRpc.ts` (both already built, unit- and
- * integration-tested, and — until now — never called from a live daemon
- * process) into `commands.ts`'s `runDaemonStartSync` boot sequence (plan.md
- * §16 "1.5"/"3.1"/"3.2"/"3.3" — daemon integration).
- *
- * This module owns exactly the glue: deriving the account's content keypair
- * from the locally-stored credentials (design §5.1), minting/wrapping this
- * machine's DEK, opening the machine-scoped `/v1/stream` socket
- * (`startMachineClient`), and binding `registerMachineRpcHandlers`'s
- * `spawnSession`/`resumeSession`/`adoptTake`/`adoptMirror` callbacks to the
- * real `spawnEngine.ts`/`resumeSession.ts`/`adoptTake.ts`/
- * `transcriptMirror.ts` implementations — replacing `commands.ts`'s old
- * literal "not implemented yet" stub. `git.status`/`fs.list`/`fs.mkdir`/
- * `workspace.register` (plan.md §16 "Flow 3 — spawn-fresh-folder-register
- * (Piece A)") need no extra wiring here: `registerMachineRpcHandlers`
- * already has real, dependency-free defaults for all four —
- * `workspace.register`'s default (`workspaceRegisterRpc.ts`) wraps the same
- * `workspace/registry.ts` store `resolveWorkspaceRoot` below is backed by.
- * `git.diff`/`adopt.mirror` DO get
- * extra wiring — a `deps.uploadBlob` closure (`blobClient.ts`'s
- * `uploadBlob`, bound to this machine's server credentials and a
- * `deriveBlobKey(dek)`-derived blob key, design §5.1) is threaded into
- * both, so a diff/transcript too large for the 64KB RPC control-plane
- * budget gets a real `blobRef` instead of just a truncated inline preview
- * (plan.md §16 "4.3 Distribution & self-host" — the blob-storage subsystem
- * both handlers' own doc comments reserved this field for). `spawnSession`'s
- * directory-dedup guard (plan.md §16 "Flow 3 — spawn-directory-dedup") ALSO
- * gets extra wiring, for the same reason `git.diff`/`adopt.mirror` do: the
- * dependency (a live scan of `registry.getSessions()`) only exists here at
- * the composition root, not inside `spawnEngine.ts` itself — see
- * `spawnSessionHandler` below.
- *
- * **No stored credentials ⇒ no machine client.** A daemon with nobody
- * logged in yet (`kvy auth login` never run) has no token/masterSecret
- * to register a machine or open an authenticated socket with — this is
- * normal, not an error (design's local-first posture: `kvy claude` works
- * fully offline). `startMachineIntegration` returns `null` in that case,
- * logged at `info`, and the daemon keeps running local-only (control
- * server, session registry, self-update heartbeat all still work — none of
- * those depend on a server connection).
- *
- * **Socket capture.** `startMachineClient` owns the socket's lifecycle
- * end-to-end (connect/reconnect/heartbeat) but doesn't hand it back to the
- * caller — `MachineClientHandle` only exposes `identity`/`stop`. Since
- * `registerMachineRpcHandlers` needs the *same* socket instance to answer
- * `rpc-request`s, this module wraps the injected `ioFactory` to capture the
- * socket `startMachineClient` creates internally, rather than modifying
- * `machineClient.ts`'s own public surface for a single caller's need.
- *
- * **DEK survives restarts.** `POST /v1/machines`'s CAS-update path (a
- * resumed `machineId`) never re-sends or rotates `dek` — the server keeps
- * whatever was stored at first registration forever (`machines.ts`'s own
- * doc comment). So this module persists its wrapped DEK into
- * `daemon.state.json` (`state.ts`'s `wrappedDek`, alongside `machineId`)
- * and unwraps it back on every later boot instead of minting a fresh one —
- * otherwise a restarted daemon would silently start encrypting/decrypting
- * every machine RPC under a key that no longer matches what the server (and
- * any other real client unwrapping the same row) actually uses.
- *
- * **Workspace registry is caller-injected, not invented here.** `spawn`'s
- * `resolveWorkspaceRoot` and the transcript indexer's `listWorkspaces` are
- * the same injected seams `spawnEngine.ts`/`workspacePath.ts`/
- * `transcriptIndexer.ts` already document — this module still does not
- * hard-code a specific registry implementation, it just wires whatever
- * `deps` supplies into `spawnSession`/`startTranscriptIndexer`.
- * `daemon/commands.ts` is the composition root that now supplies the real
- * `~/.kvy/workspaces.json`-backed registry (`workspace/adapters.ts`) as
- * both of these defaults; `createMachineIntegrationDeps` here still
- * defaults to the honest "nothing registered" stand-in so this module's own
- * unit tests never depend on that store.
- *
- * `adopt.take`/`adopt.mirror`'s `resolveProviderSession` remains a
- * no-real-default seam (`providerSessionResolver.ts`'s own doc comment) —
- * resolving a bare provider session id needs transcript-content scanning,
- * a different, later composition than "which directories are registered".
- *
- * **Transcript indexer starts here too.** Once the machine RPC handlers are
- * registered, this module also starts the adoption Tier-1 transcript
- * indexer (`transcriptIndexer.ts`) against the same `machineId` and
- * `deps.listWorkspaces`, upserting via a fresh `unmanagedSessionClient.ts`
- * client built from this boot's credentials/DEK — mirroring the RPC
- * handlers' own "reachable but previously never started" gap: the module
- * existed, fully tested, with nothing calling `startTranscriptIndexer` from
- * a live daemon boot until now.
- */
 import {
   decodeBase64,
   deriveBlobKey,
@@ -192,7 +106,6 @@ export interface MachineIntegrationDeps {
   ioFactory: (url: string, opts: Record<string, unknown>) => Socket;
   /** Reads `~/.kvy/access.key`; `null` means "not logged in" (local-only mode). */
   readCredentials: () => KvyCredentials | null;
-  /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory; `null` for anything unregistered (design §12: no arbitrary-directory execution from remote). Defaults to "nothing registered" here — `daemon/commands.ts` supplies the real registry. See module header. */
   resolveWorkspaceRoot: WorkspaceRootLookup;
   /** Lists every registered workspace, for the transcript indexer's boot-time (and periodic re-scan) fs-watch. Defaults to "nothing registered" here — `daemon/commands.ts` supplies the real registry. See module header. */
   listWorkspaces: () => Promise<RegisteredWorkspace[]>;
@@ -203,14 +116,6 @@ export interface MachineIntegrationDeps {
     session: PersistedSession,
   ) => string | null | undefined | Promise<string | null | undefined>;
   heartbeatIntervalMs: number;
-  /**
-   * `ResumeSessionRegistry`'s narrower surface, widened with `getSessions()`
-   * (`sessionRegistry.ts`'s full `SessionRegistry` shape already has both) —
-   * `spawnSessionHandler` below scans it via `scanForLiveSessionInDirectory`
-   * for the directory-dedup guard (plan.md §16 "Flow 3 —
-   * spawn-directory-dedup"), the same registry handle `resumeSessionHandler`
-   * already used `findResumable`/`stopSession`/`trackSpawned` from.
-   */
   registry: ResumeSessionRegistry & {
     getSessions(): TrackedSession[];
     /** Backs the transcript indexer's `isManaged` hook below — see `sessionRegistry.ts`'s own doc comment. */
@@ -292,7 +197,6 @@ export async function startMachineIntegration(
     return null;
   }
 
-  // issue-4-plan.md §6.6: one tokenProvider per boot, shared by the machine socket and
   // every HTTP side-channel client below — a rotated refresh token is persisted back to
   // `~/.kvy/access.key` immediately so a daemon restart resumes from the latest one,
   // not a stale one that a prior refresh already superseded.
@@ -316,7 +220,6 @@ export async function startMachineIntegration(
     withCredentialsLock: (fn) => withCredentialsLock(deps.homeDir, fn),
   });
 
-  // issue-4-plan.md §6.1/§6.5: the daemon never runs interactively (no TTY, nobody to
   // type a PIN), so it can only ever unwrap `"device"` (its own default, OS-Keychain
   // custody) or `"plaintext-fallback"` key material — `resolveKeyMaterial` returns
   // `null` for `"pin"` mode without `pinDeps`, exactly the "skip, don't hang" behavior
@@ -486,7 +389,6 @@ export async function startMachineIntegration(
       resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
       awaiter: deps.awaiter,
       logger: deps.logger,
-      // Directory-dedup guard (plan.md §16 "Flow 3 — spawn-directory-dedup"):
       // the registry handle is already in scope here (same one
       // `resumeSessionHandler` below uses) — scan its live sessions for a
       // directory match before spawning, and record this spawn's own
@@ -506,15 +408,10 @@ export async function startMachineIntegration(
   // running in (`adoptTake.ts`'s own doc comment), and a `mode: 'takeover'`
   // kill doesn't remove the old pid from the registry's live map until the
   // next `pruneDeadSessions` sweep (`sessionRegistry.ts`'s documented
-  // `stopSession` behavior). Reusing `spawnSessionHandler`'s directory-dedup
-  // guard here would therefore short-circuit the continuation spawn and
-  // hand back the very session `adopt.take` is meant to replace, instead of
-  // minting a distinct one — the guard exists for the New Session
-  // wizard/duplicate-RPC-retry case (plan.md §16 "Flow 3 —
-  // spawn-directory-dedup"), not for this intentional continuation, so this
-  // variant omits `findLiveSessionInDirectory` entirely. It still calls
-  // `trackSpawned` so a LATER, genuinely-new spawn's dedup scan can find
-  // this continuation session.
+  // `stopSession` behavior). `adopt.take` intentionally omits
+  // `findLiveSessionInDirectory` — the dedup guard is for duplicate new-session
+  // RPCs, not for continuation spawns. It still calls `trackSpawned` so a
+  // later genuinely-new spawn's dedup scan can find this continuation session.
   async function spawnSessionForAdoptTake(params: SpawnParams): Promise<SpawnResult> {
     return spawnSessionCore(params, {
       resolveWorkspaceRoot: deps.resolveWorkspaceRoot,
@@ -546,15 +443,8 @@ export async function startMachineIntegration(
     return handleAdoptTake(params, adoptTakeDeps);
   }
 
-  // The blob-storage fallback (plan.md §16 "4.3 Distribution & self-host")
-  // for `git.diff`/`adopt.mirror`'s reserved `blobRef` fields: this
-  // machine's own DEK — already established above, already what every
-  // other machine RPC's params/results are sealed under — derives a blob
-  // key the same way any session's DEK would (design §5.1: `HKDF(DEK,
-  // "kvy-blobs")`), and `uploadBlobToServer` is bound to this machine's
-  // own server credentials. Best-effort by contract (never throws — see
-  // `blobClient.ts`'s header comment), so a network hiccup here just costs
-  // the blobRef efficiency win, not the RPC itself.
+  // Blob-storage fallback for `git.diff`/`adopt.mirror`'s `blobRef` fields.
+  // Best-effort: a network hiccup costs the efficiency win, not the RPC itself.
   const blobKey = deriveBlobKey(dek);
   const blobClientDeps = createBlobClientDeps(
     { getAccessToken: () => tokenProvider.getAccessToken() },
@@ -663,7 +553,6 @@ export async function startMachineIntegration(
     });
   });
 
-  // Adoption Tier 1 (design §8/§11 UC9): fs-watch every registered
   // workspace's transcript dir for plain (non-Kvy) provider sessions.
   // Reuses this same boot's credentials/DEK to upsert against
   // `POST /v1/unmanaged-sessions` — a fresh per-row DEK per upsert

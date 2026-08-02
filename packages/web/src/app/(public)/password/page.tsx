@@ -27,15 +27,9 @@ type Status =
   /** Signed in, but this browser has no keys — fetch them from another device. */
   | { kind: "needs-keys"; nextUrl: string };
 
-/**
- * Email + password sign-up/sign-in — the identity-layer sibling of the OAuth flow at
- * `/signin/`. Local testing only: these routes 404 in production.
- *
- * docs/auth-ux-overhaul-plan.md Phase 5: no PIN anywhere. Sign-up asks once how this
- * browser should protect keys at rest; sign-in either loads them with no interaction or,
- * on a browser that has none, offers to fetch them from a device that does — replacing
- * the old "generate new keys and sign every other device out" default.
- */
+/** Email + password sign-up/sign-in for local testing (404 in production). Sign-up asks
+ * once how this browser should protect keys at rest; sign-in loads them silently or, on a
+ * browser without keys, offers to fetch them from another device. */
 export default function PasswordAuthPage() {
   const router = useRouter();
   const bridge = useCryptoBridge();
@@ -45,16 +39,10 @@ export default function PasswordAuthPage() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-  // A pending pair means the CLI sent this browser here to finish connecting a machine, so
-  // an account almost certainly exists already — defaulting to "signup" pushed those users
-  // into the key-protection question (`handleSubmit`'s signup short-circuit below) instead
-  // of signing them in.
-  //
   // Read in an EFFECT, not a `useState` initialiser: `peekPendingPair` dereferences
-  // `window.sessionStorage` unguarded, and an initialiser runs during the static-export
-  // prerender where there is no `window`. Same reason — and the same shape — as
-  // `signin/page.tsx`'s banner effect. `peek` does NOT consume the value; the auth call
-  // still spends it via `consumePendingPair()`.
+  // `window.sessionStorage` unguarded, and an initialiser runs during static-export prerender
+  // where there is no `window`. `peek` does NOT consume the value; the auth call spends it
+  // via `consumePendingPair()`.
   useEffect(() => {
     if (peekPendingPair()) {
       setMode("signin");
@@ -75,9 +63,7 @@ export default function PasswordAuthPage() {
       const { nextUrl, refreshToken } = await completePasswordSignIn(email, password);
       // Persisting needs no key material now, so this always lands.
       await bridge.setRefreshToken(refreshToken);
-      // `completePasswordSignIn` above already called `setToken`, so the account id is
-      // real by this point — scope the check to it, not "does this browser have ANY
-      // record" (auth-ux-overhaul-fix-plan.md Fix 4).
+      // Scope the identity check to this account specifically, not any record in this browser.
       const identity = await bridge.getIdentity(getAccountId() ?? undefined);
       if (!identity) {
         setStatus({ kind: "needs-keys", nextUrl });

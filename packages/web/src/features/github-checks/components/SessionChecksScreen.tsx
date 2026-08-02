@@ -11,7 +11,6 @@ import { ChecksPanel } from "./ChecksPanel";
  * SessionGitScreen.tsx`: resolves the session's real (plaintext)
  * `machineId`/`workspaceId` off the live `['sync']` snapshot
  * (`SessionRow.machineId`/`.workspaceId` — the server is allowed to see
- * these, design §5.3, unlike `metadata`'s encrypted title) so the route
  * itself stays a thin static-export shell.
  */
 export function SessionChecksScreen({ sessionId }: { sessionId: string }) {

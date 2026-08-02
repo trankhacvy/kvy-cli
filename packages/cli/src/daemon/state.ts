@@ -1,23 +1,6 @@
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-/**
- * `~/.kvy/daemon.state.json` — the daemon's published identity (design
- * §7.2, plan.md line 691). Written once by the daemon after it binds its
- * control port and successfully acquires the singleton lock (see `lock.ts`);
- * read by any `kvy` command that needs to find the running daemon (e.g.
- * `ensureDaemonRunning()`, `kvy daemon status` — both later bullets).
- *
- * This module only owns the read/write helpers for that file. It is
- * deliberately dumb: no locking, no staleness logic — `lock.ts` is the
- * source of truth for "is a daemon actually running", this is just its
- * advertised metadata.
- *
- * Port of Happy's daemon state file — https://github.com/slopus/happy (MIT);
- * mirrors `happy-cli/src/daemon/run.ts`'s published pid/port/version state
- * (plan.md §7.4: "Happy persists finished sessions ... daemon/run.ts,
- * sessions.json"), split out here into its own small read/write module.
- */
 export interface DaemonState {
   pid: number;
   port: number;
@@ -33,16 +16,10 @@ export interface DaemonState {
    */
   machineId?: string;
   /**
-   * This machine's DEK, wrapped to the account's content public key (base64
-   * — `@kvy/crypto`'s `wrapDek`), once minted (`machineIntegration.ts`).
-   * `POST /v1/machines`'s CAS-update path never re-sends or rotates `dek`
-   * (see `machines.ts`'s own doc comment) — it's only consumed server-side
-   * on a brand new machine's first registration. Round-tripping the same
-   * wrapped value through this file (alongside `machineId`) is what lets a
-   * restarted daemon recover the SAME raw DEK it minted before, rather than
-   * minting a fresh, mismatched one that no longer decrypts what the
-   * server-stored row (and any other real client unwrapping it with the
-   * same masterSecret) actually uses.
+   * This machine's DEK, wrapped to the account's content public key (base64).
+   * Persisted so a restarted daemon recovers the same DEK rather than minting
+   * a mismatched one — the CAS-update path never re-sends or rotates `dek`
+   * after the initial registration.
    */
   wrappedDek?: string;
 }

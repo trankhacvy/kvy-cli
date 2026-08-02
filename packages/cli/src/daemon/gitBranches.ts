@@ -1,30 +1,15 @@
 /**
- * `git.branches` machine RPC handler (design §4.4; docs/features/
- * worktree-isolation.md Phase 2 — backs the New Session wizard's
- * existing-branch worktree picker, docs/competitive-notes-omnara.md #2/#16).
+ * `git.branches` machine RPC handler. Backs the New Session wizard's
+ * existing-branch worktree picker.
  *
- * Modeled line-for-line on `gitStatus.ts`: same injectable `git?: GitExec`
- * seam (defaulting to `gitExec.ts`'s real `runGit`), same "throw
- * `GitExecError` through, no silent empty-list fallback" contract, and the
- * same `assertWorkspaceStillValid` pre-check (known-issues.md #3) so a
- * renamed/deleted/no-longer-a-repo worktree surfaces a classified
- * `WorkspaceValidationError` instead of a raw `git` stderr string.
- *
- * Runs `git for-each-ref refs/heads` with a tab-separated `--format` so one
- * `git` invocation yields every column this handler needs — HEAD marker
- * (current branch), worktree path (branch checked out in another worktree,
- * if any — git forbids the same branch in two worktrees), upstream, and
- * last-commit time — without a second `git branch`/`git log` call per
- * branch. `%(worktreepath)` requires git >= 2.31; an older git silently
- * returns an empty column for it, so `checkedOutAt` just stays unset rather
- * than throwing — the daemon-side pre-flight guard in `gitWorktree.ts` is
- * the actual protection against double-checkout, this is best-effort UI.
+ * Uses `git for-each-ref refs/heads` with a tab-separated `--format` so one
+ * invocation yields HEAD marker, worktree path, upstream, and last-commit
+ * time. `%(worktreepath)` requires git >= 2.31; older git returns an empty
+ * column (checkedOutAt stays unset, not a throw) - the actual double-checkout
+ * guard is `gitWorktree.ts`.
  *
  * `refs/remotes` is only queried when `git remote` reports at least one
- * configured remote — skipped entirely for a local-only repo rather than
- * running a `for-each-ref` that would just come back empty. Each resulting
- * entry (e.g. `origin/main`) is marked `remote: true`; the remote's own
- * `<name>/HEAD` symbolic ref is dropped, since it isn't a branch.
+ * remote; the remote's `<name>/HEAD` symbolic ref is dropped (not a branch).
  */
 import type { GitBranchesParams, GitBranchesResult, GitBranchInfo } from "@kvy/wire";
 import { type GitExec, runGit } from "./gitExec.js";

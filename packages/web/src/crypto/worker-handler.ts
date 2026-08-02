@@ -2,18 +2,13 @@
  * Core crypto-bridge worker logic. Split out from `worker.ts`'s `self.onmessage` wiring
  * so tests can drive it directly with in-memory storage.
  *
- * Trust boundary (kvy-system-design.md §5.3, §9.1): `keyTree`, `masterSecret`,
- * `refreshToken`, `activeDek` and every pending ephemeral secret below are closed over by
- * `handle()` and never appear in any response. The main thread can ask the worker to
- * seal/open data or mint a fresh access token, but can never read the keys back out.
+ * Trust boundary: `keyTree`, `masterSecret`, `refreshToken`, `activeDek`, and every pending
+ * ephemeral secret are closed over by `handle()` and never appear in any response. The main
+ * thread can ask the worker to seal/open data or mint a fresh access token, but can never
+ * read the keys back out.
  *
- * docs/auth-ux-overhaul-plan.md:
- *  - Phase 4a — the refresh token lives in its own store, independent of key material, so
- *    a browser with no keys can still hold a session (and therefore ask for keys).
- *  - Phase 5  — no PIN. A fresh worker loads its own key material via `ensureLoaded()`,
- *    either from a stored non-extractable wrap key or from a passkey-derived one.
- *  - Phase 4  — `beginKeyRequest`/`acceptKeyResponse`/`sealKeysForPeer` implement
- *    device-to-device key sharing.
+ * The refresh token lives in its own store, independent of key material, so a browser with
+ * no keys can still hold a session and ask for keys from another device.
  */
 
 import type { KeyTree } from "@kvy/crypto/web";
@@ -53,7 +48,7 @@ const X25519_PUBLIC_KEY_BYTES = 32;
 const MASTER_SECRET_BYTES = 32;
 const DEK_LENGTH_BYTES = 32;
 
-/** `[0x01 | masterSecret | refreshToken]` — CLI pairing (issue-4-plan.md §6.3). */
+/** `[0x01 | masterSecret | refreshToken]` — CLI pairing payload format. */
 const PAIR_PAYLOAD_VERSION = 0x01;
 /** `[0x02 | masterSecret]` — device-to-device key sharing; the peer has its own session. */
 const KEY_SHARE_PAYLOAD_VERSION = 0x02;

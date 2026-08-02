@@ -8,7 +8,6 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
-/** issue-4-plan.md §6.6: a fake `TokenProvider` that always resolves the same access
  * token, tracking `forceRefresh` calls so tests can assert on the connect_error path. */
 function fakeTokenProvider(
   accessToken: string | null = "test-token",
@@ -92,7 +91,6 @@ describe("startSessionClient", () => {
       "http://localhost:4000",
       expect.objectContaining({ path: "/v1/stream", transports: ["websocket"] }),
     );
-    // issue-4-plan.md §6.6: `auth` is now an async callback (asks the tokenProvider for
     // a currently-valid token on every handshake) rather than a static object.
     const [, socketOpts] = ioFactory.mock.calls[0] as [
       string,
@@ -245,7 +243,6 @@ describe("startSessionClient", () => {
     );
   });
 
-  it("forces a token refresh on an auth-shaped connect_error (issue-4-plan.md §6.6)", async () => {
     const fakeSocket = new FakeSocket();
     const ioFactory = vi.fn().mockReturnValue(fakeSocket);
     const tokenProvider = fakeTokenProvider();
@@ -318,7 +315,6 @@ describe("startSessionClient", () => {
     }
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 7: the session socket joins `user:${accountId}` like
   // every other connection, so a key request raised on another device already lands here —
   // it was simply never listened for before this fix.
   it("fires onKeyRequest for a valid key-request ephemeral", () => {

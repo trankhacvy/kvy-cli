@@ -1,29 +1,13 @@
 /**
- * HTTP control server for the Kvy daemon.
- *
- * Ported verbatim from happy-cli/src/daemon/controlServer.ts (MIT) per
- * plan.md §7.1 — a Fastify server bound to `127.0.0.1:0` (an OS-assigned
- * ephemeral port, never a fixed one — the resolved port is what the caller
- * persists to `daemon.state.json`, §7.4) exposing `/session-started`,
+ * HTTP control server for the Kvy daemon: a Fastify server bound to
+ * `127.0.0.1:0` (OS-assigned ephemeral port) exposing `/session-started`,
  * `/list`, `/stop-session`, `/spawn-session`, and `/stop`.
  *
- * `/session-started` is the one endpoint whose contract is load-bearing
- * beyond this module: it's the only path by which a spawned session's
- * encryption material ever reaches the daemon, and daemon durability (§7.4,
- * a separate task) persists exactly what this handler receives so resume
- * survives a daemon restart. Keep its shape stable.
+ * `/session-started` is load-bearing: it's the only path by which a spawned
+ * session's encryption material reaches the daemon. Keep its shape stable.
  *
- * It also carries the spawned session's own `pid` (optional — a session
- * started straight from a terminal, not by the daemon, doesn't know one),
- * which is how the `spawn` RPC's pid↔webhook awaiter (`spawnAwaiter.ts`,
- * plan.md §16 "3.1 Remote spawn") matches this webhook back to the spawn
- * call that launched the process: the daemon knows the pid it launched
- * immediately, but not the `sessionId` until the session reports it here.
- *
- * This module never spawns processes, locks a singleton, or opens a WS to
- * the machine — `getSessions`/`stopSession`/`spawnSession`/`requestShutdown`
- * are injected by the caller, which owns that state and those side effects
- * (§7.2/§7.3/§7.4, separate plan bullets).
+ * `getSessions`/`stopSession`/`spawnSession`/`requestShutdown` are injected;
+ * this module never spawns processes or owns that state directly.
  */
 
 import { PermissionModeSchema, ProviderIdSchema, StopSessionParamsSchema } from "@kvy/wire";
@@ -129,14 +113,12 @@ export interface ControlServerDeps {
   getSessions: () => TrackedSession[];
   /** Signal the session with this `sessionId` to stop; returns whether one was found and signalled. */
   stopSession: (sessionId: string) => boolean;
-  /** Actual process spawning (tmux, detached fallback — §7.3) is the caller's job. */
   spawnSession: (options: SpawnSessionOptions) => Promise<SpawnSessionResult>;
   /** Called once `/stop` is hit; the caller decides how the daemon process actually exits. */
   requestShutdown: () => void;
   /**
    * Re-read `~/.kvy/access.key` and restart machine integration in place —
    * the daemon only registers a machine once at startup, so a session that just
-   * re-paired needs this rather than a full daemon restart (AX-1.6). Optional:
    * a caller that doesn't own machine integration (tests) can leave it unset.
    */
   reloadAuth?: () => Promise<boolean>;
@@ -180,7 +162,6 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
     app.setValidatorCompiler(validatorCompiler);
     app.setSerializerCompiler(serializerCompiler);
 
-    // Session reports itself after creation — the resume-durability contract (§7.4).
     app.post(
       "/session-started",
       {
@@ -281,7 +262,6 @@ export function startControlServer(deps: ControlServerDeps): Promise<ControlServ
       },
     );
 
-    // Re-read credentials and restart machine integration in place (AX-1.6).
     app.post(
       "/reload-auth",
       { schema: { response: { 200: ReloadAuthResponseSchema } } },

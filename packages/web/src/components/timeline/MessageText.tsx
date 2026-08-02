@@ -3,14 +3,8 @@ import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
 import { ThinkingBlock } from "./ThinkingBlock";
 
-/** A `text` render item: either a normal chat message or (when `thinking`)
- * a collapsible reasoning block (kvy-prd.md FR-7.2).
- *
- * Layout follows the Cursor/ChatGPT chat pattern: the user's message is a
- * bordered, muted rounded box (visually distinct but not a loud filled
- * bubble); the assistant's response is flat prose directly on the
- * background, with a small always-visible action row underneath (copy — the
- * `5s · ⧉` pattern, minus duration, which we don't track). */
+/** A `text` render item: either a normal chat message or (when `thinking`) a collapsible
+ * reasoning block. */
 export function MessageText({ item }: { item: TextItem }) {
   if (item.thinking) {
     return <ThinkingBlock md={item.md} />;

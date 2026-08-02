@@ -27,7 +27,6 @@ type CasOutcome =
 
 /**
  * Shared optimistic-concurrency core for `PUT .../metadata` and
- * `PUT .../state` (design §4.3: "the `updateMany({ where: { version:
  * expected }})` → `count === 0 ? 409` pattern is identical" between the two
  * — only the target column differs).
  */
@@ -113,7 +112,6 @@ async function casUpdateSessionField(
 
 /**
  * `PUT /v1/sessions/:id/metadata` + `PUT /v1/sessions/:id/state` (design
- * §4.3 — ported from Happy's WS `update-metadata`/`update-state` handlers,
  * `sessionUpdateHandler.ts:13,75`, as HTTP CAS).
  */
 export function buildSessionCasRoutes(

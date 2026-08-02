@@ -6,15 +6,9 @@ export interface DiffLine {
 }
 
 /**
- * Line-level diff between two strings, computed via a classic LCS backtrack
- * (kvy-system-design.md §9.2 "diffs via ... a custom unified renderer").
- * This is a readable line diff, not a shortest-edit-script guarantee —
- * that's all the read-only `Edit`/`Write`/`MultiEdit` tool cards need.
- *
- * Falls back to a plain remove-all/add-all pair when the line-count product
- * would blow up the O(n*m) table — a huge generated file pasted into one
- * `Edit` call must never hang the tab (design principle: no silent hangs
- * either — this still renders every line, just without alignment).
+ * Line-level diff via a classic LCS backtrack. Falls back to a plain
+ * remove-all/add-all pair when the line-count product would blow up the O(n*m)
+ * table - a huge generated file must never hang the tab.
  */
 const MAX_LCS_CELLS = 4_000_000;
 

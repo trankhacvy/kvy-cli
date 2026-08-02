@@ -46,69 +46,30 @@ import type { SessionEncryptionData } from "./types.js";
 import type { WorkspaceRootLookup } from "./workspacePath.js";
 
 /**
- * Wires the singleton lock (`lock.ts`), the control server (`controlServer.ts`),
- * the session registry (`sessionRegistry.ts`), and `daemon.state.json`
- * (`state.ts`) into the four `kvy daemon` verbs (design §8, plan.md
- * §7.2/§7.4):
+ * Wires the singleton lock, control server, session registry, and
+ * `daemon.state.json` into the four `kvy daemon` verbs:
  *
  *  - `start`      — short-lived: spawns `start-sync` detached, then (unless
  *                   `--no-wait`) polls until it reports ready.
- *  - `start-sync` — the daemon's own long-running process body (see
- *                   `markers.ts` — this is the exact argv `kvy kill`
- *                   recognizes as the daemon). Acquires the lock, restores
- *                   `sessions.json` into the session registry, boots the
- *                   control server, writes state, then — if this machine
- *                   has stored credentials (`kvy auth login` already
- *                   ran) — opens the machine-scoped `/v1/stream` socket and
- *                   registers the real `spawn`/`resumeSession`/`git.*`/
- *                   `fs.*`/`adopt.*` RPC handlers (`machineIntegration.ts`,
- *                   design §4.4/§8). Then blocks until shutdown is
- *                   requested (SIGINT/SIGTERM, the control server's own
- *                   `/stop`, or its own heartbeat's self-update handoff —
- *                   see below), then cleans up. A 60s heartbeat runs
- *                   throughout: it prunes dead session pids
- *                   (`SessionRegistry.pruneDeadSessions`, design §8: "prunes
- *                   stale session pids via `kill(pid,0)`") and checks
- *                   whether the installed CLI bundle has been replaced on
- *                   disk (`selfUpdate.ts`) — once replaced *and* the
- *                   registry reports no live sessions, it triggers the same
- *                   shutdown path, then (post-cleanup) spawns a fresh
- *                   `start-sync` to take over, mirroring Happy's "release
- *                   ownership BEFORE spawning the new daemon" ordering.
- *  - `stop`       — prefers a graceful HTTP `/stop` through the control
- *                   server; falls back to SIGTERM-then-SIGKILL via the pid
- *                   `daemon.state.json` advertises.
- *  - `status`     — reads `daemon.state.json`, confirms the pid is alive,
- *                   and probes the control server for extra confidence
- *                   (a reused pid after reboot would otherwise look "alive").
+ *  - `start-sync` — the long-running daemon process body. Acquires the lock,
+ *                   restores `sessions.json`, boots the control server, writes
+ *                   state, then (if credentials exist) opens the machine-scoped
+ *                   `/v1/stream` socket and registers the `spawn`/`resumeSession`/
+ *                   `git.*`/`fs.*`/`adopt.*` RPC handlers. A 60s heartbeat prunes
+ *                   dead session pids and watches for a self-update: once the
+ *                   bundle is replaced and no sessions are live, it shuts down and
+ *                   spawns a fresh `start-sync` — ownership is released BEFORE the
+ *                   new daemon is spawned so its "already running" check doesn't
+ *                   refuse to start.
+ *  - `stop`       — prefers a graceful HTTP `/stop`; falls back to SIGTERM then
+ *                   SIGKILL via the pid `daemon.state.json` advertises.
+ *  - `status`     — reads `daemon.state.json`, confirms the pid is alive, and
+ *                   probes the control server (a reused pid after reboot would
+ *                   otherwise look "alive").
  *
- * `spawnSession` (the HTTP loopback `/spawn-session` path) stays an honest
- * stand-in here — it's a disjoint, separate feature (no `workspaceId`/
- * `idempotencyKey` in its body, a `sessionId` field belonging to a
- * different resume contract) from the machine-RPC `spawn`/`resumeSession`
- * this module now wires for real; see `P3-3.1-daemon-spawn-rpc`'s
- * task-summary for why it was deliberately left untouched.
- *
- * The machine RPC handlers' `resolveWorkspaceRoot`/`listWorkspaces` seams
- * default to the real `~/.kvy/workspaces.json`-backed registry
- * (`workspace/registry.ts`, adapted in `workspace/adapters.ts`) — a `spawn`
- * RPC's `workspaceId` is validated against an actually-registered directory
- * (`workspacePath.ts`'s `validateSpawnWorkspace`, via
- * `machineIntegration.ts`), and the transcript indexer
- * (`transcriptIndexer.ts`, started from within `machineIntegration.ts` once
- * a machine client is up) fs-watches actually-registered workspaces instead
- * of nothing. `resolveResumeDirectory` now defaults to the real
- * `resolveResumeDirectoryFromRecord` (`resumeSession.ts`), re-resolving a
- * persisted session's stored spawn `directory` via `realpath` so
- * spawn-directory-dedup survives a daemon restart (plan.md §16 "Flow 3 —
- * spawn-directory-dedup"). `resolveProviderSession` still has no real default
- * (resolving a bare provider session id back to a workspace needs
- * transcript-content scanning, a different, later composition — see
- * `providerSessionResolver.ts`'s own doc comment) — it honestly reports
- * "unresolved" rather than guessing. `DaemonCommandDeps`
- * exposes all of these as overridable so tests (and any future real
- * `resolveProviderSession`) can plug in a different implementation without
- * touching this wiring again.
+ * `resolveProviderSession` has no real default — resolving a bare provider
+ * session id back to a workspace needs transcript-content scanning — so it
+ * honestly reports "unresolved" rather than guessing.
  */
 
 export interface DaemonCommandDeps {
@@ -122,9 +83,9 @@ export interface DaemonCommandDeps {
   /** Sends `signal` to `pid`; swallows ESRCH (process already gone). */
   killPid: (pid: number, signal: NodeJS.Signals) => void;
   isProcessAlive: (pid: number) => boolean;
-  /** Lists every OS process visible to this user. Defaults to `processScan.ts`'s real `ps`-backed implementation. Used at boot to re-adopt live orphaned sessions (`readoptSessions.ts`). */
+  /** Lists every OS process visible to this user. Used at boot to re-adopt live orphaned sessions. */
   listProcesses: () => Promise<ProcessEntry[]>;
-  /** Resolves a pid's current working directory. Defaults to `processScan.ts`'s real implementation. Used alongside `listProcesses` for boot-time re-adoption. */
+  /** Resolves a pid's current working directory. Used alongside `listProcesses` for boot-time re-adoption. */
   resolveProcessCwd: (pid: number) => Promise<string | null>;
   /** Used for the control server's `/stop` (graceful shutdown) and `status`'s liveness probe. */
   fetchImpl: typeof fetch;
@@ -162,7 +123,7 @@ export interface DaemonCommandDeps {
   readAuthCredentials: (homeDir: string) => KvyCredentials | null;
   /** Builds the socket.io-client transport for the machine-scoped connection. Injectable so tests can point at a fake/local server; defaults to the real `socket.io-client`. */
   machineIoFactory: (url: string, opts: Record<string, unknown>) => Socket;
-  /** How often the machine client sends its `machine-alive` heartbeat. Defaults to 60s (design §8). */
+  /** How often the machine client sends its `machine-alive` heartbeat. Defaults to 60s. */
   machineHeartbeatIntervalMs: number;
   /** Resolves a `spawn` RPC's `workspaceId` to its registered root directory. Defaults to the real `workspaces.json`-backed registry — see this module's own doc comment. */
   resolveWorkspaceRoot: WorkspaceRootLookup;
@@ -179,7 +140,7 @@ export interface DaemonCommandDeps {
   /** Same, for `resumeSession.ts`. */
   resumeSessionOverrides?: Partial<ResumeSessionDeps>;
 
-  // --- Sleep-inhibit (docs/features/sleep-inhibit.md, docs/competitive-notes-omnara.md #12) ---
+  // --- Sleep-inhibit ---
 
   /**
    * Creates the sleep-inhibit assertion manager (`daemon/sleepInhibit.ts`).
@@ -243,7 +204,6 @@ function defaultRegisterShutdownSignals(onShutdown: () => void): () => void {
  * src/index.ts`, `node dist/index.mjs`, the `bin/kvy.mjs` shim, and a
  * compiled Node SEA binary alike) with `daemon start-sync`, detached and
  * with stdio ignored so it survives the parent `start` command exiting.
- * Mirrors Happy's `spawnHappyCLI(['daemon', 'start-sync'], {detached: true})`.
  *
  * Also re-passes `process.execArgv` ahead of the entry path. Without this,
  * dev mode (`tsx src/index.ts daemon start`) spawns a plain `node
@@ -353,7 +313,6 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     triggerShutdown = resolve;
   });
 
-  // Restore sessions.json BEFORE serving any request (design §7.4/§8): a
   // resume that races the daemon's own boot must always see whatever was
   // durable before the crash/restart, never a still-empty registry.
   const registry = createSessionRegistry({ homeDir, now: deps.now, logger });
@@ -362,12 +321,9 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
     logger.info("daemon start-sync: restored persisted sessions", { count: restoredCount });
   }
 
-  // Re-adopt any live orphaned session (plan.md §16 "Flow 3 —
-  // spawn-directory-dedup"): a still-running session process a prior daemon
-  // spawned but this restart never got a chance to re-track. Must happen
-  // BEFORE the control server (and any spawn RPC) starts serving, so
-  // spawn-directory-dedup sees it immediately rather than racing a fresh
-  // duplicate spawn.
+  // Re-adopt any live orphaned session: a still-running process a prior daemon
+  // spawned but this restart never re-tracked. Must happen before the control
+  // server starts, so spawn-directory-dedup sees it before any new spawn arrives.
   const readoptedCount = await registry.readoptLiveSessions({
     listProcesses: deps.listProcesses,
     resolveCwd: deps.resolveProcessCwd,
@@ -410,7 +366,6 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
 
   // Assigned further down, once the singleton lock is held — but captured by the
   // control server's `reloadAuth` closure here so a re-paired session can ask the
-  // daemon to pick up new credentials without a full restart (AX-1.6).
   let machineIntegrationDeps: MachineIntegrationDeps | null = null;
   let machineIntegration: MachineIntegrationHandle | null = null;
 
@@ -472,21 +427,17 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   await writeDaemonState(homeDir, payload);
   logger.info("daemon start-sync: ready", { pid: payload.pid, port: payload.port });
 
-  // Sleep-inhibit (docs/features/sleep-inhibit.md, docs/competitive-notes-
-  // omnara.md #12): created and boot-re-applied here, unconditionally and
-  // BEFORE `startMachineIntegration` below — a previously persisted "always"
-  // must still hold the OS assertion even in logged-out/local-only mode,
-  // where `startMachineIntegration` returns `null` and never runs. Only
-  // created once the singleton lock is actually held (never spawn
-  // `caffeinate` from a daemon that lost the boot race).
+  // Sleep-inhibit: created before `startMachineIntegration` so a persisted
+  // "always" mode still holds the OS assertion in logged-out/local-only mode.
+  // Only created once the singleton lock is held (never spawn `caffeinate`
+  // from a daemon that lost the boot race).
   const sleepInhibitManager = deps.createSleepInhibitManager({ logger, daemonPid: process.pid });
   const persistedSettings = await readSettings({ homeDir });
   sleepInhibitManager.applyMode(persistedSettings.sleepInhibit ?? "off");
 
-  // Open the machine-scoped WS client + register the real machine RPC
-  // handlers (design §4.4/§8, plan.md §16 "3.1"/"3.2"/"3.3") now that the
-  // lock is held and the registry is restored — a `null` result just means
-  // "not logged in yet", not a boot failure (see machineIntegration.ts).
+  // Open the machine-scoped WS client + register machine RPC handlers now that
+  // the lock is held and the registry is restored. A `null` result means "not
+  // logged in yet", not a boot failure.
   machineIntegrationDeps = createMachineIntegrationDeps(
     { homeDir, registry, awaiter: spawnAwaiter },
     {
@@ -520,10 +471,8 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   );
   machineIntegration = await startMachineIntegration(machineIntegrationDeps);
 
-  // Self-update detection (§8: "watch installed artifact mtime ... restart
-  // when idle") shares this same heartbeat with dead-session pruning (§8:
   // "prunes stale session pids via kill(pid,0)") — one interval, two
-  // unrelated but equally periodic jobs, same as Happy's own heartbeat.
+  // Heartbeat: prune dead sessions + check for bundle replacement.
   const initialBundleMtimeMs = deps.captureBundleMtimeMs(deps.bundlePath);
   let restartHandoffTriggered = false;
 
@@ -553,14 +502,9 @@ export async function runDaemonStartSync(deps: DaemonCommandDeps): Promise<numbe
   // Stop taking new machine RPCs / heartbeats before tearing down the
   // control server and releasing the lock, mirroring the boot order above
   // (machine client started last, stopped first). `machineIntegration.stop()`
-  // is awaited — it now also closes every tracked dev-server preview tunnel
-  // (`closeAllTunnels`, docs/features/dev-server-preview.md) before
-  // resolving. `sleepInhibitManager.stop()` MUST run before
-  // `deps.spawnStartSync()` can fire in the restart-handoff branch below —
-  // release-then-fresh-daemon-reapplies is what prevents two daemons briefly
-  // holding two caffeinate children during a self-update handoff (the `-w`
-  // tether is the crash-path backstop; this is the polite path for the
-  // ordinary case).
+  // Stop machine integration (closes preview tunnels), stop sleep inhibit
+  // (must happen before spawnStartSync in the restart-handoff path to avoid
+  // two daemons briefly holding two caffeinate children), then stop everything else.
   await machineIntegration?.stop();
   sleepInhibitManager.stop();
   await controlServer.stop();

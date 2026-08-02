@@ -19,10 +19,9 @@ const migrationsFolder = path.resolve(
 
 /**
  * Exercises the sessions-admin routes end-to-end against a REAL Socket.IO server + real
- * client connections — proving revocation is genuinely immediate on a live socket (§4.5c),
  * not just asserting a disconnect closure was called with the right arguments.
  */
-describe("sessions-admin routes (§4.4/§4.5c)", () => {
+describe("sessions-admin routes", () => {
   let pglite: PGlite;
   let db: ReturnType<typeof drizzle<typeof schema>>;
   let app: FastifyInstance;

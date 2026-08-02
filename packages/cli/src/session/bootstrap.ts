@@ -1,8 +1,5 @@
 /**
- * Session bootstrap — plan.md §16 "1.3 CLI skeleton + local mode": mint a
  * fresh session DEK, wrap it to the account's X25519 content public key
- * (design §5.1), and call the already-merged `POST /v1/sessions` (design
- * §4.3/§6.2) to create-or-get the session row. Returns the sessionId + the
  * DEK actually in force for that row, for the transcript tailer and mode
  * loop to encrypt/decrypt content with.
  *
@@ -26,7 +23,6 @@
  * `kvy auth login` CLI work — callers pass a `getAuthToken` function
  * (sync or async) that returns a bearer token.
  *
- * **Resume (plan-v2.md W3.7, design v0.3 §7.4):** a re-spawned session
  * process (`daemon/resumeSession.ts`'s `KVY_RECONNECT_*` env contract —
  * currently only set by the daemon's own headless resume path) must keep
  * writing into its *existing* server-side session row, never mint a fresh
@@ -55,7 +51,6 @@ export interface SessionMetadataInput {
   /** The `--model` override this session was started with, when the
    * caller's passthrough args carried one (`modelFlag.ts`'s
    * `extractModelFlag`) — display-only, purely for the web header's model
-   * chip (plan-v2.md W4.2); `undefined`/absent means "provider default",
    * same "" contract `features/new-session`'s spawn wizard already uses on
    * the web side. Never read back by anything on the CLI side — the actual
    * `--model` flag reaches `claude`/`codex` unchanged, independent of this. */
@@ -63,7 +58,6 @@ export interface SessionMetadataInput {
 }
 
 export interface BootstrapSessionParams {
-  /** Stable machine identity (plan.md §6.1's `machineId`) — one leg of the idempotent tag. */
   machineId: string;
   /** Absolute workspace path — the other stable leg of the idempotent tag. */
   workspacePath: string;
@@ -75,7 +69,6 @@ export interface BootstrapSessionParams {
    */
   nonce: string;
   provider: ProviderId;
-  /** Account's X25519 content keypair (design §5.1). The public half wraps
    * the DEK; the secret half recovers the original DEK on an idempotent
    * replay, when the server hands back an existing row instead of ours. */
   contentKeyPair: BoxKeyPair;
@@ -131,7 +124,6 @@ export function createBootstrapSessionDeps(
  * 0x00 | nonce)`, hex-encoded. The same triple always produces the same
  * tag, so re-running this module for the same logical session (e.g. after a
  * crash/resume) hits the server's `(accountId, tag)` unique index and gets
- * the existing row back instead of minting a duplicate (design §4.3/§6.1:
  * "tag = machineId+path+nonce"). The NUL separator prevents boundary
  * collisions (e.g. `machineId="a"` + `workspacePath="bc"` colliding with
  * `machineId="ab"` + `workspacePath="c"`).

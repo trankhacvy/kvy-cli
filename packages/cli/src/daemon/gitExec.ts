@@ -1,26 +1,10 @@
 /**
- * Shared `git` invocation helper for the daemon's `git.status`/`git.diff`
- * machine RPCs (`gitStatus.ts`/`gitDiff.ts`, design §4.4, plan.md §16 "4.1
- * Git panel"). Same hand-wrapped-`execFile` shape as
- * `gitWorktree.ts`'s own `runGit` (not `util.promisify`, for the same
- * mockability reason as `processScan.ts`'s `runPs`) — kept as a separate
- * copy here rather than importing `gitWorktree.ts`'s private helper, since
- * that module doesn't export one and status/diff reads have no reason to
- * couple to the worktree-creation module.
+ * Shared `git` invocation helper for the daemon's git machine RPCs.
  *
- * `github.checks` (docs/features/github-pr-ci.md) is this helper's first
- * consumer that ever touches the network (`git ls-remote` against the
- * configured remote to distinguish "not-pushed" from "no-pr") — every prior
- * caller (`git status`/`git diff`/`git for-each-ref`) is purely local. A
- * headless, long-running daemon has no controlling terminal to answer a
- * credential prompt, so without `GIT_TERMINAL_PROMPT=0` a remote requiring
- * interactive auth (an HTTPS remote with no cached credential helper, or a
- * GUI `core.askpass` helper invoked anyway) could hang that RPC forever
- * rather than failing fast into the generic-error path
- * `getGithubChecks`'s doc comment already describes; `timeout` below is a
- * second, defense-in-depth bound against a network hang that isn't a
- * credential prompt at all (e.g. an unreachable host). Both are no-ops for
- * every existing local-only caller.
+ * Hand-wrapped `execFile` (not `util.promisify`) for mockability in tests.
+ * Sets `GIT_TERMINAL_PROMPT=0` and enforces a timeout on network calls so a
+ * remote requiring interactive auth or an unreachable host can't hang an RPC
+ * indefinitely. Both are no-ops for local-only callers.
  */
 import { execFile } from "node:child_process";
 

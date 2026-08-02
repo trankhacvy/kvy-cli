@@ -21,8 +21,6 @@ import type {
  * `UseSessionListSnapshot` (mock by default, swapped for the real
  * `SessionRpcClient`-backed implementation once this screen's data layer —
  * the sync engine + a session-scoped crypto client — lands, a separate
- * task). Every method maps 1:1 onto one of design §4.4's session RPCs
- * (`stopSession` added by plan-v2.md W2.3 "Stop session from the web").
  */
 export interface SessionControlActions {
   sendMessage(envelope: SessionEnvelope): Promise<MessageRpcResult>;

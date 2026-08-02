@@ -4,7 +4,6 @@ import { env } from "../config.js";
 import * as schema from "./schema.js";
 
 // Single shared connection pool for the process. `max` kept modest — the
-// server is a single app process at MVP (design §6.5); revisit once the
 // Socket.IO cluster adapter ships.
 const queryClient = postgres(env.DATABASE_URL, { max: 10 });
 

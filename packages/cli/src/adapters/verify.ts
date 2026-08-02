@@ -1,21 +1,3 @@
-/**
- * Verify-before-spawn checks (design §7.9: "Post-install integrity check
- * against the manifest hash; a mismatch refuses to spawn"). Reads npm's own
- * `node_modules/.package-lock.json` — the hidden, auto-maintained lockfile
- * npm writes after every `install`/`ci` describing exactly what's on disk
- * (verified empirically: `version/resolved/integrity` per package, same
- * shape as the project-root `package-lock.json`) — rather than re-hashing
- * installed files ourselves. This is real, load-bearing verification: it
- * catches a corrupted/tampered/downgraded install, a manually-deleted
- * `node_modules`, or a manifest bump that hasn't been installed yet, without
- * ever needing network access.
- *
- * Deliberately never throws: every caller (the installer's post-install
- * check, `kvy doctor`, and Phase 2.1's `acpConnection.ts` spawn path)
- * needs a plain "is this usable, and if not, why" answer rather than a
- * try/catch — same "no silent failures, no thrown surprises" shape as
- * `codexProviderAdapter.ts`'s `detectCodex`.
- */
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import type { AdapterId } from "./manifest.js";

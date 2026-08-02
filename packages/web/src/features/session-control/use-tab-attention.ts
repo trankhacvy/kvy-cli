@@ -33,7 +33,6 @@ function applyFavicon(href: string): () => void {
 
 /**
  * Reflects a session's attention state in the browser tab — title prefix +
- * a colored-dot favicon (kvy-prd.md FR-7.9: "cheap, high-value web
  * ergonomics"). Pure computation lives in `tab-attention.ts`.
  *
  * The favicon is a plain DOM side effect (this screen is the only place in

@@ -8,9 +8,6 @@ import type {
 } from "@kvy/wire";
 
 /**
- * View-model types for the Git panel (kvy-system-design.md §4.4
- * `git.status`/`git.diff`; kvy-prd.md FR-7.7 "file-level diff list vs
- * configured base ref, per-file unified diff view"; plan.md §16 "4.1 Git
  * panel"). Real commit/push/rename write actions and a "compare against
  * any ref" selector landed in docs/features/git-write-actions.md — this is
  * no longer read-only.

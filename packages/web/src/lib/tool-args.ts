@@ -1,12 +1,3 @@
-/**
- * Defensive readers over `ToolItem.args`/`.output` (typed `unknown` on the
- * wire — kvy-system-design.md §4.2, adapter-specific shapes). Every
- * reader here degrades to `undefined` on a shape mismatch instead of
- * throwing (design principle: no silent failures at the *display* layer
- * means "never crash the card", not "never show raw JSON" — callers fall
- * back to a generic `JsonBlock` dump of the raw value when a specific field
- * is missing, so nothing is ever hidden, just possibly unformatted).
- */
 
 export function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
@@ -247,11 +238,8 @@ export interface ExitPlanModeArgs {
   plan?: string;
 }
 
-/** `ExitPlanMode` presents a plan for approval — args shape `{ plan: string }`
- * (markdown plan text), already relied on elsewhere in this codebase's own
- * tests (`session-state.test.ts:37-45`, `:57-65`; bug-fix-plan.md #6).
- * Degrades to `undefined` on any other shape, same as every other parser
- * here. */
+/** `ExitPlanMode` presents a plan for approval — args shape `{ plan: string }`.
+ * Degrades to `undefined` on any other shape. */
 export function parseExitPlanModeArgs(args: unknown): ExitPlanModeArgs {
   const r = asRecord(args);
   return { plan: readString(r, "plan") };
@@ -263,14 +251,9 @@ export interface TaskCreateArgs {
   activeForm?: string;
 }
 
-/** `TaskCreate` — Claude Code's current task/checklist-tracking tool (the
- * successor to the older `TodoWrite`; bug-fix-plan.md #7). Verified against a
- * real captured transcript (`packages/cli/src/claude/__fixtures__/
- * task-create-update-session.jsonl`) rather than assumed: each `TaskCreate`
- * call creates exactly *one* task, args shape `{subject, description,
- * activeForm}` — nothing here resembles the old `TodoWrite` `{todos: [...]}`
- * full-list shape. Degrades to `undefined` fields on any other shape, same
- * as every other parser here. */
+/** `TaskCreate` — Claude Code's task-tracking tool. Verified against a real captured
+ * transcript: each call creates exactly one task with `{subject, description, activeForm}`,
+ * not the old `TodoWrite` `{todos: [...]}` shape. */
 export function parseTaskCreateArgs(args: unknown): TaskCreateArgs {
   const r = asRecord(args);
   return {
@@ -325,10 +308,7 @@ export function parseLsArgs(args: unknown): LsArgs {
   };
 }
 
-/** True for either of Claude Code's two `AskUserQuestion` tool-name spellings
- * (mirrors `packages/cli/src/claude/pretoolPermissionBridge.ts`'s own
- * `isAskUserQuestion` — no shared runtime module between the two packages
- * for a predicate this small, plan-v2.md W2.1). */
+/** True for either of Claude Code's two `AskUserQuestion` tool-name spellings. */
 export function isAskUserQuestion(name: string): boolean {
   return name === "AskUserQuestion" || name === "ask_user_question";
 }
@@ -368,10 +348,9 @@ function parseAskOption(raw: unknown): AskQuestionOption | undefined {
   return label ? { label, description: readString(r, "description") } : undefined;
 }
 
-/** Reads the `AskUserQuestion` tool's `{questions: [...]}` input shape
- * (plan-v2.md W2.1) — each question's `options` may be bare strings or
- * `{label, description?}` objects; both normalize to `AskQuestionOption`.
- * Malformed questions/options are dropped rather than thrown on. */
+/** Reads the `AskUserQuestion` tool's `{questions: [...]}` input shape.
+ * Each question's `options` may be bare strings or `{label, description?}` objects;
+ * both normalize to `AskQuestionOption`. Malformed entries are dropped. */
 export function parseAskQuestions(args: unknown): AskQuestionParsed[] {
   const r = asRecord(args);
   const rawQuestions = r?.questions;
@@ -415,13 +394,10 @@ const ASK_ANSWER_PAIR_PATTERN = /"([^"]*)"="([^"]*)"/g;
  * (there is no local dialog to drive at all), and also true for a free-text answer on a
  * locally-typed turn (the widget's keystroke model can only select a listed option).
  * Claude Code has no channel to hand a modified tool result back to a still-pending
- * `AskUserQuestion` call, so this only reaches the model by denying the call with the
- * answer baked into the deny reason (verified live) — which is why this shows up as an
- * `is_error: true` tool_result (docs/known-issues-cliweb-sync-test.md issue #4) even
- * though it's a normal, successful answer, not a failure. This regex recovers the real
- * answer from that reason text so the card can display it instead of falling back to
- * "(no answer recorded)"; `AskUserQuestionToolCard.tsx` separately keeps the card's own
- * status badge from reading "Error" for this same case.
+ * `AskUserQuestion` call, so the answer is baked into the deny reason — which is why
+ * this shows up as `is_error: true` even though it's a successful answer. This regex
+ * recovers the real answer so the card can display it; `AskUserQuestionToolCard.tsx`
+ * separately prevents the status badge from reading "Error" for this case.
  */
 const ASK_ANSWER_ARROW_PATTERN = /^- (.+)\n {2}→ (.+)$/gm;
 
@@ -461,12 +437,10 @@ const ASK_ANSWER_ARROW_PATTERN = /^- (.+)\n {2}→ (.+)$/gm;
  *    it naturally falls through to `undefined` here — `isDeclinedQuestion`
  *    in `AskUserQuestionToolCard.tsx` is what actually recognizes that case,
  *    entirely independently of this function.
- * 2. Kvy's own "deny-with-answer" reason text ({@link ASK_ANSWER_ARROW_PATTERN} —
- *    see its own doc comment) — the shape used for a web-answered question that
- *    couldn't be driven into a live terminal widget (any web-turn answer, fixed-option
- *    or free-text alike, plus a free-text answer on a locally-typed turn). Verified
- *    live: this is what actually reaches the model (docs/known-issues-cliweb-sync-test.md
- *    issue #4), even though it carries `is_error: true` on the wire.
+ * 2. Kvy's own "deny-with-answer" reason text ({@link ASK_ANSWER_ARROW_PATTERN}) —
+ *    the shape used for a web-answered question that couldn't be driven into a live
+ *    terminal widget. Carries `is_error: true` on the wire even though it is a
+ *    successful answer.
  * 3. `{answers: {question: answer}}` (Kvy's own deny-with-answer convention as a
  *    structured value, in case a future transport ever mirrors it back that way instead
  *    of as a string).

@@ -25,14 +25,8 @@ type Status =
   /** This account's keys are already bound on another device — offer to fetch them here. */
   | { kind: "needs-keys"; nextUrl: string };
 
-/**
- * Shared body for `/auth/callback/google` and `/auth/callback/github` — everything from
- * here on (identity generation, `POST /v1/auth/register`, key custody, the pending-pair
- * redirect) is provider-agnostic; only how `oauthProof` was obtained differs.
- *
- * docs/auth-ux-overhaul-plan.md Phase 5: no PIN. A genuinely new browser picks how it
- * protects keys at rest; a returning one loads them with no interaction at all.
- */
+/** Shared body for `/auth/callback/google` and `/auth/callback/github` — everything from
+ * here on is provider-agnostic; only how `oauthProof` was obtained differs. */
 function decodeAccountLabel(): string {
   return getAccountId() ?? "Kvy";
 }

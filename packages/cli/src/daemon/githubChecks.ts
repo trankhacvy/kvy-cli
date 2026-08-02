@@ -1,11 +1,9 @@
 /**
- * `github.checks` machine RPC handler (design §4.4; docs/features/
  * github-pr-ci.md "GitHub PR/CI integration", docs/competitive-notes-
  * omnara.md #4). Backs the web "Checks" tab: resolves the workspace's
  * remote → owner/repo, the current branch, the open PR for that branch
  * head, and the PR head commit's check-runs — authenticated with a
  * machine-local GitHub token (`../github/githubAuth.js`) that never
- * reaches the Kvy server (design §5.3/§6.1).
  *
  * Modeled on `gitStatus.ts`/`gitBranches.ts`'s injectable-deps shape: same
  * `git?: GitExec` seam (defaulting to `gitExec.ts`'s real `runGit`), same

@@ -18,7 +18,6 @@ import {
   getVersion,
 } from "./claudeCliLocator.js";
 
-// Most of these cases are ported verbatim from Happy's
 // claude_version_utils.test.ts (path-pattern detection has no I/O, so the
 // assertions translate directly).
 describe("detectSourceFromPath", () => {

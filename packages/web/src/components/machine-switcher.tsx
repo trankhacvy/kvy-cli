@@ -23,15 +23,6 @@ function MachineLabel({ name }: { name: string | null }) {
   return <>{name}</>;
 }
 
-/**
- * Sidebar header machine picker (multi-machine support discussion): lists
- * every machine on the account with a live online/offline/needs-reauth dot
- * (`MachineBadge`'s same `MACHINE_STATUS_META`), defaulting to whichever
- * machine was last picked (`machine-switcher-state.ts`'s `localStorage` —
- * a per-device display preference, not account data worth a server round
- * trip) or else the first online one. Selecting a machine only persists the
- * choice for now — it isn't wired to filter the workspace nav or Home yet.
- */
 export function MachineSwitcher() {
   const { machines, isLoading } = useLiveSessionListSnapshot();
   const [selectedId, setSelectedId] = useState<string | null>(() => getSelectedMachineId());

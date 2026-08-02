@@ -1,33 +1,3 @@
-/**
- * Golden-trace tests replaying REAL recorded adapter sessions through the
- * mapper (plan.md §17 "Phase 2.1 — ACP core": "Golden-trace fixtures
- * recorded from real adapter runs (both providers) feeding the existing
- * reducer test corpus").
- *
- * The fixtures were recorded 2026-07-18 against the pinned
- * `@agentclientprotocol/claude-agent-acp@0.59.0` install (via the adapter
- * manager) driving the machine's authenticated Claude Code, speaking raw
- * NDJSON JSON-RPC — no SDK client in the recorder, so the JSONL is exactly
- * what crossed the wire. Each line: `{dir: 'in'|'out', at, msg}`.
- *
- * These recordings are what surfaced (and now pin down) the two real-stream
- * behaviors the unit fixtures originally got wrong:
- *  1. `agent_message_chunk` arrives as per-delta fragments sharing a
- *     `messageId` ("The" + " command printed ...") → text coalescing.
- *  2. The initial `tool_call` carries `rawInput: {}` / title "Terminal";
- *     args stream in via non-terminal `tool_call_update`s → deferred
- *     tool-start.
- *
- * A recorded permission-request turn is deliberately absent: this machine's
- * real Claude settings auto-allow the candidate commands, and recording
- * under an isolated CLAUDE_CONFIG_DIR loses authentication. The permission
- * path is covered schema-exactly by `acpPermissionHandler.test.ts` and
- * end-to-end by Phase 2.2's manual gate.
- *
- * Codex fixtures follow when Phase 2.3 wires `codex-acp` (recording one
- * needs a Codex login this machine may not have — the harness is provider-
- * agnostic either way).
- */
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";

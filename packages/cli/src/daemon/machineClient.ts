@@ -1,31 +1,3 @@
-/**
- * Machine-scoped WS client for the Kvy daemon.
- *
- * Ported, with changes, from Happy's `ApiMachineClient`
- * (happy-cli/src/api/apiMachine.ts, MIT) per plan.md §1.5 / design §7.1, §8:
- *
- *  - **Registration/CAS is HTTP, not WS.** Happy's client drives two
- *    separate WS acks (`machine-update-metadata`/`machine-update-state`)
- *    with a generic backoff-retry. Kvy's write path is HTTP-only end to
- *    end (design DELTA D1) — both fields are CAS'd together in one
- *    already-merged route, `POST /v1/machines`
- *    (`packages/server/src/app/routes/machines.ts`), and the retry is a
- *    bounded read-current-then-retry loop (design §4.3: "handle the 409
- *    `{current}` conflict by re-reading and retrying (x3)"), not unbounded
- *    exponential backoff. The `/v1/stream` socket (`clientType:
- *    "machine-scoped"`) is therefore just the heartbeat + (later) RPC
- *    transport from this client's perspective.
- *  - **`machineId` persists via `daemon.state.json`** (`state.ts`), not a
- *    separate settings file — a restarted daemon resumes the same
- *    server-side machine row by reading the id back out of that file
- *    instead of registering a new one on every boot.
- *  - **Heartbeat is every 60s** (design §8), not Happy's 20s, and this
- *    module does not track CLI-availability deltas — out of scope here.
- *  - **RPC handler registration** (spawnSession/stopSession/resumeSession/
- *    ...) is a separate, later plan bullet; this module only owns the
- *    connection lifecycle + registration + heartbeat + CAS sync.
- */
-
 import { homedir, hostname, platform } from "node:os";
 import { encodeBase64, encrypt } from "@kvy/crypto";
 import { type EncryptedBox, EphemeralSchema, type MachineRow } from "@kvy/wire";
@@ -66,7 +38,6 @@ export interface MachineIdentity {
 
 export interface MachineClientDeps {
   serverUrl: string;
-  /** issue-4-plan.md §6.6: mints/refreshes access tokens from a persistent refresh token — replaces the fixed `token: string` that was the root cause of "daemon silently dies after 1h" (known-issues.md #4). */
   tokenProvider: TokenProvider;
   homeDir: string;
   encryptionKey: Uint8Array;
@@ -82,7 +53,6 @@ export interface MachineClientDeps {
   logger: Logger;
   now: () => number;
   heartbeatIntervalMs: number;
-  /** Max `POST /v1/machines` attempts for a single CAS update (design §4.3: "retrying (x3)"). */
   maxCasRetries: number;
 }
 
@@ -203,10 +173,8 @@ export type RegisterMachineResult =
 /**
  * CAS-update an already-registered machine, retrying on `409 {current}` by
  * re-reading the server's current version and resubmitting — up to
- * `deps.maxCasRetries` attempts total (design §4.3). Both `metadata` and
- * `daemonState` travel in every call (the route's `metadata` field is
- * mandatory even when only `daemonState` actually changed), so a 409 on
- * either field is retried with both re-read.
+ * `deps.maxCasRetries` attempts total. Both `metadata` and `daemonState`
+ * travel in every call, so a 409 on either field is retried with both re-read.
  */
 async function casUpdateMachine(
   deps: MachineClientDeps,
@@ -253,10 +221,8 @@ async function casUpdateMachine(
 /**
  * Registers a brand new machine (no locally-remembered `machineId`) or
  * resumes an existing one, retrying CAS conflicts per `casUpdateMachine`.
- * A resume that comes back `404 not-found` (the remembered id was
- * re-associated to a different account, or the row is otherwise gone) falls
- * back to a fresh registration rather than failing outright — mirrors
- * Happy's re-auth-conflict handling in `api.ts`.
+ * A resume that comes back `404 not-found` falls back to a fresh registration
+ * rather than failing outright.
  */
 export async function registerOrResumeMachine(
   deps: MachineClientDeps,
@@ -359,7 +325,6 @@ export async function startMachineClient(
   let identity = registered.identity;
   await persistMachineId(deps.homeDir, identity.machineId);
 
-  // issue-4-plan.md §6.6: `auth` as an async callback (not a static object) so every
   // (re)connection attempt — including automatic reconnects hours or days later — asks
   // `tokenProvider` for a currently-valid access token instead of replaying whatever was
   // valid at process start. This is the fix for the "daemon silently dies after 1h"
@@ -385,7 +350,6 @@ export async function startMachineClient(
     }
   }
 
-  // Proactive in-band renewal (§4.5/§6.6): re-authenticates the SAME live socket ~1m
   // before the current access token's own expiry rather than waiting for the server to
   // drop the connection. Only takes effect once the server actually implements the
   // `renew-token` handler (Phase 6) — emitting it against an older server is a harmless
@@ -454,7 +418,6 @@ export async function startMachineClient(
       });
   });
 
-  // AX-4.17: the daemon holds the master secret, so it can answer a key request even
   // when no browser is open — but it never auto-approves. Surfacing the request in the
   // log is what tells the user to run `kvy keys approve`; approving it silently would
   // hand full read access to anyone holding a stolen account session.
@@ -475,7 +438,6 @@ export async function startMachineClient(
     // (no-silent-failures).
     deps.logger.warn("[machine-client] connect error", { error: error.message });
 
-    // issue-4-plan.md §6.6: an auth-shaped rejection means the access token the last
     // handshake presented was stale/revoked — force a refresh so the NEXT automatic
     // reconnect attempt (socket.io-client keeps retrying on its own) presents a fresh
     // one instead of the same dead credential the old fixed-token client looped on
@@ -495,9 +457,7 @@ export async function startMachineClient(
     // socket.io-client auto-reconnects on transport drops, but NOT when the
     // server explicitly disconnects the socket (`reason === "io server
     // disconnect"`) — that case requires an explicit `connect()` per the
-    // client's own docs. This is a persistent connection (design §8), so it
-    // must always keep trying regardless of why it went down, unless we're
-    // the one shutting it down (`stopped`).
+    // client's own docs. This must always keep trying unless we're shutting down.
     if (!stopped) socket.connect();
   });
 

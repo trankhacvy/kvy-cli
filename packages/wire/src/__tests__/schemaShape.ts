@@ -5,7 +5,6 @@ import type { z } from "zod";
  * per field, recursively. Used to freeze wire schemas in a checked-in
  * snapshot and detect the two changes the additive-only policy forbids:
  * a field disappearing, or a field's kind narrowing/changing shape
- * (design §5.3 — "additive-only, forever").
  */
 export type ShapeDescriptor =
   | { kind: "object"; fields: Record<string, ShapeDescriptor> }

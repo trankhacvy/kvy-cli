@@ -29,7 +29,6 @@ function fakeCredentials(overrides: Partial<KvyCredentials> = {}): KvyCredential
   };
 }
 
-/** issue-4-plan.md §6.6: default `/v1/auth/refresh` response for resolveAccessToken. */
 async function defaultFetchImpl(): Promise<Response> {
   return new Response(
     JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
@@ -254,7 +253,7 @@ describe("runStartCodexCommand", () => {
     expect(written.join("")).toContain("Codex has no local terminal mode");
   });
 
-  it("threads a --continue-from flag into startAcpRemote's resume option (§5.5 — resuming a codex session)", async () => {
+  it("threads a --continue-from flag into startAcpRemote's resume option", async () => {
     const startAcpRemote = vi.fn(() => baseDeps().fakeRemote.handle);
     const { deps, releaseExit } = baseDeps({
       codexArgs: ["--continue-from", "prior-thread-id"],

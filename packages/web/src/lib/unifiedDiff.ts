@@ -1,17 +1,3 @@
-/**
- * Parses `git diff`'s unified diff text (the daemon `git.diff` RPC's
- * `inline` result, design §4.4; kvy-prd.md FR-7.7 "per-file unified diff
- * view") into a structured, per-line model the web diff viewer renders —
- * never via `dangerouslySetInnerHTML`, same principle as `markdown.ts`.
- *
- * Handles everything a single-`baseRef` `git diff` can emit: multiple files
- * per diff, added/deleted files (`--- /dev/null` / `+++ /dev/null`),
- * renames (present as a `diff --git a/old b/new` header even though this
- * MVP viewer doesn't special-case the rename itself — `git.status`'s own
- * `FileStatus.status: 'renamed'` already surfaces that), binary files (no
- * hunks, just a marker), and the trailing `\ No newline at end of file`
- * marker line.
- */
 
 export type DiffLineType = "context" | "add" | "remove";
 

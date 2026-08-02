@@ -1,35 +1,3 @@
-/**
- * `kvy adopt [--remote] [--list]` + `kvy --continue` alias (design
- * §7.8 FR-9.2, plan.md §16 "3.3 Session adoption (UC9)"): the
- * terminal-side half of adoption — "I started plain `claude`, now move it
- * to Kvy."
- *
- * `--list`: enumerate plain sessions for the current directory's workspace
- * (`adopt/listSessions.ts`), most-recently-active first, and print them —
- * no side effects.
- *
- * Default (no `--list`): preselect the most recent session and continue
- * it via Claude Code's own native resume:
- *  - **local** (default): `claude --resume <id>` spawned with inherited
- *    stdio, so the user gets the real interactive TUI back, blocking until
- *    it exits. Since Claude Code mints a brand-new provider session id on
- *    `--resume` (plan.md §11: "documented in `happy-cli/CLAUDE.md`
- *    'Session Forking'"), this snapshots the project dir's session ids
- *    before the child runs and diffs afterward to discover the new id,
- *    then records the old→new lineage (`adopt/lineage.ts`) — no hook
- *    wiring needed, since the exact id we're resuming from is already
- *    known going in.
- *  - **`--remote`**: launches `kvy claude --starting-mode remote
- *    --continue-from <id>` detached (tmux-preferred, same launcher the
- *    daemon's `spawn` RPC uses) instead of blocking the terminal. The new
- *    session's own provider session id isn't known synchronously in this
- *    path (no hook server wired to this ad hoc launch), so lineage
- *    recording is deferred — printed as an explicit, honest note rather
- *    than silently skipped.
- *
- * `kvy --continue` aliases the flagless case (most-recent, local) —
- * wired in `args.ts`/`index.ts`.
- */
 import { readdir } from "node:fs/promises";
 import type { ProviderSessionSummary } from "@kvy/wire";
 import crossSpawnDefault from "cross-spawn";

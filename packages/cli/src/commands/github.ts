@@ -5,7 +5,6 @@
  * writes `~/.kvy/github.key` directly (`../github/githubAuth.js`) and
  * talks to GitHub's own REST API over plain `fetch`, never Kvy's server —
  * the whole point of this token is that the server never sees it (design
- * §5.3/§6.1).
  *
  * `--token` prompts for a PAT on stdin rather than accepting it as a bare
  * argv value — a token passed as `--token <value>` would land in shell

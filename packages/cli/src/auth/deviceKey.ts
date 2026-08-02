@@ -1,22 +1,17 @@
 /**
- * Cross-platform OS-vault device-key wrapping for the CLI's default at-rest custody
- * (issue-4-plan.md §6.1/§6.5, revised): wraps a secret (the masterSecret for
- * `kvy auth login`, or a reduced-custody content bundle for the daemon) under a
- * random AES-256 key that itself lives in the OS's own credential vault — macOS
- * Keychain, Windows Credential Manager, or the Linux Secret Service — rather than
- * inside `~/.kvy/access.key` alongside the wrapped blob.
+ * Cross-platform OS-vault device-key wrapping for the CLI's default at-rest custody.
+ * Wraps a secret under a random AES-256 key stored in the OS's credential vault —
+ * macOS Keychain, Windows Credential Manager, or the Linux Secret Service — rather than
+ * alongside the encrypted blob in `~/.kvy/access.key`.
  *
- * The plan is candid that this "delivers little at-rest benefit on daemon boxes
- * anyway" (§6.5) — a root/owner compromise that can read `access.key` can usually also
- * read the vault or this fallback file — but it does raise the bar against the
- * narrower threat of "another process/user on this machine reads `access.key` off
- * disk" (e.g. a backup, a misconfigured shared box), and keeps the wrapping key out of
- * the file that a `git`/dotfiles-sync tool might otherwise scoop up.
+ * This raises the bar against a narrow threat — another process or user reading
+ * `access.key` off disk (e.g. a backup or misconfigured shared box) — but delivers
+ * little at-rest benefit on daemon boxes: a root/owner compromise that can read
+ * `access.key` can usually also reach the vault. It does keep the wrapping key out of
+ * files a git/dotfiles-sync tool might scoop up.
  *
- * Backed by `@napi-rs/keyring` (real OS vault on macOS/Windows/Linux). If the vault is
- * unavailable on this machine (no Secret Service daemon running, locked, etc.), falls
- * back to a plaintext device-key file, 0600 — explicitly documented here and in
- * `credentials.ts`, not a silent downgrade.
+ * Falls back to a plaintext device-key file (0600) if the vault is unavailable.
+ * This is an explicit, documented fallback, never a silent downgrade.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -95,7 +90,7 @@ export interface DeviceKeyDeps {
  * Loads this machine's device key, creating and persisting one on first use.
  * File-first: checks the plaintext fallback file before the OS vault, so a blocking
  * Keychain permission dialog (macOS) never stalls the process when the file already
- * exists. Falls back to the vault only when no file is present.
+ * exists.
  */
 function loadOrCreateDeviceKey(homeDir: string, deps: DeviceKeyDeps): Buffer {
   const readKeyringKey = deps.readKeychainKey ?? defaultReadKeyringKey;
@@ -113,7 +108,6 @@ function loadOrCreateDeviceKey(homeDir: string, deps: DeviceKeyDeps): Buffer {
   return key;
 }
 
-/** Wrap `secret` under this machine's device key (OS-vault-backed where available). */
 export function wrapWithDeviceKey(
   secret: Uint8Array,
   homeDir: string,
@@ -131,9 +125,7 @@ export function wrapWithDeviceKey(
   };
 }
 
-/** Inverse of `wrapWithDeviceKey`. Never throws — returns `null` on a missing/rotated
- * device key or a corrupt blob (same never-throw contract as `@kvy/crypto`'s
- * `unwrapWithPin`). */
+/** Never throws — returns `null` on a missing/rotated device key or a corrupt blob. */
 export function unwrapWithDeviceKey(
   wrapped: DeviceWrapped,
   homeDir: string,

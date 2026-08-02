@@ -298,7 +298,7 @@ describe("mergeRenderItems", () => {
   });
 });
 
-describe("reconcileByStatus (tri-state message RPC reply, design §7.10)", () => {
+describe("reconcileByStatus (tri-state message RPC reply)", () => {
   const pending: PendingMessage[] = [
     { kind: "text", localId: "p1", text: "one", sentAt: 1, queued: false },
     { kind: "text", localId: "p2", text: "two", sentAt: 2, queued: false },
@@ -332,7 +332,7 @@ describe("reconcileByStatus (tri-state message RPC reply, design §7.10)", () =>
   });
 });
 
-describe("deliveryNotice (tri-state message RPC reply, design §7.10)", () => {
+describe("deliveryNotice (tri-state message RPC reply)", () => {
   it("returns a non-blocking notice only for 'outcome-unknown'", () => {
     expect(deliveryNotice({ queued: false, status: "outcome-unknown" })).toEqual(
       expect.any(String),

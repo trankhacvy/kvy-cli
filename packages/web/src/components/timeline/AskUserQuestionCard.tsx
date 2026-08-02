@@ -26,26 +26,6 @@ import { cn } from "@/lib/utils";
 import type { PermissionInfo } from "@/sync/reducer";
 import { AskQuestionOptions } from "./AskQuestionOptions";
 
-/**
- * Interactive `AskUserQuestion` card (plan-v2.md W2.1) — rendered instead of
- * `PermCard` whenever `permission.name === "AskUserQuestion"` (same
- * tool-name dispatch happy's `ToolView.tsx` uses for its own question
- * widget). Submits `{kind:"allow", scope:"once", updatedInput:{answers}}`;
- * the CLI-side bridge turns that into a `PreToolUse` deny carrying the
- * answers formatted as Claude Code's own native answer text (deny-with-
- * answer, W0.2-probe-verified) — so from the model's perspective this reads
- * exactly like the question having been answered at the terminal.
- *
- * Also mirrors the CLI's own two extra per-question-form options (the "N.
- * Type something" / "N+1. Chat about this" rows Claude Code always appends
- * to its own TUI list, docs/known-issues.md #5 follow-up): a free-text input
- * under each question's option list, and a "Chat about this instead" escape
- * hatch that declines the whole form. For a web-originated turn this submits
- * straight to the model as above; for a local terminal turn it's driven into
- * the live TUI by PTY keystrokes instead (`ptyClaudeSession.ts`'s
- * `answerAskUserQuestion` — typing into the widget's own "Type something"
- * row, live-verified against Claude Code 2.1.220).
- */
 export function AskUserQuestionCard({
   args,
   permission,

@@ -5,7 +5,6 @@ const LATENCY_MS = 80;
 const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
- * A representative slice of *this* repo's real files (kvy-prd.md's own
  * example set — "CLAUDE.md", "package.json" — plus enough breadth across
  * packages to make fuzzy matching worth demoing), not a live filesystem
  * listing — mirrors `features/git-diff/mock-source.ts`'s fixed small set

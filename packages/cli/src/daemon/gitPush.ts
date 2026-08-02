@@ -1,16 +1,9 @@
 /**
- * `git.push` machine RPC handler (design §4.4, docs/features/
- * git-write-actions.md Phase 2).
- *
- * Same injectable `deps.git?`/`deps.authorizeWorktree?` shape as
- * `gitCommit.ts` — see that module's doc comment.
- *
  * `params.force: true` maps ONLY to `--force-with-lease`, never the raw
  * `--force` flag — the raw flag is deliberately unreachable from this
- * handler's argv construction (a data-loss containment decision; see
- * `@kvy/wire`'s `GitPushParamsSchema` doc comment). A force-push-with-
- * lease can still fail (safely, refusing to push) when the local
- * remote-tracking ref is stale, which is the whole point of `--lease`
+ * handler's argv construction (a data-loss containment decision). A
+ * force-push-with-lease can still fail (safely, refusing to push) when the
+ * local remote-tracking ref is stale, which is the whole point of `--lease`
  * over raw `--force`.
  *
  * No credential management: push auth is whatever the machine's ambient

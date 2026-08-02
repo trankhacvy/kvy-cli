@@ -3,16 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-/**
- * `RequestKeysPanel` can't be rendered directly under this package's `environment: "node"`
- * vitest config (no DOM) — same source-text technique `signin/page.test.ts` and
- * `password/page.test.ts` use for similarly hook-heavy JSX.
- *
- * auth-ux-overhaul-fix-plan.md Fix 9: the panel's `starting` phase used to render nothing
- * at all between mount and the first `createKeyRequest`/`listDeviceSessions` round trip —
- * the blank first paint is the part most likely to be silently reverted, hence the
- * dedicated assertion below.
- */
+// Source-text technique: `RequestKeysPanel` can't render under `environment: "node"` vitest
+// config (no DOM).
 const source = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./request-keys-panel.tsx"),
   "utf-8",
@@ -35,10 +27,6 @@ describe("request-keys-panel.tsx", () => {
     expect(source).not.toContain("<code");
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 10 Part B: an optional `context` line names what
-  // happens after the keys land (e.g. which machine `/pair/`'s detour is about to resume
-  // connecting) — rendered only when given, so the other two call sites (`password/page.tsx`,
-  // `require-auth.tsx`) that pass nothing are unaffected.
   it("accepts an optional context prop and renders it conditionally", () => {
     expect(source).toContain("context?: string");
     expect(source).toContain("{context && ");

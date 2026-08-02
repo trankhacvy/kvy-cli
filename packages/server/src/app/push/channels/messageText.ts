@@ -3,7 +3,6 @@ import type { LifecycleKind } from "../types.js";
 
 /**
  * Generic, kind-keyed labels for the text-based fallback channels (Telegram,
- * ntfy) — same content-free rule as Web Push's payload (design §6.4: never
  * session content, since the server holds no keys to encrypt anything richer
  * anyway). Deliberately kept in lockstep with `public/sw.js`'s `KIND_LABELS`
  * — the browser can't share code with the server, so the two copies are

@@ -1,5 +1,4 @@
 /**
- * Auto-update-on-start (plan.md §16 "4.3 Distribution & self-host":
  * "check a cli-latest rolling tag/version endpoint ... download and
  * atomically replace the running binary/npm install, respect
  * KVY_NO_UPDATE ... fail safe — never block a session start on a

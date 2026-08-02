@@ -1,21 +1,10 @@
 /**
- * Workspace-path validation for the daemon `spawn` RPC (design §12: "spawn
- * params validated against registered workspace paths (no arbitrary-
- * directory execution from remote)"; plan.md §16 "3.1 Remote spawn").
+ * Workspace-path validation for the daemon `spawn` RPC.
  *
- * A `spawn` RPC arrives over the relay from a remote client — the daemon
- * must never treat its `directory` field as a bare, trusted filesystem path:
- * that would make `spawn` an arbitrary-directory (and therefore effectively
- * arbitrary-command-context) execution primitive for anyone who can reach
- * the account's machine RPC target. Instead every call is checked against
- * the *locally* registered root for its `workspaceId` — a workspace the
- * account has actually configured on this machine (`kvy workspace
- * config`, a separate plan bullet) — and the resolved real path (symlinks
- * followed) must land inside that root.
- *
- * `lookupRoot` is injected rather than hard-coded to a specific registry
- * implementation: this module only owns the validation policy, not where
- * "registered workspaces" are persisted.
+ * Every spawn directory is checked against the locally registered root for its
+ * `workspaceId` — the resolved real path (symlinks followed) must land inside
+ * that root. This prevents `spawn` from being used as an arbitrary-directory
+ * execution primitive for anyone who can reach the account's machine RPC target.
  */
 import { realpath, stat } from "node:fs/promises";
 import path from "node:path";
@@ -83,22 +72,16 @@ export async function validateSpawnWorkspace(
 }
 
 /**
- * Typed reasons a previously-registered workspace's own directory can go
- * stale after registration — see `assertWorkspaceStillValid` below
- * (known-issues.md #3: "Registered workspaces never re-validate their
- * path"). Kept as a real error-code enum (not just a message string) so a
- * caller several layers away — the web Git panel, across the encrypted RPC
- * boundary — can render plain-language copy instead of relaying whatever
- * `git`'s own stderr happened to say.
+ * Typed reasons a previously-registered workspace's own directory can go stale.
+ * A real error-code type (not just a message string) lets callers render
+ * plain-language copy rather than relay raw `git` stderr.
  */
 export type WorkspaceValidationErrorCode = "workspace-missing" | "workspace-not-a-repo";
 
 /**
- * Thrown by `assertWorkspaceStillValid`. `machineRpc.ts`'s `onRpcRequest`
- * catch block special-cases this (vs. any other thrown `Error`, e.g. a plain
- * `GitExecError`) to attach `.code` to the sealed error box it sends back,
- * so the web client can distinguish "this workspace is gone" from an
- * ordinary git failure without string-matching error text.
+ * Thrown by `assertWorkspaceStillValid`. Special-cased in `machineRpc.ts`'s
+ * catch block to attach `.code` to the error response, so clients can
+ * distinguish workspace failures from ordinary git errors without string-matching.
  */
 export class WorkspaceValidationError extends Error {
   constructor(
@@ -112,15 +95,8 @@ export class WorkspaceValidationError extends Error {
 
 /**
  * Confirms `directory` still exists and is still a git repository before a
- * git RPC (`gitStatus.ts`/`gitDiff.ts`) shells out to it. Without this
- * check, a folder that was renamed, moved, or had `.git` removed after it
- * was registered surfaces as `git`'s own raw stderr (e.g. "fatal: cannot
- * change to '...': No such file or directory" or "fatal: not a git
- * repository") — confusing, technical, and not actionable from the web UI.
- * Deliberately a plain `stat`-based check, not `validateSpawnWorkspace`'s
- * realpath/containment logic above: this only asks "does this exact path
- * still make sense to run `git` in", not "is it still inside some other
- * root".
+ * git RPC shells out to it. A plain `stat`-based check - this only asks "does
+ * this path still make sense to run `git` in", not whether it's inside any root.
  */
 export async function assertWorkspaceStillValid(directory: string): Promise<void> {
   const stats = await stat(directory).catch(() => null);

@@ -1,23 +1,11 @@
 /**
- * Worktree authorization for the *mutating* git machine RPCs
- * (`gitCommit.ts`/`gitPush.ts`/`gitRenameBranch.ts`, docs/features/
- * git-write-actions.md Phase 2; kvy-system-design.md §12: "no
- * arbitrary-directory execution from remote").
+ * Worktree authorization for the mutating git machine RPCs
+ * (`gitCommit.ts`/`gitPush.ts`/`gitRenameBranch.ts`).
  *
- * `git.status`/`git.diff`/`git.branches` today run `git` in whatever
- * `worktree` the caller sends with NO validation against the workspace
- * registry (`workspace/registry.ts`) — for read-only ops that's a bounded
- * info-leak (an authenticated device can see the changed-files list / a
- * diff for an arbitrary directory on the machine), accepted as a known,
- * flagged gap rather than fixed here. For commit/push/force-push it's a
- * genuinely different risk — an authenticated device could otherwise run
- * real git *writes* in any directory on the machine, not just ones the
- * user actually designated as a Kvy workspace — so the mutating
- * handlers gate on `isWithinRegisteredWorkspace` before touching git at
- * all. Extending the read RPCs to the same gate is a deliberate follow-up,
- * not done here, so existing panels pointed at an unregistered worktree
- * (e.g. a directory picked before workspace registration existed) keep
- * working.
+ * Read-only RPCs (`git.status`/`git.diff`/`git.branches`) currently skip this
+ * check - an authenticated device can read diffs for arbitrary directories,
+ * which is a known flagged gap. Mutating ops gate on `isWithinRegisteredWorkspace`
+ * because git writes in any directory is a real risk, not just an info-leak.
  */
 
 import { isWithinRegisteredWorkspace, type RegistryOptions } from "../workspace/registry.js";

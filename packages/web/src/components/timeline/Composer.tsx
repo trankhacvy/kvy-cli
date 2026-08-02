@@ -53,70 +53,33 @@ interface AttachmentPreview {
 }
 
 /**
- * Follow-up message input (kvy-prd.md FR-7.3; plan.md §16 "2.4 Web
- * control surface"). Purely presentational — the mutation, optimistic
- * insert, and reconciliation live in `useComposerState`
- * (`@/features/session-control`) so `Timeline` and this component can share
- * the same merged item list without threading it through props twice.
+ * Follow-up message input. Purely presentational — mutation, optimistic insert, and
+ * reconciliation live in `useComposerState` (`@/features/session-control`) so `Timeline`
+ * and this component can share the same merged item list without threading it twice.
  *
- * The shell is AI Elements' `PromptInput` (two-row chat composer: input row
- * + footer row of chips/buttons, à la the Cursor/ChatGPT layout). Our
- * behaviors stay ours:
- *  - **Draft persistence**: `sessionStorage`-backed per-`sessionId` draft
- *    (`composer-draft.ts`) — loaded once on mount/session-switch, saved on
- *    every keystroke, cleared right after a successful send.
- *  - **Direct-attach flow**: selecting a file immediately encrypts+uploads
- *    +sends it (one `onAttach` call per file), tracked by the transient
- *    preview strip below — NOT PromptInput's own accumulate-then-send
- *    attachment model, which would change semantics.
- *  - **Queue-aware send**: sending while the agent is working queues the
- *    follow-up rather than blocking, so the submit button never morphs into
- *    a stop button. Interrupt is a separate stop button shown only while
- *    `working` (it would otherwise steal the queue path).
- *  - **Voice input** (docs/competitive-notes-omnara.md #19): the mic button
- *    drives `useSpeechInput` (`@/lib/use-speech-input`), a thin wrapper
- *    around the browser's `SpeechRecognition` — disabled with an
- *    explanatory tooltip in browsers lacking it (Firefox and most
- *    non-Chromium browsers). Each finalized phrase appends to the draft
- *    (`appendTranscript`, `@/lib/speech-input`); the still-being-spoken
- *    phrase shows as a live italic preview instead of being merged into the
- *    editable text, so it never fights the user's own typing in the same
- *    box.
- *  - **"/" slash-command autocomplete** (docs/competitive-notes-omnara.md
- *    #18): while the *entire* current text is one bare leading-slash token
- *    (`detectSlashQuery`, `slash-command-state.ts`), a `SlashCommandMenu`
- *    popover lists the project's own custom commands (`slashCommands` prop
- *    — fetched by the caller via `commands.list`, read live from the
- *    session's `.claude/commands/`, never a fixed built-in list) filtered
- *    to the typed query. Arrow keys move the selection, Enter/Tab accepts
- *    it (replacing the whole textarea with `/name `), Escape dismisses the
- *    menu for that query. All keyboard handling runs in this component's own
- *    `onKeyDown` — `preventDefault()` there stops `PromptInputTextarea`'s
- *    own Enter-submits-the-form handling from also firing (see that
- *    component's own "if the external handler prevented default" doc
- *    comment).
+ * Shell is AI Elements' `PromptInput`. Behaviors:
+ *  - **Draft persistence**: `sessionStorage`-backed per-`sessionId` draft, saved on every
+ *    keystroke, cleared after a successful send.
+ *  - **Direct-attach**: selecting a file immediately encrypts+uploads+sends it — NOT
+ *    PromptInput's accumulate-then-send model.
+ *  - **Queue-aware send**: while the agent is working, sends queue rather than block, so
+ *    the submit button never morphs into a stop button.
+ *  - **Voice input**: mic button drives `useSpeechInput`; finalized phrases append to the
+ *    draft, interim speech shows as an italic preview so it never fights user typing.
+ *  - **"/" slash-command autocomplete**: while the entire text is a bare `/`-token,
+ *    `SlashCommandMenu` lists custom commands. Arrow keys move selection, Enter/Tab
+ *    accepts, Escape dismisses. `preventDefault()` in `onKeyDown` stops
+ *    `PromptInputTextarea`'s own Enter-submits-form from also firing.
+ *  - **"@" file-mention autocomplete**: "@" opens a searchable popover over repo files.
+ *    Trigger detection/insertion is pure logic (`mention-trigger.ts`); `ArrowUp`/
+ *    `ArrowDown`/`Enter`/`Tab`/`Escape` are intercepted before PromptInputTextarea's own
+ *    Enter-submits handler via the external `onKeyDown` contract.
  *
- * `footerControls` is a render slot for session-scoped chips (model, mode
- * selector, take-control) that need `SessionControlProvider` context — this
- * component intentionally stays provider-free so it can render standalone
- * in tests (`Composer.test.tsx`) and in the demo fixture.
+ * `footerControls` is a render slot for session-scoped chips that need
+ * `SessionControlProvider` context — this component stays provider-free to render
+ * standalone in tests.
  *
- * `disabled` (plan-v2.md W1.4+B15): true once the session's own row status
- * says the underlying CLI process is gone (`ended`/`failed`).
- *
- * **"@" file-mention autocomplete** (docs/competitive-notes-omnara.md #17):
- * typing "@" opens a searchable popover over real repo files
- * (`@/features/file-mentions` — `fileMentionActions` defaults to that
- * feature's `mockFileMentionActions`, same not-yet-wired-to-a-live-backend
- * seam as every other `features/*` actions prop in this app). Trigger
- * detection/insertion is pure logic (`mention-trigger.ts`) driven off the
- * textarea's own `onChange`/`onSelect` (cursor moves without typing, e.g.
- * arrow keys or a click, still update/close the popover); `ArrowUp`/
- * `ArrowDown`/`Enter`/`Tab`/`Escape` are intercepted in `onKeyDown` — passed
- * to `PromptInputTextarea` as the *external* handler, which
- * `PromptInputTextarea` itself always calls first and skips its own
- * Enter-submits-the-form behavior when we've already called
- * `preventDefault()`.
+ * `disabled`: true once the session's CLI process is gone (`ended`/`failed`).
  */
 export function Composer({
   sessionId,
@@ -148,8 +111,8 @@ export function Composer({
    * picks the right one). */
   disabledPlaceholder?: string;
   error: string | null;
-  /** Non-blocking `outcome-unknown` delivery notice (design §7.10) — shown
-   * alongside, never instead of, the composer's normal controls. */
+  /** Non-blocking delivery notice for `outcome-unknown` sends — shown alongside, never
+   * instead of, the composer's normal controls. */
   notice: string | null;
   /** True while a turn is in flight — shows the interrupt (stop) button. */
   working?: boolean;
@@ -158,12 +121,9 @@ export function Composer({
   /** Left-side footer chips (model / mode / take-control), rendered by the
    * caller inside its session-control context. */
   footerControls?: React.ReactNode;
-  /** The project's own custom slash commands (docs/competitive-notes-omnara.md
-   * #18), already fetched by the caller (`use-slash-commands.ts`'s
-   * `commands.list` machine RPC) — this component stays provider-free (see
-   * this file's own doc comment), so it takes the list as data rather than
-   * fetching it itself. Defaults to `[]` (no autocomplete) for every
-   * existing call site/test that doesn't pass one. */
+  /** Custom slash commands, already fetched by the caller (`use-slash-commands.ts`'s
+   * `commands.list` machine RPC). This component stays provider-free and takes the list as
+   * data. Defaults to `[]` (no autocomplete) for call sites that don't pass one. */
   slashCommands?: SlashCommand[];
   /** Data source for the "@" file-mention popover — defaults to a static
    * mock set (`@/features/file-mentions`'s `mockFileMentionActions`) until

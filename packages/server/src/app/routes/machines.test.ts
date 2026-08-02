@@ -243,7 +243,6 @@ describe("POST /v1/machines", () => {
         .where(eq(deviceSessions.id, daemon.sessionId));
 
       // A subsequent update (still authenticated — the access token itself is
-      // short-lived and not re-checked against the DB per-request, §4.5a)
       // now reports the machine as needing re-auth.
       const updateResponse = await app.inject({
         method: "POST",

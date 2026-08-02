@@ -34,11 +34,9 @@ export function isExitPlanTool(name: string): boolean {
   return EXIT_PLAN_TOOL_NAMES.has(name);
 }
 
-/** The plan's markdown body (`perm-request.args.plan`, kvy-prd.md
- * FR-7.4), or `null` if `name` isn't the plan-approval tool or `args` didn't
- * carry a string `plan` field (an adapter contract violation — falls back
- * to the plain `JsonBlock` dump rather than a blank preview). Exported for
- * testing without needing to render the full card (plan-v2.md W2.2). */
+/** The plan's markdown body from `perm-request.args.plan`, or `null` if `name` isn't the
+ * plan-approval tool or `args` didn't carry a string `plan` (falls back to `JsonBlock`).
+ * Exported for testing without rendering the full card. */
 export function extractPlanMarkdown(name: string, args: unknown): string | null {
   if (!isExitPlanTool(name)) return null;
   const plan = (args as { plan?: unknown } | undefined)?.plan;
@@ -85,36 +83,18 @@ function PermCardPreview({ name, args }: { name: string; args: unknown }) {
 }
 
 /**
- * Interactive permission card (kvy-system-design.md §9.2 "Session" row:
- * `PermCard` "Allow/Deny/Allow-session"; plan.md §16 "2.4 Web control
- * surface"). Replaces the read-only `PermissionBadge` at both call sites
- * that carry a `PermissionInfo` (`PermPlaceholder`, `ToolCardShell`):
+ * Interactive permission card with Allow / Allow-for-session / Deny buttons.
  *
- *  - `permission.decision` already set (canonical, from the reducer) ->
- *    falls straight through to `PermissionBadge`'s read-only display —
- *    that's always authoritative, regardless of this card's own local phase.
- *  - `decision` undefined -> Allow / Allow-for-session / Deny buttons,
- *    calling the `perm.answer` session RPC (design §4.4/§7.6). Only these
- *    three — matches the terminal's own dialog exactly (verified live: it
- *    never offers a full mode menu here, only "allow this session" via
- *    shift+tab). Switching to `plan`/`bypassPermissions`/`default` outside
- *    the context of answering a pending request is `ComposerControls`'
- *    job (the composer's own mode dropdown), not this card's.
- *  - An optional note next to Allow mirrors the terminal's "Tab to amend"
- *    (verified live: Tab does NOT edit the tool's input — it approves as-is
- *    and lets you type a follow-up chat message that's sent right after,
- *    which Claude then acts on as a new instruction). Approving with a note
- *    here does the same two things web already has separately — answer,
- *    then `actions.sendMessage` — rather than any new/edited-input channel.
+ *  - `permission.decision` already set (canonical, from the reducer) -> falls through to
+ *    `PermissionBadge`'s read-only display — always authoritative over this card's phase.
+ *  - Only three answers — matches the terminal dialog exactly (no mode-switching here;
+ *    that's `ComposerControls`' job).
+ *  - An optional note mirrors the terminal's "Tab to amend": approves as-is then sends the
+ *    note as a follow-up message (`actions.sendMessage`), not an edited tool input.
  *
- * `showPreview` controls the edit-preview diff (kvy-prd.md FR-7.4: "for
- * edits, the proposed change preview") — `PermPlaceholder` has no other
- * body rendering `args`, so it wants the preview; a `ToolItem` inside
- * `ToolCardShell` already has its own dedicated body (e.g. `EditCard`'s
- * diff), so it passes `showPreview={false}` to avoid rendering it twice.
- * `showHeader` similarly suppresses the "Permission requested — <name>" /
- * "Pending" line when the caller's own chrome already names the tool and
- * shows a permission badge (`ToolCardShell`).
+ * `showPreview`: `PermPlaceholder` passes `true` (it has no other body rendering `args`);
+ * `ToolCardShell` passes `false` to avoid rendering the diff twice.
+ * `showHeader`: suppresses the tool name and badge when the caller's chrome shows them.
  */
 export function PermCard({
   name,
@@ -160,15 +140,10 @@ export function PermCard({
 
   const isExitPlan = isExitPlanTool(name);
 
-  // A locally-typed terminal turn's request (`answerable: false`) has no
-  // channel for a web click to drive it — the terminal, not this card, owns
-  // the outcome. Rendering interactive buttons here would be a false
-  // affordance (kvy-prd.md's "never claim a control you can't honor"
-  // principle); the card resolves on its own once the reducer's
-  // `permission.decision` catches up from the terminal's real answer.
-  // `phase.kind === "not-answerable"` covers the defensive case where a
-  // click still slipped through (e.g. an older CLI build that doesn't yet
-  // send `answerable`) and the CLI told us so after the fact.
+  // A locally-typed terminal turn's request (`answerable: false`) has no channel for a web
+  // click to drive — the terminal owns the outcome. The card resolves on its own once the
+  // reducer's `permission.decision` catches up. `phase.kind === "not-answerable"` covers
+  // the defensive case where a click slipped through and the CLI told us so after the fact.
   if (permission.answerable === false || phase.kind === "not-answerable") {
     return (
       <div

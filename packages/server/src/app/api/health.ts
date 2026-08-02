@@ -7,7 +7,6 @@ const HealthResponseSchema = z.object({
   timestamp: z.string(),
 });
 
-// Liveness probe (design §6.2: `GET /health`). Deliberately dumb — no DB or
 // dependency checks here yet; those land with the Drizzle/Postgres task.
 export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(

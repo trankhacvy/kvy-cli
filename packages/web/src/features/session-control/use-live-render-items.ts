@@ -10,7 +10,6 @@ import { formatDecryptError } from "./decrypt-error";
 import { useSessionCrypto } from "./use-session-crypto";
 
 /**
- * The real data source behind `SessionTimelineScreen` (plan.md §16 "§2.3
  * Permission pipeline" follow-up: "perm-request/perm-resolve envelopes into
  * the timeline" — the demo-fixture live-wiring gap). Fetches this session's
  * most recent page of encrypted message batches (`GET
@@ -24,12 +23,10 @@ import { useSessionCrypto } from "./use-session-crypto";
  * `useInfiniteQuery` observes that cache entry directly, so a new envelope
  * flows through this hook's decrypt effect with no extra plumbing.
  *
- * `error` (W1.10, plan.md §16 wave 1) surfaces a page-level decrypt failure
  * — previously only `console.error`'d — so `SessionTimelineScreen` can show
  * an inline destructive banner with a "Retry" instead of silently rendering
  * an empty/stale transcript.
  *
- * Pagination (plan-v2.md W4.2 "Load earlier" button): `hasMore`/
  * `isLoadingMore`/`loadEarlier` pass `useInfiniteQuery`'s own
  * `hasNextPage`/`isFetchingNextPage`/`fetchNextPage` straight through —
  * `getSessionMessages`'s `before` cursor (`nextBefore` on the previous page)
@@ -38,7 +35,6 @@ import { useSessionCrypto } from "./use-session-crypto";
  * about page order (see `messages.ts`'s own doc comment), so a newly-fetched
  * older page decrypts and merges in with no special-casing here.
  *
- * `isInitialLoading` (plan-v2.md W4.2 "skeletons for … timeline initial
  * loads") is `messagesQuery.isLoading` — TanStack's own "no data cached yet
  * and a fetch is in flight" signal — straight through, so
  * `SessionTimelineScreen` can show a transcript skeleton instead of a bare

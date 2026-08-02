@@ -1,9 +1,6 @@
 /**
- * HTTP transport for the outbox: `POST /v1/sessions/:id/messages
- * {localId, content}` (design §4.3). All the outbox cares about is the 2xx /
- * non-2xx split — the response body (`{seq}` on first write, replay on a
- * duplicate `localId`) isn't consumed here; message ordering is derived from
- * the `update` stream, not the POST response.
+ * The response body is never consumed — message ordering is derived from the
+ * server's update stream, not the POST response.
  */
 import type { EncryptedBox } from "@kvy/wire";
 
@@ -23,27 +20,22 @@ export interface CreateHttpClientOptions {
   /** Kvy server origin, e.g. `https://api.kvy.dev` (no trailing slash required). */
   serverUrl: string;
   /**
-   * Static headers merged into every request (e.g. `{ Authorization: "Bearer ..." }`).
-   * Prefer `getAuthToken` for the `authorization` header on any long-lived client — a
-   * static value here is captured once and never refreshed for the client's lifetime
-   * (docs/known-issues-cliweb-sync-test.md issue #1: this is exactly how the Outbox's
-   * access token used to go stale after ~15min and retry a dead 401 forever).
+   * Static headers merged into every request. Prefer `getAuthToken` for the
+   * `authorization` header on any long-lived client — a static value is captured
+   * once and never refreshed, so a stale token retries a dead 401 forever.
    */
   headers?: Record<string, string>;
   /**
    * Resolves the current bearer token immediately before every request — including every
-   * blind retry `Outbox.sendUntil2xx()` performs — instead of a token captured once at
-   * construction. Typically `TokenProvider.getAccessToken`. Takes precedence over any
-   * `authorization` key in `headers`. A `null`/empty return sends the request with no
-   * `authorization` header (e.g. a dead refresh token — nothing more this layer can do).
+   * blind retry — so the token is never captured once at construction. Takes precedence
+   * over any `authorization` key in `headers`. A `null`/empty return sends the request
+   * with no `authorization` header.
    */
   getAuthToken?: () => string | null | Promise<string | null>;
   /**
-   * Invoked (and awaited) once whenever a request comes back `401`, before the caller's
-   * own retry loop tries again — typically `TokenProvider.forceRefresh()`, so the next
-   * `getAuthToken()` call returns a rotated token instead of the same stale one. Errors
-   * are swallowed: a failed forced refresh just means the next attempt falls back to
-   * whatever `getAuthToken` otherwise returns.
+   * Invoked (and awaited) once whenever a request comes back `401`, before the next
+   * retry attempt. Errors are swallowed: a failed call here just means the next attempt
+   * falls back to whatever `getAuthToken` returns.
    */
   onUnauthorized?: () => unknown | Promise<unknown>;
   /** Override for tests; defaults to the global `fetch`. */

@@ -7,7 +7,6 @@ import type {
 } from "@kvy/wire";
 
 /**
- * View-model types for the "Setup / Run" tab (kvy-system-design.md §4.4
  * `workspace.getConfig`/`run.*`; docs/features/setup-run-scripts.md
  * "Per-workspace Setup/Run scripts"). Structural clone of
  * `features/git-diff/types.ts`'s seam layout.
@@ -29,7 +28,6 @@ export type RunStatusSnapshot = RunStatusResult;
  * holding the target machine's unwrapped DEK.
  *
  * Script DEFINITION is deliberately absent from this surface — every method
- * here takes only a `worktree` path, never a script string (design §12's
  * local-consent boundary, docs/features/setup-run-scripts.md's central risk
  * note: scripts are defined CLI-only, via `kvy workspace config
  * --setup-script/--run-script`, and never travel over the wire).

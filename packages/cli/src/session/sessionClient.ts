@@ -1,10 +1,8 @@
 /**
  * Session-scoped WS client for a Kvy session process.
  *
- * New code (plan.md §16 Phase 1.4 line 688: "`alive` keepalive emits (working
  * flag from fd3 thinking state) over WS"), structured to mirror the
  * already-built (but also unlanded) machine-scoped WS client
- * (`daemon/machineClient.ts`) per design §4.3/§8:
  *
  *  - Connects to the already-landed `/v1/stream` Socket.IO endpoint with
  *    `clientType: "session-scoped"` — the server-side handshake
@@ -12,10 +10,8 @@
  *    this client type and rooms the connection accordingly.
  *  - Emits the `alive` keepalive on a fixed interval, and immediately on
  *    every (re)connect so presence recovers without waiting a full tick.
- *    Wire shape matches design §4.3's `ClientEmit` variant `{ e: 'alive';
  *    sessionId; working }` — Socket.IO's own event name ("alive") carries
  *    the `e` discriminator, so the payload is just `{ sessionId, working }`.
- *    Sent via `socket.volatile.emit` (design §4.3: "volatile keepalive" —
  *    droppable, never queued for a disconnected/backpressured socket).
  *  - The `working` flag is NOT read from fd3 here. The real signal
  *    (thinking-state parsed off Claude's stdio fd3 stream, debounced) now
@@ -23,14 +19,12 @@
  *    this branch's worktree, but there is not yet any call site that starts
  *    both `claudeLocal()` and this module together for the same session
  *    process: that's the still-unbuilt mode-loop/launcher orchestration
- *    (plan.md §16 "`loop.ts` port + `claudeLocalLauncher`/
  *    `claudeRemoteLauncher` orchestration"). This client instead takes an
  *    injectable `getWorking: () => boolean` — same shape as
  *    `machineClient.ts`'s `buildMetadata`/`buildRuntimeState` — so callers
  *    (and tests) can supply it however they like today, and the eventual
  *    orchestration layer wires a mutable flag toggled by `onThinkingChange`
  *    into `getWorking` without touching this module.
- *  - issue-4-plan.md §6.6: the auth handshake takes a live `TokenProvider`
  *    (not a fixed `token: string`) via an async `auth` callback — mirrors
  *    `machineClient.ts` exactly, closing the "`kvy claude` outlives the
  *    access token's TTL" gap `commands/start.ts` used to document as a known
@@ -53,7 +47,6 @@ import type { Logger } from "../logger.js";
 export interface SessionClientDeps {
   serverUrl: string;
   /** Mints/caches/refreshes the access token this socket authenticates with —
-   * see the module docblock's §6.6 note. */
   tokenProvider: TokenProvider;
   sessionId: string;
   /** Injectable so unit tests never make a real network call. */
@@ -69,14 +62,12 @@ export interface SessionClientDeps {
    * emit. Placeholder for the real fd3 thinking-state signal, which lives in
    * `claudeLocal.ts`'s `onThinkingChange` callback — callers wire that in
    * once the session-process orchestration layer that starts both modules
-   * together exists (plan.md §16, still unbuilt), by passing a `getWorking`
    * that reads a flag toggled from `onThinkingChange` instead of the default
    * `false`.
    */
   getWorking: () => boolean;
   /**
    * Fires when another device asks for a copy of this account's keys, learned via the
-   * `"key-request"` ephemeral (auth-ux-overhaul-fix-plan.md Fix 7). Optional: the daemon's
    * own `machineClient.ts` already logs this to a file nobody reads, so a caller that
    * doesn't supply this simply keeps that (invisible) behavior — no regression, just no
    * improvement.
@@ -128,7 +119,6 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
   const socket = deps.ioFactory(deps.serverUrl, {
     path: "/v1/stream",
     transports: ["websocket"],
-    // issue-4-plan.md §6.6: an async callback (not a static object) so every
     // (re)connection attempt — including automatic reconnects long after this process
     // started — asks `tokenProvider` for a currently-valid access token instead of
     // replaying whatever was valid when the socket was first opened.
@@ -167,7 +157,6 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
     }
   }
 
-  // Proactive in-band renewal (§4.5/§6.6): re-authenticates the SAME live socket
   // roughly `renewIntervalMs` after connecting, rather than waiting for the server to
   // drop the connection once the access token presented at handshake time expires.
   function armRenewTimer(): void {
@@ -215,7 +204,6 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
     // (no-silent-failures).
     deps.logger.warn("[session-client] connect error", { error: error.message });
 
-    // issue-4-plan.md §6.6: an auth-shaped rejection means the access token the last
     // handshake presented was stale/revoked — force a refresh so the NEXT automatic
     // reconnect attempt presents a fresh one instead of the same dead credential.
     if (/authentication token|Session revoked/i.test(error.message)) {
@@ -232,7 +220,6 @@ export function startSessionClient(deps: SessionClientDeps): SessionClientHandle
     // socket.io-client auto-reconnects on transport drops, but NOT when the
     // server explicitly disconnects the socket (`reason === "io server
     // disconnect"`) — that case requires an explicit `connect()` per the
-    // client's own docs. This is a persistent connection (design §8), so it
     // must always keep trying regardless of why it went down, unless we're
     // the one shutting it down (`stopped`).
     if (!stopped) socket.connect();

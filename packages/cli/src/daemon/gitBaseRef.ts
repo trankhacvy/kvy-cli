@@ -1,20 +1,11 @@
 /**
- * Shared "what am I comparing this workspace's changes against" resolution
- * for `gitStatus.ts`/`gitDiff.ts` (kvy-prd.md FR-7.7). Precedence:
+ * Shared base-ref resolution for `gitStatus.ts`/`gitDiff.ts`. Precedence:
  *
- *  1. An explicit `baseRef` (a one-off "Compare against" override from the
- *     web panel).
- *  2. The workspace's configured base ref (`workspaceConfig.ts`,
- *     `kvy workspace config --base-ref`).
- *  3. A local `main` or `master` branch, whichever exists — deliberately
- *     NOT `origin/HEAD` or any other remote-derived guess: a workspace with
- *     no remote at all (never pushed, cloned with `--no-checkout`, whatever)
- *     still has a perfectly good local default branch to diff against, and
- *     checking the remote first would need a network round trip for a
- *     question the local refs already answer.
- *  4. Neither exists (a brand-new repo with only a `feature` branch, say):
- *     `undefined` — the caller falls back to its own last resort (see
- *     `resolveDiffBaseline` below).
+ *  1. Explicit `baseRef` param (one-off override from the web panel).
+ *  2. Workspace configured base ref (`workspaceConfig.ts`).
+ *  3. Local `main` or `master` branch - deliberately NOT `origin/HEAD`: a
+ *     repo with no remote still has a valid local default, no network needed.
+ *  4. Neither exists: `undefined` - caller falls back to its own last resort.
  */
 
 import { readWorkspaceGitConfig } from "../workspaceConfig.js";

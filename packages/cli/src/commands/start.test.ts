@@ -56,7 +56,6 @@ function fakeCredentials(overrides: Partial<KvyCredentials> = {}): KvyCredential
   };
 }
 
-/** issue-4-plan.md §6.6: the default response every test's `resolveAccessToken` call
  * (via `/v1/auth/refresh`) resolves to, unless a test injects its own `fetchImpl`. */
 async function defaultFetchImpl(): Promise<Response> {
   return new Response(
@@ -442,7 +441,6 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBeNull();
   });
 
-  it("extracts a --model override from claudeArgs into the session metadata (plan-v2.md W4.2 header model chip)", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_1",
       dek: getRandomBytes(32),
@@ -545,7 +543,6 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(bootstrapParams.metadata.model).toBeUndefined();
   });
 
-  it("resumes the provider transcript from KVY_RECONNECT_PROVIDER_SESSION_ID when set (plan-v2.md W3.7)", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
 
     await runStartClaudeCommand(
@@ -608,7 +605,6 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     const dek = getRandomBytes(32);
     const fetchCalls: RequestInit[] = [];
     const fetchImpl: typeof fetch = async (input, init) => {
-      // issue-4-plan.md §6.6: resolveAccessToken's own /v1/auth/refresh call happens
       // first and isn't part of what this test asserts on.
       if (input.toString().endsWith("/v1/auth/refresh")) {
         return new Response(
@@ -1235,7 +1231,6 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
       baseDeps({
         // `KVY_PTY_SETMODE` deliberately absent — setMode must stay
         // `{ok:false}` by default regardless of what the host's own
-        // process.env happens to have (plan-v2.md W4.3, flag-gated).
         env: {},
         registerSessionRpcHandlers,
         installRemotePermissionHook,
@@ -1679,7 +1674,6 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
-  // plan-v2.md W3.3 — lifecycle `service` envelopes the web timeline should
   // see even though nothing in the Claude Code transcript says them.
   describe("lifecycle service envelopes", () => {
     it("enqueues a 'session started' service envelope once the PTY session is spawned, then 'session ended' on a clean exit", async () => {
@@ -2645,7 +2639,6 @@ describe("runStartClaudeCommand — same-directory duplicate session lock + daem
   });
 });
 
-// auth-ux-overhaul-fix-plan.md Fix 7: a key request arriving mid-session was previously
 // only ever logged to a file nobody tails. The exit path must print a durable line always,
 // and — with a human actually present — run the approve review itself rather than telling
 // the user to go run a second command (principle 1).

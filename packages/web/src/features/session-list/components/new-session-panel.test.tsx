@@ -199,7 +199,6 @@ describe("NewSessionForm", () => {
     return html.slice(start, end + suffix.length);
   }
 
-  // Feature 2 (docs/web-ux-improvements-plan.md §2.4 "Spawn path"): unlike
   // every other machine-RPC surface, this one is safe to hard-disable — the
   // picker already renders a live online dot per machine.
   it("disables Start session and shows the offline notice when the selected machine is offline", () => {

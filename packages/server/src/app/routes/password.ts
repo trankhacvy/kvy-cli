@@ -1,9 +1,3 @@
-/**
- * `POST /v1/auth/password/{register,login}` + `/v1/auth/password/reset/{request,confirm}` —
- * issue-4-plan.md §5.2/§5.3: email+password as a real login identity, with reset. The
- * legacy `/v1/auth` and `/v1/auth/register` (OAuth) routes are its identity-layer
- * siblings; this file is the third.
- */
 import { randomBytes } from "node:crypto";
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { FastifyReply, FastifyRequest } from "fastify";
@@ -18,13 +12,9 @@ import type { Database } from "../../db/types.js";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h — long enough to fetch an email, short enough to bound abuse
 
-// Security review finding F3: per-identity login lockout (issue-4-plan.md §5.2) —
-// `password.ts`'s existing rate limit is per-IP (Fastify's own `config.rateLimit`),
-// which an attacker rotating IPs simply sidesteps against a single known email. This
-// counter is keyed on the identity row itself, so it holds regardless of source IP.
-// No lock at all below `LOCKOUT_THRESHOLD` failures; past it, an exponentially growing
-// backoff (capped at `LOCKOUT_MAX_MS`) — a genuine owner who mistypes their password a
-// few times in a row is barely inconvenienced, a sustained guesser is throttled hard.
+// Per-identity lockout — the route-level IP rate limit is bypassable by rotating IPs.
+// This counter is keyed on the identity row itself, so it holds regardless of source IP.
+// No lock below `LOCKOUT_THRESHOLD`; past it an exponentially growing backoff, capped.
 const LOCKOUT_THRESHOLD = 5;
 const LOCKOUT_BASE_MS = 30_000; // 30s lock on the failure that first crosses the threshold
 const LOCKOUT_MAX_MS = 15 * 60_000; // capped at 15 minutes regardless of how long the attack continues
@@ -53,21 +43,11 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-// docs/auth-ux-hardening-plan.md item 3: email+password is dev/local-testing only — gated
-// on `NODE_ENV` directly (no separate opt-in flag), fail-closed with a 404 (route
-// effectively does not exist) rather than a 403, so a production deployment doesn't even
-// advertise that this endpoint exists.
-//
-// Wired as `preValidation` (review fix), NOT as the handler's first statement: Fastify runs
-// its own request-lifecycle hooks — onRequest → preParsing → preValidation → **body-schema
-// validation** → preHandler → handler — so a check placed as the handler's first line only
-// runs *after* the zod body schema has already validated the request. In production, a
-// well-formed body correctly 404s, but a malformed one (e.g. a missing field) still gets
-// rejected by schema validation first and answers 400 "Bad Request" before ever reaching the
-// handler — which both confirms the route exists AND leaks its expected shape, defeating the
-// "doesn't even advertise this endpoint exists" goal for exactly the kind of request a route-
-// enumerating prober would send. `preValidation` runs before schema validation, so every
-// request — well-formed or not — gets the same 404 in production.
+// Returns 404 in production to avoid advertising this endpoint. Wired as `preValidation`,
+// not as the handler's first line: Fastify runs body-schema validation between preParsing
+// and preHandler, so a handler-level check would let a malformed request answer 400 first
+// — confirming the route exists and leaking its expected shape. `preValidation` fires
+// before schema validation, so every request gets the same 404 in production.
 async function requireNonProduction(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (env.NODE_ENV === "production") {
     await reply.code(404).send({ error: "Not found" });
@@ -96,9 +76,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
           ),
         });
         if (existing) {
-          // No-enumeration (§5.2): tell the *submitter* nothing distinguishing — send a
-          // "you already have an account" email out-of-band instead of a 409, and return
-          // the exact same generic success shape the real sign-up path returns.
+          // No-enumeration: return the same generic success shape rather than a 409.
           await email.sendResetEmail({
             to: identifier,
             resetUrl: "(account already exists — use 'forgot password' to sign back in)",
@@ -146,10 +124,8 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
       },
       async (request, reply) => {
         const identifier = normalizeEmail(request.body.email);
-        // Security review finding F3: identical generic rejection whether the identity
-        // doesn't exist, the password is wrong, or the identity is currently locked out —
-        // a distinct response for any of those would be an oracle (enumeration, or "am I
-        // currently locked?" for an attacker probing).
+        // Identical rejection for "no account", "wrong password", and "locked out"
+        // to avoid being an oracle for enumeration or lock-state probing.
         const genericError = () => reply.code(401).send({ error: "Invalid email or password" });
 
         const identity = await db.query.authIdentities.findFirst({
@@ -183,8 +159,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
           return genericError();
         }
 
-        // A correct password clears any accumulated failures/lock — the genuine owner
-        // regaining access shouldn't stay throttled by their own earlier mistypes.
+        // Clear accumulated failures on a correct password.
         if (identity.failedLoginCount > 0 || identity.lockedUntil) {
           await db
             .update(authIdentities)
@@ -219,7 +194,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
           ),
         });
 
-        // Always 200 regardless of whether the identity exists (§5.3: no enumeration).
+        // Always 200 regardless of whether the identity exists — no enumeration.
         if (identity) {
           const token = randomBytes(32).toString("base64url");
           await db.insert(passwordResetTokens).values({
@@ -273,8 +248,8 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
             .update(authIdentities)
             .set({ passwordHash })
             .where(eq(authIdentities.id, identity.id));
-          // §5.3: a reset revokes every device session — losing the password is treated
-          // as a possible credential compromise, not just an inconvenience.
+          // A reset revokes every device session — losing the password is treated as
+          // a possible credential compromise.
           await tx
             .update(deviceSessions)
             .set({ revokedAt: now })

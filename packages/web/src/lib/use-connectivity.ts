@@ -27,12 +27,10 @@ export interface ConnectivityState {
    * *reachable* network with the Kvy server unreachable (server down,
    * blocked, auth failure) only ever shows up here. */
   wsConnected: boolean;
-  /** True once the server has rejected a (re)connection attempt as an auth
-   * failure (bug-fix-plan.md issue #10 — `apiSocket`'s `authError` event).
-   * Distinct from a plain `!wsConnected`: this is a permanent condition the
-   * infinite-retry engine cannot resolve on its own by waiting — the banner
-   * should stop reading "Reconnecting…" and tell the user to sign in again
-   * instead (see `OfflineBanner`). */
+  /** True once the server has rejected a (re)connection as an auth failure.
+   * Distinct from `!wsConnected`: this is a permanent condition the infinite-retry
+   * engine cannot resolve by waiting, so the banner should tell the user to sign in
+   * rather than showing "Reconnecting…". */
   authExpired: boolean;
 }
 
@@ -42,11 +40,9 @@ function readBrowserOnline(): boolean {
 }
 
 /**
- * Combines `navigator.onLine` + `apiSocket`'s connect/disconnect events into
- * one signal for `OfflineBanner` (plan-v2.md W4.2 "offline banner
- * (`navigator.onLine` + WS state from `apiSocket`)"). Two independent
- * `useEffect`s (browser online/offline vs. socket connect/disconnect) since
- * they're genuinely different event sources with no shared lifecycle.
+ * Combines `navigator.onLine` and `apiSocket`'s connect/disconnect events into
+ * one signal for `OfflineBanner`. Two independent `useEffect`s since they are
+ * genuinely different event sources with no shared lifecycle.
  */
 export function useConnectivity(source: ConnectivitySource = apiSocket): ConnectivityState {
   const [online, setOnline] = useState(readBrowserOnline);

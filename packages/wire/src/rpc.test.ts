@@ -678,7 +678,7 @@ describe("session RPC schemas", () => {
     expect(PermAnswerResultSchema.safeParse({ ok: true }).success).toBe(true);
   });
 
-  it("message RPC result accepts the legacy queued-only shape (pre-claim-store producers, design §7.10)", () => {
+  it("message RPC result accepts the legacy queued-only shape (pre-claim-store producers)", () => {
     expect(MessageRpcResultSchema.safeParse({ queued: true }).success).toBe(true);
     expect(MessageRpcResultSchema.safeParse({ queued: false }).success).toBe(true);
   });

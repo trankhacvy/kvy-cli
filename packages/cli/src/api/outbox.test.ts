@@ -94,7 +94,7 @@ describe("Outbox", () => {
 
       ob.enqueue([textEnvelope("5")]); // hits the count threshold — flush is synchronous
       expect(ob.bufferedCount).toBe(0);
-      expect(ob.queuedBatchCount).toBe(1); // sealed and queued synchronously by flush()
+      expect(ob.queuedBatchCount).toBe(1);
 
       // Let the (already-armed) async drain/send resolve.
       await sleep(20);
@@ -116,12 +116,10 @@ describe("Outbox", () => {
       expect(ob.bufferedCount).toBe(1);
       expect(calls.length).toBe(0);
 
-      // Before the timer fires, nothing has been sealed yet.
       await sleep(15);
       expect(ob.bufferedCount).toBe(1);
       expect(calls.length).toBe(0);
 
-      // After flushMs, the timer fires and the batch is sealed + sent.
       await sleep(60);
       expect(ob.bufferedCount).toBe(0);
       expect(calls.length).toBe(1);
@@ -299,7 +297,7 @@ describe("Outbox", () => {
     });
   });
 
-  describe("disk queue byte cap (design §11: 10MB cap, oldest evicted first)", () => {
+  describe("disk queue byte cap (10MB cap, oldest evicted first)", () => {
     it("evicts the oldest queued batch(es) once the cap is exceeded, keeping the newest", async () => {
       const dek = getRandomBytes(32);
       // Never acks, so nothing dequeues — isolates the append-time eviction behavior

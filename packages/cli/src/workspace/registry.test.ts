@@ -42,7 +42,6 @@ describe("registerWorkspace", () => {
     expect(entry.displayName).toBe("My Repo");
   });
 
-  // Load-bearing for auth-ux-overhaul-fix-plan.md Fix 6: `transcriptIndexer.ts`'s watch-window
   // gate trusts `registeredAt` as a stable "first registration" timestamp to filter
   // pre-Kvy history against. If re-registration ever bumped it, every already-registered
   // workspace's pre-existing transcripts would become eligible again on the next

@@ -8,14 +8,6 @@ import { provisionKeyProtection } from "@/crypto";
 import { getAccountId } from "@/lib/session";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
 
-/**
- * One-time upgrade for browsers provisioned before the PIN was removed. Shown only when
- * `describeStorage()` reports a version-1 record; after a successful unlock the key
- * material is re-wrapped under the current scheme and this never appears again.
- *
- * A user who has forgotten their PIN takes the ordinary `RequestKeysPanel` path instead
- * (reachable via the link below), exactly like any other keyless browser.
- */
 export function MigratePinPrompt({ onMigrated }: { onMigrated: () => void }) {
   const bridge = useCryptoBridge();
   const [pin, setPin] = useState("");

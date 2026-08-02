@@ -38,9 +38,8 @@ describe("logout", () => {
     errorSpy.mockRestore();
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 5: a worker still alive after logout could re-create
-  // the IndexedDB databases the wipe step just deleted — but stopping it must never be
-  // allowed to abort the rest of the teardown (token clear + redirect must always happen).
+  // A worker still alive after logout could re-create the IndexedDB databases the wipe
+  // just deleted, but stopping it must never abort the rest of teardown.
   it("still runs the rest of logout when a throwing stopSharedBridge is given", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const wipeKeyMaterial = vi.fn(async () => {});

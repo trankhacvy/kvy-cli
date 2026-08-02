@@ -8,7 +8,7 @@ import * as schema from "./schema.js";
 // `drizzle-kit generate` + applying the migration against a real Postgres,
 // not by this suite.
 describe("db schema", () => {
-  it("declares the tables named in the design doc (§6.1) and issue-4-plan.md §3", () => {
+  it("declares the expected table names", () => {
     const tableNames = [
       schema.accounts,
       schema.authIdentities,
@@ -42,7 +42,7 @@ describe("db schema", () => {
     ]);
   });
 
-  it("makes accounts.signPublicKey/contentPubKey nullable and adds a rotatable keyEpoch (issue-4-plan.md §3.3)", () => {
+  it("makes accounts.signPublicKey/contentPubKey nullable and adds a rotatable keyEpoch", () => {
     const config = getTableConfig(schema.accounts);
     const signPublicKey = config.columns.find((c) => c.name === "sign_public_key");
     const contentPubKey = config.columns.find((c) => c.name === "content_pub_key");
@@ -53,14 +53,14 @@ describe("db schema", () => {
     expect(keyEpoch?.notNull).toBe(true);
   });
 
-  it("tags every DEK-bearing row with the key epoch it was wrapped under (§3.4)", () => {
+  it("tags every DEK-bearing row with the key epoch it was wrapped under", () => {
     for (const table of [schema.machines, schema.workspaces, schema.sessions]) {
       const keyEpoch = getTableConfig(table).columns.find((c) => c.name === "key_epoch");
       expect(keyEpoch?.notNull).toBe(true);
     }
   });
 
-  it("device_sessions carries rotation lineage for theft detection (§3.2, §4.3)", () => {
+  it("device_sessions carries rotation lineage for theft detection", () => {
     const config = getTableConfig(schema.deviceSessions);
     const columnNames = config.columns.map((c) => c.name);
     expect(columnNames).toEqual(

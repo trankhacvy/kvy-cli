@@ -31,7 +31,6 @@ const SyncResponseSchema = z.object({
 });
 
 /**
- * `GET /v1/sync?since=<headerSeq>` (design §4.3/§6.2): the resync path a
  * client takes on a header-stream gap (`seq !== lastSeq + 1`) or on cold
  * start. There's no persisted change log for structural entities, so this
  * is a full account **snapshot** (sessions, machines, unmanaged sessions) —

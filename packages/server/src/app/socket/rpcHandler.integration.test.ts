@@ -9,16 +9,12 @@ import type { Database } from "../../db/types.js";
 import { createTestDb } from "../routes/testHelpers.js";
 import { buildServer } from "../server.js";
 
-// RPC integration tests (plan.md §16 "4.4 Hardening & release gate": "RPC integration
 // tests: dead-daemon fast-fail <2s, reconnect storm, double-takeover race"; kvy-
-// system-design.md §13 item 5: "dead-peer fast-fail (<2s), reconnect grace, presence
 // flap"). `rpcHandler.test.ts` already covers the room-registration/forwarding/
 // rate-limit unit surface; this file is dedicated to the two server-side scenarios that
 // need real timing and a real multi-connection storm to say anything meaningful:
 //
 // 1. Dead-daemon fast-fail: when the RPC target dies *during* an outstanding call, the
-//    caller must be told within ~2s (Happy's own postmortem-hardened design measured
-//    1.6s against a real 2-replica cluster — happy-research.md §7/§11.3), not the full
 //    30s ack timeout. This is `rpcHandler.ts`'s presence-poll race.
 // 2. Reconnect storm: a machine-scoped client that reconnects many times in rapid
 //    succession (network flap, laptop sleep/wake, daemon restart loop) must never leave
@@ -33,7 +29,6 @@ describe("rpcHandler (integration: dead-daemon fast-fail + reconnect storm)", ()
   let url: string;
   const clients: ClientSocket[] = [];
 
-  // issue-4-plan.md §4.5a: see socket.test.ts's identical helper's own comment — the
   // connect handshake now requires a real `device_sessions` row, not just a well-formed JWT.
   async function mintToken(accountId: string): Promise<string> {
     await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();

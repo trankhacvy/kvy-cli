@@ -1,20 +1,6 @@
 /**
- * `cloudflared` binary detection (docs/features/dev-server-preview.md):
- * `cloudflared` is a Go binary, not an npm package, so the pinned-manifest
- * npm-install adapter manager (`packages/cli/src/adapters/`) doesn't apply
- * here — Kvy never installs it, only detects it on `PATH`, mirroring how
- * `ProviderAdapter.detect()` detects the `claude`/`codex` CLIs.
- *
- * This is the single detection point reused by the `preview.ports` RPC
- * handler (surfaces `cloudflared.installed` alongside the port list),
- * `previewTunnel.ts`'s `handlePreviewOpen` (refuses to spawn a tunnel when
- * missing), and `doctor.ts`'s new preview section.
- *
- * Never throws — same "best-effort, swallow-and-degrade" contract as
- * `providerAccountInfo.ts`: a missing binary, a `--version` that exits
- * non-zero, or output in a format this can't parse all degrade to an honest
- * `{installed: false}` (or `installed: true` with `version` simply omitted),
- * never a thrown error.
+ * `cloudflared` binary detection. Kvy never installs it, only detects it on
+ * PATH. Never throws — a missing binary or parse failure degrades to `{installed: false}`.
  */
 import { execFile } from "node:child_process";
 

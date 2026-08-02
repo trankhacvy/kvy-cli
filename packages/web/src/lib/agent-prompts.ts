@@ -1,14 +1,5 @@
 import type { CheckRun } from "@kvy/wire";
 
-/**
- * Synthetic `role: "user"` prompts sent to a session's agent from a UI
- * action (session-panel-workflow-plan.md §1: "let the agent use its own
- * `git`/`gh`") — Create PR, Review, and Fix CI all inject one of these
- * through the same composer `send(text)` path a human's own message goes
- * through, so the copy here is genuinely user-facing/agent-facing and needs
- * the same no-internal-jargon discipline `lib/copy.ts`/`lib/__tests__/copy.test.ts`
- * already enforce for the rest of this app's copy.
- */
 
 export const CREATE_PR_PROMPT = `Please open a pull request for the current branch:
 1. Commit any pending changes with a clear, conventional commit message.

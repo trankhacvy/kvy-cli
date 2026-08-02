@@ -12,15 +12,12 @@ import { GitToolbar } from "./GitToolbar";
 import { UnifiedDiffViewer } from "./UnifiedDiffViewer";
 
 /**
- * The Git panel (kvy-prd.md FR-7.7 "Git panel"; plan.md §16 "4.1 Git
  * panel"; docs/features/git-write-actions.md): changed-files list on the
  * left, the selected file's (or every file's) unified diff on the right,
  * with a write-action toolbar above both (inline branch rename, commit,
  * push, force push behind a confirm dialog) and a "Compare against any
  * ref" selector. No longer read-only — commit/push/rename are real
  * mutating RPCs (`git.commit`/`git.push`/`git.renameBranch`); the only
- * still-deferred write action is opening a PR (`[P2]`, kvy-prd.md
- * FR-7.7).
  *
  * `useActions` is the injectable seam — mirrors `NewSessionScreen`'s
  * `useMachines`/`useActions` props. Defaults to the real

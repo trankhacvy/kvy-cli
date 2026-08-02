@@ -3,7 +3,6 @@
  * file(s) for a working directory and emits each newly-appended, previously
  * unseen entry exactly once.
  *
- * Ported from happy-cli/src/claude/utils/sessionScanner.ts (MIT). Two
  * behaviors are load-bearing and preserved verbatim:
  *
  *  - `processedEntryKeys`: a dedup set keyed on message identity, so a
@@ -18,11 +17,8 @@
  *    was written to fix. The guard is what actually stops the bleeding at
  *    the scanner level.
  *
- * ⚠ Scope note (plan.md §16, "1.4 Transcript pipeline"): this port only
  * emits raw parsed JSONL entries via `onMessage`. Mapping those entries into
- * wire envelopes (`mapClaudeToEnvelopes` / Happy's `sessionProtocolMapper`)
  * is a separate, later task and is intentionally not implemented here — nor
- * is Happy's `deadGoalStatusTranscriptEvent` side channel, which exists
  * solely to feed that mapper.
  */
 
@@ -38,8 +34,6 @@ import { type RawJSONLines, RawJSONLinesSchema } from "./types.js";
  * that are not actual conversation messages — internal state/tracking
  * events silently skipped rather than surfaced or logged as errors.
  *
- * Exported so `scripts/provider-contract-test.ts` (kvy-system-design.md
- * §13 item 2) validates transcript lines against this exact same skip-list
  * instead of maintaining a second copy that could silently drift from it.
  */
 export const INTERNAL_CLAUDE_EVENT_TYPES = new Set([
@@ -186,7 +180,6 @@ async function readSessionEntries(
 /**
  * How long to wait, after a new `*.jsonl` file appears in the project
  * directory, before treating it as a genuine rotation and calling
- * `onNewSession` (plan-v2.md W3.8). This is a fallback for when the
  * `SessionStart` hook doesn't fire (or its wiring is absent) — e.g. `/clear`
  * or a Claude-minted new id — so it deliberately waits a beat rather than
  * reacting to the bare `rename` event: a brand-new file can appear empty (or
@@ -327,7 +320,6 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   }
 
   // --- Minimal coalescing re-entrancy guard around `runSync` ---
-  // Mirrors happy-cli's InvalidateSync: `invalidate()` calls made while a
   // sync is already running are coalesced into exactly one more run after
   // the current one finishes, instead of queuing unboundedly or running
   // concurrently (readSessionEntries + watcher bookkeeping is not safe to
@@ -510,7 +502,6 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   await runSync();
   const intervalId = setInterval(invalidate, pollIntervalMs);
 
-  // Rotation fallback (plan-v2.md W3.8): a new `*.jsonl` file appearing in
   // the project directory whose id differs from the current session — e.g.
   // `/clear` or a Claude-minted new id — is a strong signal the session
   // rotated even when no `SessionStart` hook fired to announce it via
@@ -535,7 +526,6 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
         // A hook has already proven this scanner has real SessionStart
         // coverage — a *different* file appearing is almost certainly a
         // sibling session sharing this directory, not our own rotation.
-        // Never adopt it (plan-v2.md / bug-fix-plan.md #1).
         logger.debug(
           "[SESSION_SCANNER] ignoring unrelated new transcript file (hook coverage active)",
           { newSessionId, currentSessionId },
@@ -559,7 +549,6 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
       // Let any in-flight sync settle, then run one final pass ourselves —
       // the same body the periodic interval runs — so entries appended in
       // the brief window right before shutdown (the "shutdown tail") are
-      // still mapped rather than lost (plan-v2.md W3.8).
       if (currentSyncPromise) await currentSyncPromise.catch(() => {});
       try {
         await runSync();

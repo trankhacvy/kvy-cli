@@ -1,5 +1,4 @@
 /**
- * Env resolution for the self-update mechanism (plan.md §16 "4.3
  * Distribution & self-host": "CLI self-update (`cli-latest` rolling tag,
  * atomic replace, `KVY_NO_UPDATE`)"). Mirrors `scripts/install.sh`'s own
  * `KVY_REPO` default exactly, and `packages/cli/package.json`'s
@@ -37,7 +36,6 @@ export const UPDATE_CHECK_TIMEOUT_MS = 5_000;
 /** How long the binary download itself may take — larger, since the compiled binaries are tens of MB. */
 export const UPDATE_DOWNLOAD_TIMEOUT_MS = 60_000;
 
-/** Minimum time between automatic background update checks (plan.md §16: auto-update-on-start must never hammer GitHub on every single invocation). */
 export const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export function releaseAssetUrl(repo: string, assetName: string): string {

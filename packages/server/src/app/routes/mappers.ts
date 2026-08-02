@@ -9,7 +9,6 @@ import type {
 import { decodeBox } from "../../db/box.js";
 import type { machines, sessions, unmanagedSessions, workspaces } from "../../db/schema.js";
 
-/** DB row → wire row for `SessionRowSchema` (design §6.1/§4.3). */
 export function toSessionRow(row: typeof sessions.$inferSelect): SessionRow {
   return {
     id: row.id,
@@ -67,7 +66,6 @@ export function toWorkspaceRow(row: typeof workspaces.$inferSelect): WorkspaceRo
   };
 }
 
-/** DB row → wire row for `UnmanagedSessionRowSchema` (adoption Tier 1, FR-9.1). */
 export function toUnmanagedSessionRow(
   row: typeof unmanagedSessions.$inferSelect,
 ): UnmanagedSessionRow {

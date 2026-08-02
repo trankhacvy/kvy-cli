@@ -1,12 +1,11 @@
 /**
  * The SESSION credential (refresh token), stored separately from the CONTENT credential
- * (master secret) — docs/auth-ux-overhaul-plan.md Phase 4a.
+ * (master secret).
  *
- * Identity and key custody are separate systems (docs/issue-4-plan.md §3.3), but the
- * storage layer fused them: the refresh token lived PIN-wrapped inside the master
- * secret's record, so a browser with no keys could not hold a session at all. That made
- * the "signed in, no keys" state unreachable — which is precisely the state
- * device-to-device key sharing has to operate in.
+ * Identity and key custody are separate systems, but the storage layer originally fused
+ * them: the refresh token lived inside the master secret's record, so a browser with no
+ * keys could not hold a session at all. That made the "signed in, no keys" state
+ * unreachable — which is precisely the state device-to-device key sharing operates in.
  *
  * ⚠️ This is a deliberate, signed-off partial walk-back of security review finding F1,
  * which moved the refresh token into the PIN-wrapped record to get it out of

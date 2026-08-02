@@ -5,13 +5,12 @@ import { useRef } from "react";
 import { CopyButton } from "./CopyButton";
 
 /**
- * `rehype-react`'s `pre` override for fenced code blocks (`lib/markdown.ts`,
- * plan-v2.md W4.2 "Copy buttons"). Reads the rendered DOM's own
- * `textContent` at click time rather than re-serializing rehype-pretty-
- * code's per-line/per-token `<span>` tree — the browser's own text layout
- * is the simplest correct source of exactly the characters a person sees
- * (and wants to copy), and it stays correct even if the shiki token
- * structure changes.
+ * `rehype-react`'s `pre` override for fenced code blocks (`lib/markdown.ts`).
+ * Reads the rendered DOM's own `textContent` at click time rather than
+ * re-serializing rehype-pretty-code's per-line/per-token `<span>` tree —
+ * the browser's own text layout is the simplest correct source of exactly
+ * the characters a person sees (and wants to copy), and it stays correct
+ * even if the shiki token structure changes.
  */
 export function CodeBlock(props: ComponentPropsWithoutRef<"pre">) {
   const ref = useRef<HTMLPreElement>(null);

@@ -1,22 +1,15 @@
 /**
- * `git.setRemote` machine RPC handler (docs/web-ux-improvements-plan.md
- * Feature 1 — "this repo has no remote, add one" from the Git panel's Push
- * error path).
- *
- * Same injectable `deps.git?`/`deps.authorizeWorktree?` shape as
- * `gitCommit.ts`/`gitPush.ts`. Deliberately additive-only in effect: `git
- * remote add` for a new name, `git remote set-url` for an existing one, and
- * no path at all to `git remote remove`/`rename` — removing a remote is a
- * destructive act with no undo from a phone, and nothing in the web UI
- * needs it.
+ * Deliberately additive-only in effect: `git remote add` for a new name,
+ * `git remote set-url` for an existing one, and no path at all to
+ * `git remote remove`/`rename` — removing a remote is a destructive act
+ * with no undo from a phone, and nothing in the web UI needs it.
  *
  * `name` and `url` are both guarded against the leading-`-` argv-injection
- * hazard the same way `gitPush.ts`'s `assertSafeRefName` guards its own
- * remote/branch (a `--config=...`-shaped "url" would otherwise be parsed
- * as a `git remote` option). The URL is NOT validated for scheme, host or
- * reachability: Kvy manages no git credentials (`gitPush.ts`'s doc
- * comment), so "does this remote actually work" is answered by the user's
- * own next push, with git's own stderr — not fabricated here.
+ * hazard (a `--config=...`-shaped "url" would otherwise be parsed as a
+ * `git remote` option). The URL is NOT validated for scheme, host or
+ * reachability: Kvy manages no git credentials, so "does this remote
+ * actually work" is answered by the user's own next push, with git's own
+ * stderr — not fabricated here.
  */
 import type { GitSetRemoteParams, GitSetRemoteResult } from "@kvy/wire";
 import { type GitExec, GitExecError, runGit } from "./gitExec.js";

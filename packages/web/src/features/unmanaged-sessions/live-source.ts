@@ -19,35 +19,6 @@ import type {
   UseUnmanagedSessionsSnapshot,
 } from "./types";
 
-/**
- * The Home screen's real `UseUnmanagedSessionsSnapshot` (kvy-system-design.md
- * §9.2 "Home" row: `UnmanagedSection`; plan.md §16 W3.10 "Unmanaged sessions
- * -> live"). Same seam/shape as `features/session-list/live-source.ts`'s
- * `useLiveSessionListSnapshot` — reads the same `['sync']` account snapshot
- * (`useSyncSnapshotQuery`), so an `unmanaged-new`/`unmanaged-update` WS event
- * (the daemon transcript indexer's upserts, design §8) updates this section
- * with no second sync mechanism. `useMachinePresence`/`deriveMachineOnline`
- * are the exact same shared helpers `live-source.ts` uses, so a machine
- * showing in both the managed session list and this section agrees on its
- * online state.
- *
- * Decryption mirrors `live-source.ts`'s `useDecryptedTitles`: one shared
- * bridge, one row unwrapped + opened at a time (a crypto-bridge worker only
- * ever holds one active session key at once), re-running only for rows
- * whose `updatedAt` moved since the last decrypt (`UnmanagedSessionRow.summary`
- * carries no `.version` the way `metadata`/`agentState` do, so `updatedAt` —
- * bumped on every upsert, `packages/server/src/app/routes/unmanagedSessions.ts`
- * — is the freshness signal here instead).
- *
- * Read-only by design (plan.md's W3.10 brief: "Actions (mirror/adopt) stay
- * disabled until the adopt RPCs get live wiring — render read-only rows
- * first"): this module only ever produces the *snapshot* half of the
- * section. `useMockUnmanagedActions` stays the default `useActions` at the
- * Home screen's call site, and `session-list-screen.tsx` now passes
- * `actionsDisabled` alongside it so `UnmanagedSection`/`UnmanagedSessionCard`
- * grey out "View"/"Take over" rather than let a real row silently drive a
- * mocked action that only *pretends* to mirror/adopt it.
- */
 
 const UNTITLED = "(untitled session)";
 const UNNAMED_MACHINE = "(unnamed machine)";
@@ -179,10 +150,8 @@ export function buildSnapshot(
       id: m.id,
       name: decrypted.machineNames.get(m.id) ?? UNNAMED_MACHINE,
       online: deriveMachineOnline(m, presence, now),
-      // AH8 "machine-status-reauth": the same shared badge status
-      // `features/session-list/live-source.ts` computes — this section
-      // reuses `MachineBadge` (`@/features/session-list`) for the very same
-      // machine, so both must agree on it.
+      // same badge status `features/session-list/live-source.ts` computes -
+      // this section reuses `MachineBadge` for the same machine, so both must agree
       status: deriveMachineStatus(m, presence, now),
     }));
 

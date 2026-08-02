@@ -18,17 +18,13 @@ import { rpcHandler } from "./socket/rpcHandler.js";
 
 type ClientType = "session-scoped" | "machine-scoped" | "user-scoped";
 
-// Ported from Happy's `happy-server/sources/app/api/socket.ts` (plan.md §4.1: "port
 // verbatim") — READ-ONLY WS path (design ⚠ DELTA D1: writes are HTTP, see the sibling
 // 1.2 task). Keeps: auth-in-middleware (so events can't race the connection), the three
 // client scopes, room joins via `eventRouter`, machine online/offline ephemeral
-// broadcast, and `app-state` tracking for push suppression. Dropped from Happy's version:
-// the Redis streams adapter wiring (kvy-system-design.md §6.4 defers multi-process to
 // behind an env flag; single process at MVP) and the non-read-path handlers
 // (sessionUpdateHandler/usageHandler/machineUpdateHandler/etc. — out of scope for this task).
 export function startSocket(app: FastifyInstance, db: Database): Server {
   const io = new Server(app.server, {
-    // Explicit allowlist, not a wildcard (kvy-system-design.md §12, plan.md §16 "4.4
     // Hardening": "wildcard-CORS removal"). `origin: "*"` combined with
     // `credentials: true` is a standing vuln class — no real browser honors that
     // combination for credentialed requests, so it only ever gave a false sense of
@@ -87,10 +83,8 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
       return;
     }
 
-    // issue-4-plan.md §4.5a: a stateless access token can't itself carry revocation, so
     // the one place this server ever hits the DB for it is right here, at connect —
     // a single cheap row lookup, not a per-request cost, and the reason revocation is
-    // "immediate on live WebSockets" per §9 rather than bounded only by the access
     // token's own (now 15m) TTL.
     const deviceSession = await db.query.deviceSessions.findFirst({
       where: eq(deviceSessions.id, verified.sessionId),
@@ -113,7 +107,6 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
     // field from `sessionId` above, which names the session-*scoped* client's own
     // provider session (unrelated to auth) and must not be clobbered. `authSessionId` is
     // what the revoke routes' `disconnectSession` matches against to find this exact
-    // live connection, and what the expiry timer below re-arms on `renew-token` (§4.5b).
     socket.data.authSessionId = verified.sessionId;
     socket.data.tokenExpiresAt = verified.expiresAt;
     // Read the initial app-state from the handshake to close the race window between
@@ -147,7 +140,6 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
     eventRouter.addConnection(accountId, connection);
     recordWsConnectionOpened(connection.connectionType);
 
-    // Machine online broadcast (plan.md §4.1 item 4): only user-scoped/session-scoped
     // clients (e.g. the web app) care — the machine's own socket doesn't need to hear
     // about itself.
     if (connection.connectionType === "machine-scoped") {
@@ -187,7 +179,6 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
       socket.data.appState = data?.state === "active" ? "active" : "background";
     });
 
-    // In-band renewal (§4.5b): a hard disconnect timed to the access token's own `exp`
     // would flap the connection every 15 minutes for every client — exactly the
     // "disconnect storm" (and, for the daemon, the machine-presence flap) issue #4
     // reported. Instead: arm a timer for the CURRENT token's expiry; a client that
@@ -222,7 +213,6 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
     });
 
     // Session-scoped keepalive (`packages/cli/src/session/sessionClient.ts`'s
-    // `alive` volatile emit, design §4.3 `ClientEmit` `{ e: 'alive'; sessionId;
     // working }`). Relayed as an `activity` ephemeral to whoever's watching this
     // session — a pure live relay, deliberately with no durable cache behind it:
     // "is this turn actively working" is already sourced from persisted
@@ -251,7 +241,6 @@ export function startSocket(app: FastifyInstance, db: Database): Server {
 
     // Machine-scoped heartbeat (`packages/cli/src/daemon/machineClient.ts`'s
     // `machine-alive` volatile emit, every `heartbeatIntervalMs` — 60s by
-    // default). Design §6.3's write-behind `lastSeenAt` presence cache: until
     // this handler existed, the event had no listener at all (dropped
     // silently), so `machines.lastSeenAt` only ever got set once at
     // registration/`POST /v1/machines` and went stale for the rest of a long

@@ -6,7 +6,6 @@ export const SessionRoleSchema = z.enum(["user", "agent"]);
 export type SessionRole = z.infer<typeof SessionRoleSchema>;
 
 /**
- * The provider-agnostic, flat session event stream (design §4.2). Adapters
  * (Claude Code, Codex) map their native transcript format onto this shape —
  * provider-native ids (`toolu_*`, Codex item ids) never cross the wire, only
  * adapter-minted `call`/`reqId` strings.
@@ -110,7 +109,6 @@ export type SessionEvent = z.infer<typeof SessionEventSchema>;
 
 /**
  * The envelope every session event is wrapped in before it's batched,
- * encrypted, and POSTed as a `message-new` (design §4.2/§4.3).
  */
 export const SessionEnvelopeSchema = z.object({
   id: z.string(), // cuid2, minted by the adapter

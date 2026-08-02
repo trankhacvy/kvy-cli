@@ -16,13 +16,11 @@ const UpsertUnmanagedSessionBodySchema = z.object({
   workspaceId: z.string().min(1),
   providerRef: z.string().min(1),
   summary: EncryptedBoxSchema, // enc: title, lastActivity, running?
-  dek: z.string().min(1), // wrapped DEK, base64 (design §5.1)
+  dek: z.string().min(1),
 });
 
 /**
  * `POST /v1/unmanaged-sessions` — upsert-by-`(machineId, providerRef)` for
- * the daemon transcript indexer (plan.md §16 "3.3 Session adoption (UC9)",
- * kvy-system-design.md §8 "Transcript indexer (adoption Tier 1)"). Every
  * indexer tick re-encrypts the summary under a freshly-minted DEK and POSTs
  * it here; the unique index on `(machine_id, provider_ref)` (schema.ts) is
  * the actual dedup mechanism, so this is a plain last-write-wins upsert, not

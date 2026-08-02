@@ -3,19 +3,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-/**
- * `page.tsx` can't be rendered directly under this package's `environment: "node"` vitest
- * config: it's a full page component using `next/navigation`'s `useRouter` — same
- * source-text technique `signin/page.test.ts` uses for similarly hook-heavy JSX.
- *
- * auth-ux-overhaul-fix-plan.md Fix 8: `/password/` used to default to `"signup"`
- * unconditionally, so a returning user finishing a CLI pairing continuation landed on the
- * key-protection question instead of being signed in. Rev 1 of the fix proposed reading
- * `peekPendingPair()` from a `useState` lazy initialiser and was wrong — that helper
- * dereferences `window.sessionStorage` with no `typeof window` guard, and an initialiser
- * runs during the static-export prerender where there is no `window`, which would have
- * broken `next build`. The negative assertion below is the one that matters.
- */
+// Source-text technique: `page.tsx` uses `next/navigation`'s `useRouter` and can't render
+// in this package's `environment: "node"` vitest config.
 const pageSource = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./page.tsx"),
   "utf-8",

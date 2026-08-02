@@ -6,20 +6,15 @@ import { Button } from "@/components/ui/button";
 import { isPrfAvailable, type KeyWrapMode } from "@/crypto";
 
 /**
- * How this browser protects your keys at rest — asked in plain words, once, at setup
- * (docs/auth-ux-overhaul-plan.md §5.2).
+ * Key-protection mode selector, shown once at first setup.
  *
- * The two options are genuinely different, so the copy says what each one costs:
+ *  - "prf"    — wrap key re-derived from a passkey each session; never exists at rest, so
+ *               copying the browser profile yields nothing usable. Costs one biometric tap
+ *               per page load.
+ *  - "device" — non-extractable key stored in IndexedDB. No prompt, but same-origin script
+ *               can use the handle, and anyone who can access this machine can read sessions.
  *
- *  - "prf"    — the wrap key is re-derived from a passkey each session and never exists at
- *               rest, so copying the browser profile yields nothing usable. Costs one
- *               biometric tap per page load.
- *  - "device" — a non-extractable key stored in IndexedDB. No prompt ever, but same-origin
- *               script can use the handle, and anyone who can use this computer can read
- *               your sessions. Said plainly rather than dressed up as protection.
- *
- * Auto-resolves to "device" when no platform authenticator exists, so no browser matrix is
- * hard-coded anywhere.
+ * Auto-resolves to "device" when no platform authenticator exists.
  */
 export function KeyProtectionChoice({
   onChoose,

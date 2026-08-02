@@ -1,21 +1,9 @@
-/**
- * HTTP client for `POST /v1/unmanaged-sessions` (design §8's "Transcript
- * indexer (adoption Tier 1)" / plan.md §16 "3.3 Session adoption (UC9)").
- *
- * Mints a fresh per-row DEK and seals the plaintext summary under it, the
- * same pattern `session/bootstrap.ts` uses for session metadata (design
- * §5.1) — every write is a brand-new encryption (the row has no
- * client-visible version to CAS against, see the server route's own
- * doc comment), so there is no "recover the existing DEK on replay" branch
- * here the way `bootstrapSession` has for its idempotent-create path.
- */
 import { encodeBase64, getRandomBytes, seal, wrapDek } from "@kvy/crypto";
 import type { Logger } from "../logger.js";
 
 const DEK_LENGTH_BYTES = 32;
 const DEFAULT_SERVER_URL = "http://127.0.0.1:3005";
 
-/** Plaintext fields sealed into `unmanagedSessions.summary` (design §6.1). */
 export interface UnmanagedSessionSummary {
   title: string;
   lastActivity: number;
@@ -31,9 +19,9 @@ export interface UpsertUnmanagedSessionParams {
 
 export interface UnmanagedSessionClientDeps {
   serverUrl: string;
-  /** issue-4-plan.md §6.6: resolves a fresh access token per call instead of a static string that goes stale. */
+  /** Resolves a fresh access token per call rather than a static string that could go stale. */
   getAccessToken: () => Promise<string | null>;
-  /** Account's X25519 content public key (design §5.1) — wraps the per-row DEK. */
+  /** Account's X25519 content public key — wraps the per-row DEK. */
   contentPublicKey: Uint8Array;
   /** Injectable so unit tests never make a real network call. */
   fetchImpl: typeof fetch;
@@ -61,11 +49,8 @@ export function createUnmanagedSessionClientDeps(
 }
 
 /**
- * Upserts one unmanaged-session row. Best-effort: logs and resolves `false`
- * on any network/HTTP failure rather than throwing — a single failed upsert
- * must never crash the indexer's watch loop (design principle: no silent
- * failures, but also no crashing a background side channel over one bad
- * tick — matches `daemon/notify.ts`'s self-report contract).
+ * Upserts one unmanaged-session row. Logs and resolves `false` on any
+ * network/HTTP failure rather than throwing — must never crash the watch loop.
  */
 export async function upsertUnmanagedSession(
   deps: UnmanagedSessionClientDeps,

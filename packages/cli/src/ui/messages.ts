@@ -1,6 +1,5 @@
 /**
  * Every user-facing string the CLI prints during auth/first-run
- * (docs/auth-ux-overhaul-plan.md Phase 0). Centralised so the "no jargon, no
  * 'go run this yourself'" rules can be enforced in one place and asserted in
  * one test (`__tests__/messages.test.ts`).
  */

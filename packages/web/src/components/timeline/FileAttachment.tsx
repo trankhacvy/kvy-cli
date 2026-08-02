@@ -10,22 +10,17 @@ import type { FileItem } from "@/sync/reducer";
 
 type DownloadState = "idle" | "downloading" | "error";
 
-/** `envelopeMapper.ts`'s inline-image ref prefix (plan-v2.md W3.2) — a
- * transcript image small enough (≤256KB) to inline directly into the wire
- * `file` event rather than go through the (not-yet-built-on-the-CLI) blob
- * upload path `item.ref`'s other case (a real `blobId`) uses. */
+/** `envelopeMapper.ts`'s inline-image ref prefix — a transcript image small enough (≤256KB)
+ * to inline directly into the wire `file` event rather than go through the blob upload path. */
 const INLINE_REF_PREFIX = "inline:";
 
 export function isInlineFileRef(ref: string): boolean {
   return ref.startsWith(INLINE_REF_PREFIX);
 }
 
-/** `inline:` refs carry only base64 bytes, no media type (plan-v2.md W3.2's
- * wire shape) — the CLI names the file `image.<ext>` from the source media
- * type when it mints the envelope (`envelopeMapper.ts`'s `imageFileName()`),
- * so this is that mapping's inverse. Defaults to PNG for an unrecognized/
- * missing extension — always a plausible guess since this path only ever
- * renders images. */
+/** `inline:` refs carry only base64 bytes, no media type — the CLI names the file
+ * `image.<ext>` via `envelopeMapper.ts`'s `imageFileName()`, so this is that mapping's
+ * inverse. Defaults to PNG for an unrecognized extension. */
 const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
   png: "image/png",
   jpg: "image/jpeg",
@@ -70,14 +65,9 @@ export function InlineImageAttachment({
 }
 
 /**
- * Renders a `file` transcript entry and, on click, downloads + decrypts the
- * attachment (the read half of the encrypted attachment path, plan.md §16
- * "4.3 Distribution & self-host" — `Composer`'s attach button is the write
- * half). `item.ref` is the blob-storage `blobId`; decryption reuses the
- * same session blob key `Composer`'s upload path encrypted under
- * (`useSessionCrypto`, one instance per session shared with the rest of
- * this screen). An `inline:` ref (plan-v2.md W3.2 — a small transcript
- * image with no blob to download) short-circuits straight to
+ * Renders a `file` transcript entry; on click, downloads and decrypts the blob.
+ * `item.ref` is the blob-storage `blobId`; decryption reuses the session blob key from
+ * `useSessionCrypto` (shared with the upload path). An `inline:` ref short-circuits to
  * `InlineImageAttachment` instead.
  */
 export function FileAttachment({ item, compact = false }: { item: FileItem; compact?: boolean }) {

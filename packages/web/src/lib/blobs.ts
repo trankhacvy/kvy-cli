@@ -1,14 +1,8 @@
 /**
- * Encrypted attachment upload/download orchestration for the composer's
- * attach-file path (kvy-system-design.md §6.2, §5.1; plan.md §16 "4.3
- * Distribution & self-host": "encrypted attachment path in the web
- * composer"). Ties together three pieces that each already know only their
- * own slice: the crypto worker (`sealBlob`/`openBlob`, encrypt/decrypt under
- * the active session's blob key — plaintext never leaves the worker),
- * `api.ts`'s `requestBlobUpload`/`requestBlobDownload` (mint a presigned
- * target), and a raw `fetch` PUT/GET against whatever URL the driver handed
- * back (S3 presigned, or the local-disk driver's own signed sink — this
- * module doesn't know or care which).
+ * Encrypted attachment upload/download for the composer's attach-file path.
+ * Ties together the crypto worker (`sealBlob`/`openBlob`), `api.ts`'s
+ * `requestBlobUpload`/`requestBlobDownload`, and a raw `fetch` against
+ * whatever presigned URL the server returns.
  */
 import type { CryptoBridgeClient } from "@/crypto";
 import { requestBlobDownload, requestBlobUpload } from "./api.js";

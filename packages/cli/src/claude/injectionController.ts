@@ -1,37 +1,17 @@
-/**
- * PTY-injection gating (the "omnara model" — design §7, the terminal-attached
- * `kvy claude` input path).
- *
- * When a message arrives from the web (the `message` session RPC), Kvy
- * types it into the SAME pseudo-terminal the interactive `claude` TUI is
- * running on — the text, then a submit keystroke — exactly as if the human at
- * the keyboard had typed it. There is no mode switch and no process kill:
- * `claude` stays live and renders its normal TUI throughout.
- *
- * The one thing that MUST be gated is *timing*: injecting mid-turn (while
- * `claude` is streaming a reply, or mid-render) corrupts the TUI and/or gets
- * swallowed. So a web message is only ever typed in when the session is
- * **idle** — sitting at its input prompt. This class is the pure, fully
- * testable core of that gate; the surrounding `ptyClaudeSession.ts` feeds it
- * the idle/busy signal (derived from the launcher's `fetch-start`/`fetch-end`
- * instrumentation — the same signal `claudeLocal.ts` uses for its "thinking"
- * indicator) and the concrete PTY-write callbacks.
- *
- * Design (mirrors omnara's `claude_wrapper_v3.py` input-queue loop):
- *  - `enqueue()` queues a web message; it is never dropped.
- *  - `setBusy(true|false)` reflects whether `claude` is mid-turn.
- *  - A queued message is flushed only when the controller is `ready` (the TUI
- *    has painted its prompt after spawn), NOT busy, not already mid-injection,
- *    not in the brief post-submit cooldown, and neither `promptOpen` nor
- *    `localDraft` is set (plan-v2.md W1.3 — see those setters' own docs).
- *  - Flushing writes the text, waits `submitDelayMs` (letting the TUI ingest
- *    the pasted text before the Enter — omnara's 0.25s), then submits. After
- *    submit, a `postSubmitCooldownMs` cooldown prevents a second message from
- *    racing into the same prompt before the turn's own `fetch-start` flips
- *    `busy` true. The cooldown ALSO covers messages that trigger no model
- *    fetch at all (e.g. a slash command) — without it such a message would
- *    wait forever for a `busy` edge that never comes.
- */
+// PTY-injection gating: when a message arrives from the web, Kvy types it
+// into the SAME pseudo-terminal the interactive `claude` TUI is running on —
+// exactly as if the human had typed it. The one hard constraint is *timing*:
+// injecting mid-turn (while `claude` is streaming a reply or mid-render)
+// corrupts the TUI or gets swallowed. So a web message is only typed in when
+// the session is idle at its input prompt.
+//
+// A queued message is flushed only when the controller is `ready` (the TUI
+// has painted its prompt after spawn), NOT busy, not mid-injection, not in
+// the brief post-submit cooldown, and neither `promptOpen` nor `localDraft`
+// is set. Flushing writes the text, waits `submitDelayMs` (250ms, letting the
+// TUI ingest the text before Enter), then submits. The post-submit cooldown
+// also covers messages that trigger no model fetch (e.g. slash commands) —
+// without it they'd wait forever for a `busy` edge that never arrives.
 
 import type { Logger } from "../logger.js";
 
@@ -42,7 +22,7 @@ const noopLogger: Logger = {
   error: () => {},
 };
 
-/** One web-originated message awaiting injection. `id` is the send envelope id (echoed to the §7.10 send-claim completion). */
+/** One web-originated message awaiting injection. `id` is the send envelope id used to complete the send claim on success. */
 export interface PendingInjection {
   id: string;
   text: string;
@@ -53,16 +33,14 @@ export interface InjectionControllerDeps {
   writeText: (text: string) => void;
   /** Send the submit keystroke (Enter / carriage return) into the PTY master. */
   submit: () => void;
-  /** Fired once a queued message has actually been submitted — the send-claim completion hook (design §7.10). */
+  /** Fired once a queued message has actually been submitted — the send-claim completion hook. */
   onInjected?: (id: string) => void;
   /**
-   * Fired with messages that will now NEVER be injected — either still-queued
-   * entries dropped by {@link InjectionController.dispose} (session ending
-   * with messages waiting), or a message whose text was already typed into
-   * the PTY but whose submit keystroke was skipped because `dispose()` ran
-   * mid-injection (the child exited between write and submit). Either way the
-   * caller must fail the corresponding send-claim rather than leave it
-   * indeterminate (plan-v2.md W3.9) — see `start.ts`'s `onDroppedInjections`.
+   * Fired with messages that will NEVER be injected — either still-queued
+   * entries dropped by `dispose()` (session ending with messages waiting), or
+   * a message whose text was typed but whose submit was skipped because
+   * `dispose()` ran mid-injection. The caller must fail the corresponding
+   * send-claim rather than leave it indeterminate.
    */
   onDropped?: (messages: PendingInjection[]) => void;
   /** Delay between writing the text and sending the submit key. Default 250ms (omnara's value). */
@@ -80,9 +58,8 @@ const DEFAULT_SUBMIT_DELAY_MS = 250;
 const DEFAULT_POST_SUBMIT_COOLDOWN_MS = 1200;
 /**
  * A `setPromptOpen(true)` that never sees a matching `setPromptOpen(false)`
- * (a dialog that vanished without an observed clearing signal — the TUI
- * exited a menu some way the tailer/hook layer didn't catch) must not starve
- * the injection queue forever. This self-clears the gate (plan-v2.md W1.3).
+ * (a dialog that vanished without an observed clearing signal) must not starve
+ * the injection queue forever. This self-clears the gate after the timeout.
  */
 const PROMPT_OPEN_FAILSAFE_MS = 120_000;
 
@@ -189,8 +166,8 @@ export class InjectionController {
   /**
    * Cancels pending timers and drops the queue. Safe to call once. Returns
    * whatever was still queued (never injected) so the caller can fail those
-   * messages' send-claims instead of leaving them indeterminate (plan-v2.md
-   * W3.9) — also reported via {@link InjectionControllerDeps.onDropped}.
+   * messages' send-claims instead of leaving them indeterminate — also
+   * reported via {@link InjectionControllerDeps.onDropped}.
    *
    * The submit timer is deliberately NOT cleared here: if a message is
    * mid-injection (its text already written, waiting on the submit

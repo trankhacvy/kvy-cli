@@ -1,8 +1,6 @@
 /**
  * `kvy workspace config [--base-ref <ref>] [--remote <name>]
  * [--setup-script <script>] [--run-script <script>] [--directory <path>]`
- * (kvy-prd.md line 148: "Per-workspace settings (base ref for diffs, git
- * remote)"; plan.md §16 "4.1 Git panel"; docs/features/
  * setup-run-scripts.md "Per-workspace Setup/Run scripts"). Sets (or, with no
  * flags at all, just prints) the configured git base ref/remote and
  * setup/run scripts for a workspace directory — `--directory` defaults to
@@ -18,7 +16,6 @@
  * resolved) directory path, so a `git.diff` RPC call that omits an explicit
  * `baseRef` — or a fresh worktree creation, or a `run.start` RPC — picks up
  * whatever was set here. Script DEFINITION stays CLI-only by design
- * (design §12's local-consent boundary) — no machine RPC ever carries a
  * script string as a params field.
  */
 import type { PersistenceOptions } from "../persistence.js";

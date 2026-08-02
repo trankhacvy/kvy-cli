@@ -1,16 +1,12 @@
 /**
- * Blob storage subsystem (kvy-system-design.md §6.2 "POST /blobs/
- * request-upload   POST /blobs/request-download", §6.5; plan.md §16 "4.3
  * Distribution & self-host": "Blob storage: presigned upload/download
  * routes + S3/local-disk drivers"). The server is blind to blob content —
  * callers encrypt with `encryptBlob`/a DEK-derived blob key
- * (`deriveBlobKey`, design §5.1) before ever calling `request-upload`; this
  * module only brokers presigned URLs and records accounting metadata
  * (`blobs` table: owner, size, contentHash).
  *
  * This is also the fallback path `git.diff`/`adopt.mirror`/file-attachment
  * envelopes reserve `blobRef` for once a payload would blow the 64KB RPC
- * control-plane budget (design §4.4 "payload size rule") — a `blobId`
  * minted here is exactly what those `blobRef` fields carry.
  *
  * Three routes:

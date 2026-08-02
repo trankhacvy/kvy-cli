@@ -1,24 +1,21 @@
 /**
- * Persistence for the crypto worker's key material. The worker (not the main thread)
- * owns this store — design §9.1 ("keys live in worker memory, loaded from IndexedDB at
- * startup").
+ * Persistence for the crypto worker's key material. The worker owns this store — keys live
+ * in worker memory, loaded from IndexedDB at startup.
  *
- * docs/auth-ux-overhaul-plan.md Phase 5: the master secret is no longer PIN-wrapped.
- * A v2 record wraps it under one of two mechanisms, recorded in `mode`:
+ * A v2 record wraps the master secret under one of two mechanisms, recorded in `mode`:
  *
  *   - `"prf"`    — the wrap key is re-derived per session from a passkey (`prf-key.ts`).
  *                  Key material never exists at rest; unlocking needs a biometric gesture.
  *   - `"device"` — the wrap key is a non-extractable `CryptoKey` stored right here
- *                  (`device-key.ts`). Zero friction, and honestly labelled in the UI as
- *                  "anyone who can use this computer can read your sessions", because
- *                  same-origin script can use the handle even though it can't export it.
+ *                  (`device-key.ts`). Zero friction, but same-origin script can use the
+ *                  handle even though it can't export it.
  *
  * The two public identity keys stay in the clear so `getIdentity()` can answer "does this
  * browser have keys" without any unlock step.
  *
  * `wrappedRefreshToken` is gone from v2 — the session credential lives in its own store
- * now (`session-storage.ts`, Phase 4a) so a browser with no key material can still hold a
- * session. It remains on the v1 shape purely so the migration can carry it across.
+ * (`session-storage.ts`) so a browser with no key material can still hold a session. It
+ * remains on the v1 shape purely so the migration can carry it across.
  */
 import type { PinWrapped } from "@kvy/crypto/web";
 import type { WrappedBytes } from "./device-key.js";
@@ -70,10 +67,9 @@ export interface KeyStorage {
   load(): Promise<AnyStoredKeyRecord | null>;
   clear(): Promise<void>;
   /**
-   * Wipe the record AND remove the database itself. `clear()` empties the store, which
-   * leaves `kvy-crypto-bridge` enumerable by `indexedDB.databases()` after a sign-out
-   * (auth-ux-overhaul-e2e-results.md E2E-5.5) — the data is gone, but "both are gone" was
-   * the stated guarantee and an empty shell is not that.
+   * Wipe the record AND remove the database itself. `clear()` empties the store but leaves
+   * `kvy-crypto-bridge` enumerable by `indexedDB.databases()` after sign-out — the data is
+   * gone, but the empty shell is not the same as "both are gone".
    *
    * Safe to call from the worker: every operation in this module opens and closes its own
    * connection, so nothing here is holding one open for `deleteDatabase` to block on. The

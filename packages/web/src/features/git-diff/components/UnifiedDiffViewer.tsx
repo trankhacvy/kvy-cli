@@ -40,7 +40,6 @@ function FileDiff({ file, mode }: { file: UnifiedDiffFile; mode: DiffModeEnum })
 }
 
 /**
- * Read-only unified diff viewer (kvy-prd.md FR-7.7: "per-file unified
  * diff view (... shiki-highlighted)").
  *
  * Feature 3 Phase 4 (docs/web-ux-improvements-plan.md): renders through

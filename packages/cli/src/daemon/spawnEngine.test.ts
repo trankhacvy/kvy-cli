@@ -290,7 +290,7 @@ describe("spawnSession", () => {
     expect(deps.launchProcess).not.toHaveBeenCalled();
   });
 
-  describe("setup-script hook (docs/features/setup-run-scripts.md Phase 2)", () => {
+  describe("setup-script hook", () => {
     it("fires runSetupScript exactly once, with the workspace root and the created worktree dir, on a genuine fresh-worktree creation", async () => {
       const git = vi.fn(async (args: string[]) => {
         if (args[0] === "show-ref") throw new Error("not found");
@@ -388,7 +388,7 @@ describe("spawnSession", () => {
     });
   });
 
-  describe("directory dedup (plan.md §16 'Flow 3 — spawn-directory-dedup')", () => {
+  describe("directory dedup", () => {
     it("returns the already-live session's id and never invokes the process launcher when one is already tracked in this exact directory", async () => {
       const realRoot = await realpath(root);
       const deps = baseDeps({
@@ -435,7 +435,7 @@ describe("spawnSession", () => {
       expect(trackSpawned).toHaveBeenCalledExactlyOnceWith(4242, realRoot);
     });
 
-    it("keys dedup on the FINAL post-worktree directory: a live session at repo root does not dedupe a worktree-mode spawn for the same repo (docs/features/worktree-isolation.md Phase 3)", async () => {
+    it("keys dedup on the FINAL post-worktree directory: a live session at repo root does not dedupe a worktree-mode spawn for the same repo", async () => {
       const git = vi.fn(async (args: string[]) => {
         if (args[0] === "show-ref") throw new Error("not found");
         return "";

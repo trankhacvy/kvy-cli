@@ -10,9 +10,7 @@ import { useMirrorTranscript } from "../use-mirror-transcript";
 import { TakeOverDialog } from "./take-over-dialog";
 
 /**
- * Live read-only transcript mirror screen (kvy-system-design.md §8/§10.4
  * "unmanaged row visible on phone (live read-only mirror via chunked RPC)";
- * plan.md §16 "3.3 Session adoption (UC9)"). Read-only by design — this is
  * a mirror of someone else's terminal session, not a control surface, so it
  * carries no `Composer`/mode controls, only a `TakeOverDialog` entry point.
  *

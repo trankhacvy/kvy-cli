@@ -1,21 +1,11 @@
 /**
- * Ported (adapted) from Happy — https://github.com/slopus/happy (MIT).
- * Original: happy-cli/src/persistence.ts (`readPersistedSessions`/`persistSession`).
+ * `~/.kvy/sessions.json` — durability store for session records including
+ * wrapped DEKs so resume survives daemon restarts.
  *
- * `~/.kvy/sessions.json` — the durability store design §7.2/§8 and
- * plan.md §16 "3.2 Durability" describe: "finished/active session records
- * incl. wrapped DEKs (resume survival)" / "finished sessions persisted to
- * `sessions.json` including wrapped DEK + seq + versions so resume survives
- * daemon restarts". This module only owns the file's read/write/restore
- * mechanics — `sessionRegistry.ts` is what decides *when* to call these
- * (on `/session-started`, on daemon boot, on prune).
- *
- * Same tmp-write + rename atomicity convention as `state.ts`/`persistence.ts`
- * in this package; unlike `settings.json` (`persistence.ts`), this file has
- * exactly one writer process (the daemon itself), so no cross-process lock
- * file is needed — only an in-process write queue (`serialize()` below) to
- * keep two overlapping `persistSession` calls (e.g. two sessions reporting
- * back within the same tick) from racing each other's read-modify-write.
+ * This module owns file read/write/restore mechanics only; `sessionRegistry.ts`
+ * decides when to call these. Uses tmp-write + rename atomicity and an in-process
+ * write queue to prevent concurrent `persistSession` calls from racing each other's
+ * read-modify-write.
  */
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -46,27 +36,15 @@ export interface PersistedSession {
   /** `Date.now()` at the time this record was last written — drives expiry below. */
   savedAt: number;
   /**
-   * The resolved real (symlink-followed) directory this session was spawned
-   * into (`TrackedSession.directory`, plan.md §16 "Flow 3 —
-   * spawn-directory-dedup"). Persisted so the spawn-dedup guard survives a
-   * daemon restart: without it, a session restored from disk and re-tracked
-   * by a `resumeSession` relaunch would come back with `directory:
-   * undefined` and could never match `spawnEngine.ts`'s
-   * `scanForLiveSessionInDirectory` again. Optional — absent for a
-   * terminal-started session the daemon only learned about via
-   * `/session-started` (no `trackSpawned` recorded a directory), and absent
-   * from any pre-v2 `sessions.json`.
+   * The resolved real (symlink-followed) directory this session was spawned into.
+   * Persisted so the spawn-dedup guard survives a daemon restart. Absent for
+   * terminal-started sessions and pre-v2 records.
    */
   directory?: string;
   /**
-   * The OS pid of the still-live session process, recorded at
-   * /session-started time. Persisted so daemon boot can re-adopt a session
-   * whose process outlived the restart (plan.md §16 "Flow 3 — spawn-directory-
-   * dedup"): without a pid there is no way to find the orphaned child and
-   * re-enter it into the live map, so spawn-dedup misses it and spawns a
-   * duplicate. Verified against pid recycling on boot (readoptSessions.ts),
-   * never trusted blindly. Optional/absent from pre-v3 files and from records
-   * whose session never reported a real pid.
+   * The OS pid of the still-live session process. Persisted so daemon boot can
+   * re-adopt sessions whose process outlived the restart. Verified against pid
+   * recycling on boot — never trusted blindly. Absent from pre-v3 records.
    */
   pid?: number;
 }
@@ -76,7 +54,7 @@ interface SessionsFileShape {
   sessions: Record<string, PersistedSession>;
 }
 
-/** Matches Happy's own `SESSION_MAX_AGE_MS` — a session nobody has resumed in two weeks is not worth carrying forward indefinitely. */
+/** A session nobody has resumed in two weeks is not worth carrying forward indefinitely. */
 const MAX_SESSION_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 export function sessionsFilePath(homeDir: string): string {

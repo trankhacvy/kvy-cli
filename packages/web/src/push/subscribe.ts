@@ -1,19 +1,9 @@
 /**
- * Web Push subscribe/unsubscribe (design §8.5/§9.3, FR-7.6). Registers the
- * service worker at `/sw.js` (`public/sw.js` — a static file, since Next's
- * static export doesn't bundle `public/` and there's no equivalent of
- * `new Worker(new URL(...))`'s webpack integration for service workers) and
- * exchanges the resulting `PushSubscription` for the server's
- * `POST`/`DELETE /v1/push/subscribe` (design §6.2).
+ * Web Push subscribe/unsubscribe. Registers the service worker at `/sw.js` and
+ * exchanges the resulting `PushSubscription` for the server's `POST`/`DELETE /v1/push/subscribe`.
  *
- * Structured like `apiSocket.ts`: the platform surface this needs
- * (`navigator.serviceWorker`, `PushManager`) is narrowed to a small
- * injectable `PushEnvironment` interface so the orchestration logic below is
- * unit-testable against an in-memory fake instead of a real browser, and the
- * two server calls go through an injectable `PushApiPort` for the same
- * reason (no real network in tests) — mirrors `lib/api.ts`'s
- * `subscribePush`/`unsubscribePush`, which is what the real `PushApiPort`
- * wraps.
+ * Platform surface is narrowed to `PushEnvironment`/`PushApiPort` interfaces for
+ * testability against in-memory fakes.
  */
 import type { PushSubscribeBody } from "@kvy/wire";
 import { urlBase64ToUint8Array } from "./vapid.js";
@@ -61,11 +51,9 @@ export function toSubscribeBody(sub: PushSubscriptionLike): PushSubscribeBody {
 }
 
 /**
- * Registers for push and POSTs the subscription to the server. A no-op
- * (returns `"unsupported"`) rather than throwing when the browser lacks Web
- * Push support (design §6.4 "iOS reality": this is expected on iOS Safari
- * outside an installed PWA) — the settings page shows a message instead of
- * a button in that case.
+ * Registers for push and POSTs the subscription to the server. Returns `"unsupported"`
+ * rather than throwing when the browser lacks Web Push support (expected on iOS Safari
+ * outside an installed PWA) - the settings page shows a message instead of a button.
  */
 export async function subscribeToPush(
   env: PushEnvironment,

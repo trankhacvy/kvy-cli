@@ -8,9 +8,9 @@ const MODEL_CHANGE_PATTERN =
 
 /**
  * Strips ANSI escape sequences/orphaned markers and collapses whitespace.
- * Exported (bug-fix-plan.md #4 / BF1.2) so `envelopeMapper.ts` can reuse this
- * exact cleaner for local-command-stdout service text instead of
- * duplicating ANSI-stripping logic.
+ * Exported so `envelopeMapper.ts` can reuse this exact cleaner for
+ * local-command-stdout service text instead of duplicating ANSI-stripping
+ * logic.
  */
 export function normalizeTranscriptText(text: string): string {
   return text
@@ -60,12 +60,10 @@ export function findClaudeModelChangeInEnvelopes(
       continue;
     }
 
-    // BF1.2 (bug-fix-plan.md #4): `/model`'s real transcript shape is a
-    // `<local-command-stdout>` block, which `envelopeMapper.ts` now maps to a
-    // quiet `service` envelope (not `text`) instead of a raw chat bubble —
-    // this side channel has to look at the cleaned `service` text too, or a
-    // model switch would stop updating the chip the moment the chat-render
-    // fix landed.
+    // `/model`'s real transcript shape is a `<local-command-stdout>` block,
+    // which `envelopeMapper.ts` maps to a quiet `service` envelope (not
+    // `text`) — this side channel has to look at the cleaned `service` text
+    // too, or a model switch would stop updating the chip.
     if (envelope.ev.t === "service") {
       const model = extractClaudeModelChangeFromText(envelope.ev.text);
       if (model) return model;

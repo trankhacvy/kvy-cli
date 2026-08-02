@@ -5,7 +5,6 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { env } from "../config.js";
 
-// Run on every boot (design §6.5: "migrate runs on boot" — the self-host
 // docker-compose shape has no separate migration step). Idempotent: drizzle
 // tracks applied migrations in its own `drizzle.__drizzle_migrations` table,
 // so re-running on an already-current database is a no-op.
@@ -22,7 +21,6 @@ const MIGRATION_ADVISORY_LOCK_KEY = 727_106;
 /**
  * How long to keep trying for the advisory lock before giving up and migrating anyway.
  * A blocking `pg_advisory_lock` is what wedged a boot against a Neon pooled endpoint
- * (auth-ux-overhaul-e2e-results.md S1): a session-scoped lock taken through a transaction
  * pooler is not reliably released by the `pg_advisory_unlock` that follows, because the
  * unlock can be routed to a different backend than the lock was. Proceeding without the
  * lock is safe to fail loudly — drizzle runs every pending migration inside ONE
@@ -66,10 +64,8 @@ export async function runMigrations(): Promise<void> {
       console.warn("migrate: proceeded without the advisory lock (timed out waiting)");
     }
 
-    // "migrate runs on boot" (design §6.5) is only a guarantee if a no-op run is
     // distinguishable from a successful one. It wasn't: a run that applied 0 of 2 pending
     // migrations exited 0 and the server booted against a schema with no `key_requests`
-    // table at all (auth-ux-overhaul-e2e-results.md S1). Verify, then fail hard.
     const [{ count } = { count: "0" }] = await migrationClient<{ count: string }[]>`
       select count(*)::text as count from drizzle.__drizzle_migrations
     `;

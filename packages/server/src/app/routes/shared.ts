@@ -13,7 +13,6 @@ export const SessionIdParamsSchema = z.object({ id: z.string().min(1) });
 export const NotFoundSchema = z.object({});
 
 /**
- * Opaque `(updatedAt, id)` keyset cursor for `GET /v1/sessions` (design §6.2:
  * `GET /sessions?cursor`). Keyset (not offset) pagination so a page is stable
  * under concurrent inserts/updates — an offset cursor would skip or repeat
  * rows as `updatedAt` churns.

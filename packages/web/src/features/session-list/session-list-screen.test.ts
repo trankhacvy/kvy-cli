@@ -96,9 +96,6 @@ describe("SessionListScreen (archived filter — docs/features/session-lifecycle
     expect(html).not.toContain("all-archived");
   });
 
-  // Feature 4 (docs/web-ux-improvements-plan.md): the "no sessions yet"
-  // empty state now offers a real "New project" entry point rather than
-  // only static CLI-pointing copy.
   it("renders the New project trigger in the zero-sessions empty state", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [],

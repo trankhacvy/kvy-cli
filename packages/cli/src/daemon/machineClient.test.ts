@@ -65,7 +65,6 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
-/** issue-4-plan.md §6.6: a fake `TokenProvider` that always resolves the same access
  * token, tracking `forceRefresh` calls so tests can assert on the connect_error path. */
 function fakeTokenProvider(
   accessToken = "test-token",
@@ -357,7 +356,6 @@ describe("startMachineClient", () => {
       "http://localhost:4000",
       expect.objectContaining({ path: "/v1/stream" }),
     );
-    // issue-4-plan.md §6.6: `auth` is now an async callback (asks the tokenProvider for
     // a currently-valid token on every handshake) rather than a static object.
     const [, socketOpts] = ioFactory.mock.calls[0] as [
       string,
@@ -510,7 +508,7 @@ describe("startMachineClient", () => {
     );
   });
 
-  it("forces a token refresh on an auth-shaped connect_error (issue-4-plan.md §6.6)", async () => {
+  it("forces a token refresh on an auth-shaped connect_error", async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_forcerefresh" })));

@@ -1,69 +1,3 @@
-/**
- * Remote-mode session over ACP (design §7.4 "Remote mode (v0.3 — ACP)",
- * plan.md §17 "Phase 2.2 — Claude remote on ACP"). The v2 successor to
- * `remote/claudeRemote.ts` (deleted in the same change that wires this in):
- * the same handle shape the launcher drives — `send`/`interrupt`/`setMode`/
- * `resolvePermission`/`stop` — but the transport underneath is the managed
- * ACP adapter child (`AcpConnection`) instead of a direct Claude Agent SDK
- * `query()`.
- *
- * What maps where (v1 → v2):
- *  - `query({prompt: PushableAsyncIterable})` spanning many turns
- *    → one `session/new` + one `session/prompt` request PER user turn,
- *      drained sequentially off an internal queue (`AcpConnection.prompt`
- *      enforces one in-flight prompt per session — ACP's own model).
- *  - `systemPrompt: {preset:'claude_code', append}` / `resume` / `model` /
- *    `permissionMode` → `session/new` `_meta.systemPrompt` +
- *    `_meta.claudeCode.options.{resume,model,permissionMode}` (verified: the
- *    adapter spreads `_meta.claudeCode.options` wholesale into SDK options).
- *  - `canUseTool` permission callback → `session/request_permission` server
- *    request → `AcpPermissionHandler` (same §7.6 pipeline surface:
- *    `resolvePermission` is first-wins for the `perm.answer` RPC).
- *  - (v1) SDK message stream → `SdkToEnvelopeConverter` becomes
- *    (v2) `session/update` notifications → `acpToEnvelope` mapper (text
- *      coalescing + deferred tool-start), with `turn-start`/`turn-end`
- *      synthesized around each `session/prompt` call/return.
- *  - `sdkQuery.interrupt()` → `session/cancel`; the adapter answers the
- *    in-flight prompt with `stopReason: 'cancelled'` (a normal response, not
- *    an error) → `turn-end{cancelled}`.
- *  - The SDK's `session_id` → the ACP `sessionId`, which IS the Claude Code
- *    session UUID (design §7.4) — reported once via `onProviderSessionId`
- *    and returned from `stop()` for the remote→local `claude --resume <id>`
- *    handoff.
- *
- * ## Send-idempotency hook (design §7.10)
- * `onTurnSettled` fires with the originating message's id when — and only
- * when — its `session/prompt` request RESOLVED (any stopReason: the turn
- * verifiably ran to a terminal state). A rejected prompt (adapter died,
- * connection closed) deliberately does NOT fire it: the outcome is
- * indeterminate and the caller's claim must stay open so a retried send
- * reports `outcome-unknown` instead of silently re-running the turn —
- * mobvibe's `executeMessageSend` rule, kept exactly.
- *
- * ## Mode-id mapping
- * `claude-code`: verified against the installed adapter — its ACP
- * session-mode ids are literally the four wire `PermissionMode` strings
- * (`default`/`acceptEdits`/`plan`/`bypassPermissions`), so `setMode` passes
- * them through unchanged. (`bypassPermissions` may be refused agent-side
- * when running as root — the error is logged, not thrown, same as v1's
- * best-effort mode sync.)
- * `codex`: NOT the same ids — live-verified 2026-07-31 (the installed
- * `codex-acp`'s own `_AgentMode` list) that its real mode ids are
- * `read-only`/`agent`/`agent-full-access`, nothing like the wire strings.
- * Sending a wire `PermissionMode` straight through gets rejected by the
- * agent with a JSON-RPC "Invalid params" error. `PROVIDER_MODE_ID` below
- * maps each wire mode to its closest codex equivalent before every
- * `session/set_mode` call.
- *
- * ## Known v2 delta: AskUserQuestion
- * The adapter disables the `AskUserQuestion` tool when the client doesn't
- * advertise form-elicitation capability (Kvy doesn't yet — see
- * `ACP_CLIENT_CAPABILITIES`). The model falls back to asking questions as
- * plain transcript text answered via the composer — functional, just not a
- * structured card. v1's structured flow depended on `updatedInput`, which
- * ACP's permission outcome cannot carry either way. Revisit with elicitation
- * support if the UX gap matters in practice.
- */
 import type { PermissionMode, SessionEnvelope } from "@kvy/wire";
 import { createEnvelope } from "@kvy/wire";
 import type { AdapterId } from "../adapters/index.js";
@@ -88,6 +22,9 @@ import {
   startAcpTurn,
 } from "./acpToEnvelope.js";
 
+// Codex ACP mode ids are NOT the wire PermissionMode strings — live-verified
+// 2026-07-31 against the installed codex-acp's own `_AgentMode` list. Sending
+// a wire mode string straight through causes a JSON-RPC "Invalid params" error.
 const CODEX_MODE_ID_BY_PERMISSION_MODE: Record<PermissionMode, string> = {
   default: "agent",
   acceptEdits: "agent",
@@ -102,12 +39,11 @@ function providerModeId(adapterId: AdapterId, mode: PermissionMode): string {
 
 export interface AcpRemoteOptions {
   /**
-   * Which managed ACP adapter to spawn (design §7.3 "single `AcpRemote`
-   * shared by every provider"). Defaults to `claude-code`. `codex` spawns the
-   * `codex-acp` adapter and skips the Claude-only `_meta.systemPrompt`/
-   * `claudeCode` payload (codex-acp ignores those — verified against the
-   * installed adapter's `newSession`, which reads only `additionalDirectories`
-   * off `_meta`).
+   * Which managed ACP adapter to spawn. Defaults to `claude-code`. `codex`
+   * spawns the `codex-acp` adapter and skips the Claude-only
+   * `_meta.systemPrompt`/`claudeCode` payload (codex-acp ignores those —
+   * verified against the installed adapter's `newSession`, which reads only
+   * `additionalDirectories` off `_meta`).
    */
   adapterId?: AdapterId;
   /** cwd for the ACP session (must exist — the adapter validates it). */
@@ -122,18 +58,14 @@ export interface AcpRemoteOptions {
   onEnvelopes: (envelopes: SessionEnvelope[]) => void;
   /** Fires once with the ACP session id (= provider session UUID). */
   onProviderSessionId?: (providerSessionId: string) => void;
-  /** Fires when a turn's `session/prompt` RESOLVED — the claim-completion hook (file header). */
+  /** Fires when a turn's `session/prompt` RESOLVED — the claim-completion hook. `onTurnSettled` does NOT fire on rejected prompts (adapter death/connection closed) since the outcome is indeterminate. */
   onTurnSettled?: (info: { messageId?: string; status: SessionTurnEndStatus }) => void;
   /**
-   * Kvy session id + backend/auth config for the session-attention
-   * notify POST (docs/plan-flows-3-4-5.md Flow 5's ACP wiring,
-   * `api/sessionNotify.ts`), threaded straight into the `AcpPermissionHandler`
-   * this module owns (`perm`/`question` kinds) and consulted again at this
-   * module's own turn-end path (`done` kind, see `drain()`). Optional: no
-   * live caller wires these yet (same not-yet-connected-seam precedent as
-   * this package's other injectable deps) — when absent, attention
-   * reporting is a silent no-op and every other ACP behavior (permission
-   * decisions, turn flow) is unchanged.
+   * Kvy session id + backend/auth config for the session-attention notify POST
+   * (`api/sessionNotify.ts`), threaded into `AcpPermissionHandler` for
+   * `perm`/`question` attention kinds and consulted at turn-end for the `done`
+   * kind. Optional: when absent, attention reporting is a silent no-op and
+   * every other ACP behavior is unchanged.
    */
   sessionId?: string;
   attention?: ReportSessionAttentionDeps;
@@ -265,9 +197,8 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
   });
 
   // Provider-specific `session/new` `_meta`. Claude Code takes the preset
-  // system-prompt + `claudeCode.options` payload (design §7.4); codex-acp
-  // ignores those (it reads only `additionalDirectories`), so Codex sends no
-  // `_meta` — its resume/model/approval config live in its own thread APIs.
+  // system-prompt + `claudeCode.options` payload; codex-acp ignores those
+  // (it reads only `additionalDirectories`), so Codex sends no `_meta`.
   const sessionMeta: Record<string, unknown> | null =
     adapterId === "claude-code"
       ? {
@@ -282,12 +213,10 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
         }
       : null;
 
-  // Session startup — connect + session/new (or session/load, for a
-  // resumed session on an adapter that advertises support for it — see
-  // file header's "Mode-id mapping" note for the same "verify per adapter,
-  // don't assume" lesson this took). `ready` is awaited by the turn drain;
-  // a startup failure surfaces once as a service envelope and fails
-  // subsequent sends fast.
+  // Session startup — connect + session/new (or session/load for a resumed
+  // session on an adapter that advertises support for it). `ready` is awaited
+  // by the turn drain; a startup failure surfaces once as a service envelope
+  // and fails subsequent sends fast.
   const ready: Promise<string> = (async () => {
     await connection.connect();
 
@@ -357,9 +286,8 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
       try {
         const result = await connection.prompt(sessionId, [{ type: "text", text: turn.text }]);
         outgoing.pushAll(endAcpTurn(mapperState, result.stopReason));
-        // Turn genuinely completed (this prompt call RESOLVED) — the "done"
-        // attention kind, parity with the terminal path's Stop-hook
-        // `reportAttention("done")` (docs/plan-flows-3-4-5.md Flow 5).
+        // Turn genuinely completed (this prompt call RESOLVED) — report the
+        // "done" attention kind, parity with the terminal path's Stop-hook.
         permissionHandler.reportTurnEnd();
         opts.onTurnSettled?.({
           messageId: turn.id,
@@ -367,8 +295,8 @@ export function startAcpRemote(opts: AcpRemoteOptions, deps: AcpRemoteDeps = {})
         });
       } catch (error) {
         // Prompt REJECTED (adapter death / connection closed mid-turn): the
-        // outcome is indeterminate — close the turn visually, but do NOT
-        // fire onTurnSettled (file header: the claim must stay open).
+        // outcome is indeterminate — close the turn visually, but do NOT fire
+        // onTurnSettled (the claim must stay open).
         logger.error("[acp-remote] session/prompt failed", {
           error: error instanceof Error ? error.message : String(error),
         });

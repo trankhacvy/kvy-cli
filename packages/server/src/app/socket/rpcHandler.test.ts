@@ -11,7 +11,6 @@ import { buildServer } from "../server.js";
 
 import { RPC_CALL_RATE_LIMIT_MAX } from "./rpcHandler.js";
 
-// Integration tests for the ported-wholesale rpcHandler (plan.md §4.2): room-based
 // registration, forwarding, and the presence-poll dead-peer race. Runs a real listening
 // server + two real socket.io-client connections (one plays the RPC target, one the
 // caller) since the behavior under test is entirely in room membership and ack timing.
@@ -23,7 +22,6 @@ describe("rpcHandler", () => {
   let url: string;
   const clients: ClientSocket[] = [];
 
-  // issue-4-plan.md §4.5a: see socket.test.ts's identical helper's own comment — the
   // connect handshake now requires a real `device_sessions` row, not just a well-formed JWT.
   async function mintToken(accountId: string): Promise<string> {
     await db.insert(accounts).values({ id: accountId }).onConflictDoNothing();

@@ -1,12 +1,7 @@
 /**
- * Sealed-box DEK wrap/unwrap — browser build. Sync (unlike box.web.ts): the
- * underlying NaCl box operations come from libsodium-wrappers, which is
- * synchronous once `ready` has resolved — only the AES-GCM data-key path
- * needs WebCrypto's async API. See dek.ts for the wire format.
- *
- * Not itself a Happy port (see dek.ts, which this mirrors). The primitives it
- * wraps are adapted from Happy — https://github.com/slopus/happy (MIT); see
- * `encryption.web.ts`'s header for the full license text those primitives carry.
+ * Sealed-box DEK wrap/unwrap — browser build. Sync: the underlying NaCl box
+ * operations come from libsodium-wrappers, which is synchronous once `ready`
+ * has resolved. See dek.ts for the wire format.
  */
 import { libsodiumDecryptWithSecretKey, libsodiumEncryptForPublicKey } from "./encryption.web.js";
 

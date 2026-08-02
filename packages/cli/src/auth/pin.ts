@@ -1,12 +1,7 @@
 /**
- * PIN unwrapping for reading credentials written by an older `kvy` build
- * (issue-4-plan.md §6.1/§6.5, revised): `kvy auth login` no longer writes PIN-wrapped
- * credentials — see `keyMaterial.ts` — but a machine that paired before that change may
- * still have a `"pin"`-mode `access.key` on disk, and this lets that credential still
- * unlock rather than forcing a re-login. Uses the same `unwrapWithPin` (`@kvy/crypto`)
- * the web client uses (same argon2id params, `pin-params.ts`). Mirrors
- * `shim/onboardingPrompt.ts`'s `node:readline/promises` + injectable-prompt pattern so
- * this is unit-testable without a real TTY.
+ * `kvy auth login` no longer writes PIN-wrapped credentials, but credentials written by
+ * an older build may still have `"pin"` mode — this lets those still unlock rather than
+ * forcing a re-login. Uses an injectable prompt for testability without a real TTY.
  */
 import { createInterface } from "node:readline/promises";
 import type { PinWrapped } from "@kvy/crypto";
@@ -15,8 +10,8 @@ import { unwrapWithPin } from "@kvy/crypto";
 const MAX_UNLOCK_ATTEMPTS = 3;
 
 export interface PinPromptDeps {
-  /** Test seam; defaults to a real masked-ish `readline` prompt (no echo suppression —
-   * documented gap, see the module docblock's "not implemented" note below). */
+  /** Test seam; defaults to a real readline prompt (no echo suppression —
+   * readline doesn't hide typed characters by default). */
   prompt?: (question: string) => Promise<string>;
   write?: (text: string) => void;
 }
@@ -31,10 +26,8 @@ async function defaultPrompt(question: string): Promise<string> {
 }
 
 /**
- * Prompts for the PIN that unwraps an already-provisioned `wrapped` blob, retrying up
- * to `MAX_UNLOCK_ATTEMPTS` times on a wrong PIN before giving up (`null`) — a bounded
- * retry, not an infinite loop, so a scripted/non-interactive caller (or a genuinely
- * forgotten PIN) fails fast instead of hanging.
+ * Prompts for the PIN, retrying up to `MAX_UNLOCK_ATTEMPTS` times — bounded so a
+ * scripted caller or genuinely forgotten PIN fails fast instead of hanging.
  */
 export async function promptAndUnwrapWithPin(
   wrapped: PinWrapped,

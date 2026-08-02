@@ -1,5 +1,4 @@
 /**
- * `git.commit` machine RPC handler (design §4.4, docs/features/
  * git-write-actions.md Phase 2 — the first *mutating* git RPC).
  *
  * Modeled on `gitBranches.ts`/`gitStatus.ts`'s injectable `git?: GitExec`

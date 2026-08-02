@@ -3,9 +3,8 @@ import { env } from "./config.js";
 import { runMigrations } from "./db/migrate.js";
 
 async function main() {
-  // Migration-on-boot: run before the app starts serving (design §6.5).
-  // Runs first, before the logger exists, so a failure here is a hard exit
-  // via the top-level .catch below rather than a half-started server.
+  // Runs before the logger exists, so a boot failure here exits via the
+  // top-level .catch below rather than a half-started server with app.log.
   await runMigrations();
 
   const app = await buildServer();
@@ -30,8 +29,7 @@ async function main() {
 }
 
 main().catch((err: unknown) => {
-  // Only reachable if runMigrations() or buildServer() itself throws, before
-  // app.log exists.
+  // Reachable only if runMigrations() or buildServer() throws before app.log exists.
   console.error(err);
   process.exit(1);
 });

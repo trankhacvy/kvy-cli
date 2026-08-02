@@ -203,7 +203,6 @@ describe("loop", () => {
 
     for (const [i, message] of messages.entries()) {
       // Arrives while local is in control — the loop must queue it and
-      // abort the local child to switch to remote (plan.md: "a queued
       // remote message ... aborts the local child process").
       messageTrigger.fire(message);
       await flushAll();

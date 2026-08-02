@@ -2,10 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchFullTranscript, type MirrorLine, parseMirrorLines } from "./mirror";
 import type { UnmanagedActions } from "./types";
 
-/** How often the mirror view re-reads the transcript from the daemon (design
- * §10.4 "live read-only mirror via chunked RPC"). A live plain-`claude`
- * session is not itself pushing updates over the WS — this is on-demand
- * polling, not a stream — so this stays modest rather than aggressive. */
+/** How often the mirror view re-reads the transcript from the daemon.
+ * This is on-demand polling, not a stream, so the interval stays modest. */
 const POLL_INTERVAL_MS = 4000;
 
 export interface MirrorTranscriptState {
@@ -15,14 +13,10 @@ export interface MirrorTranscriptState {
 }
 
 /**
- * Live read-only transcript mirror (kvy-system-design.md §8/§10.4,
- * plan.md §16 "3.3 Session adoption (UC9)"): polls `actions.mirror` on an
- * interval, reassembling the full transcript from cursor `0` each time
- * (`fetchFullTranscript`) and parsing it into a readable line feed. Never
- * shows a hard error for a transient poll failure — the previous
- * successfully-parsed lines stay on screen (design §9.1 "never show a
- * loading error — retry silently"); `error` is surfaced only alongside
- * still-empty `lines` (first load failed).
+ * Polls `actions.mirror` on an interval, reassembling the full transcript each
+ * time and parsing it into a readable line feed. Never shows a hard error for a
+ * transient poll failure - previous lines stay on screen; `error` is only set
+ * when `lines` is still empty (i.e. the first load failed).
  */
 export function useMirrorTranscript(
   actions: Pick<UnmanagedActions, "mirror">,

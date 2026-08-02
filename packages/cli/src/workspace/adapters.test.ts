@@ -58,7 +58,6 @@ describe("createTranscriptIndexerWorkspaceLister", () => {
     ]);
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 6: `registeredAt` used to be structurally discarded
   // here (`{workspaceId: entry.path, path: entry.path}`, no timestamp) before it could ever
   // reach `transcriptIndexer.ts`'s watch-window gate. This is the production wiring path —
   // closes the gap `machineIntegration.test.ts` doesn't cover (no indexer-wiring test there

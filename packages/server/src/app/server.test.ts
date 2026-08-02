@@ -49,7 +49,6 @@ describe("buildServer", () => {
   });
 });
 
-// Split-origin self-host shape (kvy-system-design.md §5.3/§9, plan.md §16 "4.3
 // Distribution & self-host"): the web static export is served from a different origin
 // than this API, so plain HTTP routes — not just the Socket.IO `/v1/stream` path — need a
 // real CORS allowlist too. `CORS_ALLOWED_ORIGINS` defaults to `http://localhost:3000`

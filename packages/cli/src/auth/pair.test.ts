@@ -88,11 +88,9 @@ describe("pairDevice", () => {
       if (statusCalls === 0) {
         return jsonResponse({ state: "pending" });
       }
-      // Matches the real approver's wire format exactly (packages/web/src/crypto/
-      // worker-handler.ts's `sealForPeer`: `[version(1) | masterSecret(32) |
-      // refreshToken]`, issue-4-plan.md §6.3) — sealing the bare masterSecret here
-      // would let this test pass while the real pairing flow (which has the
-      // version-byte prefix and the trailing refresh token) still failed to decode.
+      // Matches the real approver's wire format: [version(1) | masterSecret(32) | refreshToken]
+      // — sealing the bare masterSecret here would let this test pass while the real
+      // pairing flow still failed to decode.
       const refreshTokenBytes = new TextEncoder().encode("refresh-token-1");
       const versionedPayload = new Uint8Array([0x01, ...masterSecret, ...refreshTokenBytes]);
       const sealed = libsodiumEncryptForPublicKey(versionedPayload, decodeBase64(body.ephPub));
@@ -202,9 +200,9 @@ describe("pairDevice", () => {
   });
 
   it("returns expired immediately when the follow-up POST reports expired after status said authorized", async () => {
-    // Server-side expiry racing the last poll tick: GET /status says
-    // "authorized", but by the time the follow-up POST /v1/auth/pair lands
-    // to fetch the token + sealed box, the request has expired server-side.
+    // Server-side expiry racing the last poll tick: GET /status says "authorized",
+    // but by the time the follow-up POST /v1/auth/pair lands to fetch the token +
+    // sealed box, the request has expired server-side.
     let posts = 0;
     global.fetch = vi.fn(async (input: Parameters<typeof fetch>[0]) => {
       const url = String(input);
@@ -256,10 +254,10 @@ describe("delay (Issue #11: leaked abort listeners on the never-aborted path)", 
     const addSpy = vi.spyOn(controller.signal, "addEventListener");
     const removeSpy = vi.spyOn(controller.signal, "removeEventListener");
 
-    // Mirrors `pairDevice`'s poll loop: the same long-lived signal reused
-    // across many ticks, none of which ever abort — the exact shape that
-    // used to accumulate a dangling listener per tick until Node's default
-    // max-listener threshold tripped a `MaxListenersExceededWarning`.
+    // Mirrors `pairDevice`'s poll loop: the same long-lived signal reused across many
+    // ticks, none of which ever abort — the exact shape that used to accumulate a
+    // dangling listener per tick until Node's default max-listener threshold tripped a
+    // `MaxListenersExceededWarning`.
     for (let i = 0; i < 20; i++) {
       await delay(0, controller.signal);
     }

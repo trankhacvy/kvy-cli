@@ -10,14 +10,12 @@ import { runGit } from "./daemon/gitExec.js";
 // import and reset the module registry between tests that care about it.
 //
 // `start`/`auth`/`sessions`/`resume` now call `ensureDaemonRunning()` first
-// (PRD FR-1.2), which — left unchecked — would spawn a real detached
 // `daemon start-sync` child process during every test run. `KVY_NO_SERVICE=1`
 // is the documented opt-out (see index.ts's help text / ensureDaemonRunning.ts),
 // so tests that aren't specifically exercising the daemon-auto-start wiring
 // set it to keep those subcommands side-effect-free; the dedicated tests below
 // unset it and mock `./daemon/ensureDaemonRunning.js` instead.
 //
-// `ensureDaemon()` also fires `maybeTriggerAutoUpdate()` (plan.md §16 "4.3
 // Distribution & self-host") right alongside it — left unchecked, that would
 // spawn a real detached `kvy update` child (and, past the rate-limit
 // check, a real network call) during every test run here too.
@@ -393,7 +391,6 @@ describe("main()", () => {
     });
 
     /**
-     * AX-1.1: `ensureLoggedIn` now gates EVERY provider, not just claude, and it
      * runs ahead of `ensureDaemon()` — so a test about daemon wiring has to get
      * past auth first. Stubbing it keeps these tests about what they say they're
      * about; the real not-logged-in path is covered separately above.
@@ -486,7 +483,6 @@ describe("main()", () => {
     });
 
     it("exits 1 and never describes the start when ensureDaemonRunning fails to bring up the daemon", async () => {
-      // Auth runs before the daemon for every provider now (AX-1.1), so this has to
       // get past it to exercise the daemon-failure path it's actually about.
       delete process.env.KVY_NO_SERVICE;
       mockSignedIn();
@@ -540,7 +536,6 @@ describe("main()", () => {
       vi.doUnmock("./auth/login.js");
     });
 
-    /** Same rationale as the daemon-wiring block's own helper — see AX-1.1 there. */
     function mockSignedIn(): void {
       vi.doMock("./auth/login.js", () => ({
         ensureLoggedIn: vi.fn(async () => ({ ok: true })),

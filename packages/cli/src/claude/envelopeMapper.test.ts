@@ -493,7 +493,6 @@ describe("mapClaudeToEnvelopes — tool call lifecycle", () => {
   });
 });
 
-/** plan-v2.md W3.3 — PTY-path parity: the same static `RISK_BY_KIND`-style
  * map ACP's `acpToEnvelope.ts` uses, ported to Claude Code's raw tool names. */
 describe("mapClaudeToEnvelopes — static tool risk map", () => {
   function toolStart(name: string, callId: string): RawJSONLines {
@@ -534,8 +533,7 @@ describe("mapClaudeToEnvelopes — static tool risk map", () => {
   });
 });
 
-/** plan-v2.md W3.2 — image blocks -> wire `file` envelopes (inline, ≤256KB)
- * or a `service` fallback note when the payload is too large. */
+/** Image blocks -> wire `file` envelopes (inline, ≤256KB) or a `service` fallback when the payload is too large. */
 describe("mapClaudeToEnvelopes — image blocks", () => {
   it("maps a small image tool_result nested content block to an inline file envelope after its tool-end", () => {
     const state = createClaudeEnvelopeMapperState();
@@ -1031,7 +1029,7 @@ describe("golden fixtures — real Claude Code transcripts", () => {
     // the leading `{"type":"summary",...}` line must never surface as an
     // envelope: 2 user texts, 2 turn-starts, 1 turn-end, 1 assistant text,
     // 1 tool-start, 1 tool-end, 3 usage envelopes (one per real assistant
-    // record in this fixture, each carrying a `message.usage`, W4.6) —
+    // record in this fixture, each carrying a `message.usage`) —
     // nothing extra leaked through for the summary line itself.
     expect(envelopes).toHaveLength(12);
     expect(envelopes.filter((e) => e.ev.t === "usage")).toHaveLength(3);

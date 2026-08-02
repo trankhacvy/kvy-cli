@@ -4,7 +4,6 @@
  * Drizzle JSON typing, `web` for the reducer.
  *
  * Wire contracts only. Additive-only forever — the server can never migrate
- * ciphertext (kvy-system-design.md §5.3). A field is never removed or
  * retyped, only added; deprecation means ignore-on-read. This is enforced
  * by the schema-shape compat test in `src/__tests__/`.
  */

@@ -1,30 +1,3 @@
-/**
- * Daemon-side core for the `adopt.mirror` machine RPC (design §4.4 "payload
- * size rule" / §8 "Read-only mirror on demand", plan.md §16 "3.3 Session
- * adoption (UC9)"): serves an unmanaged session's transcript on demand,
- * chunked so no single RPC round-trip exceeds the 64 KB control-plane cap,
- * rather than uploading whole histories eagerly (design: "bandwidth +
- * privacy frugality").
- *
- * Chunking cuts on line boundaries, never mid-line: a raw byte-offset cut
- * could split a multi-byte UTF-8 character (or a JSON line) in half,
- * corrupting the decoded chunk. `nextCursor` is always a byte offset that
- * starts a new line — a caller pages through by re-requesting with
- * `cursor: nextCursor` until `done`.
- *
- * `blobRef` (see `AdoptMirrorResultSchema`) is the blob-storage fallback for
- * very large transcripts (plan.md §16 "4.3 Distribution & self-host"): on
- * the *first* page of a mirror (`params.cursor === undefined`) only, when
- * the transcript doesn't fit in one chunk, this handler also encrypts+
- * uploads the whole file via `deps.uploadBlob` (best-effort — never throws,
- * see `blobClient.ts`) and includes the resulting `blobId` alongside that
- * first chunk. The chunked path itself is unconditional and correct on its
- * own (this is still "an efficiency improvement," not a correctness fix) —
- * a caller with `deps.uploadBlob` unwired, or an upload that fails, just
- * keeps paging chunk-by-chunk exactly as before this subsystem existed.
- * Only uploaded once per mirror session (not re-uploaded on every
- * subsequent `cursor` page) since the file doesn't change mid-mirror.
- */
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { AdoptMirrorParams, AdoptMirrorResult } from "@kvy/wire";

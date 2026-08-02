@@ -7,22 +7,10 @@ import { getToken } from "@/lib/session";
 import { apiSocket, createSyncEngine, syncQueryKey } from "@/sync";
 
 /**
- * Keeps the `['sync']` account snapshot populated + live (design §4.3/§9.1)
- * and wires the sync engine to `apiSocket` for the lifetime of the calling
- * component — the shared call site that actually connects the pair
- * `sync/index.ts`'s own docstring describes:
- *
- *   const engine = createSyncEngine(queryClient, apiSocket);
- *
- * Extracted out of `features/session-control/use-session-crypto.ts` (its
- * original, single call site) once `features/session-list`'s live data
- * source (`live-source.ts`) needed the same account snapshot — both features
- * read the same `['sync']` cache, so there should only ever be one place
- * that owns fetching + engine wiring for it. Safe to mount from more than
- * one component at a time: `apiSocket.connect` is an idempotent no-op for an
- * already-connected token, and each extra `createSyncEngine` instance just
- * redundantly observes the same `QueryClient` cache, per that module's own
- * gap-invalidation design.
+ * Keeps the `['sync']` account snapshot populated and wires the sync engine to
+ * `apiSocket` for the calling component's lifetime. Safe to mount from multiple
+ * components: `apiSocket.connect` is idempotent, and each extra `createSyncEngine`
+ * instance just observes the same `QueryClient` cache redundantly.
  */
 export function useSyncSnapshotQuery() {
   const queryClient = useQueryClient();

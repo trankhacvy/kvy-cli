@@ -3,25 +3,10 @@ import type { AdoptTakeParams, AdoptTakeResult, EncryptedBox } from "@kvy/wire";
 import { describe, expect, it, vi } from "vitest";
 import { type MachineRpcDeps, registerMachineRpcHandlers } from "./machineRpc.js";
 
-// Double-takeover race (plan.md §16 "4.4 Hardening & release gate": "double-takeover
-// race — two clients calling `adopt.take` concurrently"): verifies the idempotency-key
-// replay / atomic-resolve guarantees this module already documents for `spawn` and
-// `perm.answer` (`claude/permissionHandler.ts`'s atomic first-wins `resolve()`) also
-// hold for `adopt.take`, under genuine concurrency — not just sequential retry-after-
-// the-fact, which `machineRpc.test.ts`'s "replays the cached result for a retried
-// idempotencyKey" tests already cover.
-//
-// "Two clients" concretely means two different devices, each minting its own
-// `idempotencyKey`, both hitting take-over on the same unmanaged session at once — the
-// idempotency-key cache alone (keyed on the *request*) never sees those as the same
-// call, so `withProviderSessionGuard` (keyed on the *target*, `providerSessionId`) is
-// what has to hold here (design FR-9.4: "never two live continuations of the same
-// history").
-//
-// Uses the same `FakeSocket` harness as `machineRpc.test.ts` (no real transport needed —
-// the race lives entirely in this module's synchronous cache-check-then-set logic) plus
-// a manually-resolvable "deferred" `adoptTake` so both concurrent calls are provably
-// still in flight before either is allowed to settle.
+// Double-takeover race: verifies that two concurrent `adopt.take` calls for the
+// same `providerSessionId` — with different `idempotencyKey`s — join the same
+// in-flight attempt via `withProviderSessionGuard` rather than racing two
+// independent kill+spawn operations.
 
 class FakeSocket {
   handlers = new Map<string, ((...args: unknown[]) => void)[]>();

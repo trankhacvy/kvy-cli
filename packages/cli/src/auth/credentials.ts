@@ -1,33 +1,3 @@
-/**
- * `~/.kvy/access.key` persistence (kvy-plan.md §2.1: "`access.key`:
- * `{token, masterSecretOrContentBundle}` base64 JSON, chmod 600"). Port of Happy's
- * `persistence.ts` credential read/write, adapted to Kvy's single
- * always-present masterSecret shape — Kvy has no legacy/dataKey split to
- * carry forward, so unlike Happy's `Credentials` union this is one flat shape.
- *
- * issue-4-plan.md §6.5/§6.6: the bare 1h `token` field is replaced by a persistent
- * `refreshToken` — the whole point of the reissue is that a stored *access* token goes
- * stale in an hour (or 15m post-Phase-6) with no way back; a refresh token is what lets
- * `auth/tokenProvider.ts` mint fresh access tokens indefinitely (up to its own 60-day
- * absolute lifetime, §4.6) without another `kvy auth login`.
- *
- * §6.1/§6.5: the master secret (or reduced-custody content bundle) is never stored
- * raw anymore — `keyMaterial` is a discriminated union over HOW it's wrapped at rest:
- *
- *   - `"pin"` — `@kvy/crypto`'s `wrapWithPin` (argon2id + AES-256-GCM), for an
- *     interactive foreground login (`kvy auth login` run at a real terminal,
- *     `auth/pin.ts`'s prompt). Unwrapping needs the user to type their PIN — never
- *     usable by an unattended daemon process.
- *   - `"device"` — `auth/deviceKey.ts`'s OS-Keychain-backed AES-256-GCM wrap. The
- *     daemon's default: unwrapping needs no human present, at the cost of the
- *     documented "delivers little at-rest benefit on daemon boxes" caveat (§6.5) — a
- *     compromise of this same machine/user account can usually reach the Keychain
- *     too. Also the fallback for a non-interactive `kvy auth login` (no TTY).
- *   - `"plaintext-fallback"` — no wrapping at all; same at-rest custody this file had
- *     before this pass. Kept as an explicit, named mode (never silently substituted
- *     for a failed wrap) so a caller that hits it can log/report exactly what
- *     happened, rather than this module quietly downgrading security.
- */
 import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import type { PinWrapped } from "@kvy/crypto";
@@ -51,8 +21,6 @@ const DeviceWrappedSchema = z.object({
 const KeyMaterialSchema = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("pin"), wrapped: PinWrappedSchema }),
   z.object({ mode: z.literal("device"), wrapped: DeviceWrappedSchema }),
-  // base64-encoded masterSecret (or a content-key bundle for machines paired with
-  // reduced custody — plan.md §2.1's "masterSecretOrContentBundle"), stored as-is.
   z.object({ mode: z.literal("plaintext-fallback"), bundle: z.string().min(1) }),
 ]);
 
@@ -74,9 +42,9 @@ export function credentialsPath(homeDir: string = resolveHomeDir()): string {
 }
 
 /**
- * Reads and validates `~/.kvy/access.key`. Never throws (design principle #1) — a
- * missing, unreadable, or malformed file is just "not logged in", not an exceptional
- * condition callers need to catch.
+ * Reads and validates `~/.kvy/access.key`. Never throws — a missing, unreadable, or
+ * malformed file is just "not logged in", not an exceptional condition callers need to
+ * catch.
  */
 export function readCredentials(homeDir: string = resolveHomeDir()): KvyCredentials | null {
   const file = credentialsPath(homeDir);
@@ -89,7 +57,7 @@ export function readCredentials(homeDir: string = resolveHomeDir()): KvyCredenti
   }
 }
 
-/** Writes `~/.kvy/access.key`, chmod 0600 (kvy-plan.md §2.1). */
+/** Writes `~/.kvy/access.key`, chmod 0600. */
 export function writeCredentials(
   credentials: KvyCredentials,
   homeDir: string = resolveHomeDir(),
@@ -109,5 +77,4 @@ export function clearCredentials(homeDir: string = resolveHomeDir()): void {
   if (existsSync(file)) unlinkSync(file);
 }
 
-/** `PinWrapped`'s shape, re-exported for callers that only import from here. */
 export type { PinWrapped };

@@ -1,17 +1,9 @@
 /**
- * Directory browsing/creation for the daemon's `fs.list`/`fs.mkdir` machine
- * RPCs (kvy-prd.md FR-7.5 "workspace/directory picker (daemon-
- * provided)"; plan.md §16 "3.1 Remote spawn"). Backs the web New Session
- * flow's directory picker and its 409-equivalent create-directory approval
- * loop (`spawnEngine.ts`'s `requiresApproval` result).
+ * `fs.list`/`fs.mkdir` machine RPC handlers: directory browsing/creation.
  *
- * Deliberately NOT scoped to a registered workspace root the way
- * `workspacePath.ts`'s `validateSpawnWorkspace` is — that's exactly the
- * point of a directory picker: the user is choosing which directory
- * *becomes* a workspace. `spawn`'s own workspace-path validation remains
- * the real "no arbitrary-directory execution" boundary (design §12); this
- * module only lets the caller see and create directories, never launches
- * anything in them.
+ * Deliberately NOT scoped to a registered workspace root — the user is
+ * choosing which directory *becomes* a workspace. This module only lets the
+ * caller see and create directories, never launches anything in them.
  */
 import { mkdir, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";

@@ -16,7 +16,6 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  *
  * The standalone pending permission `reqId: "req-1"` always resolves as
  * "answered on another device" here — a deliberate demo showcase of design
- * §7.6's first-wins-across-devices case, which is otherwise a rare race to
  * hit by hand. Every other `reqId` "wins" normally.
  */
 export function createMockSessionControl(_sessionId: string): SessionControlActions {

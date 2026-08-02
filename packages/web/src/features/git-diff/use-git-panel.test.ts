@@ -244,7 +244,7 @@ describe("useGitPanel", () => {
   });
 });
 
-describe("translateInitRepoError (§1.7 rollout note)", () => {
+describe("translateInitRepoError", () => {
   it("translates a literal 'unknown-method' into a version-skew hint", () => {
     expect(translateInitRepoError("unknown-method")).toMatch(/older version of Kvy/i);
   });

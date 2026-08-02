@@ -5,13 +5,11 @@ import { describe, expect, it } from "vitest";
 
 /**
  * `Providers` wraps every route, public and authenticated alike — see
- * `(protected)/layout.test.ts` for where `OfflineBanner` actually lives now.
+ * `(protected)/layout.test.ts` for where `OfflineBanner` actually lives.
  * Source-text assertion (same technique as `signin/page.test.ts`) rather
- * than a render test: this is just confirming the banner was NOT left wired
- * here too, which would silently reintroduce known-issues.md "OfflineBanner
- * shows a misleading 'Reconnecting…' on pages with no connection to
- * reconnect" (it used to live here, unconditionally wrapping public routes
- * where `apiSocket.connect()` is never called).
+ * than a render test: confirming the banner is NOT wired here, which would
+ * cause it to show 'Reconnecting…' on public routes where
+ * `apiSocket.connect()` is never called.
  */
 const providersSource = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./providers.tsx"),

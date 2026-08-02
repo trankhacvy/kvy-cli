@@ -1,16 +1,10 @@
 /**
- * The ordered outgoing envelope queue (plan.md §16 "2.1 Remote mode":
- * "ordered outgoing queue (delayed tool-start release)"; design §7.4:
  * "SDK stream → `SDKToEnvelope` converter → ordered outgoing queue (strict
  * incremental order; tool-start release may be delayed until stable)").
  *
- * Ported (adapted) from Happy's `OutgoingMessageQueue`
- * (happy-cli/src/claude/utils/OutgoingMessageQueue.ts, MIT): strict
  * incremental-id ordering, with `tool-start` envelopes held back briefly so
  * a same-turn `tool-end` can catch up and release them together instead of
  * flashing a "running" card that a slow client barely has time to render.
- * Two mechanical deltas from Happy's version, both because this queue moves
- * typed `SessionEnvelope`s (design §4.2) rather than opaque `logMessage: any`:
  *
  *  - The "what to delay" and "what releases it" decisions are derived
  *    directly from the envelope's own `ev.t`/`ev.call` fields instead of a
@@ -18,7 +12,6 @@
  *    is delayed by construction, keyed by its own `call` id, and any
  *    `tool-end` sharing that `call` id releases it immediately.
  *  - No `AsyncLock` — a single-threaded Node event loop never actually
- *    interleaves `push()`/`drain()` calls the way Happy's comment implies;
  *    `queueMicrotask` batching (rather than `setTimeout(…, 0)`) is enough to
  *    coalesce a burst of synchronous `push()` calls into one drain pass.
  */

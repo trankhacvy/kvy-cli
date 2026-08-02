@@ -1,5 +1,4 @@
 /**
- * Driver selection (kvy-system-design.md §6.5: "self-host … blobs fall
  * back to local disk when unset"). `env.S3_BUCKET` set ⇒ S3-compatible
  * driver (real AWS S3/R2 in prod, MinIO in self-host); unset ⇒ local-disk
  * driver. `config.ts`'s own refine already guarantees a set `S3_BUCKET`

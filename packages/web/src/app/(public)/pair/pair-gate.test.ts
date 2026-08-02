@@ -1,11 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { type Gate, nextGate, type PairDetails, resolvePairGate } from "./pair-gate";
 
-// known-issues.md #14 / require-auth.tsx's `ensureSession`: `resolvePairGate`
-// is the pairing page's gating decision pulled out of its effect so it's
-// testable without mounting React/next/navigation (this package has no DOM
-// test environment — see `require-auth.test.ts`'s `shouldRedirectToSignin`
-// for the same technique).
 describe("resolvePairGate", () => {
   it("bounces to signin immediately when there's no local identity, without attempting a refresh", async () => {
     let silentRefreshCalled = false;
@@ -67,11 +62,6 @@ describe("resolvePairGate", () => {
   });
 });
 
-// auth-ux-overhaul-fix-plan.md Fix 10: the crypto-readiness effect only ever demoted
-// `confirm` -> `needs-keys`, with no inverse — a user who fetched their keys via
-// `RequestKeysPanel` was left stranded on the screen they'd just finished. `nextGate` is
-// the reversible version, extracted to a pure function so both transitions are testable
-// without mounting React (this package has no DOM test environment).
 describe("nextGate", () => {
   const details: PairDetails = { label: "MacBook", cwd: "/work/repo", requestedAt: "iso" };
 

@@ -14,14 +14,11 @@ const DeleteResponseSchema = z.object({});
 
 /**
  * `POST /v1/sessions/:id/archive` + `DELETE /v1/sessions/:id`
- * (kvy-system-design.md §6.2/§6.1's `sessions.status = 'archived'` note,
- * plan-v2.md W4.2 "Archive/delete: server routes exist … wire buttons" —
  * that line assumed these routes already existed; they didn't yet, so this
  * is where they land). Both wire shapes (`session-update{status:"archived"}`,
  * `session-delete`) were already defined on `UpdateBodySchema` — no wire
  * change needed here, just the first two callers.
  *
- * Neither route has a CLI-side reaction (design §6.1 note ported into the
  * plan: "an archived live session keeps running" — W2.3's `stop` RPC is the
  * "end it" path for that). Archive is a plain, idempotent status transition
  * mirroring `sessionStatus.ts`'s "failed" route's own shape (no CAS —

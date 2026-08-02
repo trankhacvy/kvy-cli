@@ -2,7 +2,6 @@
  * Zod schema for the JSONL lines Claude Code writes to its transcript files
  * (`~/.claude/projects/<project>/<sessionId>.jsonl`).
  *
- * Ported from happy-cli/src/claude/types.ts (MIT). Trimmed to only the
  * fields the scanner actually reads (message identity for dedup keys) —
  * everything else passes through untouched via `.passthrough()` so we never
  * reject a line just because Claude Code added a field we don't know about.

@@ -1,6 +1,5 @@
 /**
  * Shared "which paths are untracked" logic for `gitStatus.ts`/`gitDiff.ts`
- * (kvy-prd.md FR-7.7). An untracked file is invisible to `git diff`
  * regardless of what ref it's compared against — verified against the real
  * binary: `git diff <any-ref>` never lists it, staged or not, because
  * `git diff` only ever considers paths that are tracked on at least one

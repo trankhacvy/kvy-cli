@@ -23,7 +23,6 @@ function toolItem(name: string): ToolItem {
   };
 }
 
-/** `ToolCard`'s dispatch (plan-v2.md W2.1's "read-only ToolCard + registry"
  * sub-task) — calling it directly returns the `React.createElement(...)`
  * result, a plain object carrying `.type`, so the dispatch is verifiable
  * without a DOM/render environment (this package has neither). */

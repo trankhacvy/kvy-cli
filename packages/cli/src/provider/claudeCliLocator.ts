@@ -14,8 +14,6 @@ import path from "node:path";
 
 /**
  * Locates the globally-installed Claude Code CLI across every install method
- * it ships with, and resolves its version. Ported from Happy's
- * `claude_version_utils.cjs` (plan.md §16, "1.3 CLI skeleton + local mode" —
  * "`claude_version_utils.cjs` equivalent: resolve global Claude CLI path
  * across install methods (P)").
  *
@@ -24,7 +22,6 @@ import path from "node:path";
  *  - `runClaudeCli`/`getClaudeCliPath` (which spawn the CLI and print
  *    install instructions to the terminal) are intentionally omitted here —
  *    that belongs to the local-mode launcher (a separate, not-yet-built
- *    plan.md task), not the locator. This module only *finds* the CLI; it
  *    never runs it or writes to stdout/stderr (see `logger.ts`'s
  *    file-only-logging rule, which the same reasoning extends to here).
  *  - The `/goal` Stop-hook JSON-validation version warning is Happy-specific

@@ -1,29 +1,18 @@
 /**
- * The HTTP outbox: coalesce transcript envelopes into batches, seal each
- * batch into one `EncryptedBox`, and POST it to `/v1/sessions/:id/messages`
- * (plan.md §6.5, design §4.3/§11, ⚠ DELTA D1 — new code, no Happy
- * equivalent since Happy ships this over a WS `message` emit instead).
- *
- * Two thresholds decide when a buffered batch of envelopes gets sealed and
+ * Coalesces transcript envelopes into batches, seals each batch, and POSTs it
+ * to the server. Two thresholds decide when a buffered batch gets sealed and
  * queued, whichever comes first:
  *   - `maxBatchSize` envelopes have accumulated (default 20), or
- *   - `flushMs` have elapsed since the first envelope in the batch (default 150ms —
- *     plan.md W4.1: lowered from 300ms for perceived-latency polish, since real
- *     token streaming is CLI-shaped-out; see docs/protocol.md §2).
+ *   - `flushMs` have elapsed since the first envelope in the batch (default 150ms)
  *
- * Once sealed, a batch is appended to a disk-backed queue (10MB cap, oldest
- * evicted first — see `queue.ts`) *before* the network call is attempted, so
- * a batch that's been accepted into the outbox survives a CLI crash or
- * restart even if it was never POSTed. A per-session `Outbox` replays
- * whatever the disk queue holds on construction, so a crash mid-retry picks
- * back up exactly where it left off.
+ * Once sealed, a batch is appended to a disk-backed queue before the network
+ * call is attempted, so a batch survives a CLI crash or restart. A per-session
+ * `Outbox` replays whatever the disk queue holds on construction.
  *
- * Sending is a strict FIFO drain of the disk queue: one batch in flight at a
- * time, retried with backoff *forever* on any non-2xx response or network
- * error ("blind retry until 2xx") — never given up on, because the batch's
- * cuid2 `localId` makes the server-side POST idempotent (a duplicate retry
- * after a successful-but-unacked request just replays the same `seq`). Only
- * a 2xx response dequeues the batch.
+ * Sending is a strict FIFO drain: one batch in flight at a time, retried with
+ * backoff forever on any non-2xx response or network error — the batch's cuid2
+ * `localId` makes the server-side POST idempotent (a duplicate retry after a
+ * successful-but-unacked request just replays the same seq).
  */
 import { seal } from "@kvy/crypto";
 import type { SessionEnvelope } from "@kvy/wire";
@@ -40,7 +29,6 @@ import {
   type QueuedBatch,
 } from "./queue.js";
 
-/** plan.md §6.5/W4.1: "flush ≤150ms/≤20 into one outbox entry" (lowered from 300ms). */
 export const DEFAULT_FLUSH_MS = 150;
 export const DEFAULT_MAX_BATCH_SIZE = 20;
 
@@ -52,11 +40,11 @@ export interface OutboxOptions {
   /** `~/.kvy` (or `KVY_HOME_DIR`) — the disk queue lives under `<homeDir>/outbox/`. */
   homeDir: string;
   logger: Logger;
-  /** Coalescing time threshold in ms. Default 150 (plan.md §6.5/W4.1). */
+  /** Coalescing time threshold in ms. Default 150. */
   flushMs?: number;
-  /** Coalescing count threshold. Default 20 (plan.md §6.5). */
+  /** Coalescing count threshold. Default 20. */
   maxBatchSize?: number;
-  /** Disk queue cap in bytes. Default 10MB (design §11). */
+  /** Disk queue cap in bytes. Default 10MB. */
   maxQueueBytes?: number;
   /** Delay before retry attempt `n` (1-indexed). Default: exponential 1s, capped at 30s. */
   backoffMs?: (attempt: number) => number;

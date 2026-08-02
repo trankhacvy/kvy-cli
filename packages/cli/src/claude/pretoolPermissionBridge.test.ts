@@ -43,7 +43,7 @@ function permissionModeEvents(emitted: SessionEnvelope[]) {
   return emitted.filter((e) => e.ev.t === "permission-mode");
 }
 
-describe("PreToolPermissionBridge — handlePreToolUse (W1.1: always defers)", () => {
+describe("PreToolPermissionBridge — handlePreToolUse (always defers)", () => {
   it("always returns `ask` and emits nothing, regardless of web-turn state", async () => {
     for (const isWebTurnActive of [() => true, () => false]) {
       const { bridge, emitted } = makeBridge({ isWebTurnActive });
@@ -60,7 +60,7 @@ describe("PreToolPermissionBridge — handlePreToolUse (W1.1: always defers)", (
   });
 });
 
-describe("PreToolPermissionBridge — onPromptLikely (W1.3)", () => {
+describe("PreToolPermissionBridge — onPromptLikely", () => {
   it("fires onPromptLikely from handlePreToolUse on a local turn, not a web turn", async () => {
     const onPromptLikely = vi.fn();
     const local = makeBridge({ isWebTurnActive: () => false, onPromptLikely });
@@ -84,7 +84,7 @@ describe("PreToolPermissionBridge — onPromptLikely (W1.3)", () => {
   });
 });
 
-describe("PreToolPermissionBridge — onPendingAttention (docs/user-flows.md fix-plan task 4)", () => {
+describe("PreToolPermissionBridge — onPendingAttention", () => {
   it("fires 'perm' from handlePermissionRequest on both a local AND a web turn", async () => {
     const onPendingAttention = vi.fn();
     const local = makeBridge({ isWebTurnActive: () => false, onPendingAttention });
@@ -116,18 +116,15 @@ describe("PreToolPermissionBridge — onPendingAttention (docs/user-flows.md fix
     expect(onPendingAttention).not.toHaveBeenCalled();
   });
 
-  // docs/plan-flows-3-4-5.md FL5.1 "notify-callsite-guard": the assertions
-  // above only prove `onPendingAttention` is called *eventually* — they
-  // `await` the handler's returned promise first, so they'd pass just as
-  // well if the call site were moved to fire only once the decision
-  // resolves. These two tests instead assert the call already happened
-  // BEFORE the decision is ever made — i.e. before `bridge.resolve()` is
-  // called at all — which is the actual property `bridge:651-652`/`:588-589`
-  // exist for (push arrives before the tool runs, not merely "at some
-  // point"). Deleting or commenting out either call site fails the first
-  // expectation in its test (zero calls where one is expected); moving the
-  // call into `settle`/after the decision resolves also fails it, since at
-  // that point in the test no decision has been supplied yet.
+  // The next two tests assert the call happened BEFORE the decision
+  // resolves — not just "at some point". The tests above `await` the
+  // handler's returned promise first, so they'd pass even if the call site
+  // were moved to fire only after resolution. These tests instead check
+  // that `onPendingAttention` has already been called when no decision has
+  // been supplied yet, which is the actual push-arrives-before-tool-runs
+  // guarantee. Deleting the call site at `bridge.ts:651-652`/`:588-589`
+  // or moving it into the settle path makes the first expectation fail
+  // (zero calls where one is expected).
   it("invokes onPendingAttention('perm') from handlePermissionRequest before the decision resolves (guards bridge.ts:651-652)", async () => {
     const onPendingAttention = vi.fn();
     const { bridge, emitted } = makeBridge({ onPendingAttention });
@@ -164,7 +161,7 @@ describe("PreToolPermissionBridge — onPendingAttention (docs/user-flows.md fix
 });
 
 describe("PreToolPermissionBridge — handlePermissionRequest — local vs web policy", () => {
-  it("returns undefined immediately for a local turn (docs/known-issues.md #5: but still emits a live perm-request for web)", async () => {
+  it("returns undefined immediately for a local turn (but still emits a live perm-request for web)", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
     const output = await bridge.handlePermissionRequest({
       tool_name: "Bash",
@@ -175,7 +172,7 @@ describe("PreToolPermissionBridge — handlePermissionRequest — local vs web p
     // the terminal's own TUI dialog.
     expect(output).toBeUndefined();
 
-    // But web must now see a live, actionable card too (issue #5's core fix)
+    // But web must also see a live, actionable card
     // instead of a bare "Running" card with no buttons.
     const requests = permRequests(emitted);
     expect(requests).toHaveLength(1);
@@ -483,7 +480,7 @@ describe("PreToolPermissionBridge — handlePermissionRequest — web turn", () 
     expect(ev.modes).toEqual(["default", "acceptEdits", "bypassPermissions"]);
   });
 
-  it("a locally-typed ExitPlanMode (plan approve/reject) inherits the same live-visibility + local-resolution fix — nothing special-cased for it (docs/known-issues.md #5)", async () => {
+  it("a locally-typed ExitPlanMode (plan approve/reject) gets the same live-visibility + local-resolution behavior — nothing special-cased for it", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
     const output = await bridge.handlePermissionRequest({
       tool_name: "ExitPlanMode",
@@ -507,7 +504,7 @@ describe("PreToolPermissionBridge — handlePermissionRequest — web turn", () 
     expect(bridge.pendingCount).toBe(0);
   });
 
-  it("does NOT double-track AskUserQuestion — Claude Code fires PermissionRequest as a normal follow-up to PreToolUse's local `ask`, and this must be a no-op, not a second reqId (docs/known-issues.md #5 regression, found verifying track B live)", async () => {
+  it("does NOT double-track AskUserQuestion — Claude Code fires PermissionRequest as a normal follow-up to PreToolUse's local `ask`, and this must be a no-op, not a second reqId", async () => {
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false });
 
     // The real sequence for a locally-typed AskUserQuestion: PreToolUse fires
@@ -853,8 +850,8 @@ describe("composeAskAnswerReason", () => {
   });
 });
 
-describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion special case (W2.1)", () => {
-  it("local turn: defers with `ask` pointing at the terminal widget (docs/known-issues.md #5: but still emits a live perm-request for web)", async () => {
+describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion special case", () => {
+  it("local turn: defers with `ask` pointing at the terminal widget (but still emits a live perm-request for web)", async () => {
     const onPromptLikely = vi.fn();
     const { bridge, emitted } = makeBridge({ isWebTurnActive: () => false, onPromptLikely });
 
@@ -869,7 +866,7 @@ describe("PreToolPermissionBridge — handlePreToolUse — AskUserQuestion speci
     expect(out.hookSpecificOutput.permissionDecisionReason).toContain("terminal");
     expect(onPromptLikely).toHaveBeenCalledOnce();
 
-    // But web must now see the pending question too (issue #5's core fix).
+    // But web must also see the pending question.
     const requests = permRequests(emitted);
     expect(requests).toHaveLength(1);
     const ev = requests[0]?.ev as Extract<SessionEnvelope["ev"], { t: "perm-request" }>;
@@ -1108,7 +1105,6 @@ describe("PreToolPermissionBridge — initialPermissionMode seed (docs/bug-fix-p
   });
 });
 
-describe("PreToolPermissionBridge — emits permission-mode on a genuine transition (docs/bug-fix-plan.md §5)", () => {
   it("does not emit on the very first observed mode (announcing a baseline, not a change)", async () => {
     const { bridge, emitted } = makeBridge();
     await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });

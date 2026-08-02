@@ -1,18 +1,9 @@
 /**
- * Pure byte-cursor paging logic for the file viewer's "Load more" affordance
- * (Feature 3 Phase 5, docs/web-ux-improvements-plan.md) — no React, no RPC,
- * same split as `push-readiness.ts`/`git-diff-query.ts`. `use-repo-files.ts`
- * calls `actions.fetchFileContent(worktree, path, range)` with
- * `range.start` set to the previous page's `loadedBytes` and appends the
- * result through `appendPage`.
- *
  * `fsRead.ts`'s daemon handler appends a human-readable
  * `"\n\n… (file truncated at N bytes)\n"` marker into the FIRST (no-range)
- * truncated response's own text — real content that would otherwise become
- * the last two "lines" of the file and inflate the line count once a proper
- * paging UI exists. `stripTruncationMarker` removes it client-side rather
- * than changing the daemon's wire behavior, which older web clients still
- * rely on as their only truncation signal.
+ * truncated response's own text. `stripTruncationMarker` removes it
+ * client-side rather than changing the daemon's wire behavior, which older
+ * web clients still rely on as their only truncation signal.
  */
 
 const TRUNCATION_MARKER_RE = /\n\n… \(file truncated at \d+ bytes\)\n$/;

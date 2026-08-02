@@ -14,7 +14,6 @@ import type { RawJSONLines } from "./types.js";
 /** Lets pending microtasks (the async `run()` setup) settle. */
 const tick = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
-// auth-ux-overhaul-fix-plan.md Fix 7: the regression that matters here is someone later
 // "improving" this into a visible screen write — OSC 9 is a non-rendering control sequence
 // specifically because the provider TUI owns the framebuffer while a session runs.
 describe("notifyTerminal", () => {

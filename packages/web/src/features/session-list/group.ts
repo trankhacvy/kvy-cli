@@ -1,7 +1,6 @@
 import type { SessionListSession, SessionListSnapshot, SessionListWorkspace } from "./types";
 import { parentWorktreePath } from "./worktree-path";
 
-/** One workspace's sessions, newest activity first (design §9.2 "Home" row:
  * "`SessionList` grouped by workspace"). */
 export interface WorkspaceGroup {
   workspace: SessionListWorkspace;

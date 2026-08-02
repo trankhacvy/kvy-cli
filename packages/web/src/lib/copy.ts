@@ -1,9 +1,3 @@
-/**
- * User-facing auth copy for the web app (docs/auth-ux-overhaul-plan.md Phase 0).
- * One file so the wording stays consistent across /signin, /pair, /reset-keys,
- * onboarding and the devices list — and so `__tests__/copy.test.ts` can assert
- * the no-jargon rules over every string at once.
- */
 
 export const copy = {
   signin: {
@@ -23,8 +17,7 @@ export const copy = {
     oauthUnavailable:
       "Google and GitHub sign-in aren't set up on this server yet. Use email to continue.",
     emailCta: "Continue with email",
-    /** Honesty rule (auth-ux-overhaul-plan.md principle 7): the password routes 404 in
-     *  production (`requireNonProduction`), so the button says where it works. */
+    /** The password routes 404 in production, so the button says where it works. */
     emailHint: "Email sign-in is only available on local setups.",
     /** The sign-up affordance: nothing else on the page tells a newcomer that signing
      *  in also registers them. */
@@ -42,9 +35,8 @@ export const copy = {
       "Someone requested access using the Kvy CLI. Review the details below before approving.",
     approveWarning: "Only approve this if you just ran `kvy` yourself.",
     approveCta: "Approve",
-    /** Shown on the Approve button in place of `approveCta` while the crypto worker is
-     *  still booting — the button must never look clickable before `approve()` can do
-     *  anything (auth-ux-overhaul-fix-plan.md Fix 11). */
+    /** Shown on the Approve button while the crypto worker is still booting -
+     *  the button must never look clickable before `approve()` can do anything. */
     preparingCta: "Preparing…",
     cancelCta: "Cancel",
     /** Takes the resolved machine name (falls back to `unknownMachine`) so the transient
@@ -131,7 +123,7 @@ export const copy = {
     passwordCta: "Confirm with password",
     passwordSubmitCta: "Confirm",
     passwordError: "That password is incorrect.",
-    /** Honesty rule (same as copy.signin.emailHint): the password routes 404 in production. */
+    /** The password routes 404 in production. */
     passwordHint: "Only available on local setups.",
     rotating: "Rotating your keys…",
     rotatingErrorTitle: "Couldn't rotate your keys",

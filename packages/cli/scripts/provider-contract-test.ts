@@ -1,38 +1,4 @@
 #!/usr/bin/env node
-/**
- * Provider contract test (kvy-system-design.md §13 item 2, plan.md §16
- * "4.4 Hardening & release gate"): runs the actual, latest-installed Claude
- * Code CLI against a small fixture-prompt corpus and asserts three things
- * Kvy's code depends on but does not control:
- *
- *  1. **Transcript JSONL shape** — every non-internal line Claude Code
- *     writes to its `~/.claude/projects/<project>/<sessionId>.jsonl`
- *     transcript still matches `claude/types.ts`'s `RawJSONLinesSchema`,
- *     the schema `claude/scanner.ts` (the transcript tailer) depends on for
- *     its dedup-key derivation.
- *  2. **Hook event names/payloads** — `SessionStart` still fires with a
- *     `session_id` field, and `Stop` still fires once a turn completes;
- *     these are the two hooks `claude/hookServer.ts` wires up for
- *     local-mode session-id discovery and attention signalling.
- *  3. **`--resume` behavior** — resuming a session with `--resume <id>`
- *     still continues under the *same* provider session id, which is what
- *     `claude/claudeLocal.ts`'s resume handling assumes.
- *
- * This is a deliberately standalone script — not a vitest suite — because
- * it makes real network calls against a real, billed Claude Code CLI
- * invocation and must never run as part of the ordinary `pnpm test`
- * pipeline (every commit, every contributor's machine). It is invoked only
- * by `.github/workflows/provider-contract.yml`'s daily cron job, where the
- * CLI is guaranteed to be installed and authenticated. Run locally via
- * `pnpm --filter @vibe-oss/kvy run contract:provider` once `claude` is on PATH and
- * `ANTHROPIC_API_KEY` (or another supported auth method) is set.
- *
- * Any contract violation throws and `main()`'s `.catch` turns it into a
- * non-zero exit code with a descriptive message on stderr — the whole point
- * is to fail loudly. There is no soft-skip when `claude` is missing: this
- * script's only caller is a job that just installed it, so a missing binary
- * there is itself a real failure, not an expected environment gap.
- */
 
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";

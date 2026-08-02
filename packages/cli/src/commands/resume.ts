@@ -1,5 +1,4 @@
 /**
- * `kvy resume <session-id>` (kvy-prd.md §5.3, plan.md §16 "4.2
  * Adoption Tier 3 + polish"): reattach a terminal to an existing session,
  * local or daemon-managed.
  *

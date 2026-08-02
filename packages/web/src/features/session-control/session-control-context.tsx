@@ -23,7 +23,6 @@ interface SessionControlContextValue {
 const SessionControlContext = createContext<SessionControlContextValue | null>(null);
 
 /**
- * Makes `sessionId` + the session RPC actions (design §4.4: `message`,
  * `perm.answer`, `interrupt`, `takeControl`, `setMode`) available to every
  * `Composer`/`PermCard`/`ControlBar` under a session screen without
  * threading them through `Timeline` -> `TimelineRow` -> every `ToolCard` —

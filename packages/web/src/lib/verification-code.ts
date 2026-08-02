@@ -1,20 +1,15 @@
 /**
- * A 6-digit code derived from a requesting device's ephemeral public key, shown on BOTH
- * screens of a key-sharing handshake (docs/auth-ux-overhaul-plan.md §4.3).
+ * A 6-digit code derived from the requesting device's ephemeral public key, shown on both
+ * screens of a key-sharing handshake.
  *
- * This is the control that replaces pairing's implicit co-presence proof (a human
- * physically opening a URL the CLI printed). Without it, an attacker holding only a
- * stolen access token could raise a key request and phish the approve card.
+ * Defends against:
+ *  1. Phishing via a stolen access token - attacker can make the card appear but cannot
+ *     make their code match the victim's device.
+ *  2. A relay substituting its own ephemeral key - requester shows the code for the key it
+ *     generated, approver shows the code for the key the server delivered, so substitution
+ *     makes them differ.
  *
- * What it defends against:
- *  1. Phishing via a stolen access token — the attacker can make the card appear, but
- *     cannot make their code match what the victim's own device shows.
- *  2. A malicious or compromised relay substituting its own ephemeral key: the requester
- *     shows the code for the key IT generated, the approver shows the code for the key the
- *     server delivered, so substitution makes them differ.
- *
- * What it does NOT defend against: a user who approves without looking. Hence the approve
- * button is labelled "Codes match — send my keys" rather than "Approve".
+ * Does NOT defend against a user who approves without looking.
  */
 
 export async function verificationCode(ephPub: string): Promise<string> {

@@ -1,10 +1,3 @@
-/**
- * Thin fetch wrappers for the auth-related endpoints these pages need
- * (`packages/server/src/app/routes/oauth.ts`, `routes/auth.ts`, `api/pair.ts`
- * — all already merged to main). No client-side schema validation library is
- * pulled in for this: the shapes are small and fixed, and a malformed
- * response surfaces as a thrown `ApiError` either way.
- */
 import type {
   BlobRequestDownloadResult,
   BlobRequestUploadResult,
@@ -86,8 +79,7 @@ function sendJson<T>(
 }
 
 /** `POST /v1/auth/register` — OAuth sign-in/sign-up: finds-or-creates the account's
- * login identity for this provider. Key material (signPubKey/contentPubKey) is bound
- * separately afterward via `keysChallenge`/`keysBind` (§6.2), same as password sign-up. */
+ * login identity for this provider. Key material is bound separately via `keysChallenge`/`keysBind`. */
 export function register(body: {
   oauthProvider: "google" | "github";
   oauthProof: string;
@@ -103,7 +95,7 @@ export function exchangeGithubCode(body: {
   return postJson("/v1/auth/oauth/github/exchange", body);
 }
 
-/** `POST /v1/auth/password/register` — issue-4-plan.md §5.2: email+password sign-up. */
+/** `POST /v1/auth/password/register` — email+password sign-up. */
 export function passwordRegister(body: {
   email: string;
   password: string;
@@ -111,7 +103,7 @@ export function passwordRegister(body: {
   return postJson("/v1/auth/password/register", body);
 }
 
-/** `POST /v1/auth/password/login` — issue-4-plan.md §5.2: email+password sign-in. */
+/** `POST /v1/auth/password/login` — email+password sign-in. */
 export function passwordLogin(body: {
   email: string;
   password: string;
@@ -126,21 +118,18 @@ export function passwordLogin(body: {
 // old `refreshSession()` wrapper (POST /v1/auth/refresh from the main thread) is gone —
 // nothing here is authorized to hold the raw refresh token to call it with.
 
-/** `POST /v1/auth/keys/challenge` — issue-4-plan.md §6.2: mint a server nonce for `keys/bind`. */
+/** `POST /v1/auth/keys/challenge` — mint a server nonce for `keys/bind`. */
 export function keysChallenge(token: string): Promise<{ nonce: string }> {
   return postJson("/v1/auth/keys/challenge", undefined, token);
 }
 
-/** A step-up proof for `POST /v1/auth/keys/bind`'s explicit-rotation path
- * (issue-4-plan.md §6.2) — re-proves account ownership right before a rotation fences
- * out every other session. Password accounts re-enter their password; OAuth-only
- * accounts re-do the OAuth round trip. */
+/** A step-up proof for `POST /v1/auth/keys/bind`'s explicit-rotation path -
+ * re-proves account ownership right before a rotation fences out every other session. */
 export type StepUpProof =
   | { kind: "password"; password: string }
   | { kind: "oauth"; provider: "google" | "github"; oauthProof: string };
 
-/** `POST /v1/auth/keys/bind` — issue-4-plan.md §6.2: bind (first-bind) or, with
- * `rotate: true` + a `stepUpProof`, explicitly rotate this device's key material. */
+/** `POST /v1/auth/keys/bind` — bind (first-bind) or, with `rotate: true` + a `stepUpProof`, explicitly rotate this device's key material. */
 export function keysBind(
   token: string,
   body: {
@@ -155,9 +144,8 @@ export function keysBind(
   return postJson("/v1/auth/keys/bind", body, token);
 }
 
-/** `GET /v1/auth/sessions` — issue-4-plan.md §4.4: this account's active device sessions.
- * `email` (issue-6) is the account's best-effort captured email — from password
- * sign-up or a Google/GitHub identity — for display only, `null` if none is on file. */
+/** `GET /v1/auth/sessions` — this account's active device sessions. `email` is
+ * the account's best-effort captured email for display only, `null` if none is on file. */
 export function listDeviceSessions(token: string): Promise<{
   email: string | null;
   sessions: Array<{
@@ -174,21 +162,19 @@ export function listDeviceSessions(token: string): Promise<{
   return getJson("/v1/auth/sessions", token);
 }
 
-/** `POST /v1/auth/sessions/:id/revoke` — issue-4-plan.md §4.4. */
+/** `POST /v1/auth/sessions/:id/revoke`. */
 export function revokeSession(token: string, sessionId: string): Promise<{ success: true }> {
   return postJson(`/v1/auth/sessions/${sessionId}/revoke`, undefined, token);
 }
 
-/** `POST /v1/auth/sessions/revoke-others` — issue-4-plan.md §4.4: log out every other device. */
+/** `POST /v1/auth/sessions/revoke-others` — log out every other device. */
 export function revokeOtherSessions(token: string): Promise<{ success: true; revoked: number }> {
   return postJson("/v1/auth/sessions/revoke-others", undefined, token);
 }
 
-/** `POST /v1/auth/pair/mint` — issue-4-plan.md §6.3: mints the new device's session
- * server-side and hands its refresh token straight back to this (already
- * authenticated) browser, so the crypto worker can seal it alongside the master
- * secret BEFORE anything derived from it ever touches Postgres in plaintext. Must be
- * called before `approvePairing` below for the same `ephPub`. */
+/** `POST /v1/auth/pair/mint` — mints the new device's session server-side and hands
+ * its refresh token to this browser so the crypto worker can seal it before anything
+ * derived from it ever touches Postgres in plaintext. Must be called before `approvePairing`. */
 export function mintPairSession(token: string, ephPub: string): Promise<{ refreshToken: string }> {
   return postJson("/v1/auth/pair/mint", { ephPub }, token);
 }
@@ -256,7 +242,7 @@ export function claimKeyRequest(token: string, ephPub: string): Promise<ClaimKey
   return postJson("/v1/keys/request/claim", { ephPub }, token);
 }
 
-/** `POST /v1/push/subscribe` — register (or update) a push subscription (design §6.2, FR-7.6). */
+/** `POST /v1/push/subscribe` — register (or update) a push subscription. */
 export function subscribePush(token: string, body: PushSubscribeBody): Promise<{ id: string }> {
   return postJson("/v1/push/subscribe", body, token);
 }
@@ -266,7 +252,7 @@ export function unsubscribePush(token: string, endpoint: string): Promise<{ ok: 
   return sendJson("DELETE", "/v1/push/subscribe", { endpoint }, token);
 }
 
-/** `POST /v1/push/telegram/link` — mint a Telegram `/start` pairing deep link (FR-8.3). */
+/** `POST /v1/push/telegram/link` — mint a Telegram `/start` pairing deep link. */
 export function linkTelegram(token: string): Promise<{ code: string; deepLink: string }> {
   return postJson("/v1/push/telegram/link", undefined, token);
 }
@@ -279,17 +265,17 @@ export function listSessions(
   return getJson(`/v1/sessions?limit=100`, token);
 }
 
-/** `GET /v1/account/notifications-mute` — current "mute all" state (FR-8.3). */
+/** `GET /v1/account/notifications-mute` — current "mute all" state. */
 export function getMutedAll(token: string): Promise<{ mutedAll: boolean }> {
   return getJson("/v1/account/notifications-mute", token);
 }
 
-/** `PUT /v1/account/notifications-mute` — toggle "mute all" (FR-8.3). */
+/** `PUT /v1/account/notifications-mute` — toggle "mute all". */
 export function setMutedAll(token: string, mutedAll: boolean): Promise<{ mutedAll: boolean }> {
   return putJson("/v1/account/notifications-mute", { mutedAll }, token);
 }
 
-/** `PUT /v1/sessions/:id/notifications-mute` — mute/unmute one session (FR-8.3). */
+/** `PUT /v1/sessions/:id/notifications-mute` — mute/unmute one session. */
 export function setSessionMuted(
   token: string,
   sessionId: string,
@@ -298,12 +284,8 @@ export function setSessionMuted(
   return putJson(`/v1/sessions/${sessionId}/notifications-mute`, { muted }, token);
 }
 
-/** `GET /v1/sync?since=0` — full account snapshot (design §4.3/§6.2): every
- * session/machine/unmanaged-session row, each still carrying its opaque
- * `EncryptedBox` metadata + `dek` wrap. Always requests the full snapshot —
- * the route's own doc comment notes there's no incremental-resync support
- * yet ("not an incremental delta from `since`"), so there's no benefit to
- * threading a real cursor through here. */
+/** `GET /v1/sync?since=0` — full account snapshot. Always requests from `since=0` because
+ * the route has no incremental-resync support yet, so threading a real cursor adds no benefit. */
 export function getSync(token: string): Promise<SyncSnapshot> {
   return getJson("/v1/sync?since=0", token);
 }
@@ -319,10 +301,7 @@ export function getSessionMessages(
   return getJson(`/v1/sessions/${sessionId}/messages${qs}`, token);
 }
 
-/** `POST /v1/sessions/:id/archive` — flip a session to `status: "archived"`
- * (design §6.2, plan-v2.md W4.2 "Archive/delete: … wire buttons on Home rows
- * + session header"). Idempotent server-side; no CLI-side reaction (an
- * archived live session keeps running — W2.3's `stop` is the "end it" path). */
+/** `POST /v1/sessions/:id/archive` — flip a session to `status: "archived"`. Idempotent server-side. */
 export function archiveSession(token: string, sessionId: string): Promise<{ status: "archived" }> {
   return postJson(`/v1/sessions/${sessionId}/archive`, undefined, token);
 }
@@ -331,14 +310,9 @@ export type PutSessionMetadataCasResult =
   | { ok: true; version: number }
   | { ok: false; current: { value: EncryptedBox | null; version: number } };
 
-/** `PUT /v1/sessions/:id/metadata` (server `sessionCas.ts`) — the web's
- * first encrypted-metadata write path (docs/features/session-lifecycle-
- * actions.md Phase 3, Rename/Pin). Deliberately doesn't go through
- * `request()`/`putJson` above: those throw on any non-2xx and discard the
- * body, but a `409` here carries the CURRENT box the caller needs to
- * re-open and retry against — cloned from the CLI's own
- * `cli/src/api/sessionMetadata.ts` updater, which hits this same route the
- * same way for the same reason. */
+/** `PUT /v1/sessions/:id/metadata` — CAS update for encrypted session metadata.
+ * Deliberately doesn't go through `request()`/`putJson`: a `409` carries the CURRENT
+ * box the caller needs to re-open and retry against, which those helpers would discard. */
 export async function putSessionMetadataCas(
   token: string,
   sessionId: string,
@@ -379,9 +353,7 @@ export async function putSessionMetadataCas(
   );
 }
 
-/** `POST /v1/workspaces` — create-or-get a workspace row by its absolute
- * path (design conversation: server-synced `baseBranch`/`remote` config).
- * Idempotent, same shape as `POST /v1/sessions`. */
+/** `POST /v1/workspaces` — create-or-get a workspace row by its absolute path. Idempotent. */
 export function createWorkspace(
   token: string,
   body: { path: string; metadata: EncryptedBox; dek: string },
@@ -435,7 +407,7 @@ export async function putWorkspaceMetadataCas(
   );
 }
 
-/** `POST /v1/blobs/request-upload` — mint an upload target for an already-encrypted blob (design §6.2; plan.md §16 "4.3 Distribution & self-host"). `size`/`contentHash` describe the *encrypted* bytes — the server never sees plaintext. */
+/** `POST /v1/blobs/request-upload` — mint an upload target for an already-encrypted blob. `size`/`contentHash` describe the encrypted bytes - the server never sees plaintext. */
 export function requestBlobUpload(
   token: string,
   body: { size: number; contentHash: string; sessionId?: string },

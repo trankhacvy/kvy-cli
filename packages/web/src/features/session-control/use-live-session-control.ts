@@ -27,7 +27,6 @@ function pendingSessionControl(): SessionControlActions {
 }
 
 /**
- * The real `UseSessionControl` (plan.md §16 "2.4 Web control surface"'s own
  * note: swapping `useMockSessionControl` for
  * `(id) => sessionRpcToActions(createSessionRpcClient({...}))` is "a
  * one-line change here — no other change needed anywhere in

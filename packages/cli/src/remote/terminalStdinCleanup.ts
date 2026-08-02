@@ -1,6 +1,5 @@
 /**
  * Ported (verbatim) from Happy — https://github.com/slopus/happy
- * Original: happy-cli/src/utils/terminalStdinCleanup.ts
  *
  * MIT License
  * Copyright (c) 2026 Happy Coder Contributors

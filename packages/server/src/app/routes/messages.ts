@@ -10,7 +10,6 @@ import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
 import { NotFoundSchema, SessionIdParamsSchema } from "./shared.js";
 
-// One flush from the CLI's coalescing outbox is one POST (plan.md §6.5:
 // "flush every 300ms or 20 events"). The outbox's own disk-backed queue caps
 // at 10MB; give a single batch's EncryptedBox (base64, ~33% larger than raw)
 // headroom above that before Fastify's body-size guard kicks in.
@@ -41,7 +40,6 @@ type InsertOutcome = { seq: number; fanOut: boolean } | null;
 
 /**
  * `POST /v1/sessions/:id/messages` + `GET /v1/sessions/:id/messages`
- * (design §4.3 — ⚠ DELTA D1, the biggest change from Happy: this logic lived
  * in `sessionUpdateHandler.ts`'s WS `message` handler there; here it's an
  * idempotent HTTP route so a retry has unambiguous delivery semantics).
  */
@@ -118,7 +116,6 @@ export function buildMessagesRoutes(
         const result = await insertMessage(id, accountId, localId, content);
         if (!result) return reply.code(404).send({});
 
-        // Post-commit fan-out — NEVER inside the tx (design §6.1). Only the
         // request that actually inserted the row fans out; a localId replay
         // returns the same `seq` without emitting a second event.
         if (result.fanOut) {

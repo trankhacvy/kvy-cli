@@ -1,33 +1,3 @@
-/**
- * Send-idempotency claim store (design §7.10, plan.md §16 "Phase 2.0 —
- * foundation"): claim-before-execute protection for the `message` session
- * RPC, so a retried or duplicated RPC can never cause the agent to run a
- * turn twice for one logical send.
- *
- * Reference semantics adapted (P) from mobvibe's `wal-store.ts`
- * (`claimMessageSend`/`completeMessageSend`,
- * apps/mobvibe-cli/src/wal/wal-store.ts): INSERT-OR-IGNORE the claim, then
- * verify-claimId-then-record-result atomically. mobvibe backs this with a
- * SQLite WAL and a real transaction; Kvy's design instead calls for a
- * plain per-session JSON file (`~/.kvy/claims/<sessionId>.json`, design
- * §7.2/§7.10) under the same O_CREAT|O_EXCL lock-file + tmp-write-then-rename
- * pattern `persistence.ts`/`workspace/registry.ts` already use — so this is
- * a port-with-changes: the tri-state claim semantics are faithful, but the
- * storage engine (and therefore the concurrency primitive — an exclusive
- * file lock instead of a SQL transaction) is not.
- *
- * A pre-existing claim with no recorded result is *indeterminate*: the
- * prior claimant may have crashed mid-turn, and the design is explicit that
- * this must never be silently re-executed. `claimMessageSend` reports that
- * case as `'in-progress'` rather than a fresh `'claimed'` (design §7.10's
- * flow step ①); it is up to the caller (the `message` RPC handler, wired in
- * Phase 2.2's `deliverMessage()` — out of scope here) to reply
- * `'outcome-unknown'` and never blind-resend under a fresh id.
- *
- * This module is standalone and self-contained: nothing in Phase 2.0 wires
- * it into a live RPC handler yet — it is tested in isolation.
- */
-
 import { randomUUID } from "node:crypto";
 import { existsSync, constants as fsConstants } from "node:fs";
 import {
@@ -67,7 +37,7 @@ export interface CompletedClaimEntry {
 
 export type ClaimEntry = PendingClaimEntry | CompletedClaimEntry;
 
-/** Tri-state claim outcome (design §7.10) — mirrors mobvibe's `claimed`/`completed`/`in_progress`, kebab-cased to match this codebase's other status strings. */
+/** Tri-state claim outcome — kebab-cased to match this codebase's other status strings. */
 export type ClaimOutcome =
   | { status: "claimed"; claimId: string }
   | { status: "completed"; result: unknown }
@@ -81,13 +51,11 @@ interface ClaimsFileShape {
 export const CLAIMS_SCHEMA_VERSION = 1;
 
 /**
- * Completed claims older than this are pruned on the next write to this
- * session's claim file (bounded retention, design §7.10). A *pending*
- * (`'claimed'`, no result) entry is never pruned by age — evicting an
- * indeterminate claim would make a later retry look fresh again and
- * silently re-execute it, exactly what this store exists to prevent. Only
- * an explicit `completeMessageSend` (or `clearClaims` deleting the file
- * wholesale, e.g. on session archive) ever removes a pending entry.
+ * Completed claims older than this are pruned on the next write. A *pending*
+ * (`'claimed'`, no result) entry is NEVER pruned by age — evicting an
+ * indeterminate claim would make a later retry look fresh again and silently
+ * re-execute it, exactly what this store exists to prevent. Only an explicit
+ * `completeMessageSend` (or `clearClaims`) ever removes a pending entry.
  */
 const CLAIM_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -96,15 +64,11 @@ function homeDirFrom(options: ClaimStoreOptions): string {
 }
 
 /**
- * `sessionId` becomes a filename component below (unlike `sessionsStore.ts`'s
- * `sessions.json`, where session ids are only ever object *keys*, this is the
- * first place in this package that interpolates one into a path) — reject
- * anything that could escape the `claims/` directory (path separators, `.`,
- * `..`, or empty) rather than silently resolving outside it. Session ids are
- * server-minted UUIDs in every caller today, but this module is explicitly
- * designed to eventually sit behind the `message` RPC (design §7.10), so the
- * id can't be assumed trustworthy forever — same defense-in-depth reasoning
- * as `normalizeClaimsFile`'s `"__proto__"` guard above.
+ * `sessionId` becomes a filename component — reject anything that could
+ * escape the `claims/` directory (path separators, `.`, `..`, or empty).
+ * Session ids are server-minted UUIDs today, but the id can't be assumed
+ * trustworthy in all callers — defense in depth, same as `normalizeClaimsFile`'s
+ * `"__proto__"` guard.
  */
 function assertSafeSessionId(sessionId: string): void {
   if (
@@ -142,15 +106,12 @@ function normalizeEntry(value: unknown): ClaimEntry | null {
 }
 
 /**
- * Field-by-field extraction, same rationale as `persistence.ts`'s
- * `normalizeSettings`: unknown/malformed entries are dropped, not fatal to
- * the whole read. Accumulates into a null-prototype object (rather than
+ * Field-by-field extraction: unknown/malformed entries are dropped, not fatal
+ * to the whole read. Accumulates into a null-prototype object (rather than
  * `{}`) so an envelope id of `"__proto__"` — a real, if exotic, own key that
- * `JSON.parse` happily round-trips — can't be silently reinterpreted as a
- * `[[Set]]` on `Object.prototype`'s inherited accessor when written back via
- * `claims[envelopeId] = entry`; that would drop the entry as an own key and
- * leave `claims` with a corrupted prototype instead (CWE-1321-shaped, even
- * though nothing calls this module with untrusted ids yet).
+ * `JSON.parse` round-trips — can't be silently reinterpreted as a `[[Set]]`
+ * on `Object.prototype`'s inherited accessor when written back. That would
+ * drop the entry as an own key and corrupt the prototype (CWE-1321).
  */
 function normalizeClaimsFile(raw: unknown): ClaimsFileShape {
   if (!isPlainObject(raw) || !isPlainObject(raw.claims)) {
@@ -183,8 +144,7 @@ async function readClaimsFileRaw(homeDir: string, sessionId: string): Promise<Cl
  */
 function pruneExpired(file: ClaimsFileShape, now: number): ClaimsFileShape {
   const cutoff = now - CLAIM_RETENTION_MS;
-  // Null-prototype accumulator — same `"__proto__"`-key rationale as
-  // `normalizeClaimsFile` above.
+  // Null-prototype accumulator — same `"__proto__"`-key protection as `normalizeClaimsFile`.
   const claims: Record<string, ClaimEntry> = Object.create(null);
   for (const [envelopeId, entry] of Object.entries(file.claims)) {
     if (entry.status === "completed" && entry.completedAt < cutoff) continue;
@@ -203,9 +163,9 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Acquires an exclusive lock file via O_CREAT|O_EXCL (atomic create-or-fail),
- * retrying while another process/invocation holds it, and reclaiming it if
- * its mtime is older than `STALE_LOCK_TIMEOUT_MS` (a prior holder that died
- * without cleaning up) — mirrors `persistence.ts`'s `acquireLock` exactly.
+ * retrying while another process holds it, and reclaiming it if its mtime is
+ * older than `STALE_LOCK_TIMEOUT_MS` (a prior holder that died without
+ * cleaning up).
  */
 async function acquireLock(lockFile: string): Promise<FileHandle> {
   for (let attempt = 0; attempt < MAX_LOCK_ATTEMPTS; attempt++) {
@@ -276,8 +236,7 @@ async function withClaimsFile<T>(
 }
 
 /**
- * Claim-before-execute (design §7.10 flow steps ① / ②): look up
- * `envelopeId` in this session's claim store.
+ * Claim-before-execute — looks up `envelopeId` in this session's claim store.
  *
  * - No entry yet ⇒ durably write a fresh claim and return `'claimed'`; the
  *   caller now owns executing this send and must eventually call
@@ -313,12 +272,11 @@ export async function claimMessageSend(
 }
 
 /**
- * Atomically persist a completed result and clear the pending claim (design
- * §7.10 flow step ③). Verifies `claimId` still matches the active claim
- * before recording anything — mirrors mobvibe's `completeMessageSend`
- * verify-claimId-then-record-result guard — so a stale/superseded claimant
- * can never overwrite a result it doesn't own. Throws if there is no active
- * claim for `envelopeId`, or one exists under a different `claimId`.
+ * Atomically persists a completed result and clears the pending claim.
+ * Verifies `claimId` still matches the active claim before recording anything,
+ * so a stale/superseded claimant can never overwrite a result it doesn't own.
+ * Throws if there is no active claim for `envelopeId`, or one exists under a
+ * different `claimId`.
  */
 export async function completeMessageSend(
   sessionId: string,

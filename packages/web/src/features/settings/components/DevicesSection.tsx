@@ -44,7 +44,6 @@ function formatRelative(iso: string | null): string {
 /**
  * Settings → Devices — security review finding F2: `GET /v1/auth/sessions` +
  * `POST /v1/auth/sessions/:id/revoke` + `POST /v1/auth/sessions/revoke-others`
- * (`sessionsAdmin.ts`, issue-4-plan.md §4.4) existed, were tested, and had nothing
  * calling them from the web app. This lists the account's active `device_sessions`
  * and offers "log out this device" (revokes the CURRENT session, then runs the same
  * local teardown `nav-user.tsx`'s sign-out button does) and "log out all other

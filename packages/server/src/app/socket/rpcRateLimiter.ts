@@ -3,7 +3,6 @@
 // used on `routes/*.ts`) never sees them at all. This is the WS-side equivalent, scoped to
 // the one event that actually does work on behalf of a caller (`rpc-call`; `rpc-register`/
 // `rpc-unregister` just join/leave a room and are cheap enough not to need their own limit)
-// (kvy-system-design.md §12, plan.md §16 "4.4 Hardening": rate limiting on
 // "auth/pairing/RPC endpoints" — one of the reported Happy vuln classes).
 //
 // Sliding-window counter, keyed by accountId (mirrors server.ts's HTTP keyGenerator so one

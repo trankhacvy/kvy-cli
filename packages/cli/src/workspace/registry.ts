@@ -1,7 +1,5 @@
 /**
  * Workspace registry — "which workspace directories does this machine know
- * about" (plan.md §16 "3.1 Remote spawn" / "3.3 Session adoption (UC9)",
- * kvy-system-design.md §12: "spawn params validated against registered
  * workspace paths"). Several already-landed tasks
  * (`daemon/workspacePath.ts`'s `WorkspaceRootLookup`,
  * `daemon/transcriptIndexer.ts`'s `listWorkspaces`,

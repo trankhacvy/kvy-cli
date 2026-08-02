@@ -17,7 +17,6 @@ const migrationsFolder = path.resolve(
 );
 
 /**
- * Device-to-device key sharing (docs/auth-ux-overhaul-plan.md Phase 4).
  *
  * The authorization tests here are the point: `accountId` scoping alone is NOT sufficient
  * (an attacker with a stolen access token satisfies it), so the routes additionally bind

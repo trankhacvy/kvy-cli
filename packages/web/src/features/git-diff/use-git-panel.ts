@@ -9,7 +9,6 @@ import { derivePushReadiness } from "./push-readiness";
 import type { GitDiffActions } from "./types";
 
 /**
- * The Git panel's data-fetching + write-action state (kvy-prd.md FR-7.7;
  * docs/features/git-write-actions.md): `git.status` once per `worktree`,
  * `git.diff` re-fetched whenever the selected file or `compareRef` changes,
  * and `git.branches` for the "Compare against" selector's branch options.
@@ -50,7 +49,6 @@ function handlerErrorCode(error: unknown): string | undefined {
 }
 
 /**
- * Feature 1 rollout note (docs/web-ux-improvements-plan.md §1.7): a web
  * build that knows `git.init` talking to an older daemon gets back the
  * literal `"unknown-method"` (`machineRpc.ts`'s uniform unknown-method
  * error box) — translated here into copy that reads like a version-skew

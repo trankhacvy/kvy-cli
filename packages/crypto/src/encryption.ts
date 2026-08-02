@@ -1,6 +1,5 @@
 /**
  * Ported (near-verbatim) from Happy — https://github.com/slopus/happy
- * Original: happy/packages/happy-cli/src/api/encryption.ts
  *
  * MIT License
  * Copyright (c) 2026 Happy Coder Contributors
@@ -23,11 +22,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * ---
- * Node entry point (default `import`/`require` condition of @kvy/crypto).
- * Uses node:crypto for AES-256-GCM + random bytes, tweetnacl for NaCl box/
- * secretbox/sign. See `encryption.web.ts` for the browser counterpart
- * (libsodium-wrappers + WebCrypto AES-GCM).
  */
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import tweetnacl from "tweetnacl";
@@ -35,9 +29,6 @@ import { decodeBase64, encodeBase64, encodeBase64Url } from "./base64.js";
 
 export { decodeBase64, encodeBase64, encodeBase64Url };
 
-/**
- * Generate secure random bytes
- */
 export function getRandomBytes(size: number): Uint8Array {
   return new Uint8Array(randomBytes(size));
 }
@@ -53,16 +44,11 @@ export function libsodiumEncryptForPublicKey(
   data: Uint8Array,
   recipientPublicKey: Uint8Array,
 ): Uint8Array {
-  // Generate ephemeral keypair for this encryption
   const ephemeralKeyPair = tweetnacl.box.keyPair();
-
-  // Generate random nonce (24 bytes for box encryption)
   const nonce = getRandomBytes(tweetnacl.box.nonceLength);
-
-  // Encrypt the data using box (authenticated encryption)
   const encrypted = tweetnacl.box(data, nonce, recipientPublicKey, ephemeralKeyPair.secretKey);
 
-  // Bundle format: ephemeral public key (32 bytes) + nonce (24 bytes) + encrypted data
+  // Bundle format: ephemeral public key (32 bytes) + nonce (24 bytes) + ciphertext
   const result = new Uint8Array(
     ephemeralKeyPair.publicKey.length + nonce.length + encrypted.length,
   );
@@ -75,10 +61,7 @@ export function libsodiumEncryptForPublicKey(
 
 /**
  * Inverse of libsodiumEncryptForPublicKey — open a [ephPub32|nonce24|ct] sealed
- * box with the recipient's secret key. Not present in Happy's original file
- * (Happy only ever encrypts *to* the app, never needs to open one CLI-side);
- * added here because @kvy/crypto's `unwrapDek` needs the symmetric decrypt.
- * Never throws — returns null on any failure (design principle #1).
+ * box with the recipient's secret key. Never throws — returns null on any failure.
  */
 export function libsodiumDecryptWithSecretKey(
   bundle: Uint8Array,
@@ -105,12 +88,6 @@ export function libsodiumDecryptWithSecretKey(
   }
 }
 
-/**
- * Encrypt data using the secret key
- * @param data - The data to encrypt
- * @param secret - The secret key to use for encryption
- * @returns The encrypted data
- */
 export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(tweetnacl.secretbox.nonceLength);
   const encrypted = tweetnacl.secretbox(
@@ -124,12 +101,6 @@ export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   return result;
 }
 
-/**
- * Decrypt data using the secret key
- * @param data - The data to decrypt
- * @param secret - The secret key to use for decryption
- * @returns The decrypted data
- */
 export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null {
   if (data.length < tweetnacl.secretbox.nonceLength) {
     return null;
@@ -139,8 +110,6 @@ export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null 
   try {
     const decrypted = tweetnacl.secretbox.open(encrypted, nonce, secret);
     if (!decrypted) {
-      // Decryption failed - returning null is sufficient for error handling
-      // Callers should handle the null case appropriately
       return null;
     }
     return JSON.parse(new TextDecoder().decode(decrypted));
@@ -154,7 +123,6 @@ export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null 
 /**
  * Encrypt a binary blob with NaCl crypto_secretbox (XSalsa20-Poly1305).
  * Wire format: [nonce (24 bytes)] [ciphertext + auth tag (16 bytes + data)]
- * Matches the app-side encryptBlob() in packages/happy-app/sources/encryption/blob.ts.
  */
 export function encryptBlob(data: Uint8Array, key: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(tweetnacl.secretbox.nonceLength);
@@ -172,7 +140,7 @@ export function encryptBlob(data: Uint8Array, key: Uint8Array): Uint8Array {
 /**
  * Decrypt a binary blob encrypted with NaCl crypto_secretbox (XSalsa20-Poly1305).
  * Wire format: [nonce (24 bytes)] [ciphertext + auth tag (16 bytes + data)]
- * Matches the app-side encryptBlob() in packages/happy-app/sources/encryption/blob.ts.
+ * Never throws — returns null on any failure.
  */
 export function decryptBlob(bundle: Uint8Array, key: Uint8Array): Uint8Array | null {
   if (bundle.length < tweetnacl.secretbox.nonceLength + 16) {
@@ -193,12 +161,6 @@ export function decryptBlob(bundle: Uint8Array, key: Uint8Array): Uint8Array | n
   }
 }
 
-/**
- * Encrypt data using AES-256-GCM with the data encryption key
- * @param data - The data to encrypt
- * @param dataKey - The 32-byte AES-256 key
- * @returns The encrypted data bundle (version + nonce + ciphertext + auth tag)
- */
 export function encryptWithDataKey(data: any, dataKey: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(12); // GCM uses 12-byte nonces
   const cipher = createCipheriv("aes-256-gcm", dataKey, nonce);
@@ -218,12 +180,6 @@ export function encryptWithDataKey(data: any, dataKey: Uint8Array): Uint8Array {
   return bundle;
 }
 
-/**
- * Decrypt data using AES-256-GCM with the data encryption key
- * @param bundle - The encrypted data bundle
- * @param dataKey - The 32-byte AES-256 key
- * @returns The decrypted data or null if decryption fails
- */
 export function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array): any | null {
   if (bundle.length < 1) {
     return null;
@@ -274,9 +230,6 @@ export function decrypt(
   }
 }
 
-/**
- * Generate authentication challenge response
- */
 export function authChallenge(secret: Uint8Array): {
   challenge: Uint8Array;
   publicKey: Uint8Array;

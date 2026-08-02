@@ -54,12 +54,8 @@ import { providerIdForSubcommand } from "./provider/registry.js";
 import { maybeTriggerAutoUpdate } from "./update/autoUpdateTrigger.js";
 import { runUpdateCommand } from "./update/runUpdateCommand.js";
 
-// Scaffolding note (plan.md §16, "1.3 CLI skeleton + local mode"): most of
 // this module still wires up arg parsing + a stub dispatcher. `auth` is now
-// a real implementation (`./auth/`, kvy-plan.md §2.2); daemon control is
 // real too (`./daemon/`); `workspace-config` is real too (`./commands/
-// workspaceConfig.js`, plan.md §16 "4.1 Git panel"); `workspace-sync` is a
-// deliberate, permanent stub (kvy-prd.md line 149: "cloud sync coming
 // soon" — sandboxing is out of scope); `kvy claude` now spawns a real
 // local session (`./commands/start.js`, see `runStart()` below) — every
 // other provider (`codex` has no local-interactive mode, see
@@ -70,7 +66,6 @@ import { runUpdateCommand } from "./update/runUpdateCommand.js";
 // straight to stdout/stderr, same as any CLI. That's unrelated to the
 // logger's "never stdout" rule (see logger.ts) — that rule is about
 // internal diagnostics colliding with an *inherited* provider TUI once a
-// session is actually spawned (§6.3), which doesn't happen here yet.
 
 const logger = createLogger();
 
@@ -165,7 +160,6 @@ KVY_DEBUG=1, KVY_NO_UPDATE=1, KVY_NO_SERVICE=1
 
 /**
  * Auto-starts the background daemon ahead of every agent-invoking
- * subcommand (plan.md §16 1.5, PRD FR-1.2: "First run of `kvy` triggers
  * ... daemon auto-start — no separate setup steps"). `KVY_NO_SERVICE=1`
  * opts out entirely — `ensureDaemonRunning()`'s "disabled" result is
  * treated the same as success here, since the user has explicitly taken
@@ -176,9 +170,7 @@ async function ensureDaemon(): Promise<{ ok: true } | { ok: false; message: stri
     createEnsureDaemonRunningDeps({ version: readVersion() }),
   );
 
-  // Auto-update-on-start (plan.md §16 "4.3 Distribution & self-host") shares
   // this same "runs ahead of every agent-invoking subcommand" entry point as
-  // the daemon auto-start above (PRD FR-1.2). `maybeTriggerAutoUpdate` does
   // no network I/O itself — it only rate-limits via a local timestamp and
   // spawns a detached background child — so awaiting it here adds no
   // meaningful latency and can never block on a failed/slow update check;
@@ -196,7 +188,6 @@ async function ensureDaemon(): Promise<{ ok: true } | { ok: false; message: stri
 }
 
 /**
- * `kvy kill *` is process-scan based (plan.md §7.2/§7.4) and therefore
  * inherently async (it shells out to `ps`, then waits out a graceful-stop
  * timeout) — the only subcommand so far that can't return its exit code
  * synchronously. See the `main()`/bottom-of-file guard for how that's
@@ -218,7 +209,6 @@ async function runKill(target: KillTarget): Promise<number> {
 /**
  * `kvy doctor` (+ `kvy doctor clean`) — process discovery/
  * categorization (`doctor.ts`) and, for `clean`, the runaway-kill escape
- * hatch (plan.md §16 "3.2 Durability"). Deliberately does **not** call
  * `ensureDaemon()` first, unlike every other subcommand above — `doctor`
  * exists specifically to be useful when the daemon is wedged or gone
  * entirely (same rationale as `kvy kill`'s process-scan-only discovery).
@@ -237,7 +227,6 @@ async function runDoctorCommand(command: Extract<KvyCommand, { type: "doctor" }>
 }
 
 /**
- * `kvy daemon start|start-sync|stop|status` (plan.md §7.2, design §8) —
  * wires the singleton lock + control server + `daemon.state.json` helpers
  * together; see `daemon/commands.ts` for the actual logic. `start-sync` is
  * the one branch that can block indefinitely (it's the daemon's own
@@ -273,9 +262,7 @@ async function runDaemon(command: Extract<KvyCommand, { type: "daemon" }>): Prom
 }
 
 /**
- * `kvy daemon service install|uninstall|status` (kvy-prd.md FR-4.1
  * "installable as a login service (launchd / systemd-user) [P1]",
- * kvy-system-design.md §8 "Service install (P1)") — see
  * `commands/serviceInstall.ts` for the CLI-facing dispatch and
  * `daemon/serviceInstall.ts` for the actual launchd/systemd logic.
  * Deliberately does **not** call `ensureDaemon()`: this only registers/
@@ -291,7 +278,6 @@ async function runDaemonService(
 }
 
 /**
- * `kvy update` (plan.md §16 "4.3 Distribution & self-host") — checks the
  * `cli-latest` rolling release tag and, if a newer version is published,
  * downloads and atomically replaces the running standalone binary (or
  * shells out to `npm install -g @vibe-oss/kvy@<version>` for an npm install).
@@ -351,7 +337,6 @@ export async function resolveStartWorkingDirectory(
  * function existed to call them); `codex` (no local-interactive mode, see
  * `CODEX_NO_LOCAL_MODE_NOTE`) and any other provider still go through the
  * honest `describeStart` stub. The daemon auto-start this depends on (PRD
- * FR-1.2) is real either way: this is the first place a fresh install
  * actually touches the daemon.
  *
  * Auth is checked *before* the daemon is started (`ensureLoggedIn()`, first-run
@@ -367,7 +352,6 @@ export async function resolveStartWorkingDirectory(
  * reload credentials afterwards (`daemon/reloadAuth.ts`).
  */
 async function runStart(command: Extract<KvyCommand, { type: "start" }>): Promise<number> {
-  // Every provider, not just claude (AX-1.1) — `startCodex` had the same
   // read-credentials-then-hard-fail shape, and both now depend on this having run.
   const auth = await ensureLoggedIn(logger);
   if (!auth.ok) {
@@ -403,7 +387,6 @@ async function runStart(command: Extract<KvyCommand, { type: "start" }>): Promis
 }
 
 /**
- * `kvy auth login|logout|status` (plan.md §5, design §5) — the real
  * OAuth browser flow + pairing fallback lives in `./auth/`.
  *
  * `login` specifically runs *before* `ensureDaemon()` (same rationale as
@@ -414,7 +397,6 @@ async function runStart(command: Extract<KvyCommand, { type: "start" }>): Promis
  * risk it coming up with nothing to register and never retrying, even
  * moments later once login succeeds. `logout`/`status` don't create
  * credentials, so for them `ensureDaemon()` still runs first, consistent
- * with every other agent-adjacent subcommand (PRD FR-1.2).
  *
  */
 async function runAuth(command: Extract<KvyCommand, { type: "auth" }>): Promise<number> {
@@ -437,7 +419,6 @@ async function runAuth(command: Extract<KvyCommand, { type: "auth" }>): Promise<
 }
 
 /**
- * `kvy adapters install|upgrade` (design §7.9, plan.md §16 "Phase 2.0 —
  * foundation") — see `commands/adapters.ts` / `adapters/install.ts` for the
  * actual npm-prefix install + integrity-verification logic. Deliberately
  * does **not** call `ensureDaemon()`, same rationale as `workspace config`:
@@ -473,10 +454,8 @@ async function runGithub(command: Extract<KvyCommand, { type: "github" }>): Prom
 }
 
 /**
- * `kvy sessions list` (plan.md §16 "4.2 Adoption Tier 3 + polish") — see
  * `commands/sessionsList.ts` for the actual local+remote listing logic.
  * `ensureDaemon()` runs first for consistency with every other
- * agent-adjacent subcommand (PRD FR-1.2), even though the listing itself
  * doesn't talk to this machine's daemon (only to the server, over HTTP).
  */
 async function runSessions(command: Extract<KvyCommand, { type: "sessions" }>): Promise<number> {
@@ -490,7 +469,6 @@ async function runSessions(command: Extract<KvyCommand, { type: "sessions" }>): 
 }
 
 /**
- * `kvy resume <session-id>` (plan.md §16 "4.2 Adoption Tier 3 + polish")
  * — see `commands/resume.ts` for the local-vs-daemon-managed dispatch logic.
  */
 async function runResume(command: Extract<KvyCommand, { type: "resume" }>): Promise<number> {
@@ -507,10 +485,8 @@ async function runResume(command: Extract<KvyCommand, { type: "resume" }>): Prom
 }
 
 /**
- * `kvy adopt [--remote] [--list]` / `kvy --continue` (plan.md §16
  * "3.3 Session adoption (UC9)") — see `commands/adopt.ts` for the actual
  * listing/resume/lineage logic. `ensureDaemon()` runs first for
- * consistency with every other agent-adjacent subcommand (PRD FR-1.2):
  * `--remote`'s detached child self-reports to the daemon's control server
  * the same way any other spawned session does.
  */
@@ -528,7 +504,6 @@ async function runAdopt(command: Extract<KvyCommand, { type: "adopt" }>): Promis
 
 /**
  * `kvy workspace config [--base-ref/--remote/--setup-script/--run-script/
- * --directory]` (plan.md §16 "4.1 Git panel"; docs/features/
  * setup-run-scripts.md) — reads/writes `~/.kvy/settings.json` directly
  * (see `commands/workspaceConfig.ts`). Deliberately does **not** call
  * `ensureDaemon()`: unlike `adopt`/`start`/`auth`, this command has no
@@ -553,7 +528,6 @@ async function runWorkspaceConfig(
 }
 
 /**
- * `kvy workspace register|list|unregister` (plan.md §16 "3.1 Remote
  * spawn" / "3.3 Session adoption (UC9)") — reads/writes
  * `~/.kvy/workspaces.json` directly (see `commands/workspaceRegister.ts`
  * / `workspace/registry.ts`). Same rationale as `workspace-config` for
@@ -647,8 +621,6 @@ function handleUnexpectedError(error: unknown): number {
 }
 
 // `run()` returns a `Promise<number>` for every subcommand that touches the
-// daemon — `kill` (process-scan based, §7.2/§7.4) and `start`/`auth`/
-// `sessions`/`resume` (all call `ensureDaemon()` first, PRD FR-1.2) — and a
 // plain `number` for the handful that don't (`help`/`version`/`daemon`'s own
 // subcommands notwithstanding, since `daemon` is itself always async).
 // `main()`'s return type stays `number | Promise<number>` to cover both

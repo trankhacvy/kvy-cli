@@ -1,5 +1,4 @@
 /**
- * Same-directory duplicate session lock (plan-v2.md Wave 4 W4.4, design §7.4
  * durability neighbor): before `commands/start.ts` mints a fresh session
  * nonce, it takes an exclusive, per-`(machineId, workspacePath)` lock file at
  * `~/.kvy/locks/session-<sha256(machineId|path)>.lock` — if a *live* pid

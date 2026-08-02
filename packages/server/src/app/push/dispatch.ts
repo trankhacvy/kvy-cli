@@ -6,8 +6,6 @@ import { createRenotifyScheduler } from "./renotify.js";
 import type { LifecycleKind, PresencePort, PushDispatcherPort } from "./types.js";
 
 /**
- * Port of Happy's dispatch model (`happy-server/sources/app/push/
- * pushDispatch.ts`, plan.md §10): lifecycle events only (`perm`, `question`,
  * `done`/turn-completed, `failed`) — generic per-message pushes were
  * explicitly ruled out by both Happy and Omnara's own postmortems (one buzz
  * every 10s during a turn, no useful title). Never called for message
@@ -23,9 +21,7 @@ import type { LifecycleKind, PresencePort, PushDispatcherPort } from "./types.js
  * Kvy add vs. Happy: `pushSubscriptions.channel` fans out to a pluggable
  * `channels` registry (`webpush` | `telegram` | `ntfy`) instead of a single
  * hardcoded Expo sender — iOS Web Push is unreliable and the notification
- * IS the product (plan.md §10).
  *
- * Kvy add — quiet controls (PRD FR-8.3, plan.md §10 "Per-session mute +
  * mute-all"): checked right alongside presence, before any channel fan-out.
  * An explicit user setting, so it applies uniformly to every channel and
  * every follow-up re-notify attempt — there's no "mute Telegram but not
@@ -35,10 +31,8 @@ import type { LifecycleKind, PresencePort, PushDispatcherPort } from "./types.js
  * `dispatch` never rejects: every failure (presence check, subscription
  * lookup, a channel's `send`) is caught and logged so a broken push path
  * never takes down the caller's request/response cycle — callers invoke
- * this fire-and-forget (`void dispatcher.dispatch(...)`), same as Happy's
  * `void dispatchSessionEventPush(...)`.
  *
- * Kvy add — re-notify scheduling (design §6.4, plan.md §10's "Server
  * dispatch" bullet): a `perm`/`question` dispatch is a request awaiting a
  * human answer, so after the initial attempt this arms up to two follow-up
  * attempts at +5 min and +10 min (max 3 notifications total) via
@@ -63,7 +57,6 @@ export function buildPushDispatcher(db: Database, presence: PresencePort): PushD
           return; // suppressed — a visible client already shows this in-app
         }
       } catch (err) {
-        // Fail OPEN on a broken presence check (Happy's own comment: "Presence
         // check failed, sending push anyway") — a presence bug must never
         // silently swallow a real notification.
         console.error({ module: "push" }, `presence check failed, dispatching anyway: ${err}`);
@@ -111,7 +104,6 @@ export function buildPushDispatcher(db: Database, presence: PresencePort): PushD
             if (statusCode === 404 || statusCode === 410) {
               // The push service says this endpoint is gone for good (expired/
               // unsubscribed) — prune it so future dispatches stop retrying it.
-              // Mirrors Happy's DeviceNotRegistered cleanup in pushDispatch.ts.
               await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
               return;
             }

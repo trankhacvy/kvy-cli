@@ -1,39 +1,3 @@
-/**
- * Transcript indexer — adoption Tier 1 (plan.md §16 "3.3 Session adoption
- * (UC9)", kvy-system-design.md §8 "Transcript indexer (adoption Tier
- * 1)" / §11 "Session adoption — UC9"): fs-watches every registered
- * workspace's Claude Code project transcript directory
- * (`../claude/scanner.js`'s `getProjectPath`) and upserts an
- * `unmanagedSessions` row (via `unmanagedSessionClient.ts`) for every
- * session transcript found there, debounced 2s so a burst of appends during
- * one active turn produces one upsert, not dozens. Liveness ("is this
- * specific transcript's session still running?") is a best-effort signal
- * derived from `processScan.ts` + `markers.ts` — a plain `claude` process
- * (never a Kvy-managed one) whose cwd resolves to the workspace path,
- * matched against whichever transcript file in that workspace was most
- * recently modified.
- *
- * New code (N) — no direct Happy equivalent (Happy's `sessionScanner.ts`
- * this borrows `getProjectPath` from watches a *specific* session id
- * already known to a running `kvy claude` process; this watches an
- * entire *directory* for sessions Kvy never started).
- *
- * Scope note: this module only owns discovery + upsert. Two seams are
- * intentionally left to later, not-yet-built work rather than stubbed out
- * half-finished here:
- *
- *  - `listWorkspaces` has no real default (mirrors `bootstrap.ts`'s
- *    `getAuthToken`) — nothing in the codebase yet persists "which
- *    workspace paths are registered" (that bookkeeping belongs to the
- *    spawn-RPC task, plan.md §16 "3.1 Remote spawn", which is what actually
- *    knows a workspace's path/id at the point a session is spawned into
- *    it). Callers must supply it.
- *  - `isManaged` (skip a `providerRef` that's actually a Kvy-managed
- *    session's lineage) defaults to "nothing is managed yet" — the
- *    lineage store it would consult (`providerSessionLineage`) is built by
- *    the *other* half of §3.3 (`adopt.take` + `kvy adopt`), explicitly
- *    out of scope for this task.
- */
 import { readdir, readFile, stat, watch } from "node:fs/promises";
 import path, { resolve as resolvePath } from "node:path";
 import { getProjectPath } from "../claude/scanner.js";
@@ -62,25 +26,17 @@ export interface RegisteredWorkspace {
   /** Absolute working-directory path Claude Code was/would be run in. */
   path: string;
   /**
-   * ISO-8601 first-registration time, from `workspace/registry.ts`. Transcripts whose files
-   * haven't been touched since then are pre-Kvy history, not "the session the user just
-   * left" (kvy-prd.md FR-9.1), and are not indexed — a brand-new account's first
-   * `kvy claude` was otherwise uploading the machine's entire prior Claude Code archive
-   * for that folder as unmanaged sessions.
+   * ISO-8601 first-registration time. Transcripts untouched since this time are
+   * pre-Kvy history and are not indexed.
    *
-   * Optional: absent means index everything, which keeps the daemon's default
-   * `listWorkspaces: async () => []` and every existing test's fixture valid.
+   * Optional: absent means index everything.
    */
   registeredAt?: string;
 }
 
 /**
- * How far back a workspace's FIRST registration reaches. kvy-prd.md:221's canonical entry
- * path is "run plain `claude`, work a while, THEN reach for Kvy", so the session the user
- * just left is minutes older than `registeredAt` — a strict `mtime >= registeredAt` gate would
- * drop precisely the transcript Tier 1 exists to catch. One hour is long enough for "I just
- * finished that" and far short of the days-old archive that made a brand-new account show 11
- * unrelated cards.
+ * Grace window before `registeredAt` to include transcripts that predate registration by
+ * a short time — e.g. a session that ended just before the user first ran `kvy`.
  */
 const FIRST_REGISTRATION_GRACE_MS = 60 * 60 * 1000;
 

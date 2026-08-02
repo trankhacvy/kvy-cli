@@ -7,8 +7,6 @@ import { machineRpcToActions } from "./live-actions";
 import type { NewSessionActions, UseNewSessionActions } from "./types";
 
 /**
- * The real `UseNewSessionActions` (kvy-system-design.md §9.2 "New
- * session" row, kvy-prd.md FR-7.5/UC5) — gated on `useMachineCrypto`
  * (`@/lib/use-machine-crypto.ts`, the shared per-machine DEK unwrap both
  * this and `features/git-diff` need); every method rejects with an honest
  * "not ready yet" message until the chosen machine's key has unwrapped,

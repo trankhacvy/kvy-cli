@@ -6,13 +6,11 @@ import { accounts, sessions } from "./schema.js";
  * Anything that can run the Drizzle query builder: the shared pool (`db`) or
  * an open transaction (`db.transaction(async (tx) => ...)`). Both expose the
  * same `.update(...)` interface, so callers can allocate a seq either inside
- * a larger transaction (the common case — see §4.3's message-ingest flow) or
  * standalone.
  */
 type Executor = Database | Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 /**
- * Two-level sequencing (design §4.3, §6.1 — DELTA D2 from Happy's single
  * `allocateUserSeq`/`allocateSessionSeq`): high-rate transcript messages get
  * a counter scoped to ONE session row (`sessions.msgSeq`), so two chatty
  * sessions never serialize on a shared counter. Structural account changes

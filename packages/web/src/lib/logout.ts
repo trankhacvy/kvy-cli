@@ -1,28 +1,16 @@
 /**
- * Sign-out teardown, extracted from `nav-user.tsx` so the step sequence is
- * unit-testable under this package's node-only vitest environment (no React
- * rendering). Four steps, in order:
+ * Sign-out teardown. Four steps in order:
  *
- * 0. Stop the shared crypto-bridge worker — BEFORE wiping, so it can't answer a stray
- *    `describeStorage()` mid-teardown and re-open a database step 1 is about to delete
- *    (auth-ux-overhaul-e2e-results.md E2E-5.5). Skips `use-crypto-bridge.ts`'s normal
- *    2-second release grace: that grace exists to survive a route change, which is the
- *    opposite of what sign-out wants.
- * 1. Wipe key material — a throwaway crypto bridge whose worker `clear()`
- *    purges the shared IndexedDB store (`crypto/key-storage.ts`) and its own
- *    in-memory keys. `lib/use-crypto-bridge.ts`'s shared bridge singleton is
- *    for already-mounted feature components, not logout: this always spins
- *    up its own worker so it works the same whether or not anything else
- *    happens to be mounted right now.
- * 2. Disconnect `apiSocket` — stops the infinite-reconnect loop before the
- *    token disappears, so it never fires a reconnect rejected with `null`
- *    auth.
- * 3. Clear the access token — last, so nothing above can observe a
- *    signed-out token state while still running.
+ * 0. Stop the shared crypto-bridge worker BEFORE wiping, so it can't re-open a
+ *    database the wipe step is about to delete. Skips the normal 2-second release
+ *    grace (that exists to survive a route change, not a sign-out).
+ * 1. Wipe key material via a throwaway bridge whose `clear()` purges the shared
+ *    IndexedDB store. A dedicated worker so this works regardless of what else is mounted.
+ * 2. Disconnect `apiSocket` before the token disappears, so the reconnect loop never
+ *    fires with null auth.
+ * 3. Clear the access token last, so nothing above observes a signed-out state mid-teardown.
  *
- * A key-wipe failure is logged but never aborts the sign-out (token clear +
- * redirect must always happen) — same "logout is best-effort past the crypto
- * step" posture as `client.ts`'s own doc comment.
+ * Key-wipe failures are logged but never abort the sign-out - token clear must always happen.
  */
 import { createCryptoBridge } from "@/crypto";
 import { clearToken } from "@/lib/session";

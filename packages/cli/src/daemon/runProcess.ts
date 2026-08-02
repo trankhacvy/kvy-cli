@@ -1,37 +1,17 @@
 /**
- * The Setup/Run scripts subsystem's daemon-side run process
- * (docs/features/setup-run-scripts.md Phase 3): `run.start`/`run.stop`/
- * `run.status`/`run.setup` machine RPC handlers backing a long-lived,
- * remotely start/stop-able process — e.g. `npm run dev` — distinct from a
- * provider session (`sessionRegistry.ts` is provider-session-only).
+ * `run.start`/`run.stop`/`run.status`/`run.setup` machine RPC handlers:
+ * a long-lived, remotely start/stop-able user process (e.g. `npm run dev`).
  *
- * **`resolveRunContext` is both the auth gate and the config-key
- * resolver** (design §12 "no arbitrary-directory execution from remote",
- * mirroring `gitWriteGuard.ts`'s `createRegistryWorktreeAuthorizer`): every
- * handler below calls it first. A worktree outside every registered
- * workspace throws a typed `RunProcessError` before touching anything else.
- * `workspaceRoot` (the registered root the worktree resolves *inside*) is
- * the key `workspaceConfig.ts`'s `setupScript`/`runScript` are stored
- * under — a `.worktrees/<branch>` directory is never itself a config key —
- * while `directoryKey` (the worktree's own real path) is what
- * `runStateStore.ts` keys the actual run/setup state on, so two worktrees
- * under the same repo each get their own independent run process.
+ * `resolveRunContext` is both the auth gate and config-key resolver: every
+ * handler calls it first. A worktree outside any registered workspace throws
+ * before touching anything else. `workspaceRoot` is the config key for
+ * `setupScript`/`runScript`; `directoryKey` (the worktree's real path) is what
+ * `runStateStore.ts` keys run state on, so worktrees under the same repo each
+ * get their own independent run process.
  *
- * **Launch reuses `processLauncher.ts` unchanged** (tmux-preferred, detached
- * fallback) — the only new piece is wrapping the run script's stdout/stderr
- * into a single log file via shell redirection (`<script> >> <logFile>
- * 2>&1`, built through `shellCommand.ts`'s `buildShellInvocation`) BEFORE
- * launch, since `launchProviderProcess` doesn't expose a stdout pipe for the
- * tmux path (a real pty, not a Node child process stream) the way
- * `setupScript.ts`'s plain `cross-spawn` child does. Documented tradeoff:
- * the tmux pane itself shows no output — the log file is the single source
- * both `run.status`'s `logTail` and a `tmux attach`'d `tail -f` read.
- *
- * **Liveness is probed lazily, on demand** — no daemon-boot re-adoption
- * task exists (or is needed) for this subsystem: `tmux has-session -t
- * <name>` for the tmux method, `process.kill(pid, 0)` for the detached
- * method (same PID-recycling caveat `runStateStore.ts`'s `RunEntry` doc
- * comment already flags).
+ * Output goes to a log file (stdout/stderr redirected via `buildShellInvocation`)
+ * because `launchProviderProcess` doesn't expose a Node stream for the tmux path.
+ * Liveness is probed lazily on demand.
  */
 import { execFile } from "node:child_process";
 import type {
@@ -76,7 +56,6 @@ export interface RunContext {
   workspaceRoot: string;
 }
 
-/** Resolves + authorizes `worktree` — throws `RunProcessError` when it isn't inside any registered workspace (design §12). */
 export async function resolveRunContext(
   worktree: string,
   options: RegistryOptions = {},
@@ -151,7 +130,6 @@ async function isRunEntryLive(entry: RunEntry, deps: RunProcessDeps): Promise<bo
   return isAlive(entry.pid);
 }
 
-/** SIGTERM, wait up to 5s, then SIGKILL if still alive — mirrors `kill.ts`'s escalation policy (kvy-system-design.md §11) at the scale of a single run entry, plus a best-effort `tmux kill-session` for the tmux method. */
 async function defaultKillRunEntry(entry: RunEntry, deps: RunProcessDeps): Promise<void> {
   const isAlive = deps.isAlive ?? defaultIsAlive;
 

@@ -123,7 +123,6 @@ async function failOrphanedSession(
  * `attention` ephemeral + push dispatch) so web clients pick this up
  * identically to a self-reported failure, with no new client-side code.
  * Deferred to `reply.raw`'s `finish` event for the same reason as every
- * other write route (design §6.1: never fan out before the transaction's
  * response has actually been sent).
  */
 function fanOutOrphanedSession(

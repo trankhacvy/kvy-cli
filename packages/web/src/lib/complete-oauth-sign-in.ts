@@ -1,26 +1,16 @@
 /**
- * Shared completion step for both OAuth callback pages
- * (`src/app/auth/callback/google`, `.../github`) — design §5.2 "Sign-up":
- * find-or-create this login identity, PIN-wrap (or reuse) this device's key
- * material, and bind it via `keys/challenge`+`keys/bind` (§6.2) — the same two-step
- * shape `complete-password-sign-in.ts`'s `completePasswordSignUp` uses, since OAuth
- * and password are both first-class login identities now (§5.5), separate from key
- * custody.
+ * Shared completion step for both OAuth callback pages. Finds-or-creates this login
+ * identity, wraps (or reuses) this device's key material, and binds it via
+ * `keys/challenge`+`keys/bind`.
  *
- * If this browser already holds a provisioned identity (`getIdentity()`
- * resolves non-null — e.g. the user is re-linking an OAuth account rather
- * than signing up fresh), that identity is reused as-is rather than
- * generating (and silently orphaning) a second one; `/v1/auth/register`'s
- * upsert-by-`(provider, subject)` semantics make this a safe rebind. Only the
- * genuinely-new-identity path needs a PIN — there is nothing to unlock when
- * reusing an existing one (the caller is expected to already be in an unlocked
- * state, or handle `needs-unlock` itself, mirroring `/password/`'s post-login step).
+ * If this browser already holds a provisioned identity for this account, it is reused
+ * rather than generating a second one; `/v1/auth/register`'s upsert-by-(provider,subject)
+ * semantics make this a safe rebind. The existing-identity path returns the refresh token
+ * to the caller to persist once its own post-login unlock step confirms the worker is ready.
  *
- * Security review finding F1: the refresh token from `register()` is PIN-wrapped
- * (never `localStorage`) — the new-identity path persists it directly via
- * `bridge.init(masterSecret, pin, refreshToken)`; the existing-identity path returns it
- * to the caller (`oauth-callback-page.tsx`) to persist via `bridge.setRefreshToken`
- * once its own post-login unlock step confirms the worker is unlocked.
+ * The refresh token from `register()` is never stored in localStorage - the new-identity
+ * path persists it via `bridge.init(masterSecret, refreshToken)`; the existing-identity
+ * path returns it to the caller to persist via `bridge.setRefreshToken`.
  */
 import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";

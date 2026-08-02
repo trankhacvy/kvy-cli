@@ -2,11 +2,8 @@ import type { PermissionMode } from "@kvy/wire";
 import type { RenderItem } from "@/sync/reducer";
 
 /**
- * The session's current local/remote control mode (kvy-system-design.md
- * §7.5's mode state machine), read straight off the most recent
  * `mode-switch` item — `"local"` if none has happened yet (sessions start
  * local unless spawned with `--starting-mode remote`). Drives whether
- * `ControlBar` offers "Take control" at all (design §4.4: `takeControl`
  * "triggers local→remote switch" — nothing to take if it's already remote).
  */
 export function deriveControlMode(items: RenderItem[]): "local" | "remote" {
@@ -23,7 +20,6 @@ export function deriveControlMode(items: RenderItem[]): "local" | "remote" {
  * imported, for the same reason `attention.ts`'s `hasPendingPermission` is:
  * this module's only dependency should be the `RenderItem` type itself).
  * Used as a fallback "working" signal alongside the live `activity`
- * ephemeral (design §4.3's ephemerals are droppable/coalesced — a missed
  * one shouldn't disable Interrupt on an actually-open turn). */
 export function isTurnOpen(items: RenderItem[]): boolean {
   let open = false;
@@ -71,8 +67,6 @@ export function deriveWorking(items: RenderItem[], ephemeralWorking: boolean): b
 }
 
 /**
- * The session's current permission mode (kvy-system-design.md §7.5,
- * plan-v2.md W2.4), replacing `SessionTimelineScreen`'s previously-hardcoded
  * `"default"` passed to `ControlBar`. There is no wire event carrying a bare
  * "the mode is now X" fact — `mode-switch` items only carry *control*
  * (`"local"` | `"remote"`, see `deriveControlMode` above), never a

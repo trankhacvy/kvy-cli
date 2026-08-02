@@ -15,18 +15,8 @@ import { TodoCard } from "./TodoCard";
 import { WebFetchCard } from "./WebFetchCard";
 import { WebSearchCard } from "./WebSearchCard";
 
-/** ToolCard registry (kvy-system-design.md §9.2: "Bash, Edit+diff, Read,
- * Grep, Todo, Task/subagent group" — ported from Happy's `knownTools.tsx`
- * mapping, plan.md §8.4). Any tool name not listed here, plus every
- * `mcp__*` tool, falls back to `McpGenericCard`. `AskUserQuestion` (plan-v2.md
- * W2.1) gets its own read-only card instead of that raw-JSON fallback.
- * `WebFetch`/`WebSearch`/`NotebookEdit`/`LS` (plan-v2.md W3.1) round out
- * coverage against Happy's own `knownTools.tsx` (19 native tools).
- * `ExitPlanMode`/`exit_plan_mode` (bug-fix-plan.md #6) get a dedicated card
- * instead of falling to the raw-JSON `McpGenericCard` fallback.
- * `TaskCreate`/`TaskUpdate` (bug-fix-plan.md #7) are Claude Code's current
- * task/checklist tool pair, replacing `TodoWrite` — they get their own
- * `TaskEntryCard` instead of falling through to `McpGenericCard`. */
+/** ToolCard registry: maps tool names to their card components. Any tool name not listed
+ * here, plus every `mcp__*` tool, falls back to `McpGenericCard`. */
 const REGISTRY: Record<string, (item: ToolItem) => ReactElement> = {
   Bash: (item) => <BashCard item={item} />,
   Edit: (item) => <EditCard item={item} />,

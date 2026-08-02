@@ -124,12 +124,9 @@ describe("completePasswordSignUp", () => {
     expect(outcome).toEqual({ kind: "ok", nextUrl: "/pair/#eph-pub-base64==" });
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 4, Part A: a genuinely new account (this function only
-  // ever runs for one — the already-registered case is the blank-token branch below) can
-  // never legitimately already have key material on this browser, so the old reuse branch
-  // is gone. A browser holding a DIFFERENT account's leftover keys must still provision
-  // fresh, account-scoped ones rather than silently reusing (and later trying to bind) the
-  // other account's public key.
+  // A new account can never legitimately already have key material on this browser.
+  // A browser holding a DIFFERENT account's leftover keys must provision fresh,
+  // account-scoped ones rather than silently reusing the other account's public key.
   it("always provisions fresh key material for a new account, even when this browser already holds a DIFFERENT account's identity", async () => {
     const token = fakeAccessToken("acct_1");
     passwordRegisterMock.mockResolvedValue({ success: true, token, refreshToken: "rt1" });
@@ -155,7 +152,7 @@ describe("completePasswordSignUp", () => {
     );
   });
 
-  it("reports existing-account (not a crash) on password.ts's §5.2 no-enumeration blank-token response", async () => {
+  it("reports existing-account (not a crash) on the server's no-enumeration blank-token response", async () => {
     passwordRegisterMock.mockResolvedValue({ success: true, token: "", refreshToken: "" });
     const bridge = fakeBridge();
 

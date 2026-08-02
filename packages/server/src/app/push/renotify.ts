@@ -2,10 +2,7 @@ import type { LifecycleKind } from "./types.js";
 
 /**
  * Re-notify schedule for an unanswered permission-request push (design
- * §6.4: "Re-notify unanswered `perm-request` at +5 min, +10 min (max 3)",
- * plan.md §10's "Server dispatch" bullet). `question` is included alongside
  * `perm` — the design doc treats an agent question as "a perm-request with
- * `name: 'AskUserQuestion'`" (§6.4), i.e. both are "waiting on a human
  * answer" states; `done`/`failed` are terminal and never scheduled.
  *
  * `RENOTIFY_DELAYS_MS.length` follow-ups plus the initial attempt itself
@@ -19,7 +16,6 @@ const RENOTIFIABLE_KINDS: ReadonlySet<LifecycleKind> = new Set(["perm", "questio
  * Tracks, per session, the follow-up timers for one outstanding
  * perm-request/question dispatch. There is deliberately no separate
  * "answered" signal here: the server holds no plaintext permission state
- * (agentState is E2E-encrypted, design §5.3), so a follow-up is suppressed
  * the exact same way the initial dispatch is — via the caller's presence
  * check (`PresencePort.hasActiveVisibleClient`) run again at fire time.
  *

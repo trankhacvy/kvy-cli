@@ -1,10 +1,7 @@
 /**
- * Hand-rolled argument parsing for the `kvy` command surface (PRD §5.3,
- * plan.md §6.1). No CLI-parsing framework — same approach Happy uses, and
- * the one that makes verbatim flag passthrough easy to reason about: a
- * framework wants to own and validate every flag, which is exactly wrong
- * for `kvy claude [args...]`, where *every* flag must reach the
- * underlying provider CLI untouched.
+ * No CLI-parsing framework — a framework wants to own and validate every
+ * flag, which is exactly wrong when every flag must reach the underlying
+ * provider CLI untouched.
  *
  * Two parsing modes coexist:
  *  - Kvy's own subcommands (`auth`, `daemon`, `kill`, `doctor`,
@@ -97,17 +94,14 @@ export function parseArgs(argv: string[]): KvyCommand {
   // `kvy claude --help` correctly forwards `--help` to Claude Code.
   if (HELP_FLAGS.has(first)) return { type: "help" };
   if (VERSION_FLAGS.has(first)) return { type: "version" };
-  // `kvy --continue` aliases `kvy adopt` (design §7.8 FR-9.2, plan.md
-  // §16 "3.3 Session adoption (UC9)"): preselect the most-recent plain
-  // session in cwd's workspace and continue it. `--remote`/`--list`
-  // compose the same way as `kvy adopt` itself (`kvy --continue
-  // --remote`).
+  // `kvy --continue` aliases `kvy adopt`: preselects the most-recent plain
+  // session in cwd's workspace and continues it. `--remote`/`--list`
+  // compose the same way as `kvy adopt` (`kvy --continue --remote`).
   if (CONTINUE_FLAGS.has(first)) return parseAdopt(rest);
 
   if (isProvider(first)) {
-    // Everything after the provider name is passed through VERBATIM —
-    // Kvy never interprets provider flags (PRD §5.3: "all unknown flags
-    // pass through verbatim to the underlying CLI").
+    // Everything after the provider name is passed through verbatim —
+    // Kvy never interprets provider flags.
     return { type: "start", provider: first, providerArgs: rest };
   }
 
@@ -203,13 +197,9 @@ function parseDaemon(rest: string[]): KvyCommand {
   if (action === "start-sync" || action === "stop" || action === "status") {
     return { type: "daemon", action, noWait: false };
   }
-  // `kvy daemon service install|uninstall|status` (kvy-prd.md FR-4.1,
-  // kvy-system-design.md §8 "Service install (P1)") — registers the
-  // daemon as a login-managed OS service (launchd plist / systemd --user
-  // unit). Kept as its own `daemon-service` command type rather than
-  // overloading `daemon`'s own `status`/`start` actions, since "is the OS
-  // service registered" is a distinct question from "is the daemon process
-  // currently running" (`daemon status` above).
+  // `kvy daemon service` is its own command type rather than overloading
+  // `daemon`'s `status`/`start` actions — "is the OS service registered"
+  // is a distinct question from "is the daemon process currently running".
   if (action === "service") {
     return parseDaemonService(rest.slice(1));
   }
@@ -371,8 +361,7 @@ function parseAdopt(rest: string[]): KvyCommand {
   return { type: "adopt", list, remote };
 }
 
-/** `kvy keys approve` — answer another device's request for a copy of this account's
- * keys (docs/auth-ux-overhaul-plan.md AX-4.19). */
+/** Answer another device's key-sharing request. */
 function parseKeys(rest: string[]): KvyCommand {
   const action = rest[0];
   if (action === "approve") return { type: "keys", action };
@@ -392,7 +381,7 @@ function parseAdapters(rest: string[]): KvyCommand {
 
 const GITHUB_USAGE = "kvy github login [--token] [--client-id <id>] | logout | status";
 
-/** `kvy github login|logout|status` (docs/features/github-pr-ci.md "GITHUB AUTH"). `login`'s `--token` takes no inline value — it's a bare toggle for the stdin-prompt path (`commands/github.ts`), never a flag a token could be passed to directly (that would leak into shell history/`ps`). */
+/** `login`'s `--token` is a bare toggle, never a flag a token value can be passed to directly — that would leak into shell history and `ps` output. */
 function parseGithub(rest: string[]): KvyCommand {
   const [action, ...opts] = rest;
   if (action === "logout" || action === "status") {

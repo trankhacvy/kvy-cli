@@ -4,7 +4,6 @@ import { ntfyChannel } from "./ntfy.js";
 import { telegramChannel } from "./telegram.js";
 import { webpushChannel } from "./webpush.js";
 
-/** `pushSubscriptions.channel -> sender` registry (plan.md §10). */
 export const channels: Record<PushChannelName, PushChannel> = {
   webpush: webpushChannel,
   telegram: telegramChannel,

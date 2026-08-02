@@ -583,16 +583,9 @@ describe("registerMachineRpcHandlers", () => {
     });
 
     describe("with the real default (no mocked-away side effect)", () => {
-      // Live-equivalent coverage (plan.md §16 "Flow 3 —
-      // spawn-fresh-folder-register (Piece A)" Definition of Done): unlike
-      // every other `describe` block above, this one does NOT override
-      // `registerWorkspace` in `register(...)` — it exercises
-      // `machineRpc.ts`'s real, dependency-free default
-      // (`workspaceRegisterRpc.ts`, wrapping `workspace/registry.ts`'s real
-      // `registerWorkspace`), pointed at a temp `~/.kvy`-equivalent via
-      // `KVY_HOME_DIR`, and asserts the actual `workspaces.json` file the
-      // real registry writes — proving the RPC really performs the durable
-      // side effect, not just that some function got called.
+      // Exercises `machineRpc.ts`'s real default (`workspaceRegisterRpc.ts`)
+      // pointed at a temp `~/.kvy`-equivalent, asserting the actual `workspaces.json`
+      // the real registry writes — proving the RPC performs the durable side effect.
       let homeDir: string;
       let previousKvyHomeDir: string | undefined;
 
@@ -1314,11 +1307,7 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_github_checks_2", worktree: "/repo" }, DEK),
       );
       // The shared `onRpcRequest` catch clause forwards the handler's own
-      // thrown message (see this module's doc comment / `git.commit`'s
-      // sibling test above) rather than a flat "handler-error" placeholder —
-      // this test predates that change (docs/features/git-write-actions.md),
-      // so it's updated to match the now-current, strictly more useful
-      // behavior every handler shares.
+      // thrown message rather than a flat "handler-error" placeholder.
       expect(open(response, DEK)).toEqual({
         ok: false,
         error: "GitHub API request failed: HTTP 500",
@@ -1357,11 +1346,7 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_commands_2", worktree: "/repo" }, DEK),
       );
       // The shared `onRpcRequest` catch clause forwards the handler's own
-      // thrown message (see this module's doc comment / `git.commit`'s
-      // sibling test above) rather than a flat "handler-error" placeholder —
-      // this test predates that change (docs/features/git-write-actions.md),
-      // so it's updated to match the now-current, strictly more useful
-      // behavior every handler shares.
+      // thrown message rather than a flat "handler-error" placeholder.
       expect(open(response, DEK)).toEqual({ ok: false, error: "boom" });
     });
   });
@@ -1393,11 +1378,7 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_git_files_2", worktree: "/repo" }, DEK),
       );
       // The shared `onRpcRequest` catch clause forwards the handler's own
-      // thrown message (see this module's doc comment / `git.commit`'s
-      // sibling test above) rather than a flat "handler-error" placeholder —
-      // this test predates that change (docs/features/git-write-actions.md),
-      // so it's updated to match the now-current, strictly more useful
-      // behavior every handler shares.
+      // thrown message rather than a flat "handler-error" placeholder.
       expect(open(response, DEK)).toEqual({
         ok: false,
         error: "fatal: not a git repository",
@@ -1432,11 +1413,7 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_fs_read_2", worktree: "/repo", path: "img.png" }, DEK),
       );
       // The shared `onRpcRequest` catch clause forwards the handler's own
-      // thrown message (see this module's doc comment / `git.commit`'s
-      // sibling test above) rather than a flat "handler-error" placeholder —
-      // this test predates that change (docs/features/git-write-actions.md),
-      // so it's updated to match the now-current, strictly more useful
-      // behavior every handler shares.
+      // thrown message rather than a flat "handler-error" placeholder.
       expect(open(response, DEK)).toEqual({
         ok: false,
         error: "looks like a binary file",
@@ -1494,11 +1471,7 @@ describe("registerMachineRpcHandlers", () => {
         seal({ idempotencyKey: "idem_provider_account_2", provider: "codex" as const }, DEK),
       );
       // The shared `onRpcRequest` catch clause forwards the handler's own
-      // thrown message (see this module's doc comment / `git.commit`'s
-      // sibling test above) rather than a flat "handler-error" placeholder —
-      // this test predates that change (docs/features/git-write-actions.md),
-      // so it's updated to match the now-current, strictly more useful
-      // behavior every handler shares.
+      // thrown message rather than a flat "handler-error" placeholder.
       expect(open(response, DEK)).toEqual({
         ok: false,
         error: "unexpected failure",
@@ -1506,7 +1479,7 @@ describe("registerMachineRpcHandlers", () => {
     });
   });
 
-  describe("sleepInhibit.get / sleepInhibit.set (docs/features/sleep-inhibit.md)", () => {
+  describe("sleepInhibit.get / sleepInhibit.set", () => {
     it("sleepInhibit.get decrypts params, calls getSleepInhibit, and seals the result", async () => {
       const socket = new FakeSocket();
       const getSleepInhibit = vi.fn(async () => ({
@@ -1991,7 +1964,7 @@ describe("registerMachineRpcHandlers", () => {
       expect(previewClose).toHaveBeenCalledTimes(2);
     });
   });
-  describe("workspace.getConfig (docs/features/setup-run-scripts.md)", () => {
+  describe("workspace.getConfig", () => {
     it("decrypts params, calls getWorkspaceConfig, and seals the result", async () => {
       const socket = new FakeSocket();
       const getWorkspaceConfig = vi.fn(async () => ({

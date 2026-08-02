@@ -1,19 +1,7 @@
 /**
- * Shared "is a plain (non-Kvy) `claude` process live for this workspace,
- * and which transcript does it own" check (design §7.8/§8, plan.md §16
- * "3.3 Session adoption (UC9)") — used both by `kvy adopt`'s local
- * listing (`adopt/listSessions.ts`) and the daemon's `adopt.take` RPC
- * (`daemon/adoptTake.ts`, to find the pid to signal on takeover).
- *
- * Mirrors `daemon/transcriptIndexer.ts`'s private `isPlainClaudeCommand` +
- * `computeRunning` (same heuristic: a live, non-Kvy `claude` process
- * whose cwd resolves to the workspace path, paired with whichever
- * transcript in that project dir was most recently modified — the file
- * that process is presumed to own). Reimplemented here rather than
- * imported since `transcriptIndexer.ts` doesn't export those symbols and
- * this task's scope deliberately avoids editing that module — kept in
- * lockstep by design: if the indexer's heuristic ever changes, this should
- * change with it.
+ * Reimplemented rather than imported because `daemon/transcriptIndexer.ts`
+ * doesn't export these symbols. Must be kept in lockstep with the indexer's
+ * heuristic — if that changes, this must change with it.
  */
 import { readdir, stat } from "node:fs/promises";
 import path, { resolve as resolvePath } from "node:path";

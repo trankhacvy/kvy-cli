@@ -1,26 +1,14 @@
 /**
- * issue-4-plan.md §5.2/§6.3: email+password sign-up/sign-in, the password-identity
- * sibling of `complete-oauth-sign-in.ts`. Unlike OAuth (where the server never sees a
- * password and the flow is "prove an external identity, then bind local keys"),
- * register/login here mint a session first — key binding is a separate step
- * afterward, using `keys/challenge` + `keys/bind` (§6.2) once the account is
- * authenticated.
+ * Email+password sign-up/sign-in. Register/login mint a session first; key binding
+ * is a separate step afterward via `keys/challenge` + `keys/bind` once authenticated.
  *
- * issue-4-plan.md §6.1: the generated `masterSecret` is PIN-wrapped at rest
- * (`bridge.init(masterSecret, pin, refreshToken)`) — signup collects a PIN alongside
- * email/password. Security review finding F1: the refresh token from
- * `passwordRegister`/`passwordLogin` is PIN-wrapped the same way (never `localStorage`)
- * — signup persists it via `init` directly; sign-in returns it to the caller
- * (`password/page.tsx`) to persist via `bridge.setRefreshToken` once the post-login
- * unlock step confirms the worker is unlocked (sign-in itself doesn't take a `bridge`
- * — whether this device's crypto worker is even unlocked yet is a separate concern,
- * see `lib/use-unlocked-crypto-bridge.ts`).
+ * The refresh token from `passwordRegister`/`passwordLogin` is never stored in localStorage
+ * - signup persists it via `bridge.init`; sign-in returns it to the caller to persist via
+ * `bridge.setRefreshToken` once the post-login unlock step completes.
  *
- * §6.2/§6.4's "lost PIN -> rotate epoch" flow lives in `rotateKeyEpoch` below: a known
- * account, on a browser that either has no local identity or whose PIN nobody
- * remembers, generates a brand-new masterSecret + PIN and rotates the account's bound
- * key material — fenced by a real step-up proof (password re-entry) and the
- * "other devices online" 409 interlock (`keys/bind`'s own check).
+ * The "rotate epoch" flow (`rotateKeyEpoch`) handles a known account whose local key
+ * material is absent or inaccessible - generates a fresh masterSecret and force-rotates
+ * the account's bound key material, fenced by a step-up proof and the 409 interlock.
  */
 import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
@@ -32,15 +20,11 @@ export interface PasswordSignInOutcome {
   nextUrl: string;
 }
 
-/** `completePasswordSignUp`'s outcome — distinct from `PasswordSignInOutcome` above because
- * register (unlike login) has a second, non-error terminal state: `password.ts`'s §5.2
- * no-enumeration branch for an already-registered email returns the exact same
- * `{success:true}` shape as a real sign-up, but with `token`/`refreshToken` both `""` — there
- * is no session and no account id to bind key material to, so there is nothing left for THIS
- * browser to do but hand the caller back to the sign-in flow. That is a distinct outcome from
- * both "created a new identity" and "network/validation error" (`ApiError`), so it gets its
- * own `kind` rather than being coerced into either.
- */
+/** `completePasswordSignUp`'s outcome. Distinct from `PasswordSignInOutcome` because register
+ * has a second non-error terminal state: the server's no-enumeration branch for an already-registered
+ * email returns `{success:true}` with blank `token`/`refreshToken` — no session to set up,
+ * so the caller routes back to sign-in instead. This `kind` keeps that distinct from both
+ * "created a new identity" and a thrown `ApiError`. */
 export type PasswordSignUpOutcome = { kind: "ok"; nextUrl: string } | { kind: "existing-account" };
 
 /** Sign-in's own outcome additionally carries the refresh token — this device's crypto
@@ -70,11 +54,9 @@ function decodeAccountId(accessToken: string): string {
 }
 
 /**
- * `POST /v1/auth/password/register` → generate a `masterSecret`, PIN-wrap it AND the
- * fresh refresh token (`bridge.init`), and bind its key material via
- * `keys/challenge`+`keys/bind` (first bind, epoch 1). Idempotent-ish: re-registering
- * the same email is handled server-side (§5.2 no-enumeration) — this function only
- * ever runs for a genuinely fresh sign-up attempt from the caller's perspective.
+ * `POST /v1/auth/password/register` - generates a `masterSecret`, wraps it and the
+ * refresh token via `bridge.init`, and binds key material via `keys/challenge`+`keys/bind`.
+ * Re-registering the same email is handled server-side (returns blank tokens - see outcome).
  */
 export async function completePasswordSignUp(
   bridge: CryptoBridgeClient,
@@ -84,11 +66,9 @@ export async function completePasswordSignUp(
 ): Promise<PasswordSignUpOutcome> {
   const { token, refreshToken } = await passwordRegister({ email, password });
   if (!token || !refreshToken) {
-    // §5.2 no-enumeration: the server returns this exact `{success:true}` shape (with both
-    // fields blanked) when `identifier` is already registered, instead of a 409 that would let
-    // a caller distinguish "new" from "existing" from the response alone. There's no session
-    // here to `setToken` and no account id to bind key material to — the caller's job is just
-    // to route this browser back to sign-in, not to treat it as a failure.
+    // No-enumeration: the server returns {success:true} with blank fields when the email is
+    // already registered, rather than a 409 that would distinguish "new" from "existing".
+    // No session to set up - the caller routes back to sign-in.
     return { kind: "existing-account" };
   }
   setToken(token);
@@ -110,9 +90,8 @@ export async function completePasswordSignUp(
     throw new Error("crypto bridge failed to provision an identity");
   }
 
-  // §6.2: bind this device's key material now that we have an authenticated session.
-  // The WORKER signs accountId‖contentPubKey‖nonce; the account id is the `sub` claim of
-  // the access token we just received.
+  // Bind this device's key material now that we have an authenticated session.
+  // The worker signs accountId‖contentPubKey‖nonce.
   const { nonce } = await keysChallenge(token);
   const proof = await bridge.bindKeysProof(accountId, nonce);
   await keysBind(token, {
@@ -146,14 +125,10 @@ export async function completePasswordSignIn(
 }
 
 /**
- * issue-4-plan.md §6.2/§6.4 "lost PIN -> rotate epoch": generates a brand-new
- * masterSecret + PIN on THIS browser, and force-rotates the account's bound key
- * material to match — fenced by `keys/bind`'s own explicit-rotation checks (a real
- * step-up password re-proof, and a 409 if another device session is still healthy,
- * since a blind rotation would race that session's next encrypted write under the
- * now-dead epoch). The caller must already hold a valid access token (post-login) and
- * its current refresh token (carried over unchanged — rotating key material doesn't
- * rotate the session, only the master secret).
+ * Generates a fresh masterSecret and force-rotates the account's bound key material -
+ * fenced by `keys/bind`'s explicit-rotation checks (step-up password re-proof, 409 if
+ * another device is still healthy). Rotating key material doesn't rotate the session;
+ * the caller's current access+refresh tokens carry over unchanged.
  */
 export async function rotateKeyEpoch(
   bridge: CryptoBridgeClient,
@@ -211,24 +186,16 @@ export type RotateKeyEpochOAuthOutcome =
   | { kind: "error"; message: string };
 
 /**
- * The OAuth-step-up twin of `rotateKeyEpoch` above — reachable once email+password auth is
- * dev-only (docs/auth-ux-hardening-plan.md item 3), an OAuth-only account still needs a way to
- * rotate a forgotten-PIN browser's key material. Fenced by the same `keys/bind` explicit-
- * rotation checks, just with an `oauth` `stepUpProof` instead of a re-entered password.
+ * OAuth-step-up twin of `rotateKeyEpoch` — for accounts that can't re-enter a password.
+ * Fenced by the same `keys/bind` explicit-rotation checks with an `oauth` stepUpProof.
  *
- * Takes the refresh token as a PARAMETER, exactly like `rotateKeyEpoch` does — there is no
- * `bridge.getRefreshToken()` and there must never be one (security review finding F1: the raw
- * refresh token never crosses out of the crypto worker to the main thread). The caller
- * (`/reset-keys/`) carries it in from the OAuth callback's in-memory return channel
- * (`lib/pending-stepup.ts`'s `takeStepUpReturn()`), which is exactly how it got a fresh refresh
- * token to hand over in the first place — this function never fetches or refreshes one itself.
+ * Takes the refresh token as a parameter — there is no `bridge.getRefreshToken()` and must
+ * never be one (the raw refresh token must never cross out of the crypto worker to the main
+ * thread). The caller carries it from the OAuth callback's in-memory return channel.
  *
- * `bridge.init` MUST run before `bridge.bindKeysProof` — the worker rejects the signing call
- * when it isn't initialized (`crypto/client.ts`). This means a proof the server later rejects
- * (401 wrong-account / 409 other-devices-online) has already overwritten this browser's
- * previous wrapped record, same as `rotateKeyEpoch`'s password path already accepts; only the
- * "abandoned before submitting" case (never reaching this function at all) genuinely avoids
- * orphaning key material.
+ * `bridge.init` MUST run before `bridge.bindKeysProof`. A proof the server rejects (401/409)
+ * has already overwritten this browser's previous wrapped record - only "abandoned before
+ * calling this function" avoids that, same tradeoff the password path accepts.
  */
 export async function rotateKeyEpochOAuth(
   bridge: CryptoBridgeClient,

@@ -1,33 +1,20 @@
 /**
- * Session RPC registration (plan.md §16 "2.1 Remote mode": "Session RPC
  * registration: `message`, `interrupt`, `takeControl`, `setMode`,
- * `perm.answer` handlers over the relay"; design §4.4's "Session RPCs —
- * registered by the session process" table; `stop` added by plan-v2.md
  * W2.3 "Stop session from the web").
  *
- * Ported (adapted) from Happy's `RpcHandlerManager`
- * (happy-cli/src/api/rpc/RpcHandlerManager.ts, MIT) and the `rpc-request`
- * wiring in `happy-cli/src/api/apiSession.ts` — same shape (register a
  * target by joining a room, decrypt on receipt, encrypt the reply, ack via
  * callback), adapted to Kvy's actual (already-landed) server contract and
- * wire schemas rather than Happy's own:
  *
  *  - **Registration payload is `{ target }`, not `{ method }`.** Kvy's
  *    server-side `rpcHandler.ts` (`packages/server/src/app/socket/rpcHandler.ts`,
- *    ported wholesale from Happy's own server) reads `data.target` off
  *    `rpc-register`/`rpc-unregister` — that's the field name this module
- *    must emit, regardless of what Happy's CLI-side manager historically
  *    sent.
  *  - **Params/results are `EncryptedBox` objects, not opaque base64
  *    strings.** `@kvy/wire`'s `RpcCallSchema.params: EncryptedBoxSchema`
- *    (design §4.4: "Params/results are always an `EncryptedBox`") — so this
  *    module seals/opens `{t:'enc', v:1, c}` objects via `@kvy/crypto`'s
  *    `seal`/`open` (the same session DEK the HTTP outbox encrypts messages
- *    under), not Happy's own base64-string convention.
  *  - **One handler per method, not a generic bag.** The session RPC
- *    methods are fixed by the wire contract (design §4.4's table, plus
  *    `stop`), so
- *    `SessionRpcHandlers` is a closed interface instead of Happy's
  *    `registerHandler(method, fn)` free-form registry.
  *  - **Validated against the wire schemas.** Every decrypted params/result
  *    payload is round-tripped through its `@kvy/wire` zod schema — a
@@ -73,8 +60,6 @@ type StopRpcParams = z.infer<typeof StopRpcParamsSchema>;
 type StopRpcResult = z.infer<typeof StopRpcResultSchema>;
 
 /**
- * The session RPC methods design §4.4 lists as "registered by the session
- * process", plus `stop` (plan-v2.md W2.3 — a session RPC, not the daemon's
  * machine-scoped `stopSession`: the session process is alive and owns its
  * own child, so ending it doesn't need a daemon round-trip).
  */
@@ -180,7 +165,6 @@ function errorBox(dek: Uint8Array, error: string): EncryptedBox {
  * `s:<sessionId>:<method>` room for each on every (re)connect, and answers
  * `rpc-request` by decrypting params, validating + running the matching
  * handler, and sealing the result back for the server's `emitWithAck` to
- * relay to the caller (design §4.4's routing rules — this module only ever
  * sees the local half of that contract).
  */
 export function registerSessionRpcHandlers(deps: SessionRpcDeps): SessionRpcHandle {

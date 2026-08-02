@@ -354,8 +354,7 @@ function AllFilesTab({
  * it shares the composer's own optimistic-pending/error handling.
  * `actionsDisabled` is `isSessionControlDisabled(sessionStatus)` — combined
  * with `looksLikeWorktreePath(worktree)` at each action's own gate, since a
- * worktree-eligible session that's ended, or offline, must still hide these
- * actions (session-panel-workflow-plan.md §2).
+ * worktree-eligible session that's ended or offline must still hide these actions.
  */
 export function SessionSidePanel({
   defaultTab = "changes",

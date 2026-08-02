@@ -10,7 +10,6 @@ export type PermissionMode = z.infer<typeof PermissionModeSchema>;
 /**
  * How a pending permission request was resolved. Carried by the
  * `perm-resolve` session event and the `perm.answer` session RPC (design
- * §4.2, §7.6).
  */
 export const PermDecisionSchema = z.discriminatedUnion("kind", [
   z.object({

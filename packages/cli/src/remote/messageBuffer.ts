@@ -1,11 +1,6 @@
 /**
- * Ported (adapted) from Happy's `MessageBuffer`
- * (happy-cli/src/ui/ink/messageBuffer.ts, MIT) — the small pub/sub buffer
  * `RemoteModeDisplay` renders from. Verbatim structure; the one behavioral
- * change is `summarizeEnvelope` below, which replaces Happy's
- * `formatClaudeMessageForInk` (that formatter reads Happy's own richer
  * `SDKMessage`/ACP log shape). Kvy's Ink display instead summarizes the
- * SAME `SessionEnvelope`s already flowing to the outbox (design §7.4's
  * `SDKToEnvelope` converter output) — one source of truth for what the
  * remote-mode terminal shows and what the web timeline shows, rather than
  * re-deriving a second formatting of the raw SDK stream.
@@ -63,7 +58,6 @@ function truncate(text: string): string {
 }
 
 /**
- * Summarizes one `SessionEnvelope` (design §4.2) into a short display line
  * for the remote-mode terminal. Returns `null` for envelopes with nothing
  * useful to show (e.g. bookkeeping-only turn markers).
  */
@@ -104,7 +98,6 @@ export function summarizeEnvelope(
     case "sub-stop":
       return { content: "⏹ Subagent finished", kind: "status" };
     case "usage":
-      // Token accounting (plan-v2.md W4.6) — a web-only chip, not worth a
       // line in this already-terse remote-mode terminal display.
       return null;
     case "plan":

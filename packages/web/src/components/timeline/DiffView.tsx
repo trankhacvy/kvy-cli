@@ -1,8 +1,7 @@
 import { diffLines } from "@/lib/diff";
 import { cn } from "@/lib/utils";
 
-/** Inline unified-style line diff for `Edit`/`Write`/`MultiEdit` tool cards
- * (kvy-system-design.md §9.2 "diffs via ... a custom unified renderer"). */
+/** Inline unified-style line diff for `Edit`/`Write`/`MultiEdit` tool cards. */
 export function DiffView({ oldText, newText }: { oldText?: string; newText?: string }) {
   if (oldText === undefined && newText === undefined) {
     return <p className="text-xs text-muted-foreground">(no change content captured)</p>;

@@ -5,11 +5,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { copy } from "@/lib/copy";
 
-/**
- * The only entry point to the destructive key-rotation flow. A link, never a primary
- * button sitting next to a safe one, and it always states what it erases before the user
- * can reach the rotation screen.
- */
 export function StartOverLink() {
   const router = useRouter();
   const [open, setOpen] = useState(false);

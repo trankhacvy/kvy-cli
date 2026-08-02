@@ -1,65 +1,3 @@
-/**
- * Maps Claude Code transcript entries (`RawJSONLines`, from `types.ts`) onto
- * `@kvy/wire`'s `SessionEnvelope` stream — the shape the HTTP outbox
- * (plan.md §6.5) batches, encrypts, and POSTs.
- *
- * Ported from happy-cli/src/claude/utils/sessionProtocolMapper.ts (MIT),
- * fidelity (P) — the mapping *rules* are preserved verbatim (plan.md §16
- * "1.4 Transcript pipeline"):
- *
- *  - assistant text block      -> `text`
- *  - thinking block            -> `text{thinking:true}`
- *  - non-Task `tool_use`       -> `tool-start`
- *  - Task `tool_use`           -> subagent registration, NO parent card;
- *                                 children of a not-yet-registered Task are
- *                                 buffered and replayed once it registers
- *  - `tool_result`             -> `tool-end`
- *  - sidechain `user` message  -> subagent-scoped text
- *
- * Deltas from Happy, driven by `@kvy/wire`'s actual (already-merged)
- * contract rather than Happy's own `happy-wire`:
- *
- *  - **No provider ids on the wire.** `session.ts`: "provider-native ids
- *    (`toolu_*`, Codex item ids) never cross the wire, only adapter-minted
- *    `call`/`reqId` strings." So every provider id (`tool_use.id`,
- *    `tool_result.tool_use_id`) is translated through a `Map<string,
- *    string>` that mints a cuid2 the first time an id is seen and returns
- *    the same cuid2 on every later reference — "provider-id -> cuid2 map"
- *    per the task description, replacing Happy's own approach (a mix of a
- *    random-mint map for tool calls and a deterministic sha256 hash for
- *    subagents). One map is kept for tool `call` ids, a second for
- *    `subagent` ids, since a Task's `tool_use.id` needs both a `call`
- *    identity (defensively, see below) and a `subagent` identity.
- *  - **`usage` is a sibling envelope, not an attached field** (plan-v2.md
- *    W4.6/C21+C22). `SessionEventSchema` carries no per-message metadata slot
- *    the way Happy's mapper attached `usage` directly onto its own message
- *    shape, so an assistant record's `message.usage` (when present and
- *    numeric) mints its own `{t:"usage"}` envelope in the same
- *    turn/subagent scope instead — see `pickUsage`/the end of the
- *    `assistant` branch below.
- *  - **No subagent title.** `sub-start` has no `title` field in
- *    `SessionEventSchema` (unlike Happy's `{t:'start', title?}`), so
- *    `pickTaskTitle`/`subagentTitles` has no equivalent here — the first
- *    thing a client sees in a subagent's scope is its prompt text instead.
- *  - **`text{md}` not `text{text}`.** `SessionEventSchema`'s text event
- *    field is named `md`.
- *  - **Only `Task` triggers subagent scope.** Happy also treated the older
- *    `Agent` tool name as subagent-launching (visibly, with a shown parent
- *    card); Claude Code's current tool set only uses `Task`, and the task
- *    description calls out `Task` specifically, so that's the only trigger
- *    ported.
- *
- * One piece of Happy's design is kept even though only `Task` triggers
- * subagent scope: a `call`/`subagent` cuid2 is minted for *every* `tool_use`
- * block, not only `Task`'s. This is what stops the orphan-buffer from
- * deadlocking — a child message's `parent_tool_use_id` is resolved against
- * this map on every message, and if the mapping doesn't exist yet the child
- * is buffered forever waiting for a registration that will never come
- * (e.g. a client resuming mid-session after the Task's own `tool_use` line
- * already scrolled out of the reprocessed window). Minting eagerly for
- * every tool call closes that gap at negligible cost — see maybeEmitSubagentStart.
- */
-
 import {
   type CreateEnvelopeOptions,
   createEnvelope,
@@ -75,10 +13,9 @@ import type { RawJSONLines } from "./types.js";
 export type SessionTurnEndStatus = Extract<SessionEvent, { t: "turn-end" }>["status"];
 
 /**
- * Mutable, per-session mapper state. Only `currentTurnId` is required —
- * every other field is an internal, lazily-created map/set, following
- * Happy's own state shape so tests can construct plain `{ currentTurnId:
- * null }` literals without needing a factory.
+ * Mutable, per-session mapper state. Only `currentTurnId` is required;
+ * every other field is an internal, lazily-created map/set. Tests can
+ * construct plain `{ currentTurnId: null }` literals without a factory.
  */
 export interface ClaudeEnvelopeMapperState {
   currentTurnId: string | null;
@@ -161,7 +98,6 @@ function lookupSubagentId(
 // `RawJSONLinesSchema` (types.ts) deliberately validates only the dedup-key
 // fields; everything else — `message.*`, `parentUuid`, `isSidechain`,
 // `parent_tool_use_id` — is real at runtime (Claude Code writes it) but
-// untyped, so these accessors cast narrowly, matching Happy's own
 // `pickUuid`/`pickParentUuid`-style helpers.
 
 interface RawTextBlock {
@@ -241,7 +177,6 @@ function isLocalCommandInvocation(content: string): boolean {
 }
 
 /**
- * Reads an assistant record's `message.usage` (plan-v2.md W4.6) — Claude
  * Code's real transcript shape (`__fixtures__/0-say-lol-session.jsonl`) is
  * `{input_tokens, output_tokens, cache_creation_input_tokens,
  * cache_read_input_tokens, service_tier}`; only the two counts the wire
@@ -321,7 +256,6 @@ function toolTitle(name: string, input: unknown): string {
   return `${name} call`;
 }
 
-// --- static tool -> risk map (plan-v2.md W3.3, PTY-path parity with
 // `acp/acpToEnvelope.ts`'s own `RISK_BY_KIND`, keyed by ACP `kind` there —
 // Claude Code's raw transcript instead names the tool directly, so this is
 // keyed by tool name). ---
@@ -344,8 +278,6 @@ function pickRisk(name: string): "read" | "write" | "exec" | "network" | undefin
   return RISK_BY_TOOL_NAME[name];
 }
 
-// --- image blocks -> `file` envelopes (plan-v2.md W3.2) ---
-// No blob-storage subsystem exists on the CLI yet (design §4.3's blob path is
 // server/web-side only, driven by the web composer's upload button — see
 // `optimistic-composer.ts:63`), so a transcript image is inlined directly
 // into the wire `file` event's `ref` as `inline:<base64>` when it's small
@@ -621,7 +553,6 @@ export function mapClaudeToEnvelopes(
 
   if (message.type === "summary" || message.type === "system") return envelopes;
 
-  // Compact boundary (plan-v2.md W4.6): a `/clear`/auto-compact replaces the
   // conversation history with a synthetic summary Claude Code re-injects as
   // its own assistant record. Surfaced as a quiet `service` marker rather
   // than dropped — no turn is opened for it, matching the pre-existing
@@ -713,7 +644,6 @@ export function mapClaudeToEnvelopes(
       }
     }
 
-    // Per-message token usage (plan-v2.md W4.6) — one `usage` envelope per
     // assistant record that carries one, in the same turn/subagent scope as
     // the content just emitted above; a web client renders it as a per-turn
     // token chip. Emitted last so it always trails the text/tool-start
@@ -841,7 +771,6 @@ export function mapClaudeToEnvelopes(
         // A tool result's own `content` can itself be a block array (e.g.
         // `Read` on an image file) — surface any image blocks nested in it
         // as their own `file`/`service` envelopes, right after the tool-end
-        // they belong to (plan-v2.md W3.2). `output` above keeps the raw
         // content untouched either way — this only adds envelopes, it
         // doesn't rewrite tool-end's payload.
         if (Array.isArray(resultBlock.content)) {

@@ -76,7 +76,7 @@ describe("oauth-callback-page.tsx — step-up branch (docs/auth-ux-hardening-pla
   });
 });
 
-describe("oauth-callback-page.tsx — returning-user 409 (docs/auth-ux-overhaul-plan.md Phase 4/5)", () => {
+describe("oauth-callback-page.tsx — returning-user 409", () => {
   it("detects a keys/bind 409 and offers key sharing instead of a dead end", () => {
     const handlerIndex = source.indexOf("async function handleProtectionChoice");
     expect(handlerIndex).toBeGreaterThan(-1);
@@ -85,11 +85,6 @@ describe("oauth-callback-page.tsx — returning-user 409 (docs/auth-ux-overhaul-
     expect(body).toContain('kind: "needs-keys"');
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 4 Part A2: the returning-browser effect's OWN catch
-  // (not just handleProtectionChoice's) reaches `completeOAuthSignIn`, which now takes the
-  // account-scoped `init` path whenever the effect's unscoped pre-check guessed "reuse" but
-  // the scoped check found a foreign record — surfacing as keysBind's 409 here too. Before
-  // this fix that 409 fell through to the generic "Sign-in failed" error.
   it("the returning-user effect's own catch ALSO handles a keys/bind 409, not just handleProtectionChoice's", () => {
     const effectIndex = source.indexOf("const identity = await bridge.getIdentity()");
     expect(effectIndex).toBeGreaterThan(-1);

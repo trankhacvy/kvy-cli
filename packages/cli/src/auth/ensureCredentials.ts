@@ -1,8 +1,3 @@
-/**
- * "Give me usable credentials, signing the user in if needed" — the single entry point
- * commands should use instead of `readCredentials()` followed by a hard failure
- * (docs/auth-ux-overhaul-plan.md AX-1.3/AX-1.9).
- */
 import type { Logger } from "../logger.js";
 import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
 import { type KvyCredentials, readCredentials } from "./credentials.js";

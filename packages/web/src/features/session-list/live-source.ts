@@ -30,8 +30,6 @@ import {
 import { useWorkspaceIndexContext } from "./workspace-index-context";
 
 /**
- * The Home screen's real `UseSessionListSnapshot` (kvy-system-design.md
- * §9.2 "Home" row, kvy-prd.md FR-7.1). Mirrors the seam
  * `features/git-diff/live-actions.ts` / `features/unmanaged-sessions/
  * live-actions.ts` use for "the real, non-mock implementation" — swapped in
  * at `session-list-screen.tsx`'s call site in place of `useMockSessionListData`.
@@ -44,7 +42,6 @@ import { useWorkspaceIndexContext } from "./workspace-index-context";
  * mechanism built here.
  *
  * Decryption: each session/machine's `metadata` is an `EncryptedBox` sealed
- * under its own row-level DEK (design §5.3) — `session.tag`/`machine.id`
  * carry no plaintext title. `useDecryptedTitles` below unwraps each row's
  * DEK (`bridge.setSessionKey`) and opens its metadata box
  * (`bridge.open`) one row at a time, since a crypto-bridge worker only ever
@@ -56,7 +53,6 @@ import { useWorkspaceIndexContext } from "./workspace-index-context";
  * codebase's "no silent failures, no silent data loss" design principle
  * (`@kvy/crypto`'s `open()` doc comment).
  *
- * Status inputs (plan.md §16 W3.6 "Home screen real status dots +
  * presence"): `machineOnline` prefers the live `machine-presence` ephemeral
  * (`use-machine-presence.ts`, shared with `features/unmanaged-sessions`),
  * falling back to the `lastSeenAt` heuristic until this machine's first
@@ -215,7 +211,6 @@ function useDecryptedItems(
 }
 
 /** Live `attention` ephemeral, fanned across every session this hook is
- * given (kvy-system-design.md §4.3) — mirrors
  * `features/session-control/use-session-ephemerals.ts`'s per-session
  * pattern, but as one shared subscription for however many rows are
  * currently rendered rather than one hook instance per open session. */

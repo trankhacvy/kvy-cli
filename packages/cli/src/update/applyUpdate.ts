@@ -1,7 +1,6 @@
 /**
  * Applies a self-update once `runUpdateCommand.ts` has already decided a
  * newer version is available — the actual "download and atomically replace
- * the running binary/npm install" half of plan.md §16 "4.3 Distribution &
  * self-host".
  */
 import { execFile } from "node:child_process";

@@ -4,8 +4,6 @@ const IDLE_COLOR = "#6b7280"; // muted-foreground-ish gray, matches SESSION_STAT
 const WORKING_COLOR = "#3b82f6"; // matches SESSION_STATUS_META's "working" blue
 
 /**
- * Tab title prefix reflecting a session's max attention state (kvy-prd.md
- * FR-7.9). Pure so it's testable without touching `document` — the DOM
  * side-effect lives in `use-tab-attention.ts`. Attention always wins over
  * "working": an outstanding permission/question/failure is more urgent than
  * "still going", per `attention.ts`'s own priority rule.
@@ -29,7 +27,6 @@ export function faviconColor(attention: AttentionState, working: boolean): strin
 }
 
 /** A solid-color dot favicon as a data URI — no image asset needed, cheap
- * enough to regenerate on every attention change (kvy-prd.md FR-7.9:
  * "cheap, high-value web ergonomics"). */
 export function faviconDataUri(color: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><circle cx="16" cy="16" r="14" fill="${color}"/></svg>`;

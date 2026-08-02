@@ -23,7 +23,6 @@ import { bootstrapSession } from "./bootstrap.js";
  * HTTP round trip over an ephemeral port, real in-memory Postgres) rather
  * than a mocked fetch — the create-then-recreate-with-same-tag idempotency
  * guarantee this module leans on lives in `POST /v1/sessions`'s
- * `(accountId, tag)` unique index (already merged, plan.md §1.2), not in
  * anything this module does itself, so it's only meaningfully verified end
  * to end.
  */

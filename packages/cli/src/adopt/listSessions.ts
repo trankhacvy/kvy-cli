@@ -1,15 +1,7 @@
 /**
- * Local (terminal-side) enumeration of plain Claude Code sessions for a
- * workspace directory — design §7.8's `listRecentSessions`: "enumerate
- * provider transcripts in cwd's workspace, preselect most recent." Backs
- * `kvy adopt [--list]` (plan.md §16 "3.3 Session adoption (UC9)").
- *
- * Purely local: no server round-trip. Reuses
- * `daemon/transcriptIndexer.ts`'s `parseTranscript` (title/last-activity
- * extraction) and `claude/scanner.ts`'s `getProjectPath` — the same
- * building blocks the daemon's ambient indexer uses, so a session listed
- * here always agrees with what the dashboard would eventually show for the
- * same workspace.
+ * Purely local enumeration: no server round-trip. Reuses the same building
+ * blocks as the daemon's ambient indexer, so sessions listed here always
+ * agree with what the dashboard shows for the same workspace.
  */
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";

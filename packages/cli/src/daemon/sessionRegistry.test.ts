@@ -76,7 +76,7 @@ describe("sessionRegistry", () => {
     expect(tracked?.sessionId).toBe("sess_1");
   });
 
-  it("trackSpawned records a spawned pid's directory, queryable via getSessions before any webhook arrives (plan.md §16 'Flow 3 — spawn-directory-dedup')", () => {
+  it("trackSpawned records a spawned pid's directory, queryable via getSessions before any webhook arrives", () => {
     const registry = createSessionRegistry({ homeDir });
     registry.trackSpawned(4242, "/Users/vy/projects/kvy");
 
@@ -106,7 +106,7 @@ describe("sessionRegistry", () => {
     });
   });
 
-  it("a session's spawn directory survives a daemon restart end-to-end, so spawn-dedup matches it again (plan.md §16 'Flow 3 — spawn-directory-dedup')", async () => {
+  it("a session's spawn directory survives a daemon restart end-to-end, so spawn-dedup matches it again", async () => {
     const realDirectory = "/Users/vy/projects/kvy";
 
     // --- daemon instance #1: a daemon-spawned session, tracked with its

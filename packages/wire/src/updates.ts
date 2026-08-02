@@ -10,7 +10,6 @@ import {
 } from "./rows";
 
 /**
- * Persistent, seq-ordered server -> client updates (design §4.3).
  *
  * ⚠ DELTA D1/D2 from Happy: writes happen over idempotent HTTP, not WS —
  * `Update` is a read-only broadcast of what already landed. `seq` is the
@@ -83,7 +82,6 @@ export type Update = z.infer<typeof UpdateSchema>;
 
 /**
  * Volatile server -> client signals: never persisted, never gap-checked,
- * safe to coalesce/drop under backpressure (design §4.3).
  */
 export const EphemeralSchema = z.discriminatedUnion("t", [
   z.object({
@@ -100,7 +98,6 @@ export const EphemeralSchema = z.discriminatedUnion("t", [
     // revoked (auth-ux-hardening-plan.md item 8) — distinguishes "needs
     // `kvy auth login`" from a plain power-off/asleep machine. Optional so
     // an old web client that doesn't know the field yet degrades to the
-    // pre-existing boolean-only "Offline" reading (design §5.3 additive-only).
     needsReauth: z.boolean().optional(),
   }),
   z.object({
@@ -108,7 +105,6 @@ export const EphemeralSchema = z.discriminatedUnion("t", [
     sessionId: z.string(),
     kind: LifecycleKindSchema,
   }),
-  // docs/auth-ux-overhaul-plan.md Phase 4: another device of this account is asking for a
   // copy of the keys. Carries no secret — only the requester's ephemeral PUBLIC key and a
   // display label.
   //

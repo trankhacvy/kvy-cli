@@ -6,7 +6,6 @@ import type { AttentionKind } from "@/features/session-list/types";
 import { apiSocket } from "@/sync";
 
 export interface SessionEphemeralState {
-  /** Live "thinking" indicator (design §4.3's `activity` ephemeral) — droppable/
    * coalesced, so this is a UI nicety, never something correctness depends on. */
   working: boolean;
   /** The server's `attention` ephemeral for this session, or `null` if none has
@@ -25,7 +24,6 @@ export interface EphemeralSource {
 const INITIAL_STATE: SessionEphemeralState = { working: false, attentionKind: null };
 
 /** A `working:true` ephemeral older than this with no successor is treated
- * as stale. Ephemerals are droppable by design (§4.3) — a `working:true`
  * that never gets a matching `working:false` (daemon crash, dropped socket
  * message, etc.) must not pin the "Working…" indicator on forever (W1.7). */
 export const WORKING_STALE_MS = 60_000;
@@ -38,7 +36,6 @@ export function isWorkingFresh(workingSince: number | null, now: number): boolea
 }
 
 /** Subscribes to the live `ephemeral` stream for one session's `activity`/
- * `attention` signals (kvy-system-design.md §4.3, plan.md §16 "2.4 Web
  * control surface"). Resets to `INITIAL_STATE` whenever `sessionId` changes
  * so switching sessions doesn't carry over a stale "working"/attention flag
  * from whatever was previously open. */

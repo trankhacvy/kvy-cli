@@ -197,11 +197,11 @@ describe("ensureLoggedIn", () => {
       expect(result).toEqual({ ok: false, message: "" });
     }));
 
-  // auth-ux-overhaul-fix-plan.md Fix 3 / E2E-6.4: web-side revocation never deletes
-  // `access.key`, so a stale-but-present credentials file must NOT short-circuit
-  // `ensureLoggedIn` when the caller has already proved (via a real 401) that the token
-  // is dead. `{ force: true }` is that proof, and re-pairing must clear the dead file
-  // FIRST so a Ctrl-C mid-pairing can't leave the short-circuit re-triggering.
+  // Web-side revocation never deletes `access.key`, so a stale-but-present credentials
+  // file must NOT short-circuit `ensureLoggedIn` when the caller has already proved (via
+  // a real 401) that the token is dead. `{ force: true }` is that proof, and re-pairing
+  // must clear the dead file FIRST so a Ctrl-C mid-pairing can't leave the short-circuit
+  // re-triggering.
   it("re-pairs instead of short-circuiting when credentials exist but the caller passes force:true", async () =>
     withStdinTTY(true, async () => {
       readCredentialsMock.mockReturnValue({

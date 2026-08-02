@@ -5,11 +5,9 @@ import path from "node:path";
 
 /**
  * Determines whether the locally-installed Claude Code CLI has usable
- * credentials. New code (plan.md §16, "1.3 CLI skeleton + local mode" —
  * "Provider detection: locate Claude Code install + auth state") — Happy
  * has no equivalent: it just launches `claude` and lets the child process
  * handle its own login prompt. Kvy checks proactively so `detect()` can
- * surface PRD FR-2.7's actionable "Provider not authenticated" error
  * instead of silently spawning a session that then hangs waiting on a
  * login prompt no one is watching (e.g. a remote-spawned session).
  *

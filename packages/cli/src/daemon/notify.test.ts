@@ -129,10 +129,7 @@ describe("notifyDaemonSessionStarted", () => {
   });
 });
 
-// A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
-// reason"): the child's own best-effort self-report of a startup failure —
-// same best-effort contract as `notifyDaemonSessionStarted` above, proved
-// the same way.
+// Best-effort self-report of a startup failure — same contract as `notifyDaemonSessionStarted`.
 describe("reportSessionStartFailed", () => {
   let homeDir: string;
 

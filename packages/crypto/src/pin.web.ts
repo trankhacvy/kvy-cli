@@ -1,5 +1,4 @@
 /**
- * Browser entry point for PIN-wrapping (issue-4-plan.md §6.1) — see `pin.ts`
  * for the shared param rationale and the node counterpart. Uses
  * `libsodium-wrappers-sumo` (not the slim `libsodium-wrappers` the rest of
  * this package's browser build uses) because `crypto_pwhash` — the argon2id

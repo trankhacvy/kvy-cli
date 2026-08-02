@@ -1,11 +1,6 @@
 /**
- * `git.renameBranch` machine RPC handler (design §4.4, docs/features/
- * git-write-actions.md Phase 2).
- *
- * Same injectable `deps.git?`/`deps.authorizeWorktree?` shape as
- * `gitCommit.ts`/`gitPush.ts`. Reuses `gitWorktree.ts`'s
- * `assertSafeBranchName` verbatim — same argv-injection hazard as that
- * module's own `branch.name`, guarding both `params.to` and (when given)
+ * Reuses `gitWorktree.ts`'s `assertSafeBranchName` verbatim — same
+ * argv-injection hazard, guarding both `params.to` and (when given)
  * `params.from`. Deliberately does NOT reuse that module's
  * `assertNotCheckedOutElsewhere`: git allows renaming a branch that's
  * checked out elsewhere (unlike creating a *second* worktree for the same

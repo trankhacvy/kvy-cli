@@ -1,7 +1,5 @@
 /**
  * Remote permission answering for the LIVE Claude Code TUI, via the
- * `PreToolUse` + `PermissionRequest` hooks (design §7.4/§7.6, plan.md §17,
- * plan-v2.md Wave 1.1).
  *
  * ## The problem this solves
  * In the new `kvy claude` model the real `claude` TUI stays live at the
@@ -37,7 +35,6 @@
  * instead", so this bridge only emits the new form.)
  *
  * ## The `PermissionRequest` contract (verified against Claude Code 2.1.214,
- * plan-v2.md W0.3)
  * Fires only when a permission dialog would actually be shown — auto-allowed
  * tools (settings/allowlist/mode) never reach it. Input (stdin JSON):
  * `{ session_id, tool_name, tool_input, permission_mode, hook_event_name:
@@ -51,19 +48,16 @@
  * Returning `undefined` (→ the hook server's 204) means "no decision" — the
  * forwarder writes nothing and Claude Code's normal TUI dialog renders.
  *
- * ## Two hooks, one responsibility split (design §7.6, plan-v2.md Wave 1.1 —
  * "kill the web-turn permission flood")
  * An earlier version of this bridge routed EVERY `PreToolUse` call of a
  * web-initiated turn to the web — Read/Grep/Glob included, one web message
  * → a wall of PermCards. `PermissionRequest` (verified against our installed
- * Claude Code build, plan-v2.md W0.3) fires only for calls that survive
  * Claude Code's own settings/allowlist/mode evaluation and would genuinely
  * show a dialog — auto-allowed tools never reach it. So responsibilities
  * split across the two hooks:
  *  - `PreToolUse` ({@link handlePreToolUse}) always defers with `ask` —
  *    Claude Code's own permission engine decides from there, exactly like a
  *    local turn — EXCEPT for `AskUserQuestion` ({@link handleAskUserQuestion},
- *    plan-v2.md Wave 2.1), which this hook intercepts directly. Denying at
  *    `PreToolUse` happens *before* Claude Code ever runs the tool, so a web
  *    answer never renders the question widget at all — see "AskUserQuestion
  *    deny-with-answer" below.
@@ -112,7 +106,6 @@
  *    it (docs/known-issues.md issue #5's stretch goal — real PTY-based racing
  *    — is intentionally not implemented here).
  *
- * ## AskUserQuestion deny-with-answer (plan-v2.md Wave 2.1, gated on the W0.2
  * probe — **PASS**, 2026-07-18, claude 2.1.214)
  * `AskUserQuestion` can't go through `PermissionRequest` like a normal
  * prompt: there is no output channel there for the actual answer text, only
@@ -127,7 +120,6 @@
  * reason ({@link ASK_FALLBACK_REASON}) instructing the model to ask again as
  * ordinary chat text, which the composer can answer like any other message.
  *
- * ## Deny copy (probe finding, plan-v2.md W0.3)
  * A live probe showed the model working around a `PreToolUse`/
  * `PermissionRequest` deny by retrying the same effect through an
  * allowlisted tool (e.g. an allowlisted `Bash` to create a file after a
@@ -145,7 +137,6 @@
  * expiry resolves the request as a **deny** with an explicit "timed out"
  * message — a safe, consistent outcome (tool blocked, PermCard resolved,
  * timeline honest) rather than letting Claude's own timeout fire a confusing
- * error. Design §7.6's re-notify ×3 policy still applies: it lives in the
  * server-side push pipeline and is driven by the `perm-request` envelope this
  * bridge emits, so no re-notification logic is duplicated here.
  *
@@ -156,7 +147,6 @@
  * differs (a `PreToolUse` `permissionDecision` string vs. ACP's option-id
  * response), so the two handlers are parallel rather than one reused class.
  *
- * ## `permission_mode` cache + real PTY `setMode` (plan-v2.md W4.3, flag-gated)
  * Both hooks' input carries `permission_mode` — the live TUI's own,
  * authoritative idea of its current mode — on every call. {@link
  * cachePermissionMode} records the latest value ({@link
@@ -195,7 +185,6 @@ export const isAskUserQuestion = (name: string): boolean =>
   name === "AskUserQuestion" || name === "ask_user_question";
 
 /** True for either of Claude Code's two `ExitPlanMode` tool-name spellings
- * (an ACP adapter can normalize casing differently — plan-v2.md W2.2). */
 export const isExitPlanTool = (name: string): boolean =>
   name === "ExitPlanMode" || name === "exit_plan_mode";
 
@@ -219,7 +208,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * Composes the `PreToolUse` deny reason in Claude Code's own native answer
  * format (`- {question}\n  → {labels}`) so the model reads it exactly like a
  * real `AskUserQuestion` result (format verified by the W0.2 live probe,
- * plan-v2.md; mirrors the format claude-code-anywhere's intercept.cjs uses,
  * which itself mimics Claude Code's own).
  */
 export function composeAskAnswerReason(
@@ -275,7 +263,6 @@ export interface PreToolUseHookOutput {
 
 /**
  * Claude Code's `PermissionRequest` hook stdin payload (verified against
- * 2.1.214, plan-v2.md W0.3). Only `tool_name`/`tool_input` are load-bearing
  * here; everything else (`permission_suggestions` included) is accepted and
  * ignored so a Claude Code version that adds fields never breaks this.
  */
@@ -284,7 +271,6 @@ export interface PermissionRequestHookInput {
   tool_name: string;
   tool_input?: Record<string, unknown>;
   /** Present per the header doc's verified `PermissionRequest` contract;
-   * cached the same way `PreToolUse`'s own `permission_mode` is (plan-v2.md
    * W4.3) — a `PermissionRequest` fires strictly more often than a mode
    * switch, so it's as good an echo source as `PreToolUse`. */
   permission_mode?: string;
@@ -334,10 +320,8 @@ function availableModes(toolName: string): PermissionMode[] {
 
 /**
  * The fixed order Claude Code's own Shift+Tab keystroke cycles permission
- * modes through (plan-v2.md W4.3 "Real setMode for the PTY path") — the same
  * four states {@link ALL_MODES} already enumerates, exported under its own
  * name here because the PTY keystroke feature's identity as "a fixed 4-state
- * cycle, not a freeform widget" (plan-v2.md W4.3) is the point, not an
  * implementation detail of the permission pipeline.
  */
 export const PERMISSION_MODE_CYCLE: readonly PermissionMode[] = ALL_MODES;
@@ -361,7 +345,6 @@ export interface CancelableTimer {
 }
 
 export interface PreToolPermissionBridgeDeps {
-  /** Emits a `perm-request`/`perm-resolve` envelope onto the session timeline (design §7.6). */
   emitEnvelope: (envelope: SessionEnvelope) => void;
   /**
    * True when the currently-running Claude turn was initiated by a
@@ -385,7 +368,6 @@ export interface PreToolPermissionBridgeDeps {
    * own TUI dialog may render next"; `handlePermissionRequest`'s local-
    * `undefined` return means the same thing, more precisely (only calls that
    * survive Claude Code's own auto-allow evaluation reach it). The caller
-   * wires this to the injection gate's `setPromptOpen(true)` (plan-v2.md
    * W1.3) so a queued web message is never typed into an open dialog. Never
    * fires on a web turn — those prompts resolve remotely with no local
    * dialog rendered.
@@ -467,7 +449,6 @@ interface PendingPreToolRequest {
   toolName: string;
   input: Record<string, unknown>;
   timer: CancelableTimer;
-  /** True only for the `AskUserQuestion` pending path (plan-v2.md W2.1). */
   isQuestion?: boolean;
   /** The original `questions` array — kept for {@link composeAskAnswerReason}. */
   questions?: AskQuestion[];
@@ -502,7 +483,6 @@ function output(decision: PreToolPermissionDecision, reason: string): PreToolUse
 
 /**
  * Appends the anti-workaround instruction every deny message must carry
- * (plan-v2.md W0.3 probe finding: without it, the model routed around a
  * denied `Write` via an allowlisted `Bash` instead of treating the deny as
  * final). Applied exactly once, at the point each deny message is authored.
  */
@@ -518,7 +498,6 @@ function appendDenyGuard(message: string): string {
  */
 export class PreToolPermissionBridge {
   // Populated only by {@link handleAskUserQuestion}'s web-turn path — see
-  // {@link PendingPreToolRequest}'s own doc (plan-v2.md Wave 2.1).
   private readonly pending = new Map<string, PendingPreToolRequest>();
   private readonly permRequestPending = new Map<string, PendingPermissionRequest>();
   // A local turn's `perm-request` (docs/known-issues.md issue #5 fix, see the
@@ -549,7 +528,6 @@ export class PreToolPermissionBridge {
   private readonly answerTimeoutMs: number;
   private readonly setTimer: (callback: () => void, ms: number) => CancelableTimer;
   // The last `permission_mode` seen on ANY hook input — `PreToolUse` and
-  // `PermissionRequest` both carry it on every call (plan-v2.md W4.3). This
   // is the PTY `setMode` RPC's only source of truth for "what mode is the
   // live TUI actually in right now" (there is no other channel to ask it),
   // and the verification target for {@link waitForModeEcho} after sending a
@@ -581,7 +559,6 @@ export class PreToolPermissionBridge {
    *
    * Also emits a `permission-mode` wire event whenever the observed mode is a
    * genuine transition from the previously-cached one (docs/bug-fix-plan.md
-   * §5) — so a Shift+Tab press at the live TUI, which every hook call reports
    * but nothing previously surfaced, reaches the web mode chip without a
    * round-trip through a permission decision. With `lastPermissionMode`
    * seeded from {@link PreToolPermissionBridgeDeps.initialPermissionMode}
@@ -632,7 +609,6 @@ export class PreToolPermissionBridge {
    * Resolves with the `permission_mode` observed on the NEXT hook input
    * (whichever mode that turns out to be — the caller compares it to what it
    * expected), or `null` if none arrives within `timeoutMs`. This is the
-   * "verify via hook echo" half of plan-v2.md W4.3's real PTY `setMode`: the
    * bridge can't reach into the live TUI to ask its mode directly, so
    * confirmation is "did the next thing Claude Code told us agree with what
    * we expect".
@@ -670,7 +646,6 @@ export class PreToolPermissionBridge {
    * genuine prompt that fires `PermissionRequest`, where the web-vs-terminal
    * fork now lives; see {@link handlePermissionRequest}) — EXCEPT
    * `AskUserQuestion`, which {@link handleAskUserQuestion} intercepts here
-   * directly (plan-v2.md Wave 2.1; see the class-level "AskUserQuestion
    * deny-with-answer" doc for why this can't wait for `PermissionRequest`).
    */
   handlePreToolUse(input: PreToolUseHookInput): Promise<PreToolUseHookOutput> {
@@ -686,7 +661,6 @@ export class PreToolPermissionBridge {
   }
 
   /**
-   * `AskUserQuestion`'s `PreToolUse` special case (plan-v2.md Wave 2.1).
    * Always emits a `perm-request` (`modes: []` — a question offers no mode
    * switches; docs/known-issues.md issue #5 — web must see this pending too,
    * regardless of who's driving the turn). A local turn then defers to `ask`
@@ -774,7 +748,6 @@ export class PreToolPermissionBridge {
 
   /**
    * The `PermissionRequest` hook handler — fires only for calls Claude Code
-   * itself decided need a genuine prompt (design §7.6, plan-v2.md Wave 1.1).
    * Always emits a `perm-request` (docs/known-issues.md issue #5 — web must
    * see every pending prompt, not just web-initiated ones). A local turn then
    * returns `undefined` immediately (no decision → the terminal TUI dialog
@@ -902,7 +875,6 @@ export class PreToolPermissionBridge {
   }
 
   /**
-   * First-wins resolution for a `perm.answer` RPC call (design §7.6). Looks
    * up both the `PreToolUse`-style {@link pending} map and the
    * `PermissionRequest`-style {@link permRequestPending} map — one RPC
    * method serves both hook types. The first caller to resolve a given
@@ -1062,7 +1034,6 @@ export class PreToolPermissionBridge {
     decision: PermDecision,
   ): PreToolUseHookOutput {
     if (pending.isQuestion) {
-      // deny-with-answer (plan-v2.md Wave 2.1, W0.2-probe-verified): the
       // question widget never renders — Claude reads the deny reason as the
       // user's answer and continues the same turn.
       if (

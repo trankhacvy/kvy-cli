@@ -20,7 +20,6 @@ import type { NewSessionActions, SpawnOutcome } from "./types";
  * A genuinely fresh directory — picked cold in the wizard, never
  * `kvy workspace register`'d from a terminal — is not yet in that
  * registry, so `spawn` resolves with a `register-workspace` approval
- * (plan.md §16 "Flow 3 — spawn-fresh-folder-register (Piece A)") instead of
  * throwing `unknown-workspace`; `registerWorkspace` below (the new
  * `workspace.register` RPC) is what `spawn-flow.ts`'s `runSpawnFlow` calls
  * to resolve that, mirroring `createDirectory`/`create-directory` exactly.

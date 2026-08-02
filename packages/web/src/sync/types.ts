@@ -11,7 +11,6 @@ import type {
  * in `packages/server/src/app/routes/messages.ts` field-for-field). Not
  * exported from `@kvy/wire` because it's an HTTP response shape, not a
  * wire envelope — `content` is still the untouched `EncryptedBox` the server
- * sent; decryption is a later boundary (crypto-bridge worker, design §5.3),
  * out of scope for the sync engine itself.
  */
 export interface MessageItem {

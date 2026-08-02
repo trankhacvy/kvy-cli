@@ -131,7 +131,6 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       await pair(ephPub);
 
       const response = await status(ephPub);
-      // AX-2.6 added display metadata (label/cwd/requestedAt) alongside the status, so
       // this asserts the status specifically rather than the whole envelope.
       expect(response.json()).toMatchObject({ status: "pending" });
     });
@@ -230,7 +229,6 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       expect(body.state).toBe("authorized");
       expect(decodeBase64(body.response ?? "")).toEqual(sealedBox);
       // No plaintext token/refreshToken field exists on this response at all anymore
-      // (issue-4-plan.md §6.3) — everything secret travels only inside `response`.
       expect(body.token).toBeUndefined();
 
       // Single-use: the row is deleted the moment it's picked up — polling again

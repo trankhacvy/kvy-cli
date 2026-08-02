@@ -1,20 +1,12 @@
 /**
- * `git.files` machine RPC handler (design §4.4's `git.*` family; docs/
- * competitive-notes-omnara.md #5 "Full repo file browser" — the "Repo
- * Files" sidebar tab's flat file listing, joining `git.status`/`git.diff`/
- * `git.branches` above). Backs the web repo file tree.
+ * `git.files` machine RPC handler. Backs the web repo file tree.
  *
- * `git ls-files --cached --others --exclude-standard` lists every tracked
- * file plus every untracked file `.gitignore` doesn't exclude — exactly the
- * set a repo file browser wants to show (skip `node_modules`/build output/
- * anything else the repo itself says to ignore), without this handler
- * needing its own ignore-file parser. `kvy claude` also runs in folders
- * that were never a git repo at all — for those, `ls-files` has nothing to
- * read, so this falls back to a plain recursive directory walk (skipping a
- * small hardcoded list of directories no one wants in a file browser) rather
- * than leaving the tab unusable outside a repo. Any OTHER `git` failure
- * (permissions, a corrupt repo, etc.) still throws `GitExecError` through —
- * only "not a git repository" triggers the fallback.
+ * Uses `git ls-files --cached --others --exclude-standard` to list every
+ * tracked + untracked (non-ignored) file without needing its own ignore parser.
+ * For non-git directories, falls back to a plain recursive walk (with a
+ * hardcoded skip list) rather than leaving the tab unusable. Any other git
+ * failure (permissions, corrupt repo) throws through; only "not a git
+ * repository" triggers the fallback.
  */
 import { readdir } from "node:fs/promises";
 import path from "node:path";

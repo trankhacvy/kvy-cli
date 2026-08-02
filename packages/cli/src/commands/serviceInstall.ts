@@ -1,6 +1,4 @@
 /**
- * `kvy daemon service install/uninstall/status` (kvy-prd.md FR-4.1,
- * kvy-system-design.md §8 "Service install (P1)", plan.md §16 "4.3
  * Distribution & self-host"). Thin CLI wiring over
  * `../daemon/serviceInstall.ts` — see that module for the actual
  * launchd/systemd logic.

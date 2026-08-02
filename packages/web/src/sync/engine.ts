@@ -1,14 +1,10 @@
 /**
  * Sync engine — headerSeq/msgSeq fast-path with gap-invalidation.
  *
- * Ported from Happy's `happy-app/sources/sync/sync.ts` model (a singleton
  * combining `apiSocket` + `InvalidateSync`), split per **⚠ DELTA D1/D2**
- * (kvy-system-design.md §4.3, §9.1; plan.md §8.1, §16 line 705): reads
  * arrive over the WS `update` stream, but *writes* go through TanStack Query
- * mutations against the HTTP endpoints (§4.3) — this module only ever reads
  * from the socket and reconciles the Query cache, it never emits writes.
  *
- * Two-level gap detection (design §4.3 "Ordering contract"):
  *  - **Header stream** (account-level `seq`, absent only on `message-new`):
  *    structural changes — session/machine/unmanaged create-update-delete,
  *    metadata/state version bumps. Fast path applies `seq === lastHeaderSeq
@@ -21,9 +17,7 @@
  *    session nobody has opened is simply ignored; opening it later fetches
  *    fresh via `GET /v1/sessions/:id/messages`.
  *
- * On WS reconnect: invalidate *every* query (design §9.1: "reconnect/focus
  * ⇒ invalidate all queries") rather than trying to resume a gap silently —
- * Happy's model, ported verbatim.
  *
  * Ownership split: this module never fetches anything itself. It reconciles
  * its two in-memory seq trackers with whatever the Query cache actually
@@ -51,11 +45,9 @@ import {
 import type { MessageItem, MessagesQueryData, SyncSnapshot } from "./types.js";
 
 /**
- * The narrow slice of `apiSocket` (see `../sync/apiSocket.ts` once §1.6's
  * `apiSocket` bullet lands) this engine needs: the `update` stream and the
  * `reconnect` signal. Declared locally — rather than importing that module
  * directly — so the engine is buildable/testable in isolation against the
- * wire contract alone, per plan.md 1.6's own note that the sync engine "can
  * be built and verified in isolation now against the wire contract." A real
  * `ApiSocket` satisfies this structurally; no adapter needed at call sites.
  */
@@ -229,7 +221,6 @@ export function createSyncEngine(queryClient: QueryClient, socket: SyncSocketSou
   }
 
   function handleReconnect(): void {
-    // Happy's model, ported verbatim (design §9.1, plan.md §8.1): never try
     // to resume a gap silently across a reconnect. Invalidate everything —
     // the header snapshot and every open session's message pages — and let
     // each active query refetch.

@@ -82,7 +82,6 @@ function fakeServer() {
   let registrations = 0;
 
   const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
-    // issue-4-plan.md §6.6: `startMachineIntegration` now also builds a `TokenProvider`
     // that calls `/v1/auth/refresh` through this same injected `fetchImpl` — handle it
     // distinctly so it doesn't fall into (and pollute the registration count of) the
     // `/v1/machines` branch below.
@@ -304,10 +303,6 @@ describe("startMachineIntegration — transcript indexer isManaged wiring", () =
 
   // Confirms the regression this fix closes: `startTranscriptIndexer` used
   // to be wired with no `isManaged` override at all here, so it silently
-  // ran with `createTranscriptIndexerDeps`'s permanent `() => false` default
-  // — nothing was ever recognized as already Kvy-managed, which is
-  // exactly why a session's own transcript kept getting duplicated as
-  // "Unmanaged" (docs/auth-ux-post-verification-fixes.md).
   it("wires isManaged to the injected registry's isProviderSessionManaged, not the indexer's own no-op default", async () => {
     const { startTranscriptIndexer } = await import("./transcriptIndexer.js");
     const isProviderSessionManaged = vi.fn(

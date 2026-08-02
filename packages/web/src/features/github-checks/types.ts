@@ -1,7 +1,6 @@
 import type { GithubChecksResult } from "@kvy/wire";
 
 /**
- * View-model types for the "Checks" tab (kvy-system-design.md §4.4
  * `github.checks`; docs/features/github-pr-ci.md "GitHub PR/CI
  * integration"; docs/competitive-notes-omnara.md #4). Structural clone of
  * `features/git-diff/types.ts` — read-only for the MVP, same seam pattern.

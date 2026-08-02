@@ -1,5 +1,4 @@
 /**
- * Shared TanStack Query key builders (design §8.1, §9.1: "React Query owns
  * request-shaped state — messages pagination, sync snapshot"). The sync
  * engine's `setQueryData`/`invalidateQueries` calls and whatever hook
  * eventually owns the matching `useQuery`/`useInfiniteQuery` must agree on

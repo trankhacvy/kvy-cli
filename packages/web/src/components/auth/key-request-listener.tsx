@@ -25,9 +25,6 @@ interface Card {
 }
 
 /**
- * Mounted once inside the protected layout. When another device of this account asks for
- * a copy of the keys, show a confirm card.
- *
  * This is the most security-sensitive UI in the product — the moment a human grants full
  * read access to everything — so three things here are controls, not decoration:
  *
@@ -131,11 +128,9 @@ export function KeyRequestListener() {
                 <Button size="sm" variant="ghost" onClick={dismiss}>
                   {copy.keys.denyCta}
                 </Button>
-                {/* `!bridge` is defensive, not reachable today — `open={card !== null}`
-                 *  above already keeps this dialog closed until the bridge exists — but
-                 *  the button must never be able to look clickable while it can't do
-                 *  anything (auth-ux-overhaul-fix-plan.md Fix 11), and a future change to
-                 *  that gate should not silently reopen this. */}
+                {/* `!bridge` is defensive: `open={card !== null}` already keeps this dialog
+                 *  closed until the bridge exists, but a future change to that gate should
+                 *  not silently make the button look clickable when it can't do anything. */}
                 <Button size="sm" disabled={pending || !bridge} onClick={() => void approve()}>
                   {pending ? copy.keys.sendingLabel : copy.keys.sendCta}
                 </Button>

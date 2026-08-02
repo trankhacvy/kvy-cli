@@ -1,27 +1,11 @@
 /**
- * `fs.read` machine RPC handler (design §4.4: `'fs.read'({worktree, path,
- * range?}) → { inline?, blobRef?, truncated }`; docs/competitive-notes-
- * omnara.md #5 "Full repo file browser" — the "Repo Files" sidebar tab's
- * file-content fetch, once a path is picked from `git.files`'s tree).
+ * `fs.read` machine RPC handler: reads file content, scoped to `worktree`.
  *
- * Scoped to `worktree` the same way `git.status`/`git.diff` are (unlike
- * `fs.list`/`fs.mkdir`, which are deliberately unscoped — see that module's
- * own doc comment): a file *viewer* only ever operates inside an
- * already-known workspace, so `params.path` is always relative to
- * `params.worktree` and is rejected outright if it would escape it (design
- * §12's "no arbitrary-directory execution", the same containment guard
- * `fsBrowse.ts`'s directory picker applies to its own root).
- *
- * **Truncation, plus a best-effort blob upload:** mirrors `gitDiff.ts`
- * exactly — a file that would blow the 64KB RPC control-plane budget
- * (design §4.4 "payload size rule") is truncated inline with `truncated:
- * true`; when `deps.uploadBlob` is wired, the full file is also uploaded
- * and referenced via `blobRef`. `params.range`, when given, is a byte-offset
- * slice `[start, end)` of the file — used to page through a large file
- * instead of always re-serving the same truncated prefix (same byte-cursor
- * idea as `adopt.mirror`'s transcript paging), still clamped to
- * `maxInlineBytes` so an oversized explicit range can't itself blow the
- * budget.
+ * `params.path` is resolved relative to `worktree` and rejected if it would
+ * escape (path traversal check). Files larger than the RPC budget are truncated
+ * inline (`truncated: true`); when `deps.uploadBlob` is wired, the full file is
+ * also uploaded and referenced via `blobRef`. `params.range` provides byte-offset
+ * pagination for large files.
  */
 import {
   readFile as readFileNode,
@@ -38,7 +22,6 @@ export class FsReadError extends Error {
   }
 }
 
-/** Stays well under the 64KB RPC control-plane cap (design §4.4) after JSON envelope + encryption overhead — same budget as `gitDiff.ts`'s own `MAX_INLINE_BYTES`. */
 const MAX_INLINE_BYTES = 60_000;
 
 export interface FsReadDeps {

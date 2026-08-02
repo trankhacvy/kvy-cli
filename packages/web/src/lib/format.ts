@@ -1,4 +1,4 @@
-/** Human-readable byte size, base-1024 (`FileItem.size` — kvy-system-design.md §4.2). */
+/** Human-readable byte size, base-1024. */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
@@ -16,10 +16,8 @@ export function formatBytes(bytes: number): string {
   return `${value.toFixed(digits)} ${units[unitIndex]}`;
 }
 
-/** Compact token-count display for the per-turn usage chip (`UsageChip`,
- * plan-v2.md W4.6, AI Elements `Context` pattern) — base-1000 (k/M/B), not
- * base-1024 like `formatBytes`: token counts are a plain decimal quantity,
- * not a byte size. */
+/** Compact token-count display — base-1000 (k/M/B), not base-1024:
+ * token counts are a plain decimal quantity, not a byte size. */
 export function formatTokenCount(count: number): string {
   if (!Number.isFinite(count) || count < 0) return "0";
   if (count < 1000) return `${count}`;
@@ -63,10 +61,8 @@ function hourBucketStart(ms: number): number {
   return date.getTime();
 }
 
-/** Whether an hourly divider (`TimelineRow`, plan-v2.md W4.2) should render
- * immediately before an item at `time`, given the previous rendered item's
- * `time` (`undefined` for the very first item in the list — always shown,
- * so the timeline opens with an explicit time anchor rather than none). */
+/** Whether an hourly divider should render before an item at `time`, given
+ * the previous item's time (`undefined` for the first item - always shown). */
 export function shouldShowHourDivider(previousTime: number | undefined, time: number): boolean {
   if (previousTime === undefined) return true;
   return hourBucketStart(previousTime) !== hourBucketStart(time);
@@ -85,8 +81,7 @@ export function formatHourDividerLabel(ms: number): string {
   }).format(new Date(hourBucketStart(ms)));
 }
 
-/** Full-precision timestamp for a timeline row's hover tooltip (plan-v2.md
- * W4.2 "Timestamps"), e.g. "Jul 18, 2026, 3:45:12 PM". */
+/** Full-precision timestamp for a timeline row's hover tooltip, e.g. "Jul 18, 2026, 3:45:12 PM". */
 export function formatFullTimestamp(ms: number): string {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",

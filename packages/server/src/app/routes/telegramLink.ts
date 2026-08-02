@@ -7,7 +7,6 @@ import { pushSubscriptions, telegramLinkRequests } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 import { sendTelegramMessage } from "../push/channels/telegram.js";
 
-// Bounded pairing window, same rationale as `pairRequests` (design §5.2):
 // an unbounded window is a standing vulnerability, since the code is the
 // only thing standing between "anyone who messages this bot" and "this
 // account's push subscriptions".
@@ -34,8 +33,6 @@ const TelegramUpdateSchema = z
 
 /**
  * `POST /v1/push/telegram/link` + `POST /v1/push/telegram/webhook` —
- * Telegram bot `/start` deep-link pairing (kvy-system-design.md §6.4,
- * plan.md §10: "Telegram bot `/start` pairing"). Two-step flow:
  *
  *  1. The signed-in web client calls `/link`; the server mints a short-lived,
  *     single-use code and returns `https://t.me/<bot>?start=<code>`.

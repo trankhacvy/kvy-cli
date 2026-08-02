@@ -5,8 +5,6 @@ import type { MessagesPage } from "./types.js";
 /**
  * Decrypts + validates every message row's `content` box across a set of
  * `GET /v1/sessions/:id/messages` pages into a flat `SessionEnvelope[]`,
- * ready to feed straight into `reduceEnvelopes` (kvy-system-design.md
- * §9.1, plan.md's timeline live-wiring follow-up).
  *
  * Each row's `content` is a *batch*, not a single envelope: the CLI's HTTP
  * outbox coalesces up to 20 envelopes (or 300ms) into one `seal(batch, dek)`

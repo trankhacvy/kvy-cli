@@ -30,13 +30,8 @@ function fakeJwt(payload: Record<string, unknown>): string {
 const FAR_FUTURE_EXP = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 365; // ~1 year out
 const PAST_EXP = Math.floor(Date.now() / 1000) - 60; // 1 minute ago
 
-/**
- * Security review finding F1: the access token now lives in a plain in-memory
- * module variable (`session.ts`) — never `localStorage` — so these tests just
- * drive `setToken`/`getToken`/`clearToken` directly, no `window`/storage
- * stand-in needed (an earlier revision of this suite stubbed
- * `window.localStorage`, back when that's where the token actually lived).
- */
+// The access token lives in a plain in-memory module variable (session.ts), never localStorage,
+// so these tests drive setToken/getToken/clearToken directly with no storage stub needed.
 describe("session", () => {
   afterEach(() => {
     clearToken();
@@ -150,7 +145,7 @@ describe("session", () => {
     });
   });
 
-  describe("silentRefresh (security review finding F1; tri-state per auth-ux-overhaul-fix-plan.md Fix 2)", () => {
+  describe("silentRefresh", () => {
     it('resolves "unreachable" without touching the token when no unlocked bridge is available', async () => {
       getSharedCryptoBridgeMock.mockReturnValue(null);
       setToken(fakeJwt({ exp: FAR_FUTURE_EXP }));

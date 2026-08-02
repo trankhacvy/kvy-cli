@@ -30,9 +30,6 @@ describe("web auth copy", () => {
     expect(copy.keys.needKeysBody).not.toMatch(/^run /i);
   });
 
-  // auth-ux-overhaul-fix-plan.md Fix 9: the verification code is the security control, so
-  // its copy is load-bearing — the requester side must say what a mismatch means, same as
-  // the approver side (`copy.keys.codeMismatch`) already does.
   it("the requester's mismatch warning names the check it depends on", () => {
     expect(copy.keys.codeMismatchRequester).toMatch(/code/i);
   });

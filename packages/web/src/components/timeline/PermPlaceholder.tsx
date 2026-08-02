@@ -5,15 +5,10 @@ import { JsonBlock } from "./JsonBlock";
 import { PermCard } from "./PermCard";
 import { PermissionBadge } from "./PermissionBadge";
 
-/** A `perm-request` that never matched a `tool-start` (design principle: no
- * silent data loss — the reducer surfaces it standalone rather than
- * dropping it). Interactive once a decision is pending (`PermCard`, plan.md
- * §16 "2.4 Web control surface"); already-decided requests keep the
- * read-only `PermissionBadge` + a raw args dump, since `PermCard` only
- * bothers with the edit-preview rendering while a decision is still pending.
- * `AskUserQuestion` (plan-v2.md W2.1) dispatches to its own card instead —
- * that card handles its own pending/answered/lost-race states internally,
- * so it's routed here regardless of `permission.decision`. */
+/** A `perm-request` that never matched a `tool-start` (no silent data loss — surfaced
+ * standalone rather than dropped). Pending decisions go to the interactive `PermCard`;
+ * already-decided ones get `PermissionBadge` + a raw args dump. `AskUserQuestion` routes
+ * to its own card regardless of `permission.decision`. */
 export function PermPlaceholder({ item }: { item: PermPlaceholderItem }) {
   if (isAskUserQuestion(item.name)) {
     return <AskUserQuestionCard args={item.args} permission={item.permission} />;

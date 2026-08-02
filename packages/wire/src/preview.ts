@@ -19,7 +19,6 @@ import { z } from "zod";
  * adapters/` doesn't apply).
  *
  * **Non-E2E caveat**: unlike every other RPC body on this wire (sealed under
- * the machine DEK, design §5.3/§6.1), the tunnel `preview.open` returns a
  * PUBLIC, UNAUTHENTICATED URL — traffic to it is plain HTTP(S) to whoever
  * has the link, not E2E-encrypted. The RPC call itself is E2E; the resulting
  * tunnel is not. Callers must present this distinction to the user before

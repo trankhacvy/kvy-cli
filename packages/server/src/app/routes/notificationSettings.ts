@@ -14,11 +14,9 @@ const SessionMuteBodySchema = z.object({ muted: z.boolean() });
 const SessionMuteResponseSchema = z.object({ muted: z.boolean() });
 
 /**
- * Per-account quiet controls (PRD FR-8.3, plan.md §10 "Per-session mute +
  * mute-all settings"). Plaintext columns (`accounts.notificationsMutedAll`,
  * `sessions.notificationsMuted`) — not the encrypted `settings`/`metadata`
  * blobs — because the push dispatcher (`app/push/dispatch.ts`) has to be
- * able to check them without decrypting anything (design §5.3: the server
  * holds no keys). Both routes are plain booleans, not CAS: there's no
  * legitimate concurrent writer to race against (a user only ever flips their
  * own mute switch from one settings page at a time), unlike the versioned

@@ -20,11 +20,9 @@ import { useSessionCrypto } from "./use-session-crypto";
 
 export interface ComposerState {
   /** `items` with every still-unreconciled pending send merged in by `time`
-   * (design §9.1: "optimistic timeline insert reconciled by echo update").
    * Feed this to `Timeline`, not the raw `items` prop. */
   mergedItems: RenderItem[];
   send(text: string): void;
-  /** Encrypts + uploads `file` (composer attach path, plan.md §16 "4.3
    * Distribution & self-host") then sends a `file` envelope referencing the
    * resulting blob. */
   sendAttachment(file: File): void;
@@ -34,19 +32,15 @@ export interface ComposerState {
   isQueued: boolean;
   /** Whether this session's crypto bridge has unwrapped its DEK yet — an
    * attachment can't be encrypted (`sendAttachment` throws) until this is
-   * `true` (plan-v2.md W4.2 "disabled-until-crypto-ready attach button"). A
    * text-only send doesn't depend on this — the composer's Send button is
    * never gated on it, only the attach affordance is. */
   cryptoReady: boolean;
   error: string | null;
   /** Non-blocking notice from an `outcome-unknown` `message` reply (design
-   * §7.10) — never blocks the composer, and clears itself on the next send. */
   notice: string | null;
 }
 
 /**
- * The `Composer`'s TanStack Query mutations (kvy-system-design.md §9.1;
- * plan.md §16 "2.4 Web control surface": "TanStack Query mutation calling
  * session RPC `message`"), factored out of the component so `Timeline` and
  * `Composer` can share the same merged/reconciled item list without lifting
  * a `useMutation` call through props. On failure the optimistic entry is
@@ -70,7 +64,6 @@ export function useComposerState(items: RenderItem[]): ComposerState {
     setPending((prev) => reconcilePending(prev, items));
   }, [items]);
 
-  // Feature 2 (docs/web-ux-improvements-plan.md §2.2d): the composer never
   // hard-blocks on `machineOffline` — we don't queue, so a non-blocking
   // heads-up is set BEFORE the mutation fires rather than after a failure,
   // giving the user the honest expectation up front. A real failure still

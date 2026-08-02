@@ -1,6 +1,5 @@
 /**
  * PTY-injection Claude session — the terminal-attached `kvy claude` input
- * path (the "omnara model"; design §7, replaces the legacy mode-switch
  * takeover for sessions that have a real terminal).
  *
  * ## What this replaces and why
@@ -93,7 +92,6 @@ const noopLogger: Logger = {
 const DEFAULT_BUSY_DEBOUNCE_MS = 500;
 /** Grace period after spawn before the first web message may be typed in (lets the TUI paint its prompt). */
 const DEFAULT_READY_DELAY_MS = 1500;
-/** How long a local draft may sit idle before the injection gate assumes it was abandoned (plan-v2.md W1.3). */
 const DRAFT_IDLE_MS = 15_000;
 const DEFAULT_PTY_NAME = "xterm-256color";
 const DEFAULT_COLS = 80;
@@ -127,7 +125,6 @@ const CLOSE_TURN_QUIET_FLUSHES_REQUIRED = 2;
 
 /** The submit keystroke — a carriage return, the same byte a real Enter sends on a TTY. */
 const SUBMIT_KEY = "\r";
-/** Shift+Tab — Claude Code's own permission-mode cycle keystroke (plan-v2.md W4.3). */
 const SHIFT_TAB_KEY = "[Z";
 /** Right arrow — moves between the `AskUserQuestion` widget's per-question
  * tabs and its final "Submit" review tab (live-verified against Claude Code
@@ -289,18 +286,15 @@ export interface PtyClaudeSessionOptions {
    * (it's not conversation content), so it has to be read here, straight off
    * the raw scanner output, before that mapping call. */
   onSummaryTitle?: (title: string) => void;
-  /** Fires once a web-injected message has actually been submitted — the §7.10 send-claim completion hook. */
   onInjected?: (id: string) => void;
   /**
    * Fires with messages that will never be injected — session ending with
    * some still queued, or one whose text was typed but whose submit was
-   * skipped because the child exited mid-injection (design/plan-v2.md W3.9).
    * The caller must fail those messages' send-claims (`start.ts` completes
    * them as `dropped-session-ended`) so a web retry sees an honest
    * `duplicate` instead of hanging as `outcome-unknown` forever.
    */
   onDroppedInjections?: (messages: PendingInjection[]) => void;
-  /** Fires when the human at the real terminal submits input (Enter outside injection) — plan-v2.md W1.2. */
   onLocalSubmit?: () => void;
   logger?: Logger;
 }
@@ -345,14 +339,11 @@ export interface PtyClaudeSessionHandle {
    * Reflects "a TUI dialog is open" from the hook layer (`Notification`
    * attention / a local-turn `PreToolUse`-or-`PermissionRequest` deferral) —
    * gates injection so a queued web message is never typed into an open
-   * dialog (plan-v2.md W1.3).
    */
   setPromptOpen(open: boolean): void;
-  /** Sends a single Escape into the PTY — the TUI's own cancel gesture (plan-v2.md W1.5). */
   sendInterrupt(): boolean;
   /**
    * Types `presses` Shift+Tab keystrokes into the live PTY — Claude Code's
-   * own permission-mode cycle gesture (plan-v2.md W4.3 "Real setMode for the
    * PTY path"). Gated by the SAME idle/no-prompt rule as message injection
    * (`InjectionController.canInjectNow`) — a synthetic keystroke mid-turn or
    * into an open dialog carries the identical TUI-corruption risk a queued
@@ -536,7 +527,6 @@ export interface PtyClaudeSessionHandle {
  * A desktop notification via OSC 9, plus a BEL. Deliberately NOT a screen write: the
  * provider's TUI owns the framebuffer while a session runs, and painting into it would
  * corrupt its rendering exactly the way `logger.ts` exists to prevent
- * (auth-ux-overhaul-fix-plan.md Fix 7).
  *
  * HONEST SCOPE: OSC 9 is implemented by iTerm2, WezTerm, kitty and Ghostty, and ignored by
  * terminals that don't support it. This raises the chance the user notices in time; it does
@@ -962,7 +952,6 @@ export function startPtyClaudeSession(
           });
         }
       }
-      // Local-typing signals for the injection gate (plan-v2.md W1.2/W1.3),
       // skipped entirely while a queued web message is itself mid-injection
       // (`controller.isInjecting`) — those synthetic keystrokes are not the
       // human at the keyboard.
@@ -1042,7 +1031,6 @@ export function startPtyClaudeSession(
       if (!ptyProcess || presses <= 0) return false;
       // Same idle/no-prompt gate message injection uses — a mode-cycle
       // keystroke mid-turn or into an open dialog is exactly as unsafe as
-      // typing a message would be (plan-v2.md W4.3).
       if (!controller.canInjectNow) return false;
       for (let i = 0; i < presses; i++) ptyProcess.write(SHIFT_TAB_KEY);
       return true;

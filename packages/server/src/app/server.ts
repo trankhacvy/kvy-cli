@@ -58,26 +58,13 @@ import { buildWorkspacesRoutes } from "./routes/workspaces.js";
 import { buildCorsOriginValidator } from "./security/cors.js";
 import { startSocket } from "./socket.js";
 
-// Default request-size cap (design §4.3: "request-size caps"). The message
-// ingest route overrides this per-route to fit one coalesced outbox flush —
-// see messages.ts's MESSAGE_BODY_LIMIT_BYTES. Every other route is
-// structural/control-plane JSON, for which Fastify's own 1 MiB default is
-// already generous; set explicitly here so it's a documented decision, not
-// an implicit default.
+// The message ingest route overrides this per-route; every other route is
+// structural JSON for which 1 MiB is already generous.
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
 
-// App factory (kept separate from process startup in src/main.ts) so tests
-// can build+inject() without opening a real port or a real pino transport.
-// `db` defaults to the module-level singleton (db/client.ts) but can be overridden —
-// auth.test.ts/route tests bind an in-memory Postgres instead of touching
-// `DATABASE_URL`. `oauthVerifier`/`githubExchanger` similarly default to the real
-// implementations but can be overridden — oauth.test.ts injects fakes instead of
-// touching the network. `eventRouter` defaults to the process-wide Socket.IO-backed
-// singleton (events/eventRouter.ts) but route tests inject a recording fake so they
-// can assert on fan-out without a real socket connection. `pushDispatcher` defaults
-// to a real one built from `db` + the process-wide `eventRouter` singleton's presence
-// check (`app/push/dispatch.ts`) but route tests inject a recording fake so they can
-// assert "a dispatch was requested" without touching real Web Push/Socket.IO.
+// Kept separate from process startup so tests can build+inject() without opening
+// a real port. All deps default to real implementations but accept injected fakes
+// for test isolation.
 export async function buildServer(
   opts: FastifyServerOptions = {},
   deps: {
@@ -86,11 +73,8 @@ export async function buildServer(
     githubExchanger?: GithubCodeExchanger;
     eventRouter?: EventRouterPort;
     pushDispatcher?: PushDispatcherPort;
-    /** Injectable so tests never need real S3 creds or a writable disk; defaults to `buildBlobStorage(env)` (S3 if `S3_BUCKET` is set, else local-disk). */
     blobStorage?: BlobStorageDriver;
-    /** Only consulted when `blobStorage.kind === "local"`; defaults to `resolveLocalDriverConfig(env)`. Tests inject a throwaway temp dir here instead of touching `~/.kvy/server/blobs` or process env. */
     blobLocalConfig?: LocalDriverConfig;
-    /** Defaults to the dev-logger transport (`auth/email.ts`) — no real SMTP wired up yet (issue-4-plan.md Phase 0). Tests inject a recording fake to assert on. */
     emailTransport?: EmailTransport;
   } = {},
 ) {
@@ -100,10 +84,8 @@ export async function buildServer(
   const blobLocalConfig =
     deps.blobLocalConfig ??
     (blobStorage.kind === "local" ? resolveLocalDriverConfig(env) : undefined);
-  // Deliberately built from `defaultEventRouter` (the real, presence-capable
-  // singleton), not the possibly-fake `eventRouter` above — `EventRouterPort`
-  // (what `deps.eventRouter` is typed as) doesn't carry `hasActiveVisibleClient`,
-  // only the full `eventRouter` singleton does (see events/eventRouter.ts).
+  // Built from `defaultEventRouter`, not the possibly-fake `eventRouter` dep, because
+  // `EventRouterPort` doesn't carry `hasActiveVisibleClient` — only the full singleton does.
   const pushDispatcher = deps.pushDispatcher ?? buildPushDispatcher(db, defaultEventRouter);
 
   const app = Fastify({
@@ -112,33 +94,15 @@ export async function buildServer(
     ...opts,
   }).withTypeProvider<ZodTypeProvider>();
 
-  // Zod becomes the schema/validation/serialization language for every
-  // typed route registered below (design §3: "Typed routes").
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
 
   const emailTransport = deps.emailTransport ?? createDevLoggerEmailTransport(app.log);
 
-  // HTTP CORS for the split-origin self-host shape (kvy-system-design.md §5.3/§9,
-  // plan.md §16 "4.3 Distribution & self-host": web is a static export served from a
-  // different origin than this API). Reuses the exact same allowlist validator Socket.IO's
-  // `cors.origin` already uses (`security/cors.ts`, built for the wildcard-CORS removal in
-  // P4-4.4-security-pass) so there is one `CORS_ALLOWED_ORIGINS` allowlist governing both
-  // transports, not two independently-drifting lists. `credentials: false`: auth is a
-  // bearer token in the `Authorization` header (auth/tokens.ts), never a cookie, so there's
-  // no session to leak via a credentialed cross-origin request — omitting
-  // `Access-Control-Allow-Credentials` entirely is strictly safer than the alternative.
-  // `allowedHeaders` is an explicit allowlist (not the plugin's default "reflect whatever
-  // the browser asked for") to match this file's general stance of narrow-by-default.
-  //
-  // `@fastify/cors`'s origin-function callback is `(err, origin: StaticOrigin) => void`
-  // (its second argument becomes the literal `Access-Control-Allow-Origin` value, or a
-  // boolean shorthand for "reflect the request origin" / "deny"), which differs just
-  // enough from `buildCorsOriginValidator`'s `(err, allow?: boolean) => void` shape
-  // (matched to Socket.IO's `cors` package convention) that TypeScript won't structurally
-  // unify the two callback types. `allow ?? false` below adapts the boolean the shared
-  // validator already produces into this plugin's expected shape without duplicating the
-  // allowlist-matching logic itself.
+  // Reuses the same allowlist validator as Socket.IO's CORS so one `CORS_ALLOWED_ORIGINS`
+  // list governs both transports. `credentials: false`: auth is always a bearer token,
+  // never a cookie. `allow ?? false` adapts `buildCorsOriginValidator`'s boolean callback
+  // shape into `@fastify/cors`'s StaticOrigin shape without duplicating the allowlist logic.
   const isAllowedOrigin = buildCorsOriginValidator(env.CORS_ALLOWED_ORIGINS);
   await app.register(cors, {
     origin: (origin, callback) => {
@@ -149,25 +113,15 @@ export async function buildServer(
     allowedHeaders: ["Content-Type", "Authorization"],
   });
 
-  // Decorates `app.authenticate` (design §16 "0.4 Server foundation") so routes
-  // registered below can require a valid bearer JWT via `{ preHandler: app.authenticate }`.
-  //
-  // Registered BEFORE the rate limiter on purpose (docs/auth-ux-overhaul-plan.md AX-7.4):
-  // it also installs a non-enforcing global `preHandler` that populates `req.accountId`,
-  // and global hooks run in registration order — so this must precede the limiter's own
-  // hook for account-keying below to see anything.
+  // Registered BEFORE the rate limiter: authPlugin installs a non-enforcing global
+  // preHandler that populates `req.accountId`, and global hooks run in registration order.
+  // The rate limiter's keyGenerator must see accountId, so authPlugin must register first.
   await app.register(authPlugin);
 
-  // Global default; individual routes narrow it further via `config.rateLimit`
-  // (design §4.3: "rate limits on auth + ingest routes"). Keyed by the authenticated
-  // account when available so one account can't starve another sharing an IP/NAT, and
-  // so an attacker on a different IP can't get their own budget against a victim; falls
-  // back to IP for routes that run without authentication (health checks, the auth
-  // routes themselves).
-  //
-  // `hook: "preHandler"` — the plugin's default `onRequest` fires before ANY preHandler,
-  // including `authPlugin`'s identification hook above, and would silently degrade to
-  // IP-only keying everywhere.
+  // Keyed by authenticated account when available so one account can't starve another
+  // sharing an IP/NAT. Falls back to IP for unauthenticated routes.
+  // `hook: "preHandler"` — the default `onRequest` fires before authPlugin's identification
+  // hook and would silently degrade to IP-only keying everywhere.
   await app.register(rateLimit, {
     global: true,
     max: 300,
@@ -176,15 +130,9 @@ export async function buildServer(
     keyGenerator: (req) => req.accountId || req.ip,
   });
 
-  // `onResponse` (not a route-level hook) so every route registered below —
-  // present and future — is covered without each one remembering to
-  // instrument itself, mirroring how `rpcHandler.ts` instruments every RPC
-  // call from one shared `finish()` closure rather than per-method. Reads
-  // `request.routeOptions.url` (the matched *pattern*, e.g.
-  // `/v1/sessions/:id/messages`) rather than `request.url` (the literal
-  // path) to keep the `route` label's cardinality bounded — see
-  // `routes/metrics.ts`'s `recordHttpRequest` doc comment. Falls back to
-  // `"unmatched"` for 404s, where no route pattern exists yet.
+  // `onResponse` hook covers all routes without per-route instrumentation.
+  // Uses `routeOptions.url` (the matched pattern) not `request.url` (literal path)
+  // to keep the `route` label's cardinality bounded. Falls back to `"unmatched"` for 404s.
   app.addHook("onResponse", async (request, reply) => {
     const route = request.routeOptions.url ?? "unmatched";
     recordHttpRequest(request.method, route, reply.statusCode, reply.elapsedTime / 1000);
@@ -230,14 +178,6 @@ export async function buildServer(
   await app.register(buildTelegramLinkRoutes(db));
   await app.register(buildNotificationSettingsRoutes(db, eventRouter));
 
-  // Socket.IO attaches to the underlying HTTP server (design §4.1 "/v1/stream" —
-  // read-only updates/ephemerals + RPC transport). Started here rather than in
-  // `main.ts` so `buildServer()` remains the single place a real server (or a test)
-  // assembles the whole app. `startSocket` binds the process-wide `eventRouter`
-  // singleton (events/eventRouter.ts) to this server's Socket.IO instance via
-  // `eventRouter.init(io)` — the same singleton the HTTP write routes above fan
-  // out through by default, so a write's post-commit `emitUpdate` reaches Socket.IO
-  // rooms without either side knowing about the other's transport.
   startSocket(app, db);
 
   return app;

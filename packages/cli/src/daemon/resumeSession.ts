@@ -1,35 +1,13 @@
 /**
- * `resumeSession` RPC's core (design §4.4: `'resumeSession'({sessionId}) →
- * { ok }               // re-spawn w/ reconnect env`; plan.md §16 "3.2
- * Durability": "`resumeSession` RPC: re-spawn with `KVY_RECONNECT_*` env
- * re-attaching to the same server session row").
+ * Core for the `resumeSession` RPC: re-spawns a session with `KVY_RECONNECT_*`
+ * env so it reconnects to its existing server-side row.
  *
- * Ported, with changes, from Happy's `resumeSession` closure in
- * `daemon/run.ts` (https://github.com/slopus/happy, MIT). Reuses the exact
- * same building blocks as the already-landed `spawn` RPC
- * (`spawnEngine.ts`): `processLauncher.ts`'s tmux-preferred launch and
- * `spawnAwaiter.ts`'s pid↔webhook matching. The two real differences from a
- * fresh spawn:
+ * Key difference from a fresh spawn: the directory comes from the daemon's own
+ * registry, not a caller-supplied path, so workspace-path validation doesn't apply.
  *
- *  - The session to relaunch is looked up in the daemon's own registry
- *    (`sessionRegistry.ts`), not validated against a remote-supplied
- *    workspace path — design §12's "no arbitrary-directory execution from
- *    remote" concern is about a *caller-supplied* directory; here the
- *    directory comes from what this daemon already recorded for this
- *    session, so `workspacePath.ts`'s validation doesn't apply.
- *  - The child is handed `KVY_RECONNECT_*` env instead of nothing —
- *    the wrapped DEK + seq + version counters the session process needs to
- *    keep writing into its *existing* server-side session row rather than
- *    minting a new one.
- *
- * A still-live process for the same session is stopped first: two
- * processes must never share ownership of one session's persisted DEK/seq
- * counters (a resumed session's provider process would otherwise race the
- * old one's writes). "Stopped" means *confirmed dead*, not just signalled —
- * `stopSession` only sends SIGTERM, so this module polls `isAlive` on the
- * old pid (reusing `kill.ts`'s SIGTERM-then-wait-then-SIGKILL escalation
- * pattern) before proceeding to launch the replacement process, closing the
- * window where both could otherwise be alive at once.
+ * A still-live process for the same session is stopped first and confirmed dead
+ * before the replacement is launched — two processes must never share ownership
+ * of one session's DEK/seq counters.
  */
 import { realpath } from "node:fs/promises";
 import { defaultKvyEntrypoint } from "../kvyEntrypoint.js";
@@ -57,7 +35,6 @@ export interface ResumeSessionRegistry {
   getLivePid(sessionId: string): number | null;
   /**
    * Re-tracks the relaunched pid. `directory` is the resolved real path the
-   * session is being resumed into (plan.md §16 "Flow 3 —
    * spawn-directory-dedup"): passing it through keeps the restored session
    * matchable by `spawnEngine.ts`'s `scanForLiveSessionInDirectory` after a
    * daemon restart, instead of coming back with `directory: undefined`.
@@ -232,7 +209,6 @@ export async function resumeSession(
     throw new ResumeSessionError("could not resolve the kvy entrypoint to re-invoke");
   }
 
-  // Headless-vs-terminal decision (plan-v2.md W3.7): this module ALWAYS
   // relaunches with `--starting-mode remote`, deliberately, regardless of
   // whatever mode the original session ran in. The daemon has no controlling
   // TTY to hand a re-spawned process — there is no terminal here to run a
@@ -281,7 +257,6 @@ export async function resumeSession(
   // Re-record the directory this session was resumed into, so a
   // subsequent spawn into the same directory still dedups against it — the
   // whole point of persisting `PersistedSession.directory` across a daemon
-  // restart (plan.md §16 "Flow 3 — spawn-directory-dedup").
   deps.registry.trackSpawned(launched.pid, directory);
   logger.info("[resume-session] launched provider process", {
     method: launched.method,
@@ -304,7 +279,6 @@ export async function resumeSession(
 /**
  * The real default `resolveDirectory` for a `resumeSession` relaunch, now that
  * `PersistedSession` carries the session's spawn `directory` across a daemon
- * restart (plan.md §16 "Flow 3 — spawn-directory-dedup"). Re-resolves the
  * stored path via `realpath` rather than trusting the stored string verbatim:
  * spawn-dedup matches directories by exact string equality against a
  * *freshly* `realpath`-resolved spawn target (`spawnEngine.ts`'s

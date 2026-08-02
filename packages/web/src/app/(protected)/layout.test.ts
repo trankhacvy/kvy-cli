@@ -10,9 +10,7 @@ import { describe, expect, it } from "vitest";
  * against the shipped source text is the same technique `signin/page.test.ts`
  * uses for similarly hook-heavy, non-pulled-out JSX — this just confirms
  * `OfflineBanner` mounts here (and only here — see `providers.test.ts`),
- * inside `RequireAuth` so it never renders on a public route
- * (known-issues.md "OfflineBanner shows a misleading 'Reconnecting…' on
- * pages with no connection to reconnect").
+ * inside `RequireAuth` so it never renders on a public route.
  */
 const layoutSource = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./layout.tsx"),

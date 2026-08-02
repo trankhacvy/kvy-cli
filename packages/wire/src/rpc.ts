@@ -5,7 +5,6 @@ import { ProviderIdSchema } from "./providers";
 import { SessionEnvelopeSchema } from "./session";
 
 /**
- * RPC call envelope sent over the WS `rpc-call` client emit (design §4.4).
  * `target` is scope-prefixed: `m:<machineId>:<method>` (daemon-registered)
  * or `s:<sessionId>:<method>` (session-process-registered). Params/results
  * are always an `EncryptedBox` — the relay forwards opaque bytes and never
@@ -19,7 +18,6 @@ export const RpcCallSchema = z.object({
 export type RpcCall = z.infer<typeof RpcCallSchema>;
 
 // ---------------------------------------------------------------------------
-// Machine RPCs — registered by the daemon (design §4.4)
 //
 // `idempotencyKey` is required on spawn/adopt.*/git.*/fs.read: an RPC ack can
 // legitimately be lost after the daemon already ran the call (dead-peer
@@ -59,16 +57,13 @@ export type SpawnParams = z.infer<typeof SpawnParamsSchema>;
 // `sessionId` is optional (rather than the union `SpawnSessionResult` the
 // daemon's loopback controlServer contract uses internally,
 // packages/cli/src/daemon/types.ts) because the additive-only policy
-// (design §5.3) forbids retyping an already-shipped required field into a
 // union — schemaRegistry.ts's compat check would reject that. `requiresApproval`
 // is the wire-safe equivalent of that contract's
-// `requestToApproveDirectoryCreation` case (plan.md §16 "3.1 Remote spawn"
 // — "409 directory-creation approval loop"): the target directory doesn't
 // exist yet, so the caller offers to create it (`fs.mkdir`) and retries
 // `spawn` with the same `idempotencyKey`. Exactly one of `sessionId` /
 // `requiresApproval` is set on any successful (non-throwing) response.
 //
-// `action` is a multi-value literal, not a `z.enum` (plan.md §16 "Flow 3 —
 // spawn-fresh-folder-register (Piece A)"): the additive-only compat check
 // (`__tests__/schemaShape.ts`'s `isCompatible`) treats a schema's `kind` as
 // part of its frozen shape, and `describeShape` reports `z.literal(...)` and
@@ -76,7 +71,6 @@ export type SpawnParams = z.infer<typeof SpawnParamsSchema>;
 // would be a breaking kind change under the frozen fixture even though the
 // value set only grew. `"register-workspace"` is the second action: a
 // `spawn` whose `workspaceId` was never registered (a genuinely fresh
-// folder picked cold in the web UI — kvy-prd.md FR-7.5, plan.md §16
 // "3.1 Remote spawn") resolves to this instead of throwing, mirroring the
 // `"create-directory"` loop — the caller confirms, registers it (the new
 // `workspace.register` RPC below), and retries `spawn`.
@@ -149,11 +143,9 @@ export const GitDiffParamsSchema = z.object({
 export type GitDiffParams = z.infer<typeof GitDiffParamsSchema>;
 
 // `truncated` mirrors `FsReadResultSchema`'s own field below — same "no blob
-// subsystem yet" contract (design §4.4 "payload size rule"): a diff that
 // would blow the 64KB RPC control-plane budget is truncated inline rather
 // than dropped, and `truncated: true` tells the caller more content exists.
 // `blobRef` is the reserved extension point for the eventual blob-storage
-// fallback (plan.md §16 "4.3 Distribution & self-host") — unset until that
 // subsystem lands, same as `adopt.mirror`'s own not-yet-wired `blobRef`.
 export const GitDiffResultSchema = z.object({
   inline: z.string().optional(),
@@ -162,7 +154,6 @@ export const GitDiffResultSchema = z.object({
 });
 export type GitDiffResult = z.infer<typeof GitDiffResultSchema>;
 
-// `git.branches` machine RPC (design §4.4, docs/features/worktree-isolation.md
 // Phase 1): lists local branches for the existing-branch worktree picker.
 // Structural clone of `git.status`'s params shape above.
 export const GitBranchesParamsSchema = z.object({
@@ -262,7 +253,6 @@ export const ProviderAccountResultSchema = z.object({
 });
 export type ProviderAccountResult = z.infer<typeof ProviderAccountResultSchema>;
 
-// `git.files` machine RPC (design §4.4's "fs.read"/Repo Files sidebar tab,
 // docs/competitive-notes-omnara.md #5 "Full repo file browser"): the flat
 // file listing that backs the file tree, joining `git.status`/`git.diff`/
 // `git.branches` in the `git.*` family above. `git ls-files --cached
@@ -318,7 +308,6 @@ export const SlashCommandsListResultSchema = z.object({
 });
 export type SlashCommandsListResult = z.infer<typeof SlashCommandsListResultSchema>;
 
-// `git.commit` machine RPC (design §4.4, docs/features/git-write-actions.md
 // Phase 1 — the first *mutating* git RPC; `git.status`/`git.diff`/
 // `git.branches` above are all read-only). `stageAll: true` runs `git add
 // -A` before committing, so the commit includes exactly what the panel's
@@ -348,7 +337,6 @@ export const GitCommitResultSchema = z.object({
 });
 export type GitCommitResult = z.infer<typeof GitCommitResultSchema>;
 
-// `git.push` machine RPC (design §4.4, docs/features/git-write-actions.md
 // Phase 1). `force: true` maps to `--force-with-lease`, NEVER the raw
 // `--force` flag — the raw flag is deliberately unreachable over the wire
 // as a data-loss containment measure (a lease-checked force-push still
@@ -375,7 +363,6 @@ export const GitPushResultSchema = z.object({
 });
 export type GitPushResult = z.infer<typeof GitPushResultSchema>;
 
-// `git.renameBranch` machine RPC (design §4.4, docs/features/
 // git-write-actions.md Phase 1): local-only `git branch -m` (the remote
 // branch, if any, keeps its old name until the next push — `hadUpstream`
 // tells the UI to surface that warning).
@@ -467,12 +454,10 @@ export const GitSetRemoteResultSchema = z.object({
 });
 export type GitSetRemoteResult = z.infer<typeof GitSetRemoteResultSchema>;
 
-// `github.checks` machine RPC (design §4.4; docs/features/github-pr-ci.md
 // "GitHub PR/CI integration", docs/competitive-notes-omnara.md #4).
 // Structural clone of `git.status`/`git.branches`'s params shape above —
 // the daemon resolves the PR/CI state for the current branch of
 // `params.worktree` using a machine-local GitHub token, never one held by
-// the server (design §5.3/§6.1: the server decrypts nothing).
 export const GithubChecksParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),
@@ -557,12 +542,9 @@ export const FsReadResultSchema = z.object({
 export type FsReadResult = z.infer<typeof FsReadResultSchema>;
 
 // `fs.list`/`fs.mkdir` — the New Session directory picker's daemon-provided
-// browsing RPCs (kvy-prd.md FR-7.5 "workspace/directory picker
-// (daemon-provided)"; plan.md §16 "3.1 Remote spawn"). Deliberately NOT
 // scoped to a `worktree` like `fs.read` above: picking a brand-new
 // directory has to work before any workspace/worktree is registered.
 // `spawn`'s own workspace-path validation (`workspacePath.ts`) remains the
-// actual "no arbitrary-directory execution" boundary (design §12) — these
 // two RPCs only let the caller *see* and *create* directories, never run
 // anything in them.
 export const FsListParamsSchema = z.object({
@@ -596,14 +578,12 @@ export type FsMkdirParams = z.infer<typeof FsMkdirParamsSchema>;
 export const FsMkdirResultSchema = z.object({ ok: z.boolean() });
 export type FsMkdirResult = z.infer<typeof FsMkdirResultSchema>;
 
-// `workspace.register` (plan.md §16 "Flow 3 — spawn-fresh-folder-register
 // (Piece A)"): backs `SpawnResult`'s `register-workspace` approval branch
 // above — registers `directory` as a genuine, deliberately-designated
 // workspace (`workspace/registry.ts`'s already-idempotent
 // `registerWorkspace`), so a `spawn` retried with the same `directory`
 // afterward resolves instead of repeating `unknown-workspace`. Deliberately
 // NOT folded into `fs.mkdir` — that RPC only ever touches the filesystem
-// (design §12's directory-picker carve-out); this one is the actual
 // workspace-registry write, kept as its own explicit, user-confirmed act
 // per that same design note ("no arbitrary-directory execution from
 // remote" must stay an opt-in designation, never an implicit side effect
@@ -710,7 +690,6 @@ export const AdoptTakeParamsSchema = z.object({
 });
 
 // `warning` is set when a 'takeover' actually interrupted a live, mid-turn
-// process (design §10.4/FR-9.3: "if the process is mid-turn, show a
 // warning") — additive field, absent on 'fork' or when the original process
 // was already idle/finished.
 export const AdoptTakeResultSchema = z.object({
@@ -720,13 +699,10 @@ export const AdoptTakeResultSchema = z.object({
 export type AdoptTakeResult = z.infer<typeof AdoptTakeResultSchema>;
 export type AdoptTakeParams = z.infer<typeof AdoptTakeParamsSchema>;
 
-// Read-only transcript mirror (design §4.4 "payload size rule" / §8 /
-// plan.md §16 "3.3 Session adoption (UC9)"): serves an unmanaged session's
 // transcript on demand in ≤64KB chunks rather than uploading whole
 // histories eagerly. `cursor`/`nextCursor` are byte offsets into the
 // transcript file; `done: true` on the final chunk (`nextCursor: null`).
 // `blobRef` is a reserved extension point for the eventual blob-storage
-// fallback for very large transcripts (plan.md §16 "4.3 Distribution &
 // self-host") — unset until that subsystem lands, same as `git.diff`/
 // `fs.read`'s own not-yet-wired `blobRef`.
 export const AdoptMirrorParamsSchema = z.object({
@@ -791,12 +767,10 @@ export const SleepInhibitSetParamsSchema = z.object({
 export type SleepInhibitSetParams = z.infer<typeof SleepInhibitSetParamsSchema>;
 
 // ---------------------------------------------------------------------------
-// Session RPCs — registered by the session process (design §4.4)
 // ---------------------------------------------------------------------------
 
 export const MessageRpcParamsSchema = z.object({ envelope: SessionEnvelopeSchema });
 
-// Tri-state reply (design §7.10 "Send-idempotency claim", v0.3): protects
 // the highest-frequency mutating session RPC end-to-end — a retried or
 // duplicated `message` call must never cause the agent to run a turn twice.
 // - 'queued': normal accept path (today's only outcome).
@@ -809,11 +783,9 @@ export const MessageRpcStatusSchema = z.enum(["queued", "duplicate", "outcome-un
 export type MessageRpcStatus = z.infer<typeof MessageRpcStatusSchema>;
 
 // `queued` (unchanged, required) stays exactly as it shipped — the
-// additive-only wire policy (design §5.3) forbids retyping an
 // already-shipped required field, and the CLI's `message` RPC handler
 // (packages/cli/src/commands/start.ts) still only ever sets it: wiring the
 // send-idempotency claim store into `deliverMessage()` so the producer can
-// actually compute `status` is Phase 2.2 (plan.md §17 "17. v2 — ACP
 // migration"), not this change. `status` is therefore additive *and*
 // optional — a reply that omits it (every producer today) is still valid,
 // and the web composer falls back to the pre-existing `queued`-only
@@ -828,7 +800,6 @@ export const PermAnswerParamsSchema = z.object({
   decision: PermDecisionSchema,
 });
 
-// First-wins across devices (design §7.6): the session process resolves each
 // reqId exactly once. The losing answer gets ok:false plus the decision that
 // actually won, so the client can render "answered on another device".
 // `"local-turn"` (no `decision` — nobody has answered yet) is the other
@@ -846,13 +817,11 @@ export const PermAnswerResultSchema = z.object({
 export const InterruptParamsSchema = z.object({});
 export const InterruptResultSchema = z.object({ ok: z.boolean() });
 
-// `stop` (plan.md §16 "2.3 Stop session", plan-v2.md W2.3 "Stop session from
 // the web"): a session RPC, not the machine RPC `StopSessionParams/
 // ResultSchema` above — the session process is alive, connected, and owns
 // its own child, so no daemon round-trip is needed (the daemon doesn't even
 // track terminal sessions, design §A9). The machine-RPC `stopSession` stays
 // reserved for a dead/daemon-spawned session with no live session-RPC
-// target to call directly (plan-v2.md Wave 4 note).
 export const StopRpcParamsSchema = z.object({
   /** Graceful by default (SIGTERM to the child, or the remote loop's own
    * exit request); `force: true` additionally exits the whole CLI process
@@ -867,7 +836,6 @@ export const TakeControlResultSchema = z.object({ ok: z.boolean() });
 export const SetModeParamsSchema = z.object({ mode: PermissionModeSchema });
 export const SetModeResultSchema = z.object({
   ok: z.boolean(),
-  // Additive (plan-v2.md W4.3 "Real setMode for the PTY path"): the PTY
   // path can't blindly trust its own Shift+Tab keystrokes landed — it
   // verifies via the next hook input's `permission_mode` echo and reports
   // whatever it actually observed here, so the caller can revert an
@@ -927,7 +895,6 @@ export const SetModelResultSchema = z.object({
 // once per freshly-created worktree, e.g. `npm install`) and "Run script"
 // (a one-click, long-lived dev-server-style process, e.g. `npm run dev`),
 // both defined CLI-only (`kvy workspace config --setup-script/
-// --run-script`, design §12's local-consent boundary — no RPC params
 // schema below ever carries a script string, only a `worktree` path the
 // daemon resolves back to its own on-disk config). `workspace.getConfig` is
 // the one read-only addition that lets the web Workspace Settings UI *see*
@@ -952,7 +919,6 @@ export type WorkspaceGetConfigResult = z.infer<typeof WorkspaceGetConfigResultSc
 
 // `workspace.setConfig`: the web Workspace Settings UI's write path for
 // `baseRef`/`remote` only — `setupScript`/`runScript` stay outside this
-// schema entirely, preserving design §12's local-consent boundary (no
 // script string ever crosses the RPC wire in either direction). `baseRef`/
 // `remote` carry no execution risk, so unlike scripts they're safe to set
 // remotely; an empty string clears the field, matching

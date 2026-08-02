@@ -1,15 +1,11 @@
 /**
  * Composition that wires remote permission answering into a live Claude Code
- * TUI session (design §7.4/§7.6, plan.md §17). It ties together the three
  * pieces that already exist in isolation:
  *
  *  - {@link PreToolPermissionBridge} — the decision-routing core. `PreToolUse`
  *    defers (`ask`) for every tool except `AskUserQuestion`, which it
- *    intercepts directly (deny-with-answer, plan-v2.md Wave 2.1);
  *    `PermissionRequest` is where the web-vs-terminal fork for everything
  *    else lives (local-vs-web policy, perm-request/perm-resolve emission,
- *    first-wins `perm.answer`, timeout→deny fallback) — design §7.6,
- *    plan-v2.md Wave 1.1.
  *  - {@link startHookServer} — the loopback server, with `onPreToolUse` and
  *    `onPermissionRequest` endpoints the generated hook forwarder POSTs to
  *    and blocks on for the decision.
@@ -37,7 +33,6 @@
  *    `message`; `markTurnEnd()` when the turn finishes (also fired
  *    automatically from Claude Code's own `Stop` hook here) or control
  *    returns to the terminal. The flag is self-healing rather than a plain
- *    boolean (plan-v2.md W1.2): `markLocalActivity()` — wired to a locally-
  *    typed Enter at the real keyboard — clears it immediately (a present
  *    human beats a remote one), and a `WEB_TURN_MAX_MS` watchdog auto-clears
  *    a web turn that's gone quiet too long (a missed `Stop` hook, e.g. a
@@ -67,7 +62,6 @@ import { PreToolPermissionBridge } from "./pretoolPermissionBridge.js";
 export const HOOK_SETTINGS_ENV_VAR = "KVY_HOOK_SETTINGS_PATH";
 
 /**
- * Default max quiet time before an active web turn auto-clears (plan-v2.md
  * W1.2's watchdog). Refreshed by hook traffic while the flag is set, so this
  * only fires on a genuinely wedged turn (e.g. a missed `Stop` hook after a
  * crash), never on a merely-long-running one.
@@ -93,7 +87,6 @@ export interface RemotePermissionHookOptions {
   /**
    * Fires when the bridge sees a hook decision that means a TUI dialog is (or
    * is about to be) on screen at the terminal — a local-turn `PreToolUse`
-   * `ask` or a local-turn `PermissionRequest` deferral (plan-v2.md W1.3). The
    * caller wires this to the PTY session's `setPromptOpen(true)` so a queued
    * web message never gets typed into an open dialog.
    */
@@ -120,7 +113,6 @@ export interface RemotePermissionHookOptions {
   /**
    * Any web turn quiet longer than this auto-clears the web-turn flag — a
    * missed `Stop` hook (e.g. a crash) must not wedge every future prompt onto
-   * the web forever (plan-v2.md W1.2). Default 30 minutes.
    */
   webTurnMaxMs?: number;
   logger?: Logger;
@@ -155,14 +147,12 @@ export interface RemotePermissionHookHandle {
   /**
    * The last `permission_mode` seen on any hook input, or `null` before the
    * first one fires. The PTY `setMode` RPC's only source of truth for the
-   * live TUI's actual mode (plan-v2.md W4.3) — forwards {@link
    * PreToolPermissionBridge.currentPermissionMode}.
    */
   getCurrentPermissionMode: () => PermissionMode | null;
   /**
    * Resolves with the `permission_mode` observed on the NEXT hook input, or
    * `null` on `timeoutMs` with none seen — the "verify via hook echo" half
-   * of the real PTY `setMode` (plan-v2.md W4.3). Forwards {@link
    * PreToolPermissionBridge.waitForModeEcho}.
    */
   waitForModeEcho: (timeoutMs: number) => Promise<PermissionMode | null>;
@@ -178,7 +168,6 @@ export interface RemotePermissionHookHandle {
   /**
    * True once `markWebTurnStart()` has fired and `markTurnEnd()`/
    * `markLocalActivity()` has not, AND the turn hasn't gone quiet past
-   * `webTurnMaxMs` (the watchdog — plan-v2.md W1.2). Calling this refreshes
    * the watchdog's last-activity clock, since hook traffic while the flag is
    * set counts as evidence the turn is still genuinely alive.
    */
@@ -190,7 +179,6 @@ export interface RemotePermissionHookHandle {
   /**
    * Call when the human at the real terminal submits input (a locally-typed
    * Enter outside injection) — clears the web-turn flag immediately. A
-   * present human beats a remote one (plan-v2.md W1.2's known, accepted
    * residual: this also flips a still-genuinely-running web turn's
    * subsequent prompts to the terminal).
    */
@@ -212,7 +200,6 @@ export async function installRemotePermissionHook(
   const now = deps.now ?? (() => Date.now());
   const webTurnMaxMs = opts.webTurnMaxMs ?? WEB_TURN_MAX_MS;
 
-  // Epochs + a watchdog instead of a plain boolean (plan-v2.md W1.2): a
   // missed `Stop` hook (crash) must not wedge every future prompt onto the
   // web forever, and a locally-typed submit must be able to reclaim the
   // turn immediately (see `markLocalActivity`'s own doc).

@@ -8,15 +8,9 @@ export interface ElementSize {
 }
 
 /**
- * Measures a ref'd element's content box via `ResizeObserver`, for
- * libraries that need explicit pixel `width`/`height` rather than filling
- * their container via CSS (`react-arborist`'s `<Tree>` — Feature 3, docs/
- * web-ux-improvements-plan.md Phase 3 — has no built-in auto-sizer, unlike
- * `@tanstack/react-virtual`'s scroll-element-driven approach).
- *
- * Starts at `{width: 0, height: 0}` — callers must treat that as "not
- * measured yet, don't render the sized child" the same way `useMachineOnline`
- * treats "unknown" as distinct from a real value, not fall back to a guess.
+ * Measures a ref'd element's content box via `ResizeObserver`.
+ * Starts at `{width: 0, height: 0}` — callers must treat that as "not yet
+ * measured" and not render sized children until the first measurement arrives.
  */
 export function useElementSize<T extends HTMLElement>(): [React.RefObject<T | null>, ElementSize] {
   const ref = useRef<T | null>(null);

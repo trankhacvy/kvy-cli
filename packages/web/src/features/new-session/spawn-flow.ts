@@ -1,7 +1,6 @@
 import type { NewSessionActions, SpawnRequest } from "./types";
 
 /**
- * Orchestrates `spawn`'s two approval loops (plan.md §16 "3.1 Remote
  * spawn" and "Flow 3 — spawn-fresh-folder-register (Piece A)"): call
  * `spawn`; if the daemon reports it needs an approval first
  * (`requiresApproval`), ask the caller to confirm, resolve it — create the

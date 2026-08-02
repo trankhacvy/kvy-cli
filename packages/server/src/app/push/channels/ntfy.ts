@@ -3,7 +3,6 @@ import type { PushChannel } from "../types.js";
 import { notificationDeepLink, notificationLabel } from "./messageText.js";
 
 /**
- * Kvy-add fallback channel (plan.md §10, kvy-system-design.md §6.4).
  * `endpoint` holds the ntfy.sh (or self-hosted ntfy) topic name the user
  * configured in Settings — no pairing needed, unlike Telegram, since a topic
  * is just a name the user picks; `POST /v1/push/subscribe` already accepts

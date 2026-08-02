@@ -1,23 +1,14 @@
 /**
- * Boot-time re-adoption matcher (plan.md §16 "Flow 3 — spawn-directory-dedup"):
- * finds persisted sessions whose recorded pid is STILL a live kvy session
- * process running in the recorded directory — the ones a daemon restart
- * orphaned but did not kill.
+ * Boot-time re-adoption: finds persisted sessions whose recorded pid is still a
+ * live kvy session process in the recorded directory.
  *
- * `sessionRegistry.ts`'s `restore()` only seeds the durable `resumable` map
- * from `sessions.json`; it never touches the live `pidToSession` map. So a
- * still-running orphaned `kvy claude --starting-mode remote --started-by
- * daemon` child stays invisible to `spawnEngine.ts`'s
- * `scanForLiveSessionInDirectory` (which only scans live-tracked sessions)
- * until an explicit `resumeSession` RPC re-tracks it — and nothing triggers
- * that automatically. This module is the discovery half of the fix;
- * `sessionRegistry.ts`'s `readoptLiveSessions` owns the map insertion.
+ * After a daemon restart, orphaned children are invisible to
+ * `scanForLiveSessionInDirectory` (which only scans live-tracked sessions) until
+ * explicitly re-tracked. This module is the discovery half; `sessionRegistry.ts`'s
+ * `readoptLiveSessions` owns the map insertion.
  *
- * Guards pid recycling: `kill(pid,0)`-style liveness alone is NOT enough (a
- * reused pid could be an unrelated process, or another kvy session in a
- * different dir), so the live pid's `ps` command line must classify as a
- * kvy `session` AND its resolved cwd must equal the persisted
- * (realpath-canonicalized) directory.
+ * Guards pid recycling: liveness alone is not enough — the pid's command line must
+ * classify as a kvy `session` AND its resolved cwd must match the persisted directory.
  */
 import { realpath as realpathDefault } from "node:fs/promises";
 import { classifyKvyCommand } from "./markers.js";

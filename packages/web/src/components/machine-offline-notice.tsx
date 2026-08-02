@@ -4,13 +4,8 @@ import { CloudOff } from "lucide-react";
 import type { MachineOnlineState } from "@/lib/use-machine-online";
 
 /**
- * The one shared "this machine can't be reached right now" strip every
- * machine-RPC panel renders (Changes, All Files, Checks, Run, Preview, new
- * workspace). Deliberately a slim inline strip, NOT a full-screen or
- * blocking overlay: everything already fetched stays readable and
- * scrollable underneath, and everything sourced from the synced caches (the
- * transcript, the session list) is unaffected by a machine being offline at
- * all.
+ * Deliberately a slim inline strip, not a full-screen overlay: everything
+ * already fetched stays readable and scrollable underneath.
  *
  * Renders nothing when the machine is online or its state is unknown — see
  * `useMachineOnline`'s doc comment on why "unknown" must never look like

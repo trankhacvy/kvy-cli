@@ -1,8 +1,6 @@
 /**
  * Ported verbatim from Happy — https://github.com/slopus/happy
- * Original: happy-cli/src/ui/ink/RemoteModeDisplay.tsx's
  * `interpretRemoteModeKeypress` (MIT) — split into its own module so it can
- * be unit-tested "without Ink/React" per Happy's own comment on it, rather
  * than pulling the Ink/React/JSX toolchain into a test that only exercises
  * this pure reduce-style function.
  *
@@ -28,7 +26,6 @@
  * SOFTWARE.
  *
  * ---
- * Keypress semantics (plan.md §16 "2.1 Remote mode"): double-space within
  * 15s confirms switching back to local/terminal control (Ctrl-T switches
  * immediately, no confirmation needed); double-Ctrl-C within 15s exits the
  * whole client; any other key cancels a pending confirmation.

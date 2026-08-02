@@ -1,22 +1,12 @@
 /**
- * Daemon-side HTTP client for the blob storage subsystem (kvy-system-
- * design.md §6.2 "POST /blobs/request-upload   POST /blobs/request-download",
- * §6.5; plan.md §16 "4.3 Distribution & self-host"). Encrypts with
- * `encryptBlob`/a machine-DEK-derived blob key (`deriveBlobKey`, design
- * §5.1) *before* ever talking to the server — same "server is blind"
- * boundary every other content path in this codebase respects.
+ * Daemon-side HTTP client for the blob storage subsystem. Encrypts with
+ * `encryptBlob` before ever talking to the server — the server never sees
+ * plaintext.
  *
- * This is what backs the `blobRef` fields `git.diff`/`adopt.mirror`
- * reserved on the wire (`@kvy/wire`'s `rpc.ts`) for exactly this
- * subsystem, once it existed — see `gitDiff.ts`/`transcriptMirror.ts`'s own
- * doc comments for how they consume `uploadBlob` below.
- *
- * Best-effort by design: every method here resolves `null` (never throws)
- * on any network/HTTP/decode failure, logged at `warn`. A failed blob
- * upload must never crash the RPC handler that was about to fall back to
- * inline/chunked delivery anyway — it just doesn't get the `blobRef`
- * efficiency win this time. Mirrors `unmanagedSessionClient.ts`'s own
- * "best-effort side channel, log and return a falsy sentinel" contract.
+ * Best-effort by design: every method resolves `null` (never throws) on any
+ * network/HTTP/decode failure, logged at `warn`. A failed blob upload must
+ * never crash the RPC handler that was about to fall back to inline delivery
+ * anyway — it just doesn't get the `blobRef` efficiency win.
  */
 import { createHash } from "node:crypto";
 import { decryptBlob, encryptBlob } from "@kvy/crypto";
@@ -28,7 +18,7 @@ const UPLOAD_TIMEOUT_MS = 60_000;
 
 export interface BlobClientDeps {
   serverUrl: string;
-  /** issue-4-plan.md §6.6: resolves a fresh access token per call (via `auth/tokenProvider.ts`) instead of a static string that goes stale. */
+  /** Resolves a fresh access token per call — not a static string that goes stale. */
   getAccessToken: () => Promise<string | null>;
   /** Injectable so unit tests never make a real network call. */
   fetchImpl: typeof fetch;
@@ -93,11 +83,9 @@ async function fetchJson(
 }
 
 /**
- * Encrypts `plaintext` under `blobKey` and uploads it: `POST
- * /v1/blobs/request-upload` → mint a target, then `PUT` the encrypted bytes
- * to it. Returns the resulting `blobId` (what callers embed as `blobRef`),
- * or `null` on any failure — see this module's header for the never-throw
- * contract.
+ * Encrypts `plaintext` under `blobKey`, requests an upload target, then PUTs
+ * the encrypted bytes. Returns the resulting `blobId`, or `null` on any failure
+ * (see module-level never-throw contract).
  */
 export async function uploadBlob(
   plaintext: Uint8Array,
@@ -147,10 +135,9 @@ export async function uploadBlob(
 }
 
 /**
- * Inverse of `uploadBlob`: `POST /v1/blobs/request-download` → `GET` the
- * bytes → `decryptBlob` under `blobKey`. Returns `null` on any failure
- * (network, missing/foreign blob, or a decrypt failure — `decryptBlob`
- * itself never throws, design principle: unwrap never throws).
+ * Inverse of `uploadBlob`: requests a download URL, GETs the bytes, then
+ * decrypts under `blobKey`. Returns `null` on any failure — `decryptBlob`
+ * itself never throws; a bad ciphertext returns null rather than an exception.
  */
 export async function downloadBlob(
   blobId: string,

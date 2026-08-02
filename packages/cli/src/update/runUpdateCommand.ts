@@ -1,6 +1,5 @@
 /**
  * `kvy update` — the explicit, user-facing entrypoint for the
- * self-update mechanism (plan.md §16 "4.3 Distribution & self-host"), and
  * also what `autoUpdateTrigger.ts` spawns as a detached background child on
  * every `kvy` start. Both paths share this exact same check-then-apply
  * logic; the only difference is `silent` (set via `KVY_UPDATE_SILENT=1`

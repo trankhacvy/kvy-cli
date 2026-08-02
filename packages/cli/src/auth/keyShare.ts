@@ -1,11 +1,7 @@
 /**
- * Node twin of the web crypto worker's `sealKeysForPeer`
- * (docs/auth-ux-overhaul-plan.md AX-4.18) — lets a CLI machine that holds the master
- * secret answer another device's key request when no browser is open.
- *
- * The payload format is shared with `web/src/crypto/worker-handler.ts` and is asserted
- * byte-compatible in `keyShare.test.ts`; changing one side without the other silently
- * breaks cross-platform key sharing.
+ * The payload format is byte-compatible with `web/src/crypto/worker-handler.ts`'s
+ * `sealForPeer`; changing one side without the other silently breaks cross-platform
+ * key sharing.
  */
 import { decodeBase64, encodeBase64, libsodiumEncryptForPublicKey } from "@kvy/crypto";
 

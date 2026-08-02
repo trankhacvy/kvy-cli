@@ -11,14 +11,11 @@ const UnsubscribeResponseSchema = z.object({ ok: z.literal(true) });
 const SubscribeConflictSchema = z.object({ error: z.string() });
 
 /**
- * `POST /v1/push/subscribe` + `DELETE /v1/push/subscribe` (design §6.2).
  * Registers/removes one row per device+channel — a device re-subscribing
  * (browser push subscriptions rotate their endpoint on renewal, and a
  * user may re-link the same Telegram chat) upserts on `endpoint`, which is
- * unique across all channels (design §6.1's `push_subscriptions.endpoint`).
  *
  * No content ever touches this table — `keys` is the Web Push transport
- * key pair (p256dh/auth), not session data (design §6.1: "unencrypted:
  * transport, not content").
  */
 export function buildPushRoutes(db: Database): FastifyPluginAsyncZod {
@@ -50,7 +47,6 @@ export function buildPushRoutes(db: Database): FastifyPluginAsyncZod {
           // Re-subscribe with an endpoint already on file — idempotent for the
           // *same* account (e.g. a retried request, or the client resending
           // its subscription on every app start). `endpoint` is globally
-          // unique (design §6.1), so guard against silently reassigning an
           // existing subscription to a different caller rather than updating
           // across accounts.
           const existing = await db.query.pushSubscriptions.findFirst({

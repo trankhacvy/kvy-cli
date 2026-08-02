@@ -1,6 +1,4 @@
-/** Quiet hourly time anchor between timeline rows (`Timeline.tsx`,
- * plan-v2.md W4.2 "hourly dividers" — `shouldShowHourDivider`/
- * `formatHourDividerLabel`, `lib/format.ts`). Purely presentational: the
+/** Quiet hourly time anchor between timeline rows. Purely presentational: the
  * decision of *when* to render one lives in the caller. */
 export function HourDivider({ label }: { label: string }) {
   return (

@@ -1,9 +1,9 @@
 /**
  * crypto-bridge RPC protocol — the postMessage-shaped contract between the main thread
- * (`client.ts`) and the crypto worker (`worker.ts` / `worker-handler.ts`). See
- * kvy-system-design.md §5.3, §9.1: keys live in worker memory only, so every response
- * shape here is deliberately incapable of carrying raw key material — only ciphertext
- * (`EncryptedBox`), booleans, or already-public values cross back out.
+ * (`client.ts`) and the crypto worker (`worker.ts` / `worker-handler.ts`). Keys live in
+ * worker memory only, so every response shape is deliberately incapable of carrying raw
+ * key material — only ciphertext (`EncryptedBox`), booleans, or already-public values
+ * cross back out.
  */
 import type { EncryptedBox } from "@kvy/crypto/web";
 import type { KeyWrapMode } from "./key-storage.js";
@@ -252,9 +252,8 @@ export interface StorageDescription {
 
 /**
  * Why a refresh did or didn't produce a token. Deliberately NOT a bare `string | null`:
- * collapsing "the server rejected this credential" into the same value as "the request
- * never arrived" is what turned a bundler misconfiguration into a total sign-out for every
- * user on every reload (auth-ux-overhaul-e2e-results.md E2E-4.1).
+ * "server rejected" and "request never arrived" must be distinct — conflating them can turn
+ * a transient network/config failure into a total sign-out for all users.
  */
 export type RefreshOutcome =
   | { kind: "ok"; accessToken: string }

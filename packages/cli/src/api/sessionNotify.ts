@@ -1,21 +1,3 @@
-/**
- * CLI-side client for `POST /v1/sessions/:id/notify` (the server route
- * `packages/server/src/app/routes/sessionNotify.ts` — already fully wired,
- * server-side is out of scope here). `docs/user-flows.md`'s fix-plan task 4:
- * the CLI never calls this route today, so a live permission request,
- * AskUserQuestion, or turn completion never triggers a push notification —
- * this module is the missing caller.
- *
- * Same best-effort philosophy/shape as `sessionStatus.ts`'s
- * `reportSessionStatus`: never throws, every outcome (success, HTTP error,
- * network error) is a typed result the caller logs and moves past. This is a
- * side-signal alongside the real permission/turn pipeline — a slow or
- * unreachable backend must never block or fail the thing that triggered it,
- * hence the same bounded `timeoutMs`.
- *
- * `backendUrl`/`accessToken` are caller-supplied, matching `sessionStatus.ts`'s
- * own doc comment on why this module doesn't own config/token resolution.
- */
 
 import type { Logger } from "../logger.js";
 

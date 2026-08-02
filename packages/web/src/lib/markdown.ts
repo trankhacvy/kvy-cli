@@ -9,42 +9,18 @@ import { unified } from "unified";
 import { CodeBlock } from "@/components/timeline/CodeBlock";
 
 /**
- * Markdown → React pipeline for assistant/user message text (design §9.1
- * "Markdown via unified/remark + shiki"; plan.md §8.4). A single shared
- * `unified` processor, built lazily and reused for every message — shiki's
- * highlighter setup is the expensive part, not worth repeating per card.
+ * Markdown → React pipeline. A single shared `unified` processor built lazily and
+ * reused — shiki highlighter setup is the expensive part.
  *
- * `rehype-pretty-code` wraps shiki inside the unified pipeline (it *is* the
- * "unified+shiki" combination the design calls for).
+ * Compiles to React elements via `rehype-react`, never to an HTML string.
+ * `remarkRehype`'s `allowDangerousHtml` stays `false` so literal HTML inside
+ * markdown (e.g. a transcript containing `<script>`) is dropped before `rehype-react`
+ * sees it — there is no HTML-injection surface. Adversary-controlled transcript content
+ * can influence which elements render, never inject raw markup.
  *
- * This compiles straight to React elements via `rehype-react` rather than to
- * an HTML string — `Markdown.tsx` renders the result directly (`{node}`),
- * never through `dangerouslySetInnerHTML`. `remarkRehype`'s
- * `allowDangerousHtml` is left at its default `false`, so literal HTML
- * inside the markdown source (e.g. a transcript containing `<script>`) is
- * never turned into element nodes in the first place — it's dropped by
- * `remark-rehype` before `rehype-react` ever sees it. Combined with
- * `rehype-react` (which only ever produces real React elements, whose text
- * children React escapes on render, exactly like everywhere else in this
- * app), there is no HTML-injection surface here at all: `md` (Kvy's own
- * decrypted-but-still-adversary-controlled transcript content, design §5.3)
- * can influence *which* elements render, never inject raw markup.
- *
- * Dual shiki theme (plan-v2.md W4.2): `{ light, dark }` makes shiki emit
- * *both* themes' colors per token as `--shiki-light`/`--shiki-dark` CSS
- * custom properties (no literal `color:` fallback — that's shiki's own
- * dual-theme convention, see https://shiki.style/guide/dual-themes) rather
- * than baking one theme's colors in at render time; `globals.css` picks
- * between them with a plain `.dark` selector, same class `use-theme.ts`
- * toggles on `<html>`. `keepBackground: false` (unchanged) means neither
- * theme's background ever renders — markdown code blocks sit on whatever
- * background their container already has.
- *
- * `components: { pre: CodeBlock }` overrides every fenced-code-block `pre`
- * rehype-pretty-code produces with `CodeBlock` (plan-v2.md W4.2 "Copy
- * buttons") — the one seam `rehype-react` exposes for wrapping/augmenting a
- * specific tag, so the copy affordance rides along without a second pass
- * over the tree.
+ * Dual shiki theme `{ light, dark }` emits `--shiki-light`/`--shiki-dark` CSS custom
+ * properties per token; `globals.css` picks between them with a `.dark` selector.
+ * `keepBackground: false` means code blocks inherit their container's background.
  */
 function buildProcessor() {
   return unified()

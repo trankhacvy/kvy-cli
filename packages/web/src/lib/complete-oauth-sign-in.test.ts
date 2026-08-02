@@ -62,10 +62,9 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
   };
 }
 
-// auth-ux-overhaul-fix-plan.md Fix 4, Part A2: `/v1/auth/register` is find-or-create, so
-// (unlike password sign-up) a returning user reusing their OWN key material on this
-// browser is the normal, correct case — but only when `getIdentity` is scoped to THIS
-// account. There was no test of this module at all before this fix.
+// `/v1/auth/register` is find-or-create, so (unlike password sign-up) a returning user
+// reusing their own key material on this browser is the normal case — but only when
+// `getIdentity` is scoped to THIS account's id.
 describe("completeOAuthSignIn", () => {
   beforeEach(() => {
     (globalThis as { window?: unknown }).window = { sessionStorage: createMemoryStorage() };

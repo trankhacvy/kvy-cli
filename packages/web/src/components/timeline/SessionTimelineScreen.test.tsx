@@ -10,7 +10,6 @@ import { isSessionControlDisabled, LifecycleBanner } from "./SessionTimelineScre
  * Covers the actual UI wiring `status.test.ts` (features/session-list) can't
  * reach — that file only exercises the Home-screen status derivation, not
  * this screen's own ended/failed banner + disabled-controls rule
- * (plan-v2.md W1.4+B15, sub-task 4). `LifecycleBanner`/
  * `isSessionControlDisabled` are pulled out of `SessionTimelineScreen.tsx`
  * as plain, hook-free exports specifically so this can render the real
  * production JSX via `react-dom/server`'s `renderToStaticMarkup` — no

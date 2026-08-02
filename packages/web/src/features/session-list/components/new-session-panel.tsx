@@ -234,7 +234,6 @@ export function NewSessionForm({
 
   const spawning = spawn.state.phase === "spawning";
   const selectedMachine = machineId ? machinesById.get(machineId) : undefined;
-  // Feature 2 (docs/web-ux-improvements-plan.md §2.4 "Spawn path"): unlike
   // every other machine-RPC surface, this one IS safe to hard-disable — the
   // picker already renders a live online dot per machine (below), so a
   // disabled Start button here is legible rather than mysterious.

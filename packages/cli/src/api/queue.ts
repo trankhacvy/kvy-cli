@@ -1,8 +1,6 @@
 /**
- * Disk persistence for the HTTP outbox's pending-batch queue (plan.md §6.5,
- * design §11: "disk outbox … 10 MB cap"). Kept separate from `outbox.ts` so
- * the crash-recovery/cap-eviction logic is testable without spinning up a
- * whole Outbox instance.
+ * Kept separate from `outbox.ts` so the crash-recovery/cap-eviction logic is
+ * testable without spinning up a whole Outbox instance.
  *
  * Layout: one JSONL file per session at `<homeDir>/outbox/<sessionId>.jsonl`,
  * one `QueuedBatch` per line, oldest first.
@@ -20,7 +18,6 @@ export interface QueuedBatch {
   bytes: number;
 }
 
-/** design §11: "CLI disk outbox keeps retrying POSTs (10 MB cap, backoff)". */
 export const DEFAULT_MAX_QUEUE_BYTES = 10 * 1024 * 1024;
 
 function payloadBytes(localId: string, content: EncryptedBox): number {
@@ -48,10 +45,8 @@ function isQueuedBatch(value: unknown): value is QueuedBatch {
 }
 
 /**
- * Loads whatever a previous process left on disk — crash/restart recovery is
- * the entire point of disk-backing the queue. A corrupt line is skipped with
- * a warning rather than aborting the whole load; one bad line can't sink the
- * rest of the backlog.
+ * A corrupt line is skipped with a warning rather than aborting the whole
+ * load — one bad line cannot sink the rest of the backlog.
  */
 export function loadQueue(filePath: string, logger: Logger): QueuedBatch[] {
   let raw: string;

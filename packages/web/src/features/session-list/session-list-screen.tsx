@@ -23,8 +23,6 @@ function workspaceKey(group: WorkspaceGroup): string {
 }
 
 /**
- * The Home screen (kvy-system-design.md §9.2 "Home" row; kvy-prd.md
- * FR-7.1): every session across machines, grouped by workspace, each with a
  * derived status dot and its machine's online/offline badge.
  *
  * `useData` defaults to the real sync-engine-backed `useLiveSessionListSnapshot`
@@ -94,7 +92,6 @@ export function SessionListScreen({
   // Skeleton only for the true first-load window: the initial account fetch
   // is in flight and nothing has rendered yet. A later refetch
   // (gap-invalidation, reconnect) never re-shows this; it just keeps
-  // whatever was already on screen (plan-v2.md W4.2 "skeletons for Home …
   // initial loads").
   if (snapshot.isLoading && groups.length === 0) {
     return (

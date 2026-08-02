@@ -1,7 +1,5 @@
 /**
- * Pluggable blob storage driver contract (kvy-system-design.md §6.5:
  * "Prod: … S3/R2 … Self-host: … optional minio; blobs fall back to local
- * disk when unset"; plan.md §16 "4.3 Distribution & self-host": "S3/
  * local-disk drivers"). Both drivers below (`s3Driver.ts`, `localDriver.ts`)
  * implement this same narrow surface so `app/routes/blobs.ts` never branches
  * on which one is active — see `index.ts`'s `buildBlobStorage` for how the

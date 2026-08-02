@@ -3,8 +3,6 @@ import type { AttentionKind, SessionListSession } from "./types";
 import type { MachineStatus } from "./use-machine-presence";
 
 /**
- * The Home screen's per-session status dot (kvy-prd.md FR-7.1,
- * kvy-system-design.md §9.2 "Home" row). Design principle #3: this is
  * *computed*, every call, from the session's reduced event stream plus live
  * presence/attention signals — never a stored flag that can go stale.
  */
@@ -109,7 +107,6 @@ function hasEverHadTurn(items: RenderItem[]): boolean {
  * span of its own decrypt — the same conflation known-issues.md #9 was
  * filed to fix, just relocated rather than removed.
  *
- * `"ended"` (plan-v2.md W1.4+B15) is its own terminal row state, distinct
  * from `"completed"`: `completed` describes a *turn* outcome (or an
  * archived/compacted row) on a session that's still otherwise controllable,
  * while `ended` means the underlying CLI process itself is gone — the PTY
@@ -124,7 +121,6 @@ function hasEverHadTurn(items: RenderItem[]): boolean {
  * wire's `SessionEvent` union has no "agent asked a question" variant yet)
  * and "the last turn finished but nobody has looked" (`"done"`), which turns
  * an otherwise-idle closed turn into a `completed` badge until viewed
- * (kvy-prd.md FR-8.1 "completed-and-unseen"). A turn that closed with
  * `status: "failed"` is always shown as `failed`, seen or not — unlike a
  * clean completion, an error is actionable until the user starts a new turn.
  */

@@ -1,7 +1,6 @@
 /**
  * Per-workspace settings — `kvy workspace config [--base-ref <ref>]
  * [--remote <name>] [--setup-script <script>] [--run-script <script>]
- * [--directory <path>]` (kvy-prd.md line 148, plan.md §16 "4.1 Git
  * panel"; docs/features/setup-run-scripts.md "Per-workspace Setup/Run
  * scripts"). Backs both the CLI command (`commands/workspaceConfig.ts`) and
  * the daemon's `git.diff` RPC (`daemon/gitDiff.ts`'s
@@ -25,7 +24,6 @@
  * be usable to pre-configure a workspace, and a lookup miss just means
  * `git.diff` falls back to its own no-config default rather than throwing.
  *
- * **Script definition is CLI-only** (design §12's local-consent boundary,
  * docs/features/setup-run-scripts.md's central risk note): no machine RPC
  * ever carries a script string as a params field — `workspace.getConfig` is
  * read-only and `run.*`/setup only ever read `setupScript`/`runScript` back

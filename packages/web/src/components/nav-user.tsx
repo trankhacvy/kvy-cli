@@ -19,9 +19,8 @@ import { listDeviceSessions } from "@/lib/api";
 import { logout } from "@/lib/logout";
 import { getAccountId, getToken } from "@/lib/session";
 
-/** Two-letter avatar fallback — the email's local part when we have one
- * (password sign-up or a Google/GitHub identity, issue-6), else the account
- * id's prefix for the rare account with none on file yet. */
+/** Two-letter avatar fallback — the email's local part when we have one,
+ * else the account id's prefix for the rare account with none on file yet. */
 function accountInitials(email: string | null, accountId: string | null): string {
   if (email) return email.split("@")[0]?.slice(0, 2).toUpperCase() || "?";
   if (!accountId) return "?";
@@ -29,18 +28,10 @@ function accountInitials(email: string | null, accountId: string | null): string
 }
 
 /**
- * The sidebar footer's account menu (adapted from shadcn's `nav-user` block
- * to this codebase: lucide icons, "Log out" running `lib/logout.ts`'s
- * teardown). The popup opens top-center above the trigger. "Settings" opens
- * `SettingsDialog`.
- *
- * The JWT itself carries no email claim by design (`sub`/`sid`/`ct` only —
- * `lib/session.ts`'s own doc comment) — the account's best-effort captured
- * email (password sign-up or a Google/GitHub identity, issue-6) instead comes
- * from `GET /v1/auth/sessions` (`listDeviceSessions`), the same call
- * `DevicesSection` already makes for its own "Signed in as {email}" line.
- * Falls back to the account id's prefix for the rare account with no email on
- * file (or before this fetch resolves), rather than showing nothing.
+ * The JWT carries no email claim by design (`sub`/`sid`/`ct` only) — email
+ * instead comes from `GET /v1/auth/sessions` (`listDeviceSessions`).
+ * Falls back to the account id's prefix before the fetch resolves or when
+ * no email is on file.
  */
 export function NavUser() {
   const router = useRouter();

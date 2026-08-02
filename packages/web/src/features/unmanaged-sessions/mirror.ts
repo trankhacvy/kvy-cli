@@ -1,23 +1,13 @@
 import type { UnmanagedActions } from "./types";
 
-/**
- * Safety cap on chunks read per `fetchFullTranscript` call — `adopt.mirror`
- * caps each chunk at ≤64KB (design §4.4 "payload size rule"), so 4096 chunks
- * is a ~256MB ceiling. Not a realistic transcript size; this exists purely
- * so a daemon bug that never sets `done: true` produces a thrown error
- * instead of an infinite loop (design principle: no silent failures).
- */
+/** Safety cap so a daemon bug that never sets `done: true` throws instead of looping forever. */
 const MAX_CHUNKS = 4096;
 
 /**
  * Reads `providerSessionId`'s entire transcript by looping `actions.mirror`
- * from cursor `0` until the daemon reports `done: true`, concatenating every
- * chunk. Called fresh on every poll (`use-mirror-transcript.ts`) rather than
- * resuming from a prior cursor — `adopt.mirror`'s cursor is a pagination
- * offset into one read, not a tail/follow position, so "live" here means
- * "re-read the current file state on an interval", the same tradeoff the
- * design doc's "bandwidth + privacy frugality" note accepts for an
- * on-demand mirror (kvy-system-design.md §8).
+ * from cursor `0` until the daemon reports `done: true`. Called fresh on every
+ * poll rather than resuming from a prior cursor - the cursor is a pagination
+ * offset into one read, not a tail/follow position.
  */
 export async function fetchFullTranscript(
   actions: Pick<UnmanagedActions, "mirror">,

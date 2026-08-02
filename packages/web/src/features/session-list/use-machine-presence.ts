@@ -7,8 +7,6 @@ import { apiSocket } from "@/sync";
 
 /**
  * Live machine online/offline (+ AH8 "machine-status-reauth" needs-reauth)
- * signal from the `machine-presence` ephemeral (kvy-system-design.md
- * §4.3, plan.md §16 W3.6 "Home screen real status dots + presence").
  * Shared between `features/session-list`'s own `live-source.ts` and
  * `features/unmanaged-sessions`' — both screens render machine badges for
  * what can be the very same machine, so both should agree on its live state

@@ -1,4 +1,3 @@
-// Explicit CORS allowlist (kvy-system-design.md §12, plan.md §16 "4.4 Hardening":
 // "wildcard-CORS removal" — one of the reported Happy vuln classes). Socket.IO's `cors`
 // option previously used `origin: "*"` — permitting `credentials: true` connections from
 // *any* web origin, which defeats the point of an origin check entirely (browsers refuse

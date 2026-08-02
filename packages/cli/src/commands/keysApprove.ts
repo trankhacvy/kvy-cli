@@ -1,6 +1,5 @@
 /**
  * `kvy keys approve` — answer another device's request for a copy of this account's
- * keys (docs/auth-ux-overhaul-plan.md AX-4.19).
  *
  * Deliberately a command a human runs, not a silent auto-approval: a device asking for
  * the master secret is asking for read access to everything, so anyone holding a stolen

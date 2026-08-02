@@ -1,7 +1,6 @@
 /**
  * `pin.ts` (node) / `pin.web.ts` (browser) — PIN-wrapping round-trip, wrong-PIN
  * rejection, nonce uniqueness, and the cross-platform argon2id parity vector
- * (issue-4-plan.md §6.1, §10). Runs under vitest's Node environment — see
  * `cross-impl.test.ts`'s header for why the web build runs for real here too.
  */
 import { beforeAll, describe, expect, it } from "vitest";

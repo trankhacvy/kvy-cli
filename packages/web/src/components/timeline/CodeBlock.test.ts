@@ -4,12 +4,10 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { CodeBlock } from "./CodeBlock";
 
-/** `CodeBlock` is `lib/markdown.ts`'s `rehype-react` `pre` override
- * (plan-v2.md W4.2 "Copy buttons") — it uses `useRef`, so (unlike the
- * hook-free components elsewhere in this directory) it can't be called
- * directly and inspected as a plain element tree; `renderToStaticMarkup`
- * gives a stable string instead, same technique `lib/markdown.test.ts` uses
- * for the pipeline as a whole. */
+/** `CodeBlock` uses `useRef`, so (unlike hook-free components elsewhere in this directory)
+ * it can't be called directly and inspected as a plain element tree;
+ * `renderToStaticMarkup` gives a stable string instead, same technique
+ * `lib/markdown.test.ts` uses for the pipeline as a whole. */
 describe("CodeBlock", () => {
   it("renders the wrapped `pre` untouched, plus a resting-state CopyButton alongside it", () => {
     const html = renderToStaticMarkup(

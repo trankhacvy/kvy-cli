@@ -25,19 +25,16 @@ import {
 import type { AdoptMode, UnmanagedActions, UnmanagedSessionItem } from "../types";
 
 /**
- * "Take Over / Fork Instead" dialog (kvy-system-design.md §10.4/§11 UC9,
- * plan.md §16 "3.3 Session adoption (UC9)"): confirms the adoption mode,
- * warns about interrupting a still-running process before a takeover, then
- * calls `adopt.take` (via the injected `actions.take`) and hands the
- * caller a link to the freshly-adopted managed session.
+ * "Take Over / Fork Instead" dialog: confirms the adoption mode, warns about
+ * interrupting a still-running process before a takeover, then calls
+ * `adopt.take` (via the injected `actions.take`) and hands the caller a link
+ * to the freshly-adopted managed session.
  *
  * "Take Over" (`mode: 'takeover'`) kills the owning `claude` process
  * (SIGTERM ≤5s → SIGKILL, daemon-side) and continues in its place — a
  * mid-turn session loses whatever that turn was doing. "Fork Instead"
  * (`mode: 'fork'`) leaves the original terminal session running untouched
- * and starts a brand-new lineage from the same transcript history (design
- * §7.8: "`mode: 'fork'` skips the kill and copies the transcript to a fresh
- * lineage").
+ * and starts a brand-new lineage from the same transcript history.
  */
 export function TakeOverDialog({
   session,

@@ -1,18 +1,3 @@
-/**
- * GitHub OAuth **device authorization flow** (`kvy github login`,
- * docs/features/github-pr-ci.md "GITHUB AUTH"): the CLI has no browser
- * redirect target of its own, so it mints a device code, shows the user a
- * short verification URL + code to enter on github.com, then polls until
- * they approve it there. Two standalone requests, kept separate (rather
- * than one `runDeviceFlow` doing both) so `commands/github.ts` can print the
- * user code between them: `requestDeviceCode` kicks the flow off,
- * `pollForToken` waits out the approval.
- *
- * Both take an injectable `fetchImpl` (default global `fetch`) so tests
- * never hit the real network; `pollForToken` additionally takes an
- * injectable `sleep` so tests don't wait out real device-flow intervals.
- */
-
 export interface DeviceCodeResponse {
   deviceCode: string;
   userCode: string;
@@ -25,7 +10,7 @@ export interface DeviceCodeResponse {
 
 export interface RequestDeviceCodeOptions {
   clientId: string;
-  /** Space-separated OAuth scopes; defaults to `"repo"` (kvy-prd.md/design's "elevated `repo`/`read:checks` scope" — GitHub's `repo` scope already covers check-run reads). */
+  /** Space-separated OAuth scopes; defaults to `"repo"`. GitHub's `repo` scope covers check-run reads. */
   scope?: string;
   fetchImpl?: typeof fetch;
 }
@@ -57,7 +42,6 @@ interface RawDeviceCodeResponse {
   expires_in: number;
 }
 
-/** POSTs https://github.com/login/device/code, returning the code the user enters at `verificationUri`. */
 export async function requestDeviceCode(
   options: RequestDeviceCodeOptions,
 ): Promise<DeviceCodeResponse> {
@@ -88,12 +72,12 @@ export async function requestDeviceCode(
 export interface PollForTokenOptions {
   clientId: string;
   deviceCode: string;
-  /** Starting poll interval in seconds (from `requestDeviceCode`'s response) — `slow_down` bumps it by +5s per GitHub's own protocol. */
+  /** Starting poll interval in seconds — bumped by +5s on `slow_down` per GitHub's own protocol. */
   interval: number;
   fetchImpl?: typeof fetch;
   /** Test seam; defaults to a real `setTimeout`-backed sleep. */
   sleep?: (ms: number) => Promise<void>;
-  /** Caps the number of poll attempts so a stuck/misbehaving fake never hangs a test (or a real run) forever; defaults to a generous bound well past any real device code's expiry. */
+  /** Caps poll attempts — defaults to a generous bound well past any real device code's expiry. */
   maxAttempts?: number;
 }
 
@@ -111,14 +95,6 @@ interface RawTokenResponse {
 
 const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-/**
- * POSTs https://github.com/login/oauth/access_token in a loop until the user
- * approves (or the flow terminates some other way): `authorization_pending`
- * keeps looping at the current interval, `slow_down` bumps the interval by
- * +5s and keeps looping, `expired_token`/`access_denied` fail cleanly with a
- * typed `DeviceFlowError`, and any other unrecognized error shape also fails
- * rather than looping forever on something this flow doesn't understand.
- */
 export async function pollForToken(options: PollForTokenOptions): Promise<PollForTokenResult> {
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? defaultSleep;

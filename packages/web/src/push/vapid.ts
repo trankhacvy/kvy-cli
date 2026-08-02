@@ -1,7 +1,6 @@
 /**
  * `PushManager.subscribe`'s `applicationServerKey` option wants a raw
  * `Uint8Array`, but VAPID public keys are handed out base64url-encoded
- * (design §6.4's config; `packages/server/src/config.ts`'s `VAPID_PUBLIC_KEY`).
  * Standard base64url -> bytes decode, ported from the canonical MDN/web.dev
  * Web Push snippet (no library needed for one function).
  */

@@ -1,14 +1,8 @@
 /**
- * `${VAR}` expansion for env-var templates handed to a daemon-spawned
- * session process (plan.md §16 "3.1 Remote spawn": "env `${VAR}` expansion
- * fail-fast").
+ * `${VAR}` expansion for env-var templates in spawn params.
  *
- * Deliberately NOT the Bash/Node convention of silently substituting `''`
- * for an unset variable: a spawned session silently missing, say, its API
- * base URL because of a typo'd variable name is exactly the kind of
- * surprising, hard-to-diagnose failure the design's "no silent failures"
- * principle forbids. A template referencing an unresolved variable fails
- * the whole spawn instead.
+ * Deliberately fail-fast: an unresolved variable name fails the whole spawn
+ * rather than silently substituting `''`.
  */
 
 const VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;

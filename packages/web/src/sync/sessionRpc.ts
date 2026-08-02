@@ -1,15 +1,11 @@
 /**
  * Typed caller-side client for the session RPC methods
- * (kvy-system-design.md §4.4 "Session RPCs — registered by the session
- * process"; plan.md §16 "2.4 Web control surface"; `stop` added by
- * plan-v2.md W2.3 "Stop session from the web"). This is the web's
  * counterpart to `packages/cli/src/rpc/sessionRpc.ts` (the session-process
  * registration side): seal the params under the session's crypto-bridge
  * key, `apiSocket.rpcCall` to `s:<sessionId>:<method>`, open + validate the
  * sealed result.
  *
  * Only the transport is defined here — `params`/`result` are always an
- * `EncryptedBox` on the wire (design §4.4), and this module never assumes
  * *how* the caller obtained a crypto client with the right session key
  * loaded (that's `@/crypto`'s job, wired in by whatever screen owns a live
  * session — see `features/session-control/`).
@@ -34,7 +30,6 @@ import type { ApiSocket } from "./apiSocket.js";
 
 export type MessageRpcParams = z.infer<typeof MessageRpcParamsSchema>;
 export type MessageRpcResult = z.infer<typeof MessageRpcResultSchema>;
-/** The tri-state `message` RPC reply's `status` field (design §7.10) — re-exported
  * here for callers (`features/session-control/optimistic-composer.ts`) that branch
  * on it without importing `@kvy/wire` directly. */
 export type MessageRpcStatus = z.infer<typeof MessageRpcStatusSchema>;
@@ -62,7 +57,6 @@ export interface SessionRpcParams {
 
 /** Result shape per method, matching `packages/cli/src/rpc/sessionRpc.ts`'s
  * `SessionRpcHandlers`. Note `perm.answer`'s `ok` is an *application*-level
- * field (did this answer win the race, design §7.6 "first-wins") — distinct
  * from the RPC transport's own `RpcCallResult.ok` (did the call reach the
  * target at all). A losing answer is a normal, successful RPC round-trip
  * that resolves here with `{ok: false, reason: 'already-answered', decision}`

@@ -1,6 +1,5 @@
 /**
  * `POST /v1/keys/request` + `GET /v1/keys/requests` + `POST /v1/keys/request/approve`
- * + `POST /v1/keys/request/claim` — docs/auth-ux-overhaul-plan.md Phase 4.
  *
  * Device-to-device key sharing: a signed-in device with no key material asks another of
  * the account's devices for a copy. The server relays an opaque sealed box and holds no

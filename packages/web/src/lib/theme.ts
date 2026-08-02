@@ -1,10 +1,7 @@
 export type Theme = "light" | "dark";
 
-/** Kvy's default theme (design §9 stack table: "dark default theme").
- * `layout.tsx`'s pre-hydration script and `use-theme.ts`'s server snapshot
- * both fall back to this when no stored preference exists yet — the two
- * places that need to agree on it without importing each other (the script
- * runs before any bundle loads). */
+/** Default theme — `layout.tsx`'s pre-hydration script and `use-theme.ts` both fall back
+ * to this when no stored preference exists, so they agree without importing each other. */
 export const DEFAULT_THEME: Theme = "dark";
 
 /** `localStorage` key for the persisted preference — shared by the

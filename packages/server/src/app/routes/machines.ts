@@ -37,7 +37,6 @@ const MachineConflictSchema = z.object({
 
 /**
  * `POST /v1/machines` — register-or-update, encrypted + versioned metadata/
- * daemonState (design §4.3/§6.1: "register/update (encrypted metadata +
  * daemonState, versioned)"). Registering (no `machineId`) is a plain insert
  * — there's no existing row to race against, so no CAS check applies.
  * Updating (`machineId` present) is the same optimistic-concurrency CAS as

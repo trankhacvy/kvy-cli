@@ -31,22 +31,19 @@ export function shouldRedirectToSignin(signedIn: boolean): boolean {
 /**
  * Auth gate for every protected page.
  *
- * Static export → this has to stay a client-side gate (design §5.3: no server ever
- * renders user content). `children` never renders — not even for a frame — for a
- * signed-out visitor.
+ * Static export → this has to stay a client-side gate (no server-side rendering of user
+ * content). `children` never renders — not even for a frame — for a signed-out visitor.
  *
- * docs/auth-ux-overhaul-plan.md Phase 4a: the SESSION check runs independently of key
- * material now. The refresh token lives in its own store, so a browser with no keys can
- * still be signed in — which is exactly the state `RequestKeysPanel` needs in order to
- * ask another device for a copy. Gating the session on crypto readiness (as this did
- * before) made that state unreachable and left the user staring at a spinner.
+ * The SESSION check runs independently of key material: the refresh token lives in its
+ * own store, so a browser with no keys can still be signed in — which is exactly the
+ * state `RequestKeysPanel` needs in order to ask another device for a copy. Gating the
+ * session on crypto readiness made that state unreachable.
  */
 export function RequireAuth({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   /** `null` until the session effect below confirms a real access token — on a cold load
    *  that's AFTER this component's first render, so `useCryptoBridgeStatus` must stay
-   *  `"loading"` until then rather than evaluating readiness for nobody in particular
-   *  (auth-ux-overhaul-fix-plan.md Fix 4 Part C). */
+   *  `"loading"` until then rather than evaluating readiness for nobody in particular. */
   const [accountId, setAccountId] = useState<string | null>(null);
   const { status, refresh } = useCryptoBridgeStatus(accountId);
   const [sessionReady, setSessionReady] = useState(false);

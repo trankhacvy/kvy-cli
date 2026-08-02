@@ -1,18 +1,11 @@
 /**
- * `git.status` machine RPC handler (design §4.4: `'git.status'({worktree})
- * → { branch, ahead, behind, files: FileStatus[] }`; kvy-prd.md FR-7.7
- * "Git panel"; plan.md §16 "4.1 Git panel"). Backs the web changed-files
- * list (conductor.build-style: everything different from the workspace's
- * base branch, not just uncommitted edits).
- *
- * The file list itself comes from a diff against the resolved base ref
- * (`gitBaseRef.ts`'s `resolveEffectiveBaseRef`/`resolveDiffBaseline` — same
- * resolution `gitDiff.ts` uses to build the actual per-file diff), not from
+ * The file list comes from a diff against the resolved base ref, not from
  * `git status`'s own porcelain output — a two-dot `git diff <ref>` already
  * captures both this branch's committed changes *and* in-progress
- * uncommitted edits (see `gitDiff.ts`'s own doc comment), which is what
- * makes a long-running agent session's Changes tab show everything since
- * branching off `main`, not just what's still sitting uncommitted.
+ * uncommitted edits, which is what makes a long-running agent session's
+ * Changes tab show everything since branching off `main`, not just what's
+ * still sitting uncommitted.
+ *
  * `--no-renames` is deliberate: a rename shows up as a plain delete + add
  * pair instead of one "renamed" row, trading a little presentation nuance
  * for not having to reconcile old/new paths across two separately-parsed
@@ -25,21 +18,18 @@
  * untracked files (invisible to `git diff`, which only ever compares
  * tracked content), and in-progress merge/rebase conflicts (a working-tree/
  * index state, not something meaningful to diff against a branch).
+ *
  * `--untracked-files=all` is required, not cosmetic: `git status`'s default
  * mode collapses an untracked directory into a single `? dir/` entry, and
  * `git diff --no-index` can't compare a file (`/dev/null`) against a
  * directory at all — verified against the real binary, it errors outright
- * (`Could not access 'dir/null'`) rather than partially working. `-uall`
- * lists every file inside individually, so every untracked path this
- * module ever sees is a real file.
+ * rather than partially working. `-uall` lists every file inside
+ * individually, so every untracked path this module ever sees is a real file.
  *
- * An untracked file's `insertions`/`deletions` come from a *separate*
- * per-file `git diff --no-index --numstat -- /dev/null <path>` call
- * (`gitExec.ts`'s `runGitDiffNoIndex` — see its own doc comment for why
- * `--no-index` needs different exit-code handling than every other `git
- * diff` call here), the same "diff against nothing" trick `gitDiff.ts` uses
- * to show a real diff for an untracked file on click, rather than the
- * folder-name-only badge with no stat this had before.
+ * An untracked file's `insertions`/`deletions` come from a separate
+ * per-file `git diff --no-index --numstat -- /dev/null <path>` call,
+ * the same "diff against nothing" trick used to show a real diff for an
+ * untracked file on click.
  */
 import type { FileStatus, GitStatusParams, GitStatusResult } from "@kvy/wire";
 import { resolveDiffBaseline, resolveEffectiveBaseRef } from "./gitBaseRef.js";

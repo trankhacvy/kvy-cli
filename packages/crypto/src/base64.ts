@@ -1,8 +1,7 @@
 /**
  * Isomorphic base64 / base64url codec — no Buffer, no atob/btoa, no Node built-ins.
- * Shared verbatim by both the node (`index.ts`) and browser (`index.web.ts`) entry
- * points so encoding is guaranteed byte-identical across platforms (load-bearing
- * for the cross-impl test vectors in `cross-impl.test.ts`).
+ * Shared by both the node and browser entry points so encoding is guaranteed
+ * byte-identical across platforms.
  */
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -15,11 +14,6 @@ const LOOKUP = (() => {
   return table;
 })();
 
-/**
- * Encode a Uint8Array to base64 string.
- * @param buffer - The buffer to encode
- * @param variant - The encoding variant ('base64' or 'base64url')
- */
 export function encodeBase64(
   buffer: Uint8Array,
   variant: "base64" | "base64url" = "base64",
@@ -50,16 +44,10 @@ export function encodeBase64Url(buffer: Uint8Array): string {
 /**
  * Decode a base64 (or base64url) string to a Uint8Array.
  *
- * WARNING: this never throws (package-wide "never throw" philosophy) — any
- * character outside the selected variant's alphabet (e.g. '-'/'_' when
- * decoding with the default 'base64' variant, or '+'/'/' when decoding with
- * 'base64url') is silently dropped rather than rejected. Passing the wrong
- * `variant` for the input string will NOT raise an error; it will silently
- * produce the wrong bytes. Always pass the `variant` that matches how the
- * string was encoded (see `encodeBase64`).
- *
- * @param base64 - The base64 string to decode
- * @param variant - The encoding variant ('base64' or 'base64url') — must match the encoder's variant
+ * WARNING: never throws — any character outside the selected variant's alphabet
+ * is silently dropped rather than rejected. Passing the wrong `variant` for the
+ * input string will NOT raise an error; it will silently produce the wrong bytes.
+ * Always pass the `variant` that matches how the string was encoded.
  */
 export function decodeBase64(
   base64: string,

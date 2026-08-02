@@ -1,39 +1,23 @@
 /**
- * apiSocket — singleton, user-scoped WebSocket client (design §9.1, §4.3).
+ * Singleton, user-scoped WebSocket client. One Socket.IO connection carrying the
+ * `update`/`ephemeral` event stream (all writes go over HTTP).
  *
- * Ported from Happy's `happy-app/sources/sync/apiSocket.ts`: one Socket.IO
- * connection carrying the read-only `update`/`ephemeral` event stream (all
- * writes go over HTTP — ⚠ DELTA D1, see kvy-system-design.md §4.3/§9.1).
- * Two deltas from Happy's React Native original:
+ * `app-state` ("active" | "background") is derived from `document.visibilitychange`
+ * and feeds the server's push-suppression logic.
  *
- *  - `app-state` ("active" | "background") is derived from
- *    `document.visibilitychange` instead of React Native's `AppState` module
- *    (see `visibility.ts`) — it feeds the server's push-suppression logic
- *    (design §6.4: "skip if any user-scoped connection reports `app-state:
- *    active` and has the session's room joined").
- *  - Reconnection is Socket.IO's own infinite-retry engine
- *    (`reconnectionAttempts: Infinity`, see `socket-factory.ts`) rather than a
- *    hand-rolled timer: it already implements exponential backoff + jitter,
- *    and its `auth` option, given as a callback, is re-evaluated on *every*
- *    (re)connection attempt — so the handshake always carries the current
- *    token + app-state, closing the server's auth-in-middleware race window
- *    (`P1-1.1-server-realtime`'s `socket.ts`) on every reconnect, not just
- *    the first connect.
+ * Reconnection is Socket.IO's infinite-retry engine with exponential backoff + jitter.
+ * The `auth` callback is re-evaluated on every (re)connection attempt so the handshake
+ * always carries the current token + app-state.
  *
- * Testable in isolation (plan.md 1.6: "the client module itself, its
- * reconnect/backoff state machine, and its unit tests can be built and
- * verified in isolation now against the wire contract"): `createApiSocket()`
- * takes an injectable `SocketFactory` + `VisibilitySource` so unit tests can
- * swap in in-memory fakes instead of a real Socket.IO connection and a real
- * `document` — mirrors `crypto/client.ts`'s `WorkerLike` split.
+ * `createApiSocket()` takes injectable `SocketFactory` + `VisibilitySource` so unit tests
+ * can swap in in-memory fakes.
  */
 import type { EncryptedBox, Ephemeral, Update } from "@kvy/wire";
 import { EphemeralSchema, UpdateSchema } from "@kvy/wire";
 
 export type AppState = "active" | "background";
 
-/** apiSocket is always user-scoped (design §9.1) — session/machine-scoped
- * sockets belong to the CLI/daemon, not the web app. */
+/** apiSocket is always user-scoped — session/machine-scoped sockets belong to the CLI/daemon. */
 export type ClientType = "user-scoped";
 
 export interface ApiSocketAuth {
@@ -72,17 +56,13 @@ export interface VisibilitySource {
 type ApiSocketEventMap = {
   update: Update;
   ephemeral: Ephemeral;
-  /** Fires once per *re*connect — not the initial connect. This is the
-   * signal the sync engine invalidates every Query on (design §9.1: "reconnect
-   * ⇒ invalidate all queries"; plan.md 8.1: `apiSocket.on('reconnect', () =>
-   * queryClient.invalidateQueries())`). */
+  /** Fires once per *re*connect (not the initial connect) — the signal for
+   * the sync engine to invalidate all queries. */
   reconnect: undefined;
   connect: undefined;
   disconnect: undefined;
-  /** Fires when a (re)connection attempt is rejected by the server (e.g. an
-   * expired/invalid token) — distinct from a transport-level disconnect,
-   * which infinite-retry can genuinely recover from on its own
-   * (bug-fix-plan.md #10). */
+  /** Fires when a (re)connection attempt is rejected by the server (e.g. expired/invalid
+   * token) — distinct from a transport-level disconnect, which infinite-retry can recover from. */
   authError: { message: string };
 };
 
@@ -91,14 +71,12 @@ type Listener<T> = (payload: T) => void;
 // at the `on`/`off`/`emit` boundary, never inside the class body.
 type ErasedListener = (payload: never) => void;
 
-/** Ack payload for an `rpc-call` (design §4.4, server's `rpcHandler.ts`):
  * `ok: false` covers everything from "bad params" through "target offline"
  * to "target died mid-call" — the relay always resolves the ack, it never
  * lets a call hang past its own 30s cap. Never thrown as an error by
  * `rpcCall` below; callers branch on `.ok`. */
 export type RpcCallResult = { ok: true; result: EncryptedBox } | { ok: false; error: string };
 
-// Comfortably above the server's own 30s `rpc-call` timeout (design §4.4) so
 // a well-behaved server's own `{ok:false, error:"..."}` ack always wins the
 // race — this is purely a last-resort guard against an ack that never
 // arrives at all (e.g. the transport drops the response frame).
@@ -134,17 +112,13 @@ export interface ApiSocket {
     handler: Listener<ApiSocketEventMap[K]>,
   ): () => void;
   off<K extends keyof ApiSocketEventMap>(event: K, handler: Listener<ApiSocketEventMap[K]>): void;
-  /** Calls a machine/session RPC method over the WS `rpc-call` transport
-   * (design §4.4: `target` is `m:<machineId>:<method>` or
-   * `s:<sessionId>:<method>`; `params` is always an `EncryptedBox` — the
-   * relay forwards opaque bytes). Never rejects: no live socket, or an ack
-   * that never arrives, resolves `{ok:false}` the same as a server-reported
-   * failure — callers always branch on `.ok`, never on a caught exception. */
+  /** Calls a machine/session RPC method. `target` is `m:<machineId>:<method>` or
+   * `s:<sessionId>:<method>`; `params` is an `EncryptedBox`. Never rejects - no live socket
+   * or a missing ack resolves `{ok:false}` same as a server-reported failure. */
   rpcCall(target: string, method: string, params: EncryptedBox): Promise<RpcCallResult>;
 }
 
 /**
- * issue-4-plan.md §4.5/§6.4: attempts one silent refresh (via the stored refresh
  * token) and returns the fresh access token, or `null` if the refresh token is
  * dead/absent. Kept as an injectable dependency (mirrors `SocketFactory`/
  * `VisibilitySource`) rather than importing `lib/session.ts`'s `silentRefresh`
@@ -210,7 +184,6 @@ export function createApiSocket(
     }
   }
 
-  // issue-4-plan.md §4.5/§6.4: re-authenticates the SAME live socket well before the
   // access token it originally handshook with expires, via the server's in-band
   // `renew-token` event — no disconnect, no visible reconnect.
   function armRenewTimer(): void {
@@ -264,7 +237,6 @@ export function createApiSocket(
     // its own.
     if (!/authentication token|Session revoked/i.test(err.message)) return;
 
-    // issue-4-plan.md §4.5/§6.4: a single silent-refresh attempt before giving up —
     // the access token presented at this handshake may simply be stale (not
     // necessarily revoked). No `renew` source wired (or already one in flight)
     // falls straight through to the same fail-closed teardown as before.

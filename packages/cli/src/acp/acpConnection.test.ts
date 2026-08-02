@@ -59,11 +59,11 @@ afterEach(async () => {
 });
 
 describe("AcpConnection.connect", () => {
-  // A2: "not-installed" now triggers an auto-install attempt before giving
-  // up (design §7.9) — this proves the *still-fails* half of that: if the
-  // auto-install itself fails, connect() still refuses honestly rather than
-  // pretending to succeed. Injects a failing `installAdapter` fake so this
-  // never shells out to a real `npm install`.
+  // "not-installed" now triggers an auto-install attempt before giving up —
+  // this proves the *still-fails* half: if the auto-install itself fails,
+  // connect() still refuses honestly rather than pretending to succeed.
+  // Injects a failing `installAdapter` fake so this never shells out to a
+  // real `npm install`.
   it("refuses to connect when the adapter isn't installed and auto-install fails", async () => {
     const installAdapterSpy = vi.fn(async () => ({
       id: "claude-code" as const,
@@ -77,11 +77,11 @@ describe("AcpConnection.connect", () => {
     expect(installAdapterSpy).toHaveBeenCalled();
   });
 
-  // A2's actual fix: a clean "never installed" verification result now
-  // auto-installs (via the real install pipeline's seam, faked here to
-  // avoid a real `npm install`/network call) and then connects successfully
-  // — a daemon-initiated spawn no longer has to fail once just to trigger a
-  // manual `kvy adapters install` before it can ever work.
+  // A clean "never installed" verification result now auto-installs (via the
+  // real install pipeline's seam, faked here to avoid a real `npm install`/
+  // network call) and then connects successfully — a daemon-initiated spawn
+  // no longer has to fail once just to trigger a manual `kvy adapters install`
+  // before it can ever work.
   it("auto-installs the adapter when verification reports not-installed, then connects", async () => {
     const entry = ADAPTER_MANIFEST["claude-code"];
     const installAdapterSpy = vi.fn(async () => {
@@ -119,11 +119,10 @@ describe("AcpConnection.connect", () => {
     }
   });
 
-  // A2's deliberate scoping decision: an integrity mismatch (installed bytes
-  // don't match the pinned manifest hash — `verify.ts`'s "tampered/
-  // corrupted install" case) must still fail loudly and must NOT trigger an
-  // auto-reinstall, since silently reinstalling over it would mask exactly
-  // the signal this check exists to raise.
+  // An integrity mismatch (installed bytes don't match the pinned manifest
+  // hash) must still fail loudly and must NOT trigger an auto-reinstall, since
+  // silently reinstalling over it would mask exactly the signal this check
+  // exists to raise.
   it("still fails loudly on an integrity mismatch, without attempting an auto-reinstall", async () => {
     const entry = ADAPTER_MANIFEST["claude-code"];
     const lockPath = installedLockPath(homeDir);
@@ -198,8 +197,7 @@ describe("AcpConnection.connect", () => {
   it("declares no fs and no terminal client capabilities", async () => {
     // The fake adapter doesn't echo clientCapabilities back, so this is
     // asserted structurally instead: `AcpConnection` never registers fs/
-    // terminal request handlers at all (design: "client capabilities (no
-    // fs, no terminal initially)") — there is no `readTextFile`/
+    // terminal request handlers at all — there is no `readTextFile`/
     // `writeTextFile`/`createTerminal` method on the public API.
     await installFakeAdapter();
     const connection = createConnection();

@@ -9,7 +9,6 @@
  * Bounded by an `AbortController` timeout — a hung or unreachable GitHub
  * must never hang the caller; `null` (never a thrown error) signals "could
  * not determine the latest version", which every caller treats as "skip
- * this update check", not as a fatal error (plan.md §16 "4.3": self-update
  * must fail safe).
  */
 import { releaseAssetUrl, UPDATE_CHECK_TIMEOUT_MS } from "./config.js";

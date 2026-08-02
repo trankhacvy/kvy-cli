@@ -1,9 +1,7 @@
 /**
  * `GET /v1/auth/sessions` + `POST /v1/auth/sessions/:id/revoke` +
- * `POST /v1/auth/sessions/revoke-others` — issue-4-plan.md §4.4: lets an account see and
  * manage its own `device_sessions` (the web Settings "Devices" list), and makes
  * revocation genuinely immediate by disconnecting any live socket for the revoked
- * session (§4.5c), not just waiting for its access token to expire.
  */
 import { and, eq, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
@@ -40,7 +38,6 @@ export function buildSessionsAdminRoutes(
         schema: {
           response: {
             200: z.object({
-              // issue-6 ("capture & store email from Google/GitHub sign-in") §6f:
               // this is the read path for the email `routes/oauth.ts` (and
               // `routes/password.ts`) capture onto `auth_identities` — there being
               // no other account-summary endpoint to hang it off. Best-effort

@@ -10,12 +10,10 @@ import type {
 
 /**
  * Folds a `SessionEnvelope[]` into an ordered `RenderItem[]`
- * (kvy-system-design.md §9.1, plan.md §8.2). Pure and idempotent: calling
  * it twice on the same (possibly re-fetched, possibly re-ordered) array
  * yields the same result, which is what makes it safe to re-run on every
  * sync merge rather than incrementally patched.
  *
- * Multi-phase, mirroring Happy's `reducer.ts`:
  *   1. dedupe by envelope id (a re-fetch/reconnect merge may repeat ids)
  *   2. stable time-sort
  *   3. partition into scopes by `subagent` id (root scope = no subagent)
@@ -193,7 +191,6 @@ function reduceScope(envs: SessionEnvelope[]): RenderItem[] {
         }
 
         // No call id yet — render a placeholder, fall back to matching the
-        // eventual tool-start by name+args (plan.md §8.2).
         const placeholder: PermPlaceholderItem = {
           ...base,
           kind: "perm-placeholder",

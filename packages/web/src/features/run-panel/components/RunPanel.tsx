@@ -200,7 +200,6 @@ export function RunPanelBody({
 }
 
 /**
- * The "Setup / Run" tab (docs/features/setup-run-scripts.md, plan.md §16
  * "17."): play/stop the workspace's configured run script and re-run its
  * setup script, both defined CLI-only (`kvy workspace config
  * --setup-script/--run-script`).

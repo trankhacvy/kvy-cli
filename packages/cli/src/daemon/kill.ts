@@ -1,7 +1,5 @@
 /**
- * `kvy kill daemon|sessions|all|all-force` (plan.md §7.2/§7.4).
  *
- * The escape hatch for a wedged daemon (kvy-system-design.md §11:
  * "Wedged provider process ... SIGKILL fallback; `kvy kill sessions`
  * escape hatch"): targets are discovered purely by scanning the OS process
  * list (`processScan.ts` + `markers.ts`), never by reading
@@ -11,15 +9,11 @@
  * Non-force variants (`daemon`, `sessions`, `all`) send SIGTERM to every
  * target, wait up to `gracefulTimeoutMs` (default 5s — the same
  * SIGTERM-then-wait-then-SIGKILL grace period used elsewhere in the design,
- * e.g. `adopt.take`'s takeover, kvy-system-design.md §7.8), then SIGKILL
  * anything still alive. `all-force` SIGKILLs every target immediately, no
  * grace period.
  *
  * The discovery this composes (`processScan.ts` + `markers.ts`) mirrors
- * Happy's `daemon/doctor.ts` (`findAllHappyProcesses`) —
  * https://github.com/slopus/happy (MIT); the SIGTERM-then-SIGKILL escalation
- * policy above is Kvy-specific (kvy-system-design.md §11), not present
- * in Happy's doctor.ts.
  */
 
 import type { Logger } from "../logger.js";

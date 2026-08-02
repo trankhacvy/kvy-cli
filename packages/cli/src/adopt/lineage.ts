@@ -1,12 +1,7 @@
 /**
- * Old→new provider-session-id lineage (design §7.8 FR-9.5, plan.md §16
- * "3.3 Session adoption (UC9)"): Claude Code's `--resume` mints a brand-new
- * provider session id every time (documented in Happy's `CLAUDE.md` as
- * "Session Forking" and echoed in this project's own `plan.md` §11), so
- * `kvy adopt` records old→new mappings locally in
- * `~/.kvy/settings.json`'s `adoptedSessions` — so a session's history
- * can be presented as one continuous timeline across resumes instead of a
- * chain of apparently-unrelated sessions.
+ * Claude Code's `--resume` mints a brand-new provider session id every time,
+ * so `kvy adopt` records old→new id mappings so a session's history can be
+ * presented as one continuous timeline across resumes.
  */
 import { type PersistenceOptions, readSettings, updateSettings } from "../persistence.js";
 

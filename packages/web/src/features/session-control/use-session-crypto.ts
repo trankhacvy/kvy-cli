@@ -8,7 +8,6 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 
 /**
  * Unwraps `sessionId`'s data-encryption key into a fresh crypto-bridge
- * worker (kvy-system-design.md §5.3, plan.md's "per-session DEK-unwrap
  * crypto worker" bullet) — `null` until the session's row has synced *and*
  * `setSessionKey` has resolved `true`. `useLiveRenderItems` (decrypting
  * messages) and `useLiveSessionControl` (sealing/opening RPC params/

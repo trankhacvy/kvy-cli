@@ -1,8 +1,6 @@
 /**
  * Typed caller-side client for the daemon's machine-scoped RPCs (design
- * §4.4 "Machine RPCs — registered by the daemon"; plan.md §16 "3.1 Remote
  * spawn" / "4.1 Git panel"): `spawn`, the New Session directory picker's
- * `fs.list`/`fs.mkdir`/`workspace.register` (plan.md §16 "Flow 3 —
  * spawn-fresh-folder-register (Piece A)"), the Git panel's
  * `git.status`/`git.diff`, `git.branches` (docs/features/
  * worktree-isolation.md — the New Session wizard's existing-branch worktree
@@ -23,12 +21,10 @@
  * `features/new-session/`'s composition notes for how a caller obtains a
  * `MachineRpcCrypto` scoped to the chosen machine.
  *
- * `adopt.take`/`adopt.mirror` (plan.md §16 "3.3 Session adoption (UC9)")
  * join the same method table below — the daemon-side registration
  * (`packages/cli/src/daemon/machineRpc.ts`) already serves both; this is
  * just the caller-side typing for `features/unmanaged-sessions/`.
  *
- * `adopt.list` (kvy-prd.md FR-7.8/FR-9.1-9.2 UC7/UC9) is the New Session
  * wizard's session-import step's data source (`features/new-session/`).
  * `@kvy/wire`'s `rpc.ts` defines its params/result schemas but, unlike
  * every sibling method here, doesn't export paired `AdoptListParams`/

@@ -1,5 +1,4 @@
 /**
- * Shared argon2id KDF params for PIN-wrapping (§6.1). Both `pin.ts` (node,
  * `@node-rs/argon2`) and `pin.web.ts` (browser, libsodium-wrappers-sumo)
  * import from here so the two platforms can never drift apart — a mismatch
  * in any of these numbers breaks the cross-platform parity vector in

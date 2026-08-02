@@ -34,9 +34,6 @@ type Status =
 const pushApi: PushApiPort = { subscribe: subscribePush, unsubscribe: unsubscribePush };
 
 /**
- * Settings → Notifications (design §9.2 Settings screen, FR-7.6/FR-8.3):
- * Web Push enable/disable, fallback channels (Telegram/ntfy — plan.md §10),
- * and quiet controls (mute-all + per-session mute, PRD FR-8.3). Moved
  * verbatim out of the deleted `app/(protected)/settings/notifications/page.tsx`
  * route — page chrome dropped, behavior unchanged.
  */

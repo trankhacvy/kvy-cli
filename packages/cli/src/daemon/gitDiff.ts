@@ -1,10 +1,6 @@
 /**
- * `git.diff` machine RPC handler (design §4.4: `'git.diff'({worktree, path?,
- * baseRef?}) → { inline?, blobRef? }`; kvy-prd.md FR-7.7 "Git panel: ...
  * file-level diff list vs configured base ref, per-file unified diff view";
- * plan.md §16 "4.1 Git panel"). Backs the web unified diff viewer.
  *
- * **Base ref resolution** (kvy-prd.md line 148, `kvy workspace
  * config --base-ref`) is shared with `gitStatus.ts` via `gitBaseRef.ts`:
  * an explicit `params.baseRef` always wins (a one-off override, e.g.
  * comparing against a different branch than the workspace's configured
@@ -35,14 +31,12 @@
  * tab's own file list correctly listing it.
  *
  * **Truncation, plus a best-effort blob upload:** a diff that would blow
- * the 64KB RPC control-plane budget (design §4.4 "payload size rule") is
  * always truncated inline at a safe line boundary with `truncated: true`
  * (mirroring `fs.read`'s own `{inline, truncated}` contract) — that inline
  * preview is served unconditionally so the panel always has *something* to
  * show immediately, with no round trip. When `deps.uploadBlob` is wired
  * (`machineIntegration.ts`, once a live machine DEK/server connection
  * exists), the *full* untruncated diff is also encrypted and uploaded via
- * the blob-storage subsystem (plan.md §16 "4.3 Distribution & self-host")
  * and its `blobId` set as `blobRef` — the caller can then fetch the
  * complete diff instead of settling for the truncated preview. Best-effort:
  * `deps.uploadBlob` never throws (see `blobClient.ts`'s own contract), so a
@@ -55,7 +49,6 @@ import { type GitExec, GitExecError, runGit, runGitDiffNoIndex } from "./gitExec
 import { listUntrackedFiles } from "./gitUntracked.js";
 import { assertWorkspaceStillValid } from "./workspacePath.js";
 
-/** Stays well under the 64KB RPC control-plane cap (design §4.4) after JSON envelope + encryption overhead. */
 const MAX_INLINE_BYTES = 60_000;
 
 export interface GitDiffDeps {

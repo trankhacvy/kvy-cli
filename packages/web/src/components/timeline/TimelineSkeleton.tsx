@@ -1,11 +1,8 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** Placeholder transcript, shown while a session's first message page (and
- * its DEK unwrap) are still in flight (plan-v2.md W4.2 "skeletons for …
- * timeline initial loads") — replaces a bare empty scroll area for that
- * window instead of letting it read as "this session really has nothing in
- * it yet". A handful of message-bubble-shaped rows of varying width, no
- * animation beyond `Skeleton`'s own pulse. */
+/** Placeholder transcript shown while the first message page is loading —
+ * replaces a bare empty scroll area so it doesn't read as "this session
+ * has nothing in it yet". */
 export function TimelineSkeleton() {
   return (
     <div

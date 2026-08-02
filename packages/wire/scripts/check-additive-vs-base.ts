@@ -1,7 +1,6 @@
 /**
  * CI lint: fails if any @kvy/wire schema that already existed on the base
  * branch has lost a field or had a field retyped in a way that violates
- * additive-only-forever (design §5.3 — "the server can never migrate
  * ciphertext... payload schemas are additive-only, forever").
  *
  * This complements `additiveOnly.test.ts` (which diffs live schemas against
@@ -139,7 +138,7 @@ async function main() {
     );
     for (const v of violations) console.error(`  - ${v}`);
     console.error(
-      "\nEncrypted payload schemas are additive-only, forever (design §5.3): the server can " +
+      "\nEncrypted payload schemas are additive-only, forever: the server can " +
         "never migrate ciphertext, so every historical client must still be able to decode every " +
         "field it ever shipped. Add a new field (or a new versioned schema) instead of altering " +
         "or removing an existing one.",

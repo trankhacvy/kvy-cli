@@ -1,70 +1,3 @@
-/**
- * Ported (adapted) from Happy — https://github.com/slopus/happy
- * Original: happy/packages/happy-cli/src/claude/claudeLocal.ts
- * (plus its small `utils/claudeFindLastSession.ts` and
- * `utils/claudeCheckSession.ts` helpers, folded in here)
- *
- * MIT License
- * Copyright (c) 2026 Happy Coder Contributors
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- *
- * ---
- * Local-mode Claude Code child-process spawn wrapper (plan.md §16, "1.3 CLI
- * skeleton + local mode"; kvy-plan.md §3.2). Spawns `kvy`'s local
- * launcher script (a separate, already-in-flight plan bullet — see
- * `scripts/kvy_claude_launcher.cjs` — treated here as a given path, not
- * duplicated) with the real Claude CLI's flags, and:
- *
- *  1. Forces the inherited stdin fd back to blocking I/O before spawn — a
- *     verbatim-ported fix for a real macOS/Linux garbled-echo bug (see the
- *     comment on the fix itself below; it IS the documentation).
- *  2. Spawns via `cross-spawn` with `stdio: ['inherit','inherit','inherit',
- *     'pipe']` — fd 3 is the launcher's fetch-patch pipe (`fetch-start`/
- *     `fetch-end` JSON lines), used below to derive a debounced `thinking`
- *     boolean.
- *  3. Intercepts `--resume [id]` / `-r [id]` / `--continue` / `-c` /
- *     `--session-id <uuid>` out of the passthrough args and re-resolves them
- *     against Claude Code's own on-disk session transcripts for this working
- *     directory (`findLastLocalSession`, ported from Happy's
- *     `claudeFindLastSession`/`claudeCheckSession`), then re-injects the
- *     flag Claude Code actually understands (`--resume <id>` or
- *     `--session-id <id>`).
- *  4. Injects `--append-system-prompt <prompt>` and, when a hook-settings
- *     temp file was already generated (`hookServer.ts`'s
- *     `writeHookSettingsFile` — wired in by the caller, not here),
- *     `--settings <path>`.
- *  5. Maps the child's exit into a clean resolve, an `ExitCodeError`, or a
- *     signal error — with `SIGTERM` while `abort.aborted` treated as a
- *     clean exit (the mode-switch/shutdown path terminates the child this
- *     way on purpose).
- *
- * Scope note: mirrors kvy-plan.md §3.2's five numbered items exactly.
- * Happy's `--mcp-config`/`--allowedTools` injections and its sandbox
- * (`initializeSandbox`/`wrapCommand`) integration are out of scope — neither
- * is part of Kvy's current design surface. `launcherPath` (the launcher
- * script's resolved location) and any hook-server wiring are supplied by the
- * caller via `ClaudeLocalDeps`/`ClaudeLocalOptions` rather than resolved
- * here, since both come from separate, still-unmerged plan bullets
- * (`kvy_claude_launcher.cjs`, `cliLocator.ts`, `hookServer.ts`) whose
- * interfaces this module treats as given.
- */
 
 import type { ChildProcess, SpawnOptions } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -86,12 +19,7 @@ export class ExitCodeError extends Error {
   }
 }
 
-/**
- * Default system prompt Kvy appends via `--append-system-prompt`. Kept
- * intentionally minimal — unlike Happy's equivalent, Kvy does not (yet)
- * ship an MCP tool for the agent to call, so there is nothing to instruct
- * it to use.
- */
+/** Default system prompt Kvy appends via `--append-system-prompt`. */
 export const KVY_SYSTEM_PROMPT =
   "You are running inside Kvy, a terminal + web session wrapper around Claude Code.";
 
@@ -130,9 +58,8 @@ function hasValidSessionEntries(projectDir: string, sessionId: string): boolean 
 
 /**
  * Find the most recently modified valid session transcript for a working
- * directory. Ported from Happy's `claudeFindLastSession` +
- * `claudeCheckSession`: a valid session has a UUID-shaped id (Claude Code
- * 2.0.65+ requires this for `--resume`) and at least one real message entry.
+ * directory. A valid session has a UUID-shaped id (Claude Code 2.0.65+
+ * requires this for `--resume`) and at least one real message entry.
  */
 export function findLastLocalSession(
   workingDirectory: string,
@@ -230,11 +157,7 @@ export interface ClaudeLocalOptions {
 }
 
 export interface ClaudeLocalDeps {
-  /**
-   * Resolved path to `kvy_claude_launcher.cjs` (a separate, already-in-
-   * flight plan bullet). Supplied by the caller rather than resolved here —
-   * see the module header.
-   */
+  /** Resolved path to `kvy_claude_launcher.cjs` — supplied by the caller. */
   launcherPath: string;
   /** Injectable for tests; defaults to `cross-spawn`'s `spawn`. */
   spawnImpl?: (command: string, args: string[], options: SpawnOptions) => ChildProcess;
@@ -261,13 +184,11 @@ interface StdinBlockingHandle {
 
 /**
  * Force blocking I/O on the inherited stdin fd. Node leaves O_NONBLOCK set
- * after libuv-mode reads (upstream of this spawn); when the spawned child
- * inherits the fd and tries to read in blocking mode, EAGAIN comes back
- * instead of bytes — the visible symptom is duplicated cursors and garbled
- * echo on macOS/Linux right after a remote→local switch (the
- * slopus/happy#301 bug family this fix was written for). Calling
- * `setBlocking(true)` here clears O_NONBLOCK before `cross-spawn` dups the
- * fd into the child.
+ * after libuv-mode reads; when the spawned child inherits the fd and tries to
+ * read in blocking mode, EAGAIN comes back instead of bytes — the visible
+ * symptom is duplicated cursors and garbled echo on macOS/Linux right after a
+ * remote→local switch. Calling `setBlocking(true)` here clears O_NONBLOCK
+ * before `cross-spawn` dups the fd into the child.
  */
 function forceStdinBlocking(logger: Logger): void {
   const stdinHandle = (process.stdin as unknown as { _handle?: StdinBlockingHandle })._handle;
