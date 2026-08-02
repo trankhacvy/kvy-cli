@@ -93,19 +93,19 @@ export interface DeviceKeyDeps {
 
 /**
  * Loads this machine's device key, creating and persisting one on first use.
- * Vault-first: only falls back to (and creates) the plaintext file when the vault is
- * unavailable or the write itself fails — never both at once, so a key wrapped one way
- * is always found the same way later.
+ * File-first: checks the plaintext fallback file before the OS vault, so a blocking
+ * Keychain permission dialog (macOS) never stalls the process when the file already
+ * exists. Falls back to the vault only when no file is present.
  */
 function loadOrCreateDeviceKey(homeDir: string, deps: DeviceKeyDeps): Buffer {
   const readKeyringKey = deps.readKeychainKey ?? defaultReadKeyringKey;
   const writeKeyringKey = deps.writeKeychainKey ?? defaultWriteKeyringKey;
 
-  const fromKeyring = readKeyringKey();
-  if (fromKeyring) return fromKeyring;
-
   const fromFallback = readFallbackKey(homeDir);
   if (fromFallback) return fromFallback;
+
+  const fromKeyring = readKeyringKey();
+  if (fromKeyring) return fromKeyring;
 
   const key = randomBytes(DEVICE_KEY_BYTES);
   if (writeKeyringKey(key)) return key;
