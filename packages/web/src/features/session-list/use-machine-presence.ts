@@ -12,12 +12,14 @@ import { apiSocket } from "@/sync";
  * what can be the very same machine, so both should agree on its live state
  * rather than each reinventing the subscription.
  *
- * `machine-presence` is only *emitted* on a machine-scoped socket's own
- * connect/disconnect (`server/src/app/socket.ts`) — a web client that
- * connects while a machine is already online gets no retroactive snapshot,
- * so this map starts empty and `deriveMachineOnline`/`deriveMachineStatus`
- * below fall back to the `lastSeenAt` heuristic (and `MachineRow.needsReauth`)
- * until this machine's first live event arrives.
+ * `machine-presence` is emitted on a machine-scoped socket's own
+ * connect/disconnect (`server/src/app/socket.ts`), re-emitted on that
+ * machine's `machine-alive` heartbeat (every 60s), and broadcast once as an
+ * initial snapshot for every machine already online when a web client
+ * connects (socket.ts's user-scoped connect handler) — so a map entry can
+ * arrive at any time, not just at web connect. Until this machine's first
+ * live event arrives, `deriveMachineOnline`/`deriveMachineStatus` below fall
+ * back to the `lastSeenAt` recency heuristic (and `MachineRow.needsReauth`).
  */
 
 /** One machine's live presence — `needsReauth` (docs/auth-ux-hardening-plan.md

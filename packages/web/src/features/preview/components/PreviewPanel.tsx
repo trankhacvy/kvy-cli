@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { MachineOfflineNotice } from "@/components/machine-offline-notice";
+import { Kbd } from "@/components/ui/kbd";
 import { useMachineOnline } from "@/lib/use-machine-online";
 import type { UsePreviewActions } from "../types";
 import { useLivePreviewActions } from "../use-live-preview-actions";
@@ -50,8 +51,8 @@ export function PreviewPanel({
 
       {panel.cloudflaredMissing && (
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-          <code>cloudflared</code> isn&apos;t installed on this machine.{" "}
-          <code>brew install cloudflared</code> (or see{" "}
+          <Kbd>cloudflared</Kbd> isn&apos;t installed on this machine.{" "}
+          <Kbd>brew install cloudflared</Kbd> (or see{" "}
           <a
             href="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/"
             target="_blank"

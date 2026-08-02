@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AuthArtPanel } from "@/components/auth/auth-art-panel";
 import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
-import { InlineCodeText } from "@/components/auth/inline-code-text";
 import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
+import { InlineCommandText } from "@/components/inline-command-text";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -170,7 +170,7 @@ export default function PairPage() {
                     {copy.pair.invalidLinkTitle}
                   </h1>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    <InlineCodeText text={copy.pair.invalidLinkBody} />
+                    <InlineCommandText text={copy.pair.invalidLinkBody} />
                   </p>
                 </div>
                 <Button
@@ -233,7 +233,7 @@ export default function PairPage() {
                     aria-hidden="true"
                   />
                   <AlertDescription className="text-amber-700 dark:text-amber-400">
-                    <InlineCodeText text={copy.pair.approveWarning} />
+                    <InlineCommandText text={copy.pair.approveWarning} />
                   </AlertDescription>
                 </Alert>
 

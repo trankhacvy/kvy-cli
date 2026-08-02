@@ -4,6 +4,7 @@ import type { CheckRun } from "@kvy/wire";
 import { EllipsisVertical, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { InlineCommandText } from "@/components/inline-command-text";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -423,8 +424,10 @@ export function SessionSidePanel({
         <p className="p-4 text-sm text-muted-foreground">
           This session has no machine/workspace recorded yet.
         </p>
-      ) : machineUnavailable ? (
-        <p className="p-4 text-sm text-muted-foreground">{machine.reason}</p>
+      ) : machineUnavailable && machine.reason !== null ? (
+        <p className="p-4 text-sm text-muted-foreground">
+          <InlineCommandText text={machine.reason} />
+        </p>
       ) : workspaceGone ? (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <GitStatusError panel={panel} />

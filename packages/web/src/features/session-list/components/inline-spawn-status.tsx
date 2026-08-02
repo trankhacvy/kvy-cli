@@ -1,4 +1,5 @@
 import { Loader2 } from "lucide-react";
+import { InlineCommandText } from "@/components/inline-command-text";
 import type { InlineSpawnState } from "../use-inline-spawn";
 
 /**
@@ -45,7 +46,7 @@ export function InlineSpawnStatus({
   if (state.phase === "error") {
     return (
       <p className="text-sm text-destructive" role="alert">
-        {state.message}
+        <InlineCommandText text={state.message} />
       </p>
     );
   }

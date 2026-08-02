@@ -34,7 +34,7 @@ describe("MachineOfflineNotice", () => {
     expect(html).toContain('role="status"');
   });
 
-  it("shows the distinct needs-reauth copy", () => {
+  it("shows the distinct needs-reauth copy with the command rendered as a kbd chip", () => {
     const state: MachineOnlineState = {
       availability: "needs-reauth",
       isKnownUnavailable: true,
@@ -42,5 +42,8 @@ describe("MachineOfflineNotice", () => {
     };
     const html = renderToStaticMarkup(createElement(MachineOfflineNotice, { state }));
     expect(html).toContain("sign in again");
+    expect(html).toContain('<kbd data-slot="kbd"');
+    expect(html).toContain("kvy auth login");
+    expect(html).not.toContain("`kvy auth login`");
   });
 });

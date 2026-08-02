@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronRight, Plus } from "lucide-react";
+import { ChevronRight, CloudOff, Plus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { InlineCommandText } from "@/components/inline-command-text";
 import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,15 @@ import { InlineSpawnStatus } from "./inline-spawn-status";
  * `WorkspaceNav` next to its own workspace row — a `Dialog` rather than an
  * inline expansion is what lets both call sites share it unmodified, since
  * the sidebar rail is too narrow for an inline form.
+ *
+ * Disabled (a `Tooltip` explaining why, no `Dialog`) when every machine
+ * this workspace's sessions have run on is known-unavailable — spawning
+ * would be a dead end the form can't resolve, so the button itself says so
+ * up front. Only known-unavailable states gate: a target machine missing
+ * from `machinesById` (unknown) never disables, and a single online target
+ * keeps the button live for the multi-machine case. A workspace with no
+ * targetable machine at all (every session machine-less) is disabled too —
+ * the same dead end, just with nothing to check.
  */
 export function NewSessionTrigger({
   group,
@@ -69,6 +79,47 @@ export function NewSessionTrigger({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const label = `Start a new session in ${group.workspace.name}`;
+
+  const targetMachines = deriveWorkspaceTargetMachines(group);
+  const targets = targetMachines
+    .map((t) => machinesById.get(t.machineId))
+    .filter((m): m is SessionListMachine => m !== undefined);
+  const noTargets = targetMachines.length === 0;
+  const allUnavailable =
+    noTargets ||
+    (targets.length === targetMachines.length &&
+      targets.every((m) => m.status === "offline" || m.status === "needs-reauth"));
+  const unavailableReason = allUnavailable
+    ? noTargets
+      ? "No machine is connected to this workspace yet. Run `kvy` here once to start sessions."
+      : targets.every((m) => m.status === "needs-reauth")
+        ? UNAVAILABLE_COPY["needs-reauth"]
+        : UNAVAILABLE_COPY.offline
+    : null;
+
+  if (unavailableReason !== null) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7"
+              disabled
+              aria-label={label}
+            >
+              <Plus className="size-3.5" />
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent className="block">
+          <InlineCommandText text={unavailableReason} />
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -129,6 +180,8 @@ export function NewSessionForm({
   const [form, setForm] = useState<InlineSpawnForm>(initialForm);
   const [advancedOpen, setAdvancedOpen] = useState(defaultAdvancedOpen);
   const [branches, setBranches] = useState<BranchItem[] | null>(null);
+  const [branchesLoading, setBranchesLoading] = useState(false);
+  const [branchesError, setBranchesError] = useState<string | null>(null);
   const [configuredBaseRef, setConfiguredBaseRef] = useState<string | undefined>(undefined);
   const [baseBranchTouched, setBaseBranchTouched] = useState(false);
 
@@ -143,43 +196,47 @@ export function NewSessionForm({
     setForm((prev) => ({ ...prev, ...patch }));
   }
 
-  // Eagerly fetches this workspace's local branches once a target machine is
-  // known, so the base-branch field can default to something real ("the
-  // workspace's configured base ref if resolvable, else 'main'" —
-  // `deriveDefaultBaseBranch`'s own doc comment) instead of starting blank.
-  // Deliberately eager here (unlike `BaseBranchPicker`'s own lazy-on-open
-  // fetch): base branch is this panel's primary field, not a step nested
-  // three levels deep in an Options screen, so showing a real value up front
-  // is worth one extra `git.branches` read (a cheap, no-idempotency-cache
-  // RPC by design — `machineRpc.ts`'s own doc comment).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-fetch when the machine/workspace actually changes, not on every `actions` identity change (a fresh `NewSessionActions` object every render would otherwise refetch in a loop).
-  useEffect(() => {
-    if (!machineId) return;
-    let cancelled = false;
+  // One fetch owns the branch list for both the picker and the default-base
+  // derivation; a generation counter drops the response of any stale or
+  // superseded fetch (machine switch, actions swap) instead of letting it
+  // overwrite newer data.
+  const branchesGeneration = useRef(0);
+  function loadBranches() {
+    const generation = ++branchesGeneration.current;
+    setBranchesLoading(true);
+    setBranchesError(null);
     actions
       .listBranches(group.workspace.id)
       .then((result) => {
-        if (cancelled) return;
+        if (branchesGeneration.current !== generation) return;
         setBranches(result);
       })
-      .catch(() => {
-        // Best-effort only — `BaseBranchPicker`'s own retry UI covers a real
-        // failure once the user opens it; this prefetch silently falls back
-        // to the "main" default instead of surfacing a duplicate error.
+      .catch((err) => {
+        if (branchesGeneration.current !== generation) return;
+        setBranchesError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (branchesGeneration.current === generation) setBranchesLoading(false);
       });
     actions
       .getConfig(group.workspace.id)
       .then((result) => {
-        if (cancelled) return;
+        if (branchesGeneration.current !== generation) return;
         setConfiguredBaseRef(result.baseRef);
       })
-      .catch(() => {
-        // Best-effort only, same reasoning as the `listBranches` fetch above —
-        // silently falls back to `deriveDefaultBaseBranch`'s next fallback.
-      });
-    return () => {
-      cancelled = true;
-    };
+      .catch(() => {});
+  }
+
+  // Eagerly fetches this workspace's local branches + configured base ref
+  // once a target machine is known, so the base-branch field can default to
+  // something real ("the workspace's configured base ref if resolvable, else
+  // 'main'" — `deriveDefaultBaseBranch`'s own doc comment) instead of
+  // starting blank. `BaseBranchPicker` is presentational and renders this
+  // state directly.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only re-fetch when the machine/workspace actually changes, not on every `actions` identity change (a fresh `NewSessionActions` object every render would otherwise refetch in a loop).
+  useEffect(() => {
+    if (!machineId) return;
+    loadBranches();
   }, [machineId, group.workspace.id]);
 
   // `actions` starts out as a permanently-rejecting stub until the chosen
@@ -198,30 +255,15 @@ export function NewSessionForm({
       return;
     }
     if (!machineId) return;
-    let cancelled = false;
-    actions
-      .listBranches(group.workspace.id)
-      .then((result) => {
-        if (cancelled) return;
-        setBranches(result);
-      })
-      .catch(() => {});
-    actions
-      .getConfig(group.workspace.id)
-      .then((result) => {
-        if (cancelled) return;
-        setConfiguredBaseRef(result.baseRef);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+    loadBranches();
   }, [actions]);
 
-  // Only ever seeds the default once branches first load — not a dependency
-  // loop, since `baseBranchTouched` flips true the moment the user picks
-  // anything (including re-picking the same default) and the guard above
-  // then short-circuits every later run. Uses `setForm` directly (not the
+  // Seeds the base-branch default whenever a fresh branch list arrives and
+  // the user hasn't picked one (a machine switch resets `baseBranchTouched`,
+  // so the new machine's default re-seeds there) — not a dependency loop,
+  // since `baseBranchTouched` flips true the moment the user picks anything
+  // (including re-picking the same default) and the guard above then
+  // short-circuits every later run. Uses `setForm` directly (not the
   // `patchForm` closure, whose identity changes every render) so this only
   // needs `branches`/`baseBranchTouched` in its dependency list.
   useEffect(() => {
@@ -246,12 +288,18 @@ export function NewSessionForm({
     spawn.start(group.workspace.id, form);
   }
 
+  function handleMachineChange(nextMachineId: string) {
+    setMachineId(nextMachineId);
+    setBaseBranchTouched(false);
+    patchForm({ baseBranch: "", continueFrom: null });
+  }
+
   return (
     <div className="flex flex-col gap-3">
       {needsChoice && (
         <label className="flex flex-col gap-1.5 text-sm font-medium" htmlFor="new-session-machine">
           Machine
-          <Select value={machineId ?? undefined} onValueChange={(v) => setMachineId(v)}>
+          <Select value={machineId ?? undefined} onValueChange={handleMachineChange}>
             <SelectTrigger id="new-session-machine" className="w-full">
               <SelectValue placeholder="Choose a machine" />
             </SelectTrigger>
@@ -293,8 +341,12 @@ export function NewSessionForm({
       <div className="flex flex-col gap-1.5 text-sm font-medium">
         <span id="new-session-base-branch-label">From</span>
         <BaseBranchPicker
-          directory={group.workspace.id}
-          listBranches={actions.listBranches}
+          branches={branches}
+          loading={branchesLoading}
+          error={branchesError}
+          onRetry={() => {
+            if (machineId) loadBranches();
+          }}
           selected={form.baseBranch}
           onSelect={(name) => {
             setBaseBranchTouched(true);
@@ -341,6 +393,20 @@ export function NewSessionForm({
           />
         </CollapsibleContent>
       </Collapsible>
+
+      {machineId === null && !needsChoice && (
+        <div
+          className="flex items-center gap-2 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+          role="status"
+          aria-live="polite"
+        >
+          <CloudOff className="size-3.5 shrink-0" aria-hidden="true" />
+          <span>
+            No machine is connected to this workspace yet. Run kvy in this workspace once to start
+            sessions from here.
+          </span>
+        </div>
+      )}
 
       {selectedMachine && (
         <MachineOfflineNotice
