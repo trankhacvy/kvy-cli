@@ -3,9 +3,25 @@
  * **remote from the start**: it drives one `AcpRemote` on the `codex-acp`
  * adapter for its whole lifetime, with no `loop()` and no local child.
  *
- * The surrounding scaffolding is the same a `kvy claude` session uses
- * (bootstrap → outbox → session-scoped WS + the five session RPCs → the
- * send-idempotency claim store), just without the mode machinery: the
+ * ## Two entry shapes
+ *
+ * **Daemon-spawned (`--started-by daemon`, the web wizard's New Session →
+ * Codex flow via `daemon/spawnEngine.ts`):** the full remote host below —
+ * bootstrap → outbox → session-scoped WS + the five session RPCs → the
+ * send-idempotency claim store — running headless, ending only on Ctrl-C/
+ * web `stop`.
+ *
+ * **Terminal run (a human typing `kvy codex`):** there is nothing a
+ * foreground process adds that the web session can't do better — no TUI to
+ * type into, no take-back to hand control back to — so this command stops
+ * being a session host here. It keeps the honest pieces a terminal run is
+ * actually good for (Codex CLI detection + pairing via `runPreflightWithReauth`)
+ * and, on success, prints `codexDashboardGuidance` (open your dashboard,
+ * start the session there) and exits 0 — no bootstrap, no ACP child, no
+ * "waiting for Ctrl-C" dead end.
+ *
+ * The full-flow scaffolding below (bootstrap/outbox/WS/RPCs) is the same a
+ * `kvy claude` session uses, just without the mode machinery: the
  * `message`/`interrupt`/`setMode`/`perm.answer` RPCs route straight into the
  * `AcpRemoteHandle`. `takeControl` has no meaning here (there is no local
  * terminal to hand control back to) and answers an honest `{ok:false}`.
@@ -19,7 +35,7 @@ import { createId } from "@paralleldrive/cuid2";
 import { startAcpRemote as startAcpRemoteDefault } from "../acp/acpRemote.js";
 import { createHttpClient } from "../api/httpClient.js";
 import { Outbox } from "../api/outbox.js";
-import { resolveBackendUrl } from "../auth/config.js";
+import { resolveBackendUrl, resolveFrontendUrl } from "../auth/config.js";
 import {
   type KvyCredentials,
   readCredentials as readCredentialsDefault,
@@ -53,7 +69,7 @@ import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
 } from "../session/sessionClient.js";
-import { NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
+import { codexDashboardGuidance, NO_TTY_CANNOT_SIGN_IN } from "../ui/messages.js";
 import type { registerWorkspace as registerWorkspaceDefault } from "../workspace/registry.js";
 import { runPreflightWithReauth } from "./startPreflight.js";
 
@@ -70,6 +86,8 @@ export interface StartCodexCommandDeps {
   codexArgs: string[];
   env?: NodeJS.ProcessEnv;
   backendUrl?: string;
+  /** Injectable for tests; defaults to the real `resolveFrontendUrl(env)`. */
+  frontendUrl?: string;
   readCredentials?: (homeDir: string) => KvyCredentials | null;
   readDaemonState?: (homeDir: string) => Promise<DaemonState | null>;
   fetchImpl?: typeof fetch;
@@ -122,6 +140,13 @@ function waitForSigint(): Promise<void> {
     };
     process.on("SIGINT", onSigint);
   });
+}
+
+/** True only for headless spawns (`spawnEngine`/`resumeSession`/`adopt` all
+ * pass `--started-by daemon`) — a human's `kvy codex` never carries it. */
+function isDaemonSpawn(args: string[]): boolean {
+  const index = args.indexOf("--started-by");
+  return index !== -1 && args[index + 1] === "daemon";
 }
 
 /** Runs `kvy codex [args...]`. Returns the process exit code. */
@@ -187,6 +212,16 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     registerWorkspace: deps.registerWorkspace,
     logger,
   });
+
+  // Terminal run (no `--started-by daemon`): pairing + workspace registration
+  // are this command's real job — there is no TUI for a foreground session to
+  // add, so guide the user to the dashboard and exit instead of blocking on
+  // Ctrl-C forever (see the file header's "Two entry shapes").
+  if (!isDaemonSpawn(deps.codexArgs)) {
+    const frontendUrl = deps.frontendUrl ?? resolveFrontendUrl(env);
+    write(codexDashboardGuidance(frontendUrl));
+    return 0;
+  }
 
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;
   try {

@@ -61,3 +61,18 @@ export const NETWORK_UNREACHABLE =
  */
 export const KEY_REQUEST_PENDING =
   "\n  A device asked for a copy of your keys while you were working.\n";
+
+/**
+ * Printed by `kvy codex` run from a terminal (i.e. not daemon-spawned):
+ * Codex has no terminal mode, so after pairing the terminal's job is done —
+ * the session is started and driven from the dashboard, and there is
+ * nothing to wait on here (no Ctrl-C-forever).
+ */
+export function codexDashboardGuidance(frontendUrl: string): string {
+  return (
+    "\n  kvy codex: you're all set.\n" +
+    "  Codex has no terminal mode, so you start and drive the session from your dashboard:\n" +
+    webUrlLine(`${frontendUrl}/dashboard/`) +
+    "  Nothing is running in this window - you can close it.\n"
+  );
+}
