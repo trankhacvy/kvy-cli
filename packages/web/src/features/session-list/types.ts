@@ -9,10 +9,6 @@ import type { MachineStatus } from "./use-machine-presence";
  * pass-through of the plaintext routing metadata the server is allowed to
  */
 
- * `Ephemeral` union, `t: "attention"`) — the one status input that isn't
- * recoverable by replaying `RenderItem[]` alone, since the wire's
- * `SessionEvent` union has no "agent asked a question" variant yet
- * `null` means "no outstanding attention signal for this session". */
 export type AttentionKind = Extract<Ephemeral, { t: "attention" }>["kind"];
 
 export interface SessionListWorkspace {
@@ -28,12 +24,6 @@ export interface SessionListMachine {
    * resolved placeholder string (Issue #13: don't flash a placeholder while
    * decryption is still in flight). */
   name: string | null;
-   * heartbeat) — never persisted as a flag, always a snapshot of "right now".
-   * Kept alongside `status` (AH8 "machine-status-reauth") rather than
-   * replaced by it — every existing consumer (restart-eligibility checks,
-   * the per-session "offline" status dot) only ever needed "is the machine
-   * reachable", a strictly boolean question `status`'s extra "why" doesn't
-   * change the answer to. */
   online: boolean;
   /** The Home screen's machine badge status (`use-machine-presence.ts`'s
    * `deriveMachineStatus`) — distinguishes "needs re-authentication" (a

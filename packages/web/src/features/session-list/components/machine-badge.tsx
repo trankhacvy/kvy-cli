@@ -4,9 +4,6 @@ import { cn } from "@/lib/utils";
 import { MACHINE_STATUS_META } from "../status";
 import type { SessionListMachine } from "../types";
 
- * indicators"; AH8 "machine-status-reauth", docs/auth-ux-hardening-plan.md
- * item 8 — "Needs re-authentication" renders as its own amber chip, never
- * collapsed into the same grey "Offline" a powered-off machine shows). */
 export function MachineBadge({ machine }: { machine: SessionListMachine }) {
   const meta = MACHINE_STATUS_META[machine.status];
   return (

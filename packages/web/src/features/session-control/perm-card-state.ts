@@ -13,8 +13,6 @@ export type PermCardPhase =
   /** Our decision won the first-wins race — shown until the canonical
    * `permission.decision` prop catches up. */
   | { kind: "answered"; decision: PermDecision }
-   * device" case. `decision` is the winning one, so the UI can show what
-   * actually happened rather than just "you lost". */
   | { kind: "lost-race"; decision: PermDecision }
   /** The click landed on a locally-typed terminal turn's request — there was
    * never a channel for it to do anything (the terminal, not the web, drives

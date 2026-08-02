@@ -56,7 +56,6 @@ function fakeCredentials(overrides: Partial<KvyCredentials> = {}): KvyCredential
   };
 }
 
- * (via `/v1/auth/refresh`) resolves to, unless a test injects its own `fetchImpl`. */
 async function defaultFetchImpl(): Promise<Response> {
   return new Response(
     JSON.stringify({ accessToken: "test-token", refreshToken: "test-refresh-token" }),
@@ -441,6 +440,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(ptyOptions.providerSessionId).toBeNull();
   });
 
+  it("extracts a --model override from claudeArgs into the session metadata", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_1",
       dek: getRandomBytes(32),
@@ -543,6 +543,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(bootstrapParams.metadata.model).toBeUndefined();
   });
 
+  it("resumes the provider transcript from KVY_RECONNECT_PROVIDER_SESSION_ID when set", async () => {
     const startPtyClaudeSession = vi.fn(() => fakePtyHandle());
 
     await runStartClaudeCommand(

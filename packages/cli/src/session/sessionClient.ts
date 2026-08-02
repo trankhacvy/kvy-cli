@@ -46,7 +46,7 @@ import type { Logger } from "../logger.js";
 
 export interface SessionClientDeps {
   serverUrl: string;
-  /** Mints/caches/refreshes the access token this socket authenticates with —
+  /** Mints/caches/refreshes the access token this socket authenticates with. */
   tokenProvider: TokenProvider;
   sessionId: string;
   /** Injectable so unit tests never make a real network call. */

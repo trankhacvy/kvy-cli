@@ -493,7 +493,6 @@ describe("mapClaudeToEnvelopes — tool call lifecycle", () => {
   });
 });
 
- * map ACP's `acpToEnvelope.ts` uses, ported to Claude Code's raw tool names. */
 describe("mapClaudeToEnvelopes — static tool risk map", () => {
   function toolStart(name: string, callId: string): RawJSONLines {
     return {

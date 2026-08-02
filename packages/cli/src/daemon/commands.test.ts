@@ -201,6 +201,7 @@ describe("daemon commands", () => {
     });
   });
 
+  describe("runDaemonStartSync — durability", () => {
     it("restores persisted sessions.json before serving any request", async () => {
       await persistSession(homeDir, {
         sessionId: "sess_1",

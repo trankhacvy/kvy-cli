@@ -30,8 +30,6 @@ import type { ApiSocket } from "./apiSocket.js";
 
 export type MessageRpcParams = z.infer<typeof MessageRpcParamsSchema>;
 export type MessageRpcResult = z.infer<typeof MessageRpcResultSchema>;
- * here for callers (`features/session-control/optimistic-composer.ts`) that branch
- * on it without importing `@kvy/wire` directly. */
 export type MessageRpcStatus = z.infer<typeof MessageRpcStatusSchema>;
 export type PermAnswerParams = z.infer<typeof PermAnswerParamsSchema>;
 export type PermAnswerResult = z.infer<typeof PermAnswerResultSchema>;

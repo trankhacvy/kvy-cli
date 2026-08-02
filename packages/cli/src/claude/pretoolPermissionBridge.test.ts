@@ -1105,6 +1105,7 @@ describe("PreToolPermissionBridge — initialPermissionMode seed (docs/bug-fix-p
   });
 });
 
+describe("PreToolPermissionBridge — emits permission-mode on a genuine transition", () => {
   it("does not emit on the very first observed mode (announcing a baseline, not a change)", async () => {
     const { bridge, emitted } = makeBridge();
     await bridge.handlePreToolUse({ tool_name: "Bash", permission_mode: "acceptEdits" });

@@ -7,9 +7,6 @@ import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { startSessionClient } from "./sessionClient.js";
 
- * token — this suite exercises the transport/reconnect behavior, not token renewal
- * (see `sessionClient.test.ts` for the renew-token unit tests), so a fixed token with
- * a `renewIntervalMs` well outside each test's runtime keeps it out of the way. */
 function fakeTokenProvider(accessToken = "test-token"): TokenProvider {
   return {
     async getAccessToken() {

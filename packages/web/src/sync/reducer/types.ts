@@ -59,10 +59,6 @@ export interface ModeSwitchItem extends RenderItemBase {
   by: "terminal" | "client";
 }
 
- * standalone fact distinct from `mode-switch`'s local↔remote control handoff.
- * `source: "terminal"` is the live TUI's Shift+Tab cycling reported via the
- * CLI's hook bridge; `source: "client"` is reserved for a future web-initiated
- * `setMode` RPC announcing its own change the same way. */
 export interface PermissionModeItem extends RenderItemBase {
   kind: "permission-mode";
   mode: PermissionMode;
@@ -77,10 +73,6 @@ export interface SubStopItem extends RenderItemBase {
   kind: "sub-stop";
 }
 
- * — one per assistant transcript record that reported `usage`, rendered as
- * a quiet per-turn token chip. `costUsd` is optional: no provider surfaces
- * it in Kvy's transcript source today, so it's always absent for now,
- * but the wire event reserves the field for a future pricing lookup. */
 export interface UsageItem extends RenderItemBase {
   kind: "usage";
   inputTokens: number;
@@ -136,7 +128,7 @@ export interface ToolItem extends RenderItemBase {
   ok?: boolean;
   output?: unknown;
   permission?: PermissionInfo;
-  /** Linked sidechain/subagent scope — envelopes whose `subagent` field
+  /** Linked sidechain/subagent scope. */
   subagent?: RenderItem[];
 }
 

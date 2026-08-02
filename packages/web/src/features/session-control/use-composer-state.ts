@@ -23,8 +23,6 @@ export interface ComposerState {
    * Feed this to `Timeline`, not the raw `items` prop. */
   mergedItems: RenderItem[];
   send(text: string): void;
-   * Distribution & self-host") then sends a `file` envelope referencing the
-   * resulting blob. */
   sendAttachment(file: File): void;
   isSending: boolean;
   /** True while the most recently sent message is queued behind the agent's
@@ -36,7 +34,7 @@ export interface ComposerState {
    * never gated on it, only the attach affordance is. */
   cryptoReady: boolean;
   error: string | null;
-  /** Non-blocking notice from an `outcome-unknown` `message` reply (design
+  /** Non-blocking notice from an `outcome-unknown` `message` reply. */
   notice: string | null;
 }
 

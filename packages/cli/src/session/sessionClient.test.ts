@@ -8,7 +8,6 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
- * token, tracking `forceRefresh` calls so tests can assert on the connect_error path. */
 function fakeTokenProvider(
   accessToken: string | null = "test-token",
 ): TokenProvider & { forceRefreshCalls: number } {
@@ -243,6 +242,7 @@ describe("startSessionClient", () => {
     );
   });
 
+  it("forces a token refresh on an auth-shaped connect_error", async () => {
     const fakeSocket = new FakeSocket();
     const ioFactory = vi.fn().mockReturnValue(fakeSocket);
     const tokenProvider = fakeTokenProvider();

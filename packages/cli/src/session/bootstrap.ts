@@ -69,8 +69,6 @@ export interface BootstrapSessionParams {
    */
   nonce: string;
   provider: ProviderId;
-   * the DEK; the secret half recovers the original DEK on an idempotent
-   * replay, when the server hands back an existing row instead of ours. */
   contentKeyPair: BoxKeyPair;
   metadata: SessionMetadataInput;
   workspaceId?: string | null;

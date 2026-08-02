@@ -1,7 +1,6 @@
 import type { SessionListSession, SessionListSnapshot, SessionListWorkspace } from "./types";
 import { parentWorktreePath } from "./worktree-path";
 
- * "`SessionList` grouped by workspace"). */
 export interface WorkspaceGroup {
   workspace: SessionListWorkspace;
   sessions: SessionListSession[];

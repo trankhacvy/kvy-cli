@@ -74,7 +74,7 @@ export function deriveAttention(input: DeriveAttentionInput): AttentionState {
 
 export interface AttentionMeta {
   label: string;
-  /** Single-character glyph for a favicon/title prefix — cheap, high-value
+  /** Single-character glyph for a favicon/title prefix. */
   glyph: string;
   /** Tailwind color token for a favicon dot, matching `SESSION_STATUS_META`'s
    * palette (`features/session-list/status.ts`) so the same state reads the

@@ -65,7 +65,6 @@ function silentLogger(): Logger {
   return { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 }
 
- * token, tracking `forceRefresh` calls so tests can assert on the connect_error path. */
 function fakeTokenProvider(
   accessToken = "test-token",
 ): TokenProvider & { forceRefreshCalls: number } {

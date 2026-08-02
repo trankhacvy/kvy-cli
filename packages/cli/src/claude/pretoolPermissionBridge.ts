@@ -184,7 +184,7 @@ export type PreToolPermissionDecision = "allow" | "deny" | "ask";
 export const isAskUserQuestion = (name: string): boolean =>
   name === "AskUserQuestion" || name === "ask_user_question";
 
-/** True for either of Claude Code's two `ExitPlanMode` tool-name spellings
+/** True for either of Claude Code's two `ExitPlanMode` tool-name spellings. */
 export const isExitPlanTool = (name: string): boolean =>
   name === "ExitPlanMode" || name === "exit_plan_mode";
 

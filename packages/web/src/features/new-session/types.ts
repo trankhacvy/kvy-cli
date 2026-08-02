@@ -62,8 +62,6 @@ export interface SpawnRequest {
   permissionMode: PermissionMode;
   model?: string;
   branch?: BranchOption;
-   * from a recent CLI session") picked a candidate to continue instead of
-   * starting fresh — mirrors `@kvy/wire`'s `SpawnParams.continueFrom`. */
   continueFrom?: { providerSessionId: string };
 }
 

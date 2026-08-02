@@ -6,7 +6,6 @@ import type { AttentionKind } from "@/features/session-list/types";
 import { apiSocket } from "@/sync";
 
 export interface SessionEphemeralState {
-   * coalesced, so this is a UI nicety, never something correctness depends on. */
   working: boolean;
   /** The server's `attention` ephemeral for this session, or `null` if none has
    * arrived yet this session — see `attention.ts`'s `deriveAttention` for how

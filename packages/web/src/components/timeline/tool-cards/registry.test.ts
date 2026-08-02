@@ -23,9 +23,6 @@ function toolItem(name: string): ToolItem {
   };
 }
 
- * sub-task) — calling it directly returns the `React.createElement(...)`
- * result, a plain object carrying `.type`, so the dispatch is verifiable
- * without a DOM/render environment (this package has neither). */
 describe("ToolCard registry — AskUserQuestion dispatch", () => {
   it("routes both AskUserQuestion tool-name spellings to AskUserQuestionToolCard", () => {
     expect(ToolCard({ item: toolItem("AskUserQuestion") }).type).toBe(AskUserQuestionToolCard);

@@ -71,10 +71,6 @@ type Listener<T> = (payload: T) => void;
 // at the `on`/`off`/`emit` boundary, never inside the class body.
 type ErasedListener = (payload: never) => void;
 
- * `ok: false` covers everything from "bad params" through "target offline"
- * to "target died mid-call" — the relay always resolves the ack, it never
- * lets a call hang past its own 30s cap. Never thrown as an error by
- * `rpcCall` below; callers branch on `.ok`. */
 export type RpcCallResult = { ok: true; result: EncryptedBox } | { ok: false; error: string };
 
 // a well-behaved server's own `{ok:false, error:"..."}` ack always wins the
