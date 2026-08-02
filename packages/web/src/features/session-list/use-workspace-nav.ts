@@ -6,10 +6,9 @@ import type { RenderItem } from "@/sync/reducer";
 import { groupSessionsByWorkspace, UNGROUPED_WORKSPACE_ID, type WorkspaceGroup } from "./group";
 import { buildSnapshot } from "./live-source";
 import type { AttentionKind, SessionListMachine } from "./types";
-import type { MachinePresence } from "./use-machine-presence";
+import { useMachinePresence } from "./use-machine-presence";
 import { useWorkspaceIndexContext } from "./workspace-index-context";
 
-const EMPTY_PRESENCE = new Map<string, MachinePresence>();
 const EMPTY_ITEMS = new Map<string, RenderItem[]>();
 const EMPTY_ATTENTION = new Map<string, AttentionKind>();
 
@@ -21,10 +20,16 @@ export function useWorkspaceNavGroups(): {
   const { sessionRows, machineRows, titles, isLoading, selectedMachineId } =
     useWorkspaceIndexContext();
 
+  // Same live `machine-presence` ephemeral the Home screen and the sidebar
+  // `MachineSwitcher` subscribe to — without it, `buildSnapshot` would fall
+  // back to the `lastSeenAt` recency heuristic for every machine, so the
+  // nav's `+` gate (NewSessionTrigger) could never trust the statuses it
+  // derives from this map.
+  const presence = useMachinePresence();
+
   const snapshot = useMemo(
-    () =>
-      buildSnapshot(sessionRows, machineRows, titles, EMPTY_PRESENCE, EMPTY_ITEMS, EMPTY_ATTENTION),
-    [sessionRows, machineRows, titles],
+    () => buildSnapshot(sessionRows, machineRows, titles, presence, EMPTY_ITEMS, EMPTY_ATTENTION),
+    [sessionRows, machineRows, titles, presence],
   );
 
   // Same current-machine resolution the sidebar `MachineSwitcher` displays

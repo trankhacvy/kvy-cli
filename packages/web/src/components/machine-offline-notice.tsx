@@ -1,6 +1,7 @@
 "use client";
 
 import { CloudOff } from "lucide-react";
+import { InlineCommandText } from "@/components/inline-command-text";
 import type { MachineOnlineState } from "@/lib/use-machine-online";
 
 /**
@@ -20,7 +21,9 @@ export function MachineOfflineNotice({ state }: { state: MachineOnlineState }) {
       aria-live="polite"
     >
       <CloudOff className="size-3.5 shrink-0" aria-hidden="true" />
-      <span>{state.reason}</span>
+      <span>
+        <InlineCommandText text={state.reason} />
+      </span>
     </div>
   );
 }

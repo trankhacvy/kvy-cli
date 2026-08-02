@@ -14,7 +14,7 @@ export function LandingNav() {
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5" aria-label="Kvy home">
           <KvyMark className="size-8" />
-          <span className="font-semibold tracking-tight">Kvy</span>
+          <span className="font-semibold tracking-tight">KVY</span>
         </Link>
         <nav className="flex items-center gap-1.5 sm:gap-2" aria-label="Account">
           <Button asChild variant="ghost" size="icon-sm" aria-label="View source on GitHub">

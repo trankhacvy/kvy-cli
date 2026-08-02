@@ -20,6 +20,11 @@ for the flows-3/4/5 track, in `docs/plan-flows-3-4-5.md`.
 | 18 | [Re-pairing an already-registered machine to a different account silently leaves it owned by the original account](#issue-18) | Open |
 | 19 | [A browser that connects after the daemon does can show a false "offline" state indefinitely — blocks the Git/Repo-Files panels and the new Create-workspace button](#issue-19) | Landed (needs live re-verification) |
 
+
+20. Start over with new keys
+- use dialog to display, not inline
+- when user decice to reset -> it contain many steps
+
 When an issue is resolved and verified, remove its row from this table and its section below
 — don't mark it "Fixed" and leave it here, per this file's own no-growing-archive convention.
 

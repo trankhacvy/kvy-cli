@@ -126,7 +126,7 @@ const HELP_TEXT = `kvy: wrapper CLI for Claude Code / Codex agent sessions
 Usage:
   kvy                            Start a session with the default provider
   kvy claude [args...]           Start a Claude Code session (flags pass through)
-  kvy codex [args...]            Start a Codex session (beta, no local TUI, flags pass through)
+  kvy codex [args...]            Connect for Codex (beta, no terminal mode - sessions run from your dashboard)
   kvy -b <branch>                Start a session on a new git worktree/branch
   kvy auth login|logout|status   Manage Kvy account auth
   kvy daemon start [--no-wait] | start-sync | stop | status

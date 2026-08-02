@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Kbd } from "@/components/ui/kbd";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -69,8 +70,7 @@ export function WorkspaceNav() {
           </SidebarMenu>
         ) : stableGroups.length === 0 ? (
           <p className="px-2 py-1.5 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
-            No workspaces yet. Run <code className="rounded bg-muted px-1 py-0.5">kvy</code> from a
-            project to see it here.
+            No workspaces yet. Run <Kbd>kvy</Kbd> from a project to see it here.
           </p>
         ) : (
           <SidebarMenu>
@@ -124,7 +124,7 @@ function WorkspaceNavItem({
             <span className="truncate">{group.workspace.name}</span>
           </SidebarMenuButton>
         </CollapsibleTrigger>
-        <div className="absolute top-1 right-1 flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100">
+        <div className="absolute top-1 right-1 flex items-center gap-0.5">
           <WorkspaceSettingsButton
             workspaceName={group.workspace.name}
             onClick={() => setSettingsOpen(true)}

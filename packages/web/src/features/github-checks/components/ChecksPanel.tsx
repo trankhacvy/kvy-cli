@@ -5,6 +5,7 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Kbd } from "@/components/ui/kbd";
 import { useMachineOnline } from "@/lib/use-machine-online";
 import type { GithubChecksSnapshot, UseGithubChecksActions } from "../types";
 import { DaemonUnsupportedError } from "../types";
@@ -86,8 +87,8 @@ export function ChecksBody({
     case "no-token":
       return (
         <EmptyState>
-          GitHub is not connected on this machine. Run <code>kvy github login</code> in a terminal
-          on it.
+          GitHub is not connected on this machine. Run <Kbd>kvy github login</Kbd> in a terminal on
+          it.
         </EmptyState>
       );
     case "unsupported-remote":

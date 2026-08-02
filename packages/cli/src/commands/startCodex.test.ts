@@ -134,7 +134,11 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
   const deps: StartCodexCommandDeps = {
     homeDir,
     workingDirectory: "/fake/workdir",
-    codexArgs: [],
+    // Daemon-spawned by default (spawnEngine.ts's `--started-by daemon`
+    // marker) so the session-host flow is what these tests exercise —
+    // a plain terminal run now takes the guidance-exit path instead.
+    codexArgs: ["--starting-mode", "remote", "--started-by", "daemon"],
+    frontendUrl: "https://app.kvy.dev",
     readCredentials: () => fakeCredentials(),
     fetchImpl: defaultFetchImpl as unknown as typeof fetch,
     readDaemonState: async () => fakeDaemonState(),
@@ -202,6 +206,66 @@ describe("runStartCodexCommand", () => {
     expect(errors[0]).toContain("Codex CLI is not installed");
   });
 
+  // Fallback UI for TUI-less agents: a human's `kvy codex` (no
+  // `--started-by daemon`) pairs, prints the dashboard guidance, and exits —
+  // no bootstrap, no ACP child, no Ctrl-C wait.
+  it("terminal run: pairs, prints dashboard guidance, and exits without starting a session", async () => {
+    const bootstrapSession = vi.fn();
+    const startAcpRemote = vi.fn();
+    const notifyDaemonSessionStarted = vi.fn(async () => ({ type: "no-daemon" as const }));
+    const { deps, written, errors } = baseDeps({
+      codexArgs: [],
+      frontendUrl: "https://app.kvy.dev",
+      bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+      startAcpRemote: startAcpRemote as unknown as StartCodexCommandDeps["startAcpRemote"],
+      notifyDaemonSessionStarted:
+        notifyDaemonSessionStarted as unknown as typeof notifyDaemonSessionStartedType,
+    });
+
+    const code = await runStartCodexCommand(deps);
+
+    expect(code).toBe(0);
+    expect(errors).toHaveLength(0);
+    const output = written.join("");
+    expect(output).toContain("https://app.kvy.dev/dashboard/");
+    expect(output).toContain("Codex has no terminal mode");
+    expect(bootstrapSession).not.toHaveBeenCalled();
+    expect(startAcpRemote).not.toHaveBeenCalled();
+    expect(notifyDaemonSessionStarted).not.toHaveBeenCalled();
+  });
+
+  it("terminal run still registers the workspace, so the dashboard wizard finds it", async () => {
+    const registerWorkspace = vi.fn(
+      async () =>
+        ({
+          path: "/fake/workdir",
+          registeredAt: "2026-01-01T00:00:00.000Z",
+        }) as unknown as Awaited<ReturnType<typeof registerWorkspaceType>>,
+    );
+    const { deps } = baseDeps({
+      codexArgs: [],
+      registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+    });
+
+    const code = await runStartCodexCommand(deps);
+
+    expect(code).toBe(0);
+    expect(registerWorkspace).toHaveBeenCalledWith("/fake/workdir");
+  });
+
+  it("terminal run fails honestly when not logged in (pairing is its real job)", async () => {
+    const bootstrapSession = vi.fn();
+    const { deps, errors } = baseDeps({
+      codexArgs: [],
+      readCredentials: () => null,
+      bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
+    });
+    const code = await runStartCodexCommand(deps);
+    expect(code).toBe(1);
+    expect(errors[0]).toContain("not logged in");
+    expect(bootstrapSession).not.toHaveBeenCalled();
+  });
+
   it("surfaces a bootstrapSession failure as an honest error instead of throwing", async () => {
     const { deps, errors } = baseDeps({
       bootstrapSession: vi.fn(async () => {
@@ -256,7 +320,14 @@ describe("runStartCodexCommand", () => {
   it("threads a --continue-from flag into startAcpRemote's resume option", async () => {
     const startAcpRemote = vi.fn(() => baseDeps().fakeRemote.handle);
     const { deps, releaseExit } = baseDeps({
-      codexArgs: ["--continue-from", "prior-thread-id"],
+      codexArgs: [
+        "--starting-mode",
+        "remote",
+        "--started-by",
+        "daemon",
+        "--continue-from",
+        "prior-thread-id",
+      ],
       startAcpRemote: startAcpRemote as unknown as StartCodexCommandDeps["startAcpRemote"],
     });
 
@@ -399,7 +470,14 @@ describe("runStartCodexCommand", () => {
       created: true,
     }));
     const { deps, releaseExit } = baseDeps({
-      codexArgs: ["--model", "gpt-5.1-codex"],
+      codexArgs: [
+        "--model",
+        "gpt-5.1-codex",
+        "--starting-mode",
+        "remote",
+        "--started-by",
+        "daemon",
+      ],
       bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
     });
 
@@ -423,7 +501,6 @@ describe("runStartCodexCommand", () => {
       created: true,
     }));
     const { deps, releaseExit } = baseDeps({
-      codexArgs: [],
       bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
     });
 

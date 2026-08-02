@@ -16,9 +16,33 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { SETTINGS_SECTIONS, type SettingsSectionId } from "@/features/settings";
+import {
+  SETTINGS_SECTIONS,
+  type SettingsSectionId,
+  type SettingsSectionMeta,
+} from "@/features/settings";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+
+/** Temporary production-only menu cut: these sections ship in dev builds
+ * but are hidden from the dialog menu in production until they're ready.
+ * Remove the filter once they land. */
+const SECTIONS_HIDDEN_IN_PRODUCTION: SettingsSectionId[] = [
+  "appearance",
+  "providers",
+  "notifications",
+  "devices",
+  "support",
+];
+
+function getVisibleSections(): SettingsSectionMeta[] {
+  if (process.env.NODE_ENV === "production") {
+    return SETTINGS_SECTIONS.filter(
+      (section) => !SECTIONS_HIDDEN_IN_PRODUCTION.includes(section.id),
+    );
+  }
+  return SETTINGS_SECTIONS;
+}
 
 function findSection(id: SettingsSectionId | null) {
   return SETTINGS_SECTIONS.find((section) => section.id === id);
@@ -35,7 +59,8 @@ function SettingsDialogDesktop({
   activeId: SettingsSectionId;
   onSelect: (id: SettingsSectionId) => void;
 }) {
-  const active = findSection(activeId) ?? SETTINGS_SECTIONS[0];
+  const sections = getVisibleSections();
+  const active = findSection(activeId) ?? sections[0];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -50,7 +75,7 @@ function SettingsDialogDesktop({
             className="w-44 shrink-0 overflow-y-auto border-r border-border p-2"
           >
             <ul className="flex flex-col gap-0.5">
-              {SETTINGS_SECTIONS.map((section) => (
+              {sections.map((section) => (
                 <li key={section.id}>
                   <button
                     type="button"
@@ -95,6 +120,7 @@ function SettingsSheetMobile({
   onSelect: (id: SettingsSectionId | null) => void;
 }) {
   const active = findSection(activeId);
+  const sections = getVisibleSections();
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -125,7 +151,7 @@ function SettingsSheetMobile({
               <SheetDescription className="sr-only">Settings sections</SheetDescription>
             </SheetHeader>
             <ul className="flex flex-col gap-0.5 overflow-y-auto p-2">
-              {SETTINGS_SECTIONS.map((section) => (
+              {sections.map((section) => (
                 <li key={section.id}>
                   <button
                     type="button"
@@ -180,7 +206,7 @@ export function SettingsDialog({
     <SettingsDialogDesktop
       open={open}
       onOpenChange={handleOpenChange}
-      activeId={activeId ?? SETTINGS_SECTIONS[0]?.id ?? "agent"}
+      activeId={activeId ?? getVisibleSections()[0]?.id ?? "agent"}
       onSelect={setActiveId}
     />
   );

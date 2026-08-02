@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { StartOverLink } from "@/components/auth/start-over-link";
+import { InlineCommandText } from "@/components/inline-command-text";
 import { Spinner } from "@/components/ui/spinner";
 import { provisionKeyProtection } from "@/crypto";
 import { claimKeyRequest, createKeyRequest, listDeviceSessions } from "@/lib/api";
@@ -154,7 +155,7 @@ export function RequestKeysPanel({
           {/* Always shown, not just when the device list is empty — a listed web device
            *  doesn't mean the CLI isn't faster/easier to reach right now. */}
           <p className="text-xs text-muted-foreground">
-            {copy.keys.noOtherDevicesHint("kvy keys approve")}
+            <InlineCommandText text={copy.keys.noOtherDevicesHint("kvy keys approve")} />
           </p>
         </>
       )}

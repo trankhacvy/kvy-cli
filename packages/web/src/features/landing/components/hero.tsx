@@ -15,7 +15,7 @@ export function Hero() {
     <section className="px-4 pt-20 pb-16 sm:px-6 md:pt-24">
       <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
         <Reveal immediate>
-          <h1 className="font-semibold text-4xl tracking-tighter sm:text-5xl md:text-6xl">
+          <h1 className="font-semibold max-w-xl text-4xl leading-tight tracking-tighter sm:text-5xl md:text-6xl">
             Run coding agents from anywhere.
           </h1>
         </Reveal>

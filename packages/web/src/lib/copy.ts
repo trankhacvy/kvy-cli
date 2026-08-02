@@ -90,7 +90,7 @@ export const copy = {
     /** The "run `kvy keys approve`" instruction — pulled out of the component's inline
      *  JSX so `copy.test.ts`'s jargon walker can see it (it previously couldn't, being the
      *  one user-facing string in `request-keys-panel.tsx` not routed through `copy.*`). */
-    noOtherDevicesHint: (command: string) => `Run ${command} on a machine that has your keys.`,
+    noOtherDevicesHint: (command: string) => `Run \`${command}\` on a machine that has your keys.`,
     signedOut: "You've been signed out. Sign in again.",
     unreadable: "Those keys couldn't be read. Ask the other device to try again.",
     timedOut: "The request timed out. Reload this page to try again.",
