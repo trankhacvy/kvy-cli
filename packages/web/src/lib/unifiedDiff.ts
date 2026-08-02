@@ -1,4 +1,3 @@
-
 export type DiffLineType = "context" | "add" | "remove";
 
 export interface UnifiedDiffLine {

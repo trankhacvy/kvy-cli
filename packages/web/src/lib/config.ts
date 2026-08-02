@@ -1,4 +1,3 @@
-
 /** Base URL of the Kvy API server (Fastify), e.g. "https://api.kvy.dev". */
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3005").replace(
   /\/+$/,

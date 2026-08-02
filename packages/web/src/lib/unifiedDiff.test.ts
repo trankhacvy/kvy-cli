@@ -20,14 +20,16 @@ describe("parseUnifiedDiff", () => {
     const parsed = parseUnifiedDiff(diff);
 
     expect(parsed.files).toHaveLength(1);
-    const file = parsed.files[0]!;
+    const file = parsed.files[0];
+    if (!file) return;
     expect(file.path).toBe("src/a.ts");
     expect(file.oldPath).toBe("src/a.ts");
     expect(file.newPath).toBe("src/a.ts");
     expect(file.binary).toBe(false);
     expect(file.hunks).toHaveLength(1);
 
-    const hunk = file.hunks[0]!;
+    const hunk = file.hunks[0];
+    if (!hunk) return;
     expect(hunk.header).toBe("@@ -1,3 +1,4 @@");
     expect(hunk.lines).toEqual([
       { type: "context", content: "line one", oldLine: 1, newLine: 1 },
@@ -57,8 +59,8 @@ describe("parseUnifiedDiff", () => {
 
     const parsed = parseUnifiedDiff(diff);
     expect(parsed.files.map((f) => f.path)).toEqual(["src/a.ts", "src/b.ts"]);
-    expect(parsed.files[0]!.hunks[0]!.lines).toHaveLength(2);
-    expect(parsed.files[1]!.hunks[0]!.lines).toHaveLength(2);
+    expect(parsed.files[0]?.hunks[0]?.lines).toHaveLength(2);
+    expect(parsed.files[1]?.hunks[0]?.lines).toHaveLength(2);
   });
 
   it("handles a newly added file (oldPath is /dev/null)", () => {
@@ -75,11 +77,12 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
 
     const parsed = parseUnifiedDiff(diff);
-    const file = parsed.files[0]!;
+    const file = parsed.files[0];
+    if (!file) return;
     expect(file.oldPath).toBeNull();
     expect(file.newPath).toBe("src/new.ts");
     expect(file.path).toBe("src/new.ts");
-    expect(file.hunks[0]!.lines.every((l) => l.type === "add")).toBe(true);
+    expect(file.hunks[0]?.lines.every((l) => l.type === "add")).toBe(true);
   });
 
   it("handles a deleted file (newPath is /dev/null), displaying oldPath", () => {
@@ -95,7 +98,8 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
 
     const parsed = parseUnifiedDiff(diff);
-    const file = parsed.files[0]!;
+    const file = parsed.files[0];
+    if (!file) return;
     expect(file.oldPath).toBe("src/old.ts");
     expect(file.newPath).toBeNull();
     expect(file.path).toBe("src/old.ts");
@@ -110,7 +114,8 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
 
     const parsed = parseUnifiedDiff(diff);
-    const file = parsed.files[0]!;
+    const file = parsed.files[0];
+    if (!file) return;
     expect(file.binary).toBe(true);
     expect(file.hunks).toEqual([]);
   });
@@ -129,7 +134,7 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
 
     const parsed = parseUnifiedDiff(diff);
-    expect(parsed.files[0]!.hunks[0]!.lines).toEqual([
+    expect(parsed.files[0]?.hunks[0]?.lines).toEqual([
       { type: "remove", content: "old", oldLine: 1, newLine: null },
       { type: "add", content: "new", oldLine: null, newLine: 1 },
     ]);
@@ -152,9 +157,10 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
 
     const parsed = parseUnifiedDiff(diff);
-    const file = parsed.files[0]!;
+    const file = parsed.files[0];
+    if (!file) return;
     expect(file.hunks).toHaveLength(2);
-    expect(file.hunks[1]!.lines[0]).toEqual({
+    expect(file.hunks[1]?.lines[0]).toEqual({
       type: "context",
       content: "d",
       oldLine: 10,
@@ -179,7 +185,7 @@ describe("parseUnifiedDiff", () => {
     ].join("\n");
 
     const parsed = parseUnifiedDiff(diff);
-    expect(parsed.files[0]!.hunks[0]!.lines).toEqual([
+    expect(parsed.files[0]?.hunks[0]?.lines).toEqual([
       { type: "context", content: "line one", oldLine: 1, newLine: 1 },
       { type: "context", content: "", oldLine: 2, newLine: 2 },
       { type: "context", content: "line three", oldLine: 3, newLine: 3 },

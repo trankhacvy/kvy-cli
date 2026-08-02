@@ -69,7 +69,7 @@
   },
   "overrides": [
     {
-      "includes": ["packages/cli/scripts/**", "packages/cli/native/**"],
+      "includes": ["packages/cli/scripts/**", "packages/cli/native/**", "packages/wire/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {

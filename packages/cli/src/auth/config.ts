@@ -1,4 +1,3 @@
-
 const DEFAULT_BACKEND_URL = "https://api.kvy.dev";
 const DEFAULT_FRONTEND_URL = "https://app.kvy.dev";
 

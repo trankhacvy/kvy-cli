@@ -1,4 +1,3 @@
-
 import type { Logger } from "../logger.js";
 
 /** The three lifecycle kinds `POST /v1/sessions/:id/notify` accepts (mirrors the server's `NotifyBodySchema`). */

@@ -33,7 +33,8 @@ function scriptedHttpClient(plan: PlanEntry[]): {
     client: {
       async postMessages(sessionId, body): Promise<OutboxPostResult> {
         const idx = Math.min(calls.length, plan.length - 1);
-        const entry = plan[idx]!;
+        const entry = plan[idx];
+        if (!entry) throw new Error("plan exhausted");
         calls.push({ sessionId, localId: body.localId });
         if ("throws" in entry) {
           throw new Error("simulated network failure");

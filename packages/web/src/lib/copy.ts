@@ -1,4 +1,3 @@
-
 export const copy = {
   signin: {
     titleDefault: "Sign in to Kvy",

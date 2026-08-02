@@ -1,4 +1,3 @@
-
 import type { Logger } from "../logger.js";
 
 export interface ReportSessionFailedDeps {

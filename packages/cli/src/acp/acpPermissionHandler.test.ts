@@ -61,7 +61,7 @@ function harness(overrides: Partial<AcpPermissionHandlerDeps> = {}): Harness {
 
 function reqIdFrom(envelopes: SessionEnvelope[]): string {
   const request = envelopes.find((e) => e.ev.t === "perm-request");
-  if (!request || request.ev.t !== "perm-request") throw new Error("no perm-request emitted");
+  if (request?.ev.t !== "perm-request") throw new Error("no perm-request emitted");
   return request.ev.reqId;
 }
 
