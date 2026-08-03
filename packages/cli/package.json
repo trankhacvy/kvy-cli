@@ -6,11 +6,11 @@
   "description": "kvy — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/trankhacvy/falcon-cli.git",
+    "url": "git+https://github.com/trankhacvy/kvy-cli.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/trankhacvy/falcon-cli#readme",
-  "bugs": "https://github.com/trankhacvy/falcon-cli/issues",
+  "homepage": "https://github.com/trankhacvy/kvy-cli#readme",
+  "bugs": "https://github.com/trankhacvy/kvy-cli/issues",
   "keywords": [
     "cli",
     "claude-code",

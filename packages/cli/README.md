@@ -11,7 +11,7 @@ from a browser on any device.
 ```bash
 npm install -g @vibe-oss/kvy
 # or, no Node required:
-curl -fsSL https://kvy.dev/install.sh | sh
+curl -fsSL https://kvy-cli.tkvy.dev/install.sh | sh
 ```
 
 ## Usage
@@ -25,10 +25,10 @@ live on the web app within a few seconds.
 
 ## Links
 
-- [Source & full documentation](https://github.com/trankhacvy/falcon-cli)
-- [Architecture](https://github.com/trankhacvy/falcon-cli/blob/main/docs/kvy-system-design.md)
-- [Self-hosting](https://github.com/trankhacvy/falcon-cli/blob/main/deploy/README.md)
-- [Uninstall](https://github.com/trankhacvy/falcon-cli/blob/main/docs/uninstall.md)
+- [Source & full documentation](https://github.com/trankhacvy/kvy-cli)
+- [Architecture](https://github.com/trankhacvy/kvy-cli/blob/main/docs/kvy-system-design.md)
+- [Self-hosting](https://github.com/trankhacvy/kvy-cli/blob/main/deploy/README.md)
+- [Uninstall](https://github.com/trankhacvy/kvy-cli/blob/main/docs/uninstall.md)
 
 ## License
 
