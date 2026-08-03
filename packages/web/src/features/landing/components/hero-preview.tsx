@@ -24,7 +24,7 @@ export function HeroPreview() {
           <span className="size-2.5 rounded-full bg-muted-foreground/25" />
         </div>
         <div className="mx-auto flex h-6 w-52 items-center justify-center rounded-md bg-muted/60 font-mono text-[11px] text-muted-foreground sm:w-64">
-          app.kvy.dev/dashboard
+          kvy-cli.tkvy.dev/dashboard
         </div>
         <Badge variant="outline" className="gap-1.5">
           <span className="size-1.5 animate-pulse rounded-full bg-primary" />

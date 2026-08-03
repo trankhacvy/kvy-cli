@@ -54,7 +54,7 @@ const EnvSchema = z
     VAPID_PUBLIC_KEY: z.string().min(1).optional(),
     VAPID_PRIVATE_KEY: z.string().min(1).optional(),
     // `mailto:` or `https:` contact URL required by the VAPID spec.
-    VAPID_SUBJECT: z.string().min(1).default("mailto:support@kvy.dev"),
+    VAPID_SUBJECT: z.string().min(1).default("mailto:support@kvy-cli.tkvy.dev"),
     // All optional — missing config means a skipped capability, not a crash.
     TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
     // Bot @username (no `@`), used to build the `/start` deep-link URL.

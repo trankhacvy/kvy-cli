@@ -1,11 +1,11 @@
-/** Base URL of the Kvy API server (Fastify), e.g. "https://api.kvy.dev". */
+/** Base URL of the Kvy API server (Fastify), e.g. "https://api.kvy-cli.tkvy.dev". */
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3005").replace(
   /\/+$/,
   "",
 );
 
 /** Public web origin for canonical URLs, Open Graph, and the sitemap. */
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.kvy.dev").replace(
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://kvy-cli.tkvy.dev").replace(
   /\/+$/,
   "",
 );
@@ -30,7 +30,8 @@ export const DISCORD_INVITE_URL: string =
   process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || "https://discord.gg/kvy";
 
 /** Settings → Support: direct support email rendered as a `mailto:` link. */
-export const SUPPORT_EMAIL: string = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@kvy.dev";
+export const SUPPORT_EMAIL: string =
+  process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@kvy-cli.tkvy.dev";
 
 /**
  * Mirrors the CLI's `KVY_PTY_SETMODE` flag. Un-hides the mode-selector affordance

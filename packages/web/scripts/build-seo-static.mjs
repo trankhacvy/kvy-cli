@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = path.join(root, "out");
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.kvy.dev").replace(/\/+$/, "");
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://kvy-cli.tkvy.dev").replace(
+  /\/+$/,
+  "",
+);
 
 const robots = `User-agent: *
 Allow: /

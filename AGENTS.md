@@ -79,7 +79,7 @@ pnpm --filter @kvy/server dev   # Fastify API on :3005 (tsx watch; migrates on b
 pnpm --filter @kvy/web dev      # Next.js web on :3000 (defaults its API to http://localhost:3005)
 ```
 
-The **CLI** defaults to the production deployment (`api.kvy.dev` / `app.kvy.dev`),
+The **CLI** defaults to the production deployment (`api.kvy-cli.tkvy.dev` / `kvy-cli.tkvy.dev`),
 so point it at your local stack with two env vars (`packages/cli/src/auth/config.ts`):
 
 ```bash

@@ -17,7 +17,7 @@ export interface OutboxHttpClient {
 }
 
 export interface CreateHttpClientOptions {
-  /** Kvy server origin, e.g. `https://api.kvy.dev` (no trailing slash required). */
+  /** Kvy server origin, e.g. `https://api.kvy-cli.tkvy.dev` (no trailing slash required). */
   serverUrl: string;
   /**
    * Static headers merged into every request. Prefer `getAuthToken` for the
