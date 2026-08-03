@@ -10,8 +10,17 @@ updates:
         update-types:
           - minor
           - patch
+      # Kept separate from minor-and-patch: a single breaking major (e.g. a
+      # Next.js major) shouldn't block CI on an otherwise-safe patch batch.
+      major:
+        update-types:
+          - major
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
