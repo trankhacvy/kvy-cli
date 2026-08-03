@@ -24,8 +24,8 @@ import { getToken, setToken } from "@/lib/session";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
 
 /**
- * docs/auth-ux-hardening-plan.md item 2/4: provider-agnostic "reset keys" recovery,
- * reachable from `StartOverLink` (offered wherever a browser has no usable key material)
+ * Provider-agnostic "reset keys" recovery, reachable from `StartOverLink`
+ * (offered wherever a browser has no usable key material)
  * and the OAuth callback's step-up-return continuation (`oauth-callback-page.tsx`'s
  * `consumePendingStepUp` branch).
  *

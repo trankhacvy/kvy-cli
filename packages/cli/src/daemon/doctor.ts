@@ -1,7 +1,7 @@
 /**
  * `kvy doctor` (+ `kvy doctor clean`) — process discovery,
  * categorization, and runaway-process cleanup. Ported, with changes, from
- * categorization, runaway kill".
+ * Happy's own process-doctor command.
  *
  * `kvy doctor` is purely diagnostic: it reports every Kvy-owned
  * process currently visible to `ps` (via `processScan.ts` + `markers.ts`'s
@@ -10,15 +10,14 @@
  * either), plus the locally-recorded daemon state and how many sessions are
  * resumable from `sessions.json`. It never sends a signal to anything.
  *
- * It also reports ACP adapter health and provider CLI detection (design
- * underlying provider CLI detection (`claude` binary, `codex` binary)") —
+ * It also reports ACP adapter health and provider CLI detection —
  * `checkAllAdaptersHealth` (`../adapters/health.ts`) re-verifies every
  * pinned adapter's install against `ADAPTER_MANIFEST`, and
  * `detectClaudeCode`/`detectCodex` (the same `ProviderAdapter.detect()`
  * implementations `kvy claude`/`kvy codex` themselves use) report
  * whether the underlying provider CLI is even findable.
  *
- * A `preview` section (docs/features/dev-server-preview.md) joins these:
+ * A `preview` section joins these:
  * `cloudflared` detection (`cloudflaredResolve.ts`'s `detectCloudflared`,
  * same as the `preview.ports` RPC uses) plus every entry in the durable
  * `tunnels.json` pid journal (`tunnelRegistry.ts`), each marked live/dead by
@@ -249,8 +248,7 @@ export async function runDoctorClean(
   const targeted = classifyProcesses(processes, deps.currentPid).filter(isRunaway);
   const outcomes = await killGraceful(targeted, deps, gracefulTimeoutMs);
 
-  // Orphaned `cloudflared` tunnels (docs/features/dev-server-preview.md)
-  // aren't `ClassifiedProcess`es at all — they carry no Kvy argv marker
+  // Orphaned `cloudflared` tunnels aren't `ClassifiedProcess`es at all — they carry no Kvy argv marker
   // for `markers.ts` to find — so they're swept separately here via the
   // same journal-driven, verify-before-kill reap a live daemon runs at its
   // own boot (`tunnelRegistry.ts`'s `reapOrphanedTunnels`), reusing this

@@ -37,8 +37,8 @@ export const SpawnParamsSchema = z.object({
     .object({
       name: z.string(),
       createWorktree: z.boolean(),
-      // The base ref a brand-new branch is created from (docs/competitive-notes-omnara.md
-      // #16 "searchable base-branch picker") — e.g. `main`/`master` instead of
+      // The base ref a brand-new branch is created from (searchable base-branch
+      // picker) — e.g. `main`/`master` instead of
       // always forking off whatever's currently checked out at `directory`.
       // Optional and additive: omitted (or a branch that already exists, where
       // there's no "base" to speak of) preserves the old behavior of branching
@@ -143,9 +143,10 @@ export const GitDiffParamsSchema = z.object({
 export type GitDiffParams = z.infer<typeof GitDiffParamsSchema>;
 
 // `truncated` mirrors `FsReadResultSchema`'s own field below — same "no blob
+// store yet" MVP scope as the rest of this file: a diff that
 // would blow the 64KB RPC control-plane budget is truncated inline rather
 // than dropped, and `truncated: true` tells the caller more content exists.
-// `blobRef` is the reserved extension point for the eventual blob-storage
+// `blobRef` is the reserved extension point for whenever the eventual blob-storage
 // subsystem lands, same as `adopt.mirror`'s own not-yet-wired `blobRef`.
 export const GitDiffResultSchema = z.object({
   inline: z.string().optional(),
@@ -154,8 +155,8 @@ export const GitDiffResultSchema = z.object({
 });
 export type GitDiffResult = z.infer<typeof GitDiffResultSchema>;
 
-// Phase 1): lists local branches for the existing-branch worktree picker.
-// Structural clone of `git.status`'s params shape above.
+// `git.branches` machine RPC: lists local branches for the existing-branch
+// worktree picker. Structural clone of `git.status`'s params shape above.
 export const GitBranchesParamsSchema = z.object({
   idempotencyKey: z.string(),
   worktree: z.string(),
@@ -201,8 +202,8 @@ export const GitRemotesResultSchema = z.object({
 });
 export type GitRemotesResult = z.infer<typeof GitRemotesResultSchema>;
 
-// `provider.account` machine RPC (docs/competitive-notes-omnara.md #9
-// "Provider account inspection + usage metering"): Settings → Providers'
+// `provider.account` machine RPC (provider account inspection + usage
+// metering): Settings → Providers'
 // per-machine, per-provider account snapshot — read straight off the local
 // CLI's own auth config files (`~/.claude.json`'s `oauthAccount`/
 // `cachedUsageUtilization`, `~/.codex/auth.json`'s ChatGPT id-token claims —
@@ -253,7 +254,7 @@ export const ProviderAccountResultSchema = z.object({
 });
 export type ProviderAccountResult = z.infer<typeof ProviderAccountResultSchema>;
 
-// docs/competitive-notes-omnara.md #5 "Full repo file browser"): the flat
+// `git.files` machine RPC (full repo file browser): the flat
 // file listing that backs the file tree, joining `git.status`/`git.diff`/
 // `git.branches` in the `git.*` family above. `git ls-files --cached
 // --others --exclude-standard` (tracked + untracked-but-not-ignored) is the
@@ -277,9 +278,8 @@ export const GitFilesResultSchema = z.object({
 });
 export type GitFilesResult = z.infer<typeof GitFilesResultSchema>;
 
-// `commands.list` machine RPC ("/" slash-command autocomplete,
-// docs/competitive-notes-omnara.md #18): lists the project's own custom
-// Claude Code slash commands, read live from `.claude/commands/` in the
+// `commands.list` machine RPC ("/" slash-command autocomplete): lists the
+// project's own custom Claude Code slash commands, read live from `.claude/commands/` in the
 // session's worktree — a structural clone of `git.branches`'s params shape
 // above (same "no idempotency-key replay needed, just uniformity" reasoning
 // as `git.status`/`git.diff`/`git.branches`: this only reads the current
@@ -308,8 +308,8 @@ export const SlashCommandsListResultSchema = z.object({
 });
 export type SlashCommandsListResult = z.infer<typeof SlashCommandsListResultSchema>;
 
-// Phase 1 — the first *mutating* git RPC; `git.status`/`git.diff`/
-// `git.branches` above are all read-only). `stageAll: true` runs `git add
+// `git.commit` machine RPC — the first *mutating* git RPC; `git.status`/`git.diff`/
+// `git.branches` above are all read-only. `stageAll: true` runs `git add
 // -A` before committing, so the commit includes exactly what the panel's
 // changed-files list shows — untracked files included; omitted/`false`
 // commits only already-tracked changes (`git commit -a`). Unlike its
@@ -337,7 +337,7 @@ export const GitCommitResultSchema = z.object({
 });
 export type GitCommitResult = z.infer<typeof GitCommitResultSchema>;
 
-// Phase 1). `force: true` maps to `--force-with-lease`, NEVER the raw
+// `git.push` machine RPC. `force: true` maps to `--force-with-lease`, NEVER the raw
 // `--force` flag — the raw flag is deliberately unreachable over the wire
 // as a data-loss containment measure (a lease-checked force-push still
 // fails, rather than silently discarding, when the remote moved since the
@@ -363,7 +363,7 @@ export const GitPushResultSchema = z.object({
 });
 export type GitPushResult = z.infer<typeof GitPushResultSchema>;
 
-// git-write-actions.md Phase 1): local-only `git branch -m` (the remote
+// `git.renameBranch` machine RPC: local-only `git branch -m` (the remote
 // branch, if any, keeps its old name until the next push — `hadUpstream`
 // tells the UI to surface that warning).
 export const GitRenameBranchParamsSchema = z.object({
@@ -381,8 +381,8 @@ export const GitRenameBranchResultSchema = z.object({
 });
 export type GitRenameBranchResult = z.infer<typeof GitRenameBranchResultSchema>;
 
-// `git.init` machine RPC (docs/web-ux-improvements-plan.md Feature 1): the
-// recovery action behind the Git panel's `workspace-not-a-repo` state
+// `git.init` machine RPC: the recovery action behind the Git panel's
+// `workspace-not-a-repo` state
 // (`workspacePath.ts`'s `WorkspaceValidationErrorCode`) — a registered
 // workspace whose folder is real but was never `git init`ed. Joins
 // `git.commit`/`git.push`/`git.renameBranch` as a *mutating* git RPC and is
@@ -425,8 +425,8 @@ export const GitInitResultSchema = z.object({
 });
 export type GitInitResult = z.infer<typeof GitInitResultSchema>;
 
-// `git.setRemote` machine RPC (docs/web-ux-improvements-plan.md Feature 1):
-// configures a remote URL for a repository that has none, so the Git panel's
+// `git.setRemote` machine RPC: configures a remote URL for a repository
+// that has none, so the Git panel's
 // Push button has somewhere to push. Additive and non-destructive by
 // construction — `git remote add` when `name` is new, `git remote set-url`
 // when it already exists; there is deliberately NO remove/rename path over
@@ -454,7 +454,7 @@ export const GitSetRemoteResultSchema = z.object({
 });
 export type GitSetRemoteResult = z.infer<typeof GitSetRemoteResultSchema>;
 
-// "GitHub PR/CI integration", docs/competitive-notes-omnara.md #4).
+// `github.checks` machine RPC (GitHub PR/CI integration).
 // Structural clone of `git.status`/`git.branches`'s params shape above —
 // the daemon resolves the PR/CI state for the current branch of
 // `params.worktree` using a machine-local GitHub token, never one held by
@@ -600,8 +600,7 @@ export type WorkspaceRegisterParams = z.infer<typeof WorkspaceRegisterParamsSche
 export const WorkspaceRegisterResultSchema = z.object({ ok: z.boolean() });
 export type WorkspaceRegisterResult = z.infer<typeof WorkspaceRegisterResultSchema>;
 
-// `workspace.unregister` (known-issues.md #3 "Registered workspaces never
-// re-validate their path"): the counterpart to `workspace.register` above —
+// `workspace.unregister`: the counterpart to `workspace.register` above —
 // removes a stale registry entry once a git RPC (or a future boot-time scan)
 // has confirmed the underlying folder is gone/no longer a git repo, so the
 // Git panel's "Remove this workspace" action has a real RPC to call instead
@@ -721,9 +720,8 @@ export const AdoptMirrorResultSchema = z.object({
 });
 export type AdoptMirrorResult = z.infer<typeof AdoptMirrorResultSchema>;
 
-// `sleepInhibit.get`/`sleepInhibit.set` machine RPCs (docs/features/
-// sleep-inhibit.md, docs/competitive-notes-omnara.md #12 "Sleep-inhibit
-// control"): a per-machine tri-state policy that makes the daemon hold an
+// `sleepInhibit.get`/`sleepInhibit.set` machine RPCs: a per-machine
+// tri-state policy that makes the daemon hold an
 // OS "don't sleep" assertion via `caffeinate` (macOS only for MVP) so a Mac
 // won't sleep mid-session. `"off"` holds no assertion; `"onPower"` maps to
 // `caffeinate -s` (system-sleep prevention, but macOS itself only honors
@@ -817,7 +815,7 @@ export const PermAnswerResultSchema = z.object({
 export const InterruptParamsSchema = z.object({});
 export const InterruptResultSchema = z.object({ ok: z.boolean() });
 
-// the web"): a session RPC, not the machine RPC `StopSessionParams/
+// The `stop` session RPC (the "Stop" control in the web UI): a session RPC, not the machine RPC `StopSessionParams/
 // ResultSchema` above — the session process is alive, connected, and owns
 // its own child, so no daemon round-trip is needed (the daemon doesn't even
 // track terminal sessions, design §A9). The machine-RPC `stopSession` stays
@@ -847,8 +845,7 @@ export const SetModeResultSchema = z.object({
 
 /**
  * Curated `/model` aliases the CLI's PTY injection path is allowed to type
- * into a live terminal (docs/known-issues.md issue #12, "web model
- * selector") — a closed enum, not a free `z.string()` like
+ * into a live terminal — a closed enum, not a free `z.string()` like
  * `SpawnParamsSchema.model` above. That field only ever becomes a
  * `--model` CLI flag argument, never raw keystrokes, so an arbitrary string
  * is safe there. This one is typed character-for-character into a live PTY
@@ -890,13 +887,13 @@ export const SetModelResultSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Per-workspace Setup/Run scripts (docs/features/setup-run-scripts.md,
-// docs/competitive-notes-omnara.md #7): a persisted "Setup script" (runs
+// Per-workspace Setup/Run scripts: a persisted "Setup script" (runs
 // once per freshly-created worktree, e.g. `npm install`) and "Run script"
 // (a one-click, long-lived dev-server-style process, e.g. `npm run dev`),
 // both defined CLI-only (`kvy workspace config --setup-script/
+// --run-script`) — no machine RPC params
 // schema below ever carries a script string, only a `worktree` path the
-// daemon resolves back to its own on-disk config). `workspace.getConfig` is
+// daemon resolves back to its own on-disk config. `workspace.getConfig` is
 // the one read-only addition that lets the web Workspace Settings UI *see*
 // the configured scripts; `run.*` is the new long-lived run-process
 // subsystem, deliberately decoupled from the reserved (and still unbuilt)
@@ -919,7 +916,8 @@ export type WorkspaceGetConfigResult = z.infer<typeof WorkspaceGetConfigResultSc
 
 // `workspace.setConfig`: the web Workspace Settings UI's write path for
 // `baseRef`/`remote` only — `setupScript`/`runScript` stay outside this
-// script string ever crosses the RPC wire in either direction). `baseRef`/
+// write path entirely, so no script string ever crosses the RPC wire in
+// either direction. `baseRef`/
 // `remote` carry no execution risk, so unlike scripts they're safe to set
 // remotely; an empty string clears the field, matching
 // `setWorkspaceGitConfig`'s clear-on-empty-string semantics.
@@ -937,9 +935,8 @@ export const WorkspaceSetConfigResultSchema = z.object({
 });
 export type WorkspaceSetConfigResult = z.infer<typeof WorkspaceSetConfigResultSchema>;
 
-// `run.start`/`run.stop`/`run.status`/`run.setup` (docs/features/
-// setup-run-scripts.md Phase 3): the daemon's long-lived run-process
-// subsystem. `worktree` resolves (via the registered-workspace authorizer,
+// `run.start`/`run.stop`/`run.status`/`run.setup`: the daemon's long-lived
+// run-process subsystem. `worktree` resolves (via the registered-workspace authorizer,
 // same as `git.commit`/`git.push`/`git.renameBranch`) to the containing
 // workspace whose `runScript`/`setupScript` config applies — a
 // `.worktrees/<branch>` directory is never itself a config key.

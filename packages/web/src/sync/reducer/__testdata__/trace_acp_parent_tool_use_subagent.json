@@ -1,5 +1,5 @@
 {
-  "description": "ACP mapping verification (kvy-system-design.md §7.3, docs/acp-delta-proposal.md §3 A4): a tool-call update carrying ACP's `_meta.claudeCode.parentToolUseId` maps onto the existing envelope `subagent` field, using the same convention as local mode — the subagent id equals the spawning Task-like call's id. No new envelope type is needed to represent ACP subagent scope.",
+  "description": "ACP mapping verification (kvy-system-design.md §7.3): a tool-call update carrying ACP's `_meta.claudeCode.parentToolUseId` maps onto the existing envelope `subagent` field, using the same convention as local mode — the subagent id equals the spawning Task-like call's id. No new envelope type is needed to represent ACP subagent scope.",
   "envelopes": [
     {
       "id": "e1",

@@ -4,7 +4,7 @@ import { useSyncExternalStore } from "react";
 import { DEFAULT_THEME, parseTheme, THEME_STORAGE_KEY, type Theme } from "./theme";
 
 /**
- * Appearance store (plan-v2.md W4.2 "theme toggle") — one module-level
+ * Appearance store — one module-level
  * source of truth shared by every `useTheme()` caller, same
  * `useSyncExternalStore` external-store shape as `document-title-store.ts`.
  * Reads/writes `localStorage` directly (guarded — this module is imported

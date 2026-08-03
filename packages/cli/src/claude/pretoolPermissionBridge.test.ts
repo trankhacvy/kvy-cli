@@ -1078,7 +1078,7 @@ describe("PreToolPermissionBridge — permission_mode cache (W4.3)", () => {
   });
 });
 
-describe("PreToolPermissionBridge — initialPermissionMode seed (docs/bug-fix-plan.md #5 fix)", () => {
+describe("PreToolPermissionBridge — initialPermissionMode seed", () => {
   it("reports the seeded mode via currentPermissionMode before any hook has fired", () => {
     const { bridge } = makeBridge({ initialPermissionMode: "default" });
     expect(bridge.currentPermissionMode).toBe("default");

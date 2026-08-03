@@ -23,7 +23,7 @@
  *  - `resolvePermission` — the `perm.answer` session RPC's handler for the
  *    live TUI (the ACP remote handler is unrelated; this is the TUI path).
  *  - `resolveLocalOutcome` — wired from the PTY tailer's `tool-start`/
- *    `tool-end` envelopes (docs/known-issues.md issue #5): a locally-typed
+ *    `tool-end` envelopes: a locally-typed
  *    turn's permission prompt is now visible on web too, but its hook already
  *    hands off to the terminal immediately, so this is the only channel that
  *    tells the bridge (and, via a `perm-resolve` envelope, web) what actually
@@ -62,9 +62,10 @@ import { PreToolPermissionBridge } from "./pretoolPermissionBridge.js";
 export const HOOK_SETTINGS_ENV_VAR = "KVY_HOOK_SETTINGS_PATH";
 
 /**
- * W1.2's watchdog). Refreshed by hook traffic while the flag is set, so this
- * only fires on a genuinely wedged turn (e.g. a missed `Stop` hook after a
- * crash), never on a merely-long-running one.
+ * Max duration a web-injected turn may run before the "web turn" flag's
+ * watchdog auto-clears it. Refreshed by hook traffic while the flag is set,
+ * so this only fires on a genuinely wedged turn (e.g. a missed `Stop` hook
+ * after a crash), never on a merely-long-running one.
  */
 export const WEB_TURN_MAX_MS = 30 * 60 * 1000;
 
@@ -77,7 +78,7 @@ export interface RemotePermissionHookOptions {
   onModeChange?: (mode: PermissionMode) => void;
   /** Forwarded straight to {@link PreToolPermissionBridge}'s own
    * `initialPermissionMode` — the mode the caller knows the session actually
-   * launched in (docs/bug-fix-plan.md issue #5), e.g. `start.ts`'s
+   * launched in, e.g. `start.ts`'s
    * `extractPermissionModeFlag(claudeArgs) ?? "default"`. */
   initialPermissionMode?: PermissionMode;
   /** Forwarded from Claude Code's `SessionStart` hook (the real provider session UUID). */
@@ -93,8 +94,8 @@ export interface RemotePermissionHookOptions {
   onPromptLikely?: () => void;
   /**
    * Fires the instant a permission request or `AskUserQuestion` becomes
-   * pending, regardless of local vs. web (docs/user-flows.md fix-plan task
-   * 4) — forwarded straight from {@link PreToolPermissionBridge}'s own
+   * pending, regardless of local vs. web — forwarded straight from
+   * {@link PreToolPermissionBridge}'s own
    * `onPendingAttention` dep. The caller (`start.ts`) wires this to a
    * `POST /v1/sessions/:id/notify` call so a push notification fires for a
    * pending permission/question even when the turn originated locally.
@@ -138,8 +139,8 @@ export interface RemotePermissionHookHandle {
   resolvePermission: (params: { reqId: string; decision: PermDecision }) => PermAnswerResult;
   /**
    * Correlates a locally-resolved permission/question's outcome back to its
-   * pending request (docs/known-issues.md issue #5 — "web card must not hang
-   * forever"). Wire into the PTY tailer's own `tool-start`→`tool-end`
+   * pending request, so its web card doesn't hang forever. Wire into the PTY
+   * tailer's own `tool-start`→`tool-end`
    * tracking in `start.ts`'s `onEnvelopes`: forwards to {@link
    * PreToolPermissionBridge.resolveLocalOutcome}.
    */

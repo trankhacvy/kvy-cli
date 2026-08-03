@@ -1,6 +1,6 @@
 /**
- * `commands.list` machine RPC handler ("/" slash-command autocomplete,
- * docs/competitive-notes-omnara.md #18): lists the project's *actual
+ * `commands.list` machine RPC handler ("/" slash-command autocomplete):
+ * lists the project's *actual
  * custom* Claude Code slash commands, read live from `.claude/commands/`
  * in the session's worktree — not a fixed built-in list.
  *

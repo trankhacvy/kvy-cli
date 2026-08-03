@@ -25,7 +25,7 @@ describe("formatBytes", () => {
   });
 });
 
-describe("formatTokenCount (UsageChip, W4.6)", () => {
+describe("formatTokenCount (UsageChip)", () => {
   it("renders sub-1000 counts as plain numbers", () => {
     expect(formatTokenCount(0)).toBe("0");
     expect(formatTokenCount(4)).toBe("4");
@@ -56,7 +56,7 @@ describe("formatTokenCount (UsageChip, W4.6)", () => {
 });
 
 // Local wall-clock formatting (`shouldShowHourDivider`/`formatHourDividerLabel`/
-// `formatFullTimestamp`, plan-v2.md W4.2) is inherently timezone-dependent —
+// `formatFullTimestamp`) is inherently timezone-dependent —
 // pinned to UTC for this test file only, so assertions are deterministic
 // regardless of the machine running them. Production code never sets `TZ`;
 // the browser's real local timezone always applies there, which is the

@@ -14,22 +14,23 @@ const NotifyBodySchema = z.object({ kind: z.enum(["perm", "question", "done"]) }
 const NotifyResponseSchema = z.object({ ok: z.literal(true) });
 
 /**
- * `POST /v1/sessions/:id/notify` — the generic lifecycle-signal endpoint
- * turn-end(status!=cancelled)"). Deliberately content-free — `kind` only, no
- * title/body/data — because session content is E2E encrypted and the server
- * :sessionId/push-event` carries plaintext title/body because Happy has no
- * E2E encryption; Kvy's push payload stays `{sessionId, kind}` and the
- * client renders a fixed, kind-keyed message.
+ * `POST /v1/sessions/:id/notify` — the generic lifecycle-signal endpoint for
+ * "perm-request, agent question, turn-end(status!=cancelled)". Deliberately
+ * content-free — `kind` only, no title/body/data — because session content is
+ * E2E encrypted and the server holds no keys; the push payload stays
+ * `{sessionId, kind}` and the client renders a fixed, kind-keyed message.
  *
  * Callers: the CLI's transcript pipeline already detects `turn-end` locally
  * (the `SessionEvent` `turn-end` variant, `@kvy/wire`'s `session.ts`) and
  * will POST here on a remote-initiated turn's completion once that call site
  * is wired (out of scope for this task — CLI is a disjoint worktree); the
- * lands. Both are unblocked by this route existing now: `kind` is generic,
- * so no dispatch-side change is needed when those callers arrive.
+ * permission pipeline will POST here for `perm`/`question` once it lands.
+ * Both are unblocked by this route existing now: `kind` is generic, so no
+ * dispatch-side change is needed when those callers arrive.
  *
  * Same fan-out shape as `sessionStatus.ts`'s `failed` branch: an `attention`
- * fire-and-forget push dispatch (presence-suppressed).
+ * ephemeral for connected clients plus a fire-and-forget push dispatch
+ * (presence-suppressed).
  */
 export function buildSessionNotifyRoutes(
   db: Database,

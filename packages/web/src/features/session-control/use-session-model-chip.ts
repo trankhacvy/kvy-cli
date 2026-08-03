@@ -7,8 +7,8 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { useSessionCrypto } from "./use-session-crypto";
 
 /**
- * Display-only "model" chip for the session header (plan-v2.md W4.2 "header
- * model chip … from session metadata once the CLI records it there"). Reuses
+ * Display-only "model" chip for the session header, sourced from session
+ * metadata once the CLI records it there. Reuses
  * `useSessionCrypto`'s already-unwrapped DEK — the exact key
  * `bootstrapSession` seals `{title, path, providerSessionId, model}` under
  * (`session/bootstrap.ts`) — to open this session's own `metadata` box out

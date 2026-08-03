@@ -88,7 +88,7 @@ describe("readSettings", () => {
     expect(settings.adoptedSessions).toEqual({ "old-1": ["old-1", "new-1"] });
   });
 
-  it("normalizes sleepInhibit, ignoring any value outside the tri-state (docs/features/sleep-inhibit.md)", async () => {
+  it("normalizes sleepInhibit, ignoring any value outside the tri-state", async () => {
     writeFileSync(
       path.join(homeDir, "settings.json"),
       JSON.stringify({

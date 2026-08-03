@@ -23,16 +23,16 @@
  * SOFTWARE.
  *
  * ---
- * skeleton + local mode"):
+ * This module backs `kvy`'s two on-disk state files:
  *
  *   settings.json   schema-versioned; atomic read-modify-write via an
  *                   O_CREAT|O_EXCL lock file + tmp-write + rename.
  *   access.key      {token, masterSecret} — 0600, written via tmp + rename
  *                   so a reader never observes a partially-written file.
  *
- * Adapted from Happy: settings fields trimmed to what Kvy's design
- * actually defines (no `sandboxConfig`/`chromeMode` — Happy-specific
- * features with no Kvy equivalent); credentials narrowed to the single
+ * Settings fields trimmed to what Kvy's design actually defines (no
+ * `sandboxConfig`/`chromeMode` — features from the ported implementation
+ * with no Kvy equivalent); credentials narrowed to the single
  * `masterSecret` variant, since @kvy/crypto's `deriveKeyTree` (unlike
  */
 
@@ -102,29 +102,26 @@ export interface Settings {
   /**
    * Per-workspace settings written by `kvy workspace config
    * [--base-ref/--remote/--setup-script/--run-script/--directory]`
-   * docs/features/setup-run-scripts.md) — keyed by the workspace's real
-   * (symlink-resolved) absolute directory path, same key shape
-   * `daemon/gitDiff.ts`'s `resolveConfiguredBaseRef` looks up when a
-   * `git.diff` RPC omits an explicit `baseRef`. `remote` is stored for a
-   * read-only MVP diff viewer. `setupScript`/`runScript`
-   * (docs/features/setup-run-scripts.md) back the Setup/Run scripts
-   * subsystem — `daemon/setupScript.ts` reads `setupScript` after a fresh
-   * worktree creation; `daemon/runProcess.ts`'s `run.*` machine RPCs read
-   * `runScript`.
+   * — keyed by the workspace's real (symlink-resolved) absolute directory
+   * path, same key shape `daemon/gitDiff.ts`'s `resolveConfiguredBaseRef`
+   * looks up when a `git.diff` RPC omits an explicit `baseRef`. `remote` is
+   * stored for a read-only MVP diff viewer. `setupScript`/`runScript` back
+   * the Setup/Run scripts subsystem — `daemon/setupScript.ts` reads
+   * `setupScript` after a fresh worktree creation; `daemon/runProcess.ts`'s
+   * `run.*` machine RPCs read `runScript`.
    */
   workspaces?: Record<
     string,
     { baseRef?: string; remote?: string; setupScript?: string; runScript?: string }
   >;
   /**
-   * Epoch-ms timestamp of the last auto-update-on-start background check
-   * self-host") — rate-limits how often `kvy` spawns a background
+   * Epoch-ms timestamp of the last auto-update-on-start background check —
+   * rate-limits how often `kvy` spawns a background
    * `kvy update` child so a stream of invocations doesn't hammer GitHub.
    */
   lastUpdateCheckAt?: number;
   /**
-   * Per-machine sleep-inhibit policy (docs/features/sleep-inhibit.md,
-   * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") —
+   * Per-machine sleep-inhibit policy —
    * re-applied via `daemon/sleepInhibit.ts`'s `createSleepInhibitManager`
    * at every `runDaemonStartSync` boot (independent of login state, so a
    * previously persisted "always" is enforced even in local-only mode),

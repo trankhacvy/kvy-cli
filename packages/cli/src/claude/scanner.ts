@@ -66,7 +66,7 @@ export interface SessionScannerOptions {
    * How long the directory-wide rotation fallback (see
    * `watchProjectDirectoryForNewSessions`) stays armed after scanner start —
    * and again briefly after a tracked session is dropped — before it stops
-   * trusting any new `*.jsonl` file it sees (bug-fix-plan.md #1). Defaults to
+   * trusting any new `*.jsonl` file it sees. Defaults to
    * `FALLBACK_ARMED_WINDOW_MS` (30s). Exposed mainly so tests can exercise the
    * expiry path quickly.
    */
@@ -195,8 +195,7 @@ const NEW_SESSION_ROTATION_DEBOUNCE_MS = 2000;
  * can never prove a new file belongs to *this* scanner's own child process —
  * it's only a reasonable signal right around when a rotation would actually
  * be expected, not for the entire lifetime of a long-running session
- * (bug-fix-plan.md #1, "Time-box the fallback's authority even in the
- * no-hook case").
+ * — the fallback's authority is time-boxed even in the no-hook case.
  */
 const FALLBACK_ARMED_WINDOW_MS = 30_000;
 
@@ -305,10 +304,10 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   // the caller already knows a real session id at construction — that also
   // came from an authoritative source, not the directory-wide heuristic
   // below). Once true, the directory-wide fallback below is never trusted
-  // again for a *different* file — see bug-fix-plan.md #1.
+  // again for a *different* file.
   let hookConfirmed = opts.sessionId !== null;
-  // The directory-wide rotation fallback's authority is also time-boxed
-  // (bug-fix-plan.md #1 item 3): armed for `fallbackArmedWindowMs` from
+  // The directory-wide rotation fallback's authority is also time-boxed:
+  // armed for `fallbackArmedWindowMs` from
   // scanner start, and re-armed briefly whenever a tracked session is
   // dropped (`onGaveUp`, below) — never for the scanner's entire lifetime.
   let fallbackArmedUntil = Date.now() + fallbackArmedWindowMs;
@@ -460,8 +459,7 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
    * (`deadSessions`) id — a `"fallback"`-sourced call has zero actual
    * correlation to "this is my own process rotating," it's purely "a file
    * with some other name appeared in a directory I'm also watching," so it
-   * must never resurrect a session it can't independently verify
-   * (bug-fix-plan.md #1 item 2).
+   * must never resurrect a session it can't independently verify.
    */
   async function announceNewSession(
     sessionId: string,
@@ -507,7 +505,7 @@ export async function createSessionScanner(opts: SessionScannerOptions): Promise
   // rotated even when no `SessionStart` hook fired to announce it via
   // `onNewSession` directly. Hook coverage is the primary path; this only
   // fires when it didn't, hence the debounce + explicit log. Its authority
-  // is bounded two ways (bug-fix-plan.md #1): it stops being trusted at all
+  // is bounded two ways: it stops being trusted at all
   // once a hook has ever confirmed this scanner's own session id
   // (`hookConfirmed`), and even before that it's only armed for a bounded
   // window (`fallbackArmedUntil`), not the scanner's entire lifetime.

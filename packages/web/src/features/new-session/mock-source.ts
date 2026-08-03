@@ -29,9 +29,9 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 function seedFakeFs(): Map<string, string[]> {
   return new Map([
     ["/Users/vy", ["projects", "Documents", "Downloads"]],
-    ["/Users/vy/projects", ["kvy", "happy", "scratch"]],
+    ["/Users/vy/projects", ["kvy", "sandbox", "scratch"]],
     ["/Users/vy/projects/kvy", []],
-    ["/Users/vy/projects/happy", []],
+    ["/Users/vy/projects/sandbox", []],
     ["/Users/vy/projects/scratch", []],
     ["/Users/vy/Documents", []],
     ["/Users/vy/Downloads", []],

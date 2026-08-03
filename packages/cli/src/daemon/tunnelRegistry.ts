@@ -1,7 +1,6 @@
 /**
- * Tunnel registry for `preview.open`/`preview.close`/`preview.tunnels`
- * (docs/features/dev-server-preview.md): the daemon-managed `cloudflared`
- * quick-tunnel child registry.
+ * Tunnel registry for `preview.open`/`preview.close`/`preview.tunnels`: the
+ * daemon-managed `cloudflared` quick-tunnel child registry.
  *
  * Two halves, deliberately split (mirrors `sessionRegistry.ts` +
  * `sessionsStore.ts`'s own live-map/durable-store split):

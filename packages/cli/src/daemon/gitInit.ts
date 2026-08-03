@@ -1,7 +1,6 @@
 /**
- * `git.init` machine RPC handler (docs/web-ux-improvements-plan.md Feature 1
- * — the recovery action behind the Git panel's `workspace-not-a-repo`
- * state).
+ * `git.init` machine RPC handler — the recovery action behind the Git
+ * panel's `workspace-not-a-repo` state.
  *
  * Same injectable `deps.git?`/`deps.authorizeWorktree?` shape as
  * `gitCommit.ts`/`gitPush.ts`/`gitRenameBranch.ts` — see `gitCommit.ts`'s

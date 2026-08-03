@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Bin shim — re-exec node with `--no-warnings` so Node's experimental-feature
 // banners never land on stdout/stderr. Those channels are reserved for the
-// real provider TUI (Claude Code / Codex) once local-mode session spawning
-// lands (plan.md §6.3); keeping the shim clean now avoids a footgun later.
-// Mirrors Happy's `bin/happy.mjs`.
+// real provider TUI (Claude Code / Codex) during local-mode session spawning;
+// keeping the shim clean avoids a footgun there.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 

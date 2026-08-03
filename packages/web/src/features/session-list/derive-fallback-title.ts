@@ -4,7 +4,7 @@ const MAX_LENGTH = 80;
 
 /** Strips a leading Conductor-style `<system_instruction>...</system_instruction>`
  * wrapper block, if present — the same environment-preamble-as-first-line
- * problem known-issues.md #9 documents for unmanaged sessions'
+ * problem seen for unmanaged sessions'
  * `firstUserText`, applied here up front rather than repeated as a fresh bug
  * on this second surface. */
 const SYSTEM_INSTRUCTION_RE = /^\s*<system_instruction>[\s\S]*?<\/system_instruction>\s*/i;

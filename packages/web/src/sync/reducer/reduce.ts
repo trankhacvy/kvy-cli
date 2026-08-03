@@ -64,7 +64,7 @@ function dedupeById(envelopes: SessionEnvelope[]): SessionEnvelope[] {
 
 /** Pure boundary chatter with no information value beyond "a session
  * exists" — the only `service` text currently emitted that should stay
- * hidden from the transcript (docs/bug-fix-plan.md issue #4). Everything
+ * hidden from the transcript. Everything
  * else — model-switch confirmations, compaction notices, omitted-attachment
  * notes, remote-session errors — is a real event a user would want to see,
  * and was only ever hidden as a side effect of `service` being treated as

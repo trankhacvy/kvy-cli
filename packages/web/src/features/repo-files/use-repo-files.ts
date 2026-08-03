@@ -15,8 +15,7 @@ const PAGE_SIZE_BYTES = 60_000;
 const LIVE_REFRESH_POLL_INTERVAL_MS = 7_000;
 
 /**
- * The Repo Files panel's data-fetching state (docs/competitive-notes-
- * omnara.md #5): `git.files` once per `worktree` to build the tree, then
+ * The Repo Files panel's data-fetching state: `git.files` once per `worktree` to build the tree, then
  * `fs.read` re-fetched whenever the selected file changes. Mirrors
  * `features/git-diff/use-git-panel.ts`'s shape exactly — plain `useQuery`
  * (not the sync engine's invalidate-on-update machinery), a point-in-time
@@ -45,8 +44,7 @@ export function useRepoFiles(
     enabled: selectedPath !== null,
   });
 
-  // Feature 3 Phase 5 (docs/web-ux-improvements-plan.md): `contentQuery`
-  // above always represents just the FIRST page (no `range`) of whatever
+  // `contentQuery` above always represents just the FIRST page (no `range`) of whatever
   // file is selected. `pagedContent` accumulates it plus every subsequent
   // `loadMoreMutation` page through `appendPage` — reset to `null`
   // immediately on a path change (so a slow-loading new file never shows

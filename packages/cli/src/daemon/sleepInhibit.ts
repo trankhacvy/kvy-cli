@@ -1,7 +1,6 @@
 /**
- * `sleepInhibit.get`/`sleepInhibit.set` machine RPC enforcement (docs/features/
- * sleep-inhibit.md, docs/competitive-notes-omnara.md #12 "Sleep-inhibit
- * control"): owns the OS "don't sleep" assertion subprocess lifecycle for a
+ * `sleepInhibit.get`/`sleepInhibit.set` machine RPC enforcement: owns the
+ * OS "don't sleep" assertion subprocess lifecycle for a
  * per-machine tri-state policy (Off / While on Power / Always), macOS-only
  * for MVP (`caffeinate` is a macOS binary — every other platform reports
  * `supported: false` and never spawns anything).

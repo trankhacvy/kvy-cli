@@ -725,7 +725,7 @@ describe("registerMachineRpcHandlers", () => {
       expect(open(response, DEK)).toEqual({ ok: false, error: "fatal: not a git repository" });
     });
 
-    it("attaches the typed .code when getGitStatus throws a WorkspaceValidationError (known-issues.md #3)", async () => {
+    it("attaches the typed .code when getGitStatus throws a WorkspaceValidationError", async () => {
       const socket = new FakeSocket();
       register(socket, {
         getGitStatus: vi.fn(async () => {

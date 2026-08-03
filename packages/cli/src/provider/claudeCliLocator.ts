@@ -13,20 +13,17 @@ import { homedir } from "node:os";
 import path from "node:path";
 
 /**
- * Locates the globally-installed Claude Code CLI across every install method
- * "`claude_version_utils.cjs` equivalent: resolve global Claude CLI path
- * across install methods (P)").
+ * Locates the globally-installed Claude Code CLI across every install
+ * method (npm, Homebrew, native installer, PATH fallback).
  *
- * Deltas from the Happy source this was ported from:
- *  - `HAPPY_CLAUDE_PATH` → `KVY_CLAUDE_PATH` (env var override).
- *  - `runClaudeCli`/`getClaudeCliPath` (which spawn the CLI and print
- *    install instructions to the terminal) are intentionally omitted here —
- *    that belongs to the local-mode launcher (a separate, not-yet-built
- *    never runs it or writes to stdout/stderr (see `logger.ts`'s
- *    file-only-logging rule, which the same reasoning extends to here).
- *  - The `/goal` Stop-hook JSON-validation version warning is Happy-specific
- *    product copy with no Kvy equivalent; dropped rather than ported
- *    unused.
+ * `KVY_CLAUDE_PATH` is an env var override checked first, ahead of any
+ * install-method detection. `runClaudeCli`/`getClaudeCliPath` (which spawn
+ * the CLI and print install instructions to the terminal) are intentionally
+ * omitted here — that belongs to the local-mode launcher (a separate,
+ * not-yet-built concern) and never runs it or writes to stdout/stderr (see
+ * `logger.ts`'s file-only-logging rule, which the same reasoning extends to
+ * here). The `/goal` Stop-hook JSON-validation version warning has no Kvy
+ * equivalent and was dropped rather than kept unused.
  *
  * Supports:
  * 1. npm global: `npm install -g @anthropic-ai/claude-code`

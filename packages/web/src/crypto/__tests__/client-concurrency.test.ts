@@ -149,7 +149,7 @@ describe("createCryptoBridgeClient — request/response matching", () => {
     expect(worker.terminate).toHaveBeenCalledTimes(1);
   });
 
-  describe("terminate()'s drain (auth-ux-post-verification-fixes.md Bug B)", () => {
+  describe("terminate()'s drain", () => {
     // `Worker.terminate()` is abrupt and skips a request's pending `finally` block (e.g.
     // key-storage.ts closing its IndexedDB connection) — killing the thread while a
     // request is still in flight can leak a connection that wedges every future

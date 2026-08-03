@@ -3,7 +3,7 @@
 **Version:** 0.1 (Draft)
 **Date:** 2026-07-15
 **Status:** For review
-**Product:** Kvy — a command center for CLI coding agents (Omnara-class clone)
+**Product:** Kvy — a command center for CLI coding agents
 **MVP scope:** CLI + Remote Control. Remote sandboxing explicitly deferred.
 
 ---
@@ -16,12 +16,14 @@
 
 ### 1.2 Background
 
-Omnara (YC-backed, 20,000+ users) validated this category: developers run long agent sessions and hate being "tied to the machine." Its product is a **CLI wrapper + background daemon** on the developer's computer, a **sync/relay backend**, and **remote clients** (web, mobile, watch, desktop). Two open-source projects in this same space were deep-researched as part of this effort and inform this PRD:
+Developers running long Claude Code / Codex sessions are tied to the machine they
+started on — a permission prompt or a finished task goes unnoticed until they
+physically return to the terminal. Kvy closes that gap with a **CLI wrapper +
+background daemon** on the developer's machine, a **zero-knowledge sync/relay
+backend**, and a **remote web client**.
 
-- **Happy** (`happy-research.md`) — MIT, E2E-encrypted mobile/web client for Claude Code & Codex. Closest architectural reference: wrapper CLI, daemon, blind Socket.IO relay, dual local/remote mode.
-- **Superset** (`research.md`) — ELv2, Electron desktop orchestrator for parallel agents in git worktrees. Reference for worktree lifecycle, agent-attention hooks, and durable PTY design.
-
-Kvy replicates Omnara's core loop with an MVP focused on the two things that create the "magic moment": **a frictionless CLI** and **best-in-class remote control**.
+Kvy's MVP is focused on the two things that create the "magic moment": **a
+frictionless CLI** and **best-in-class remote control**.
 
 ### 1.3 The magic moment (north star)
 
@@ -52,7 +54,7 @@ Time-to-magic-moment target: **< 5 minutes** from `npm install -g @vibe-oss/kvy`
 | Desktop app (Electron/Tauri) | CLI + web covers MVP users | Keep remote client logic in a shared package |
 | Voice (two-way conversation, dictation) | Differentiator, not core loop | None |
 | Live previews (cloudflared tunnels) | Post-MVP fast-follow | Reserve `preview` message types in protocol |
-| Parallel-agent orchestration UI, worktree fan-out | Superset territory; MVP supports worktrees minimally | Worktree is a first-class concept in the data model |
+| Parallel-agent orchestration UI, worktree fan-out | Large, independent feature area; MVP supports worktrees minimally | Worktree is a first-class concept in the data model |
 | Additional providers (Gemini, Cursor, OpenCode…) | Claude Code + Codex = market majority | Provider adapter interface from day 1 |
 | Teams/organizations, billing | Single-user free product first | Account model keeps an org-id field |
 
@@ -64,7 +66,7 @@ Time-to-magic-moment target: **< 5 minutes** from `npm install -g @vibe-oss/kvy`
 
 - **P1 — The Solo Shipper (primary).** Indie hacker / senior engineer running 1–3 Claude Code sessions daily on side projects or work repos. Pain: long agent runs block their evening; permission prompts die silently while they're away. Wants: fire-and-check-in workflow.
 - **P2 — The Multi-Tasker.** Engineer who runs an agent, switches to meetings/reviews, and wants a dashboard tab showing all running sessions with attention badges.
-- **P3 — The Tinkerer / Self-Hoster (secondary).** Privacy-conscious dev who will only adopt if E2E encryption is real and the server is self-hostable. (Happy's community proves this segment drives OSS adoption and contributions.)
+- **P3 — The Tinkerer / Self-Hoster (secondary).** Privacy-conscious dev who will only adopt if E2E encryption is real and the server is self-hostable.
 
 ### 3.2 Core use cases (MVP)
 
@@ -84,8 +86,6 @@ Time-to-magic-moment target: **< 5 minutes** from `npm install -g @vibe-oss/kvy`
 
 ## 4. Core Concepts (domain model)
 
-Mirrors Omnara's concepts; names are Kvy's.
-
 | Concept | Definition | Notes |
 |---|---|---|
 | **Account** | A Kvy identity; all devices/machines link to it | MVP: single-user accounts |
@@ -95,9 +95,9 @@ Mirrors Omnara's concepts; names are Kvy's.
 | **Session** | One coding conversation + execution timeline: prompts, agent replies, tool calls, permission events, diffs | Belongs to a workspace + worktree + machine; has a provider |
 | **Provider** | The coding engine: `claude-code` or `codex` (MVP) | Adapter interface for future providers |
 | **Execution target** | `local` (user's machine — MVP) or `sandbox` (managed cloud — deferred) | Present in schema, only `local` implemented |
-| **Remote control** | Observing/steering a *local* session from another device. Execution never moves | Distinct from sandboxing, per Omnara's own docs |
+| **Remote control** | Observing/steering a *local* session from another device. Execution never moves | Distinct from sandboxing |
 
-**Key clarification carried from Omnara docs (avoid user confusion):**
+**Key clarification (avoid user confusion):**
 - Workspace = the project; Session = one run of work inside it.
 - Remote control ≠ sandbox: remote control keeps execution on your machine.
 
@@ -118,13 +118,13 @@ Requirements are labeled `[P0]` (MVP blocker), `[P1]` (MVP polish — ship withi
 
 ### 5.2 Authentication
 
-Two distinct layers, kept explicitly separate in UX copy (Omnara's #1 documented confusion):
+Two distinct layers, kept explicitly separate in UX copy:
 
 **Kvy sign-in (account/sync):**
 - **[P0] FR-2.1** `kvy auth login` opens the browser for OAuth-style device flow; supports **Email+password, Google, GitHub** at MVP (Apple `[P2]`). On success the CLI stores a token and the machine is linked to the account.
 - **[P0] FR-2.2** `kvy auth logout` clears local credentials; `kvy auth status` shows account, machine id, token validity.
 - **[P0] FR-2.3** Token storage encrypted at rest under `~/.kvy/`; automatic refresh; TLS everywhere.
-- **[P0] FR-2.4** Same account works across CLI, web dashboard, and future clients. Device linking for E2E keys uses a QR/URL pairing flow where **an already-authenticated client approves the new device** (Happy's model): the new device shows a QR/URL encoding an ephemeral public key; an existing device approves and returns key material sealed to that key. The web-first variant: CLI prints a URL, the browser (holding keys in local storage after first sign-up) approves.
+- **[P0] FR-2.4** Same account works across CLI, web dashboard, and future clients. Device linking for E2E keys uses a QR/URL pairing flow: **an already-authenticated client approves the new device** — the new device shows a QR/URL encoding an ephemeral public key; an existing device approves and returns key material sealed to that key. The web-first variant: CLI prints a URL, the browser (holding keys in local storage after first sign-up) approves.
 - **[P1] FR-2.5** Manual secret backup: the account content key exportable as a grouped Base32 recovery code (1Password-style), with error-tolerant re-entry.
 
 **Provider authentication:**
@@ -133,7 +133,7 @@ Two distinct layers, kept explicitly separate in UX copy (Omnara's #1 documented
 
 ### 5.3 The CLI
 
-Command surface (modeled on Omnara's, trimmed to MVP):
+Command surface (trimmed to MVP):
 
 | Command | Description | Priority |
 |---|---|---|
@@ -154,7 +154,7 @@ Environment variables: `KVY_BACKEND_URL`, `KVY_FRONTEND_URL`, `KVY_HOME_DIR`, `K
 
 **Wrapper behavior requirements:**
 
-- **[P0] FR-3.1 Local-mode fidelity.** When run in a terminal, the user gets the **genuine provider TUI** (Claude Code interactive UI), not a re-implementation. Implementation guidance (from Happy, proven at scale): spawn the real CLI with inherited stdio; observe the session by tailing the provider's on-disk transcript (Claude Code JSONL) rather than intercepting the UI. All provider keybindings, slash commands, themes, and flags must work untouched.
+- **[P0] FR-3.1 Local-mode fidelity.** When run in a terminal, the user gets the **genuine provider TUI** (Claude Code interactive UI), not a re-implementation. Implementation approach: spawn the real CLI with inherited stdio; observe the session by tailing the provider's on-disk transcript (Claude Code JSONL) rather than intercepting the UI. All provider keybindings, slash commands, themes, and flags must work untouched.
 - **[P0] FR-3.2 Session mirroring.** Every transcript event (user prompt, assistant text, thinking, tool call, tool result) is normalized and relayed to the backend within ~1 s of appearing, encrypted client-side.
 - **[P0] FR-3.3 Codex support.** Codex sessions run via `codex app-server` (JSON-RPC over stdio) since Codex has no equivalent local TUI transcript; approvals route through Kvy's permission pipeline.
 - **[P0] FR-3.4 Mode switching (local ⇄ remote).**
@@ -164,7 +164,7 @@ Environment variables: `KVY_BACKEND_URL`, `KVY_FRONTEND_URL`, `KVY_HOME_DIR`, `K
 - **[P0] FR-3.5 Permission interception (remote mode).** In remote mode, tool-permission requests surface as structured events (tool name, args, risk category) that remote clients can answer: **Allow once / Deny / Allow for session / switch permission mode**. Timeout behavior: configurable; default = wait indefinitely, keep re-notifying at 5-minute intervals up to 3 times.
 - **[P1] FR-3.6 Permission visibility (local mode).** In local mode Kvy cannot answer prompts on the agent's TTY; the dashboard shows "waiting for input at the terminal" state, and a notification is still sent (via provider hook events) so the user knows to return. (Full remote answering requires remote mode — make this an explicit, honest UX distinction.)
 - **[P0] FR-3.7 Crash & exit semantics.** Ctrl-C / terminal close does **not** archive a session (it remains resumable); explicit archive from a client or `kvy sessions archive` ends it. Agent crash marks the session `failed` with the error surfaced remotely.
-- **[P1] FR-3.8 "Thinking" indicator.** Remote clients see a live working/idle indicator. Local mode may derive it from transcript activity (and optionally a fetch-level probe as Happy does); remote mode derives it from SDK stream state.
+- **[P1] FR-3.8 "Thinking" indicator.** Remote clients see a live working/idle indicator. Local mode may derive it from transcript activity (and optionally a fetch-level activity probe); remote mode derives it from SDK stream state.
 
 ### 5.4 The Daemon
 
@@ -172,22 +172,24 @@ Environment variables: `KVY_BACKEND_URL`, `KVY_FRONTEND_URL`, `KVY_HOME_DIR`, `K
 - **[P0] FR-4.2** Maintains a persistent, machine-scoped realtime connection to the backend; registers RPC handlers: `spawnSession`, `stopSession`, `resumeSession`, `listSessions`, plus a minimal utility surface for the dashboard: `gitStatus`, `gitDiff`, `readFile` (for diff viewing), `listRecentProviderSessions` (for session import). Heartbeats every 60 s; machine presence (online/offline) visible in the dashboard.
 - **[P0] FR-4.3 Remote spawn:** given workspace path (validated against registered workspaces), provider, permission mode, and optional branch, the daemon launches `kvy <provider> --starting-mode remote --started-by daemon`, preferring **tmux** when available so users can attach a real terminal later; detached process otherwise.
 - **[P0] FR-4.4 Durability:** daemon restart must not orphan sessions — it re-discovers running session processes (pid tracking + liveness probe) and reconnects them; finished sessions are persisted (including their session keys) so **resume survives daemon and machine restarts**.
-- **[P1] FR-4.5** Version drift: daemon detects a newer installed CLI (artifact mtime, not version string — a documented Happy bug) and self-restarts safely when idle.
+- **[P1] FR-4.5** Version drift: daemon detects a newer installed CLI via artifact mtime rather than a version string (a version-string comparison is unreliable across install methods) and self-restarts safely when idle.
 - **[P0] FR-4.6** Kill-switch commands work even when the daemon is wedged (`kvy kill all-force` scans processes directly).
 
 ### 5.5 Backend (Sync & Relay Service)
 
 - **[P0] FR-5.1 Zero-knowledge relay.** The backend stores and routes **only ciphertext** for user content: session messages, metadata, agent state, diffs. Plaintext it may hold: account ids/public keys, machine ids, sequence numbers, version counters, timestamps, push tokens, workspace display names (user-controlled toggle `[P1]`). This is both an ethics posture and a breach-liability reducer — and table stakes for the self-hosting community.
 - **[P0] FR-5.2 Transport.** One realtime endpoint (WebSocket; Socket.IO or equivalent) with three connection scopes: `user` (dashboard), `session` (CLI session process), `machine` (daemon). REST for fetch/pagination and auth.
-- **[P0] FR-5.3 Ordering & sync model.** Every persistent update carries a per-account monotonic sequence number. Clients apply `seq == last+1` fast-path; any gap triggers a re-fetch. Shared mutable state (session metadata, agent state) uses optimistic concurrency (`expectedVersion` → conflict response). On reconnect, clients re-fetch rather than relying on server-side event replay (Happy's deliberate, simpler choice).
-- **[P0] FR-5.4 Client↔client RPC.** Dashboard→daemon and dashboard→session calls are routed through the relay as RPC (register/call with ack + timeout). Design directly to Happy's postmortem: room-membership (connection registry) as the single source of truth — no TTL-based registries; fast dead-peer detection (presence poll racing the ack, target ~1–2 s failure detection, not 30 s timeouts); a short reconnect grace window (~10 s) for daemons that are briefly offline.
+- **[P0] FR-5.3 Ordering & sync model.** Every persistent update carries a per-account monotonic sequence number. Clients apply `seq == last+1` fast-path; any gap triggers a re-fetch. Shared mutable state (session metadata, agent state) uses optimistic concurrency (`expectedVersion` → conflict response). On reconnect, clients re-fetch rather than relying on server-side event replay — simpler and avoids event-sourcing complexity at MVP.
+- **[P0] FR-5.4 Client↔client RPC.** Dashboard→daemon and dashboard→session calls are routed through the relay as RPC (register/call with ack + timeout). Room-membership (connection registry) is the single source of truth for routing — no TTL-based registries, since TTL-expiry races are a well-known source of stale-target bugs; fast dead-peer detection (presence poll racing the ack, target ~1–2 s failure detection, not 30 s timeouts); a short reconnect grace window (~10 s) for daemons that are briefly offline.
 - **[P0] FR-5.5 Idempotency.** Message ingest deduped by `(sessionId, localId)`; session creation deduped by `(account, tag)`.
-- **[P1] FR-5.6 Self-hostable single container.** One Docker image with embedded storage (SQLite/PGlite) and the web app bundled — zero external dependencies. Production shape: Postgres + Redis. Same codebase, two entrypoints (Happy's proven pattern).
+- **[P1] FR-5.6 Self-hostable single container.** One Docker image with embedded storage (SQLite/PGlite) and the web app bundled — zero external dependencies. Production shape: Postgres + Redis. Same codebase, two entrypoints.
 - **[P0] FR-5.7 Attachments** (images in prompts): encrypted blob upload with pre-signed URLs; per-session blob keys derived from the session key so attachments are cryptographically isolated. `[P1]` if timeline pressure demands.
 
 ### 5.6 Encryption (MVP-inclusive, not deferred)
 
-Rationale: retrofitting E2E is effectively impossible without breaking the protocol; both Omnara's positioning ("nothing leaves your machine unless you opt in") and Happy's adoption show privacy is a wedge.
+Rationale: retrofitting E2E later is effectively impossible without breaking the
+protocol, and privacy — genuinely not being able to read a user's code — is a real
+product differentiator worth building in from day one, not bolting on later.
 
 - **[P0] FR-6.1** Account = keypair. Registration generates a master secret client-side; the server authenticates by public-key challenge/response (Ed25519 signature) plus the OAuth identity for account recovery mapping.
 - **[P0] FR-6.2** Per-session **data encryption keys** (32-byte, AES-256-GCM for payloads), wrapped to the account content public key (X25519 sealed box) and stored server-side as opaque blobs. Key-unwrap failures degrade to `null` — one corrupt record must never poison a sync batch.
@@ -200,19 +202,19 @@ Rationale: retrofitting E2E is effectively impossible without breaking the proto
 A responsive web app (desktop + mobile browser), installable as a PWA.
 
 - **[P0] FR-7.1 Session list (home).** All sessions across machines, grouped by workspace; live status per session: `working / waiting-for-permission / waiting-for-input / idle / completed / failed / offline`; attention badges; machine online/offline indicators.
-- **[P0] FR-7.2 Session view (chat timeline).** Rendered structured transcript — not a terminal dump: user prompts, assistant markdown (code blocks with syntax highlighting), collapsible thinking, **tool-call cards** (Bash command + output, file Edit/Write with inline diff, Read, Grep/Glob, WebFetch/WebSearch, TodoWrite as a checklist, Task/subagent groups), permission events, mode switches. Normalization layer must handle both Claude and Codex dialects (Happy's reducer is the reference: dedupe by ids, match permissions to tool calls by name + arguments, link subagent sidechains to parent tool calls).
+- **[P0] FR-7.2 Session view (chat timeline).** Rendered structured transcript — not a terminal dump: user prompts, assistant markdown (code blocks with syntax highlighting), collapsible thinking, **tool-call cards** (Bash command + output, file Edit/Write with inline diff, Read, Grep/Glob, WebFetch/WebSearch, TodoWrite as a checklist, Task/subagent groups), permission events, mode switches. The normalization layer must handle both Claude and Codex dialects: dedupe by ids, match permissions to tool calls by name + arguments, link subagent sidechains to parent tool calls.
 - **[P0] FR-7.3 Composer.** Send follow-up messages to a session (queued if the agent is mid-turn); quick actions: **Stop/Interrupt**, permission-mode selector (`default / acceptEdits / plan / bypassPermissions` mapped per provider), take-control.
 - **[P0] FR-7.4 Permission approval UX.** Permission requests render as blocking cards with Allow / Deny / Allow-for-session and (for edits) the proposed change preview. Answering from web resolves the CLI-side promise within 1 s.
 - **[P0] FR-7.5 New session flow.** Machine picker (online machines) → workspace/directory picker (daemon-provided) → provider, permission mode, model → optional new branch/worktree `[P1]` → spawn (UC5).
-- **[P0] FR-7.6 Notifications.** Web Push (service worker) for: permission request, agent question, session completed, session failed. Notification tap deep-links to the exact session. **Presence-aware suppression:** no push when the user has the session visibly open in a focused tab (client reports app/tab focus state; server suppresses). Do this at MVP — notification fatigue is the top churn risk, and per-message pushes are explicitly out (Omnara/Happy both learned this).
-- **[P1] FR-7.7 Git panel.** For the active session's worktree: file-level diff list vs configured base ref, per-file unified diff view (executed on the machine via daemon RPC, streamed encrypted), plus real one-click Commit, Push, and Force Push (`--force-with-lease` only, behind a confirm dialog), inline branch rename, and a "Compare against" selector accepting any local branch, `HEAD` (uncommitted), or a free-text ref — docs/features/git-write-actions.md. "Create PR" ships as of docs/session-panel-workflow-plan.md Phase 2: a manual "Open PR on GitHub" compare-URL link (primary, always visible once pushed) plus an agent-assisted "Ask agent to open PR" action that hands the session's own agent a prompt to commit/push/`gh pr create` itself — no direct-API "create PR" RPC yet (still backlogged, session-panel-workflow-plan.md Phase 5).
+- **[P0] FR-7.6 Notifications.** Web Push (service worker) for: permission request, agent question, session completed, session failed. Notification tap deep-links to the exact session. **Presence-aware suppression:** no push when the user has the session visibly open in a focused tab (client reports app/tab focus state; server suppresses). Do this at MVP — notification fatigue is the top churn risk, so per-message pushes are explicitly out.
+- **[P1] FR-7.7 Git panel.** For the active session's worktree: file-level diff list vs configured base ref, per-file unified diff view (executed on the machine via daemon RPC, streamed encrypted), plus real one-click Commit, Push, and Force Push (`--force-with-lease` only, behind a confirm dialog), inline branch rename, and a "Compare against" selector accepting any local branch, `HEAD` (uncommitted), or a free-text ref. "Create PR" ships as a manual "Open PR on GitHub" compare-URL link (primary, always visible once pushed) plus an agent-assisted "Ask agent to open PR" action that hands the session's own agent a prompt to commit/push/`gh pr create` itself — no direct-API "create PR" RPC yet (backlogged).
 - **[P1] FR-7.8 Session import (UC7).** "Continue from a recent CLI session": daemon lists recent plain `claude`/`codex` sessions for the workspace (from provider transcript dirs), user picks one, Kvy imports the JSONL history into a new Kvy session and resumes with context.
 - **[P1] FR-7.9** Tab title + favicon reflect pending-attention state (cheap, high-value web ergonomics).
 - **[P2] FR-7.10** Command palette, keyboard shortcuts, session search.
 
 ### 5.8 Notifications & Attention Model
 
-- **[P0] FR-8.1** Attention states are **derived, never stored**: a session needs attention iff (pending permission ∨ pending question ∨ completed-and-unseen), computed from event stream vs per-device last-seen timestamps (Superset's derived-state lesson: eliminates stale-badge bugs by construction).
+- **[P0] FR-8.1** Attention states are **derived, never stored**: a session needs attention iff (pending permission ∨ pending question ∨ completed-and-unseen), computed from event stream vs per-device last-seen timestamps. Deriving rather than storing this state eliminates stale-badge bugs by construction.
 - **[P0] FR-8.2** Event taxonomy for notifications: `permission_request`, `agent_question`, `turn_completed`, `session_failed`. No per-message notifications, ever.
 - **[P1] FR-8.3** Per-account quiet controls: mute a session, mute all, notification schedule.
 
@@ -283,20 +285,22 @@ kvy/
 │  ├─ kvy-wire     # THE shared package: Zod schemas for every wire message,
 │  │                  # session envelope, permission modes, RPC contracts
 │  └─ kvy-crypto   # encryption primitives + key hierarchy (isomorphic)
-└─ docs/              # architecture docs from day 1 (protocol.md, encryption.md…)
+└─ docs/              # architecture docs from day 1
 ```
 
-`kvy-wire` is non-negotiable: every consumer imports the same schemas (Happy's drift-prevention lesson). Session events use a **flat, provider-agnostic envelope** from day 1: `{id (cuid2), time, role, turn?, subagent?, ev}` with event types `text / tool-call-start / tool-call-end / file / turn-start / turn-end / service / start / stop` — adapter-minted ids only, provider-native ids never cross the wire.
+`kvy-wire` is non-negotiable: every consumer imports the same schemas, which
+prevents silent drift between server/CLI/web. Session events use a **flat,
+provider-agnostic envelope** from day 1: `{id (cuid2), time, role, turn?, subagent?, ev}` with event types `text / tool-call-start / tool-call-end / file / turn-start / turn-end / service / start / stop` — adapter-minted ids only, provider-native ids never cross the wire.
 
 ### 6.3 Key implementation decisions (with rationale)
 
 | Decision | Choice | Rationale |
 |---|---|---|
-| Local-mode strategy | Spawn real provider CLI + transcript tailing (NOT PTY re-render, NOT SDK-only) | Fidelity is the product; Happy proved this works at 17k-star scale |
+| Local-mode strategy | Spawn real provider CLI + transcript tailing (NOT PTY re-render, NOT SDK-only) | Fidelity is the product — users get the exact CLI they already know, not a re-implementation |
 | Remote-mode strategy | Claude Agent SDK / Codex app-server | Only way to programmatically answer permissions |
-| RPC registry | Connection/room membership as truth; no TTLs | Happy's 4-bug postmortem; fast dead-peer detection via presence-poll race |
+| RPC registry | Connection/room membership as truth; no TTLs | Avoids a well-known class of stale-registry bugs; fast dead-peer detection via presence-poll race |
 | Sync model | Per-account seq + client re-fetch on gap; no server event replay | Simpler, proven; avoids event-sourcing complexity at MVP |
-| Crypto | libsodium: Ed25519 auth, X25519 sealed-box key wrap, AES-256-GCM payloads | Mirrors Happy's audited-in-public scheme |
+| Crypto | libsodium: Ed25519 auth, X25519 sealed-box key wrap, AES-256-GCM payloads | Well-reviewed, standard primitives for E2E encryption |
 | Spawned sessions | Prefer tmux | Users can always attach a real terminal; huge trust win |
 | Session dedup | `(sessionId, localId)` for messages; content ring-buffer for cross-mode dedup | Prevents duplicates across local⇄remote switches |
 | Web push | Service worker + presence-suppression at server | The notification experience is the product's spine |
@@ -339,46 +343,21 @@ Fast-follows post-MVP (ordered): git commit/push/PR → live previews (cloudflar
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Provider CLI/SDK breaking changes (Claude Code updates transcript format or SDK) | High | High | Adapter layer isolates providers; pin tested version ranges; transcript-format contract tests run in CI daily against latest provider releases |
-| Mode-switch edge cases (dropped/duplicated messages, wedged TTY) | High | Med | Dedup ring buffers; `setBlocking(stdin)` fix (known Happy bug); a scripted 20-step conformance test à la Happy's `exercise-flow.md` run before every release |
+| Mode-switch edge cases (dropped/duplicated messages, wedged TTY) | High | Med | Dedup ring buffers; a `setBlocking(stdin)` fix for a known stdin-blocking-mode issue when switching between raw and cooked terminal modes; a scripted 20-step conformance test run before every release |
 | Notification fatigue → uninstall | Med | High | Lifecycle-only events, presence suppression, per-session mute at MVP |
 | Terms-of-service friction with providers (wrapping/driving their CLIs) | Med | High | Local-first design uses the user's own auth; monitor Anthropic/OpenAI policies; SDKs are the sanctioned path for remote mode |
-| E2E crypto slows MVP | Med | Med | Reuse Happy's published scheme wholesale (it's MIT); `kvy-crypto` built and tested in M0 |
-| RPC/presence bugs at scale | Med | Med | Adopt the post-postmortem design from day 1; integration tests with kill-the-daemon chaos scenarios |
+| E2E crypto slows MVP | Med | Med | Reuse a well-reviewed, standard encryption scheme rather than designing new primitives; `kvy-crypto` built and tested in M0 |
+| RPC/presence bugs at scale | Med | Med | Careful room-membership design from day 1; integration tests with kill-the-daemon chaos scenarios |
 | Web push unreliability on iOS Safari | High | Med | Honest platform messaging; native app is the durable fix (post-MVP); email fallback `[P2]` |
-| Category competition (Omnara free + funded; Happy OSS) | High | — | Wedge: OSS + genuinely self-hostable + E2E + best CLI fidelity; speed |
+| Category competition (well-funded and open-source alternatives exist) | High | — | Wedge: OSS + genuinely self-hostable + E2E + best CLI fidelity; speed |
 
 ---
 
 ## 10. Open Questions (need decisions before M1)
 
-1. **Business/licensing:** OSS (MIT like Happy) vs source-available (ELv2 like Superset)? Recommendation: MIT client + wire, decide server later — the community wedge depends on it.
-2. **Backend stack final call:** Fastify+Socket.IO+Prisma (maximum reference reuse from Happy) vs Hono+plain WS+Drizzle (lighter). Recommendation: former for speed, latter only if team has strong preference.
+1. **Business/licensing:** fully permissive OSS (e.g. MIT) vs source-available (e.g. a non-compete license)? Recommendation: MIT client + wire, decide server later — the community wedge depends on it.
+2. **Backend stack final call:** Fastify+Socket.IO+Prisma (maximum reference reuse) vs Hono+plain WS+Drizzle (lighter). Recommendation: former for speed, latter only if team has strong preference.
 3. **Web-only key custody UX:** is browser-held key material acceptable for MVP sign-up (with recovery codes), or must the CLI be the key-origin device? Affects FR-2.4 flow order.
-4. **Permission answering in local mode (FR-3.6):** ship "notify-only" honestly, or invest in provider hook-based approval injection? Omnara's behavior here should be probed by hands-on testing.
+4. **Permission answering in local mode (FR-3.6):** ship "notify-only" honestly, or invest in provider hook-based approval injection? Should be probed by hands-on testing.
 5. **Codex depth at MVP:** full parity, or Claude-first with Codex marked beta at M3?
 6. **Name/trademark check** for "Kvy" in dev-tools (crowded namespace: Kvy framework, CrowdStrike Kvy).
-
----
-
-## 11. Appendix A — Omnara Feature → Kvy Disposition
-
-| Omnara feature (docs) | Kvy MVP | Notes |
-|---|---|---|
-| CLI (`omnara`, auth, daemon, kill, workspace cmds) | ✅ Full clone (minus `workspace sync/load`) | §5.3 |
-| Remote control (phone/web steering local sessions) | ✅ Core of MVP (web PWA) | §5.7 |
-| Sessions / workspaces / worktrees model | ✅ Same concepts | §4 |
-| Providers: Claude Code + Codex, bundled auth reuse | ✅ | §5.2 |
-| Notifications (permission/question/done) | ✅ + presence suppression | §5.8 |
-| Session import ("continue recent CLI session") | ✅ P1 | FR-7.8 |
-| Git integration (diffs, commit, push, PR via relay) | ✅ Diffs + commit/push/rename P1; PR via relay fast-follow | FR-7.7 |
-| Live previews (cloudflared tunnel + tokenized links) | ⏭ Fast-follow | protocol namespace reserved |
-| Remote sandboxing (Cloudflare containers, checkpoints, GitHub App, cloud credits) | ⏭ **Deferred by requirement** | schema stubs only, §6.4 |
-| Session migration to cloud ("sessions never die") | ⏭ Deferred (depends on sandboxing) | |
-| Desktop app / mobile apps / Apple Watch / voice | ⏭ Post-MVP | web PWA covers MVP |
-| Multi-parallel agents & worktree orchestration UI | ◐ Minimal (`-b` worktrees, parallel sessions listed) | full orchestration later |
-
-## 11. Appendix B — Primary sources
-
-- Omnara: landing (remote.omnara.com), docs: core-concepts, authentication, remote-sandboxing, git-integration, live-previews, session-import, cli (fetched 2026-07-15).
-- `happy-research.md` — Happy (slopus/happy) architecture deep-dive: wrapper/daemon/relay/E2E reference implementation.
-- `research.md` — Superset deep-dive: worktree lifecycle, attention model, durable sessions reference.

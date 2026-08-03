@@ -1,8 +1,7 @@
 /**
  * `pnpm --filter @kvy/e2e exercise-flow` — the human/CI-facing entry
- * point for the release-gate script (plan.md §16 "4.4 Hardening & release
- * gate": "run pre-release"). Prints a PASS/FAIL line per step and exits
- * non-zero on any failure, so it composes as a CI gate or a local
+ * point for the release-gate script. Prints a PASS/FAIL line per step and
+ * exits non-zero on any failure, so it composes as a CI gate or a local
  * pre-release check without any extra parsing.
  */
 import { runExerciseFlow } from "./exerciseFlow.js";

@@ -13,9 +13,9 @@ export interface WorkspaceGroup {
  * takeover candidates. */
 export const UNGROUPED_WORKSPACE_ID = "__ungrouped__";
 
-/** Pinned sessions first (Pin — docs/features/session-lifecycle-actions.md
- * Phase 4), then most-recently-updated first within each of those two
- * groups — applies uniformly to every bucket, including the ungrouped one. */
+/** Pinned sessions first, then most-recently-updated first within each of
+ * those two groups — applies uniformly to every bucket, including the
+ * ungrouped one. */
 export function byPinnedThenUpdatedAtDesc(a: SessionListSession, b: SessionListSession): number {
   if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
   return b.updatedAt - a.updatedAt;
@@ -23,7 +23,7 @@ export function byPinnedThenUpdatedAtDesc(a: SessionListSession, b: SessionListS
 
 /** The group-level "most recently active" key. Deliberately the MAX
  * `updatedAt` across every session in the group, not `sessions[0]`'s —
- * since Phase 4's pinned-first sort means `sessions[0]` can be an old
+ * since the pinned-first sort above means `sessions[0]` can be an old
  * pinned session, which must not make a workspace with genuinely fresher
  * (but unpinned) activity sort BELOW a less-recently-active workspace. */
 function mostRecentUpdatedAt(sessions: readonly SessionListSession[]): number {
@@ -36,7 +36,7 @@ function mostRecentUpdatedAt(sessions: readonly SessionListSession[]): number {
 
 /**
  * Resolves the bucket key a session's `workspaceId` groups under — a
- * worktree child re-parents onto its parent repo (known-issues.md #15) only
+ * worktree child re-parents onto its parent repo only
  * when that parent is itself a known, registered workspace; otherwise it
  * stays its own top-level group rather than inventing one for an
  * unregistered parent.

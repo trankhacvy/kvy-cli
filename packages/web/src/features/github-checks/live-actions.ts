@@ -12,7 +12,7 @@ import { DaemonUnsupportedError, type GithubChecksActions } from "./types";
  * for an RPC target an older daemon never registered (`registerMachineRpcHandlers`'s
  * `onRpcRequest`) — caught here and remapped to a typed `DaemonUnsupportedError`
  * so the panel can render "update kvy and restart the daemon" instead of
- * a generic failure, per docs/features/github-pr-ci.md Phase 4.
+ * a generic failure.
  */
 export function machineRpcToGithubChecksActions(rpc: MachineRpcClient): GithubChecksActions {
   return {

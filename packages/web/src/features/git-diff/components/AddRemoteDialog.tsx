@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { resolveSetRemoteSubmit } from "../git-toolbar-state";
 
 /**
- * "Add a remote" dialog (Feature 1, docs/web-ux-improvements-plan.md) — a
+ * "Add a remote" dialog — a
  * structural clone of `GitToolbar.tsx`'s own Force Push confirm `Dialog`:
  * one field for the URL, one for the name (prefilled `origin`), Cancel +
  * Save, the mutation's own error rendered inline in `text-destructive`.

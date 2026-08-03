@@ -12,9 +12,9 @@ const migrationsFolder = path.resolve(
   "../../../drizzle",
 );
 
-// docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): under `NODE_ENV=production`,
-// all four `password.ts` handlers must 404 rather than expose any email+password behavior
-// (no enumeration oracle, no way to register/login/reset). See
+// Under `NODE_ENV=production`, all four `password.ts` handlers must 404 rather
+// than expose any email+password behavior (no enumeration oracle, no way to
+// register/login/reset). See
 // password.test.ts's own header comment for why this lives in a SEPARATE file: each
 // vitest test file gets its own isolated module registry/worker, so this file's one
 // `vi.resetModules()` + fresh `buildServer` import doesn't collide with that file's
@@ -24,7 +24,7 @@ const migrationsFolder = path.resolve(
 // and isn't reset by `vi.resetModules()`).
 const ORIGINAL_ENV = { ...process.env };
 
-describe("password auth routes — NODE_ENV=production (production gate, item 3)", () => {
+describe("password auth routes — NODE_ENV=production (production gate)", () => {
   let pglite: PGlite;
   let app: FastifyInstance;
 

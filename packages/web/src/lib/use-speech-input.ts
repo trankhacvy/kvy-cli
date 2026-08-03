@@ -28,8 +28,8 @@ export interface UseSpeechInputResult {
 }
 
 /**
- * Thin, testable wrapper around the browser's `SpeechRecognition`
- * (docs/competitive-notes-omnara.md #19 "voice input"). Mirrors
+ * Thin, testable wrapper around the browser's `SpeechRecognition`.
+ * Mirrors
  * `use-connectivity.ts`'s injectable-source pattern: the real
  * `getSpeechRecognitionFactory()` default reads `window`; tests inject a
  * fake `SpeechRecognitionFactory` instead so the start/stop/result

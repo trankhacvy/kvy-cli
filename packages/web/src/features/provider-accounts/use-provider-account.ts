@@ -4,8 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import type { ProviderAccountActions, ProviderAccountProvider } from "./types";
 
 /**
- * One provider card's data-fetching state (docs/competitive-notes-omnara.md
- * #9: "live, refreshable account metadata"). Plain `useQuery` — mirrors
+ * One provider card's data-fetching state (live, refreshable account
+ * metadata). Plain `useQuery` — mirrors
  * `features/git-diff/use-git-panel.ts`'s own doc comment: this has no
  * server-side push channel of its own, it's a point-in-time RPC snapshot the
  * user refreshes explicitly (the card's refresh button), not the sync

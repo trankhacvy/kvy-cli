@@ -11,7 +11,7 @@ import { useProviderAccount } from "../use-provider-account";
 import { UsageMeterBar } from "./UsageMeterBar";
 
 /**
- * One provider's account card (docs/competitive-notes-omnara.md #9): auth
+ * One provider's account card: auth
  * type, email, organization, org role, billing type, last-refreshed
  * timestamp, and a usage meter — read straight from the target machine's
  * local CLI config via `actions.fetchAccount` (the `provider.account`

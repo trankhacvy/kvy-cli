@@ -49,7 +49,7 @@ describe("renderMarkdown", () => {
     expect(html).toContain("just a plain sentence");
   });
 
-  it("emits dual --shiki-light/--shiki-dark CSS vars per token, never a hardcoded single-theme color (plan-v2.md W4.2 'dual shiki theme')", async () => {
+  it("emits dual --shiki-light/--shiki-dark CSS vars per token, never a hardcoded single-theme color", async () => {
     const html = await renderToHtml("```ts\nconst x = 1;\n```");
     expect(html).toContain("--shiki-light:");
     expect(html).toContain("--shiki-dark:");
@@ -60,7 +60,7 @@ describe("renderMarkdown", () => {
     expect(html).not.toContain("color:#");
   });
 
-  it("wires the fenced-code `pre` through CodeBlock (plan-v2.md W4.2 'Copy buttons'), not a bare `pre`", async () => {
+  it("wires the fenced-code `pre` through CodeBlock ('Copy buttons'), not a bare `pre`", async () => {
     const html = await renderToHtml("```ts\nconst x = 1;\n```");
     // CodeBlock wraps `pre` in a `group/code` div alongside a CopyButton.
     expect(html).toContain('class="group/code relative"');

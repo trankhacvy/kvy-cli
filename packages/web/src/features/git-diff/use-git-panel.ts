@@ -9,8 +9,8 @@ import { derivePushReadiness } from "./push-readiness";
 import type { GitDiffActions } from "./types";
 
 /**
- * docs/features/git-write-actions.md): `git.status` once per `worktree`,
- * `git.diff` re-fetched whenever the selected file or `compareRef` changes,
+ * `useGitPanel` is the data-fetching hub behind the Git panel: `git.status`
+ * once per `worktree`, `git.diff` re-fetched whenever the selected file or `compareRef` changes,
  * and `git.branches` for the "Compare against" selector's branch options.
  * `selectedPath: null` means "diff every changed file at once" —
  * `ChangedFilesList`'s "All files" row. `compareRef: null` means "use the
@@ -34,11 +34,11 @@ import type { GitDiffActions } from "./types";
  * moves.
  */
 /**
- * Duck-types out a thrown error's optional `handlerErrorCode` (known-issues.md
- * #3) without this hook depending on the concrete `MachineRpcError` class —
- * `GitDiffActions` is the seam that keeps this hook transport-agnostic
- * (mock vs. live), and a mock action's plain `Error` simply has no such
- * property, so this safely resolves to `undefined` for it.
+ * Duck-types out a thrown error's optional `handlerErrorCode` without this
+ * hook depending on the concrete `MachineRpcError` class — `GitDiffActions`
+ * is the seam that keeps this hook transport-agnostic (mock vs. live), and
+ * a mock action's plain `Error` simply has no such property, so this
+ * safely resolves to `undefined` for it.
  */
 function handlerErrorCode(error: unknown): string | undefined {
   if (error && typeof error === "object" && "handlerErrorCode" in error) {
@@ -183,15 +183,14 @@ export function useGitPanel(
     },
   });
 
-  // known-issues.md #3: offered once `statusErrorCode`/`diffErrorCode` is
+  // Offered once `statusErrorCode`/`diffErrorCode` is
   // "workspace-missing"/"workspace-not-a-repo" — removes the stale registry
   // entry so it stops showing up as a broken workspace everywhere else too.
   const removeWorkspaceMutation = useMutation({
     mutationFn: () => actions.unregisterWorkspace(worktree),
   });
 
-  // Feature 1 (docs/web-ux-improvements-plan.md): offered when
-  // `statusErrorCode` is "workspace-not-a-repo" — a real folder that was
+  // Offered when `statusErrorCode` is "workspace-not-a-repo" — a real folder that was
   // simply never `git init`ed. Invalidates status/diff/branches/remotes on
   // success so the panel flips straight from the error state to a live repo
   // with no manual refresh (CLAUDE.md rule #6); a refused

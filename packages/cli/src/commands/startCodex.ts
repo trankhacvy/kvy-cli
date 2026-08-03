@@ -257,7 +257,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     return 1;
   }
 
-  // A1 (docs/known-issues.md — Codex daemon-spawn timeout): mirror
+  // To avoid a Codex daemon-spawn timeout, mirror
   // `start.ts`'s post-`bootstrapSession()` self-report to the daemon
   // (`daemon/notify.ts` — best-effort, never throws, so an absent/unreachable
   // daemon never blocks session startup). Without this, a daemon-initiated
@@ -317,7 +317,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      // issue #1 (docs/known-issues-cliweb-sync-test.md): same fix as start.ts's Outbox —
+      // Same fix as start.ts's Outbox —
       // pull a currently-valid token from the shared `TokenProvider` on every
       // request/retry instead of the `accessToken` string captured once at preflight.
       getAuthToken: () => tokenProvider.getAccessToken(),
@@ -415,7 +415,7 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
       await remote.setMode(mode);
       return { ok: true };
     },
-    // docs/known-issues.md issue #12's web model selector is PTY-only
+    // The web model selector is PTY-only
     // (`start.ts`'s `runLocalPty`) — Codex has no live terminal to type
     // ACP has no analogous model-change call. Honest not-supported.
     setModel: () => {

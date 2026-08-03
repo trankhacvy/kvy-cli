@@ -12,9 +12,8 @@ import { useSessionCrypto } from "./use-session-crypto";
 const UNTITLED_SESSION = "(untitled session)";
 
 /**
- * Decrypted session title for the timeline header (plan-v2.md W4.2
- * "session title (decrypted) in the timeline header" — replacing the
- * previous literal `Session {sessionId}`). Structurally identical to
+ * Decrypted session title for the timeline header — replacing the
+ * previous literal `Session {sessionId}`. Structurally identical to
  * `use-session-model-chip.ts` (same DEK, same `useSyncSnapshotQuery` +
  * `useSessionCrypto` inputs, same metadata-version-gated re-decrypt), just
  * opening the box's `title` field instead of `model`.

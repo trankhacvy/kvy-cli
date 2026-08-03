@@ -3,16 +3,16 @@ import { type FileItem, type RenderItem, stableSortByTime, type TextItem } from 
 import type { MessageRpcResult } from "@/sync/sessionRpc";
 
 /**
- * A composer message sent but not yet confirmed by the canonical transcript
- * session process is still finishing a turn, so the composer can show
- * "queued" rather than implying the agent is already reading it. It's kept
- * up to date by `reconcileByStatus` below, which also handles the RPC
- * `outcome-unknown` don't change how a pending entry is *rendered*, only
+ * A composer message sent but not yet confirmed by the canonical transcript.
+ * `queued` is true while the session process is still finishing a prior
+ * turn, so the composer can show "queued" rather than implying the agent is
+ * already reading it. `reconcileByStatus` below only ever updates `queued` —
+ * it doesn't change how or whether a pending entry is rendered, only
  * whether/when it's dropped.
  *
  * A discriminated union (not just text) since the composer's attach-file
- * path in the web composer") optimistically inserts a `FileItem`-shaped
- * pending entry the same way a text send inserts a `TextItem`-shaped one.
+ * path optimistically inserts a `FileItem`-shaped pending entry the same
+ * way a text send inserts a `TextItem`-shaped one.
  */
 export type PendingMessage =
   | { kind: "text"; localId: string; text: string; sentAt: number; queued: boolean }
@@ -26,13 +26,13 @@ export type PendingMessage =
     };
 
 /**
- * RPC: `{envelope: SessionEnvelope}`). The envelope's `id` — cuid2, minted
- * here, not server-assigned — doubles as the reconciliation key: the
- * session process is expected to carry it through unchanged into the
- * canonical transcript, the same way the CLI's own tailer preserves an
- * envelope's id from capture to broadcast. If a future landing changes that
- * assumption, `reconcilePending`'s id-match below is the only line that
- * needs updating.
+ * Builds the envelope sent over the `message` RPC (`{envelope: SessionEnvelope}`).
+ * The envelope's `id` — cuid2, minted here, not server-assigned — doubles as
+ * the reconciliation key: the session process is expected to carry it
+ * through unchanged into the canonical transcript, the same way the CLI's
+ * own tailer preserves an envelope's id from capture to broadcast. If a
+ * future change alters that assumption, `reconcilePending`'s id-match below
+ * is the only line that needs updating.
  */
 export function buildMessageEnvelope(text: string, now: number = Date.now()): SessionEnvelope {
   return createEnvelope("user", { t: "text", md: text }, { time: now });
@@ -62,8 +62,8 @@ export function buildFileEnvelope(
 /**
  * Whether some turn has closed at or after `sentAt` — the self-healing
  * fallback `reconcilePending` uses for a still-`queued` entry that neither
- * id nor text matching below has confirmed yet (docs/user-flows.md fix-plan
- * item 3: the stale "Queued" banner + duplicate message bubble). Per the
+ * id nor text matching below has confirmed yet (fixes the stale "Queued"
+ * banner + duplicate message bubble). Per the
  * CLI's transcript mapper (`envelopeMapper.ts`'s `closeTurn`), a turn only
  * ever closes when a *new* user message lands in the transcript — so a
  * `turn-end` at/after the moment a message was queued is proof some user
@@ -80,9 +80,9 @@ function hasTurnClosedSince(items: RenderItem[], sentAt: number): boolean {
  * `RenderItem.id === localId`) — the reconciliation half of "optimistic
  * insert, reconciled by echo update". Falls back to matching by exact
  * `(role: user, text)` content when the id doesn't match — a defense-in-depth
- * borrowed from Omnara's `web_ui_messages` content-set (their CLI wrapper
- * has no id-threading step to drop in the first place, since it injects web
- * text straight into the same PTY the local process reads from; Kvy's
+ * fallback (an implementation that injects web text straight into the same
+ * PTY the local process reads from has no id-threading step to drop in the
+ * first place; but Kvy's
  * dual local/remote-mode design has several hops — RPC handler, local
  * pub-sub, the mode loop, the SDK wrapper — any one of which silently
  * dropping the id would otherwise leave a permanent duplicate on screen
@@ -157,13 +157,13 @@ export function mergeRenderItems(items: RenderItem[], pending: PendingMessage[])
 
 /**
  * Reconciles the pending entry for `localId` against the tri-state
- * "17. v2 — ACP migration" Phase 2.0). Called instead of a bare
- * `queued`-flag update once a `sendMessage` call resolves.
+ * `message` RPC reply (`queued | duplicate | outcome-unknown`). Called
+ * instead of a bare `queued`-flag update once a `sendMessage` call resolves.
  *
  * - `status: 'queued'`, or no `status` at all (every producer before the
- *   claim store lands in Phase 2.2 only ever sets `queued`): unchanged
- *   behavior — the pending entry's `queued` flag tracks whether the agent
- *   is still finishing a prior turn.
+ *   claim store landed only ever sets `queued`): unchanged behavior — the
+ *   pending entry's `queued` flag tracks whether the agent is still
+ *   finishing a prior turn.
  * - `status: 'duplicate'`: a claim for this envelope id already recorded a
  *   terminal result, so this call is a replay of an already-delivered send.
  *   Reconciled as success by dropping the pending entry immediately — no
@@ -191,9 +191,10 @@ export function reconcileByStatus(
 }
 
 /**
- * contract: "reconcile from the transcript, surface a non-blocking
- * notice"). `null` for every other reply — including the legacy
- * `status`-less shape, which carries no uncertainty to report.
+ * User-facing notice for an `outcome-unknown` send result (the "reconcile
+ * from the transcript, surface a non-blocking notice" contract). `null` for
+ * every other reply — including the legacy `status`-less shape, which
+ * carries no uncertainty to report.
  */
 export function deliveryNotice(result: MessageRpcResult): string | null {
   if (result.status !== "outcome-unknown") return null;
@@ -203,7 +204,7 @@ export function deliveryNotice(result: MessageRpcResult): string | null {
 const RELAY_UNREACHABLE_ERRORS = new Set(["RPC target not available", "RPC target disconnected"]);
 
 /**
- * Feature 2 (docs/web-ux-improvements-plan.md): the composer never blocks on
+ * The composer never blocks on
  * `machineOffline`, but a genuinely failed send should read like a machine
  * problem, not a raw transport string. `rpcHandler.ts` produces exactly
  * these two literal messages for "the daemon isn't in this RPC target's

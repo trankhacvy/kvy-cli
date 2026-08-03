@@ -5,8 +5,7 @@ import type { FileMentionEntry } from "@/features/file-mentions";
 import { cn } from "@/lib/utils";
 
 /**
- * The "@" mention picker's popover list (docs/competitive-notes-omnara.md
- * #17) — purely presentational, anchored by its caller (`Composer.tsx`)
+ * The "@" mention picker's popover list — purely presentational, anchored by its caller (`Composer.tsx`)
  * inside a `relative` wrapper positioned right above the textarea.
  * Keyboard nav (`ArrowUp`/`ArrowDown`/`Enter`/`Tab`/`Escape`) lives in
  * `Composer.tsx`'s own `onKeyDown` handler on the textarea — a plain

@@ -34,9 +34,9 @@ describe("ToolCard registry — AskUserQuestion dispatch", () => {
   });
 });
 
-/** W3.1 "tool-card registry parity" coverage additions: `WebFetch`,
+/** Tool-card registry parity coverage additions: `WebFetch`,
  * `WebSearch`, `NotebookEdit`, `LS`. */
-describe("ToolCard registry — W3.1 coverage cards", () => {
+describe("ToolCard registry — coverage cards", () => {
   it("routes WebFetch to WebFetchCard", () => {
     expect(ToolCard({ item: toolItem("WebFetch") }).type).toBe(WebFetchCard);
   });
@@ -54,7 +54,7 @@ describe("ToolCard registry — W3.1 coverage cards", () => {
   });
 });
 
-/** bug-fix-plan.md #6: `ExitPlanMode` previously fell through to the raw-JSON
+/** `ExitPlanMode` previously fell through to the raw-JSON
  * `McpGenericCard` fallback like any unregistered tool. */
 describe("ToolCard registry — ExitPlanMode dispatch", () => {
   it("routes both ExitPlanMode tool-name spellings to ExitPlanModeToolCard", () => {
@@ -68,7 +68,7 @@ describe("ToolCard registry — ExitPlanMode dispatch", () => {
   });
 });
 
-/** bug-fix-plan.md #7: `TaskCreate`/`TaskUpdate` (Claude Code's current
+/** `TaskCreate`/`TaskUpdate` (Claude Code's current
  * task/checklist tool pair, replacing `TodoWrite`) previously fell through
  * to the raw-JSON `McpGenericCard` fallback like any unregistered tool. */
 describe("ToolCard registry — TaskCreate/TaskUpdate dispatch", () => {

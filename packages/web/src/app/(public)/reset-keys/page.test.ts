@@ -27,8 +27,7 @@ const codeOnlySource = pageSource.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/
 describe("reset-keys/page.tsx", () => {
   it("uses the raw useCryptoBridge(), not useUnlockedCryptoBridge() (review Problem 3)", () => {
     // This page must call `bridge.init(...)` from states useUnlockedCryptoBridge()'s "ready"
-    // status never carries a bridge for (no-identity / needs-unlock) — see
-    // docs/auth-ux-hardening-plan.md item 2b.
+    // status never carries a bridge for (no-identity / needs-unlock).
     expect(pageSource).toContain("useCryptoBridge");
     expect(codeOnlySource).not.toContain("useUnlockedCryptoBridge");
   });

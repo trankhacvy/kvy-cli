@@ -1,7 +1,7 @@
 name: provider-contract
 
-# Daily provider contract check (kvy-system-design.md §13 item 2,
-# plan.md §16 "4.4 Hardening & release gate"): installs the *latest*
+# Daily provider contract check (kvy-system-design.md §13 item 2):
+# installs the *latest*
 # published Claude Code CLI and runs it against a small fixture-prompt
 # corpus (packages/cli/scripts/provider-contract-test.ts), asserting that
 # the on-disk JSONL transcript shape, SessionStart/Notification/Stop hook
@@ -25,6 +25,9 @@ on:
     - cron: "17 6 * * *" # once daily, 06:17 UTC — arbitrary off-peak minute
   workflow_dispatch: {}
 
+permissions:
+  contents: read
+
 jobs:
   provider-contract:
     name: claude CLI transcript / hook / resume contract
@@ -38,13 +41,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Enable corepack (pnpm)
         run: corepack enable
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
@@ -61,7 +64,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm run contract:provider
 
-      # v2 (ACP, plan.md §17 Phase 2.4 / design §13.2): exercise Kvy's real
+      # ACP adapter contract (design §13.2): exercise Kvy's real
       # ACP stack (AcpConnection + acpToEnvelope + acpPermissionHandler)
       # against the pinned claude-agent-acp adapter — hard-fail on a broken
       # pinned contract, warn on latest-version drift. Same billed Claude

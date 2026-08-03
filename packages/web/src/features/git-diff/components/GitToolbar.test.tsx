@@ -77,7 +77,7 @@ describe("GitToolbar", () => {
     expect(html).toContain('checked=""');
   });
 
-  it("gives the commit textarea a stable id so the Changes-tab checklist can focus it (session-panel-workflow-plan.md Phase 1.2)", () => {
+  it("gives the commit textarea a stable id so the Changes-tab checklist can focus it", () => {
     const panel = fakePanel();
     const html = renderToStaticMarkup(createElement(GitToolbar, { panel }));
     expect(html).toContain('id="git-toolbar-commit-message"');
@@ -172,7 +172,7 @@ describe("GitToolbar", () => {
     expect(buttonTag(html, "Commit &amp; Push")).toContain("disabled=");
   });
 
-  // Feature 2 (docs/web-ux-improvements-plan.md): a confidently-offline
+  // A confidently-offline
   // machine disables every write action here, not just the ones already
   // gated on their own pending flags.
   it("disables Push and Force Push when machineUnavailable is true, even with nothing else pending", () => {
@@ -191,7 +191,7 @@ describe("GitToolbar", () => {
     expect(buttonTag(html, "Force Push")).not.toContain("disabled=");
   });
 
-  // Feature 1 (docs/web-ux-improvements-plan.md): pushReadiness "no-remote"
+  // pushReadiness "no-remote"
   // disables the three push-shaped buttons before the click and offers an
   // inline "Add a remote" affordance instead of letting git's stderr teach
   // the user.

@@ -1,21 +1,23 @@
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { Counter, collectDefaultMetrics, Gauge, Histogram, register } from "prom-client";
 
-// "Prometheus metrics + /metrics"). Exposes request rates, WS connection
-// counts, RPC latency, and error rates as counters/histograms — never user
+// Prometheus-format metrics endpoint (design doc's "Prometheus metrics +
+// /metrics"). Exposes request rates, WS connection
+// counts, RPC latency, and error rates as counters/histograms — never
+// user-identifying data.
 //
 // "(bind-local)" in the design doc is a deployment-network concern, not
 // something this route enforces itself: Fastify has no notion of "reachable
 // only from this listener" once bound to one port, so operators must keep
 // this path off the public ingress (scrape it from inside the private
 // network / reverse-proxy allowlist) — same posture as `deploy/README.md`'s
-// split-origin CSP notes for the web app. Documented in
-// `docs/observability.md`.
+// split-origin CSP notes for the web app.
 //
 // Reuses prom-client's default `register` — the exact same one
 // `app/socket/rpcHandler.ts` already registers `rpc_calls_total` /
 // `rpc_call_duration_seconds` / `rpc_lookup_retries` /
 // `rpc_fetchsockets_timeouts_total` against (the RPC-latency metrics this
+// module's own histograms feed). `register.metrics()` below serializes
 // every metric registered anywhere in the process, not just the ones
 // defined here.
 

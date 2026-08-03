@@ -14,8 +14,8 @@ import { Input } from "@/components/ui/input";
 import { useSessionMetadataPatchMutation } from "@/lib/use-session-metadata-write";
 
 /**
- * Rename (docs/features/session-lifecycle-actions.md Phase 4) — shared
- * between the Home card's dropdown (`SessionCardActions`) and the timeline
+ * Rename — shared between the Home card's dropdown (`SessionCardActions`)
+ * and the timeline
  * header's (`SessionActionsMenu`), same "one dialog component, two call
  * sites" shape as the delete-confirm `Dialog` both menus already duplicate.
  * Controlled (`open`/`onOpenChange`) rather than owning its own trigger, so

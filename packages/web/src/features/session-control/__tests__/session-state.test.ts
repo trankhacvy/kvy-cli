@@ -217,7 +217,7 @@ describe("isTurnOpen", () => {
   });
 });
 
-describe("deriveWorking (docs/user-flows.md fix-plan item 2: the stuck 'Working…' header)", () => {
+describe("deriveWorking (the stuck 'Working…' header)", () => {
   it("is true while the turn is open, regardless of the ephemeral hint", () => {
     const items: RenderItem[] = [{ id: "t1", time: 1, role: "agent", kind: "turn-start" }];
     expect(deriveWorking(items, false)).toBe(true);

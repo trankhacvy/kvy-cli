@@ -1,7 +1,7 @@
 /**
- * Pure query-shape helper for `useGitPanel`'s `git.diff` query
- * (docs/features/git-write-actions.md — "Compare against any ref").
- * Extracted from `use-git-panel.ts` so the `selectedPath`/`compareRef` →
+ * Pure query-shape helper for `useGitPanel`'s `git.diff` query — backs the
+ * "Compare against any ref" selector. Extracted from `use-git-panel.ts` so
+ * the `selectedPath`/`compareRef` →
  * `fetchDiff` options mapping is unit-testable without a DOM: this
  * package's vitest config runs under `environment: "node"` with no
  * jsdom/`@testing-library/react` wired up (see `use-session-lifecycle.test.ts`'s

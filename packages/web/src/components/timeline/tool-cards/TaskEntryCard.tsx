@@ -31,7 +31,7 @@ function statusLabel(status: string | undefined): string {
 
 /**
  * `TaskCreate`/`TaskUpdate` — Claude Code's current task/checklist tool pair
- * (successor to the older `TodoWrite`; bug-fix-plan.md #7). Unlike
+ * (successor to the older `TodoWrite`). Unlike
  * `TodoWrite`, verified against a real captured transcript
  * (`packages/cli/src/claude/__fixtures__/task-create-update-session.jsonl`):
  * each call touches exactly *one* task — `TaskCreate` creates it, `TaskUpdate`

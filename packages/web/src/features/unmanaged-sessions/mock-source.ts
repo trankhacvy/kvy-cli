@@ -27,7 +27,7 @@ const sessions: UnmanagedSessionItem[] = [
   {
     id: "u-running",
     machineId: "m-laptop",
-    workspaceId: "w-happy",
+    workspaceId: "w-sandbox",
     providerRef: "prov-running-1",
     title: "Investigate the flaky push-notification test",
     lastActivityAt: NOW - 2 * MIN,

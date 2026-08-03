@@ -12,8 +12,7 @@ export const WIZARD_STEPS = ["machine", "directory", "import", "options", "revie
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
 /**
- * The New Session wizard's 3-way branch/worktree choice (docs/features/
- * worktree-isolation.md Phase 4, docs/competitive-notes-omnara.md #2):
+ * The New Session wizard's 3-way branch/worktree choice:
  * `"repo-root"` — work directly in the main checkout, no branch/worktree
  * involved; `"new-branch"` — start a fresh branch, isolated in a worktree
  * when `createWorktree` is on (the recommended default); `"existing-branch"`
@@ -36,8 +35,8 @@ export interface NewSessionForm {
   /** Only meaningful in `"new-branch"` mode — `"existing-branch"` always isolates in a fresh worktree regardless of this flag. */
   createWorktree: boolean;
   /**
-   * The searchable base-branch picker's pick (docs/competitive-notes-omnara.md
-   * #16), only meaningful in `"new-branch"` mode — the real local branch
+   * The searchable base-branch picker's pick, only meaningful in
+   * `"new-branch"` mode — the real local branch
    * `branchName` forks from (e.g. `main`/`master`), or `""` to fall back to
    * git's own default of branching from whatever's currently checked out.
    */
@@ -90,8 +89,8 @@ export function previousStep(step: WizardStep): WizardStep {
  * `SpawnRequest.branch`: `"repo-root"` → `undefined` (no branch/worktree
  * involved); `"new-branch"` → `{name, createWorktree: form.createWorktree,
  * from: form.baseBranch}` (worktree isolation is the recommended default but
- * user-toggleable; `from` is the searchable base-branch picker's pick —
- * docs/competitive-notes-omnara.md #16 — omitted when left blank so the
+ * user-toggleable; `from` is the searchable base-branch picker's pick,
+ * omitted when left blank so the
  * daemon falls back to branching off whatever's currently checked out);
  * `"existing-branch"` → `{name, createWorktree: true}` always, no `from` —
  * the wizard never switches the main checkout's branch out from under the

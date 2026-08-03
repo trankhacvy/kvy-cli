@@ -69,7 +69,7 @@
  * This makes the web see *exactly* the prompts a terminal user would see —
  * no more, no less.
  *
- * ## Local turns are visible on web too (docs/known-issues.md issue #5 fix)
+ * ## Local turns are visible on web too
  * The web-vs-local fork inside {@link handlePermissionRequest} and {@link
  * handleAskUserQuestion} used to gate the `perm-request` EMISSION itself: a
  * locally-typed turn (`!isWebTurnActive()`) returned before ever creating a
@@ -103,8 +103,7 @@
  *    `{ok:false, reason:"local-turn"}` (see {@link resolve}) — nothing was
  *    "already answered", this bridge just has no channel to make a web click
  *    actually drive the live terminal dialog without also keystroke-injecting
- *    it (docs/known-issues.md issue #5's stretch goal — real PTY-based racing
- *    — is intentionally not implemented here).
+ *    it (real PTY-based racing is intentionally not implemented here).
  *
  * probe — **PASS**, 2026-07-18, claude 2.1.214)
  * `AskUserQuestion` can't go through `PermissionRequest` like a normal
@@ -368,16 +367,16 @@ export interface PreToolPermissionBridgeDeps {
    * own TUI dialog may render next"; `handlePermissionRequest`'s local-
    * `undefined` return means the same thing, more precisely (only calls that
    * survive Claude Code's own auto-allow evaluation reach it). The caller
-   * W1.3) so a queued web message is never typed into an open dialog. Never
-   * fires on a web turn — those prompts resolve remotely with no local
-   * dialog rendered.
+   * uses this signal to pause queued web-message injection, so a queued web
+   * message is never typed into an open dialog. Never fires on a web turn —
+   * those prompts resolve remotely with no local dialog rendered.
    */
   onPromptLikely?: () => void;
   /**
    * Fires the instant a permission request or `AskUserQuestion` becomes
    * pending — at the TOP of {@link handlePermissionRequest} /
    * {@link handleAskUserQuestion}, before either branch decides local vs.
-   * web (docs/user-flows.md fix-plan task 4). Unlike {@link emitEnvelope}'s
+   * web. Unlike {@link emitEnvelope}'s
    * `perm-request` (which stays local-turn-honest — a locally-typed
    * permission request must never show a PermCard on web), this fires on
    * BOTH local and web turns: it's an additive push-notification side
@@ -419,9 +418,8 @@ export interface PreToolPermissionBridgeDeps {
   /** Injectable timer (default `setTimeout`) so tests can trigger the timeout on demand. */
   setTimer?: (callback: () => void, ms: number) => CancelableTimer;
   /**
-   * The mode the session actually launched in (docs/bug-fix-plan.md issue #5's
-   * known gap) — the caller's best knowledge of "what mode is this *before*
-   * any hook has ever fired", e.g. `extractPermissionModeFlag`'s read of a
+   * The mode the session actually launched in — the caller's best knowledge
+   * of "what mode is this *before* any hook has ever fired", e.g. `extractPermissionModeFlag`'s read of a
    * `--permission-mode` passthrough flag, falling back to `"default"`.
    * Seeds {@link currentPermissionMode} so the very first hook echo has a
    * real baseline to compare against — without this, a mode switched via
@@ -500,7 +498,7 @@ export class PreToolPermissionBridge {
   // Populated only by {@link handleAskUserQuestion}'s web-turn path — see
   private readonly pending = new Map<string, PendingPreToolRequest>();
   private readonly permRequestPending = new Map<string, PendingPermissionRequest>();
-  // A local turn's `perm-request` (docs/known-issues.md issue #5 fix, see the
+  // A local turn's `perm-request` (see the
   // class-level doc's "Local turns are visible on web too" section) — no
   // blocking promise to settle, so these live in their own FIFO-by-tool-name
   // queue rather than `pending`/`permRequestPending`. Populated by both
@@ -528,7 +526,7 @@ export class PreToolPermissionBridge {
   private readonly answerTimeoutMs: number;
   private readonly setTimer: (callback: () => void, ms: number) => CancelableTimer;
   // The last `permission_mode` seen on ANY hook input — `PreToolUse` and
-  // is the PTY `setMode` RPC's only source of truth for "what mode is the
+  // `PermissionRequest` alike. This is the PTY `setMode` RPC's only source of truth for "what mode is the
   // live TUI actually in right now" (there is no other channel to ask it),
   // and the verification target for {@link waitForModeEcho} after sending a
   // Shift+Tab cycle.
@@ -540,7 +538,7 @@ export class PreToolPermissionBridge {
     this.setTimer = deps.setTimer ?? defaultSetTimer;
     // `null` (not seeded) preserves the pre-existing behavior for any caller
     // that doesn't pass this — the first hook echo is treated as "no prior
-    // state", same as before docs/bug-fix-plan.md issue #5's fix.
+    // state", same as before this fix.
     this.lastPermissionMode = deps.initialPermissionMode ?? null;
   }
 
@@ -558,9 +556,10 @@ export class PreToolPermissionBridge {
    * cache with something {@link permissionModeCyclePresses} can't index.
    *
    * Also emits a `permission-mode` wire event whenever the observed mode is a
-   * genuine transition from the previously-cached one (docs/bug-fix-plan.md
-   * but nothing previously surfaced, reaches the web mode chip without a
-   * round-trip through a permission decision. With `lastPermissionMode`
+   * genuine transition from the previously-cached one — i.e. `lastPermissionMode`
+   * was already known and differs from the new mode — so a mode change that
+   * happened but was never previously surfaced still reaches the web mode
+   * chip, without a round-trip through a permission decision. With `lastPermissionMode`
    * seeded from {@link PreToolPermissionBridgeDeps.initialPermissionMode}
    * (falling back to `null` when the caller doesn't provide one), the very
    * first hook call *can* now emit — if the caller told us the session
@@ -662,8 +661,8 @@ export class PreToolPermissionBridge {
 
   /**
    * Always emits a `perm-request` (`modes: []` — a question offers no mode
-   * switches; docs/known-issues.md issue #5 — web must see this pending too,
-   * regardless of who's driving the turn). A local turn then defers to `ask`
+   * switches; web must see this pending too, regardless of who's driving the
+   * turn). A local turn then defers to `ask`
    * — the terminal TUI's own question widget renders there, answered by the
    * human at the keyboard, and the tailer mirrors question+answer as an
    * ordinary tool-start/tool-end pair (a read-only card — no interception
@@ -683,9 +682,9 @@ export class PreToolPermissionBridge {
     const questions = (toolInput.questions ?? []) as AskQuestion[];
     const reqId = createId();
 
-    // Emitted unconditionally (docs/known-issues.md issue #5 fix — see the
-    // class-level "Local turns are visible on web too" doc) so web always
-    // sees the pending question, regardless of who's driving this turn.
+    // Emitted unconditionally (see the class-level "Local turns are visible
+    // on web too" doc) so web always sees the pending question, regardless of
+    // who's driving this turn.
     this.requests[reqId] = { tool: input.tool_name, arguments: toolInput, createdAt: Date.now() };
     this.publishAgentState();
     this.deps.emitEnvelope(
@@ -748,8 +747,8 @@ export class PreToolPermissionBridge {
 
   /**
    * The `PermissionRequest` hook handler — fires only for calls Claude Code
-   * Always emits a `perm-request` (docs/known-issues.md issue #5 — web must
-   * see every pending prompt, not just web-initiated ones). A local turn then
+   * Always emits a `perm-request` (web must see every pending prompt, not
+   * just web-initiated ones). A local turn then
    * returns `undefined` immediately (no decision → the terminal TUI dialog
    * renders untouched, zero added delay) and tracks the request in {@link
    * localOutcomePending} for {@link resolveLocalOutcome} to complete later; a
@@ -770,7 +769,7 @@ export class PreToolPermissionBridge {
     // in Claude Code, just a fact of the two-hook design this class's header
     // doc describes. Before this fix, that follow-up call independently
     // created a SECOND reqId/pending entry for the exact same logical
-    // question (docs/known-issues.md issue #5 regression): since only one
+    // question: since only one
     // real `tool-end` ever fires for one actual tool call,
     // {@link resolveLocalOutcome}'s FIFO-by-tool-name match could only ever
     // resolve ONE of the two, leaving the other stuck pending forever (and,
@@ -788,9 +787,9 @@ export class PreToolPermissionBridge {
     const toolInput = input.tool_input ?? {};
     const reqId = createId();
 
-    // Emitted unconditionally (docs/known-issues.md issue #5 fix — see the
-    // class-level "Local turns are visible on web too" doc) so web always
-    // sees the pending request, regardless of who's driving this turn.
+    // Emitted unconditionally (see the class-level "Local turns are visible
+    // on web too" doc) so web always sees the pending request, regardless of
+    // who's driving this turn.
     this.requests[reqId] = { tool: toolName, arguments: toolInput, createdAt: Date.now() };
     this.publishAgentState();
     this.deps.emitEnvelope(
@@ -883,8 +882,8 @@ export class PreToolPermissionBridge {
    * decision that actually won.
    *
    * A `reqId` that belongs to a LOCAL turn (in {@link localOutcomePending}
-   * instead of either blocking map — docs/known-issues.md issue #5) is
-   * neither "already answered" nor a normal blocked hook to settle. If it's
+   * instead of either blocking map) is neither "already answered" nor a
+   * normal blocked hook to settle. If it's
    * `drivable` (or, for an `AskUserQuestion` entry, has `questions`) and the
    * caller wired the matching {@link PreToolPermissionBridgeDeps.driveLocalDialog}/
    * {@link PreToolPermissionBridgeDeps.driveLocalQuestion}, this actually
@@ -971,9 +970,9 @@ export class PreToolPermissionBridge {
   }
 
   /**
-   * Completes a local turn's pending permission/question (docs/known-issues.md
-   * issue #5's "web card must not hang forever" fix) once its real outcome is
-   * known — fed from `start.ts`'s transcript tailer, which sees the tool's own
+   * Completes a local turn's pending permission/question — so its web card
+   * never hangs forever — once its real outcome is known, fed from
+   * `start.ts`'s transcript tailer, which sees the tool's own
    * `tool-start`/`tool-end` pair the instant the terminal human actually
    * answers (Claude Code records a `tool_result` for a permission-gated call
    * either way, allowed or denied). Matches FIFO by `toolName`: Claude Code's

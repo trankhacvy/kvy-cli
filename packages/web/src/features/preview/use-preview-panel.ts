@@ -10,8 +10,8 @@ export function deriveCloudflaredMissing(ports: PreviewPortsSnapshot | undefined
 }
 
 /**
- * The Preview tab's data-fetching + open/close mutation state
- * (docs/features/dev-server-preview.md). Polling MVP, same "no server-side
+ * The Preview tab's data-fetching + open/close mutation state. Polling
+ * MVP, same "no server-side
  * push channel of its own" reasoning as `use-git-panel.ts`/
  * `use-checks-panel.ts` — the reserved `preview:*` ephemeral-streaming
  * namespace (`@kvy/wire`'s `reserved.ts`) is the real fix for live

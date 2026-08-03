@@ -1,5 +1,5 @@
 /**
- * Codex "Effort" setting (docs/competitive-notes-omnara.md #14): a persisted
+ * Codex "Effort" setting: a persisted
  * global default for Codex's reasoning effort level (Low / Medium / High /
  * Extra High / Max), configured in Settings → Agent and independent of model
  * choice. `localStorage` is the right store here — same reasoning as

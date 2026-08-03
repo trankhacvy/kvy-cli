@@ -57,7 +57,7 @@ describe("LifecycleBanner", () => {
   });
 });
 
-describe("deriveWorking wiring (docs/bug-fix-plan.md #2: the stuck 'Working…' header)", () => {
+describe("deriveWorking wiring (the stuck 'Working…' header)", () => {
   // `SessionTimelineScreen` itself can't be rendered here — it pulls in the
   // live sync engine, TanStack Query, and the session-scoped crypto worker
   // via non-hook-free hooks (`useLiveRenderItems`/`useSessionEphemerals`/

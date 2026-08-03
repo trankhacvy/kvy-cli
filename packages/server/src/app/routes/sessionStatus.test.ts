@@ -205,11 +205,11 @@ describe("POST /v1/sessions/:id/status", () => {
     expect(updates).toHaveLength(0);
   });
 
-  // A5 (docs/known-issues.md — "orphaned active session rows when the
-  // process dies after DB-row creation, on an otherwise-healthy machine"):
   // `failed` now has a second legitimate writer (the daemon's own
   // best-effort fallback report, `machineIntegration.ts`'s
-  // `watchForUnreportedDeath`), which is deliberately imprecise about
+  // `watchForUnreportedDeath`, covering orphaned active session rows when
+  // the process dies after DB-row creation on an otherwise-healthy
+  // machine), which is deliberately imprecise about
   // whether the session's own report already landed. This proves the guard
   // that makes that safe: a `failed` report can never downgrade a session
   // that already reported its own `ended` outcome.

@@ -1,7 +1,6 @@
 /**
- * Shared log-file naming for the Setup/Run scripts subsystem
- * (docs/features/setup-run-scripts.md Phases 2/3): both `setupScript.ts`
- * (setup-script runs) and `runProcess.ts` (the long-lived `run.*` process)
+ * Shared log-file naming for the Setup/Run scripts subsystem: both
+ * `setupScript.ts` (setup-script runs) and `runProcess.ts` (the long-lived `run.*` process)
  * write their child's stdout/stderr into a single, fresh-truncated log file
  * per directory — `setupLogFilePath`/`runLogFilePath` below are the one
  * place that naming is decided, so both modules (and `run.status`'s

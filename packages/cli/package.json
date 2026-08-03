@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
-  "description": "kvy — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework, matching Happy's approach), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
+  "description": "kvy — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/trankhacvy/falcon-cli.git",

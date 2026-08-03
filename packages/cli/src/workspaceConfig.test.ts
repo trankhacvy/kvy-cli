@@ -80,7 +80,7 @@ describe("setWorkspaceGitConfig", () => {
     expect(await readWorkspaceGitConfig(missing, { homeDir })).toEqual({ baseRef: "main" });
   });
 
-  it("persists setupScript/runScript and reads them back (docs/features/setup-run-scripts.md)", async () => {
+  it("persists setupScript/runScript and reads them back", async () => {
     const result = await setWorkspaceGitConfig(
       workspaceDir,
       { setupScript: "npm install", runScript: "npm run dev" },

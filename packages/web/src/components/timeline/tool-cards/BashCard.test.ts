@@ -16,8 +16,7 @@ function bashItem(args: Record<string, unknown>): ToolItem {
   };
 }
 
-/** `BashCard`'s new "Copy command" affordance (plan-v2.md W4.2 "Copy
- * buttons"). No hooks in `BashCard`/`ToolCardShell` themselves — `CopyButton`
+/** `BashCard`'s "Copy command" affordance. No hooks in `BashCard`/`ToolCardShell` themselves — `CopyButton`
  * only ever appears as an unrendered JSX child — so calling `BashCard`
  * directly and inspecting the plain element tree works without a render
  * environment, same technique `ToolCardShell.test.ts` uses. */

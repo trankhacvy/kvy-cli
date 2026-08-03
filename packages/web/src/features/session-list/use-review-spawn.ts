@@ -6,8 +6,7 @@ import { translateSpawnError } from "./inline-spawn";
 import { buildReviewSpawnRequest } from "./review-spawn";
 
 /**
- * Spawn wiring for the "Review" action (session-panel-workflow-plan.md
- * Phase 3) — mirrors `use-inline-spawn.ts`'s shape closely (same
+ * Spawn wiring for the "Review" action — mirrors `use-inline-spawn.ts`'s shape closely (same
  * generation-guard-against-stale-response precedent, same "approval branch
  * should be structurally unreachable" reasoning: `repoRoot` is derived from
  * the CURRENT session's own already-registered `workspaceId`, so it's

@@ -5,11 +5,12 @@ import path from "node:path";
 
 /**
  * Determines whether the locally-installed Claude Code CLI has usable
- * "Provider detection: locate Claude Code install + auth state") — Happy
- * has no equivalent: it just launches `claude` and lets the child process
- * handle its own login prompt. Kvy checks proactively so `detect()` can
- * instead of silently spawning a session that then hangs waiting on a
- * login prompt no one is watching (e.g. a remote-spawned session).
+ * credentials before a session starts. Launching `claude` blind and letting
+ * the child process handle its own login prompt would leave a caller with
+ * no way to tell a hung login prompt from a genuinely slow session. Kvy
+ * checks proactively so `detect()` can fail fast instead of silently
+ * spawning a session that then hangs waiting on a login prompt no one is
+ * watching (e.g. a remote-spawned session).
  *
  * Checked in order, matching how the Claude Code CLI itself resolves auth:
  * 1. `ANTHROPIC_API_KEY` — direct API-key auth, no OAuth needed.

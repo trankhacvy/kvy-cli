@@ -228,12 +228,12 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
         return reply.code(410).send({ error: "Pair request expired" });
       }
 
-      // if not already set"). Happy does this as a read-then-write (`if (!authRequest.response)
-      // { update(...) }`, `authRoutes.ts:159-164`), which is a TOCTOU race under two
-      // concurrent approvals. This is the same intent expressed as a single atomic
-      // conditional UPDATE — the `isNull(response)` guard is Drizzle's equivalent of
-      // `onConflictDoNothing` for a row that (unlike an INSERT conflict) already exists:
-      // a second concurrent approve matches zero rows and silently no-ops.
+      // if not already set"). A naive read-then-write (`if (!authRequest.response)
+      // { update(...) }`) is a TOCTOU race under two concurrent approvals. This is the
+      // same intent expressed as a single atomic conditional UPDATE — the
+      // `isNull(response)` guard is Drizzle's equivalent of `onConflictDoNothing` for a
+      // row that (unlike an INSERT conflict) already exists: a second concurrent approve
+      // matches zero rows and silently no-ops.
       await db
         .update(pairRequests)
         .set({ response: decodeBase64(response), state: "authorized" })

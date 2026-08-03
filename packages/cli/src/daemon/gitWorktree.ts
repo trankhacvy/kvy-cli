@@ -1,8 +1,8 @@
 /**
  * Git worktree/branch setup for the daemon `spawn` RPC's optional `branch`
- * field (`@kvy/wire`'s `SpawnParams.branch: {name, createWorktree, from}`,
- * Remote spawn" — "Branch/worktree option (-b): `git worktree add` via
- * daemon"). Called from `spawnEngine.ts` after workspace-path validation,
+ * field (`@kvy/wire`'s `SpawnParams.branch: {name, createWorktree, from}`) —
+ * a remote spawn's branch/worktree option: `git worktree add` via the
+ * daemon. Called from `spawnEngine.ts` after workspace-path validation,
  * before the provider process is launched.
  *
  * `createWorktree: true` creates a fresh worktree at
@@ -13,8 +13,8 @@
  * existing checkout. `createWorktree: false` just checks out (creating if
  * needed) the branch in `repoDirectory` directly, no new worktree.
  *
- * `from` (docs/competitive-notes-omnara.md #16 "searchable base-branch
- * picker") is the optional base ref a brand-new branch forks from — passed
+ * `from` (the base-branch picker's chosen ref) is the optional base ref a
+ * brand-new branch forks from — passed
  * straight through to `git checkout -b`/`git worktree add -b` as the
  * trailing start-point argument (`startPointArgs`) instead of always
  * forking off whatever's currently checked out at `repoDirectory`. Ignored
@@ -27,8 +27,7 @@
  * failing — `git worktree add` is not itself idempotent, so this checks
  * first.
  *
- * **Checked-out-elsewhere guard** (docs/features/worktree-isolation.md
- * Phase 3): git forbids the same branch from being checked out in two
+ * **Checked-out-elsewhere guard**: git forbids the same branch from being checked out in two
  * worktrees at once — attempting it fails with a raw `fatal: '<branch>' is
  * already used by worktree at '<path>'` from the underlying `git checkout`/
  * `git worktree add` call. `assertNotCheckedOutElsewhere` pre-flights this
@@ -124,8 +123,7 @@ async function findCheckedOutWorktree(
  * git's own raw stderr ("fatal: '<branch>' is already used by worktree at
  * '<path>'") surface — when `branchName` is already checked out in some
  * worktree other than `targetDir` (git forbids the same branch in two
- * worktrees at once, whether via `checkout` or `worktree add`;
- * docs/features/worktree-isolation.md Phase 3). A no-op when the branch is
+ * worktrees at once, whether via `checkout` or `worktree add`). A no-op when the branch is
  * either unchecked-out or already checked out at `targetDir` itself (the
  * idempotent-reuse case).
  */
@@ -147,7 +145,7 @@ async function assertNotCheckedOutElsewhere(
  * Idempotently ensures the parent repo's `.git/info/exclude` ignores the
  * `.worktrees/` container this module creates worktrees under, so a
  * worktree-mode spawn doesn't show up as untracked clutter in the repo's
- * own `git status` (docs/features/worktree-isolation.md Phase 3). Purely a
+ * own `git status`. Purely a
  * git-status hygiene nicety, not the actual protection against anything —
  * best-effort: `repoDirectory` not being a plain repo (e.g. itself a
  * worktree, where `.git` is a file, not a directory) or any read/write
@@ -181,8 +179,7 @@ async function ensureWorktreesExcluded(repoDirectory: string): Promise<void> {
 
 /**
  * Trailing `git checkout -b`/`git worktree add -b` argv for a brand-new
- * branch's start point (docs/competitive-notes-omnara.md #16 "searchable
- * base-branch picker") — `[from]` when a base ref was picked, or `[]` to
+ * branch's start point — `[from]` when a base ref was picked, or `[]` to
  * fall back to git's own default (branch from whatever's currently checked
  * out), preserving the pre-existing behavior when the wizard's base-branch
  * picker is left at its default. Only meaningful on the branch-doesn't-exist
@@ -196,10 +193,9 @@ function startPointArgs(from: string | undefined): string[] {
 /**
  * Rejects a branch name that could be used to escape `.worktrees/` via
  * `path.join`, or be parsed as a `git` option instead of a ref (a
- * leading `-`). Exported: `gitRenameBranch.ts` (docs/features/
- * git-write-actions.md Phase 2) reuses this verbatim to guard its own
- * user-controlled `to`/`from` branch names — same argv-injection hazard,
- * different call site.
+ * leading `-`). Exported: `gitRenameBranch.ts` reuses this verbatim to guard
+ * its own user-controlled `to`/`from` branch names — same argv-injection
+ * hazard, different call site.
  */
 export function assertSafeBranchName(branchName: string): void {
   if (
@@ -226,9 +222,8 @@ export interface EnsureBranchWorkspaceParams {
  * call — `false` on the in-place-checkout path (`createWorktree: false`,
  * whether the branch is new or already existed) AND on the idempotent-reuse
  * path (an already-there `.worktrees/<branch>` directory, no git call at
- * all). This is the setup-script hook's own signal
- * (docs/features/setup-run-scripts.md Phase 2, `spawnEngine.ts`): the setup
- * script must run exactly once, right after the worktree is genuinely
+ * all). This is the setup-script hook's own signal (`spawnEngine.ts`): the
+ * setup script must run exactly once, right after the worktree is genuinely
  * created — never on a retried/idempotent spawn that reuses an existing
  * worktree, and never on a repo-root (no-worktree) spawn.
  */

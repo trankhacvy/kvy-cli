@@ -20,7 +20,7 @@ import {
 } from "../compare-against-select-state";
 
 /**
- * "Compare against" selector (docs/features/git-write-actions.md Phase 5):
+ * "Compare against" selector:
  * "Workspace default" (`compareRef: null` — omits `baseRef`, so the
  * daemon's own configured-base-ref fallback applies), "HEAD (uncommitted)",
  * every local branch (`git.branches`, including the current one — comparing

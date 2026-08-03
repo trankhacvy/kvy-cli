@@ -43,7 +43,7 @@ export interface InjectionControllerDeps {
    * send-claim rather than leave it indeterminate.
    */
   onDropped?: (messages: PendingInjection[]) => void;
-  /** Delay between writing the text and sending the submit key. Default 250ms (omnara's value). */
+  /** Delay between writing the text and sending the submit key. Default 250ms — long enough for the TUI to ingest the pasted text before Enter is sent. */
   submitDelayMs?: number;
   /** Quiet window after a submit before the next message may be injected. Default 1200ms. */
   postSubmitCooldownMs?: number;
@@ -194,7 +194,7 @@ export class InjectionController {
    * True exactly when a queued message WOULD be injected right now — the
    * same idle/no-prompt predicate {@link canInject} uses, minus the
    * queue-length check. Exposed for the mode-cycle keystroke feature
-   * (plan-v2.md W4.3, `ptyClaudeSession.ts`'s `sendModeCycle`): those
+   * (`ptyClaudeSession.ts`'s `sendModeCycle`): those
    * synthetic Shift+Tab presses carry the identical TUI-corruption risk as
    * typing a message mid-turn or into an open dialog, so they must be gated
    * by the identical rule, not a looser one.
@@ -236,7 +236,7 @@ export class InjectionController {
         // could be sent — dispose()'s own queue splice never saw this
         // message (it was shifted off the queue before this callback was
         // scheduled), so it must be reported here or its send-claim would
-        // hang open forever (plan-v2.md W3.9).
+        // hang open forever.
         this.deps.onDropped?.([message]);
         return;
       }

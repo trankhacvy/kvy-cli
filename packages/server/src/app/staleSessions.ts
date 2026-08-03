@@ -9,8 +9,8 @@ import type { PushDispatcherPort } from "./push/types.js";
 type SessionRow = typeof sessions.$inferSelect;
 
 /**
- * known-issues.md #8: a session whose machine loses power / gets `kill -9`d
- * never gets a chance to run `start.ts`'s clean-exit/signal `reportStatusOnce`
+ * A session whose machine loses power / gets `kill -9`d never gets a chance
+ * to run `start.ts`'s clean-exit/signal `reportStatusOnce`
  * (`POST /v1/sessions/:id/status`), so its row stays `status: "active"`
  * forever — nothing server-side ever times it out.
  *
@@ -37,9 +37,9 @@ export const STALE_SESSION_MACHINE_WINDOW_MS = 5 * 60_000;
  * A session is presumed orphaned only when BOTH signals agree it's gone:
  * its owning machine hasn't heartbeated in `STALE_SESSION_MACHINE_WINDOW_MS`
  * AND the session row itself hasn't been touched in that same window either
- * (`allocMsgSeq` bumps `sessions.updatedAt` on every real chat message —
- * known-issues.md #10 — so this is a genuine "no activity" signal, not just
- * a proxy). Requiring both avoids flipping a session on a merely-stale
+ * (`allocMsgSeq` bumps `sessions.updatedAt` on every real chat message, so
+ * this is a genuine "no activity" signal, not just a proxy). Requiring both
+ * avoids flipping a session on a merely-stale
  * `machines` row (e.g. a multi-machine account glitch) that's still seeing
  * real traffic some other way.
  *

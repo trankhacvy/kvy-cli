@@ -2,8 +2,9 @@
 // `@fastify/rate-limit` (server.ts's global default, and the per-route `config.rateLimit`
 // used on `routes/*.ts`) never sees them at all. This is the WS-side equivalent, scoped to
 // the one event that actually does work on behalf of a caller (`rpc-call`; `rpc-register`/
-// `rpc-unregister` just join/leave a room and are cheap enough not to need their own limit)
-// "auth/pairing/RPC endpoints" — one of the reported Happy vuln classes).
+// `rpc-unregister` just join/leave a room and are cheap enough not to need their own limit) —
+// rate limiting auth/pairing/RPC endpoints closes off a common credential-stuffing and
+// brute-force vector.
 //
 // Sliding-window counter, keyed by accountId (mirrors server.ts's HTTP keyGenerator so one
 // account can't starve another sharing a Socket.IO room/process). In-memory only, same

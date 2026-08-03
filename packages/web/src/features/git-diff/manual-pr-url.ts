@@ -2,8 +2,8 @@ import type { GithubChecksResult } from "@kvy/wire";
 
 /**
  * The manual (browser) "Create/open PR" action's target URL, derived from
- * the already-fetched `github.checks` result (no new RPC — session-panel-
- * workflow-plan.md Phase 2). `repo`/`branch`/`pr` are independent optional
+ * the already-fetched `github.checks` result (no new RPC needed).
+ * `repo`/`branch`/`pr` are independent optional
  * fields on a flat object, not narrowed by `state` alone, so both must be
  * checked explicitly even inside a matching `state`. `null` means "nothing
  * to compare/open yet" (`not-pushed`/`no-token`/`unsupported-remote`, or a

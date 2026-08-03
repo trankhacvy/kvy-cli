@@ -33,7 +33,7 @@ type PanelTab = "changes" | "files" | "checks";
  * A file/diff the user picked from this panel's Changes/All Files list —
  * lifted to `SessionTimelineScreen.tsx` (via `onOpenFile`) so it can swap
  * the main column's Timeline+Composer for a read-only viewer, conductor.build-
- * style (known-issues.md #7 follow-up). `path: null` (diff only) means "all
+ * style. `path: null` (diff only) means "all
  * changed files" — `ChangedFilesList`'s own aggregate row.
  */
 export interface OpenFile {
@@ -93,7 +93,7 @@ function ReviewButton({
 }
 
 /**
- * The Create PR row (session-panel-workflow-plan.md Phases 2-3) — rendered
+ * The Create PR row — rendered
  * inside the Changes tab's overflow dialog (`GitActionsDialog` below), not
  * inline: Create PR still "works" at the repo root even outside a worktree,
  * but this row is only ever shown alongside worktree-only write actions, so
@@ -128,9 +128,9 @@ function CreatePrRow({
 }
 
 /**
- * Everything in the Changes tab that *mutates* the repo (session-panel-
- * workflow-plan.md), folded behind one overflow dialog so the tab itself
- * can just be a list (known-issues.md follow-up: the old always-visible
+ * Everything in the Changes tab that *mutates* the repo,
+ * folded behind one overflow dialog so the tab itself
+ * can just be a list (the old always-visible
  * commit/push toolbar + status checklist + Create PR row made the tab do
  * too many things at once — conductor.build's own Changes tab is just a
  * file list plus a Review button and this overflow). Commit/push/branch-
@@ -337,9 +337,9 @@ function AllFilesTab({
 }
 
 /**
- * The session screen's right-side workspace panel (known-issues.md #7):
+ * The session screen's right-side workspace panel:
  * Changes / All Files / Checks tabs, plus the Create PR / Review / Fix CI
- * workflow actions (session-panel-workflow-plan.md). Changes/All Files are
+ * workflow actions. Changes/All Files are
  * pickers only (`ChangesTab`/`AllFilesTab` above) — the actual diff/file
  * content renders in the main column via `FileViewerColumn.tsx`, driven by
  * `openFile` state `SessionTimelineScreen.tsx` owns (this panel just

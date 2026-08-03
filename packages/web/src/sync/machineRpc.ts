@@ -1,14 +1,11 @@
 /**
- * Typed caller-side client for the daemon's machine-scoped RPCs (design
- * spawn" / "4.1 Git panel"): `spawn`, the New Session directory picker's
- * spawn-fresh-folder-register (Piece A)"), the Git panel's
- * `git.status`/`git.diff`, `git.branches` (docs/features/
- * worktree-isolation.md — the New Session wizard's existing-branch worktree
- * picker), plus the mutating `git.commit`/`git.push`/`git.renameBranch`
- * (docs/features/git-write-actions.md — the Git panel's write actions),
- * `commands.list` ("/" slash-command autocomplete, docs/
- * competitive-notes-omnara.md #18 — `features/slash-commands/`), and
- * `provider.account` (docs/competitive-notes-omnara.md #9 — Settings →
+ * Typed caller-side client for the daemon's machine-scoped RPCs: `spawn`,
+ * the New Session directory picker's spawn-fresh-folder-register flow; the
+ * Git panel's `git.status`/`git.diff`/`git.branches` (the New Session
+ * wizard's existing-branch worktree picker); the mutating
+ * `git.commit`/`git.push`/`git.renameBranch` (the Git panel's write
+ * actions); `commands.list` ("/" slash-command autocomplete —
+ * `features/slash-commands/`); and `provider.account` (Settings →
  * Providers' per-machine account card). This is
  * the web's counterpart to `packages/cli/src/daemon/machineRpc.ts` (the
  * daemon-side registration), mirroring `sessionRpc.ts`'s shape exactly
@@ -21,30 +18,30 @@
  * `features/new-session/`'s composition notes for how a caller obtains a
  * `MachineRpcCrypto` scoped to the chosen machine.
  *
- * join the same method table below — the daemon-side registration
- * (`packages/cli/src/daemon/machineRpc.ts`) already serves both; this is
+ * `adopt.take`/`adopt.mirror` join the same method table below — the
+ * daemon-side registration (`packages/cli/src/daemon/machineRpc.ts`)
+ * already serves both; this is
  * just the caller-side typing for `features/unmanaged-sessions/`.
  *
+ * `adopt.list` is the New Session
  * wizard's session-import step's data source (`features/new-session/`).
  * `@kvy/wire`'s `rpc.ts` defines its params/result schemas but, unlike
  * every sibling method here, doesn't export paired `AdoptListParams`/
  * `AdoptListResult` type aliases — so those two are derived locally via
  * `z.infer` instead of imported, same values either way.
  *
- * `github.checks` (docs/features/github-pr-ci.md "GitHub PR/CI
- * integration", docs/competitive-notes-omnara.md #4) is the Checks tab's
+ * `github.checks` ("GitHub PR/CI integration") is the Checks tab's
  * data source (`features/github-checks/`) — same read-only, no-
  * idempotency-cache shape as `git.status`/`git.diff`/`git.branches` above.
  *
- * `git.files`/`fs.read` (docs/competitive-notes-omnara.md #5 "Full repo file
- * browser") join the same method table for `features/repo-files/`'s Repo
+ * `git.files`/`fs.read` (a full repo file browser) join the same method
+ * table for `features/repo-files/`'s Repo
  * Files sidebar tab: `git.files` lists every worktree-relative path
  * (tracked + untracked-but-not-ignored) for the file tree; `fs.read` fetches
  * one file's content once a path is picked.
  *
  * `preview.ports`/`preview.tunnels`/`preview.open`/`preview.close`
- * (docs/features/dev-server-preview.md — "Live dev-server preview via
- * secure tunnel", docs/competitive-notes-omnara.md #6) back the Preview
+ * ("Live dev-server preview via secure tunnel") back the Preview
  * tab's data source (`features/preview/`): `preview.ports` lists the
  * machine's listening TCP ports plus whether `cloudflared` is installed;
  * `preview.tunnels` lists currently-tracked tunnels; `preview.open`/
@@ -53,8 +50,8 @@
  * NOT E2E-encrypted (unlike this RPC call itself) — see that feature
  * folder's consent-dialog copy.
  *
- * `resumeSession` (docs/features/session-lifecycle-actions.md Phase 6 —
- * Restart) drives the daemon's `resumeSession` RPC (`daemon/resumeSession.ts`
+ * `resumeSession` (the session list's "Restart" action) drives the
+ * daemon's `resumeSession` RPC (`daemon/resumeSession.ts`
  * — kills any still-live process for the session, then re-spawns it with
  * `KVY_RECONNECT_*` env). The daemon side has been registered since the
  * spawn-RPC task; this is only the caller-side registry entry, structural
@@ -62,15 +59,13 @@
  * exports no paired `ResumeSessionParams`/`ResumeSessionResult` type
  * aliases — derived locally via `z.infer` instead.
  *
- * `sleepInhibit.get`/`sleepInhibit.set` (docs/features/sleep-inhibit.md,
- * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control") back
+ * `sleepInhibit.get`/`sleepInhibit.set` back
  * Settings → Machines' per-machine Off/While-on-Power/Always card
  * (`features/machine-settings/`) — both share the one `SleepInhibitState`
  * result shape (`set` returns the post-apply state, no follow-up `get`
  * needed).
  *
  * `workspace.getConfig`/`run.start`/`run.stop`/`run.status`/`run.setup`
- * (docs/features/setup-run-scripts.md "Per-workspace Setup/Run scripts")
  * join the table for `features/run-panel/`: the read-only workspace config
  * surface plus the long-lived, remotely start/stop-able `run.*` process.
  * Same no-idempotency-cache reasoning as `git.status` for
@@ -321,7 +316,7 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
  * Thrown only for a *transport*-level failure — target unreachable, ack
  * timeout, or the sealed result didn't decrypt/validate. `code` here is this
  * client's own transport-stage label (`"rpc-failed"`/`"handler-error"`/etc),
- * NOT the daemon's typed reason. `handlerErrorCode` (known-issues.md #3) is
+ * NOT the daemon's typed reason. `handlerErrorCode` is
  * the separate, optional pass-through of the daemon's own error box `code`
  * (e.g. `"workspace-missing"`) — only ever set when `code === "handler-error"`
  * AND the daemon attached one; a plain `GitExecError` or any other thrown
@@ -362,7 +357,7 @@ function rpcTarget(machineId: string, method: MachineRpcMethod): string {
   return `m:${machineId}:${method}`;
 }
 
-/** Structural check for the daemon's sealed error-box shape — see the call site's doc comment. `code` is optional (known-issues.md #3's additive extension to `daemon/machineRpc.ts`'s `errorBox`) — most handler errors still carry none. */
+/** Structural check for the daemon's sealed error-box shape — see the call site's doc comment. `code` is optional (an additive extension to `daemon/machineRpc.ts`'s `errorBox`) — most handler errors still carry none. */
 function isHandlerErrorBox(value: unknown): value is { ok: false; error: string; code?: string } {
   return (
     typeof value === "object" &&
@@ -398,9 +393,9 @@ export function createMachineRpcClient(deps: MachineRpcDeps): MachineRpcClient {
       // unambiguous. Checked BEFORE schema validation: falling through to
       // `safeParse` here would always fail (an error box never matches a
       // result schema) and replace the handler's real message — e.g. a
-      // `GitExecError`'s git stderr, the whole point of docs/features/
-      // git-write-actions.md's "not a Kvy abstraction" credential-failure
-      // UX — with a useless generic "failed schema validation" string.
+      // `GitExecError`'s git stderr, the whole point of the "not a Kvy
+      // abstraction" credential-failure UX — with a useless generic
+      // "failed schema validation" string.
       if (isHandlerErrorBox(opened)) {
         throw new MachineRpcError(opened.error, "handler-error", opened.code);
       }

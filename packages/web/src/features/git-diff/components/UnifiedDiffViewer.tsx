@@ -40,9 +40,9 @@ function FileDiff({ file, mode }: { file: UnifiedDiffFile; mode: DiffModeEnum })
 }
 
 /**
- * diff view (... shiki-highlighted)").
+ * Renders a session's git diff as a syntax-highlighted unified/split view.
  *
- * Feature 3 Phase 4 (docs/web-ux-improvements-plan.md): renders through
+ * Renders through
  * `@git-diff-view/react`'s `DiffView` instead of a hand-rolled per-line
  * `<span>` walk — it consumes raw unified-diff hunk text directly
  * (`git-diff-view-adapter.ts`'s `buildDiffViewHunks`, built from
@@ -63,7 +63,7 @@ export function UnifiedDiffViewer({
   diff: GitDiffContent;
   /** `DiffModeEnum.Unified` (default, one column) or `.Split` (side-by-side) — `FileViewerColumn.tsx`'s Split/Unified toggle. */
   mode?: DiffModeEnum;
-  /** Feature 3 Phase 5 (docs/web-ux-improvements-plan.md): called with a file's path when the truncation notice's "View this file" action is used — the caller re-fetches `git.diff` scoped to just that file, which the daemon's own 60KB inline budget applies per-file rather than across the whole multi-file diff. */
+  /** Called with a file's path when the truncation notice's "View this file" action is used — the caller re-fetches `git.diff` scoped to just that file, which the daemon's own 60KB inline budget applies per-file rather than across the whole multi-file diff. */
   onNarrowToFile?: (path: string) => void;
 }) {
   // Hooks can't sit below a conditional return, so the parse (previously

@@ -19,7 +19,7 @@
  *
  * ## Two flows (`detectStartingMode()` picks the branch)
  *
- * v3 (PTY injection — the omnara model): a human-run, terminal-attached
+ * v3 (PTY injection): a human-run, terminal-attached
  * `kvy claude` no longer drives the local↔remote mode-switch loop at all.
  * It runs `claude` on a pseudo-terminal (`ptyClaudeSession.ts`): the normal
  * TUI stays live, and a web-sent `message` is TYPED INTO that same PTY when
@@ -97,7 +97,7 @@
  * point ends it instantly and leaves the lock file behind naming a pid that's
  * now dead — exactly the stale "a Kvy session is already running" report
  * a later `kvy claude` in the same directory would otherwise have to wait
- * out (docs/known-issues.md). `SIGINT` (Ctrl-C) reaching the PTY child
+ * out. `SIGINT` (Ctrl-C) reaching the PTY child
  * directly — raw mode forwards the byte to the foreground process group,
  * `stdin.setRawMode(true)` in `ptyClaudeSession.ts` — only starts applying
  * once the PTY is actually up; a real, interactive-shell SIGINT still hits
@@ -214,8 +214,8 @@ const PTY_SET_MODE_ENV_VAR = "KVY_PTY_SETMODE";
 const PTY_SET_MODE_VERIFY_TIMEOUT_MS = 5000;
 
 /**
- * `setModel` on the PTY path (docs/known-issues.md issue #12, "web model
- * selector") — types Claude Code's own `/model <alias>` slash command into
+ * `setModel` on the PTY path (the web model selector) — types Claude Code's
+ * own `/model <alias>` slash command into
  * the live PTY. Same "version-coupled, keystroke-driven TUI behavior, kept
  * behind a flag until live-soaked" rationale as `PTY_SET_MODE_ENV_VAR`
  * above; unset/anything else keeps the honest `{ok:false}` behavior.
@@ -282,8 +282,7 @@ export interface StartClaudeCommandDeps {
   /**
    * Injectable for tests; defaults to the real `reportSessionAttention()`
    * (`api/sessionNotify.ts`). Backs the best-effort `POST /v1/sessions/:id/
-   * notify` fired for a pending permission/question and a completed turn
-   * (docs/user-flows.md fix-plan task 4).
+   * notify` fired for a pending permission/question and a completed turn.
    */
   reportSessionAttention?: typeof reportSessionAttentionDefault;
   /**
@@ -309,7 +308,7 @@ export interface StartClaudeCommandDeps {
    * the web "New Session" wizard's `spawn` RPC, which already registers a
    * workspace before launching — never designated its `workingDirectory` as
    * a registered workspace, so `bootstrapSession()` always recorded a `null`
-   * `workspaceId` (known-issues.md #6). Best-effort: a lock-acquisition
+   * `workspaceId`. Best-effort: a lock-acquisition
    * failure here is logged and swallowed rather than failing the whole
    * session start, matching `notifyDaemonSessionStarted`'s precedent above.
    */
@@ -663,8 +662,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     });
   };
 
-  // Fix-plan task 4 (docs/user-flows.md): fire-and-forget `POST /v1/sessions/
-  // :id/notify` for a pending permission/question or a completed turn, so a
+  // Fire-and-forget `POST /v1/sessions/:id/notify` for a pending
+  // permission/question or a completed turn, so a
   // push notification actually reaches a user who's walked away — nobody
   // calls this route today. `reportSessionAttention` itself never throws
   // (typed result), so this is a plain fire-and-forget, unlike
@@ -738,7 +737,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     dek: bootstrap.dek,
     http: createHttpClient({
       serverUrl: backendUrl,
-      // issue #1 (docs/known-issues-cliweb-sync-test.md): a captured `accessToken`
+      // A captured `accessToken`
       // string goes stale after ~15min and every retry hit a dead 401 forever. Pull a
       // currently-valid token from the shared `TokenProvider` on every request/retry
       // instead, and force a rotation on a 401 so the next retry isn't doomed either.
@@ -793,8 +792,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
 
   /**
    * `setMode`'s two independent confirmation signals, raced rather than
-   * chained (docs/known-issues.md issue #11's sibling bug — a live-reproduced
-   * "web reverted a mode switch the terminal genuinely made" report): the
+   * chained (a live-reproduced "web reverted a mode switch the terminal
+   * genuinely made" report): the
    * hook-echo path ({@link RemotePermissionHookHandle.waitForModeEcho}, the
    * next `PreToolUse`/`PermissionRequest` hook call's own `permission_mode`
    * — arriving only on the session's NEXT tool call, which may be never for
@@ -1002,8 +1001,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     let ptyHandle: PtyClaudeSessionHandle | null = null;
 
     // `call` -> tool name, learned from each `tool-start` envelope and
-    // consumed by its matching `tool-end` (docs/known-issues.md issue #5):
-    // the tailer's tool-end carries no tool name of its own, but
+    // consumed by its matching `tool-end`: the tailer's tool-end carries no
+    // tool name of its own, but
     // `permHook.resolveLocalOutcome` needs one to correlate back to a
     // locally-pending permission/question request. Unbounded but
     // self-limiting in practice — every `tool-start` is followed by exactly
@@ -1045,8 +1044,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           }
           if (kind === "done") {
             ptyHandle?.setPromptOpen(false);
-            // Fix-plan task 1 (docs/user-flows.md): the `Stop` hook is
-            // Claude Code's own authoritative "the turn just finished"
+            // The `Stop` hook is Claude Code's own authoritative "the turn just finished"
             // signal — close the turn on the wire the instant it fires
             // instead of waiting for the transcript scanner to retroactively
             // close it on the NEXT prompt (`envelopeMapper.ts`'s `closeTurn`,
@@ -1058,8 +1056,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         // The bridge's local-turn path (a dialog may be about to render at
         // the terminal) — the earlier, less certain half of the same gate.
         onPromptLikely: () => ptyHandle?.setPromptOpen(true),
-        // Fix-plan task 4 (docs/user-flows.md): fires for BOTH web- and
-        // locally-initiated turns (unlike the `perm-request` envelope this
+        // Fires for BOTH web- and locally-initiated turns (unlike the
+        // `perm-request` envelope this
         // bridge emits, which stays local-turn-honest) — a push notification
         // is a harmless side-signal, and the server's own presence
         // suppression already avoids over-notifying an actively-watching tab.
@@ -1078,9 +1076,9 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           ) ?? false,
         driveLocalQuestion: (decision, questions) =>
           ptyHandle?.answerAskUserQuestion(decision, questions) ?? false,
-        // The mode this local PTY session actually launched in
-        // (docs/bug-fix-plan.md issue #5) — a `--permission-mode` passthrough
-        // flag if the user gave one, else Claude Code's own "default". Seeds
+        // The mode this local PTY session actually launched in — a
+        // `--permission-mode` passthrough flag if the user gave one, else
+        // Claude Code's own "default". Seeds
         // the bridge's mode cache so a Shift+Tab before the first tool call
         // is a real, emittable transition instead of an unfalsifiable "first
         // observation".
@@ -1115,8 +1113,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
           // open is gone" signal — clears the gate the attention/onPromptLikely
           if (envelopes.some((e) => e.ev.t === "tool-end")) ptyHandle?.setPromptOpen(false);
           // The same tool-start/tool-end pair is also the "resolved locally"
-          // signal for a permission-gated tool call (docs/known-issues.md
-          // issue #5): Claude Code records a `tool_result` for a call either
+          // signal for a permission-gated tool call: Claude Code records a
+          // `tool_result` for a call either
           // way, allowed or denied, so `tool-end`'s own `ok` flag is the real
           // outcome — correlate it back through `toolNameByCall` (tool-end
           // itself carries no name) and complete the matching local pending
@@ -1248,7 +1246,7 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
         );
         return { ok: false, observedMode: observedMode ?? current };
       },
-      // Real PTY setModel (docs/known-issues.md issue #12), flag-gated
+      // Real PTY setModel, flag-gated
       // behind `KVY_PTY_SETMODEL=1` — see `PTY_SET_MODEL_ENV_VAR`'s doc
       // comment. Types `/model <alias>` into the live PTY via
       // `ptySession.sendModelChange` (same idle/no-prompt gate message

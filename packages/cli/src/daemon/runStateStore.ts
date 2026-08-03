@@ -1,7 +1,7 @@
 /**
  * `~/.kvy/run-state.json` — the persisted state for the Setup/Run
- * scripts subsystem's daemon-side run process and setup-script runs
- * (docs/features/setup-run-scripts.md Phase 3). Keyed by a directory's real
+ * scripts subsystem's daemon-side run process and setup-script runs.
+ * Keyed by a directory's real
  * (symlink-resolved) absolute path — same key convention as
  * `workspaceConfig.ts`'s `resolveWorkspaceKey` — so a `run.*` RPC's
  * resolved worktree path and a re-read after a daemon restart land on the
@@ -15,8 +15,7 @@
  * for two different directories racing within the same tick) from
  * clobbering each other's read-modify-write.
  *
- * **PID-recycling caveat** (docs/features/setup-run-scripts.md's own risk
- * note): a persisted `detached`-method `pid`, re-probed with
+ * **PID-recycling caveat**: a persisted `detached`-method `pid`, re-probed with
  * `process.kill(pid, 0)` after a machine reboot, can in principle match an
  * unrelated process that happened to reuse the same pid. The `tmux` method
  * is immune (liveness is `tmux has-session -t <name>`, not a raw pid

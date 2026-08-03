@@ -37,8 +37,8 @@ async function defaultFetchImpl(): Promise<Response> {
 }
 
 /**
- * Preflight now does real filesystem I/O (the credentials lock, known-issues.md
- * #20) before registering session RPC handlers, so it no longer reliably settles
+ * Preflight now does real filesystem I/O (the credentials lock)
+ * before registering session RPC handlers, so it no longer reliably settles
  * within a single `setTimeout(r, 0)` tick — poll instead. Fake-timer-aware:
  * `vi.waitFor` advances fake timers itself when they're active, same as the
  * "stop RPC with force" test below already relies on.
@@ -277,9 +277,9 @@ describe("runStartCodexCommand", () => {
     expect(errors.join("")).toContain("failed to start session");
   });
 
-  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
-  // reason"): same self-report as `start.ts` on a `bootstrapSession()`
-  // failure, so a daemon-initiated Codex spawn surfaces the real error.
+  // A generic 15s timeout masks the real failure reason, so this is the same
+  // self-report as `start.ts` on a `bootstrapSession()` failure, ensuring a
+  // daemon-initiated Codex spawn surfaces the real error.
   it("self-reports a bootstrapSession failure to the daemon via reportSessionStartFailed", async () => {
     const reportSessionStartFailed = vi.fn(async () => ({ type: "ok" as const }));
     const { deps } = baseDeps({
@@ -353,7 +353,7 @@ describe("runStartCodexCommand", () => {
     expect(startAcpRemote).toHaveBeenCalledWith(expect.objectContaining({ resume: null }));
   });
 
-  it("announces remote control once at startup, so the web reads this session as remote from envelope #1 (known-issues.md — dead mode selector)", async () => {
+  it("announces remote control once at startup, so the web reads this session as remote from envelope #1 (avoids a dead mode selector)", async () => {
     const enqueueSpy = vi.spyOn(Outbox.prototype, "enqueue");
     const { deps, releaseExit } = baseDeps();
 
@@ -373,7 +373,7 @@ describe("runStartCodexCommand", () => {
     enqueueSpy.mockRestore();
   });
 
-  // A1 (docs/known-issues.md — Codex daemon-spawn timeout): `start.ts` calls
+  // To avoid a Codex daemon-spawn timeout, `start.ts` calls
   // `notifyDaemonSessionStarted` right after `bootstrapSession()` succeeds so
   // a daemon-initiated `spawn` RPC's `spawnAwaiter` can resolve instead of
   // always timing out after 15s. `startCodex.ts` previously never called it
@@ -462,7 +462,7 @@ describe("runStartCodexCommand", () => {
     await expect(run).rejects.toThrow("unexpected daemon failure");
   });
 
-  it("extracts a --model override from codexArgs into the session metadata (plan-v2.md W4.2 header model chip)", async () => {
+  it("extracts a --model override from codexArgs into the session metadata (header model chip)", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_codex_1",
       dek: getRandomBytes(32),
@@ -515,7 +515,7 @@ describe("runStartCodexCommand", () => {
     expect(bootstrapParams.metadata.model).toBeUndefined();
   });
 
-  it("registers workingDirectory as a workspace and threads its id into bootstrapSession (known-issues.md #6)", async () => {
+  it("registers workingDirectory as a workspace and threads its id into bootstrapSession", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_codex_1",
       dek: getRandomBytes(32),

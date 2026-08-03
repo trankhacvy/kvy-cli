@@ -12,8 +12,10 @@
  * anything still alive. `all-force` SIGKILLs every target immediately, no
  * grace period.
  *
- * The discovery this composes (`processScan.ts` + `markers.ts`) mirrors
- * https://github.com/slopus/happy (MIT); the SIGTERM-then-SIGKILL escalation
+ * The discovery this composes (`processScan.ts` + `markers.ts`) combined with
+ * a SIGTERM-then-SIGKILL escalation is the standard graceful-shutdown
+ * pattern: ask a process to exit cleanly first, and only force-kill whatever
+ * is still alive once the grace period elapses.
  */
 
 import type { Logger } from "../logger.js";

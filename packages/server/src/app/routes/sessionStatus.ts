@@ -37,12 +37,12 @@ const SessionStatusResponseSchema = z.object({ status: z.enum(["failed", "ended"
  * Rationale for skipping full optimistic-concurrency CAS here: this route
  * exists for exactly one caller shape — a best-effort exit/crash report,
  * fired from `start.ts`'s normal-exit path, a signal/uncaught-exception
- * handler racing the process's own shutdown, OR (docs/known-issues.md —
- * "orphaned active session rows when the process dies after DB-row
- * creation, on an otherwise-healthy machine", the CLI-side fix is
- * `daemon/machineIntegration.ts`'s `watchForUnreportedDeath`) the DAEMON's
- * own best-effort fallback report when it observes a spawned process exit
- * without ever seeing the session's own clean report land. A dropped/
+ * handler racing the process's own shutdown, OR the DAEMON's own
+ * best-effort fallback report when it observes a spawned process exit
+ * without ever seeing the session's own clean report land (this covers
+ * orphaned active session rows when the process dies after DB-row creation
+ * on an otherwise-healthy machine; the CLI-side fix is
+ * `daemon/machineIntegration.ts`'s `watchForUnreportedDeath`). A dropped/
  * duplicate retry of that POST must still succeed the same way (idempotent).
  *
  * That second caller IS a second legitimate writer, though — unlike the

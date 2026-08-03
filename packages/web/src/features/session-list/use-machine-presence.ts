@@ -22,8 +22,8 @@ import { apiSocket } from "@/sync";
  * back to the `lastSeenAt` recency heuristic (and `MachineRow.needsReauth`).
  */
 
-/** One machine's live presence — `needsReauth` (docs/auth-ux-hardening-plan.md
- * item 8) is only ever `true` on the disconnect path, when the server has
+/** One machine's live presence — `needsReauth`
+ * is only ever `true` on the disconnect path, when the server has
  * inferred this machine's `cli-daemon` device session is revoked; absent
  * (not `false`) for every other event, mirroring the wire ephemeral's own
  * "omitted means no" shape. */
@@ -85,8 +85,7 @@ export function deriveMachineOnline(
 }
 
 /**
- * AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): the
- * three-way status the Home screen's machine badge renders — a daemon that's
+ * The three-way status the Home screen's machine badge renders — a daemon that's
  * running but can't authenticate (`needs-reauth`) looks identical to a
  * powered-off machine (`offline`) under the plain boolean `online` alone, so
  * this is a distinct value, not just a color choice layered on top of

@@ -1,6 +1,5 @@
 /**
- * `provider.account` machine RPC handler (docs/competitive-notes-omnara.md
- * #9 "Provider account inspection + usage metering"; `@kvy/wire`'s
+ * `provider.account` machine RPC handler (see `@kvy/wire`'s
  * `rpc.ts` doc comment above `ProviderAccountResultSchema`). Settings →
  * Providers' per-machine, per-provider account card: email, organization,
  * org role, billing type, last-refreshed timestamp, and a usage meter —

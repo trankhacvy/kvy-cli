@@ -25,8 +25,7 @@ describe("signin/page.tsx", () => {
     expect(pageSource).toContain('router.push("/password/")');
   });
 
-  // docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): the email+password
-  // link renders unconditionally now — the server (`password.ts`'s
+  // The email+password link renders unconditionally now — the server (`password.ts`'s
   // `requireNonProduction`) is what actually 404s the underlying routes in
   // production, so the client no longer needs (or has) a matching build-time flag.
   // The dev-only OAuth bypass is gone entirely, not just ungated.
@@ -50,8 +49,7 @@ describe("signin/page.tsx", () => {
     expect(pageSource).not.toContain("disabled={!GITHUB_OAUTH_CLIENT_ID}");
   });
 
-  // docs/auth-ux-hardening-plan.md item 7 ("session-expiry-reason"): the "expired"
-  // banner is gated on the `expired` state, itself only ever set true by
+  // The "expired" banner is gated on the `expired` state, itself only ever set true by
   // `isExpiredReason(window.location.search)` (`./signin-gate`) in the mount
   // effect — source-text check that the wiring is what it looks like (the actual
   // parsing is covered behaviorally, without a DOM, by `signin-gate.test.ts`).

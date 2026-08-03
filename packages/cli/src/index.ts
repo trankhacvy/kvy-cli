@@ -301,9 +301,9 @@ async function runUpdate(): Promise<number> {
 }
 
 /**
- * Resolves `kvy -b <branch>`'s local-mode target directory
- * (known-issues.md #2 first bullet — local `-b` used to be parsed and then
- * silently dropped, only remote `spawn` ever created a worktree). Mirrors
+ * Resolves `kvy -b <branch>`'s local-mode target directory (local `-b` used
+ * to be parsed and then silently dropped, only remote `spawn` ever created a
+ * worktree). Mirrors
  * `spawnEngine.ts`'s own `ensureBranchWorkspace` call: always
  * `createWorktree: true`, no `from` (a bare `-b` forks off whatever's
  * currently checked out at the repo, same as the old in-place-checkout
@@ -433,9 +433,8 @@ async function runAdapters(command: Extract<KvyCommand, { type: "adapters" }>): 
 }
 
 /**
- * `kvy github login|logout|status` (docs/features/github-pr-ci.md
- * "GITHUB AUTH") — see `commands/github.ts` for the token-store/device-flow
- * logic. Deliberately does **not** call `ensureDaemon()`, same rationale as
+ * `kvy github login|logout|status` — see `commands/github.ts` for the
+ * token-store/device-flow logic. Deliberately does **not** call `ensureDaemon()`, same rationale as
  * `workspace config`/`adapters`: a local `~/.kvy/github.key` write
  * plus a direct GitHub API call, no daemon interaction at all — the
  * daemon's `github.checks` RPC handler reads the same token file fresh off
@@ -504,7 +503,7 @@ async function runAdopt(command: Extract<KvyCommand, { type: "adopt" }>): Promis
 
 /**
  * `kvy workspace config [--base-ref/--remote/--setup-script/--run-script/
- * setup-run-scripts.md) — reads/writes `~/.kvy/settings.json` directly
+ * --directory]` — reads/writes `~/.kvy/settings.json` directly
  * (see `commands/workspaceConfig.ts`). Deliberately does **not** call
  * `ensureDaemon()`: unlike `adopt`/`start`/`auth`, this command has no
  * daemon interaction at all — the daemon's `git.diff` RPC handler (and, as

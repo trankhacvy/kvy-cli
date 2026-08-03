@@ -106,7 +106,7 @@ describe("POST/GET /v1/sessions/:id/messages", () => {
     expect(r2.json().seq).toBe(r1.json().seq + 1);
   });
 
-  it("bumps sessions.updatedAt on a real chat message (known-issues.md #10)", async () => {
+  it("bumps sessions.updatedAt on a real chat message", async () => {
     const { authHeader: freshHeader } = await createTestAccount(db);
     const createResponse = await app.inject({
       method: "POST",
@@ -138,9 +138,8 @@ describe("POST/GET /v1/sessions/:id/messages", () => {
     // `defaultNow()` and `after` from this write path's `new Date()` — under
     // the PGlite driver these two clock sources land in different timezones
     // (a driver-level quirk distinct from the postgres-js driver's UTC-safe
-    // parsing verified in known-issues.md #10's own investigation), so only
-    // inequality is a safe cross-driver assertion that the column changed at
-    // all — which is what the bug was: it never changed.
+    // parsing), so only inequality is a safe cross-driver assertion that the
+    // column changed at all — which is what the bug was: it never changed.
     expect(after.updatedAt.getTime()).not.toEqual(before.updatedAt.getTime());
   });
 

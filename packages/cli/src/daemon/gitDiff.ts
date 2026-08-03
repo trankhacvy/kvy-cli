@@ -61,7 +61,7 @@ export interface GitDiffDeps {
   maxInlineBytes?: number;
   /** Encrypts+uploads the full diff and resolves its `blobId`, or `null` on any failure — see `blobClient.ts`'s `uploadBlob`. No default: unset (the state every caller had before this subsystem existed) means `blobRef` simply stays unset, never a thrown error. Only ever called when the diff was actually truncated — a diff that already fits inline has no need for a blob. */
   uploadBlob?: (plaintext: Uint8Array) => Promise<string | null>;
-  /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (known-issues.md #3 — a real filesystem check, so tests exercising diff-building logic against a fake `worktree` path must override this). */
+  /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (a real filesystem check, so tests exercising diff-building logic against a fake `worktree` path must override this). */
   assertWorkspaceValid?: (directory: string) => Promise<void>;
 }
 
@@ -99,7 +99,7 @@ function isSafeRevision(ref: string): boolean {
   return ref.trim() !== "" && !ref.startsWith("-");
 }
 
-/** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws a `WorkspaceValidationError` (known-issues.md #3) if `worktree` no longer exists or isn't a git repository — checked before `git` ever runs. Throws `GitExecError` for any other `git` failure (unknown ref, etc.) or an unsafe `baseRef` — no silent empty-diff fallback. */
+/** Runs `git diff` for `params.worktree` (optionally scoped to `params.path`) against the resolved base ref, returning an inline (possibly truncated) unified diff. Throws a `WorkspaceValidationError` if `worktree` no longer exists or isn't a git repository — checked before `git` ever runs. Throws `GitExecError` for any other `git` failure (unknown ref, etc.) or an unsafe `baseRef` — no silent empty-diff fallback. */
 export async function getGitDiff(
   params: GitDiffParams,
   deps: GitDiffDeps = {},

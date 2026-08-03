@@ -6,7 +6,7 @@ import type { GitPanelState } from "../use-git-panel";
 
 /**
  * Plain-language copy for the daemon's typed workspace error codes
- * (known-issues.md #3, `workspacePath.ts`'s `WorkspaceValidationErrorCode`)
+ * (`workspacePath.ts`'s `WorkspaceValidationErrorCode`)
  * — replaces raw `git` stderr ("fatal: not a git repository") with wording
  * a non-technical user can act on. Falls back to the raw message for any
  * other error (an ordinary git failure, a network/transport issue, etc.) —

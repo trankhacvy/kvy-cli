@@ -66,12 +66,11 @@ function Node({
 }
 
 /**
- * The repo file tree (docs/competitive-notes-omnara.md #5 "Full repo file
- * browser"): a collapsible, virtualized directory tree over
+ * The repo file tree: a collapsible, virtualized directory tree over
  * `buildFileTree`'s nested `FileTreeNode[]`, selecting a leaf calls
  * `onSelect` with its worktree-relative path.
  *
- * Feature 3 Phase 3 (docs/web-ux-improvements-plan.md): replaces the old
+ * Replaces the old
  * hand-rolled recursive `<TreeNode>` (a plain `<ul>`/`<li>` walk with no
  * windowing) with `react-arborist`'s `<Tree>` — purpose-built windowing,
  * keyboard nav, and selection out of the box. `buildFileTree`'s output shape

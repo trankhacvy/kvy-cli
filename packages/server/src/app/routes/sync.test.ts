@@ -96,8 +96,8 @@ describe("GET /v1/sync", () => {
   });
 });
 
-// known-issues.md #8: `GET /v1/sync` is one of the two read paths (the
-// other is `GET /v1/sessions`) that must never hand back a session claiming
+// `GET /v1/sync` is one of the two read paths (the other is
+// `GET /v1/sessions`) that must never hand back a session claiming
 // `status: "active"` once its owning machine has actually gone stale — see
 // `app/staleSessions.ts`.
 describe("GET /v1/sync — stale-session reconciliation", () => {

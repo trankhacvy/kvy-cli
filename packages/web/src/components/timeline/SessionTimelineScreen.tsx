@@ -91,10 +91,10 @@ export function SessionTimelineScreen({
   // The session's owning machine (`SessionRow.machineId`, same plaintext-on-
   // the-row convention as `workspacePath` above) — `null` until the row has
   // synced. Needed alongside `workspacePath` to fetch this session's custom
-  // slash commands (docs/competitive-notes-omnara.md #18): `commands.list`
+  // slash commands: `commands.list`
   // is a *machine*-scoped RPC (`m:<machineId>:commands.list`), so both ids
   // are required before it can even be attempted. Also threaded into
-  // `SessionSidePanel`'s Checks tab (docs/features/github-pr-ci.md) so it
+  // `SessionSidePanel`'s Checks tab so it
   // can gate its live `ChecksPanel` on both being present.
   const machineId = session?.machineId ?? null;
   // The composer's notice must never treat "we haven't heard from this
@@ -111,7 +111,7 @@ export function SessionTimelineScreen({
 
   // `deriveWorking` (`session-state.ts`) is authoritative on `isTurnOpen(items)`
   // — the always-fresh, persisted-envelope-derived signal — never masked by a
-  // stuck `ephemeralWorking` (docs/user-flows.md fix-plan item 2: the header
+  // stuck `ephemeralWorking` (the header
   // must never show "Working…" once the transcript itself says the turn is
   // closed). `ephemeralWorking` only ever contributes before this session has
   // any turn history at all.
@@ -203,23 +203,22 @@ function SessionTimelineBody({
   hasMore: boolean;
   isLoadingMore: boolean;
   /** `true` while this session's first message page + DEK unwrap are still
-   * in flight (plan-v2.md W4.2 "skeletons for … timeline initial loads"). */
+   * in flight (skeletons for the timeline's initial load). */
   isInitialLoading: boolean;
   onLoadEarlier: () => void;
   /** Decrypted `model` from this session's own metadata, or `null` until the
-   * CLI records one there (plan-v2.md W4.2 "header model chip"). */
+   * CLI records one there (the header's model chip). */
   modelChip: string | null;
   sessionStatus: SessionRow["status"];
   /** The session's registered workspace path (`SessionRow.workspaceId`), or
    * `null` until the row has synced/recorded one — the header's copy chip
-   * (docs/competitive-notes-omnara.md #21) is hidden entirely in that case. */
+   * is hidden entirely in that case. */
   workspacePath: string | null;
   /** The session's owning machine id (`SessionRow.machineId`), or `null`
-   * until the row has synced — `commands.list` (docs/competitive-notes-
-   * omnara.md #18) is a *machine*-scoped RPC, so both this and
+   * until the row has synced — `commands.list` is a *machine*-scoped RPC,
+   * so both this and
    * `workspacePath` gate the "/" autocomplete's fetch below. Also threaded
-   * into `SessionSidePanel`'s Checks tab alongside `workspacePath`
-   * (docs/features/github-pr-ci.md). */
+   * into `SessionSidePanel`'s Checks tab alongside `workspacePath`. */
   machineId: string | null;
   provider: string;
 }) {
@@ -227,13 +226,12 @@ function SessionTimelineBody({
     useComposerState(items);
   const { actions } = useSessionControl();
   // The file/diff currently open in place of Timeline+Composer (conductor.
-  // build-style picker-in-sidebar/viewer-in-main-column split,
-  // known-issues.md #7 follow-up) — `null` shows the normal chat view.
+  // build-style picker-in-sidebar/viewer-in-main-column split) — `null` shows the normal chat view.
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
 
   const isDisabled = isSessionControlDisabled(sessionStatus);
 
-  // "/" slash-command autocomplete (docs/competitive-notes-omnara.md #18):
+  // "/" slash-command autocomplete:
   // `useLiveSlashCommandsActions` needs *a* machine id to call the hook
   // (rules of hooks), even before this session's row has synced one — it
   // degrades to a permanently-pending client until then, same as
@@ -361,7 +359,7 @@ export function LockedOldKeySessionScreen({ sessionId }: { sessionId: string }) 
   );
 }
 
-/** Once the CLI process itself is gone (W1.4's `ended`/`failed`) or the
+/** Once the CLI process itself is gone (`ended`/`failed`) or the
  * session has been explicitly archived (its worktree already removed —
  * `ArchiveSessionDialog`), nothing sent from this screen can reach a live
  * process anymore — disable the controls rather than let a request
@@ -380,7 +378,7 @@ export function isSessionControlDisabled(status: SessionRow["status"]): boolean 
 }
 
 /** The read-only banner shown above the control bar once a session can no
- * longer be controlled from the web (plan-v2.md W1.4+B15) — ended, failed,
+ * longer be controlled from the web — ended, failed,
  * or archived. Renders nothing for every other status. */
 export function LifecycleBanner({ sessionStatus }: { sessionStatus: SessionRow["status"] }) {
   if (!isSessionControlDisabled(sessionStatus)) return null;

@@ -7,7 +7,7 @@ function textItem(role: TextItem["role"], md: string): TextItem {
   return { id: "1", time: 0, role, kind: "text", md, thinking: false };
 }
 
-/** `MessageText`'s `CopyButton` wiring (plan-v2.md W4.2 "Copy buttons").
+/** `MessageText`'s `CopyButton` wiring.
  * `Markdown` is only ever referenced as an unrendered JSX child here (never
  * invoked), so — same as `TimelineRow.test.ts`/`ToolCardShell.test.ts` —
  * calling `MessageText` directly and inspecting the plain element tree needs

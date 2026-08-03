@@ -16,7 +16,7 @@ import { isExpiredReason } from "./signin-gate";
 
 export default function SignInPage() {
   const router = useRouter();
-  // docs/auth-ux-hardening-plan.md item 7: `RequireAuth` redirects a failed silent
+  // `RequireAuth` redirects a failed silent
   // refresh here with `?reason=expired` (`SIGNIN_EXPIRED_PATH`, require-auth.tsx) so
   // this page can explain why the visitor landed on sign-in instead of looking like a
   // bare cold visit. Static export — no server-rendered query string to read on the

@@ -283,7 +283,7 @@ describe("installRemotePermissionHook", () => {
     });
   });
 
-  describe("onPendingAttention forwarding (docs/user-flows.md fix-plan task 4)", () => {
+  describe("onPendingAttention forwarding", () => {
     it("forwards 'perm'/'question' regardless of local vs. web turn state", async () => {
       const onPendingAttention = vi.fn();
       const h = makeHarness();

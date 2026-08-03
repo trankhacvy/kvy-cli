@@ -1375,7 +1375,7 @@ describe("startPtyClaudeSession", () => {
     });
   });
 
-  describe("closeTurn (docs/user-flows.md fix-plan task 1 — proactive turn-end)", () => {
+  describe("closeTurn (proactive turn-end)", () => {
     it("force-closes the currently open turn, reusing the same tailer mapper state onEnvelopes is driven from", async () => {
       const onEnvelopes = vi.fn<(envelopes: SessionEnvelope[]) => void>();
       const h = makeHarness();
@@ -1401,7 +1401,7 @@ describe("startPtyClaudeSession", () => {
     });
 
     it("flushes the scanner before checking turn state, so a Stop hook that fires before the periodic poll has read the assistant's message still closes the turn", async () => {
-      // Reproduces the live-confirmed race (docs/user-flows.md): the `Stop`
+      // Reproduces the live-confirmed race: the `Stop`
       // hook can fire before the transcript poll has ever ingested the
       // assistant's just-written message, so `mapperState` doesn't consider
       // any turn open yet at the instant `closeTurn` is called. `flush()`
@@ -1442,7 +1442,7 @@ describe("startPtyClaudeSession", () => {
       handle.stop();
     });
 
-    it("does not close after a single quiet flush while a tool-use turn's final reply is still being written (docs/user-flows.md live-confirmed regression)", async () => {
+    it("does not close after a single quiet flush while a tool-use turn's final reply is still being written (live-confirmed regression)", async () => {
       // A tool-using turn opens (currentTurnId becomes non-null) at the
       // FIRST assistant entry — long before the model's final text reply is
       // written. Confirmed live: trusting a single quiet flush closed the

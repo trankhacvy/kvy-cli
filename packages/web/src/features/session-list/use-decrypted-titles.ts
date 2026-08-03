@@ -8,9 +8,8 @@ import type { CryptoBridgeClient } from "@/crypto";
 const UNTITLED_SESSION = "(untitled session)";
 const UNNAMED_MACHINE = "(unnamed machine)";
 
-/** A session's decrypted title plus its Pin flag (docs/features/
- * session-lifecycle-actions.md Phase 4) — both live in the same encrypted
- * metadata blob, so one `open()` call resolves both at once. */
+/** A session's decrypted title plus its Pin flag — both live in the same
+ * encrypted metadata blob, so one `open()` call resolves both at once. */
 interface DecryptedSessionMeta {
   title: string;
   pinned: boolean;

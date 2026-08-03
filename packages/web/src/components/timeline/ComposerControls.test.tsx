@@ -6,7 +6,7 @@ import { SessionControlProvider, useMockSessionControl } from "@/features/sessio
 import { ComposerControls } from "./ComposerControls";
 
 /**
- * Covers the actual `disabled` prop wiring (plan-v2.md W1.4+B15) on the
+ * Covers the actual `disabled` prop wiring on the
  * composer footer's session chips — the redistributed ControlBar contents.
  * `ComposerControls` reads `useSessionControl()` (for the mutations'
  * `actions`) and `useMutation` (TanStack Query), so it needs a real
@@ -38,10 +38,10 @@ function renderControls(props: Partial<React.ComponentProps<typeof ComposerContr
 }
 
 describe("ComposerControls disabled wiring", () => {
-  it("leaves everything enabled on a live, locally-controlled session (mode read-only, no take-control — W2.4)", () => {
+  it("leaves everything enabled on a live, locally-controlled session (mode read-only, no take-control)", () => {
     const html = renderControls();
     expect(html).not.toContain('disabled=""');
-    // W2.4 honesty: a PTY/local session hides Take control entirely and shows
+    // Honesty: a PTY/local session hides Take control entirely and shows
     // the mode as a plain read-only label instead of a mutating select.
     expect(html).not.toContain("Take control");
     expect(html).not.toContain('role="combobox"');
@@ -59,7 +59,7 @@ describe("ComposerControls disabled wiring", () => {
 
   it("disables mode-select and take-control when disabled in remote control mode", () => {
     const html = renderControls({ disabled: true, controlMode: "remote" });
-    // W2.4: Take control is remote-only, so it IS present here.
+    // Take control is remote-only, so it IS present here.
     expect(html).toContain("Take control");
     const count = (html.match(/disabled=""/g) ?? []).length;
     // select trigger + take-control button.

@@ -12,7 +12,7 @@ import { createMachineIntegrationDeps, startMachineIntegration } from "./machine
 import { createSpawnAwaiter } from "./spawnAwaiter.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
-// Preview-tunnel wiring (docs/features/dev-server-preview.md): spied on
+// Preview-tunnel wiring: spied on
 // rather than exercised end-to-end here — `previewTunnel.test.ts`/
 // `tunnelRegistry.test.ts` already cover `reapOrphanedTunnels`'s and
 // `closeAllTunnels`'s real kill/journal behavior in depth. This file only

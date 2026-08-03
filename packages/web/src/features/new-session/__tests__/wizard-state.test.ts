@@ -139,7 +139,7 @@ describe("buildSpawnRequest", () => {
     expect(request.branch).toEqual({ name: "task-1", createWorktree: false });
   });
 
-  it("includes `from` in new-branch mode when a base branch was picked (docs/competitive-notes-omnara.md #16)", () => {
+  it("includes `from` in new-branch mode when a base branch was picked", () => {
     const request = buildSpawnRequest({
       ...INITIAL_FORM,
       machineId: "m1",

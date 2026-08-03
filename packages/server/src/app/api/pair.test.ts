@@ -250,8 +250,8 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       const first = await approve(ephPub, firstBox, tokenA);
       const second = await approve(ephPub, secondBox, tokenB);
 
-      // Both calls report success (idempotent from the caller's perspective — Happy does
-      // the same), but only the first writer's box is actually stored.
+      // Both calls report success (idempotent from the caller's perspective), but only
+      // the first writer's box is actually stored.
       expect(first.statusCode).toBe(200);
       expect(second.statusCode).toBe(200);
 

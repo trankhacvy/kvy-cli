@@ -5,9 +5,9 @@ import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recove
 import type { RunPanelActions, RunStatusSnapshot } from "./types";
 
 /**
- * The Setup/Run panel's data-fetching + control state (docs/features/
- * setup-run-scripts.md Phase 5): `workspace.getConfig` fetched once per
- * `worktree` (the configured scripts don't change while the panel is open —
+ * The Setup/Run panel's data-fetching + control state: `workspace.getConfig`
+ * fetched once per `worktree` (the configured scripts don't change while
+ * the panel is open —
  * they're only ever edited from a terminal), and `run.status` polled while
  * *either* the run process or a setup run is actually active, so play/stop
  * state and the log tail stay live without polling forever once everything

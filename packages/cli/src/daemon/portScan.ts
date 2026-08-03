@@ -1,7 +1,7 @@
 /**
- * Port-scan primitive backing the `preview.ports` machine RPC (docs/features/
- * dev-server-preview.md): enumerate every listening TCP port currently
- * visible to this OS user via `lsof -nP -iTCP -sTCP:LISTEN`.
+ * Port-scan primitive backing the `preview.ports` machine RPC: enumerate
+ * every listening TCP port currently visible to this OS user via
+ * `lsof -nP -iTCP -sTCP:LISTEN`.
  *
  * Same hand-wrapped-`execFile`, resolve-`""`-on-any-failure convention as
  * `processScan.ts`'s `runPs`/`listProcesses` (10MB maxBuffer, never throws —
@@ -11,11 +11,9 @@
  * `processScan.ts`'s own platform-support caveat).
  *
  * **Scope**: this lists every listening socket on the whole machine, not
- * just the current session/workspace's own dev servers — Omnara's own "14
- * ports detected" copy is machine-wide too (docs/features/
- * dev-server-preview.md's "Port detection scope" decision). No
- * attribution/filtering to a particular workspace's process tree is applied
- * in the MVP.
+ * just the current session/workspace's own dev servers — a deliberate
+ * "Port detection scope" decision. No attribution/filtering to a particular
+ * workspace's process tree is applied in the MVP.
  */
 import { execFile } from "node:child_process";
 import type { PreviewPortInfo } from "@kvy/wire";

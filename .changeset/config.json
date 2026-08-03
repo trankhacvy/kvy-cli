@@ -4,7 +4,7 @@
   "commit": false,
   "fixed": [],
   "linked": [],
-  "access": "restricted",
+  "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": ["@kvy/server", "@kvy/web", "@kvy/e2e", "@kvy/wire", "@kvy/crypto"]

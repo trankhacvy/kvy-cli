@@ -8,8 +8,8 @@
  * bypasses the check entirely.
  *
  * Same atomic hard-link + stale-pid-reclaim pattern as `daemon/lock.ts`'s
- * `acquireDaemonLock` (ported from Happy, MIT — see that file's doc comment
- * for the full "why a hard link" rationale), generalized here for a
+ * `acquireDaemonLock` (see that file's doc comment for the full "why a hard
+ * link" rationale), generalized here for a
  * `SessionLockPayload` instead of a `DaemonState`, and keyed per-directory
  * rather than singleton-per-machine. Reuses `daemon/lock.ts`'s
  * `isProcessAlive` rather than duplicating it.

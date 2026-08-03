@@ -8,7 +8,7 @@ function machine(overrides: Partial<SessionListMachine> = {}): SessionListMachin
   return { id: "mach-1", name: "vy-macbook-pro", online: true, status: "online", ...overrides };
 }
 
-// AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): the chip must read
+// The "needs re-authentication" chip must read
 // as a genuinely distinct state, not just an offline dot with different CSS underneath.
 describe("MachineBadge", () => {
   it("renders 'Needs re-authentication' — not 'Offline' — for a needs-reauth machine", () => {

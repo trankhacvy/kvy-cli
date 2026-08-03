@@ -151,8 +151,8 @@ describe("POST/GET /v1/sessions", () => {
   });
 });
 
-// known-issues.md #8: `GET /v1/sessions` is the paginated list read path —
-// same reconciliation contract as `GET /v1/sync`, but this is where it's
+// `GET /v1/sessions` is the paginated list read path — same reconciliation
+// contract as `GET /v1/sync`, but this is where it's
 // wired up (`app/staleSessions.ts`'s `reconcileStaleSessions`, called from
 // `sessions.ts` with a machine-lastSeenAt map it queries itself for just
 // the machine ids referenced on the returned page).

@@ -2,7 +2,8 @@ import type { Ephemeral, Update } from "@kvy/wire";
 import type { Server, Socket } from "socket.io";
 
 // `userId` -> `accountId` (Kvy's identity anchor), and payload shapes come from
-// Happy has no equivalent.
+// `@kvy/wire`'s `Update`/`Ephemeral` types. Ephemeral backpressure coalescing (below)
+// has no equivalent in a naive room-broadcast implementation.
 
 // === CONNECTION TYPES ===
 
@@ -208,8 +209,8 @@ class EventRouter {
   }
 
   /**
-   * reports `app-state: active` **and** has the session's room joined
-   * see `happy-server/sources/app/push/pushDispatch.ts`): scoped to the
+   * Push-suppression check: skip if any user-scoped connection reports
+   * `app-state: active` and has the session's room joined (visible). Scoped to the
    * rooms a given session's traffic actually reaches
    * (`all-interested-in-session`'s room set — session-scoped room ∪
    * user-scoped room) rather than every room the account has any socket in,

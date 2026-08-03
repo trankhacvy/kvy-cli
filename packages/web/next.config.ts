@@ -29,8 +29,8 @@ const nextConfig = (phase: string): NextConfig => ({
     // No image optimization server exists for a static export.
     unoptimized: true,
   },
-  // Subresource Integrity (plan.md §16 "4.3 Distribution & self-host": "strict
-  // CSP+SRI" for the split-origin web deploy). Next stamps an `integrity`
+  // Subresource Integrity ("strict CSP+SRI" for the split-origin web
+  // deploy). Next stamps an `integrity`
   // attribute (sha256 of the file's contents) onto every `<script>`/`<link>`
   // tag it emits for its own build output, so a compromised/tampered static
   // host or CDN in front of the split web origin can't silently swap out a

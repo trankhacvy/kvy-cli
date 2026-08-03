@@ -5,7 +5,7 @@ describe("createMockNewSessionActions", () => {
   it("browses the seeded fake filesystem, sorted alphabetically", async () => {
     const actions = createMockNewSessionActions("mach-1");
     const listing = await actions.browseDirectory("/Users/vy/projects");
-    expect(listing.entries.map((e) => e.name)).toEqual(["happy", "kvy", "scratch"]);
+    expect(listing.entries.map((e) => e.name)).toEqual(["kvy", "sandbox", "scratch"]);
     expect(listing.parent).toBe("/Users/vy");
   });
 

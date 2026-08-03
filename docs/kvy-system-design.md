@@ -2,8 +2,7 @@
 
 **Version:** 0.3
 **Date:** 2026-07-17
-**Companion docs:** `kvy-prd.md` (requirements; FR-x.x references below point there),
-`docs/acp-delta-proposal.md` (v2 migration rationale, feasibility evidence, decisions)
+**Companion docs:** `kvy-prd.md` (requirements; FR-x.x references below point there)
 **Scope:** MVP = CLI + daemon + relay server + web PWA. Remote sandboxing deferred (schema hooks only).
 
 **v0.3 revision (v2 — ACP migration, approved 2026-07-17):** the headless
@@ -21,13 +20,13 @@ deleted, not flag-gated.
    integrity-checked, spawned locally; never `npx` at session start (§7.9).
 4. **Send-time idempotency claim** — durable claim-before-execute on the `message` RPC;
    tri-state reply (`queued | duplicate | outcome-unknown`); a retried RPC can never run
-   a turn twice (§7.10, adapted from mobvibe's `claimMessageSend`).
+   a turn twice (§7.10).
 5. **Wire protocol, server, crypto, web: unchanged** — ACP events map onto the existing
    `SessionEnvelope` schema; the only wire change is the additive `message` RPC reply
    discriminator (§4.4).
 
 **v0.2 revision (design review outcome):**
-1. **Writes moved off WebSocket onto idempotent HTTP** — WS is now read-only (updates/ephemerals) + RPC wake-ups. (Happy's own roadmap corrects this same mistake.)
+1. **Writes moved off WebSocket onto idempotent HTTP** — WS is now read-only (updates/ephemerals) + RPC wake-ups; WebSocket-carried writes have no natural retry/idempotency story, which is what motivated the move.
 2. **Seq scoping fixed** — per-account seq only for header-level changes; message ordering is per-session. Kills the hot-row bottleneck under parallel chatty sessions.
 3. **Large payloads (diffs, files) go through encrypted blobs**, not chunked RPC acks.
 4. **Postgres-only** — self-host ships as docker-compose with real Postgres; no second SQL dialect to maintain.
@@ -129,15 +128,15 @@ kvy/
 
 | Layer | Choice | Rationale |
 |---|---|---|
-| Language | TypeScript everywhere, Node ≥ 20 for CLI/daemon | One language, shared wire/crypto packages; both reference codebases (Happy/Omnara-class) prove it |
+| Language | TypeScript everywhere, Node ≥ 20 for CLI/daemon | One language, shared wire/crypto packages across CLI/server/web |
 | CLI packaging | npm package + `bun build --compile` standalone binaries (mac arm64/x64, linux x64) | curl-install path without Node; npm path for devs |
 | CLI TUI bits | Ink (React) for auth selector + remote-mode status view only | Never wraps the provider TUI |
-| Server HTTP | Fastify 5 + zod type-provider — **all writes are HTTP, idempotent** | Typed routes; retryable write semantics beat WS emits (Happy's own v3 migration validates this) |
+| Server HTTP | Fastify 5 + zod type-provider — **all writes are HTTP, idempotent** | Typed routes; retryable write semantics beat WS emits |
 | Server WS | Socket.IO 4 (websocket transport, polling fallback) — **read-only stream + RPC transport** | Rooms, acks, cluster adapter path; the RPC design below leans on rooms |
 | ORM/DB | **Drizzle ORM + Postgres 16 — prod and self-host (docker-compose)** | One SQL dialect, one migration set (drizzle-kit); Drizzle is lightweight, SQL-first, no codegen step |
 | Cache/scale-out | None at MVP (single server process); Redis streams adapter ready behind `REDIS_URL` | Don't pay the multi-replica tax until needed; adapter slot reserved |
 | Web | **Next.js (App Router) built as a static PWA** + React 19; **shadcn/ui + Tailwind CSS** for the component layer; **TanStack React Query** for REST fetch/mutation + Zustand for the WS-fed stores | Next.js gives routing/code-splitting/PWA tooling for free; shadcn/Tailwind is the fastest credible path to a polished session UI; Query's retry/invalidation model matches the seq+refetch sync design. Web app is statically exported and served from a separate origin (see §12 trust boundary) — no server-side rendering of user content (it's ciphertext to the server anyway) |
-| Crypto | libsodium (sodium-native in CLI, libsodium-wrappers in web) + WebCrypto AES-GCM | Audited primitives; matches the published Happy scheme we're adopting |
+| Crypto | libsodium (sodium-native in CLI, libsodium-wrappers in web) + WebCrypto AES-GCM | Audited, standard primitives |
 | Push | Web Push (VAPID) via `web-push` | PWA-first; native push later |
 | Blobs | S3-compatible (MinIO in dev/self-host, R2/S3 in prod) | Encrypted blobs only |
 
@@ -262,7 +261,7 @@ RPC method names are scope-prefixed: `m:<machineId>:<method>` and `s:<sessionId>
 'git.branches' ({worktree})   → { branches: GitBranchInfo[] }
 'github.checks'({worktree})   → { state: 'no-token'|'unsupported-remote'|'not-pushed'|'no-pr'|'ok';
                                    repo?; branch?; pr?: PullRequestInfo; checks?: CheckRun[] }
-                              // "Checks" tab (docs/features/github-pr-ci.md). Authenticated with a
+                              // "Checks" tab. Authenticated with a
                               // machine-local GitHub token (~/.kvy/github.key, `kvy github
                               // login`) — never held by the server, same custody model as every
                               // other machine-local secret (§5.3/§6.1). `state` is derived fresh on
@@ -848,7 +847,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 - `Session.executionTarget` + `Workspace.syncEnabled/sandboxConfig` columns exist, unused.
 - Wire reserves namespaces: `checkpoint:*` (workspace sync), `preview:*` (live previews), `voice:*`.
 - `kvy workspace sync|load` commands print "coming soon" and are wired to no-op handlers behind a feature flag, keeping help output honest.
-- Daemon RPC surface versioned (`rpc.hello` exchanges `{cliVersion, rpcRev}`); additive evolution policy documented in `docs/rpc.md`.
+- Daemon RPC surface versioned (`rpc.hello` exchanges `{cliVersion, rpcRev}`); evolved additive-only, same policy as the wire schema.
 
 ---
 
@@ -867,14 +866,14 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 | R7 | Notification reliability | Fallback channels (Telegram/ntfy) alongside Web Push at MVP |
 | R8 | Socket.IO vs native ws | Socket.IO stays (RPC design depends on rooms; it no longer carries writes, shrinking the blast radius) |
 
-**Resolved in v0.3 (v2 — ACP migration, 2026-07-17; evidence in `docs/acp-delta-proposal.md`):**
+**Resolved in v0.3 (v2 — ACP migration, 2026-07-17):**
 
 | # | Decision | Resolution |
 |---|---|---|
 | R9 | Headless provider protocol | **ACP** via official adapters (`claude-agent-acp`, `codex-acp`); one `AcpRemote` + one `acpToEnvelope` mapper replaces the direct Claude Agent SDK integration and the hand-rolled `codex app-server` client. Local TUI mode untouched |
 | R10 | Migration style | **Hard cut** — old paths deleted as each phase lands; rollback = git tag `v1`. No transport flag |
 | R11 | Adapter distribution | **Managed installs**: pinned exact versions + integrity manifest under `~/.kvy/adapters/`; explicit upgrades; `kvy doctor` coverage. Never npx at session start |
-| R12 | CLI-local durability | **Send-idempotency claim only** (§7.10) — no local event WAL; the server (Postgres + msgSeq + outbox) remains the single durable event store. (mobvibe's local SQLite WAL exists because its gateway is ephemeral — inverted topology, doesn't transfer) |
+| R12 | CLI-local durability | **Send-idempotency claim only** (§7.10) — no local event WAL; the server (Postgres + msgSeq + outbox) remains the single durable event store. A local WAL only makes sense when the local process's own gateway is ephemeral, which isn't Kvy's topology |
 
 **Still open:**
 

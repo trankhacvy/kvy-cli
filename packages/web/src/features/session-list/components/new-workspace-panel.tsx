@@ -41,8 +41,7 @@ import type { SessionListMachine } from "../types";
 
 /**
  * "New project" — creates a brand-new folder on a machine, registers it as
- * a workspace, and starts the first session in it (Feature 4, docs/
- * web-ux-improvements-plan.md), closing the honest gap
+ * a workspace, and starts the first session in it, closing the honest gap
  * `session-list-screen.tsx` documents: an account with machines but zero
  * sessions ever run has no `+` on a `WorkspaceSection` row to click.
  *

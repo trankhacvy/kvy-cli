@@ -1,6 +1,6 @@
 /**
- * The 20-step conformance script itself (design §13 item 3, plan.md §16
- * "4.4 Hardening & release gate"): every step below drives the real local
+ * The 20-step conformance script itself (design §13 item 3): every step
+ * below drives the real local
  * stack (`testStack.ts`) exactly the way a real client/session process
  * would — machine/session RPC calls over a real encrypted socket, real
  * transcript reads off the real server — and asserts on the observed

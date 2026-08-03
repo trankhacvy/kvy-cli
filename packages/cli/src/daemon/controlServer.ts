@@ -44,8 +44,8 @@ const SessionStartedBodySchema = z.object({
 const SessionStartedResponseSchema = z.object({ status: z.literal("ok") });
 
 /**
- * A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
- * reason"): best-effort self-report of a startup failure, mirroring
+ * Best-effort self-report of a startup failure, so a generic 15s timeout
+ * doesn't mask the real failure reason, mirroring
  * `/session-started`'s own "session process reports itself" shape but for
  * the failure path. `start.ts`/`startCodex.ts` post here when
  * `bootstrapSession()` (or any other pre-`/session-started` step) fails, so

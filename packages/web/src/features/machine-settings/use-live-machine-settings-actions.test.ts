@@ -33,7 +33,7 @@ function renderActions(machineId: string) {
   return captured;
 }
 
-describe("useLiveMachineSettingsActions (docs/features/sleep-inhibit.md)", () => {
+describe("useLiveMachineSettingsActions", () => {
   it("rejects fetchSleepInhibit with an honest 'key isn't unwrapped yet' message before the machine key has unwrapped", async () => {
     const actions = renderActions("mach-1");
     await expect(actions.fetchSleepInhibit()).rejects.toThrow(/isn't unwrapped yet/i);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createMockMachineSettingsActions } from "../mock-source";
 
-describe("createMockMachineSettingsActions (docs/features/sleep-inhibit.md)", () => {
+describe("createMockMachineSettingsActions", () => {
   it("a darwin machine starts supported, mode off, inactive", async () => {
     const actions = createMockMachineSettingsActions("mach-darwin");
     const state = await actions.fetchSleepInhibit();

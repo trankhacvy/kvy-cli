@@ -157,7 +157,7 @@ function isCompactSummaryMessage(message: RawJSONLines): boolean {
   return (message as unknown as { isCompactSummary?: unknown }).isCompactSummary === true;
 }
 
-// BF1.2 (bug-fix-plan.md #4): Claude Code records a local slash command
+// Claude Code records a local slash command
 // (e.g. `/model haiku`) as a synthetic `user`-type record wrapped in its own
 // XML-ish tags — the invocation as `<command-name>...</command-name>` (plus
 // a sibling `<command-message>`), and the result as a later `user` record
@@ -675,8 +675,8 @@ export function mapClaudeToEnvelopes(
       if (stdout !== null) {
         // A local slash command's result (e.g. /model) — never a real chat
         // turn; surface it as a quiet service marker with ANSI/wrapping
-        // stripped, reusing modelChange.ts's own cleaner (bug-fix-plan.md
-        // #4). No turn is opened/closed for it, matching the compact-summary
+        // stripped, reusing modelChange.ts's own cleaner. No turn is
+        // opened/closed for it, matching the compact-summary
         // marker's precedent above.
         envelopes.push(
           createEnvelope("agent", { t: "service", text: normalizeTranscriptText(stdout) }),

@@ -6,8 +6,7 @@ import { ToolCardShell } from "./ToolCardShell";
 
 /** `WebFetch`: url + prompt, then the fetched/summarized result — reuses
  * `JsonBlock`'s own collapse-behind-"Show all" behavior for the (often long)
- * result text rather than a bespoke `Collapsible` (plan-v2.md W3.1's
- * "collapsible result"). */
+ * result text rather than a bespoke `Collapsible`. */
 export function WebFetchCard({ item }: { item: ToolItem }) {
   const args = parseWebFetchArgs(item.args);
 

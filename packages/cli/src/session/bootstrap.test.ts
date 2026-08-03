@@ -260,7 +260,7 @@ describe("bootstrapSession", () => {
     await expect(bootstrapSession(deps, params)).rejects.toThrow(/could not unwrap/);
   });
 
-  describe("KVY_RECONNECT_SESSION_ID re-attach (plan-v2.md W3.7)", () => {
+  describe("KVY_RECONNECT_SESSION_ID re-attach", () => {
     it("re-attaches to the existing session by unwrapping the reconnect DEK, with no network call", async () => {
       const contentKeyPair = deriveKeyTree(getRandomBytes(32)).content;
       const originalDek = getRandomBytes(32);

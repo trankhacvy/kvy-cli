@@ -7,9 +7,9 @@ import type {
 } from "@kvy/wire";
 
 /**
- * View-model types for the "Preview" tab (docs/features/dev-server-preview.md
- * — "Live dev-server preview via secure tunnel", docs/competitive-notes-
- * omnara.md #6): auto-detects the machine's open local ports and, given a
+ * View-model types for the "Preview" tab ("Live dev-server preview via
+ * secure tunnel"): auto-detects the
+ * machine's open local ports and, given a
  * port, opens a Cloudflare quick tunnel so the running dev server is
  * viewable remotely. Structural clone of `features/git-diff/types.ts` /
  * `features/github-checks/types.ts` — the RPC results are already exactly

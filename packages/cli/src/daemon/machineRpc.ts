@@ -328,7 +328,7 @@ function rpcTarget(machineId: string, method: MachineRpcMethod): string {
 /**
  * Sealed `{ok:false, error}` — the uniform error shape for unknown methods,
  * bad params, or a throwing handler. `code` is an optional, additive
- * extension (known-issues.md #3): most handler errors carry none and the
+ * extension: most handler errors carry none and the
  * shape is unchanged from before; a `WorkspaceValidationError` (thrown by
  * `workspacePath.ts`'s `assertWorkspaceStillValid`) is the first caller to
  * set it, letting the web client render plain-language copy instead of
@@ -398,13 +398,14 @@ function withIdempotencyCache<P extends { idempotencyKey: string }, R>(
 
 /**
  * Resource-keyed in-flight guard, generalized from what was originally
- * same history"). Unlike `withIdempotencyCache` above (keyed on the
+ * `adopt.take`'s own `withProviderSessionGuard` (two devices adopting the
+ * same `providerSessionId` with different `idempotencyKey`s must join the
+ * same history). Unlike `withIdempotencyCache` above (keyed on the
  * *request* — `idempotencyKey`), this is keyed on the *target* — whatever
  * `keyOf` extracts from `params` (`providerSessionId` for `adopt.take`,
- * `worktree` for `run.start` — docs/features/setup-run-scripts.md Phase 4:
- * two devices pressing play concurrently with different `idempotencyKey`s
- * must join one launch attempt rather than racing two independent
- * `run.start` calls for the same directory). Two calls for the same key
+ * `worktree` for `run.start` — two devices pressing play concurrently with
+ * different `idempotencyKey`s must join one launch attempt rather than
+ * racing two independent `run.start` calls for the same directory). Two calls for the same key
  * that arrive concurrently join the same in-flight attempt and both get its
  * exact result. Never caches a rejected attempt — the map entry is always
  * removed once the attempt settles, success or failure, so the next

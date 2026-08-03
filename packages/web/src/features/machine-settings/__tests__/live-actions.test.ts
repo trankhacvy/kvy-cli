@@ -6,7 +6,7 @@ function fakeRpc(call: MachineRpcClient["call"]): MachineRpcClient {
   return { call };
 }
 
-describe("machineRpcToMachineSettingsActions (docs/features/sleep-inhibit.md)", () => {
+describe("machineRpcToMachineSettingsActions", () => {
   it("fetchSleepInhibit calls sleepInhibit.get and returns the result as-is", async () => {
     const call = vi.fn(async () => ({
       supported: true,

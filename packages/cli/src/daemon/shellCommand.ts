@@ -1,7 +1,6 @@
 /**
  * Wraps a free-form script string (`workspaceConfig.ts`'s `setupScript`/
- * `runScript`) into a shell-invocation argv — docs/features/
- * setup-run-scripts.md Phase 2: unlike `processLauncher.ts`'s
+ * `runScript`) into a shell-invocation argv: unlike `processLauncher.ts`'s
  * `launchProviderProcess` (which spawns a known argv with no shell
  * involved), a user-authored script like `"npm install && npm run build"`
  * needs an actual shell to parse `&&`/pipes/env-var expansion, so this is a

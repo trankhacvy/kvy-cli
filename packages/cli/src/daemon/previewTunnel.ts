@@ -1,6 +1,6 @@
 /**
  * Daemon-side core for the `preview.ports`/`preview.tunnels`/`preview.open`/
- * `preview.close` machine RPCs (docs/features/dev-server-preview.md). This
+ * `preview.close` machine RPCs. This
  * is the one genuinely new long-lived-child-process subsystem the feature
  * needs — everything else follows the established RPC-handler pattern.
  *
@@ -81,7 +81,7 @@ export interface PreviewTunnelDeps {
   now?: () => number;
   /** Injectable for tests; defaults to `@paralleldrive/cuid2`'s `createId`. */
   createId?: () => string;
-  /** Refuses to open a new tunnel once this many are already tracked. Default 5 — a small, deliberate cap (docs/features/dev-server-preview.md's security posture note). */
+  /** Refuses to open a new tunnel once this many are already tracked. Default 5 — a small, deliberate cap as a security posture measure. */
   maxTunnels?: number;
   /** How long `handlePreviewOpen` waits for a `*.trycloudflare.com` URL to appear on stderr before giving up and killing the child. Default 30s. */
   urlTimeoutMs?: number;

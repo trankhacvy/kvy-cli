@@ -1,6 +1,6 @@
 /**
- * Voice input (docs/competitive-notes-omnara.md #19 "voice input (microphone
- * icon) in the composer"). Wraps the browser's `SpeechRecognition` API,
+ * Voice input (a microphone icon in the composer). Wraps the browser's
+ * `SpeechRecognition` API,
  * which is unstandardized (Chrome/Edge/Safari ship it as
  * `webkitSpeechRecognition`/`SpeechRecognition`; Firefox has neither) —
  * there's no matching type in TS's DOM lib, so the shapes below are

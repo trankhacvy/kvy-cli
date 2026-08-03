@@ -109,7 +109,7 @@ function SelectItem({
    * `Select.Value` (per Radix's own `Select.ItemText` contract: whatever's
    * passed as its children is exactly what `Select.Value` also displays).
    * For per-row controls that must stay row-only, e.g. a favorite/star
-   * toggle (docs/competitive-notes-omnara.md #22) — putting one inside
+   * toggle — putting one inside
    * `children` instead would duplicate it into the closed trigger as a
    * genuine nested `<button>`.
    */

@@ -17,7 +17,7 @@
  */
 import type { SessionEnvelope } from "@kvy/wire";
 
-/** Tool-start release delay — same constant Happy used (250ms). */
+/** Tool-start release delay (250ms) — long enough for a same-turn tool-end to catch up before releasing. */
 export const DEFAULT_TOOL_START_DELAY_MS = 250;
 
 interface QueueItem {

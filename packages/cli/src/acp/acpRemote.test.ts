@@ -423,14 +423,12 @@ describe("stop", () => {
   });
 });
 
-// docs/plan-flows-3-4-5.md Flow 5's ACP correction (FL5.2): confirms the
-// composition root (`startAcpRemote`) actually threads `sessionId`/
+// Confirms the composition root (`startAcpRemote`) actually threads `sessionId`/
 // `attention`/`reportSessionAttention` down into the `AcpPermissionHandler`
 // it constructs (perm/question) and calls its `reportTurnEnd()` at this
-// module's own turn-end path (done) — i.e. the wiring described in sub-task
-// 2, not just the handler's own unit behavior (covered by
-// acpPermissionHandler.test.ts).
-describe("session attention wiring (docs/plan-flows-3-4-5.md Flow 5 — ACP correction)", () => {
+// module's own turn-end path — i.e. the wiring itself, not just the handler's
+// own unit behavior (covered by acpPermissionHandler.test.ts).
+describe("session attention wiring (ACP correction)", () => {
   const attention: ReportSessionAttentionDeps = {
     backendUrl: "https://api.example",
     accessToken: "tok-1",

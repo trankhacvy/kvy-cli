@@ -264,7 +264,7 @@ describe("getGitStatus", () => {
     ).rejects.toThrow("not a git repository");
   });
 
-  it("propagates a WorkspaceValidationError from assertWorkspaceValid without ever calling git (known-issues.md #3)", async () => {
+  it("propagates a WorkspaceValidationError from assertWorkspaceValid without ever calling git", async () => {
     let gitCalled = false;
     const git = async () => {
       gitCalled = true;

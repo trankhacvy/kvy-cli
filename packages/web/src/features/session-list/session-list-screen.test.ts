@@ -39,7 +39,7 @@ function render(snapshot: SessionListSnapshot) {
   );
 }
 
-describe("SessionListScreen (archived filter — docs/features/session-lifecycle-actions.md Phase 5)", () => {
+describe("SessionListScreen (archived filter)", () => {
   it("renders exactly the active session, excluding the archived one", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [{ id: "w1", name: "kvy" }],

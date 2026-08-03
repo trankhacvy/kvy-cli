@@ -1,15 +1,14 @@
 import { z } from "zod";
 
 /**
- * `preview.*` machine RPCs (docs/features/dev-server-preview.md — "Live
- * dev-server preview via secure tunnel", docs/competitive-notes-omnara.md
- * #6). The Preview tab's data source: enumerate the machine's listening TCP
+ * `preview.*` machine RPCs — live dev-server preview via a secure tunnel.
+ * The Preview tab's data source: enumerate the machine's listening TCP
  * ports, then, given one, open/close a Cloudflare quick tunnel so the
  * running dev server is reachable from anywhere — no manual ngrok/tunnel
  * setup. This is the schema half of the `preview:*` namespace `reserved.ts`
  * set aside; see that file's updated comment for the ephemeral-streaming
  * namespace itself, which stays reserved for a future live-status channel
- * (Phase 2, not MVP — this is a request/response polling MVP).
+ * (not MVP — this is a request/response polling MVP).
  *
  * MVP scope, recorded here so a future reader doesn't have to reconstruct it
  * from the daemon handler: **quick tunnels only** (`cloudflared tunnel --url

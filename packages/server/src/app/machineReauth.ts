@@ -3,8 +3,7 @@ import { deviceSessions } from "../db/schema.js";
 import type { Database } from "../db/types.js";
 
 /**
- * AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): the
- * minimum-viable server-inferred signal for "this machine needs
+ * The minimum-viable server-inferred signal for "this machine needs
  * `kvy auth login` again" — no CLI change, no schema change. A daemon
  * whose refresh token was revoked (a rotate, "log out other devices", or a
  * password reset's blanket revoke) can't tell the server anything over its

@@ -12,8 +12,7 @@ import type { SyncSnapshot } from "@/sync";
 import { syncQueryKey } from "@/sync";
 
 /**
- * The web's first encrypted-metadata WRITE path
- * (docs/features/session-lifecycle-actions.md Phase 3) — Rename and Pin
+ * The web's first encrypted-metadata WRITE path — Rename and Pin
  * both go through this one CAS-retry mutation. Every prior web write to a
  * session touches only plaintext columns (archive/delete/status); this is
  * the first one that has to open the current box, patch it, and re-seal

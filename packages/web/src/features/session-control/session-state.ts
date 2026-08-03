@@ -31,8 +31,8 @@ export function isTurnOpen(items: RenderItem[]): boolean {
 }
 
 /**
- * The session-detail header's "Working…" signal (`SessionTimelineScreen.tsx`,
- * docs/user-flows.md fix-plan item 2). `isTurnOpen(items)` — always freshly
+ * The session-detail header's "Working…" signal (`SessionTimelineScreen.tsx`).
+ * `isTurnOpen(items)` — always freshly
  * re-derived from the persisted, canonical event stream — is authoritative:
  * once it says `false`, `working` is `false`, full stop, regardless of what
  * the live `activity` ephemeral (`use-session-ephemerals.ts`) claims.

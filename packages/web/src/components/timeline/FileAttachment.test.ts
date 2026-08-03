@@ -15,7 +15,7 @@ function fileItem(overrides: Partial<FileItem> = {}): FileItem {
   };
 }
 
-/** plan-v2.md W3.2 — web render coverage: `inline:` refs render as `<img
+/** Web render coverage: `inline:` refs render as `<img
  * src="data:...">` directly, no download/decrypt round trip. `InlineImageAttachment`
  * is deliberately hook-free, so — mirroring `tool-cards/registry.test.ts`'s own
  * "call it directly, inspect the returned element" pattern — this needs no DOM/render

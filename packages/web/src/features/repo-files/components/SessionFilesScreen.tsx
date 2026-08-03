@@ -6,8 +6,7 @@ import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { RepoFilesPanel } from "./RepoFilesPanel";
 
 /**
- * The Repo Files panel's session-scoped entry point (`/dashboard/session/[id]/files/`,
- * docs/competitive-notes-omnara.md #5 "Full repo file browser") — mirrors
+ * The Repo Files panel's session-scoped entry point (`/dashboard/session/[id]/files/`) — mirrors
  * `SessionGitScreen`'s role exactly: a "screen" component that owns
  * resolving real ids off the live sync snapshot, so the route itself
  * (`app/session/[id]/files/page.tsx`) stays a thin static-export shell.

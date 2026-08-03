@@ -214,7 +214,7 @@
 }
 
 /*
- * Dual shiki theme (plan-v2.md W4.2, `lib/markdown.ts`'s
+ * Dual shiki theme (`lib/markdown.ts`'s
  * `theme: { light, dark }`): rehype-pretty-code emits *no* literal `color`
  * per token in multi-theme mode, only `--shiki-light`/`--shiki-dark` CSS
  * custom properties (shiki's own dual-theme convention) — one of these two

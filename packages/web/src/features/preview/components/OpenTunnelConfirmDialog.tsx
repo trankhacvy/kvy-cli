@@ -11,9 +11,9 @@ import {
 } from "@/components/ui/dialog";
 
 /**
- * The security consent gate shown on every "Open" click (docs/features/
- * dev-server-preview.md's security-posture note): a Cloudflare quick tunnel
- * exposes the local dev server at a PUBLIC, unauthenticated URL — anyone
+ * The security consent gate shown on every "Open" click: a Cloudflare quick
+ * tunnel exposes the local dev server at a PUBLIC, unauthenticated URL —
+ * anyone
  * with the link can reach it, and unlike every other Kvy RPC body, that
  * traffic is plain HTTP(S), NOT sealed under the machine's E2E key. This
  * dialog is the mandatory, explicit acknowledgment of that before

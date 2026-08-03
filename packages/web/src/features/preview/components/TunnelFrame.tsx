@@ -8,8 +8,7 @@ import type { PreviewTunnel } from "../types";
 
 /**
  * How long to wait for the iframe's `load` event before assuming the
- * tunneled dev server refused to be embedded (droppable Phase 6, docs/
- * features/dev-server-preview.md). There is no reliable, standards-based way
+ * tunneled dev server refused to be embedded. There is no reliable, standards-based way
  * to detect an `X-Frame-Options`/`frame-ancestors` block from JS — a blocked
  * frame still fires (or never fires, depending on browser/response) `load`
  * without throwing — so this is a heuristic, not a certainty: a slow but
@@ -20,15 +19,14 @@ import type { PreviewTunnel } from "../types";
 const LOAD_TIMEOUT_MS = 8_000;
 
 /**
- * The embedded live-preview frame (docs/features/dev-server-preview.md's
- * droppable Phase 6): renders `tunnel.url` inline below the ports list once
+ * The embedded live-preview frame: renders `tunnel.url` inline below the ports list once
  * a tunnel is selected for inline preview. `sandbox="allow-scripts
  * allow-same-origin allow-forms"` lets a typical dev server (React/Vite/
  * Next dev overlay, form submissions) actually function while still
  * denying it top-level navigation/popups out of the sandbox.
  *
  * Open-in-new-tab and Copy URL stay visible above the frame at all times —
- * they're the guaranteed path (Phase 5), this embed is progressive
+ * they're the guaranteed path, this embed is progressive
  * enhancement on top, never a replacement.
  *
  * The caller (`PreviewPanel`) renders this keyed on `tunnel.tunnelId` — a

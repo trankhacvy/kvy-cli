@@ -172,9 +172,8 @@ describe("useGitPanel", () => {
     });
   });
 
-  // Feature 1 (docs/web-ux-improvements-plan.md): a successful `git.init`
-  // must flip the panel straight from the error state to a live repo with
-  // no manual refresh (CLAUDE.md rule #6).
+  // A successful `git.init` must flip the panel straight from the error
+  // state to a live repo with no manual refresh (CLAUDE.md rule #6).
   it("a successful initRepo (state: initialized) invalidates status/diff/branches/remotes", async () => {
     const actions = fakeActions();
     const { panel, queryClient } = renderPanel(actions, "/repo");

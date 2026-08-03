@@ -2,21 +2,24 @@ import { Counter, Histogram, register } from "prom-client";
 import type { DefaultEventsMap, RemoteSocket, Server, Socket } from "socket.io";
 import { RpcRateLimiter } from "./rpcRateLimiter.js";
 
-// code). Only renames: `userId` -> `accountId`, and the registered room key is Kvy's
-// wire-level scope-prefixed `target` (e.g. `m:<machineId>:spawn` / `s:<sessionId>:spawn` —
-// bare `method` field travels alongside purely for metrics labels and the forwarded
-// `rpc-request` payload, so no `baseMethodName` prefix-stripping is needed here.
+// Dead-peer-detection scheme: the registered room key is Kvy's wire-level
+// scope-prefixed `target` (e.g. `m:<machineId>:spawn` / `s:<sessionId>:spawn` —
+// `@kvy/wire`'s `RpcCallSchema`); the bare `method` field travels alongside purely
+// for metrics labels and the forwarded `rpc-request` payload, so no `baseMethodName`
+// prefix-stripping is needed here.
 //
 // RPC routing uses Socket.IO rooms. A daemon/session registering a target T joins room
 // `rpc:<accountId>:T`. Callers look the target up via `io.in(room).fetchSockets()` — this
-// in-memory adapter.
+// resolves cross-replica once a distributed adapter is enabled; at MVP (single process)
+// it resolves against the local in-memory adapter.
 //
 // No Redis keys, no TTLs, no keep-alive refresh path. On disconnect Socket.IO removes the
 // socket from all rooms automatically.
 
 const RPC_ROOM_PREFIX = "rpc:";
 const RPC_CALL_TIMEOUT_MS = 30_000;
-// dead-peer detection ... pod-kill fast-fail: 1.6s vs 30s"). Two consecutive misses are
+// Dead-peer fast-fail target: under 2s, measured at ~1.6s against a real 2-replica
+// cluster (vs. ~30s for a naive TTL-expiry-based approach). Two consecutive misses are
 // still required (below) to avoid false positives from a single transient adapter
 // timeout, so this must stay comfortably under 1000ms for the worst case (two full
 // poll intervals) to land under the 2s SLO.
@@ -37,9 +40,9 @@ const RPC_PRESENCE_FETCH_TIMEOUT_MS = 400;
 const RPC_RECONNECT_GRACE_MS = 15_000;
 const RPC_RECONNECT_POLL_MS = 200;
 
-// Hardening": rate limiting on "RPC endpoints" — one of the reported Happy vuln
-// classes). Matches server.ts's global HTTP default (300/min) so RPC traffic gets the
-// same baseline throughput budget as everything else.
+// Per-account rpc-call ceiling — RPC endpoints need the same rate limiting as any other
+// authenticated endpoint. Matches server.ts's global HTTP default (300/min) so RPC
+// traffic gets the same baseline throughput budget as everything else.
 export const RPC_CALL_RATE_LIMIT_MAX = 300;
 const RPC_CALL_RATE_LIMIT_WINDOW_MS = 60_000;
 

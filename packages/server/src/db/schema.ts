@@ -213,7 +213,8 @@ export const unmanagedSessions = pgTable(
 );
 
 // never read the key material inside `response`. `expiresAt` is a required
-// TTL — an unbounded pairing window was one of the reported Happy vulns.
+// TTL — an unbounded pairing window would let a stale, still-pending request stay
+// exploitable indefinitely.
 // end-to-end to the requester's ephemeral public key — `response` is that opaque box,
 // the ONLY secret material this table (or the unauthenticated poll route that serves
 // it) ever holds. There is deliberately no plaintext `token`/`refreshToken` column

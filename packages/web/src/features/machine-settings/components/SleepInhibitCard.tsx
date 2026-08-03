@@ -22,8 +22,7 @@ const MODE_LABELS: Record<SleepInhibitMode, string> = {
 const MODE_OPTIONS: SleepInhibitMode[] = ["off", "onPower", "always"];
 
 /**
- * Settings → Machines' Sleep Inhibit card (docs/features/sleep-inhibit.md,
- * docs/competitive-notes-omnara.md #12 "Sleep-inhibit control"): a tri-state
+ * Settings → Machines' Sleep Inhibit card: a tri-state
  * control (Off / While on Power / Always) driven by `use-machine-settings`.
  * Structural clone of `features/provider-accounts/components/
  * ProviderAccountCard.tsx`'s state-by-state render shape.
