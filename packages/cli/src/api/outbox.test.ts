@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getRandomBytes, open } from "@kvy/crypto";
 import { createEnvelope, type EncryptedBox, type SessionEnvelope } from "@kvy/wire";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Logger } from "../logger.js";
 import { createHttpClient, type OutboxHttpClient, type OutboxPostResult } from "./httpClient.js";
 import { DEFAULT_FLUSH_MS, DEFAULT_MAX_BATCH_SIZE, Outbox } from "./outbox.js";
@@ -290,9 +290,8 @@ describe("Outbox", () => {
       const ob = makeOutbox({ dek, http, maxBatchSize: 1, backoffMs: () => 5 });
       ob.enqueue([textEnvelope("recovers after refresh")]);
 
-      await sleep(100);
+      await vi.waitFor(() => expect(ob.queuedBatchCount).toBe(0)); // eventually acked and dequeued
 
-      expect(ob.queuedBatchCount).toBe(0); // eventually acked and dequeued
       expect(refreshCount).toBe(1); // forced exactly once, not once per retry
       expect(seenAuthHeaders).toEqual(["Bearer stale-token", "Bearer fresh-token"]);
     });
