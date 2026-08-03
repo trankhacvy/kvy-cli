@@ -4,7 +4,7 @@
  * [args...]`'s full flag passthrough, `CLAUDE.md`'s "CLI skeleton" bullet) —
  * used only to record the chosen model into the session's own metadata
  * (`session/bootstrap.ts`'s `SessionMetadataInput.model`) for the web
- * header's display-only model chip (plan-v2.md W4.2). The flag itself still
+ * header's display-only model chip. The flag itself still
  * reaches the real `claude`/`codex` process unmodified, exactly as before —
  * this never rewrites or strips it from the args array, it only reads it.
  *

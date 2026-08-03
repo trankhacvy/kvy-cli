@@ -25,8 +25,7 @@ function toolItem(overrides: Partial<ToolItem> = {}): ToolItem {
 /** `AskUserQuestionToolCard` has no hooks of its own (unlike `PermCard`/
  * `AskUserQuestionCard`), so — unlike those — its actual body content is
  * directly introspectable via the same "call the function, walk the plain
- * `React.createElement(...)` object" technique the dispatch tests use
- * (plan-v2.md W2.1's "read-only ToolCard" sub-task). It always wraps its
+ * `React.createElement(...)` object" technique the dispatch tests use. It always wraps its
  * body in `ToolCardShell`, so every case below unwraps one level first. */
 function bodyOf(item: ToolItem): ReactElement {
   const shell = AskUserQuestionToolCard({ item });
@@ -90,8 +89,8 @@ describe("AskUserQuestionToolCard", () => {
   });
 
   it("renders a web-answered free-text question with its real answer, and does not mark it as an Error/failed card, even though the wire-level tool result carries ok:false", () => {
-    // docs/known-issues-cliweb-sync-test.md issue #4: a free-text (or any web-turn)
-    // AskUserQuestion answer only reaches Claude via a denied tool call whose reason
+    // A free-text (or any web-turn) AskUserQuestion answer only reaches
+    // Claude via a denied tool call whose reason
     // carries the real answer (`composeAskAnswerReason` in `pretoolPermissionBridge.ts`)
     // — `item.ok` is `false` on the wire even though this is a normal, successful answer.
     const shell = AskUserQuestionToolCard({

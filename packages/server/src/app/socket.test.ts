@@ -215,9 +215,9 @@ describe("startSocket (/v1/stream handshake)", () => {
     expect(gotSnapshot).toBe(false);
   });
 
-  // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): a daemon whose
-  // `cli-daemon` device session was revoked (e.g. Settings → Devices "log out other
-  // devices") can't tell the server anything over its own dead socket — the server infers
+  // A daemon whose `cli-daemon` device session was revoked (e.g. Settings →
+  // Devices "log out other devices") can't tell the server anything over
+  // its own dead socket — the server infers
   // "needs re-auth" itself, at disconnect, from the revocation it already performed.
   it("a revoked cli-daemon device session's disconnect reports needsReauth:true, distinct from a plain offline", async () => {
     const accountId = "acct_reauth_revoked";

@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Composer } from "./Composer";
 
 /**
- * Covers the actual `disabled` prop wiring (plan-v2.md W1.4+B15) — that it
+ * Covers the actual `disabled` prop wiring — that it
  * really disables the textarea, attach button, and send button, not just
  * that the prop is threaded through in source. Purely presentational (no
  * `SessionControlProvider`/query client needed), so a plain
@@ -58,7 +58,7 @@ describe("Composer disabled wiring", () => {
 });
 
 /**
- * "@" file-mention popover wiring (docs/competitive-notes-omnara.md #17) — a
+ * "@" file-mention popover wiring — a
  * static-markup render can't fire real keyboard/change events (no
  * jsdom/@testing-library here, see this file's own top-of-file note), so
  * the interactive trigger→search→select flow is covered by

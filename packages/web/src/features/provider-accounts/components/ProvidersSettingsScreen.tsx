@@ -13,8 +13,8 @@ import { ProviderAccountCard } from "./ProviderAccountCard";
 const PROVIDERS: ProviderAccountProvider[] = [...PROVIDER_IDS];
 
 /**
- * Settings → Providers (docs/competitive-notes-omnara.md #9 "Provider
- * account inspection + usage metering"): one section per known machine,
+ * Settings → Providers (provider account inspection + usage metering): one
+ * section per known machine,
  * each with a Claude Code and a Codex account card. Reuses
  * `features/session-list`'s `useLiveSessionListSnapshot` for the machine
  * list (id/decrypted name/online) rather than re-deriving it — that hook

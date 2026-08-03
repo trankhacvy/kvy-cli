@@ -1,11 +1,9 @@
-# @kvy/server — self-host runtime image (kvy-system-design.md §6.5,
-# plan.md §16 "4.3 Distribution & self-host"). Multi-stage: install workspace
-# deps once, build just the packages `@kvy/server` needs at runtime
-# (`@kvy/wire` -> `@kvy/crypto` -> `@kvy/server`, in that dependency
-# order), then ship a slim runtime layer. `node:20-slim` is enough at every
-# stage — this image never needs python3/make/g++ (contrast with Happy's
-# Dockerfile.server, which needed those for its own dependency tree) — but
-# only because the deps stage installs with `--ignore-scripts` (see its own
+# @kvy/server — self-host runtime image (docs/kvy-system-design.md §6.5).
+# Multi-stage: install workspace deps once, build just the packages
+# `@kvy/server` needs at runtime (`@kvy/wire` -> `@kvy/crypto` -> `@kvy/server`,
+# in that dependency order), then ship a slim runtime layer. `node:20-slim` is
+# enough at every stage — this image never needs python3/make/g++ — but only
+# because the deps stage installs with `--ignore-scripts` (see its own
 # comment): the workspace's `node-pty` dependency (only actually used by
 # `@kvy/cli`, never this image) has no Linux prebuilt binary, so an
 # ordinary install would try to compile it via node-gyp and fail here.

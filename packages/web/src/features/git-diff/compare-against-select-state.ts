@@ -1,7 +1,7 @@
 /**
- * Pure state-transition helpers for `CompareAgainstSelect` (docs/features/
- * git-write-actions.md Phase 5), kept in their own module for the same
- * "directly testable without a DOM" reason as `git-toolbar-state.ts`.
+ * Pure state-transition helpers for `CompareAgainstSelect`, kept in their
+ * own module for the same "directly testable without a DOM" reason as
+ * `git-toolbar-state.ts`.
  */
 
 export const WORKSPACE_DEFAULT_VALUE = "__workspace_default__";

@@ -88,7 +88,7 @@ function hasEverHadTurn(items: RenderItem[]): boolean {
  * terminal session row state → offline → pending permission → pending
  * question → actively working → last-turn outcome → ready/idle.
  *
- * `"ready"` vs `"idle"` (docs/known-issues.md #9): both are "nothing is
+ * `"ready"` vs `"idle"`: both are "nothing is
  * currently happening", but they mean different things to a user glancing at
  * Home. A session with zero turns ever (`hasEverHadTurn(items) === false`) is
  * a freshly started, healthy session that just hasn't been given a first
@@ -104,8 +104,8 @@ function hasEverHadTurn(items: RenderItem[]): boolean {
  * `"idle"`, not `"ready"` — the safe, pre-existing default while the real
  * answer is still unknown. Reporting "ready" here would flash a fabricated
  * "brand new" badge on every session, with real history or not, for the
- * span of its own decrypt — the same conflation known-issues.md #9 was
- * filed to fix, just relocated rather than removed.
+ * span of its own decrypt — the same conflation fixed above,
+ * just relocated rather than removed.
  *
  * from `"completed"`: `completed` describes a *turn* outcome (or an
  * archived/compacted row) on a session that's still otherwise controllable,
@@ -177,8 +177,7 @@ export const SESSION_STATUS_META: Record<SessionListStatus, SessionStatusMeta> =
 };
 
 /**
- * The Home screen's machine badge status (AH8 "machine-status-reauth",
- * docs/auth-ux-hardening-plan.md item 8) — a distinct third state alongside
+ * The Home screen's machine badge status — a distinct third state alongside
  * `online`/`offline` (`MachineBadge`'s own component, not `SessionCard`'s
  * per-session dot above): a daemon that's running but can't authenticate
  * (refresh token revoked) needs `kvy auth login`, not "wake the machine",

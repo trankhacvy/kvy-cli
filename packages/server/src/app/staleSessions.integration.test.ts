@@ -30,7 +30,7 @@ function fakeReply(): FastifyReply {
   return { raw: new EventEmitter() } as unknown as FastifyReply;
 }
 
-describe("reconcileStaleSessions (known-issues.md #8)", () => {
+describe("reconcileStaleSessions", () => {
   let pglite: PGlite;
   let db: Awaited<ReturnType<typeof createTestDb>>["db"];
   let accountId: string;

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Conformance harness (design §13 item 3, plan.md §16 \"4.4 Hardening & release gate\"): a scripted 20-step session against a real local stack (server + daemon + a simulated session process) exercising every wire primitive — permissions, mode switching, adoption, reconnect. Run pre-release as a release gate; also runs in CI as an ordinary vitest suite.",
+  "description": "Conformance harness (design §13 item 3): a scripted 20-step session against a real local stack (server + daemon + a simulated session process) exercising every wire primitive — permissions, mode switching, adoption, reconnect. Run pre-release as a release gate; also runs in CI as an ordinary vitest suite.",
   "license": "MIT",
   "scripts": {
     "build": "tsc --noEmit",

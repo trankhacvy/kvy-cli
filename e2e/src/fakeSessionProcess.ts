@@ -26,9 +26,9 @@
  * interprets the resulting `RequestPermissionResponse` back into an
  * allow/deny for its scripted tool-lifecycle envelopes. That split matches
  * the design doc's own division of labor: real LLM-transcript fidelity is
- * "Provider contract tests" (plan.md §16 "4.4", item 1) — this harness's job
- * is the surrounding machinery (permission pipeline, mode switching, RPC
- * plumbing, reconnect), which is exactly what design §13 item 3 lists.
+ * covered by the provider contract tests — this harness's job is the
+ * surrounding machinery (permission pipeline, mode switching, RPC plumbing,
+ * reconnect), which is exactly what design §13 item 3 lists.
  */
 // Cross-package source imports (harness-only, same convention
 // `packages/cli/src/daemon/commands.machineWiring.integration.test.ts` and
@@ -167,14 +167,14 @@ export class FakeSessionProcess {
         // state" only inverted — here there IS a (fake) session, so it
         // succeeds.
         setMode: () => ({ ok: true }),
-        // docs/known-issues.md issue #12's web model selector has no
-        // scripted scenario in this harness yet either — same "honest
-        // {ok:true} ack, no invented behavior" precedent as `stop` below.
+        // The web model selector has no scripted scenario in this harness
+        // yet either — same "honest {ok:true} ack, no invented behavior"
+        // precedent as `stop` below.
         setModel: (params) => ({ ok: true, observedModel: params.model }),
         permAnswer: (params) => this.permissionHandler.resolve(params),
-        // `stop` (plan-v2.md W2.3 "Stop session from the web") has no
-        // scripted scenario in this harness yet — an honest `{ok:true}`
-        // ack, matching `handleInterrupt`/`handleTakeControl`'s shape, keeps
+        // `stop` (stop session from the web) has no scripted scenario in
+        // this harness yet — an honest `{ok:true}` ack, matching the
+        // `handleInterrupt`/`handleTakeControl`'s shape, keeps
         // this fake conformant with the real `SessionRpcHandlers` contract
         // without inventing process-teardown behavior no e2e scenario
         // exercises. Real teardown on stop is `dispose()`, called by the

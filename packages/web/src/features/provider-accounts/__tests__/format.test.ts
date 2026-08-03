@@ -8,7 +8,7 @@ import {
 } from "../format";
 
 describe("formatDateTime", () => {
-  it("formats a timestamp as 'Mon D, H:MM AM/PM' — docs/competitive-notes-omnara.md #9's own example shape", () => {
+  it("formats a timestamp as 'Mon D, H:MM AM/PM'", () => {
     // Just assert the shape (locale- and CI-timezone-formatted, so the exact
     // wording can vary) rather than the literal "Aug 18, 11:29 AM" string.
     expect(formatDateTime(Date.parse("2026-08-18T00:00:00Z"))).toMatch(

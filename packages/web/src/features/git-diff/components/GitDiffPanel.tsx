@@ -12,12 +12,12 @@ import { GitToolbar } from "./GitToolbar";
 import { UnifiedDiffViewer } from "./UnifiedDiffViewer";
 
 /**
- * panel"; docs/features/git-write-actions.md): changed-files list on the
+ * The Git panel: changed-files list on the
  * left, the selected file's (or every file's) unified diff on the right,
  * with a write-action toolbar above both (inline branch rename, commit,
  * push, force push behind a confirm dialog) and a "Compare against any
  * ref" selector. No longer read-only — commit/push/rename are real
- * mutating RPCs (`git.commit`/`git.push`/`git.renameBranch`); the only
+ * mutating RPCs (`git.commit`/`git.push`/`git.renameBranch`).
  *
  * `useActions` is the injectable seam — mirrors `NewSessionScreen`'s
  * `useMachines`/`useActions` props. Defaults to the real

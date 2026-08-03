@@ -318,7 +318,7 @@ describe("reduceEnvelopes — misc event pass-through", () => {
   });
 });
 
-describe("reduceEnvelopes — service item `quiet` classification (docs/bug-fix-plan.md #4)", () => {
+describe("reduceEnvelopes — service item `quiet` classification", () => {
   it("marks the routine 'session started' boundary text as quiet", () => {
     const envs: SessionEnvelope[] = [
       createEnvelope("agent", { t: "service", text: "session started" }, { id: "1", time: 1 }),
@@ -340,7 +340,7 @@ describe("reduceEnvelopes — service item `quiet` classification (docs/bug-fix-
   });
 });
 
-describe("reduceEnvelopes — usage (W4.6)", () => {
+describe("reduceEnvelopes — usage", () => {
   it("maps a usage envelope straight through, costUsd omitted when absent", () => {
     const env = createEnvelope(
       "agent",

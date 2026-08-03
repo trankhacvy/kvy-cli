@@ -1,6 +1,5 @@
 /**
- * Pure logic for the "New project" flow (docs/web-ux-improvements-plan.md
- * Feature 4) — no React, no RPC, so it is unit-testable in a package whose
+ * Pure logic for the "New project" flow — no React, no RPC, so it is unit-testable in a package whose
  * vitest runs `environment: "node"`. Same split as `inline-spawn.ts`/
  * `wizard-state.ts`/`file-tree-logic.ts`.
  *

@@ -19,22 +19,20 @@ import type { GitPanelState } from "../use-git-panel";
 import { AddRemoteDialog } from "./AddRemoteDialog";
 
 /**
- * The Git panel's write-action toolbar (docs/features/git-write-actions.md
- * Phase 5): inline branch rename, a one-click commit box (defaults to
- * staging everything — `git add -A` — via `live-actions.ts`'s own
- * `stageAll` default, this checkbox is the override), Push, and Force Push
- * behind a confirm dialog. Every mutation error surfaces the raw
- * `GitExecError` message inline (`text-destructive`) rather than a Kvy
- * abstraction — this IS the credential-failure UX (docs/features/
- * git-write-actions.md: "push auth is the machine's ambient git credential
- * helper/SSH agent").
+ * The Git panel's write-action toolbar: inline branch rename, a one-click
+ * commit box (defaults to staging everything — `git add -A` — via
+ * `live-actions.ts`'s own `stageAll` default, this checkbox is the
+ * override), Push, and Force Push behind a confirm dialog. Every mutation
+ * error surfaces the raw `GitExecError` message inline (`text-destructive`)
+ * rather than a Kvy abstraction — this IS the credential-failure UX: push
+ * auth is the machine's ambient git credential helper/SSH agent.
  */
 export function GitToolbar({
   panel,
   machineUnavailable = false,
 }: {
   panel: GitPanelState;
-  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once the owning machine is confidently offline/needs-reauth — `||`d into every button's existing disabled expression rather than adding a second disabled-state machinery. */
+  /** `true` once the owning machine is confidently offline/needs-reauth — `||`d into every button's existing disabled expression rather than adding a second disabled-state machinery. */
   machineUnavailable?: boolean;
 }) {
   const { status } = panel;
@@ -84,7 +82,7 @@ export function GitToolbar({
     panel.isCommitAndPushPending ||
     machineUnavailable;
 
-  // Feature 1 (docs/web-ux-improvements-plan.md): a repo with no remote at
+  // A repo with no remote at
   // all, or a detached HEAD, is knowable BEFORE the click — disable the
   // three push-shaped buttons and offer derived copy instead of letting
   // git's own stderr teach the user. A branch with no upstream still

@@ -195,8 +195,7 @@ describe("POST /v1/machines", () => {
     expect(response.statusCode).toBe(404);
   });
 
-  // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8).
-  describe("needsReauth (AH8)", () => {
+  describe("needsReauth", () => {
     it("registers false for a fresh machine, and backfills device_sessions.machineId onto the registering cli-daemon session", async () => {
       const { account } = await createTestAccount(db);
       const daemon = await issueSession(db, { accountId: account.id, clientKind: "cli-daemon" });

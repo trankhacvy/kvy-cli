@@ -127,8 +127,8 @@ export function ChecksBody({
 }
 
 /**
- * docs/features/github-pr-ci.md "GitHub PR/CI integration";
- * docs/competitive-notes-omnara.md #4): PR header (when one exists) plus its
+ * GitHub PR/CI integration: PR header (when
+ * one exists) plus its
  * check-run list, or a derived empty-state message otherwise (`ChecksBody`
  * above). Read-only — no re-run/cancel actions here (design: fast-follow).
  *

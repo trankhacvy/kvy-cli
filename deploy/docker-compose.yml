@@ -1,5 +1,5 @@
-# Self-host stack (kvy-system-design.md §6.5, plan.md §16 "4.3 Distribution
-# & self-host"): @kvy/server + Postgres 16 + an optional MinIO (the
+# Self-host stack (kvy-system-design.md §6.5): @kvy/server + Postgres 16 +
+# an optional MinIO (the
 # S3-compatible target the already-landed blob-storage driver picks up
 # whenever `S3_BUCKET` is set — see packages/server/src/blobStorage/index.ts;
 # leave it unset and blobs fall back to local disk, no MinIO required). The

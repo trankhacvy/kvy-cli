@@ -1,5 +1,5 @@
 /**
- * "@" file-mention autocomplete (docs/competitive-notes-omnara.md #17) — the
+ * "@" file-mention autocomplete — the
  * composer's searchable file picker. Mirrors `features/git-diff`'s
  * `GitDiffActions`/`UseGitDiffActions` seam: a small typed surface
  * (`FileMentionActions`) the UI depends on, swappable between a static

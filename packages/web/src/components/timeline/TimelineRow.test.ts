@@ -9,7 +9,7 @@ import { UsageChip } from "./UsageChip";
  * `React.createElement(...)` result (a plain object carrying `.type`), the
  * same DOM-free assertion pattern `tool-cards/registry.test.ts` uses for
  * `ToolCard`. */
-describe("TimelineRow — usage dispatch (W4.6)", () => {
+describe("TimelineRow — usage dispatch", () => {
   it("routes a usage item to UsageChip", () => {
     const item: UsageItem = {
       id: "u1",
@@ -48,7 +48,7 @@ describe("TimelineRow — plan dispatch", () => {
   });
 });
 
-describe("TimelineRow — permission-mode dispatch (docs/bug-fix-plan.md #5)", () => {
+describe("TimelineRow — permission-mode dispatch", () => {
   it("routes a permission-mode item to ServiceLine with a mode+source label", () => {
     const item: RenderItem = {
       id: "pm1",

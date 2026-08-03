@@ -159,7 +159,7 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ items: [{ providerSessionId: "prov-1", lastActivityAt: 1_000 }] });
   });
 
-  it("round-trips a resumeSession call and result (docs/features/session-lifecycle-actions.md Phase 6 — Restart)", async () => {
+  it("round-trips a resumeSession call and result (Restart)", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
         ok: true,
@@ -197,7 +197,7 @@ describe("createMachineRpcClient", () => {
     );
   });
 
-  it("surfaces the daemon's typed .code as handlerErrorCode on MachineRpcError (known-issues.md #3)", async () => {
+  it("surfaces the daemon's typed .code as handlerErrorCode on MachineRpcError", async () => {
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({
         ok: true,
@@ -479,7 +479,7 @@ describe("createMachineRpcClient", () => {
     expect(result).toEqual({ ok: true });
   });
 
-  it("round-trips a workspace.getConfig call and result (docs/features/setup-run-scripts.md)", async () => {
+  it("round-trips a workspace.getConfig call and result", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
         ok: true,
@@ -608,8 +608,7 @@ describe("createMachineRpcClient", () => {
     // which structurally can never satisfy a real result schema — this must be
     // special-cased BEFORE schema validation, or the caller only ever sees a
     // useless "'method' RPC result failed schema validation" instead of the
-    // actual git stderr (docs/features/git-write-actions.md's credential-failure
-    // UX depends on this).
+    // actual git stderr the Git panel's credential-failure UX depends on.
     const client = createMachineRpcClient({
       socket: fakeSocket(async () => ({
         ok: true,
@@ -624,7 +623,7 @@ describe("createMachineRpcClient", () => {
     ).rejects.toThrow("fatal: could not read Username for 'https://...'");
   });
 
-  it("round-trips sleepInhibit.get and sleepInhibit.set calls and results (docs/features/sleep-inhibit.md)", async () => {
+  it("round-trips sleepInhibit.get and sleepInhibit.set calls and results", async () => {
     const rpcCall = vi.fn(
       async (_target: string, _method: string, _params: EncryptedBox): Promise<RpcCallResult> => ({
         ok: true,

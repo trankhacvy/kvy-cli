@@ -124,8 +124,8 @@ describe("launchProviderProcess", () => {
     );
   });
 
-  // A3/A4 (docs/known-issues.md — "generic 15s timeout masks the real
-  // failure reason"): `spawnAwaiter.ts` needs a way to learn a launched
+  // So a generic 15s timeout doesn't mask the real failure reason:
+  // `spawnAwaiter.ts` needs a way to learn a launched
   // process died so it can reject fast instead of always waiting out the
   // full timeout. These prove the two `watchExit` implementations actually
   // observe an exit.

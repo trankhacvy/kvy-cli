@@ -41,7 +41,7 @@ function isDeclinedQuestion(item: ToolItem): boolean {
 }
 
 /**
- * Read-only `AskUserQuestion` ToolCard (plan-v2.md W2.1) — replaces
+ * Read-only `AskUserQuestion` ToolCard — replaces
  * `McpGenericCard`'s raw-JSON fallback for a locally-answered question (the
  * terminal widget rendered, the human answered it there, and the tailer
  * mirrored question+answer as an ordinary tool-start/tool-end pair; a
@@ -59,8 +59,8 @@ export function AskUserQuestionToolCard({ item }: { item: ToolItem }) {
   const declined = isDeclinedQuestion(item);
   const fallbackOutputText = readOutputText(item.output);
 
-  // docs/known-issues-cliweb-sync-test.md issue #4: a web-answered question (fixed-option
-  // or free-text) that couldn't be driven into a live terminal widget only reaches Claude
+  // A web-answered question (fixed-option or free-text) that couldn't be
+  // driven into a live terminal widget only reaches Claude
   // by denying the underlying tool call with the answer baked into the deny reason
   // (`composeAskAnswerReason` in `pretoolPermissionBridge.ts`) — Claude Code has no other
   // channel to hand back a modified tool result to a still-pending `AskUserQuestion`.

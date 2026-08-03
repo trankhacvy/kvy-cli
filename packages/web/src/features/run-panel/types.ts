@@ -7,8 +7,8 @@ import type {
 } from "@kvy/wire";
 
 /**
- * `workspace.getConfig`/`run.*`; docs/features/setup-run-scripts.md
- * "Per-workspace Setup/Run scripts"). Structural clone of
+ * View-model types for the Setup/Run tab, backed by the daemon's
+ * `workspace.getConfig`/`run.*` RPCs. Structural clone of
  * `features/git-diff/types.ts`'s seam layout.
  *
  * `RunConfig`/`RunStatusSnapshot` are re-exported straight off `@kvy/wire`
@@ -27,10 +27,11 @@ export type RunStatusSnapshot = RunStatusResult;
  * (`live-actions.ts`) once a screen has a live `apiSocket` + a crypto client
  * holding the target machine's unwrapped DEK.
  *
- * Script DEFINITION is deliberately absent from this surface — every method
- * local-consent boundary, docs/features/setup-run-scripts.md's central risk
- * note: scripts are defined CLI-only, via `kvy workspace config
- * --setup-script/--run-script`, and never travel over the wire).
+ * Script DEFINITION is deliberately absent from this surface — every
+ * method here only reads or executes an already-configured script. That's
+ * a deliberate local-consent boundary: scripts are defined CLI-only, via
+ * `kvy workspace config --setup-script/--run-script`, and never travel
+ * over the wire.
  */
 export interface RunPanelActions {
   /** Fetches the workspace's configured `baseRef`/`remote`/`setupScript`/`runScript` for `worktree`. Throws on failure (e.g. an unregistered worktree). */

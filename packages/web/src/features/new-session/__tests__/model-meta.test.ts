@@ -32,7 +32,7 @@ describe("MODEL_OPTIONS", () => {
     }
   });
 
-  it("exposes 1M-context variants for claude-code's Sonnet and Opus, distinct from the base model (docs/competitive-notes-omnara.md #13)", () => {
+  it("exposes 1M-context variants for claude-code's Sonnet and Opus, distinct from the base model", () => {
     const claudeOptions = MODEL_OPTIONS["claude-code"];
     expect(claudeOptions).toContainEqual({ value: "sonnet[1m]", label: "Sonnet (1M)" });
     expect(claudeOptions).toContainEqual({ value: "opus[1m]", label: "Opus (1M)" });

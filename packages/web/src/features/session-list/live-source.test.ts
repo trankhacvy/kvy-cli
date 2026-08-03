@@ -91,8 +91,8 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     expect(snapshot.machines[0]?.online).toBe(false);
   });
 
-  // AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8) — sub-task 4's
-  // scenario pair, exercised through the real `buildSnapshot` assembly.
+  // The needs-reauth vs. asleep scenario pair, exercised through the real
+  // `buildSnapshot` assembly.
   it("surfaces needs-reauth from the bootstrap MachineRow field, distinct from a merely-asleep machine's plain offline", () => {
     const now = Date.now();
     const revokedMachine = makeMachine({ id: "mach-revoked", lastSeenAt: now, needsReauth: true });
@@ -161,7 +161,7 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     // precedent as `title`/Issue #13 — this session could have years of real
     // history that just hasn't loaded, so it must NOT be indistinguishable
     // from a genuinely brand-new session with zero turns. Regression guard
-    // for exactly that: an earlier revision of known-issues.md #9's fix
+    // for exactly that: an earlier revision of this fix
     // collapsed "not loaded" into the same `[]` as "genuinely empty", which
     // made every session flash a fabricated "ready" on load.
     const snapshot = buildSnapshot(

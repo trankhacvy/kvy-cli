@@ -5,8 +5,7 @@ import { type ReactNode, useEffect, useRef } from "react";
 
 /**
  * The house windowing primitive for long, fixed-row-height lists — the
- * file viewer's lines and the diff viewer's hunk lines (Feature 3, docs/
- * web-ux-improvements-plan.md Phase 3).
+ * file viewer's lines and the diff viewer's hunk lines.
  *
  * `@tanstack/react-virtual` (not a hand-rolled windowing pass) for the same
  * reason `@tanstack/react-query` owns caching here: it is headless, it has

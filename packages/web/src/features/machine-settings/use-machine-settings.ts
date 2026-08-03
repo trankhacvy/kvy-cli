@@ -8,9 +8,9 @@ function queryKey(machineId: string) {
 }
 
 /**
- * The Sleep Inhibit card's data-fetching + write-action state
- * (docs/features/sleep-inhibit.md) — mirrors `features/provider-accounts/
- * use-provider-account.ts`'s shape: a plain `useQuery` (this has no
+ * The Sleep Inhibit card's data-fetching + write-action state — mirrors
+ * `features/provider-accounts/use-provider-account.ts`'s shape: a plain
+ * `useQuery` (this has no
  * server-side push channel of its own, it's a point-in-time RPC snapshot),
  * plus a `useMutation` for `setSleepInhibit`.
  *

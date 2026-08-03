@@ -14,8 +14,7 @@ import type { UseSessionListSnapshot } from "./types";
 
 const PAGE_SIZE = 10;
 // Shorter than the sidebar's — this is a page you're actively viewing, so
-// some liveliness in ordering is expected (docs/workspace-nav-redesign-plan.md
-// decision #6).
+// some liveliness in ordering is expected.
 const REORDER_DEBOUNCE_MS = 1500;
 
 function workspaceKey(group: WorkspaceGroup): string {
@@ -23,6 +22,8 @@ function workspaceKey(group: WorkspaceGroup): string {
 }
 
 /**
+ * The Home screen's session list — sessions grouped by workspace
+ * (`groupPagedSessions`), paginated at `PAGE_SIZE`, each row showing a
  * derived status dot and its machine's online/offline badge.
  *
  * `useData` defaults to the real sync-engine-backed `useLiveSessionListSnapshot`
@@ -52,8 +53,7 @@ function workspaceKey(group: WorkspaceGroup): string {
  * (`components/new-session-panel.tsx`), since a workspace only exists
  * server-side once `kvy` has actually run there once. That used to leave
  * one genuine gap: an account with machines but literally zero sessions
- * ever run had no workspace row to put a `+` on yet. Feature 4 (docs/
- * web-ux-improvements-plan.md) closes it — `NewWorkspaceTrigger`
+ * ever run had no workspace row to put a `+` on yet. `NewWorkspaceTrigger`
  * (`components/new-workspace-panel.tsx`) creates a brand-new folder on a
  * machine, registers it, and spawns the first session there, with no
  * terminal required (CLAUDE.md auth/UX rule #1: never print "run X" when

@@ -15,9 +15,9 @@ const migrationsFolder = path.resolve(
   "../../../drizzle",
 );
 
-// docs/auth-ux-hardening-plan.md item 3 ("gate-password-prod"): the four password.ts
-// handlers 404 under `NODE_ENV=production` (see password-gate.test.ts for that
-// behavior, in its own file/worker — see that file's header comment for why); this file
+// The four password.ts handlers 404 under `NODE_ENV=production` (see
+// password-gate.test.ts for that behavior, in its own file/worker — see that
+// file's header comment for why); this file
 // exercises the non-production, always-on behavior. `config.ts`'s `env` singleton is
 // parsed once from `process.env` at import time (same caveat as
 // config.test.ts/oauth.test.ts), so pinning `NODE_ENV` requires setting `process.env`
@@ -61,7 +61,7 @@ async function buildApp() {
   return { app, db, email, pglite };
 }
 
-describe("password auth routes — NODE_ENV=test (local-testing surface, item 3)", () => {
+describe("password auth routes — NODE_ENV=test (local-testing surface)", () => {
   let pglite: PGlite;
   let db: ReturnType<typeof drizzle<typeof schema>>;
   let app: FastifyInstance;

@@ -18,7 +18,7 @@ export function shouldShowTakeControl(
  * Whether the mode selector's `setMode` mutation is real (`true`) or should
  * degrade to a read-only display (`false`). A remote-loop session's
  * `setMode` is unconditionally real; a PTY/local session's is real only once
- * the flag-gated Shift+Tab cycle (plan-v2.md W4.3) has been enabled on this
+ * the flag-gated Shift+Tab cycle has been enabled on this
  * build (`ptySetModeEnabled`, defaulted to `false`). `supportsLiveModeSwitch`
  * gates the whole thing off for a provider that can't live-switch modes at
  * all, regardless of `controlMode`.
@@ -33,8 +33,8 @@ export function canMutateMode(
 }
 
 /**
- * `ControlBar`'s reaction to a settled `setMode` mutation (plan-v2.md W4.3
- * "Real setMode for the PTY path"). Kept as a pure module — same precedent
+ * `ControlBar`'s reaction to a settled `setMode` mutation
+ * (real `setMode` for the PTY path). Kept as a pure module — same precedent
  * as `stop-session-state.ts` — so the `{ok:false}` revert branch (verification
  * timeout, or the PTY injection gate closed — both expected outcomes per the
  * design, not edge cases) is directly testable (`ControlBar.test.ts`)

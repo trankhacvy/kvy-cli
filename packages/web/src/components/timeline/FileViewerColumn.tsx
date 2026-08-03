@@ -48,7 +48,7 @@ function SegmentToggle<T extends string | number>({
 
 /**
  * Replaces the main column's Timeline+Composer with a read-only file/diff
- * viewer (conductor.build-style, known-issues.md #7 follow-up) while
+ * viewer (conductor.build-style) while
  * `openFile` is set — a single-tab "replace" model (Option A): opening a
  * new file swaps this one out rather than accumulating open tabs. The tab
  * strip's job is solely to get back — click "Timeline" (or the file tab's

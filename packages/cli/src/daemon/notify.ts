@@ -113,8 +113,8 @@ export async function notifyDaemonSessionStarted(
 }
 
 /**
- * A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
- * reason"): the CLI-side client half of the `/session-start-failed`
+ * So a generic 15s timeout doesn't mask the real failure reason: the
+ * CLI-side client half of the `/session-start-failed`
  * self-report webhook (`controlServer.ts`). Called from `start.ts`'s/
  * `startCodex.ts`'s `bootstrapSession()` catch block — the one place a
  * daemon-spawned session can fail before it ever has a `sessionId` to

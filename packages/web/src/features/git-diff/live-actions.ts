@@ -29,8 +29,8 @@ export function machineRpcToGitDiffActions(rpc: MachineRpcClient): GitDiffAction
     async commit(worktree, message, options) {
       // One-click commit defaults to staging everything (`git add -A`) so
       // it commits exactly what the panel's changed-files list shows,
-      // including untracked files — docs/features/git-write-actions.md's
-      // recorded default. `GitToolbar`'s "include untracked" checkbox
+      // including untracked files — this is the intended default.
+      // `GitToolbar`'s "include untracked" checkbox
       // (defaulting checked) is the primary way a caller overrides this,
       // but the default lives here too so any other caller that omits
       // `stageAll` gets the same one-click behavior.

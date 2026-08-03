@@ -3,7 +3,7 @@
  * workspace settings Git tab's remote-name autofill. Modeled line-for-line
  * on `gitBranches.ts`: same injectable `git?: GitExec` seam, same "throw
  * `GitExecError` through, no silent empty-list fallback" contract, and the
- * same `assertWorkspaceStillValid` pre-check (known-issues.md #3) so a
+ * same `assertWorkspaceStillValid` pre-check so a
  * renamed/deleted/no-longer-a-repo worktree surfaces a classified
  * `WorkspaceValidationError` instead of a raw `git` stderr string.
  *

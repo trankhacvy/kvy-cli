@@ -365,7 +365,7 @@ describe("getGitDiff", () => {
     ).rejects.toThrow("bad revision");
   });
 
-  it("propagates a WorkspaceValidationError from assertWorkspaceValid without ever calling git (known-issues.md #3)", async () => {
+  it("propagates a WorkspaceValidationError from assertWorkspaceValid without ever calling git", async () => {
     const git = vi.fn(async () => "diff");
 
     await expect(

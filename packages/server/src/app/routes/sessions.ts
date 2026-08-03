@@ -177,10 +177,9 @@ export function buildSessionsRoutes(
         const last = page[page.length - 1];
         const nextCursor = hasMore && last ? encodeSessionCursor(last.updatedAt, last.id) : null;
 
-        // known-issues.md #8: before handing back `status: "active"` rows,
-        // flip any that are actually orphaned (owning machine gone stale,
-        // no recent activity either) — lazy, on-read reconciliation, see
-        // `staleSessions.ts`.
+        // Before handing back `status: "active"` rows, flip any that are
+        // actually orphaned (owning machine gone stale, no recent activity
+        // either) — lazy, on-read reconciliation, see `staleSessions.ts`.
         const referencedMachineIds = [
           ...new Set(
             page

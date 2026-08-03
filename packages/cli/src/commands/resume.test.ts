@@ -164,7 +164,7 @@ describe("runResumeCommand", () => {
       expect(written.join("")).toContain("resumed session sess_1");
     });
 
-    it("relaunches into the session's own persisted directory, not the CLI invocation's cwd (known-issues.md: `kvy resume` ignores the persisted session directory)", async () => {
+    it("relaunches into the session's own persisted directory, not the CLI invocation's cwd (`kvy resume` used to ignore the persisted session directory)", async () => {
       // A directory distinct from `workspacePath` (the CLI's own cwd, per `baseDeps()` below) —
       // proves resume uses the SESSION's directory, not wherever `kvy resume` was run from.
       const sessionOwnDir = join(baseDir, "session-own-dir");

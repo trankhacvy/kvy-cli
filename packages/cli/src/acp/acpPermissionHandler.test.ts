@@ -313,10 +313,9 @@ describe("cancellation", () => {
   });
 });
 
-// docs/plan-flows-3-4-5.md Flow 5's ACP correction (FL5.2): `reportSessionAttention`
-// call sites, mirroring pretoolPermissionBridge.test.ts's own
+// `reportSessionAttention` call sites, mirroring pretoolPermissionBridge.test.ts's own
 // "onPendingAttention" assertions for the terminal path.
-describe("session attention (docs/plan-flows-3-4-5.md Flow 5 — ACP wiring)", () => {
+describe("session attention (ACP wiring)", () => {
   const attention: ReportSessionAttentionDeps = {
     backendUrl: "https://api.example",
     accessToken: "tok-1",

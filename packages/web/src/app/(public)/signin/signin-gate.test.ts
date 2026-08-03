@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SIGNIN_EXPIRED_PATH, SIGNIN_PATH } from "@/features/auth";
 import { isExpiredReason } from "./signin-gate";
 
-// docs/auth-ux-hardening-plan.md item 7 ("session-expiry-reason"): a failed
-// `silentRefresh()` (`require-auth.tsx`) redirects here with `SIGNIN_EXPIRED_PATH`'s
+// A failed `silentRefresh()` (`require-auth.tsx`) redirects here with `SIGNIN_EXPIRED_PATH`'s
 // query string, and this page must recognize exactly that as "show the expired
 // banner" — while a plain unauthenticated visit (`SIGNIN_PATH`, no query string,
 // the same route a deliberate "log out this device" also lands on) must not.

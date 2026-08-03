@@ -32,6 +32,8 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
+  id-token: write
 
 jobs:
   publish-npm:
@@ -44,7 +46,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # changesets diffs against main to find pending changesets — needs
           # real history, not a shallow clone (confirmed the hard way: fails
@@ -52,10 +54,10 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: pnpm
@@ -71,9 +73,15 @@ jobs:
       - name: Build kvy (bundles @kvy/wire + @kvy/crypto)
         run: pnpm --filter @kvy/wire --filter @kvy/crypto --filter @vibe-oss/kvy build
 
+      # npm packs LICENSE from the package's own directory, not the monorepo
+      # root — copy it in right before publish rather than keeping a second,
+      # driftable copy checked into packages/cli/.
+      - name: Copy LICENSE into packages/cli for the npm tarball
+        run: cp LICENSE packages/cli/LICENSE
+
       - name: Version or publish
         id: changesets
-        uses: changesets/action@v1
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1
         with:
           publish: pnpm changeset publish
           version: pnpm changeset version
@@ -82,6 +90,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
+
+      # continue-on-error above means a real misconfiguration (missing
+      # NPM_TOKEN, wrong access level, missing permissions) fails silently —
+      # same neutral icon as a transient npm outage. Surface it loudly so it
+      # can't sit unnoticed.
+      - name: Flag a failed version/publish step
+        if: steps.changesets.outcome == 'failure'
+        run: |
+          echo "### :warning: npm version/publish step failed" >> "$GITHUB_STEP_SUMMARY"
+          echo "This job continues on error so a registry outage never blocks the native binary release below, but a failure here needs a look — check the \"Version or publish\" step's logs above." >> "$GITHUB_STEP_SUMMARY"
 
   resolve-native-release:
     name: resolve kvy's release tag
@@ -90,7 +109,7 @@ jobs:
       should_build: ${{ steps.resolve.outputs.should_build }}
       tag: ${{ steps.resolve.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -136,8 +155,7 @@ jobs:
       matrix:
         include:
           # Proven end-to-end on this exact target: real compiled binary,
-          # real pty session (spawn, resize, keyring auth, clean exit) — see
-          # docs/git-guide.md.
+          # real pty session (spawn, resize, keyring auth, clean exit).
           - os: macos-14
             suffix: darwin-arm64
           # darwin-x64 (macos-13) is deliberately OMITTED, not broken: a
@@ -175,15 +193,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ needs.resolve-native-release.outputs.tag }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: pnpm
@@ -198,7 +216,7 @@ jobs:
         shell: bash
         run: bash scripts/build-binaries.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: kvy-binaries-${{ matrix.suffix }}
           path: dist-binaries/*
@@ -221,14 +239,14 @@ jobs:
       needs.resolve-native-release.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: kvy-binaries-*
           path: dist-binaries
           merge-multiple: true
 
       - name: publish GitHub Release with binaries attached
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ needs.resolve-native-release.outputs.tag }}
           files: dist-binaries/*
@@ -236,8 +254,8 @@ jobs:
           fail_on_unmatched_files: true
 
   publish-cli-latest:
-    # The rolling self-update pointer (`kvy update` / auto-update-on-start,
-    # plan.md §16 "4.3 Distribution & self-host"): re-publishes this run's
+    # The rolling self-update pointer (`kvy update` / auto-update-on-start):
+    # re-publishes this run's
     # binaries + VERSION file under a fixed `cli-latest` tag, on every real
     # kvy release, so `packages/cli/src/update/` can always find "the
     # current version" and its assets at one stable URL
@@ -255,7 +273,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: kvy-binaries-*
           path: dist-binaries
@@ -287,7 +305,7 @@ jobs:
             || echo "no existing cli-latest release to delete — first release, continuing"
 
       - name: publish rolling cli-latest release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: cli-latest
           name: "cli-latest (rolling self-update pointer)"

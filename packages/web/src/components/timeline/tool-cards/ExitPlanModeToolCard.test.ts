@@ -17,7 +17,7 @@ function toolItem(args: unknown): ToolItem {
   };
 }
 
-/** `ExitPlanModeToolCard`'s body slot (bug-fix-plan.md #6) — same
+/** `ExitPlanModeToolCard`'s body slot — same
  * calling-directly-and-inspecting-the-element-tree technique
  * `BashCard.test.ts` uses: `ExitPlanModeToolCard({item})` returns the JSX
  * element `<ToolCardShell item={item} icon={...}>{body}</ToolCardShell>`

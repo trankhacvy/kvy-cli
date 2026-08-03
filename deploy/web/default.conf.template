@@ -1,6 +1,5 @@
-# nginx site config for the @kvy/web static export (design §5.3/§9,
-# plan.md §16 "4.3 Distribution & self-host": served from an origin separate
-# from the API, strict CSP + SRI).
+# nginx site config for the @kvy/web static export (design §5.3/§9: served
+# from an origin separate from the API, strict CSP + SRI).
 #
 # `${API_ORIGIN}`/`${API_ORIGIN_WS}` are substituted at container start by
 # the official nginx image's `docker-entrypoint.d/20-envsubst-on-templates.sh`
@@ -18,7 +17,7 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
-    # Strict CSP (plan.md §16 "4.3 ... strict CSP+SRI"). `connect-src` is
+    # Strict CSP. `connect-src` is
     # scoped to this origin plus the configured API origin (REST) and its
     # WebSocket counterpart (Socket.IO, `/v1/stream`) — nothing else is a
     # valid fetch/XHR/WS target for this app. `script-src`/`style-src` need
@@ -31,9 +30,9 @@ server {
     # compromised static host or CDN in front of this origin still fails to
     # execute even though inline same-origin script is allowed to run.
     #
-    # `frame-src https://*.trycloudflare.com` (docs/features/
-    # dev-server-preview.md's droppable Phase 6, "embedded iframe view"): the
-    # ONE deliberate, narrowly-scoped loosening of an otherwise unchanged,
+    # `frame-src https://*.trycloudflare.com` ("embedded iframe view" for the
+    # live dev-server preview): the ONE deliberate, narrowly-scoped
+    # loosening of an otherwise unchanged,
     # security-reviewed policy — it only permits THIS app to EMBED a
     # Cloudflare quick-tunnel URL inline (`TunnelFrame.tsx`). It does not
     # touch `frame-ancestors 'none'`/`X-Frame-Options: DENY` below, which

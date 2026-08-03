@@ -26,7 +26,7 @@ const MODE_LABEL: Record<PermissionMode, string> = {
 };
 
 /**
- * The composer footer's left-side session chips (plan-v2.md W2.4's
+ * The composer footer's left-side session chips (the old
  * ControlBar contents, redistributed into the chat-composer footer à la
  * Cursor/ChatGPT): a read-only model chip, the permission-mode selector,
  * and "Take control" for genuine remote-loop sessions. Interrupt lives on

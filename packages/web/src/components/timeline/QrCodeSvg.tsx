@@ -6,8 +6,8 @@ import { encodeQrMatrix, qrMatrixToPath } from "@/lib/qrCode";
 const QUIET_ZONE = 2;
 
 /**
- * Renders `value` as a scannable QR code (docs/competitive-notes-omnara.md
- * #11's "Continue on mobile" handoff). Deliberately fixed black-on-white
+ * Renders `value` as a scannable QR code for the "Continue on mobile" handoff.
+ * Deliberately fixed black-on-white
  * regardless of the app's own dark/light theme (`use-theme.ts`) — a QR
  * code's contrast is functional, not decorative, and inverting or
  * theme-tinting it risks a real phone camera failing to decode it.

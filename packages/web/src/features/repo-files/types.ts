@@ -1,10 +1,9 @@
 import type { FsReadResult } from "@kvy/wire";
 
 /**
- * `git.files`/`fs.read`; docs/competitive-notes-omnara.md #5 "Full repo
- * file browser": "browses and displays any file in the repo (full
- * syntax-highlighted viewer, line numbers), not just files with diffs — a
- * read-only code viewer with no separate editor needed"). Read-only, same
+ * `git.files`/`fs.read` — browses and displays any file in the repo (full
+ * syntax-highlighted viewer, line numbers), not just files with diffs, as a
+ * read-only code viewer with no separate editor needed. Read-only, same
  * as `features/git-diff` — no save/edit actions here.
  */
 
@@ -22,7 +21,7 @@ export type RepoFileContent = FsReadResult;
 export interface RepoFilesActions {
   /** Fetches the flat, worktree-relative file list for `worktree` (`git.files` — tracked + untracked-but-not-ignored). Throws on failure (not a git repo, unreachable machine, ...). */
   fetchFileList(worktree: string): Promise<string[]>;
-  /** Fetches one file's content (`fs.read`), `path` relative to `worktree`. `range` is a byte-offset `[start, end)` slice — the daemon already implements it (`fsRead.ts`) and clamps it to its own inline budget, so a caller can page a large file instead of re-serving the same truncated prefix forever (Feature 3 Phase 5, docs/web-ux-improvements-plan.md). Throws on failure (missing/escaping/binary/directory target, unreachable machine, ...). */
+  /** Fetches one file's content (`fs.read`), `path` relative to `worktree`. `range` is a byte-offset `[start, end)` slice — the daemon already implements it (`fsRead.ts`) and clamps it to its own inline budget, so a caller can page a large file instead of re-serving the same truncated prefix forever. Throws on failure (missing/escaping/binary/directory target, unreachable machine, ...). */
   fetchFileContent(
     worktree: string,
     path: string,

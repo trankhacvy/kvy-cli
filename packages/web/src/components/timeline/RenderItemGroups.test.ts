@@ -73,7 +73,7 @@ describe("groupRenderItems", () => {
     expect(groups[0].items).toHaveLength(2);
   });
 
-  it("keeps a non-quiet service row visible, as its own standalone group between messages (docs/bug-fix-plan.md #4)", () => {
+  it("keeps a non-quiet service row visible, as its own standalone group between messages", () => {
     const serviceText = "Set model to Haiku 4.5 and saved as your default for new sessions";
     const items: RenderItem[] = [
       agentText("a1", "hello", "t1"),

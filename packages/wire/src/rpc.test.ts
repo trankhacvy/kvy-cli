@@ -68,7 +68,7 @@ describe("RpcCallSchema", () => {
   });
 });
 
-describe("SpawnParamsSchema.branch.from (docs/competitive-notes-omnara.md #16 searchable base-branch picker)", () => {
+describe("SpawnParamsSchema.branch.from (searchable base-branch picker)", () => {
   const base = {
     idempotencyKey: "idem-1",
     workspaceId: "w1",
@@ -377,7 +377,7 @@ describe("git.commit / git.push / git.renameBranch (write RPCs)", () => {
   });
 });
 
-describe("git.init / git.setRemote (Feature 1, docs/web-ux-improvements-plan.md)", () => {
+describe("git.init / git.setRemote", () => {
   it("GitInitParamsSchema requires idempotencyKey/worktree; initialBranch stays optional", () => {
     expect(GitInitParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
     expect(
@@ -446,7 +446,7 @@ describe("git.init / git.setRemote (Feature 1, docs/web-ux-improvements-plan.md)
   });
 });
 
-describe("sleepInhibit.get / sleepInhibit.set schemas (docs/competitive-notes-omnara.md #12)", () => {
+describe("sleepInhibit.get / sleepInhibit.set schemas", () => {
   it("SleepInhibitModeSchema accepts the tri-state values and rejects anything else", () => {
     expect(SleepInhibitModeSchema.safeParse("off").success).toBe(true);
     expect(SleepInhibitModeSchema.safeParse("onPower").success).toBe(true);
@@ -493,7 +493,7 @@ describe("sleepInhibit.get / sleepInhibit.set schemas (docs/competitive-notes-om
   });
 });
 
-describe("workspace.getConfig / run.* schemas (docs/features/setup-run-scripts.md)", () => {
+describe("workspace.getConfig / run.* schemas", () => {
   it("WorkspaceGetConfigParamsSchema requires idempotencyKey/worktree", () => {
     expect(WorkspaceGetConfigParamsSchema.safeParse({ worktree: "/repo" }).success).toBe(false);
     expect(
@@ -722,7 +722,7 @@ describe("SetModeResultSchema (W4.3 — additive `observedMode` for the PTY veri
   });
 });
 
-describe("SetModelParamsSchema (issue #12 — web model selector)", () => {
+describe("SetModelParamsSchema (web model selector)", () => {
   it("accepts every curated running-session model alias", () => {
     for (const model of RUNNING_SESSION_MODEL_ALIASES) {
       expect(SetModelParamsSchema.safeParse({ model }).success).toBe(true);
@@ -744,7 +744,7 @@ describe("SetModelParamsSchema (issue #12 — web model selector)", () => {
   });
 });
 
-describe("SetModelResultSchema (issue #12 — free-text observedModel echo)", () => {
+describe("SetModelResultSchema (free-text observedModel echo)", () => {
   it("accepts the minimal shape with `ok` alone", () => {
     expect(SetModelResultSchema.safeParse({ ok: false }).success).toBe(true);
     expect(SetModelResultSchema.safeParse({ ok: true }).success).toBe(true);

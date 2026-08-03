@@ -5,7 +5,7 @@
  *
  * Remote spawn" / "3.3 Session adoption (UC9)"). `--directory` defaults to
  * the current working directory for both `register` and `unregister`,
- * matching Omnara's low-friction UX per the PRD — `kvy workspace
+ * a low-friction UX per the PRD — `kvy workspace
  * register` with no flags just registers "here". No daemon interaction:
  * this reads/writes `~/.kvy/workspaces.json` directly, same rationale as
  * `commands/workspaceConfig.ts` skipping `ensureDaemon()`.

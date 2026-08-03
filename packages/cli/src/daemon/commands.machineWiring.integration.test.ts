@@ -158,8 +158,8 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   }
 
   /**
-   * A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
-   * reason"): mints a pid, then self-reports a FAILURE via the real
+   * A generic 15s timeout masks the real failure reason, so this mints a
+   * pid, then self-reports a FAILURE via the real
    * `notify.ts` `reportSessionStartFailed` client hitting the daemon's own
    * real `/session-start-failed` control-server route — exactly what
    * `start.ts`'s/`startCodex.ts`'s `bootstrapSession()` catch block does on
@@ -187,9 +187,9 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   }
 
   /**
-   * A5 (docs/known-issues.md — "orphaned active session rows when the
-   * process dies after DB-row creation, on an otherwise-healthy machine"):
-   * mints a pid, self-reports `/session-started` for a REAL, pre-created
+   * Guards against orphaned active session rows when the process dies after
+   * DB-row creation, on an otherwise-healthy machine: mints a pid, self-reports
+   * `/session-started` for a REAL, pre-created
    * session id (so its row genuinely exists and is `active`), then fires
    * its `watchExit` with a nonzero exit shortly after — simulating "the ACP
    * adapter connection failed and the child process exited" with no clean
@@ -243,7 +243,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     };
   }
 
-  /** Fake sleep-inhibit child (docs/features/sleep-inhibit.md): never spawns a real `caffeinate` — forcing `platform: "darwin"` on the real `createSleepInhibitManager` exercises the real argv/state logic while this stands in for the OS process. */
+  /** Fake sleep-inhibit child: never spawns a real `caffeinate` — forcing `platform: "darwin"` on the real `createSleepInhibitManager` exercises the real argv/state logic while this stands in for the OS process. */
   function fakeSleepInhibitSpawnChild(): (argv: string[]) => SleepInhibitChild {
     return (_argv: string[]) => ({
       pid: 123_456,
@@ -362,8 +362,8 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     expect(adopted.sessionId).toBeTruthy();
   });
 
-  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
-  // reason"): proves the full real path — `spawn` RPC -> real spawnEngine ->
+  // A generic 15s timeout masks the real failure reason, so this proves the
+  // full real path — `spawn` RPC -> real spawnEngine ->
   // fake launch -> real HTTP POST /session-start-failed -> real
   // spawnAwaiter.reject -> the `spawn` RPC call itself rejects with the
   // REAL reported error, not a 15s-later generic timeout message.
@@ -432,13 +432,13 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     });
     expect(result.ok).toBe(false);
     expect(result.error).toContain(quotaMessage);
-    // Well under the 15s default timeout — this is the fast-reject path
-    // (A4), not the flat-timeout fallback.
+    // Well under the 15s default timeout — this is the fast-reject path,
+    // not the flat-timeout fallback.
     expect(Date.now() - start).toBeLessThan(10_000);
   });
 
-  // A5 (docs/known-issues.md — "orphaned active session rows when the
-  // process dies after DB-row creation, on an otherwise-healthy machine"):
+  // Guards against orphaned active session rows when the
+  // process dies after DB-row creation, on an otherwise-healthy machine:
   // proves the full real path end to end — a REAL session row (`POST
   // /v1/sessions`, genuinely `active`) is spawned, self-reports started,
   // then its process dies with no clean status report of its own. The
@@ -544,7 +544,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     expect(finalStatus).toBe("failed");
   });
 
-  it("sleepInhibit.set persists to settings.json and sleepInhibit.get reflects the applied state (docs/features/sleep-inhibit.md)", async () => {
+  it("sleepInhibit.set persists to settings.json and sleepInhibit.get reflects the applied state", async () => {
     // A fresh account/token — the shared `accountId`/`token` from `beforeAll`
     // already owns a machine row from the prior test in this file (same
     // db/pglite instance across every test here), and `db.query.machines

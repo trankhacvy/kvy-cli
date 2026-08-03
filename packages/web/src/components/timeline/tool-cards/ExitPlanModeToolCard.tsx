@@ -5,8 +5,8 @@ import { Markdown } from "../Markdown";
 import { ToolCardShell } from "./ToolCardShell";
 
 /** `ExitPlanMode` presents a plan for approval — render its markdown body
- * nicely instead of falling to the generic JSON fallback (bug-fix-plan.md
- * #6). `ToolCardShell` already renders the pending-decision Allow/Deny row
+ * nicely instead of falling to the generic JSON fallback. `ToolCardShell`
+ * already renders the pending-decision Allow/Deny row
  * generically whenever `item.permission.decision` is undefined, so this
  * card only needs to supply the plan body. */
 export function ExitPlanModeToolCard({ item }: { item: ToolItem }) {

@@ -27,7 +27,7 @@ const source = readFileSync(
  */
 const codeOnlySource = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
-describe("oauth-callback-page.tsx — step-up branch (docs/auth-ux-hardening-plan.md item 2c)", () => {
+describe("oauth-callback-page.tsx — step-up branch", () => {
   it("consumes (not peeks) the pending step-up flag, validating the provider matches", () => {
     expect(source).toContain("consumePendingStepUp(provider)");
   });

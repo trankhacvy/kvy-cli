@@ -748,8 +748,8 @@ describe("main()", () => {
 }, 15_000);
 
 // Real `git` binary, no mocks (same rationale as `daemon/gitExec.test.ts`):
-// this is the local `kvy -b <branch>` parity fix for known-issues.md #2's
-// first bullet — `ensureBranchWorkspace` itself is already covered against a
+// this is the local `kvy -b <branch>` parity fix — `ensureBranchWorkspace`
+// itself is already covered against a
 // fake `GitExec` in `daemon/gitWorktree.test.ts`, so this only needs to prove
 // the thin composition in `index.ts` actually reaches it and surfaces a real
 // `.worktrees/<branch>` directory, not that worktree creation itself works.

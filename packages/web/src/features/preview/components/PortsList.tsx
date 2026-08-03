@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import type { PreviewPort, PreviewTunnel } from "../types";
 
 /**
- * One row per detected port (docs/features/dev-server-preview.md): port,
- * process name/pid, and either an "Open" button or — once a tunnel is
- * tracked for that port — the tunnel's URL plus Copy/Preview/Open-in-new-tab/
- * Close actions. Open-in-new-tab is always the guaranteed path here — the
- * optional inline "Preview" toggle (`onPreviewClick`, droppable Phase 6's
- * `TunnelFrame`) is progressive enhancement on top, never a replacement.
+ * One row per detected port: port, process name/pid, and either an "Open"
+ * button or — once a tunnel is tracked for that port — the tunnel's URL
+ * plus Copy/Preview/Open-in-new-tab/Close actions. Open-in-new-tab is
+ * always the guaranteed path here — the optional inline "Preview" toggle
+ * (`onPreviewClick`, the optional `TunnelFrame`) is progressive enhancement
+ * on top, never a replacement.
  */
 export function PortsList({
   ports,
@@ -28,10 +28,10 @@ export function PortsList({
   onOpenClick: (port: number) => void;
   onClose: (tunnelId: string) => void;
   isClosePending: boolean;
-  /** Optional (droppable Phase 6) — omit to hide the inline "Preview" toggle entirely, e.g. before the embedded-frame CSP allowance has landed. */
+  /** Optional — omit to hide the inline "Preview" toggle entirely, e.g. before the embedded-frame CSP allowance has landed. */
   onPreviewClick?: (tunnelId: string) => void;
   selectedTunnelId?: string | null;
-  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once the owning machine is confidently offline/needs-reauth — disables Open/Close, since both are `preview.*` machine RPCs. */
+  /** `true` once the owning machine is confidently offline/needs-reauth — disables Open/Close, since both are `preview.*` machine RPCs. */
   disabled?: boolean;
 }) {
   if (ports.length === 0) {

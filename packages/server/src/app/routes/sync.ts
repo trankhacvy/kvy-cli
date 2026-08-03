@@ -73,8 +73,8 @@ export function buildSyncRoutes(
           throw new Error(`GET /v1/sync: authenticated accountId ${accountId} has no account row`);
         }
 
-        // AH8 "machine-status-reauth": the bootstrap/no-live-event path's
-        // source for `MachineRow.needsReauth` — one batched query for every
+        // The bootstrap/no-live-event path's source for
+        // `MachineRow.needsReauth` — one batched query for every
         // machine in this snapshot rather than one query per row.
         const needsReauthByMachine = await computeMachinesNeedReauth(
           db,
@@ -82,9 +82,9 @@ export function buildSyncRoutes(
           machineRows.map((m) => m.id),
         );
 
-        // known-issues.md #8: this snapshot already fetched every machine
-        // for the account above, so reuse it for the reconciliation's
-        // staleness check instead of a second query — see `staleSessions.ts`.
+        // This snapshot already fetched every machine for the account above,
+        // so reuse it for the reconciliation's staleness check instead of a
+        // second query — see `staleSessions.ts`.
         const machineLastSeenById = new Map(machineRows.map((m) => [m.id, m.lastSeenAt]));
         const reconciledSessions = await reconcileStaleSessions(
           db,

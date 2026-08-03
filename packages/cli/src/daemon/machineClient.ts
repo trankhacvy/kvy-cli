@@ -328,7 +328,7 @@ export async function startMachineClient(
   // (re)connection attempt — including automatic reconnects hours or days later — asks
   // `tokenProvider` for a currently-valid access token instead of replaying whatever was
   // valid at process start. This is the fix for the "daemon silently dies after 1h"
-  // failure mode (known-issues.md #4): a fixed token in the handshake object would still
+  // failure mode: a fixed token in the handshake object would still
   // go stale the same way the old plain `token: string` did.
   const socket = deps.ioFactory(deps.serverUrl, {
     path: "/v1/stream",
@@ -441,7 +441,7 @@ export async function startMachineClient(
     // handshake presented was stale/revoked — force a refresh so the NEXT automatic
     // reconnect attempt (socket.io-client keeps retrying on its own) presents a fresh
     // one instead of the same dead credential the old fixed-token client looped on
-    // forever (known-issues.md #4). If the refresh token itself is dead,
+    // forever. If the refresh token itself is dead,
     // `tokenProvider.isDead` will be true and every subsequent handshake keeps failing
     // with a clear "run kvy auth login" log line rather than a silent retry storm.
     if (/authentication token|Session revoked/i.test(error.message)) {

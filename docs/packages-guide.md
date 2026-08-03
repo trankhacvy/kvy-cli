@@ -1,6 +1,6 @@
 # Kvy packages — detailed guide
 
-Complete overview of each package's internals. Start with CLAUDE.md's quick reference; this file is for deep dives.
+Complete overview of each package's internals. Start with AGENTS.md's quick reference; this file is for deep dives.
 
 ## packages/wire — @kvy/wire
 

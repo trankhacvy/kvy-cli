@@ -14,13 +14,14 @@ const DeleteResponseSchema = z.object({});
 
 /**
  * `POST /v1/sessions/:id/archive` + `DELETE /v1/sessions/:id`
- * that line assumed these routes already existed; they didn't yet, so this
- * is where they land). Both wire shapes (`session-update{status:"archived"}`,
+ * (kvy-system-design.md's API sketch already listed both routes; this is
+ * where they actually land). Both wire shapes (`session-update{status:"archived"}`,
  * `session-delete`) were already defined on `UpdateBodySchema` — no wire
  * change needed here, just the first two callers.
  *
- * plan: "an archived live session keeps running" — W2.3's `stop` RPC is the
- * "end it" path for that). Archive is a plain, idempotent status transition
+ * Archiving a still-running live session is allowed by design — "an
+ * archived live session keeps running" is intentional, since the `stop` RPC
+ * is the actual "end it" path. Archive is a plain, idempotent status transition
  * mirroring `sessionStatus.ts`'s "failed" route's own shape (no CAS —
  * there's no legitimate concurrent writer to lose a race against for a
  * user-initiated archive either). Delete is a hard row delete; every FK that
@@ -86,9 +87,8 @@ export function buildSessionArchiveRoutes(
       },
     );
 
-    // `POST /v1/sessions/:id/unarchive` — Restore, the inverse of Mark done
-    // (docs/features/session-lifecycle-actions.md Phase 1). Same idempotent,
-    // no-CAS shape as archive above: flipping `archived` -> `active` is only
+    // `POST /v1/sessions/:id/unarchive` — Restore, the inverse of Mark done.
+    // Same idempotent, no-CAS shape as archive above: flipping `archived` -> `active` is only
     // ever a single-user action, so there's no legitimate concurrent writer
     // to race. Restore always lands on "active" rather than reconstructing
     // whatever status preceded the archive (that prior status isn't

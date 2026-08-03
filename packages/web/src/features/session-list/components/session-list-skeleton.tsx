@@ -1,8 +1,7 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** One placeholder row, shaped like `SessionCard` (plan-v2.md W4.2
- * "skeletons for Home … initial loads") — rendered while
+/** One placeholder row, shaped like `SessionCard` — rendered while
  * `SessionListSnapshot.isLoading` is true and no sessions have appeared
  * yet, instead of the "No sessions yet" empty state flashing before the
  * real data arrives. */

@@ -94,8 +94,8 @@ describe("startControlServer", () => {
     }
   });
 
-  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
-  // reason"): the child's own best-effort self-report of a startup failure.
+  // The child's own best-effort self-report of a startup failure, so a
+  // generic 15s timeout doesn't mask the real failure reason.
   describe("POST /session-start-failed", () => {
     it("forwards pid and error verbatim to onSessionStartFailed", async () => {
       const onSessionStartFailed = vi.fn();

@@ -38,7 +38,7 @@ describe("toggleAskSelection", () => {
     // A single-select toggle always starts from a fresh empty set (radio-
     // button semantics — the prior pick is discarded regardless of which
     // option it was), so re-toggling the *same* index re-adds it rather
-    // than deselecting it. This mirrors plan-v2.md's own reference snippet.
+    // than deselecting it.
     let selections: AskSelections = new Map();
     selections = toggleAskSelection(selections, 0, 0, false);
     selections = toggleAskSelection(selections, 0, 0, false);

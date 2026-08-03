@@ -192,7 +192,7 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
     // other injected dep here already follows.
     reportSessionStatus: vi.fn(async () => ({ type: "ok" }) as const),
     // Never let a unit test hit the real backend for an attention-notify
-    // report (docs/user-flows.md fix-plan task 4) either.
+    // report either.
     reportSessionAttention: vi.fn(async () => ({ type: "ok" }) as const),
     // Never touch a real per-directory lock file or a real daemon control
     // server from a unit test — both default to safe, always-succeeding fakes.
@@ -300,8 +300,8 @@ describe("runStartClaudeCommand — preflight", () => {
     expect(startPtyClaudeSession).not.toHaveBeenCalled();
   });
 
-  // A4 (docs/known-issues.md — "generic 15s timeout masks the real failure
-  // reason"): a `bootstrapSession()` failure must also best-effort self-
+  // A generic 15s timeout masks the real failure reason, so
+  // a `bootstrapSession()` failure must also best-effort self-
   // report the real error to the daemon (`/session-start-failed`) so a
   // daemon-initiated spawn's `spawnAwaiter` can surface it, not just the
   // stderr line a headless/daemon-spawned process has no one to read.
@@ -463,7 +463,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(bootstrapParams.metadata.model).toBe("opus");
   });
 
-  it("registers workingDirectory as a workspace and threads its id into bootstrapSession (known-issues.md #6)", async () => {
+  it("registers workingDirectory as a workspace and threads its id into bootstrapSession", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_1",
       dek: getRandomBytes(32),
@@ -641,9 +641,8 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     );
 
     // `sessionMetadataUpdater` now resolves its bearer token through
-    // `tokenProvider.getAccessToken()` on every request (issue #1,
-    // docs/known-issues-cliweb-sync-test.md) instead of a token captured once at
-    // preflight — an extra async hop before the metadata PUT fires, so this
+    // `tokenProvider.getAccessToken()` on every request instead of a token
+    // captured once at preflight — an extra async hop before the metadata PUT fires, so this
     // fire-and-forget `updateModel()` call is no longer guaranteed to have landed the
     // instant `runStartClaudeCommand()` returns.
     await vi.waitFor(() => {
@@ -720,7 +719,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     });
   });
 
-  it("seeds the hook server's initialPermissionMode from a --permission-mode claudeArgs override (docs/bug-fix-plan.md #5)", async () => {
+  it("seeds the hook server's initialPermissionMode from a --permission-mode claudeArgs override", async () => {
     const installRemotePermissionHook = vi.fn(async () => fakeRemotePermissionHook());
 
     await runStartClaudeCommand(
@@ -813,7 +812,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     );
   });
 
-  it("re-notifies the daemon with the provider session id once the SessionStart hook reports one (docs/auth-ux-post-verification-fixes.md — own-transcript duplicate-unmanaged fix)", async () => {
+  it("re-notifies the daemon with the provider session id once the SessionStart hook reports one (own-transcript duplicate-unmanaged fix)", async () => {
     let onSessionId: ((id: string) => void) | undefined;
     const installRemotePermissionHook = (async (opts: { onSessionId?: (id: string) => void }) => {
       onSessionId = opts.onSessionId;
@@ -1143,7 +1142,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(setPromptOpen).toHaveBeenCalledExactlyOnceWith(false);
   });
 
-  it("correlates a tool-start/tool-end pair back through resolveLocalOutcome so a local turn's web card doesn't hang forever (docs/known-issues.md #5)", async () => {
+  it("correlates a tool-start/tool-end pair back through resolveLocalOutcome so a local turn's web card doesn't hang forever", async () => {
     const resolveLocalOutcome = vi.fn();
     let onEnvelopes: ((envelopes: SessionEnvelope[]) => void) | undefined;
     const startPtyClaudeSession = vi.fn((opts: PtyClaudeSessionOptions) => {

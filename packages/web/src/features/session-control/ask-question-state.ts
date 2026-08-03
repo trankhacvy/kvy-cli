@@ -5,7 +5,7 @@ import type { AskQuestionParsed } from "@/lib/tool-args";
  * `AskUserQuestionCard`'s local selection state, kept as pure functions (same
  * "testable without mounting the component" rationale as `perm-card-state.ts`
  * — this package has no component-render test infra, so the logic worth unit
- * testing lives here, plan-v2.md W2.1). One `Set<number>` of selected option
+ * testing lives here). One `Set<number>` of selected option
  * indices per question index; a single-select question's set never grows
  * past size 1 (see {@link toggleAskSelection}).
  */
@@ -39,7 +39,7 @@ export function clearAskSelection(selections: AskSelections, questionIndex: numb
 
 /** Per-question free-text answer — set when the user types their own answer
  * instead of picking a listed option (mirrors the CLI's own "Type something"
- * option, docs/known-issues.md #5 follow-up "web free text"). A non-empty
+ * option). A non-empty
  * string for a question always wins over that question's option selections
  * in {@link buildAskAnswers}/{@link allAskQuestionsAnswered}. */
 export type AskFreeTextAnswers = Map<number, string>;
@@ -96,9 +96,9 @@ export function buildAskAnswers(
 }
 
 /** The exact wire shape a submitted answer takes: `{kind:"allow",
- * scope:"once", updatedInput:{answers}}` (plan-v2.md W2.1 — the bridge's
+ * scope:"once", updatedInput:{answers}}` — the bridge's
  * `mapDecision` question branch reads `updatedInput.answers` to compose the
- * deny-with-answer reason). */
+ * deny-with-answer reason. */
 export function buildAskAnswerDecision(
   questions: AskQuestionParsed[],
   selections: AskSelections,
@@ -111,7 +111,7 @@ export function buildAskAnswerDecision(
   };
 }
 
-/** "Chat about this" (docs/known-issues.md #5 follow-up) — declines the
+/** "Chat about this" — declines the
  * structured question form outright, mirroring the CLI's own "Chat about
  * this" option. Deliberately carries no `message`: the bridge's `mapDecision`
  * falls back to `ASK_FALLBACK_REASON` for a message-less deny, which already

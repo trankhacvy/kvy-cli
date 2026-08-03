@@ -1,6 +1,6 @@
 # @kvy/web — self-host static build + nginx runtime (kvy-system-design.md
-# §5.3/§9, plan.md §16 "4.3 Distribution & self-host": statically exported,
-# served from an origin separate from the API, strict CSP + SRI).
+# §5.3/§9: statically exported, served from an origin separate from the
+# API, strict CSP + SRI).
 #
 # `@kvy/web` reads its API origin (and a few optional public OAuth/VAPID
 # ids) from `NEXT_PUBLIC_*` env vars *inlined at build time* — there is no

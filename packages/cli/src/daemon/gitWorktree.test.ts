@@ -112,7 +112,7 @@ describe("ensureBranchWorkspace", () => {
     ).rejects.toThrow(/not a git repository/);
   });
 
-  describe("base-branch picker (docs/competitive-notes-omnara.md #16)", () => {
+  describe("base-branch picker", () => {
     it("passes `from` as the start-point of `checkout -b` when creating a new branch in place", async () => {
       const git = vi.fn<GitExec>(async (args: string[]) => {
         if (args[0] === "show-ref") throw new Error("not found");
@@ -186,7 +186,7 @@ describe("ensureBranchWorkspace", () => {
     });
   });
 
-  describe("checked-out-elsewhere guard (docs/features/worktree-isolation.md Phase 3)", () => {
+  describe("checked-out-elsewhere guard", () => {
     it("throws a typed error instead of running `worktree add` when the branch is already checked out in a different worktree", async () => {
       const otherWorktree = path.join(root, "elsewhere");
       const git = vi.fn<GitExec>(async (args: string[]) => {
@@ -241,7 +241,7 @@ describe("ensureBranchWorkspace", () => {
     });
   });
 
-  describe("idempotent .git/info/exclude entry (docs/features/worktree-isolation.md Phase 3)", () => {
+  describe("idempotent .git/info/exclude entry", () => {
     it("adds '.worktrees/' to a fresh .git/info/exclude after creating a worktree", async () => {
       await mkdir(path.join(root, ".git", "info"), { recursive: true });
       const git = vi.fn<GitExec>(async (args: string[]) => {

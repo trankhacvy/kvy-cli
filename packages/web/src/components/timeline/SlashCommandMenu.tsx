@@ -5,8 +5,7 @@ import type { SlashCommand } from "@/features/slash-commands";
 import { cn } from "@/lib/utils";
 
 /**
- * The "/" slash-command autocomplete popover (docs/competitive-notes-omnara.md
- * #18), anchored above `Composer`'s textarea. Selection/keyboard state lives
+ * The "/" slash-command autocomplete popover, anchored above `Composer`'s textarea. Selection/keyboard state lives
  * in `Composer` itself (driven by the pure `slash-command-state.ts`
  * helpers) — this component is purely presentational, same "no
  * jsdom/@testing-library, so keep interaction logic out of the rendered

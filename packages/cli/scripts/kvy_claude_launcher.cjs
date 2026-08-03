@@ -24,7 +24,7 @@
  * SOFTWARE.
  *
  * ---
- * Kvy's local-mode Claude launcher (plan.md §6.3). Runs *inside* the same
+ * Kvy's local-mode Claude launcher. Runs *inside* the same
  * process as the real Claude Code CLI (via `import()` below), so it patches
  * `global.fetch` before that CLI is loaded: every outbound request then
  * emits a `{type:'fetch-start', ...}` / `{type:'fetch-end', ...}` JSON line
@@ -38,8 +38,8 @@
  * fd 3 is the only channel this script writes diagnostics to.
  *
  * ## PTY mode (`KVY_FETCH_SIGNAL_PATH`)
- * When Kvy runs `claude` on a pseudo-terminal (the omnara-style PTY-
- * injection session — `ptyClaudeSession.ts`), there is no spare fd 3: a PTY
+ * When Kvy runs `claude` on a pseudo-terminal (the PTY-injection session —
+ * `ptyClaudeSession.ts`), there is no spare fd 3: a PTY
  * child inherits only the pty (fds 0/1/2), so `fs.writeSync(3, ...)` would
  * just EBADF. So if `KVY_FETCH_SIGNAL_PATH` is set (a unix-domain socket
  * Kvy is already listening on), the SAME `fetch-start`/`fetch-end` JSON
@@ -49,10 +49,10 @@
  *
  * NOTE on `getClaudeCliPath()`: this is a small local stub, not the full
  * cross-install-method resolver (npm / Bun / Homebrew / native-installer
- * detection, `HAPPY_CLAUDE_PATH`-style override, etc.). That resolver is a
+ * detection, a `KVY_CLAUDE_PATH`-style override, etc.). That resolver is a
  * separate, already-in-flight bullet (`claude_version_utils.cjs` equivalent
- * / provider detection) and will replace this stub at integration time —
- * see plan.md §6.3. Don't duplicate that resolver here.
+ * / provider detection) and will replace this stub at integration time.
+ * Don't duplicate that resolver here.
  */
 
 const fs = require("node:fs");
@@ -184,9 +184,9 @@ function getClaudeCliPath() {
 }
 
 /**
- * Run the resolved Claude CLI. Mirrors the JS-file branch of Happy's
- * `runClaudeCli`: dynamic `import()` loads the CLI in this same process, so
- * the fetch/fd3 interceptors above stay active inside its module scope.
+ * Run the resolved Claude CLI: dynamic `import()` loads the CLI in this
+ * same process, so the fetch/fd3 interceptors above stay active inside its
+ * module scope.
  *
  * Claude Code's native-binary installs (the standalone installer's
  * `~/.local/share/claude/versions/<ver>` — no `.js`/`.cjs` extension) can't

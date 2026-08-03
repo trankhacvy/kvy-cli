@@ -69,7 +69,7 @@ export function TimelineRow({ item }: { item: RenderItem }) {
       // (unlike `RenderItemGroups`, the actual caller for this kind — see
       // `Timeline.tsx`) there's no ordinal to compute here. Falls back to a
       // generic label rather than fabricating a number or leaking the
-      // internal `subagentId` (Issue #8 — docs/bug-fix-plan.md #8).
+      // internal `subagentId`.
       return <SubagentGroup label="Subagent" items={item.items} />;
 
     default: {

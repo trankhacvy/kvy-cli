@@ -1,8 +1,8 @@
 import type { ProviderUsageMeter } from "@kvy/wire";
 
 /**
- * Display formatting for Settings → Providers (docs/competitive-notes-omnara.md
- * #9). Pure functions, unit-tested directly — no jsdom/React-rendering
+ * Display formatting for Settings → Providers. Pure functions, unit-tested
+ * directly — no jsdom/React-rendering
  * harness exists in this package's vitest config (plain `node` environment,
  * `*.test.ts` only), same precedent `features/new-session/provider-meta.ts`'s
  * `shouldShowBetaBanner` doc comment gives for keeping formatting logic
@@ -16,7 +16,7 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   minute: "2-digit",
 });
 
-/** "Aug 18, 11:29 AM" — the exact shape docs/competitive-notes-omnara.md's #9 example uses ("100% used · Resets Aug 18, 11:29 AM"), reused for both a usage meter's reset date and the account card's "last refreshed" timestamp. */
+/** "Aug 18, 11:29 AM" — reused for both a usage meter's reset date and the account card's "last refreshed" timestamp (e.g. "100% used · Resets Aug 18, 11:29 AM"). */
 export function formatDateTime(ms: number): string {
   return DATE_TIME_FORMATTER.format(new Date(ms));
 }

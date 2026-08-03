@@ -1,8 +1,7 @@
 import type { GithubChecksResult } from "@kvy/wire";
 
 /**
- * `github.checks`; docs/features/github-pr-ci.md "GitHub PR/CI
- * integration"; docs/competitive-notes-omnara.md #4). Structural clone of
+ * `github.checks` (GitHub PR/CI integration). Structural clone of
  * `features/git-diff/types.ts` — read-only for the MVP, same seam pattern.
  *
  * `GithubChecksSnapshot` is re-exported straight off `@kvy/wire` rather
@@ -17,7 +16,7 @@ export type GithubChecksSnapshot = GithubChecksResult;
  * machine's daemon doesn't recognize the `github.checks` RPC yet (an
  * older, not-yet-upgraded daemon) — distinguished from every other failure
  * so the panel can show "update kvy and restart the daemon" instead of a
- * generic error (docs/features/github-pr-ci.md Phase 4).
+ * generic error.
  */
 export class DaemonUnsupportedError extends Error {
   constructor(message = "This machine's kvy daemon doesn't support CI checks yet.") {

@@ -60,8 +60,8 @@ describe("deriveMachineOnline", () => {
   });
 });
 
-// AH8 "machine-status-reauth" (docs/auth-ux-hardening-plan.md item 8): a distinct status
-// from plain "offline" — this suite is the exact scenario pair sub-task 4 calls for.
+// A distinct status from plain "offline" — this suite covers the needs-reauth
+// vs. asleep scenario pair.
 describe("deriveMachineStatus", () => {
   const now = 1_000_000;
 

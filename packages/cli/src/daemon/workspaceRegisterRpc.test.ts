@@ -59,7 +59,7 @@ describe("registerWorkspace (workspace.register RPC backing module)", () => {
   });
 });
 
-describe("unregisterWorkspace (workspace.unregister RPC backing module, known-issues.md #3)", () => {
+describe("unregisterWorkspace (workspace.unregister RPC backing module)", () => {
   let homeDir: string;
   let previousKvyHomeDir: string | undefined;
 

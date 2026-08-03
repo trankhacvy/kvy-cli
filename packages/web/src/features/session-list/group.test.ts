@@ -126,7 +126,7 @@ describe("groupSessionsByWorkspace", () => {
     expect(groups.map((g) => g.workspace.id)).toEqual(["a", "b"]);
   });
 
-  it("re-parents a worktree child onto its registered parent repo (known-issues.md #15)", () => {
+  it("re-parents a worktree child onto its registered parent repo", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
         { id: "/repo", name: "repo" },

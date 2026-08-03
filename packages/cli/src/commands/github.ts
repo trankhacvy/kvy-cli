@@ -1,10 +1,10 @@
 /**
- * `kvy github login [--token] [--client-id <id>]` / `logout` / `status`
- * (docs/features/github-pr-ci.md "GITHUB AUTH"). Local-only, no daemon
- * interaction (same rationale as `workspace config`/`adapters`): this reads/
- * writes `~/.kvy/github.key` directly (`../github/githubAuth.js`) and
- * talks to GitHub's own REST API over plain `fetch`, never Kvy's server —
- * the whole point of this token is that the server never sees it (design
+ * `kvy github login [--token] [--client-id <id>]` / `logout` / `status`.
+ * Local-only, no daemon interaction (same rationale as `workspace
+ * config`/`adapters`): this reads/writes `~/.kvy/github.key` directly
+ * (`../github/githubAuth.js`) and talks to GitHub's own REST API over plain
+ * `fetch`, never Kvy's server — the whole point of this token is that the
+ * server never sees it.
  *
  * `--token` prompts for a PAT on stdin rather than accepting it as a bare
  * argv value — a token passed as `--token <value>` would land in shell
@@ -13,17 +13,16 @@
  * authorization flow (`../github/deviceFlow.js`), which needs a client id:
  * `--client-id` wins, then `KVY_GITHUB_CLIENT_ID`, then
  * `DEFAULT_GITHUB_CLIENT_ID` below — empty until a Kvy GitHub OAuth app
- * with Device Flow enabled actually exists (docs/features/github-pr-ci.md's
- * risk note), so `kvy github login` with no flags and no configured
- * client id fails fast with an explicit "use --token instead" message
- * rather than hanging on a device code request that was never going to
- * succeed.
+ * with Device Flow enabled actually exists, so `kvy github login` with no
+ * flags and no configured client id fails fast with an explicit "use
+ * --token instead" message rather than hanging on a device code request
+ * that was never going to succeed.
  */
 import { createInterface } from "node:readline/promises";
 import { pollForToken, requestDeviceCode } from "../github/deviceFlow.js";
 import { clearGithubToken, readGithubToken, writeGithubToken } from "../github/githubAuth.js";
 
-/** No Kvy GitHub OAuth app with Device Flow enabled exists yet (docs/features/github-pr-ci.md risk note: "Device-flow client id"). Set `KVY_GITHUB_CLIENT_ID` or pass `--client-id` once one does. */
+/** No Kvy GitHub OAuth app with Device Flow enabled exists yet. Set `KVY_GITHUB_CLIENT_ID` or pass `--client-id` once one does. */
 export const DEFAULT_GITHUB_CLIENT_ID = "";
 
 export interface GithubLoginOptions {

@@ -31,8 +31,8 @@ export interface ServiceItem extends RenderItemBase {
    * main transcript (`transcript-view.ts`'s `isHiddenTimelineItem`). False
    * for everything else (model-switch confirmations, compaction notices,
    * omitted-attachment notes, remote-session errors, ...), which previously
-   * were *all* unconditionally hidden alongside the routine ones —
-   * docs/bug-fix-plan.md issue #4's web-side gap. */
+   * were *all* unconditionally hidden alongside the routine ones — a
+   * web-side gap that has since been fixed. */
   quiet: boolean;
 }
 

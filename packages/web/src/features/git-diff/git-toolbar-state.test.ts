@@ -36,7 +36,7 @@ describe("resolveCommitSubmit", () => {
   });
 });
 
-describe("resolveSetRemoteSubmit (Feature 1, docs/web-ux-improvements-plan.md)", () => {
+describe("resolveSetRemoteSubmit", () => {
   it("returns null for a blank/whitespace-only URL", () => {
     expect(resolveSetRemoteSubmit("", "origin")).toBeNull();
     expect(resolveSetRemoteSubmit("   ", "origin")).toBeNull();

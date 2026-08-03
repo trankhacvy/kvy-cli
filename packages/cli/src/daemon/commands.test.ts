@@ -40,7 +40,7 @@ function buildDeps(homeDir: string, overrides: Partial<DaemonCommandDeps> = {}):
   });
 }
 
-/** Fake sleep-inhibit manager (docs/features/sleep-inhibit.md) recording every `applyMode`/`stop` call into a shared, cross-call-site-ordered `events` array — never spawns anything real. */
+/** Fake sleep-inhibit manager recording every `applyMode`/`stop` call into a shared, cross-call-site-ordered `events` array — never spawns anything real. */
 function fakeSleepInhibitManager(events: string[]): SleepInhibitManager {
   let mode: SleepInhibitMode = "off";
   return {
@@ -251,7 +251,7 @@ describe("daemon commands", () => {
     });
   });
 
-  describe("runDaemonStartSync — sleep-inhibit boot re-apply (docs/features/sleep-inhibit.md)", () => {
+  describe("runDaemonStartSync — sleep-inhibit boot re-apply", () => {
     it("boots and applies the persisted sleepInhibit mode via the injected fake manager, unconditionally (even with no stored credentials)", async () => {
       await updateSettings((current) => ({ ...current, sleepInhibit: "always" }), { homeDir });
       const events: string[] = [];

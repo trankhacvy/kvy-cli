@@ -1,9 +1,9 @@
 /**
- * github-pr-ci.md "GitHub PR/CI integration", docs/competitive-notes-
- * omnara.md #4). Backs the web "Checks" tab: resolves the workspace's
+ * GitHub PR/CI integration. Backs the web "Checks" tab: resolves the workspace's
  * remote → owner/repo, the current branch, the open PR for that branch
  * head, and the PR head commit's check-runs — authenticated with a
  * machine-local GitHub token (`../github/githubAuth.js`) that never
+ * touches Kvy's server.
  *
  * Modeled on `gitStatus.ts`/`gitBranches.ts`'s injectable-deps shape: same
  * `git?: GitExec` seam (defaulting to `gitExec.ts`'s real `runGit`), same
@@ -45,8 +45,7 @@ async function defaultGetWorkspaceRemote(worktree: string): Promise<string | und
  * only — handles the scp-like syntax (`git@github.com:owner/repo.git`),
  * `ssh://git@github.com/owner/repo.git`, and `https://github.com/owner/repo`
  * (`.git`-suffixed or not). Any other host — including a GitHub Enterprise
- * instance — returns `null` for MVP (docs/features/github-pr-ci.md: "any
- * non-github.com host ... returns null").
+ * instance — returns `null` for MVP.
  */
 export function parseGithubRemote(url: string): { owner: string; name: string } | null {
   const trimmed = url.trim();

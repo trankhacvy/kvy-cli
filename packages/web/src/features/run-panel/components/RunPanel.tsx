@@ -61,13 +61,12 @@ export interface RunPanelBodyProps {
   onSetup: () => void;
   isSetupPending: boolean;
   setupError: string | null;
-  /** Feature 2 (docs/web-ux-improvements-plan.md): `true` once the owning machine is confidently offline/needs-reauth — `||`d into every button's existing disabled expression. */
+  /** `true` once the owning machine is confidently offline/needs-reauth — `||`d into every button's existing disabled expression. */
   machineUnavailable?: boolean;
 }
 
 /**
- * Renders the Setup/Run tab's body from already-resolved state
- * (docs/features/setup-run-scripts.md Phase 5): a play/stop button (play
+ * Renders the Setup/Run tab's body from already-resolved state: a play/stop button (play
  * disabled with a hint when no `runScript` is configured), a run-state
  * badge + log tail while a run process is (or was) active, and a setup
  * section (state badge, exit code on failure, "Re-run setup" button + its

@@ -139,7 +139,7 @@ describe("reconcilePending", () => {
     expect(reconcilePending(filePending, items)).toEqual([]);
   });
 
-  describe("self-healing fallback for a stuck `queued` entry (docs/user-flows.md fix-plan item 3: stale 'Queued' banner + duplicate bubble)", () => {
+  describe("self-healing fallback for a stuck `queued` entry (stale 'Queued' banner + duplicate bubble)", () => {
     it("drops a still-`queued` entry once a turn closes at/after it was sent, even if neither id nor text ever matches", () => {
       // Reproduces the reported live bug: a message queued behind a running
       // turn gets answered (visible elsewhere in the transcript as a
@@ -346,7 +346,7 @@ describe("deliveryNotice (tri-state message RPC reply)", () => {
   });
 });
 
-describe("translateSendError (Feature 2, docs/web-ux-improvements-plan.md)", () => {
+describe("translateSendError", () => {
   it("translates the relay's 'RPC target not available' into plain machine-offline copy", () => {
     expect(translateSendError("RPC target not available", true)).toBe(
       "That machine is offline right now.",

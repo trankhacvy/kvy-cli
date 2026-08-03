@@ -274,7 +274,7 @@ describe("runDoctorClean", () => {
     );
   });
 
-  it("also reaps a live journaled cloudflared tunnel (docs/features/dev-server-preview.md)", async () => {
+  it("also reaps a live journaled cloudflared tunnel", async () => {
     const { appendJournalEntry, readTunnelJournal } = await import("./tunnelRegistry.js");
     await appendJournalEntry(homeDir, { pid: 8000, port: 3000, startedAt: 1000 });
 

@@ -1,5 +1,5 @@
 /**
- * QR-code mobile handoff (docs/competitive-notes-omnara.md #11): "Continue on
+ * QR-code mobile handoff: "Continue on
  * mobile — Scan to open this session" plus a copy-link button on every
  * session. This module is the pure, synchronous encode step —
  * `qrcode`'s `create()` (the same isomorphic core both its Node and browser
@@ -25,7 +25,7 @@ export interface QrMatrix {
 
 /**
  * Encodes `text` as a QR code and returns its module grid. Uses error
- * correction level `M` (~15% recovery) — Omnara's own precedent for "scan a
+ * correction level `M` (~15% recovery) — a reasonable choice for "scan a
  * session-handoff link off a screen", and a reasonable default between `L`
  * (denser, less tolerant of a glare/reflection on a phone camera) and `H`
  * (unnecessarily large for a plain URL payload).

@@ -12,9 +12,8 @@ import { PortsList } from "./PortsList";
 import { TunnelFrame } from "./TunnelFrame";
 
 /**
- * The "Preview" tab (docs/features/dev-server-preview.md — "Live dev-server
- * preview via secure tunnel", docs/competitive-notes-omnara.md #6): header
- * copy is Omnara's own "N ports detected · M tunnels active" verbatim, a
+ * The "Preview" tab ("Live dev-server preview via secure tunnel"): header
+ * copy shows "N ports detected · M tunnels active", a
  * `cloudflared`-missing banner when it isn't found on PATH, the ports list
  * (`PortsList`), and the mandatory per-open consent dialog
  * (`OpenTunnelConfirmDialog`) — every `openTunnel` call goes through it,

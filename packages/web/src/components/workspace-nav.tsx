@@ -29,8 +29,7 @@ import { getExpandedWorkspaces, setWorkspaceExpanded } from "./workspace-nav-exp
 
 const SESSIONS_PER_WORKSPACE = 5;
 // Longer than Home's — this is a persistent nav element, so stability matters
-// more here than freshness of order (docs/workspace-nav-redesign-plan.md
-// decision #6).
+// more here than freshness of order.
 const REORDER_DEBOUNCE_MS = 4000;
 const SKELETON_ROW_IDS = ["skeleton-1", "skeleton-2", "skeleton-3"];
 

@@ -16,7 +16,7 @@ function placeholder(name: string, decision?: PermPlaceholderItem["permission"][
   } satisfies PermPlaceholderItem;
 }
 
-/** `PermPlaceholder`'s dispatch (plan-v2.md W2.1) — verified the same way as
+/** `PermPlaceholder`'s dispatch — verified the same way as
  * the registry's own dispatch test: calling the function directly returns a
  * plain `React.createElement(...)` object, no render environment needed. */
 describe("PermPlaceholder — AskUserQuestion dispatch", () => {

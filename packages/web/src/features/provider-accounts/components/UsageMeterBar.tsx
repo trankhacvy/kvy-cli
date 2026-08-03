@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 import { formatUsageMeterLabel } from "../format";
 
 /**
- * One usage-limit window's meter (docs/competitive-notes-omnara.md #9: "a
- * monthly usage meter with a reset date" — `label`/the window itself come
+ * One usage-limit window's meter — a monthly usage meter with a reset date.
+ * `label`/the window itself come
  * straight from whatever period the local CLI's own cache reports, e.g.
  * Claude Code's "Session"/"Weekly" buckets, not a fixed monthly cadence this
  * UI invents). No `<progress>`/shadcn `Progress` component exists in this

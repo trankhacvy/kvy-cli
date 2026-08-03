@@ -1,7 +1,6 @@
 /**
  * Auto-generated branch name for the New Session wizard's "new branch"
- * mode (docs/features/worktree-isolation.md Phase 4) — Omnara-style
- * default the user can override, e.g. `wf/20260722-a3f9`.
+ * mode — a sensible default the user can override, e.g. `wf/20260722-a3f9`.
  *
  * Safety contract the output must satisfy (and does, by construction, since
  * every character comes from a fixed alphanumeric alphabet or a literal

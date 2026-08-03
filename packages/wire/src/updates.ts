@@ -10,9 +10,9 @@ import {
 } from "./rows";
 
 /**
- *
- * ⚠ DELTA D1/D2 from Happy: writes happen over idempotent HTTP, not WS —
- * `Update` is a read-only broadcast of what already landed. `seq` is the
+ * Writes happen over idempotent HTTP, not WS — `Update` is a read-only
+ * broadcast of what already landed. WebSocket-carried writes have no natural
+ * retry/idempotency story, which is what motivated this split. `seq` is the
  * *account* `headerSeq` and is only present on structural updates;
  * `message-new` carries its own per-session `msgSeq` instead (gap-detection
  * for the high-rate transcript stream never contends with the low-rate
@@ -93,10 +93,9 @@ export const EphemeralSchema = z.discriminatedUnion("t", [
     t: z.literal("machine-presence"),
     machineId: z.string(),
     online: z.boolean(),
-    // AH8 "machine-status-reauth": set (true) only on the live disconnect path
-    // when the server infers this machine's `cli-daemon` device session was
-    // revoked (auth-ux-hardening-plan.md item 8) — distinguishes "needs
-    // `kvy auth login`" from a plain power-off/asleep machine. Optional so
+    // Set (true) only on the live disconnect path when the server infers
+    // this machine's `cli-daemon` device session was revoked — distinguishes
+    // "needs `kvy auth login`" from a plain power-off/asleep machine. Optional so
     // an old web client that doesn't know the field yet degrades to the
     needsReauth: z.boolean().optional(),
   }),

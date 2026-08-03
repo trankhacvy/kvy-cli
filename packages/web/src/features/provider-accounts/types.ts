@@ -1,8 +1,8 @@
 import type { ProviderAccountResult, ProviderId, ProviderUsageMeter } from "@kvy/wire";
 
 /**
- * View-model types for Settings → Providers (docs/competitive-notes-omnara.md
- * #9 "Provider account inspection + usage metering"): live, refreshable
+ * View-model types for Settings → Providers (provider account inspection +
+ * usage metering): live, refreshable
  * account metadata per machine — provider, auth type, email, organization,
  * billing type, org role, last-refreshed timestamp, plus a usage meter with
  * a reset date — read straight off the local CLI's own auth config files

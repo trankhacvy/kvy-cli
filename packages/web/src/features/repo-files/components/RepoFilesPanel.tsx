@@ -9,10 +9,9 @@ import { FileTree } from "./FileTree";
 import { FileViewer } from "./FileViewer";
 
 /**
- * The Repo Files panel (docs/competitive-notes-omnara.md #5 "Full repo file
- * browser": "A 'Repo Files' sidebar tab browses and displays any file in
- * the repo ... not just files with diffs — a read-only code viewer with no
- * separate editor needed"): file tree on the left, the selected file's
+ * The Repo Files panel — a "Repo Files" sidebar tab that browses and
+ * displays any file in the repo, not just files with diffs, as a read-only
+ * code viewer with no separate editor needed: file tree on the left, the selected file's
  * syntax-highlighted, line-numbered content on the right. Read-only, same
  * MVP scope as `GitDiffPanel` — no save/edit actions here.
  *

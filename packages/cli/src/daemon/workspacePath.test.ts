@@ -121,7 +121,7 @@ describe("validateSpawnWorkspace", () => {
   });
 });
 
-describe("assertWorkspaceStillValid (known-issues.md #3)", () => {
+describe("assertWorkspaceStillValid", () => {
   let root: string;
 
   beforeEach(async () => {

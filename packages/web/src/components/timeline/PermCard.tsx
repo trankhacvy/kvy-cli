@@ -25,7 +25,7 @@ const EDIT_TOOLS = new Set(["Edit", "MultiEdit", "Write"]);
 
 /** Claude Code's `ExitPlanMode` tool name, either casing an adapter might
  * use (the ACP `codex-acp`/`claude-agent-acp` adapters normalize tool names
- * differently — plan-v2.md W2.2). */
+ * differently). */
 const EXIT_PLAN_TOOL_NAMES = new Set(["ExitPlanMode", "exit_plan_mode"]);
 
 /** Whether `name` is the plan-approval tool — drives both the markdown plan

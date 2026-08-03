@@ -127,7 +127,7 @@ describe("createSessionScanner", () => {
     expect(uuids(seen)).toEqual(["u2", "u3", "u4"]);
   });
 
-  it("flush() ingests a just-appended entry synchronously, without waiting for the periodic poll (docs/user-flows.md fix-plan task 1)", async () => {
+  it("flush() ingests a just-appended entry synchronously, without waiting for the periodic poll", async () => {
     // Reproduces the live-confirmed race: a caller (Claude Code's `Stop`
     // hook, via `ptyClaudeSession.ts`'s `closeTurn`) can need to know the
     // transcript is fully ingested at an arbitrary moment, not on the poll's
@@ -385,7 +385,7 @@ describe("createSessionScanner", () => {
     expect(uuids(seen)).toEqual(["u2"]);
   });
 
-  it("rotates onto a new session automatically when no SessionStart hook has ever fired (W3.8 rotation fallback, no-hook coverage — bug-fix-plan.md #1 testing note (b))", async () => {
+  it("rotates onto a new session automatically when no SessionStart hook has ever fired (rotation fallback, no-hook coverage)", async () => {
     const { logger, infoRecords } = collectingLogger();
     const seen: RawJSONLines[] = [];
 
@@ -419,7 +419,7 @@ describe("createSessionScanner", () => {
     expect(rotationLogs[0]?.meta?.newSessionId).toBe("sess-rotate-new");
   }, 10_000);
 
-  it("never adopts a sibling transcript file once hook-confirmed, even after its own tracked session was dropped (bug-fix-plan.md #1 testing note (a))", async () => {
+  it("never adopts a sibling transcript file once hook-confirmed, even after its own tracked session was dropped", async () => {
     const { logger, debugRecords } = collectingLogger();
     const seen: RawJSONLines[] = [];
 
@@ -460,7 +460,7 @@ describe("createSessionScanner", () => {
     expect(ignored[0]?.meta?.newSessionId).toBe("B");
   }, 10_000);
 
-  it("a hook confirming the same session the fallback already adopted still permanently blocks later siblings (bug-fix-plan.md #1)", async () => {
+  it("a hook confirming the same session the fallback already adopted still permanently blocks later siblings", async () => {
     const { logger, debugRecords, infoRecords } = collectingLogger();
     const seen: RawJSONLines[] = [];
 
@@ -510,7 +510,7 @@ describe("createSessionScanner", () => {
     expect(ignored[0]?.meta?.newSessionId).toBe("B");
   }, 10_000);
 
-  it("ignores a new transcript file once the fallback's armed window has expired, even with no hook coverage (bug-fix-plan.md #1 testing note (c))", async () => {
+  it("ignores a new transcript file once the fallback's armed window has expired, even with no hook coverage", async () => {
     const { logger, debugRecords } = collectingLogger();
     const seen: RawJSONLines[] = [];
 

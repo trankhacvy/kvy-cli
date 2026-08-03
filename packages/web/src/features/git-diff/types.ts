@@ -8,9 +8,9 @@ import type {
 } from "@kvy/wire";
 
 /**
- * panel"). Real commit/push/rename write actions and a "compare against
- * any ref" selector landed in docs/features/git-write-actions.md — this is
- * no longer read-only.
+ * Types for the Git panel's data and actions. Real commit/push/rename write
+ * actions and a "compare against any ref" selector make this no longer
+ * read-only.
  *
  * `GitStatusSnapshot`/`FileStatus`/`GitBranchInfo` are re-exported straight
  * off `@kvy/wire` rather than redeclared: unlike `features/new-session`'s
@@ -60,7 +60,7 @@ export interface GitDiffActions {
   renameBranch(worktree: string, to: string): Promise<{ branch: string; hadUpstream: boolean }>;
   /** Lists `worktree`'s local branches — backs the "Compare against" selector's branch options. Throws on failure. */
   listBranches(worktree: string): Promise<GitBranchInfo[]>;
-  /** Removes `worktree`'s workspace registration (known-issues.md #3 — the "Remove this workspace" action offered once `fetchStatus`/`fetchDiff` report the folder is gone/no longer a git repo). Idempotent: safe to call even if the entry is already gone. Throws only on a transport/registry-write failure. */
+  /** Removes `worktree`'s workspace registration — the "Remove this workspace" action offered once `fetchStatus`/`fetchDiff` report the folder is gone/no longer a git repo. Idempotent: safe to call even if the entry is already gone. Throws only on a transport/registry-write failure. */
   unregisterWorkspace(worktree: string): Promise<{ ok: boolean }>;
   /** Runs `git init` in `worktree` (the daemon's `git.init` RPC) — the recovery action offered when `fetchStatus` reports `workspace-not-a-repo`. Refusals are result states, not throws: `"already-repo"` (someone else got there first) and `"inside-existing-repo"` (this folder is a subdirectory of another repo; `existingRoot` says which). Throws only on a real failure (unauthorized worktree, git error, unreachable machine). */
   initRepo(worktree: string): Promise<GitInitResult>;

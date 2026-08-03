@@ -33,8 +33,8 @@ export interface BranchOption {
   name: string;
   createWorktree: boolean;
   /**
-   * The base ref a brand-new branch is created from (docs/competitive-notes-omnara.md
-   * #16 "searchable base-branch picker") — e.g. `main`/`master` instead of
+   * The base ref a brand-new branch is created from (the searchable
+   * base-branch picker's pick) — e.g. `main`/`master` instead of
    * always forking off whatever's currently checked out. Only meaningful
    * when this branch doesn't exist yet; `undefined` preserves the old
    * "branch from current HEAD" behavior.
@@ -44,8 +44,8 @@ export interface BranchOption {
 
 /**
  * One local branch the daemon's `git.branches` machine RPC surfaced —
- * mirrors `@kvy/wire`'s `GitBranchInfo` (docs/features/worktree-isolation.md
- * Phase 4). Backs the existing-branch worktree picker in `OptionsStep`.
+ * mirrors `@kvy/wire`'s `GitBranchInfo`. Backs the existing-branch worktree
+ * picker in `OptionsStep`.
  */
 export interface BranchItem {
   name: string;
@@ -116,7 +116,7 @@ export interface NewSessionActions {
   registerWorkspace(directory: string): Promise<void>;
   spawn(request: SpawnRequest): Promise<SpawnOutcome>;
   listImportCandidates(directory: string): Promise<ImportCandidate[]>;
-  /** Lists local branches at `directory` (the daemon's `git.branches` RPC, docs/features/worktree-isolation.md — `directory` doubles as the RPC's `worktree` param, same "a workspaceId/worktree IS a directory path" convention as `spawn`/`listImportCandidates` above) — the existing-branch worktree picker's data source. Throws on failure (unreachable machine, not a git repo, ...); an empty array means "no local branches", not an error. */
+  /** Lists local branches at `directory` (the daemon's `git.branches` RPC — `directory` doubles as the RPC's `worktree` param, same "a workspaceId/worktree IS a directory path" convention as `spawn`/`listImportCandidates` above) — the existing-branch worktree picker's data source. Throws on failure (unreachable machine, not a git repo, ...); an empty array means "no local branches", not an error. */
   listBranches(directory: string): Promise<BranchItem[]>;
   /** Reads `directory`'s per-workspace config (the daemon's `workspace.getConfig` RPC) — used here only for `baseRef`, the base-branch picker's preferred default (`inline-spawn.ts`'s `deriveDefaultBaseBranch`). Throws on failure (unreachable machine, ...); an object with every field `undefined` means "nothing configured yet", not an error. */
   getConfig(directory: string): Promise<WorkspaceGetConfigResult>;

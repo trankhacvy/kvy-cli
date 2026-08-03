@@ -220,7 +220,7 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
       // `Worker.terminate()` is abrupt and skips that `finally`: killing the thread
       // mid-transaction can leave the connection open with no code path left to ever
       // close it, wedging a later `indexedDB.deleteDatabase()`/`open()` call behind it
-      // forever (auth-ux-post-verification-fixes.md Bug B). Give in-flight requests a
+      // forever. Give in-flight requests a
       // bounded grace period to actually settle for real before rejecting them and
       // killing the thread — a request that genuinely answers in that window resolves
       // with its real result, same as if `terminate()` were never called.

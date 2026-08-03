@@ -5,9 +5,9 @@ const path = require("node:path");
 // node-pty ships a native `spawn-helper` binary (macOS only, used to spawn the
 // PTY child through a login shell). pnpm's content-addressable store
 // sometimes restores it without the executable bit, silently breaking every
-// local PTY session until someone `chmod +x`s it by hand (plan-v2.md Wave 1
-// risk #5). Walk the pnpm store for it and fix the bit on every install; a
-// no-op on Linux, where node-pty doesn't ship this file at all.
+// local PTY session until someone `chmod +x`s it by hand. Walk the pnpm store
+// for it and fix the bit on every install; a no-op on Linux, where node-pty
+// doesn't ship this file at all.
 function chmodSpawnHelpers(dir) {
   if (!existsSync(dir)) return;
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -34,7 +34,7 @@ function fixNodePtySpawnHelper() {
 // @kvy/wire is the shared wire-protocol contract package that every other
 // workspace package (crypto, cli, server, web) imports as a built dependency.
 // Build it right after install so downstream packages never see a missing/stale
-// dist/ (mirrors Happy's scripts/postinstall.cjs pattern).
+// dist/.
 if (process.env.SKIP_KVY_WIRE_BUILD === "1") {
   console.warn("[postinstall] SKIP_KVY_WIRE_BUILD=1, skipping @kvy/wire build");
 } else {

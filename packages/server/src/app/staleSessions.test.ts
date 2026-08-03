@@ -15,7 +15,7 @@ function sessionAt(overrides: {
   };
 }
 
-describe("isSessionOrphaned (known-issues.md #8)", () => {
+describe("isSessionOrphaned", () => {
   it("is false when the machine has heartbeated recently, regardless of session quiet time", () => {
     const lastSeenAt = new Date(NOW - 30_000); // 30s ago — well within the window
     expect(isSessionOrphaned(sessionAt({ updatedAgoMs: 10 * 60_000 }), lastSeenAt, NOW)).toBe(

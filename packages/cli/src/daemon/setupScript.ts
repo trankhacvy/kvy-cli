@@ -1,10 +1,10 @@
 /**
  * Runs a workspace's configured `setupScript` (`kvy workspace config
- * --setup-script <script>`, docs/features/setup-run-scripts.md Phase 2) —
- * fire-and-forget, never blocking the caller on the script's completion.
- * Two callers: `spawnEngine.ts`'s post-`ensureBranchWorkspace` hook (only on
- * a genuine fresh-worktree creation) and the `run.setup` machine RPC
- * (`runProcess.ts`, Phase 3 — "re-run setup" from the web panel).
+ * --setup-script <script>`) — fire-and-forget, never blocking the caller on
+ * the script's completion. Two callers: `spawnEngine.ts`'s
+ * post-`ensureBranchWorkspace` hook (only on a genuine fresh-worktree
+ * creation) and the `run.setup` machine RPC (`runProcess.ts` — "re-run
+ * setup" from the web panel).
  *
  * **Config vs. cwd split:** `workspaceRoot` is the key `workspaceConfig.ts`
  * stores `setupScript` under (a worktree directory is never itself a config

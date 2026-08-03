@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DISCORD_INVITE_URL, SUPPORT_EMAIL } from "@/lib/config";
 
 /**
- * Settings → Support (docs/competitive-notes-omnara.md #23): two static,
+ * Settings → Support: two static,
  * always-on affordances — join the Discord community, or email support
  * directly. Moved verbatim out of the deleted
  * `app/(protected)/settings/support/page.tsx` route — page chrome dropped;

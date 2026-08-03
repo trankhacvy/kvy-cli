@@ -2,8 +2,8 @@ import type { UnifiedDiffFile, UnifiedDiffHunk } from "@/lib/unifiedDiff";
 
 /**
  * Pure adapter from `lib/unifiedDiff.ts`'s parsed shape to
- * `@git-diff-view/react`'s `DiffView` `data.hunks: string[]` contract
- * (Feature 3 Phase 4, docs/web-ux-improvements-plan.md) — kept as its own
+ * `@git-diff-view/react`'s `DiffView` `data.hunks: string[]` contract —
+ * kept as its own
  * module, no React, so the reconstruction is directly unit-testable (this
  * package's vitest has no jsdom, same "pure logic split out of the
  * component" pattern `git-diff-query.ts`/`push-readiness.ts` already use).

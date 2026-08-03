@@ -1,8 +1,7 @@
 import type { SlashCommand } from "@/features/slash-commands";
 
 /**
- * `Composer`'s "/" slash-command autocomplete state
- * (docs/competitive-notes-omnara.md #18) — kept as a pure module, same
+ * `Composer`'s "/" slash-command autocomplete state — kept as a pure module, same
  * precedent as `mode-switch-state.ts`/`stop-session-state.ts`: no
  * jsdom/@testing-library in this package (`vitest.config.ts`), so the
  * trigger-detection/filter/selection logic a real typing + arrow-key

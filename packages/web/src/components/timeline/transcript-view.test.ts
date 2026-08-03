@@ -25,7 +25,7 @@ function service(id: string, time: number, text: string, quiet: boolean): Render
   return { id, time, role: "agent", kind: "service", text, quiet };
 }
 
-describe("getVisibleTranscriptItems — service `quiet` (docs/bug-fix-plan.md #4)", () => {
+describe("getVisibleTranscriptItems — service `quiet`", () => {
   it("hides a quiet (routine boundary) service item", () => {
     const items: RenderItem[] = [userText("u1", 1), service("s1", 2, "session started", true)];
     const visible = getVisibleTranscriptItems(items);
@@ -44,7 +44,7 @@ describe("getVisibleTranscriptItems — service `quiet` (docs/bug-fix-plan.md #4
   });
 });
 
-describe("getVisibleTranscriptItems — permission-mode (docs/bug-fix-plan.md #5)", () => {
+describe("getVisibleTranscriptItems — permission-mode", () => {
   it("hides a permission-mode item, same as mode-switch, while keeping a sibling visible item", () => {
     const items: RenderItem[] = [userText("u1", 1), permissionMode("pm1", 2)];
     const visible = getVisibleTranscriptItems(items);
@@ -59,7 +59,7 @@ describe("hasVisibleTranscriptItems — permission-mode", () => {
   });
 });
 
-describe("shouldShowTranscriptWorking — a mid-turn permission-mode event doesn't clear 'Working…' (docs/bug-fix-plan.md #5 drift fix)", () => {
+describe("shouldShowTranscriptWorking — a mid-turn permission-mode event doesn't clear 'Working…'", () => {
   it("stays true when a Shift+Tab happens after the latest user message and before any agent reply", () => {
     const items: RenderItem[] = [userText("u1", 1), permissionMode("pm1", 2)];
     expect(shouldShowTranscriptWorking(true, items)).toBe(true);

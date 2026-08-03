@@ -1,5 +1,5 @@
 /**
- * known-issues.md #20: the daemon and a foreground `kvy claude`/`kvy codex`
+ * The daemon and a foreground `kvy claude`/`kvy codex`
  * session each run their own `TokenProvider` against the SAME on-disk
  * `~/.kvy/access.key` refresh token. Without coordination, both can call
  * `/v1/auth/refresh` around the same moment — whichever loses the race gets back a

@@ -1,6 +1,5 @@
 /**
- * `DevicesSection`'s inline revoke-confirm gate (docs/auth-ux-hardening-plan.md
- * item 5), kept as pure functions so the request -> confirm/cancel transitions
+ * `DevicesSection`'s inline revoke-confirm gate, kept as pure functions so the request -> confirm/cancel transitions
  * are directly unit-testable without mounting the component — same precedent
  * as `features/git-diff/git-toolbar-state.ts` / `features/unmanaged-sessions/
  * take-over-dialog-state.ts` (this package's vitest config has no jsdom/

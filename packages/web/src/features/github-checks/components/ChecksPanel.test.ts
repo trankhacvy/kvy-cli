@@ -143,7 +143,7 @@ describe("ChecksPanel (integration via a mock actions source)", () => {
     expect(html).toContain("Add the Checks tab");
   });
 
-  it("renders a manual Refresh control (session-panel-workflow-plan.md Phase 2: seeing a new PR sooner than the 60s poll floor)", async () => {
+  it("renders a manual Refresh control (seeing a new PR sooner than the 60s poll floor)", async () => {
     const { ChecksPanel } = await import("./ChecksPanel");
     const queryClient = new QueryClient();
     queryClient.setQueryData(["github-checks", "/repo"], MOCK_GITHUB_CHECKS_FIXTURES.ok);

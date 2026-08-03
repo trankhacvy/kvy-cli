@@ -289,7 +289,7 @@ export function buildSnapshot(
     // documents. `deriveSessionStatus` treats that as "unknown" (degrades to
     // "idle", never a fabricated "working" OR a fabricated "ready" — the
     // latter was a real regression this exact line caused once "ready" was
-    // introduced for known-issues.md #9, since a `[]` fallback here made
+    // introduced, since a `[]` fallback here made
     // every session flash "ready" on load regardless of real history).
     items: items.get(s.id) ?? null,
     attention: attention.get(s.id) ?? null,

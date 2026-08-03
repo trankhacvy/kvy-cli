@@ -1,9 +1,8 @@
 import type { SleepInhibitMode, SleepInhibitState } from "@kvy/wire";
 
 /**
- * View-model types for Settings → Machines' Sleep Inhibit card
- * (docs/features/sleep-inhibit.md, docs/competitive-notes-omnara.md #12
- * "Sleep-inhibit control") — structurally cloned from
+ * View-model types for Settings → Machines' Sleep Inhibit card —
+ * structurally cloned from
  * `features/provider-accounts/types.ts`.
  *
  * `SleepInhibitMode`/`SleepInhibitState` are re-exported straight off

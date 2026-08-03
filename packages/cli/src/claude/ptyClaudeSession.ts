@@ -98,8 +98,8 @@ const DEFAULT_COLS = 80;
 const DEFAULT_ROWS = 24;
 
 /**
- * `closeTurn`'s retry budget (docs/user-flows.md fix-plan task 1). Confirmed
- * live: Claude Code's `Stop` hook can fire before its own transcript write
+ * `closeTurn`'s retry budget. Confirmed live: Claude Code's `Stop` hook can
+ * fire before its own transcript write
  * for the final assistant message has landed on disk — `flush()` alone
  * can't help if the entry genuinely isn't there yet, no matter how fresh
  * the read is. A few short retries gives the write time to land without
@@ -183,11 +183,10 @@ const MODEL_SWITCH_CONFIRM_BUFFER_MAX = 500;
  *  - `bypassPermissions` has NO entry: live-verified unreachable via the
  *    Shift+Tab cycle in this environment at all (cycling past `plan`
  *    produces `auto mode unavailable for this model` and falls back to
- *    `default`, never rendering a `bypassPermissions` status line) — already
- *    documented as genuine Claude Code behavior in docs/known-issues.md
- *    issue #11, not a Kvy bug. There is no status text to ever match for
- *    it, so {@link waitForModeStatus} resolves `false` immediately rather
- *    than arming a watcher that could never fire.
+ *    `default`, never rendering a `bypassPermissions` status line) — genuine
+ *    Claude Code behavior, not a Kvy bug. There is no status text to ever
+ *    match for it, so {@link waitForModeStatus} resolves `false` immediately
+ *    rather than arming a watcher that could never fire.
  *
  * Each pattern anchors on the glyph immediately preceding its phrase
  * (`⏸`/`⏵⏵`) — live-verified always written CONTIGUOUSLY with the phrase in
@@ -463,8 +462,8 @@ export interface PtyClaudeSessionHandle {
   answerAskUserQuestion(decision: PermDecision, questions: AskQuestion[]): boolean;
   /**
    * Types `/model <alias>` + submit into the live PTY — Claude Code's own
-   * model-switch slash command (docs/known-issues.md issue #12, "web model
-   * selector"). Unlike {@link sendModeCycle}'s raw Shift+Tab escape bytes,
+   * model-switch slash command, for the web model selector. Unlike
+   * {@link sendModeCycle}'s raw Shift+Tab escape bytes,
    * this goes through the SAME `InjectionController` queue/gate a web chat
    * message uses (`injectMessage`'s underlying `controller.enqueue`) rather
    * than a direct `ptyProcess.write` — a slash command is ordinary typed
@@ -493,8 +492,8 @@ export interface PtyClaudeSessionHandle {
   sendModelChange(model: string): boolean;
   /**
    * Force-closes the currently open turn on the wire, the instant Claude
-   * Code's own `Stop` hook fires (docs/user-flows.md fix-plan task 1) —
-   * reuses the SAME tailer mapper state `onEnvelopes` is driven from
+   * Code's own `Stop` hook fires — reuses the SAME tailer mapper state
+   * `onEnvelopes` is driven from
    * (`envelopeMapper.ts`'s `closeClaudeTurnWithStatus`), rather than
    * inventing a parallel turn-tracking mechanism. A no-op when no turn is
    * currently open (e.g. the transcript scanner's own `type:"user"` branch

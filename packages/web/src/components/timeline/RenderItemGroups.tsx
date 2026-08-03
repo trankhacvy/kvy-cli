@@ -27,7 +27,7 @@ import { ToolCard } from "./tool-cards/registry";
 import { getVisibleTranscriptItems } from "./transcript-view";
 
 type MessageGroupItem = TextItem | FileItem | PermPlaceholderItem | ToolItem | OrphanToolEndItem;
-/** A non-quiet `service` item (docs/bug-fix-plan.md #4) renders as its own
+/** A non-quiet `service` item renders as its own
  * standalone row, same as a subagent group — it's a boundary marker between
  * messages (often carrying no `turn`, e.g. a model-switch confirmation),
  * not content that belongs inside an adjacent message bubble. `plan` is the

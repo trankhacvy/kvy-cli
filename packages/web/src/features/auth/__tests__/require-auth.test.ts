@@ -33,7 +33,7 @@ describe("SIGNIN_PATH", () => {
   });
 });
 
-// docs/auth-ux-hardening-plan.md item 7 ("session-expiry-reason"): a failed silent
+// A failed silent
 // refresh must carry a reason so `/signin/` can explain why the visitor landed there,
 // instead of looking indistinguishable from a bare cold visit.
 describe("SIGNIN_EXPIRED_PATH", () => {
@@ -92,9 +92,9 @@ describe("RequireAuth", () => {
   });
 });
 
-// docs/auth-ux-hardening-plan.md item 2d: the `no-identity` dead-end and the
+// The `no-identity` dead-end and the
 // `needs-unlock` "Forgot your PIN?" link both now route to the provider-agnostic
-// `/reset-keys/` route instead of `/password/` (dev-only in production, per item 3).
+// `/reset-keys/` route instead of `/password/` (dev-only in production).
 // Asserted against the shipped source text, same technique `signin/page.test.ts` and
 // `(protected)/layout.test.ts` use for hook-heavy JSX this vitest config can't render.
 describe("require-auth.tsx — key-state wiring", () => {
@@ -116,7 +116,7 @@ describe("require-auth.tsx — key-state wiring", () => {
   });
 
   it("checks the session independently of key material", () => {
-    // Phase 4a: gating the session effect on crypto readiness made "signed in but no
+    // Gating the session effect on crypto readiness made "signed in but no
     // keys" unreachable — the exact state RequestKeysPanel has to run in.
     const effectIndex = source.indexOf("async function ensureSession()");
     expect(effectIndex).toBeGreaterThan(-1);

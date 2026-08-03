@@ -4,8 +4,8 @@ import type { Database } from "../db/types.js";
 import type { ClientKind } from "./tokens.js";
 import { mintAccessToken } from "./tokens.js";
 
-// daily-active daemon still re-runs `kvy auth login` every 60 days. Recorded in
-// docs/encryption.md.
+// 60-day refresh token TTL — even a daily-active daemon still re-runs
+// `kvy auth login` every 60 days.
 export const REFRESH_TTL_MS = 60 * 24 * 60 * 60 * 1000;
 
 export function newRefreshToken(): string {

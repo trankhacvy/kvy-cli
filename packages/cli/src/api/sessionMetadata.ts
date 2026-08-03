@@ -11,8 +11,7 @@ const CasConflictSchema = z.object({
 });
 
 // `looseObject`, not `object`: this blob is also written by the web (Pin —
-// docs/features/session-lifecycle-actions.md Phase 3/4 — and any future
-// field), which the CLI knows nothing about. A strict schema would silently
+// and any future field), which the CLI knows nothing about. A strict schema would silently
 // strip those unknown keys on parse, and the next CLI-side updateModel CAS
 // write would then re-seal a blob missing them — clobbering a concurrent
 // writer instead of converging with it.
@@ -47,8 +46,8 @@ export interface SessionMetadataUpdaterOptions {
    * Resolves the current bearer token immediately before every request (including every
    * CAS-conflict retry inside `persistModel`) instead of a token captured once at
    * construction — same fix, same reason, as `httpClient.ts`'s `getAuthToken`
-   * (docs/known-issues-cliweb-sync-test.md issue #1: a session can run far longer than
-   * one access token's ~15min TTL). Typically `TokenProvider.getAccessToken`.
+   * (a session can run far longer than one access token's ~15min TTL).
+   * Typically `TokenProvider.getAccessToken`.
    */
   getAuthToken: () => string | null | Promise<string | null>;
   dek: Uint8Array;

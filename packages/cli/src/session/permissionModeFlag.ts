@@ -8,9 +8,8 @@ import { PermissionModeSchema } from "@kvy/wire";
  * passes for a daemon-spawned session (`--permission-mode`,
  * `packages/wire/src/permissions.ts`'s `PermissionModeSchema`).
  *
- * Used to seed `PreToolPermissionBridge`'s `lastPermissionMode` baseline
- * (docs/bug-fix-plan.md issue #5's known gap): without a real starting mode
- * to compare against, the bridge's first hook echo — which may already
+ * Used to seed `PreToolPermissionBridge`'s `lastPermissionMode` baseline:
+ * without a real starting mode to compare against, the bridge's first hook echo — which may already
  * reflect a mode the user switched to via Shift+Tab before ever using a
  * tool — is indistinguishable from "no transition happened," so the web
  * mode chip silently never catches up until a second, unrelated switch.

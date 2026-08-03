@@ -10,8 +10,7 @@ import { useLiveMachineSettingsActions } from "../use-live-machine-settings-acti
 import { SleepInhibitCard } from "./SleepInhibitCard";
 
 /**
- * Settings → Machines (docs/features/sleep-inhibit.md, docs/
- * competitive-notes-omnara.md #12 "Sleep-inhibit control"): one section per
+ * Settings → Machines: one section per
  * known machine, each with a Sleep Inhibit card. Structural clone of
  * `features/provider-accounts/components/ProvidersSettingsScreen.tsx` —
  * reuses `features/session-list`'s `useLiveSessionListSnapshot` for the

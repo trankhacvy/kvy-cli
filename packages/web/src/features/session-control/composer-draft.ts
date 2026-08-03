@@ -1,6 +1,5 @@
 /**
- * Per-session composer draft persistence (plan-v2.md W4.2 "draft persistence
- * (sessionStorage keyed by sessionId)"). `sessionStorage`, not
+ * Per-session composer draft persistence, keyed by sessionId. `sessionStorage`, not
  * `localStorage`, is the right store here — a draft is a "you were mid-typing
  * when you navigated/reloaded this tab" convenience, not something that
  * should survive across browser sessions or resurface on a different device

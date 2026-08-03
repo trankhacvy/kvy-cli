@@ -49,7 +49,7 @@ function fakeActions(overrides: Partial<MachineSettingsActions> = {}): MachineSe
   };
 }
 
-describe("useMachineSettings (docs/features/sleep-inhibit.md)", () => {
+describe("useMachineSettings", () => {
   it("setMode writes the mutation's result straight into the query cache via setQueryData", async () => {
     const actions = fakeActions();
     const { settings, queryClient } = renderSettings(actions, "mach-1");

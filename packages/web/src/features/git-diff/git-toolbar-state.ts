@@ -1,7 +1,7 @@
 /**
- * Pure state-transition helpers for `GitToolbar` (docs/features/
- * git-write-actions.md Phase 5), kept in their own module so the
- * inline-rename and commit-submit logic is directly unit-testable without
+ * Pure state-transition helpers for `GitToolbar`, kept in their own module
+ * so the inline-rename and commit-submit logic is directly unit-testable
+ * without
  * mounting the component — same precedent as `features/unmanaged-sessions/
  * take-over-dialog-state.ts` / `features/session-control/perm-card-state.ts`
  * (this package's vitest config has no jsdom/`@testing-library/react`
@@ -36,8 +36,8 @@ export function resolveCommitSubmit(
 }
 
 /**
- * Normalizes the Add-remote dialog's two fields (Feature 1, docs/
- * web-ux-improvements-plan.md) into `setRemote` params, or `null` when the
+ * Normalizes the Add-remote dialog's two fields into `setRemote` params,
+ * or `null` when the
  * URL is blank (nothing to submit). Trims both; an empty name falls back to
  * `undefined` so the daemon applies its own `"origin"` default rather than
  * this UI hard-coding it in two places.

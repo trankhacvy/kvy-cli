@@ -37,7 +37,7 @@ function render(snapshot: SessionListSnapshot) {
   );
 }
 
-describe("CompletedSessionsScreen (docs/features/session-lifecycle-actions.md Phase 5)", () => {
+describe("CompletedSessionsScreen", () => {
   it("renders exactly the archived session, excluding the active one", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [{ id: "w1", name: "kvy" }],

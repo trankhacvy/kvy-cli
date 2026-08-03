@@ -126,7 +126,7 @@ export interface MachineIntegrationDeps {
   spawnEngineOverrides?: Partial<SpawnEngineDeps>;
   /** Same, for `resumeSession.ts`. */
   resumeSessionOverrides?: Partial<ResumeSessionDeps>;
-  /** Backs the `sleepInhibit.get` RPC (docs/features/sleep-inhibit.md). Defaults to an honest "no manager wired" stub here — `commands.ts` supplies the real `daemon/sleepInhibit.ts` manager's `getState`, since the manager itself is created at that composition root (boot re-apply must work even in local-only mode, where this module's `startMachineIntegration` never runs at all). */
+  /** Backs the `sleepInhibit.get` RPC. Defaults to an honest "no manager wired" stub here — `commands.ts` supplies the real `daemon/sleepInhibit.ts` manager's `getState`, since the manager itself is created at that composition root (boot re-apply must work even in local-only mode, where this module's `startMachineIntegration` never runs at all). */
   getSleepInhibit?: (params: SleepInhibitGetParams) => Promise<SleepInhibitState>;
   /** Backs the `sleepInhibit.set` RPC. Same "real default lives in commands.ts" note as `getSleepInhibit` above. */
   setSleepInhibit?: (params: SleepInhibitSetParams) => Promise<SleepInhibitState>;
@@ -136,8 +136,7 @@ export interface MachineIntegrationHandle {
   readonly machineId: string;
   /**
    * Async because it now also closes every tracked preview tunnel
-   * (`previewTunnel.ts`'s `closeAllTunnels` — docs/features/
-   * dev-server-preview.md) before tearing down the socket; `commands.ts`'s
+   * (`previewTunnel.ts`'s `closeAllTunnels`) before tearing down the socket; `commands.ts`'s
    * shutdown path awaits it. Still allowed to return plain `void` for the
    * "socket connected but no RPC handlers ever got wired" defensive branch
    * below, which has no tunnel registry to close.
@@ -209,13 +208,13 @@ export async function startMachineIntegration(
       writeCredentials({ ...credentials, refreshToken }, deps.homeDir);
     },
     logger: deps.logger,
-    // issue #2 (docs/known-issues-cliweb-sync-test.md): this daemon-owned provider and
+    // This daemon-owned provider and
     // a foreground `kvy claude`/`kvy codex` session's own provider
     // (`resolveAccessToken.ts`) both rotate the same on-disk refresh token
     // independently — re-read it on a 401 before giving up permanently, in case the
     // other process already rotated in a newer one.
     readCurrentRefreshToken: () => deps.readCredentials()?.refreshToken ?? null,
-    // known-issues.md #20: serialize actual refresh attempts against a foreground
+    // Serialize actual refresh attempts against a foreground
     // session's own provider instead of racing on the same on-disk refresh token.
     withCredentialsLock: (fn) => withCredentialsLock(deps.homeDir, fn),
   });
@@ -308,8 +307,7 @@ export async function startMachineIntegration(
     return { machineId, stop: started.handle.stop };
   }
 
-  // Fire-and-forget setup-script kickoff (docs/features/
-  // setup-run-scripts.md Phase 2/4) — binds `setupScript.ts`'s real runner
+  // Fire-and-forget setup-script kickoff — binds `setupScript.ts`'s real runner
   // to this boot's `homeDir`/`logger`, matching every other homeDir-scoped
   // handler in this module. `spawnEngine.ts` already guarantees this is
   // only ever called on a genuine fresh-worktree creation and never awaits
@@ -322,10 +320,10 @@ export async function startMachineIntegration(
     );
   }
 
-  // A5 (docs/known-issues.md #8's sibling gap — "orphaned active session
-  // rows when the process dies after DB-row creation, on an otherwise-
-  // healthy machine"): subscribes to the SAME `watchExit` `spawnAwaiter`
-  // already used to resolve the spawn (A3/A4), but for the rest of this
+  // Guards against orphaned active session rows when the process dies after
+  // DB-row creation, on an otherwise-healthy machine: subscribes to the SAME
+  // `watchExit` `spawnAwaiter`
+  // already used to resolve the spawn, but for the rest of this
   // process's life — not just the initial `/session-started` wait. If the
   // process later dies without the session's own clean `POST
   // /v1/sessions/:id/status` report ever landing (e.g. `runRemoteLoop()`'s
@@ -466,9 +464,8 @@ export async function startMachineIntegration(
     });
   }
 
-  // Live dev-server preview via secure tunnel (docs/features/
-  // dev-server-preview.md, docs/competitive-notes-omnara.md #6): one
-  // in-memory tunnel registry per daemon process, constructed here (the
+  // Live dev-server preview via secure tunnel: one in-memory tunnel
+  // registry per daemon process, constructed here (the
   // composition root) since `preview.open`/`preview.close`/`preview.tunnels`
   // all need to share it — `machineRpc.ts` has no registry of its own to
   // default to, same reasoning as `adopt.take`'s shared state above.
@@ -492,8 +489,7 @@ export async function startMachineIntegration(
     return handlePreviewClose(params, previewTunnelDeps);
   }
 
-  // The Setup/Run scripts subsystem's five RPCs (docs/features/
-  // setup-run-scripts.md Phase 3/4) each need `homeDir` — for
+  // The Setup/Run scripts subsystem's five RPCs each need `homeDir` — for
   // `runStateStore.ts`/the log files under `~/.kvy/logs/` — the same
   // reason `getGitDiffHandler`'s `uploadBlob` binding above exists: the
   // dependency only exists at this composition root, not inside
@@ -541,7 +537,7 @@ export async function startMachineIntegration(
 
   deps.logger.info("[machine-integration] machine client + RPC handlers ready", { machineId });
 
-  // Boot-time orphan reaping (docs/features/dev-server-preview.md): a prior
+  // Boot-time orphan reaping: a prior
   // daemon process that crashed/was SIGKILLed may have left `cloudflared`
   // children running with no kvy argv marker `kill.ts`/`markers.ts` could
   // ever find — `tunnels.json`'s pid journal is the only trail back to

@@ -68,21 +68,18 @@ function FileLineRow({ lineNumber, tokens }: { lineNumber: number; tokens: Theme
 }
 
 /**
- * Read-only, syntax-highlighted file viewer with line numbers (docs/
- * competitive-notes-omnara.md #5 "Full repo file browser": "full
- * syntax-highlighted viewer, line numbers"). Shares its shiki tokenizer
+ * Read-only, syntax-highlighted file viewer with line numbers. Shares its shiki tokenizer
  * (`@/lib/diffHighlight.ts`'s `highlightDiffLines`/`languageForPath`) with
  * `UnifiedDiffViewer` rather than duplicating it — a plain file body is
  * just a diff with every line treated as unchanged context, so the same
  * per-line tokenizer applies directly. Never `dangerouslySetInnerHTML`,
  * same rule as `markdown.ts`/`UnifiedDiffViewer.tsx`.
  *
- * Feature 3 Phase 3 (docs/web-ux-improvements-plan.md): lines render through
+ * Lines render through
  * `VirtualLineList` instead of one `<FileLineRow>` per line — a 5,000-line
  * file used to mean ~10^5 DOM nodes. Fixed-height rows mean long lines no
  * longer wrap (`whitespace-pre` + horizontal scroll replaces the old
- * `whitespace-pre-wrap break-all`) — an accepted, visible trade documented
- * in the plan's rollout notes.
+ * `whitespace-pre-wrap break-all`) — an accepted, visible trade-off.
  */
 export function FileViewer({
   path,
@@ -92,7 +89,7 @@ export function FileViewer({
 }: {
   path: string;
   content: RepoFileContent;
-  /** Feature 3 Phase 5 (docs/web-ux-improvements-plan.md): fetches the next byte-range page and appends it — omit to fall back to the old static "this file was truncated" notice with no way to see the rest. */
+  /** Fetches the next byte-range page and appends it — omit to fall back to the old static "this file was truncated" notice with no way to see the rest. */
   onLoadMore?: () => void;
   isLoadingMore?: boolean;
 }) {

@@ -2,8 +2,8 @@ import { FolderOpen } from "lucide-react";
 import { CopyButton } from "./CopyButton";
 
 /**
- * Friendliest short label for a workspace path (docs/competitive-notes-
- * omnara.md #21's header chip): the path's own basename, falling back to the
+ * Friendliest short label for a workspace path shown in the header chip: the
+ * path's own basename, falling back to the
  * full path for a bare root like "/" or a value with no separator. Same
  * convention as `features/session-list/live-source.ts`'s
  * `workspaceNameFromId` — that helper isn't exported and lives in a
@@ -17,8 +17,8 @@ export function workingDirectoryBasename(path: string): string {
 }
 
 /**
- * One-click "copy working directory path" affordance in the session header
- * (docs/competitive-notes-omnara.md #21). `path` is the session's registered
+ * One-click "copy working directory path" affordance in the session header.
+ * `path` is the session's registered
  * workspace path (`SessionRow.workspaceId`, which *is* the workspace's real
  * absolute directory path — the same convention `SessionGitScreen`/
  * `live-source.ts` already rely on) — shown as a quiet basename chip with

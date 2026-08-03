@@ -2,8 +2,7 @@ import { PROVIDER_IDS } from "@kvy/wire";
 import type { NewSessionProvider } from "./types";
 
 /**
- * Starred defaults for the New Session pickers (docs/competitive-notes-omnara.md
- * #22 "Favorite/star a default machine, provider, and model"): at most one
+ * Starred defaults for the New Session pickers: at most one
  * starred machine, one starred provider, and one starred model per provider
  * (a starred model only makes sense within the provider it belongs to —
  * "sonnet" isn't a valid `--model` for Codex, same reasoning `model-meta.ts`'s
@@ -15,8 +14,8 @@ import type { NewSessionProvider } from "./types";
  * `last-seen.ts`/`lib/session.ts` are — Next prerenders these routes at
  * build time (static export), where `window` doesn't exist.
  *
- * Also the backing store for Settings → Agent (docs/competitive-notes-omnara.md
- * #15 "Global default provider + default model per provider") —
+ * Also the backing store for Settings → Agent (global default provider
+ * + default model per provider) —
  * `features/settings/components/AgentSection.tsx` (in the settings dialog)
  * is a second, more discoverable surface onto these same getters/setters,
  * so a star set from either place is honored by the other.

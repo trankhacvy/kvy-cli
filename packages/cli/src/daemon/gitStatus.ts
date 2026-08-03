@@ -44,7 +44,7 @@ export interface GitStatusDeps {
   noIndexDiff?: GitExec;
   /** Injectable for tests; defaults to `workspaceConfig.ts`'s real `~/.kvy/settings.json`-backed lookup. */
   resolveConfiguredBaseRef?: (worktree: string) => Promise<string | undefined>;
-  /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (known-issues.md #3 — a real filesystem check, so tests exercising the porcelain-parsing logic against a fake `worktree` path must override this). */
+  /** Injectable for tests; defaults to `workspacePath.ts`'s real `assertWorkspaceStillValid` (a real filesystem check, so tests exercising the porcelain-parsing logic against a fake `worktree` path must override this). */
   assertWorkspaceValid?: (directory: string) => Promise<void>;
 }
 
@@ -103,7 +103,7 @@ function parseSingleFileNumstat(output: string): { insertions: number; deletions
   return sawUsableLine ? { insertions, deletions } : null;
 }
 
-/** Runs `git status --porcelain=v2 --branch` in `params.worktree` and `git diff` against the resolved base ref, merging them into a `GitStatusResult`. Throws a `WorkspaceValidationError` (known-issues.md #3) if `worktree` no longer exists or isn't a git repository — checked before `git` ever runs. Throws `GitExecError` for any other `git` failure — no silent "empty status" fallback. */
+/** Runs `git status --porcelain=v2 --branch` in `params.worktree` and `git diff` against the resolved base ref, merging them into a `GitStatusResult`. Throws a `WorkspaceValidationError` if `worktree` no longer exists or isn't a git repository — checked before `git` ever runs. Throws `GitExecError` for any other `git` failure — no silent "empty status" fallback. */
 export async function getGitStatus(
   params: GitStatusParams,
   deps: GitStatusDeps = {},
