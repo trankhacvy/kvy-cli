@@ -29,7 +29,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/node": ">=20",
+    "@types/node": ">=26",
     "pkgroll": "^2.14.2",
     "shx": "^0.3.4",
     "tsx": "^4.20.0",

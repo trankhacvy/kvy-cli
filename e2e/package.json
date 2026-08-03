@@ -20,7 +20,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.4",
     "@kvy/server": "workspace:*",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.2",
     "kvy": "workspace:*",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
