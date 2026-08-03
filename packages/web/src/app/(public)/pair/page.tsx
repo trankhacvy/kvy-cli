@@ -42,7 +42,7 @@ function formatRelative(iso: string | null): string {
   return `${Math.round(diffSeconds / 3600)}h ago`;
 }
 
-/** CLI pairing approval: the CLI prints `app.kvy.dev/pair#<ephPub>` and polls while this
+/** CLI pairing approval: the CLI prints `kvy-cli.tkvy.dev/pair#<ephPub>` and polls while this
  * already-authenticated browser approves it. Gate order: IDENTITY FIRST, crypto second. */
 export default function PairPage() {
   const router = useRouter();

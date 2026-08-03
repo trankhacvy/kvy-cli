@@ -3,7 +3,7 @@ import { resolveBackendUrl, resolveFrontendUrl } from "./config.js";
 
 describe("resolveBackendUrl", () => {
   it("defaults to the production API host", () => {
-    expect(resolveBackendUrl({})).toBe("https://api.kvy.dev");
+    expect(resolveBackendUrl({})).toBe("https://api.kvy-cli.tkvy.dev");
   });
 
   it("uses KVY_BACKEND_URL when set", () => {
@@ -19,13 +19,13 @@ describe("resolveBackendUrl", () => {
   });
 
   it("ignores a blank override", () => {
-    expect(resolveBackendUrl({ KVY_BACKEND_URL: "   " })).toBe("https://api.kvy.dev");
+    expect(resolveBackendUrl({ KVY_BACKEND_URL: "   " })).toBe("https://api.kvy-cli.tkvy.dev");
   });
 });
 
 describe("resolveFrontendUrl", () => {
   it("defaults to the production web host", () => {
-    expect(resolveFrontendUrl({})).toBe("https://app.kvy.dev");
+    expect(resolveFrontendUrl({})).toBe("https://kvy-cli.tkvy.dev");
   });
 
   it("uses KVY_FRONTEND_URL when set", () => {

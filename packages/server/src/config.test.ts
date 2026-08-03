@@ -71,7 +71,7 @@ describe("config env parsing", () => {
     expect(env.KVY_MASTER_SECRET).toBe("dev-only-insecure-master-secret-change-me!!");
     expect(env.VAPID_PUBLIC_KEY).toBeUndefined();
     expect(env.VAPID_PRIVATE_KEY).toBeUndefined();
-    expect(env.VAPID_SUBJECT).toBe("mailto:support@kvy.dev");
+    expect(env.VAPID_SUBJECT).toBe("mailto:support@kvy-cli.tkvy.dev");
     expect(env.TELEGRAM_BOT_TOKEN).toBeUndefined();
     expect(env.TELEGRAM_BOT_USERNAME).toBeUndefined();
     expect(env.TELEGRAM_WEBHOOK_SECRET).toBeUndefined();

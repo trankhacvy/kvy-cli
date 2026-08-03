@@ -337,7 +337,7 @@ Per session / per machine record:
 CLI                                    Server                        Web (has keys)
  │ ephemeral x25519 keypair              │                                │
  │ POST /v1/auth/pair {ephPub} ─────────►│ create PairRequest             │
- │ print URL: app.kvy.dev/pair#ephPub │                                │
+ │ print URL: kvy-cli.tkvy.dev/pair#ephPub │                           │
  │ poll GET /v1/auth/pair/status ───────►│◄── POST /v1/auth/pair/approve ─│
  │                                       │    {box(ephPub, [0x00|masterSecret… or contentKey bundle])}
  │◄── {state:'authorized', box, token} ──│                                │

@@ -1,5 +1,5 @@
-const DEFAULT_BACKEND_URL = "https://api.kvy.dev";
-const DEFAULT_FRONTEND_URL = "https://app.kvy.dev";
+const DEFAULT_BACKEND_URL = "https://api.kvy-cli.tkvy.dev";
+const DEFAULT_FRONTEND_URL = "https://kvy-cli.tkvy.dev";
 
 function stripTrailingSlash(url: string): string {
   return url.endsWith("/") ? url.slice(0, -1) : url;

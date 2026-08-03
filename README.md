@@ -26,14 +26,14 @@ and control from a browser on any device.
 ```bash
 npm install -g @vibe-oss/kvy
 # or, no Node required:
-curl -fsSL https://kvy.dev/install.sh | sh
+curl -fsSL https://kvy-cli.tkvy.dev/install.sh | sh
 
 kvy claude   # or: kvy codex
 ```
 
 That's it — `kvy claude` behaves exactly like `claude`, and the session shows up live
 on the web app within a few seconds. By default the CLI talks to the hosted
-`api.kvy.dev` / `app.kvy.dev` backend; see below to run your own instead.
+`api.kvy-cli.tkvy.dev` / `kvy-cli.tkvy.dev` backend; see below to run your own instead.
 
 ## Self-hosting
 
