@@ -50,10 +50,22 @@ beforeEach(() => {
   readCredentialsMock.mockReset().mockReturnValue(null);
   clearCredentialsMock.mockReset();
   wrapWithDeviceKeyMock.mockReset().mockReturnValue({ v: 1, nonce: "n", ct: "c" });
+  // `runAuthLogin`'s post-pairing `fetchAccountEmail` call isn't mocked at the
+  // `pair.js`/`credentials.js` level like everything else here, so it was
+  // silently making a REAL network request to `resolveBackendUrl()`'s default —
+  // harmless while that default was a placeholder domain that never resolved,
+  // but it now hangs for real (to the timeout) since that default is a live
+  // server. `fetchAccountEmail` is best-effort or catches everything, so
+  // failing fast here is equivalent to a real network error, not a test hack.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new Error("network disabled in login.test.ts")),
+  );
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("runAuthLogin", () => {
