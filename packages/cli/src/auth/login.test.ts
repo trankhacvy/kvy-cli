@@ -57,10 +57,7 @@ beforeEach(() => {
   // but it now hangs for real (to the timeout) since that default is a live
   // server. `fetchAccountEmail` is best-effort or catches everything, so
   // failing fast here is equivalent to a real network error, not a test hack.
-  vi.stubGlobal(
-    "fetch",
-    vi.fn().mockRejectedValue(new Error("network disabled in login.test.ts")),
-  );
+  vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network disabled in login.test.ts")));
 });
 
 afterEach(() => {
