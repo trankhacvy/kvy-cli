@@ -7,7 +7,7 @@ import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
 import { GithubIcon } from "@/components/icons/github";
 import { GoogleIcon } from "@/components/icons/google";
 import { Button } from "@/components/ui/button";
-import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "@/lib/config";
+import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID, IS_DEV } from "@/lib/config";
 import { copy } from "@/lib/copy";
 import { clearTitleOverride, setTitleOverride } from "@/lib/document-title-store";
 import { beginGithubSignIn, beginGoogleSignIn } from "@/lib/oauth";
@@ -100,25 +100,28 @@ export default function SignInPage() {
             </div>
 
             {/* The divider only earns its place when there's an OAuth button above
-                it — with neither configured it dangles between the note and email. */}
-            {(GOOGLE_OAUTH_CLIENT_ID || GITHUB_OAUTH_CLIENT_ID) && (
+                it — with neither configured it dangles between the note and email.
+                The email button is dev-only so the divider is also gated on IS_DEV. */}
+            {IS_DEV && (GOOGLE_OAUTH_CLIENT_ID || GITHUB_OAUTH_CLIENT_ID) && (
               <p className="my-6 text-center text-sm text-muted-foreground">or</p>
             )}
 
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="h-11 w-full"
-                onClick={() => router.push("/password/")}
-              >
-                {copy.signin.emailCta}
-              </Button>
-              <p className="mt-2.5 text-center text-xs text-muted-foreground">
-                {copy.signin.emailHint}
-              </p>
-            </div>
+            {IS_DEV && (
+              <div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="lg"
+                  className="h-11 w-full"
+                  onClick={() => router.push("/password/")}
+                >
+                  {copy.signin.emailCta}
+                </Button>
+                <p className="mt-2.5 text-center text-xs text-muted-foreground">
+                  {copy.signin.emailHint}
+                </p>
+              </div>
+            )}
 
             <p className="mt-8 text-center text-sm text-muted-foreground">{copy.signin.footer}</p>
           </div>
