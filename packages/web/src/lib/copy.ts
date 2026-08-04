@@ -141,7 +141,6 @@ export const copy = {
     title: "Connect your first machine",
     subtitle: "Kvy runs on your own computer. Two commands.",
     step1: "Install",
-    step1Cmd: "npm install -g @vibe-oss/kvy",
     step2: "Run it from any project",
     step2Cmd: "cd ~/your-project && kvy",
     step3: "Approve when your browser asks",

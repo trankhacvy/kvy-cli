@@ -37,11 +37,11 @@ export function rootMetadata(): Metadata {
     icons: {
       icon: [
         { url: "/favicon.ico", sizes: "any" },
-        { url: "/icon.svg", type: "image/svg+xml" },
-        { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
-        { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        { url: "/favicon-196.png", sizes: "196x196", type: "image/png" },
+        { url: "/manifest-icon-192.maskable.png", sizes: "192x192", type: "image/png" },
+        { url: "/manifest-icon-512.maskable.png", sizes: "512x512", type: "image/png" },
       ],
-      apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+      apple: [{ url: "/apple-icon-180.png", sizes: "180x180", type: "image/png" }],
     },
   };
 }
@@ -59,7 +59,7 @@ export function landingMetadata(): Metadata {
       type: "website",
       images: [
         {
-          url: "/og.png",
+          url: "/og.jpg",
           width: 1200,
           height: 630,
           alt: "Kvy",
@@ -70,7 +70,7 @@ export function landingMetadata(): Metadata {
       card: "summary_large_image",
       title: LANDING_TITLE,
       description: LANDING_DESCRIPTION,
-      images: ["/og.png"],
+      images: ["/og.jpg"],
     },
     robots: { index: true, follow: true },
     other: {

@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { KvyMark } from "@/components/kvy-mark";
 
-// TODO(art): replace this hotlinked placeholder with a generated local asset under
-// /public before launch — a third-party image URL on an auth screen leaks visitor
-// IP + Referer and can vanish at any time.
-const AUTH_ART_URL =
-  "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=cinematic%20futuristic%20mission%20control%20workspace%2C%20encrypted%20agent%20operations%20dashboard%2C%20glowing%20glass%20panels%2C%20soft%20atmospheric%20lighting%2C%20sleek%20hardware%20desk%20setup%2C%20high-end%20product%20illustration%2C%20clean%20composition%2C%20premium%20editorial%20style&image_size=portrait_4_3";
+const AUTH_ART_URL = "/auth-art.webp";
 
 export function AuthArtPanel({ caption }: { caption: string }) {
   return (

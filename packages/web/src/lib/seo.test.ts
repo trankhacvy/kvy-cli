@@ -25,7 +25,7 @@ describe("seo helpers", () => {
     expect(meta.robots).toEqual({ index: true, follow: true });
     expect(meta.openGraph?.title).toBe(LANDING_TITLE);
     expect(meta.openGraph?.images).toEqual(
-      expect.arrayContaining([expect.objectContaining({ url: "/og.png" })]),
+      expect.arrayContaining([expect.objectContaining({ url: "/og.jpg" })]),
     );
     expect(meta.alternates?.canonical).toBe("/");
   });
