@@ -48,7 +48,9 @@ export function InstallTabs({ className }: { className?: string }) {
       {INSTALL_OPTIONS.map((opt) => (
         <TabsContent key={opt.id} value={opt.id}>
           <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5">
-            <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{opt.command}</code>
+            <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">
+              {opt.command}
+            </code>
             <button
               type="button"
               aria-label={`Copy: ${opt.command}`}
