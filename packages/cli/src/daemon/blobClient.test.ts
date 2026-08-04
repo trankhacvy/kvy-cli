@@ -66,7 +66,7 @@ describe("uploadBlob", () => {
     // The bytes actually PUT are `encryptBlob`'s output — decrypting them
     // under the same key must recover the original plaintext.
     expect(capturedPutBody).not.toBeNull();
-    const putBytes = new Uint8Array(capturedPutBody!);
+    const putBytes = new Uint8Array(capturedPutBody as ArrayBuffer);
     const decrypted = decryptBlob(putBytes, blobKey);
     expect(decrypted).toEqual(plaintext);
   });

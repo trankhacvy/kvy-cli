@@ -117,7 +117,12 @@ describe("startTranscriptIndexer", () => {
 
     const upserts: UpsertUnmanagedSessionParams[] = [];
     handle = startTranscriptIndexer(
-      baseDeps({ upsert: async (params) => (upserts.push(params), true) }),
+      baseDeps({
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
+      }),
     );
 
     await sleep(300);
@@ -139,7 +144,10 @@ describe("startTranscriptIndexer", () => {
     handle = startTranscriptIndexer(
       baseDeps({
         debounceMs: 300,
-        upsert: async (params) => (upserts.push(params), true),
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
       }),
     );
 
@@ -165,7 +173,10 @@ describe("startTranscriptIndexer", () => {
     const upserts: UpsertUnmanagedSessionParams[] = [];
     handle = startTranscriptIndexer(
       baseDeps({
-        upsert: async (params) => (upserts.push(params), true),
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
         isManaged: (providerRef) => providerRef === "sess-managed",
       }),
     );
@@ -182,7 +193,10 @@ describe("startTranscriptIndexer", () => {
     const upserts: UpsertUnmanagedSessionParams[] = [];
     handle = startTranscriptIndexer(
       baseDeps({
-        upsert: async (params) => (upserts.push(params), true),
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
         listProcesses: async () => [{ pid: 999, ppid: 1, command: "claude --resume" }],
         resolveProcessCwd: async (pid) => (pid === 999 ? workspacePath : null),
       }),
@@ -201,7 +215,10 @@ describe("startTranscriptIndexer", () => {
     const upserts: UpsertUnmanagedSessionParams[] = [];
     handle = startTranscriptIndexer(
       baseDeps({
-        upsert: async (params) => (upserts.push(params), true),
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
         listProcesses: async () => [
           { pid: 111, ppid: 1, command: "kvy claude --starting-mode remote" },
         ],
@@ -216,7 +233,12 @@ describe("startTranscriptIndexer", () => {
   it("picks up a brand-new session file appearing after startup (fs-watch, not just the initial scan)", async () => {
     const upserts: UpsertUnmanagedSessionParams[] = [];
     handle = startTranscriptIndexer(
-      baseDeps({ upsert: async (params) => (upserts.push(params), true) }),
+      baseDeps({
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
+      }),
     );
 
     await sleep(100);
@@ -235,7 +257,10 @@ describe("startTranscriptIndexer", () => {
     handle = startTranscriptIndexer(
       baseDeps({
         listWorkspaces: async () => [{ workspaceId: "ws-missing", path: missingWorkspacePath }],
-        upsert: async (params) => (upserts.push(params), true),
+        upsert: async (params) => {
+          upserts.push(params);
+          return true;
+        },
       }),
     );
 
@@ -263,7 +288,10 @@ describe("startTranscriptIndexer", () => {
       handle = startTranscriptIndexer(
         baseDeps({
           listWorkspaces: async () => [{ ...baseWorkspace(), registeredAt }],
-          upsert: async (params) => (upserts.push(params), true),
+          upsert: async (params) => {
+            upserts.push(params);
+            return true;
+          },
         }),
       );
 
@@ -283,7 +311,10 @@ describe("startTranscriptIndexer", () => {
       handle = startTranscriptIndexer(
         baseDeps({
           listWorkspaces: async () => [{ ...baseWorkspace(), registeredAt }],
-          upsert: async (params) => (upserts.push(params), true),
+          upsert: async (params) => {
+            upserts.push(params);
+            return true;
+          },
         }),
       );
 
@@ -296,7 +327,12 @@ describe("startTranscriptIndexer", () => {
       await writeFile(join(projectDir, "sess-no-registered-at.jsonl"), userLine("anything"));
       const upserts: UpsertUnmanagedSessionParams[] = [];
       handle = startTranscriptIndexer(
-        baseDeps({ upsert: async (params) => (upserts.push(params), true) }),
+        baseDeps({
+          upsert: async (params) => {
+            upserts.push(params);
+            return true;
+          },
+        }),
       );
 
       await sleep(300);
