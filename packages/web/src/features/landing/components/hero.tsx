@@ -1,6 +1,6 @@
 import Link from "next/link";
+import { InstallTabs } from "@/components/install-tabs";
 import { Button } from "@/components/ui/button";
-import { CopyCommand } from "./copy-command";
 import { HeroPreview } from "./hero-preview";
 import { Reveal } from "./reveal";
 
@@ -26,11 +26,11 @@ export function Hero() {
           </p>
         </Reveal>
         <Reveal immediate delay={0.16}>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <div className="mt-8 flex flex-col items-center gap-4">
             <Button asChild size="lg">
               <Link href="/signin/">Get started</Link>
             </Button>
-            <CopyCommand command="npm install -g @vibe-oss/kvy" />
+            <InstallTabs className="max-w-md" />
           </div>
         </Reveal>
       </div>

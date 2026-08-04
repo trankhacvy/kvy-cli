@@ -27,11 +27,23 @@ and control from a browser on any device.
 
 ## Quick start
 
+**Native (recommended) — macOS / Linux / WSL:**
+```bash
+curl -fsSL https://kvy-cli.tkvy.dev/install.sh | sh
+```
+
+**Homebrew:**
+```bash
+brew install kvy
+```
+
+**npm:**
 ```bash
 npm install -g @vibe-oss/kvy
-# or, no Node required:
-curl -fsSL https://kvy-cli.tkvy.dev/install.sh | sh
+```
 
+Then run it from any project:
+```bash
 kvy claude   # or: kvy codex
 ```
 

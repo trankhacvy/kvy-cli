@@ -2,6 +2,7 @@
 
 import { Check, Copy, Loader2 } from "lucide-react";
 import { useState } from "react";
+import { InstallTabs } from "@/components/install-tabs";
 import { copy } from "@/lib/copy";
 
 function CopyableCommand({ command }: { command: string }) {
@@ -47,7 +48,7 @@ export function FirstMachineOnboarding() {
             <span className="mr-2 text-muted-foreground">1</span>
             {copy.onboarding.step1}
           </p>
-          <CopyableCommand command={copy.onboarding.step1Cmd} />
+          <InstallTabs />
         </li>
         <li className="space-y-2">
           <p className="text-sm font-medium">
