@@ -148,8 +148,8 @@ describe("crypto-bridge client <-> worker RPC", () => {
       contentPubKey: expect.any(String),
     });
     const identity = await client.getIdentity();
-    expect(decodeBase64(identity!.signPubKey)).toEqual(tree.signing.publicKey);
-    expect(decodeBase64(identity!.contentPubKey)).toEqual(tree.content.publicKey);
+    expect(decodeBase64(identity?.signPubKey)).toEqual(tree.signing.publicKey);
+    expect(decodeBase64(identity?.contentPubKey)).toEqual(tree.content.publicKey);
   });
 
   it("a fresh worker (e.g. after a page reload) is usable with no user interaction", async () => {

@@ -81,6 +81,7 @@ export const getAttachmentLabel = (data: AttachmentData): string => {
 
 const renderAttachmentImage = (url: string, filename: string | undefined, isGrid: boolean) =>
   isGrid ? (
+    // biome-ignore lint/performance/noImgElement: attachment images use blob URLs not optimizable by Next.js Image
     <img
       alt={filename || "Image"}
       className="size-full object-cover"
@@ -89,6 +90,7 @@ const renderAttachmentImage = (url: string, filename: string | undefined, isGrid
       width={96}
     />
   ) : (
+    // biome-ignore lint/performance/noImgElement: attachment images use blob URLs not optimizable by Next.js Image
     <img
       alt={filename || "Image"}
       className="size-full rounded object-cover"

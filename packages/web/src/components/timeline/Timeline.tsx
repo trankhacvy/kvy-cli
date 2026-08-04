@@ -62,6 +62,7 @@ export function Timeline({
   return (
     <Conversation
       className="min-h-0 flex-1 px-4"
+      // biome-ignore lint/style/noNonNullAssertion: items is non-empty (rendered only when items.length > 0)
       initial={isAnchorItem(items[items.length - 1] ?? items[0]!) ? "smooth" : "instant"}
     >
       <ConversationContent className="gap-6 px-0 py-5 sm:px-2">

@@ -83,6 +83,7 @@ describe("createS3Driver", () => {
     expect(GetObjectCommandMock).not.toHaveBeenCalled();
 
     expect(getSignedUrlMock).toHaveBeenCalledTimes(1);
+    // biome-ignore lint/style/noNonNullAssertion: mock was called exactly once (asserted above)
     const [clientArg, commandArg, optionsArg] = getSignedUrlMock.mock.calls[0]!;
     expect(commandArg).toEqual({
       __command: "put",
@@ -110,6 +111,7 @@ describe("createS3Driver", () => {
     expect(PutObjectCommandMock).not.toHaveBeenCalled();
 
     expect(getSignedUrlMock).toHaveBeenCalledTimes(1);
+    // biome-ignore lint/style/noNonNullAssertion: mock was called exactly once (asserted above)
     const [, commandArg, optionsArg] = getSignedUrlMock.mock.calls[0]!;
     expect(commandArg).toEqual({
       __command: "get",

@@ -15,4 +15,5 @@ import type * as schema from "./schema.js";
  * `db/client.ts` singleton) so tests can bind an in-memory Postgres instead
  * of touching `DATABASE_URL`.
  */
+// biome-ignore lint/suspicious/noExplicitAny: drizzle-orm requires `any` for the query result type parameter
 export type Database = PgDatabase<any, typeof schema>;

@@ -156,64 +156,61 @@ export default function ResetKeysPage() {
                     <p className="text-muted-foreground text-xs">{copy.reset.oauthUnavailable}</p>
                   )}
 
-                  {IS_DEV && (
-                    <>
-                      {!passwordFormOpen ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setPasswordFormOpen(true)}
-                        >
-                          {copy.reset.passwordCta}
-                        </Button>
-                      ) : (
-                        <form className="space-y-3" onSubmit={handlePasswordStepUp}>
-                          <div className="space-y-1.5">
-                            <label htmlFor="stepup-email" className="font-medium text-xs">
-                              Email
-                            </label>
-                            <Input
-                              id="stepup-email"
-                              type="email"
-                              autoComplete="email"
-                              required
-                              value={stepUpEmail}
-                              onChange={(event) => setStepUpEmail(event.target.value)}
-                            />
-                          </div>
-                          <div className="space-y-1.5">
-                            <label htmlFor="stepup-password" className="font-medium text-xs">
-                              Password
-                            </label>
-                            <Input
-                              id="stepup-password"
-                              type="password"
-                              autoComplete="current-password"
-                              required
-                              value={stepUpPassword}
-                              onChange={(event) => setStepUpPassword(event.target.value)}
-                            />
-                          </div>
-                          {stepUpError && (
-                            <p className="text-destructive text-sm" aria-live="polite">
-                              {stepUpError}
-                            </p>
-                          )}
-                          <Button
-                            type="submit"
-                            variant="destructive"
-                            className="w-full"
-                            disabled={stepUpPending}
-                          >
-                            {stepUpPending ? "Please wait…" : copy.reset.passwordSubmitCta}
-                          </Button>
-                          <p className="text-center text-muted-foreground text-xs">
-                            {copy.reset.passwordHint}
+                  {IS_DEV &&
+                    (!passwordFormOpen ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setPasswordFormOpen(true)}
+                      >
+                        {copy.reset.passwordCta}
+                      </Button>
+                    ) : (
+                      <form className="space-y-3" onSubmit={handlePasswordStepUp}>
+                        <div className="space-y-1.5">
+                          <label htmlFor="stepup-email" className="font-medium text-xs">
+                            Email
+                          </label>
+                          <Input
+                            id="stepup-email"
+                            type="email"
+                            autoComplete="email"
+                            required
+                            value={stepUpEmail}
+                            onChange={(event) => setStepUpEmail(event.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label htmlFor="stepup-password" className="font-medium text-xs">
+                            Password
+                          </label>
+                          <Input
+                            id="stepup-password"
+                            type="password"
+                            autoComplete="current-password"
+                            required
+                            value={stepUpPassword}
+                            onChange={(event) => setStepUpPassword(event.target.value)}
+                          />
+                        </div>
+                        {stepUpError && (
+                          <p className="text-destructive text-sm" aria-live="polite">
+                            {stepUpError}
                           </p>
-                        </form>
-                      )}
-                    </>
-                  )}
+                        )}
+                        <Button
+                          type="submit"
+                          variant="destructive"
+                          className="w-full"
+                          disabled={stepUpPending}
+                        >
+                          {stepUpPending ? "Please wait…" : copy.reset.passwordSubmitCta}
+                        </Button>
+                        <p className="text-center text-muted-foreground text-xs">
+                          {copy.reset.passwordHint}
+                        </p>
+                      </form>
+                    ))}
                 </div>
 
                 <Separator />

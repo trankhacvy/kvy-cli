@@ -39,11 +39,13 @@ describe("cross-impl: encryptWithDataKey / decryptWithDataKey (AES-256-GCM)", ()
 
     const webBundle = await web.encryptWithDataKey({ x: 1 }, dek);
     const webTampered = new Uint8Array(webBundle);
+    // biome-ignore lint/style/noNonNullAssertion: index is within bounds (non-empty bundle)
     webTampered[webTampered.length - 1]! ^= 0xff;
     expect(node.decryptWithDataKey(webTampered, dek)).toBeNull();
 
     const nodeBundle = node.encryptWithDataKey({ y: 2 }, dek);
     const nodeTampered = new Uint8Array(nodeBundle);
+    // biome-ignore lint/style/noNonNullAssertion: index is within bounds (non-empty bundle)
     nodeTampered[nodeTampered.length - 1]! ^= 0xff;
     await expect(web.decryptWithDataKey(nodeTampered, dek)).resolves.toBeNull();
   });
