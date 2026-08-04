@@ -38,9 +38,9 @@ export function InstallTabs({ className }: { className?: string }) {
 
   return (
     <Tabs defaultValue="native" className={cn("w-full", className)}>
-      <TabsList variant="line" className="w-full justify-start">
+      <TabsList variant="line" className="w-full">
         {INSTALL_OPTIONS.map((opt) => (
-          <TabsTrigger key={opt.id} value={opt.id}>
+          <TabsTrigger key={opt.id} value={opt.id} className="flex-1">
             {opt.label}
           </TabsTrigger>
         ))}
@@ -48,7 +48,7 @@ export function InstallTabs({ className }: { className?: string }) {
       {INSTALL_OPTIONS.map((opt) => (
         <TabsContent key={opt.id} value={opt.id}>
           <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5">
-            <code className="flex-1 overflow-x-auto font-mono text-sm">{opt.command}</code>
+            <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">{opt.command}</code>
             <button
               type="button"
               aria-label={`Copy: ${opt.command}`}
