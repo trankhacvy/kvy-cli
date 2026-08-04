@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="packages/web/public/manifest-icon-192.maskable.png" alt="Kvy" width="96" />
+</div>
+
 # Kvy
 
 **Run Claude Code and Codex on your own machine, and control them from anywhere.**
