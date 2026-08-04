@@ -46,8 +46,8 @@ export function InstallTabs({ className }: { className?: string }) {
         ))}
       </TabsList>
       {INSTALL_OPTIONS.map((opt) => (
-        <TabsContent key={opt.id} value={opt.id}>
-          <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5">
+        <TabsContent key={opt.id} value={opt.id} className="w-full">
+          <div className="flex w-full items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5">
             <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">
               {opt.command}
             </code>
