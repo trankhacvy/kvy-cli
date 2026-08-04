@@ -52,6 +52,7 @@ export function InlineImageAttachment({
   const base64 = item.ref.slice(INLINE_REF_PREFIX.length);
   const mimeType = inferImageMimeType(item.name);
   return (
+    // biome-ignore lint/performance/noImgElement: inline data URI cannot be optimized by Next.js Image
     <img
       src={`data:${mimeType};base64,${base64}`}
       alt={item.name}

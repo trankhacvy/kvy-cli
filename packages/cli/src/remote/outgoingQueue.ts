@@ -106,7 +106,7 @@ export class OrderedEnvelopeQueue {
   private drain(): void {
     while (this.queue.length > 0) {
       const head = this.queue[0];
-      if (!head || !head.released) break;
+      if (!head?.released) break;
       this.queue.shift();
       this.onFlush(head.envelope);
     }

@@ -133,6 +133,7 @@ async function waitForRoomMember(
   while (true) {
     const timeoutMs =
       RPC_LOOKUP_FETCH_TIMEOUTS_MS[Math.min(polls, RPC_LOOKUP_FETCH_TIMEOUTS_MS.length - 1)] ??
+      // biome-ignore lint/style/noNonNullAssertion: array is a non-empty constant tuple
       RPC_LOOKUP_FETCH_TIMEOUTS_MS[0]!;
     const sockets = await fetchRoomSockets(io, room, timeoutMs);
     if (sockets.length > 0) {
@@ -222,6 +223,7 @@ export function rpcHandler(
       // adapter is enabled). If the room is empty OR fetchSockets fails, fall through
       // to the wait-for-reconnect grace window.
       const room = rpcRoom(accountId, target);
+      // biome-ignore lint/style/noNonNullAssertion: array is a non-empty constant tuple
       let targets = await fetchRoomSockets(io, room, RPC_LOOKUP_FETCH_TIMEOUTS_MS[0]!);
       if (targets.length === 0) {
         targets = await waitForRoomMember(io, room, RPC_RECONNECT_GRACE_MS, method);
@@ -239,6 +241,7 @@ export function rpcHandler(
         );
       }
 
+      // biome-ignore lint/style/noNonNullAssertion: guarded by targets.length > 0 check above
       const rpcTarget = targets[0]!;
       if (rpcTarget.id === socket.id) {
         finish("self_call");

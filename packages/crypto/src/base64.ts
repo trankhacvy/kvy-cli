@@ -20,8 +20,11 @@ export function encodeBase64(
 ): string {
   let result = "";
   for (let i = 0; i < buffer.length; i += 3) {
+    // biome-ignore lint/style/noNonNullAssertion: loop bounds guarantee these indices are in range
     const b0 = buffer[i]!;
+    // biome-ignore lint/style/noNonNullAssertion: guarded by the i+1 < length check
     const b1 = i + 1 < buffer.length ? buffer[i + 1]! : undefined;
+    // biome-ignore lint/style/noNonNullAssertion: guarded by the i+2 < length check
     const b2 = i + 2 < buffer.length ? buffer[i + 2]! : undefined;
 
     result += ALPHABET[b0 >> 2];

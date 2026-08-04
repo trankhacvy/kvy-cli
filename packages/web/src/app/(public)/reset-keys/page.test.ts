@@ -36,19 +36,16 @@ describe("reset-keys/page.tsx", () => {
     expect(pageSource).toContain("if (!bridge) return");
   });
 
-  it("offers key sharing as primary and reset as a demoted, confirm-gated secondary action", () => {
+  it("shows reset/auth options as the primary action and fetch-keys as the escape hatch below a divider", () => {
     expect(pageSource).toContain("copy.reset.fetchKeysCta");
-    expect(pageSource).toContain("copy.reset.resetInsteadCta");
-    expect(pageSource).toContain("confirmingReset");
+    expect(pageSource).toContain("copy.reset.confirmHeading");
     expect(pageSource).toContain("Confirm with Google");
     expect(pageSource).toContain("Confirm with GitHub");
+    expect(pageSource).not.toContain("confirmingReset");
   });
 
-  // The destructive confirm box used to only offer Google/GitHub step-up — with neither
-  // configured (a self-host with no OAuth app set up), both buttons rendered disabled and
-  // the single most dangerous screen in the app became a silent dead end. The password
-  // step-up form is always available regardless of OAuth config, so that can't happen again.
-  it("always offers a password step-up alongside OAuth, so the confirm box is never a dead end", () => {
+  it("gates the password step-up form behind IS_DEV so it never appears in production", () => {
+    expect(pageSource).toContain("IS_DEV");
     expect(pageSource).toContain("copy.reset.passwordCta");
     expect(pageSource).toContain("handlePasswordStepUp");
     expect(pageSource).not.toContain("disabled={!GOOGLE_OAUTH_CLIENT_ID}");

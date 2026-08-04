@@ -37,7 +37,9 @@ function hmacSha512(key: Uint8Array, data: Uint8Array): Uint8Array {
   const innerKey = new Uint8Array(HMAC_BLOCK_SIZE);
   const outerKey = new Uint8Array(HMAC_BLOCK_SIZE);
   for (let i = 0; i < HMAC_BLOCK_SIZE; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: loop bounds guarantee i < HMAC_BLOCK_SIZE <= paddedKey.length
     innerKey[i] = paddedKey[i]! ^ 0x36;
+    // biome-ignore lint/style/noNonNullAssertion: same bound as above
     outerKey[i] = paddedKey[i]! ^ 0x5c;
   }
 

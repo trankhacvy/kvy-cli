@@ -3,10 +3,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-// Source-text technique: `page.tsx` uses `next/navigation`'s `useRouter` and can't render
-// in this package's `environment: "node"` vitest config.
+// Source-text technique: the client component uses `next/navigation`'s `useRouter` and can't
+// render in this package's `environment: "node"` vitest config. `page.tsx` is now a thin
+// server wrapper that calls `notFound()` in production; the actual component is in
+// `password-page.tsx`.
 const pageSource = readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./page.tsx"),
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "./password-page.tsx"),
   "utf-8",
 );
 

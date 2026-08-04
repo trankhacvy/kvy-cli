@@ -23,6 +23,7 @@ describe("EncryptedBox seal/open", () => {
   it("open() returns null (never throws) on a corrupted box — one bad record cannot poison a batch", () => {
     const box = seal({ secret: 42 }, dek);
     const bytes = decodeBase64(box.c);
+    // biome-ignore lint/style/noNonNullAssertion: index is within bounds (length > 0 guaranteed by decodeBase64)
     bytes[bytes.length - 1]! ^= 0xff;
     const corrupted = { ...box, c: Buffer.from(bytes).toString("base64") };
     expect(() => open(corrupted, dek)).not.toThrow();

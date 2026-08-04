@@ -49,8 +49,11 @@ describe("createCryptoBridgeClient — request/response matching", () => {
     const [id1, id2, id3] = worker.requests.map((r) => r.id);
 
     // Deliver responses in reverse order of the requests that produced them.
+    // biome-ignore lint/style/noNonNullAssertion: length asserted above (toHaveLength(3))
     worker.respond({ id: id3!, ok: true, result: { t: "enc", v: 1, c: "c3" } });
+    // biome-ignore lint/style/noNonNullAssertion: length asserted above (toHaveLength(3))
     worker.respond({ id: id1!, ok: true, result: { t: "enc", v: 1, c: "c1" } });
+    // biome-ignore lint/style/noNonNullAssertion: length asserted above (toHaveLength(3))
     worker.respond({ id: id2!, ok: true, result: { t: "enc", v: 1, c: "c2" } });
 
     await expect(p1).resolves.toMatchObject({ c: "c1" });
@@ -68,7 +71,9 @@ describe("createCryptoBridgeClient — request/response matching", () => {
     const bad = client.seal({ n: 2 });
 
     const [okId, badId] = worker.requests.map((r) => r.id);
+    // biome-ignore lint/style/noNonNullAssertion: two seals were issued so both ids are present
     worker.respond({ id: badId!, ok: false, error: "boom" });
+    // biome-ignore lint/style/noNonNullAssertion: two seals were issued so both ids are present
     worker.respond({ id: okId!, ok: true, result: { t: "enc", v: 1, c: "ok" } });
 
     await expect(bad).rejects.toThrow("boom");
@@ -85,12 +90,14 @@ describe("createCryptoBridgeClient — request/response matching", () => {
     const [id] = worker.requests.map((r) => r.id);
 
     // First delivery settles the call...
+    // biome-ignore lint/style/noNonNullAssertion: one seal was issued so id is present
     worker.respond({ id: id!, ok: true, result: { t: "enc", v: 1, c: "once" } });
     await expect(p).resolves.toMatchObject({ c: "once" });
 
     // ...a duplicate/late redelivery of the same id, or a response to an id
     // that was never requested, must not throw.
     expect(() =>
+      // biome-ignore lint/style/noNonNullAssertion: same id as above, guaranteed to be set
       worker.respond({ id: id!, ok: true, result: { t: "enc", v: 1, c: "again" } }),
     ).not.toThrow();
     expect(() => worker.respond({ id: "never-requested", ok: false, error: "nope" })).not.toThrow();
@@ -187,6 +194,7 @@ describe("createCryptoBridgeClient — request/response matching", () => {
       client.terminate();
 
       const [id] = worker.requests.map((r) => r.id);
+      // biome-ignore lint/style/noNonNullAssertion: one seal was issued so id is present
       worker.respond({ id: id!, ok: true, result: { t: "enc", v: 1, c: "c1" } });
       await vi.advanceTimersByTimeAsync(20);
 

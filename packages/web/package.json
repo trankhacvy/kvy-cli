@@ -11,9 +11,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@git-diff-view/react": "^0.1.7",
     "@kvy/crypto": "workspace:*",
     "@kvy/wire": "workspace:*",
-    "@git-diff-view/react": "^0.1.7",
     "@radix-ui/react-collapsible": "^1.1.16",
     "@radix-ui/react-dialog": "^1.1.19",
     "@radix-ui/react-select": "^2.3.3",
@@ -27,6 +27,7 @@
     "@streamdown/mermaid": "^1.0.2",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.9",
+    "@vercel/analytics": "^2.0.1",
     "@xyflow/react": "^12.11.2",
     "ai": "^7.0.31",
     "ansi-to-react": "^6.2.6",

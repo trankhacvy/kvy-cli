@@ -11,6 +11,7 @@ export function AuthArtPanel({ caption }: { caption: string }) {
   return (
     <aside className="relative hidden w-[55%] lg:block">
       <div className="absolute inset-0 overflow-hidden rounded-3xl border border-border/60 bg-muted">
+        {/* biome-ignore lint/performance/noImgElement: decorative art image loaded from a CDN constant, not a user upload */}
         <img src={AUTH_ART_URL} alt="" className="size-full object-cover" />
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10" />
         <Link
