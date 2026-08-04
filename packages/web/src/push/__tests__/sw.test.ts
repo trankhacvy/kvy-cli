@@ -129,8 +129,8 @@ describe("public/sw.js", () => {
       "Kvy needs your permission",
       expect.objectContaining({
         tag: "sess_1",
-        icon: "/icon-192.png",
-        badge: "/icon-192.png",
+        icon: "/manifest-icon-192.maskable.png",
+        badge: "/manifest-icon-192.maskable.png",
         data: { url: "/dashboard/session/sess_1/" },
       }),
     );
