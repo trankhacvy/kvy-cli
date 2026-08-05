@@ -148,6 +148,8 @@ export function keysBind(
  * the account's best-effort captured email for display only, `null` if none is on file. */
 export function listDeviceSessions(token: string): Promise<{
   email: string | null;
+  identityKind: "password" | "google" | "github" | null;
+  accountCreatedAt: string | null;
   sessions: Array<{
     id: string;
     clientKind: string;

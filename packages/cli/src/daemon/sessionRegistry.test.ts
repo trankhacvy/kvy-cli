@@ -374,7 +374,14 @@ describe("sessionRegistry", () => {
         ENCRYPTION,
         4242,
       );
-      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // persistSession() fires-and-forgets (best-effort) - poll until it lands
+      // instead of assuming a fixed delay is always enough (flaky under CPU
+      // contention, e.g. `turbo` running every package's tests in parallel).
+      await vi.waitFor(async () => {
+        const persisted = await readPersistedSessions(homeDir);
+        expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1" });
+      });
 
       const second = createSessionRegistry({ homeDir });
       await second.restore();

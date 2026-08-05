@@ -33,6 +33,11 @@ type Status =
 // orchestration logic stays testable against a fake (see push/__tests__/subscribe.test.ts).
 const pushApi: PushApiPort = { subscribe: subscribePush, unsubscribe: unsubscribePush };
 
+/** Telegram/ntfy stay in the code and keep shipping in dev builds — just not
+ * rendered in production yet. Same hide-don't-remove pattern
+ * `settings-dialog.tsx`'s `SECTIONS_HIDDEN_IN_PRODUCTION` uses for whole tabs. */
+const SHOW_FALLBACK_CHANNELS = process.env.NODE_ENV !== "production";
+
 /**
  * verbatim out of the deleted `app/(protected)/settings/notifications/page.tsx`
  * route — page chrome dropped, behavior unchanged.
@@ -244,69 +249,71 @@ export function NotificationsSection() {
         {error && <p className="text-sm text-destructive">{error}</p>}
       </section>
 
-      <section className="flex flex-col gap-3">
-        <div>
-          <h3 className="text-sm font-medium">Fallback channels</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Web Push is unreliable on iOS. Link Telegram or ntfy as a backup: same events, same
-            rules, no session content.
-          </p>
-        </div>
-
-        <div className="flex flex-col items-start gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={telegramWorking}
-            onClick={handleLinkTelegram}
-          >
-            {telegramWorking ? "Working…" : "Link Telegram"}
-          </Button>
-          {telegramDeepLink && (
-            <p className="text-sm text-muted-foreground">
-              Opened Telegram to finish pairing. Didn't open?{" "}
-              <a
-                href={telegramDeepLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                Tap here
-              </a>
-              .
+      {SHOW_FALLBACK_CHANNELS && (
+        <section className="flex flex-col gap-3">
+          <div>
+            <h3 className="text-sm font-medium">Fallback channels</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Web Push is unreliable on iOS. Link Telegram or ntfy as a backup: same events, same
+              rules, no session content.
             </p>
-          )}
-          {telegramError && <p className="text-sm text-destructive">{telegramError}</p>}
-        </div>
-
-        <form onSubmit={handleSubscribeNtfy} className="flex flex-col gap-2">
-          <label htmlFor="ntfy-topic" className="text-sm font-medium">
-            ntfy topic
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="ntfy-topic"
-              type="text"
-              value={ntfyTopic}
-              onChange={(e) => setNtfyTopic(e.target.value)}
-              placeholder="my-kvy-topic"
-              className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <Button type="submit" variant="outline" disabled={ntfyWorking || !ntfyTopic.trim()}>
-              {ntfyWorking ? "Working…" : "Subscribe"}
-            </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Pick any topic name and subscribe to it in the ntfy app (or at ntfy.sh/&lt;topic&gt;).
-          </p>
-          {ntfySubscribed && (
-            <p className="text-sm text-muted-foreground">
-              Subscribed to ntfy topic "{ntfySubscribed}".
+
+          <div className="flex flex-col items-start gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={telegramWorking}
+              onClick={handleLinkTelegram}
+            >
+              {telegramWorking ? "Working…" : "Link Telegram"}
+            </Button>
+            {telegramDeepLink && (
+              <p className="text-sm text-muted-foreground">
+                Opened Telegram to finish pairing. Didn't open?{" "}
+                <a
+                  href={telegramDeepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Tap here
+                </a>
+                .
+              </p>
+            )}
+            {telegramError && <p className="text-sm text-destructive">{telegramError}</p>}
+          </div>
+
+          <form onSubmit={handleSubscribeNtfy} className="flex flex-col gap-2">
+            <label htmlFor="ntfy-topic" className="text-sm font-medium">
+              ntfy topic
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="ntfy-topic"
+                type="text"
+                value={ntfyTopic}
+                onChange={(e) => setNtfyTopic(e.target.value)}
+                placeholder="my-kvy-topic"
+                className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <Button type="submit" variant="outline" disabled={ntfyWorking || !ntfyTopic.trim()}>
+                {ntfyWorking ? "Working…" : "Subscribe"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pick any topic name and subscribe to it in the ntfy app (or at ntfy.sh/&lt;topic&gt;).
             </p>
-          )}
-          {ntfyError && <p className="text-sm text-destructive">{ntfyError}</p>}
-        </form>
-      </section>
+            {ntfySubscribed && (
+              <p className="text-sm text-muted-foreground">
+                Subscribed to ntfy topic "{ntfySubscribed}".
+              </p>
+            )}
+            {ntfyError && <p className="text-sm text-destructive">{ntfyError}</p>}
+          </form>
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <div>

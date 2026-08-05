@@ -153,6 +153,13 @@ export const copy = {
       "Anyone using one of these devices can read your sessions. Sign out anything you don't recognise.",
   },
 
+  account: {
+    signedInWith: (provider: string) => `Signed in with ${provider}`,
+    identityExplainer:
+      "Production only supports Google/GitHub sign-in - no password to change, and your email comes from that account rather than something you set here.",
+    createdOn: (date: string) => `Account created ${date}`,
+  },
+
   oauthCallback: {
     working: "Finishing sign-in…",
     errorTitle: "Sign-in didn't go through",

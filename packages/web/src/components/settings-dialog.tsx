@@ -28,7 +28,6 @@ import { cn } from "@/lib/utils";
  * but are hidden from the dialog menu in production until they're ready.
  * Remove the filter once they land. */
 const SECTIONS_HIDDEN_IN_PRODUCTION: SettingsSectionId[] = [
-  "appearance",
   "providers",
   "notifications",
   "devices",

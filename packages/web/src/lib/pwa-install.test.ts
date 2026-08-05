@@ -15,6 +15,13 @@ describe("pwa-install", () => {
     vi.unstubAllGlobals();
   });
 
+  it("returns the same object reference across calls when nothing changed", () => {
+    // useSyncExternalStore compares snapshots by reference - a getter that
+    // allocates a new object every call looks like a change on every render
+    // and loops forever.
+    expect(getInstallSnapshot()).toBe(getInstallSnapshot());
+  });
+
   it("reports standalone display mode from matchMedia", () => {
     vi.stubGlobal("window", {
       matchMedia: () => ({ matches: true }),

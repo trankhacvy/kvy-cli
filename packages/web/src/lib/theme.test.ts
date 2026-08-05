@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_THEME, parseTheme, toggleTheme } from "./theme";
+import { DEFAULT_THEME, parseTheme, resolveTheme } from "./theme";
 
 describe("parseTheme", () => {
   it("accepts 'light'", () => {
@@ -8,6 +8,10 @@ describe("parseTheme", () => {
 
   it("accepts 'dark'", () => {
     expect(parseTheme("dark")).toBe("dark");
+  });
+
+  it("accepts 'system'", () => {
+    expect(parseTheme("system")).toBe("system");
   });
 
   it("falls back to the default for null (no stored preference)", () => {
@@ -23,12 +27,13 @@ describe("parseTheme", () => {
   });
 });
 
-describe("toggleTheme", () => {
-  it("flips dark to light", () => {
-    expect(toggleTheme("dark")).toBe("light");
+describe("resolveTheme", () => {
+  it("returns light/dark unchanged", () => {
+    expect(resolveTheme("light")).toBe("light");
+    expect(resolveTheme("dark")).toBe("dark");
   });
 
-  it("flips light to dark", () => {
-    expect(toggleTheme("light")).toBe("dark");
+  it("falls back to dark for 'system' when matchMedia is unavailable", () => {
+    expect(resolveTheme("system")).toBe("dark");
   });
 });

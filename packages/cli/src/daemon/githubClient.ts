@@ -99,7 +99,7 @@ export async function githubApiPost<T>(
   return (await response.json()) as T;
 }
 
-interface RawPull {
+export interface RawPull {
   number: number;
   title: string;
   html_url: string;
@@ -109,7 +109,7 @@ interface RawPull {
   head: { sha: string };
 }
 
-function mapPullRequest(raw: RawPull): PullRequestInfo {
+export function mapPullRequest(raw: RawPull): PullRequestInfo {
   const state: PullRequestInfo["state"] =
     raw.state === "closed" ? (raw.merged_at ? "merged" : "closed") : "open";
   const pr: PullRequestInfo = {

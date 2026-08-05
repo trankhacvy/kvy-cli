@@ -6,7 +6,7 @@
 import { and, eq, ne } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
-import { authIdentities, deviceSessions } from "../../db/schema.js";
+import { accounts, authIdentities, deviceSessions } from "../../db/schema.js";
 import type { Database } from "../../db/types.js";
 
 const DeviceSessionRowSchema = z.object({
@@ -19,6 +19,12 @@ const DeviceSessionRowSchema = z.object({
   expiresAt: z.string(),
   isCurrent: z.boolean(),
 });
+
+/** Narrows the untyped `auth_identities.kind` text column — guards against a
+ * future/foreign value rather than trusting the DB blindly. */
+function toIdentityKind(kind: string | undefined): "password" | "google" | "github" | null {
+  return kind === "password" || kind === "google" || kind === "github" ? kind : null;
+}
 
 /**
  * `disconnect` is a thin closure over `eventRouter.ts`'s `disconnectSession` — injected
@@ -45,23 +51,34 @@ export function buildSessionsAdminRoutes(
               // the same as verified ones (there's no auth decision riding on it
               // here), so this is a UI label, not a claim of ownership.
               email: z.string().nullable(),
+              // 'password' identities exist for local/dev only (prod only offers
+              // Google/GitHub sign-in) — null when there's no identity row yet.
+              identityKind: z.enum(["password", "google", "github"]).nullable(),
+              // Same nullable shape as `email` above — the `accounts` row is
+              // practically always present (every FK that reaches this route
+              // requires it), but stays honest about the edge case rather than
+              // reporting a fabricated "created today".
+              accountCreatedAt: z.string().nullable(),
               sessions: z.array(DeviceSessionRowSchema),
             }),
           },
         },
       },
       async (request, reply) => {
-        const [rows, identity] = await Promise.all([
+        const [rows, identity, account] = await Promise.all([
           db.query.deviceSessions.findMany({
             where: eq(deviceSessions.accountId, request.accountId),
           }),
           db.query.authIdentities.findFirst({
             where: eq(authIdentities.accountId, request.accountId),
           }),
+          db.query.accounts.findFirst({ where: eq(accounts.id, request.accountId) }),
         ]);
         const active = rows.filter((row) => !row.revokedAt);
         return reply.send({
           email: identity?.email ?? null,
+          identityKind: toIdentityKind(identity?.kind),
+          accountCreatedAt: account?.createdAt.toISOString() ?? null,
           sessions: active.map((row) => ({
             id: row.id,
             clientKind: row.clientKind,

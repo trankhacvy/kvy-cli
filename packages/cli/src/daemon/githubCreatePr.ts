@@ -1,38 +1,16 @@
-import type { GithubCreatePrParams, GithubCreatePrResult, PullRequestInfo } from "@kvy/wire";
+import type { GithubCreatePrParams, GithubCreatePrResult } from "@kvy/wire";
 import { type GitExec, runGit } from "./gitExec.js";
 import {
   type GithubClientDeps,
   githubApiGet,
   githubApiPost,
+  mapPullRequest,
+  type RawPull,
   resolveGithubTarget,
 } from "./githubClient.js";
 
 interface RawRepo {
   default_branch: string;
-}
-
-interface RawPull {
-  number: number;
-  title: string;
-  html_url: string;
-  state: "open" | "closed";
-  merged_at: string | null;
-  draft?: boolean;
-  head: { sha: string };
-}
-
-function mapPullRequest(raw: RawPull): PullRequestInfo {
-  const state: PullRequestInfo["state"] =
-    raw.state === "closed" ? (raw.merged_at ? "merged" : "closed") : "open";
-  const pr: PullRequestInfo = {
-    number: raw.number,
-    title: raw.title,
-    url: raw.html_url,
-    state,
-    headSha: raw.head.sha,
-  };
-  if (raw.draft !== undefined) pr.draft = raw.draft;
-  return pr;
 }
 
 export async function createGithubPr(

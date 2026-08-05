@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DEFAULT_THEME, parseTheme, THEME_STORAGE_KEY, type Theme } from "./theme";
+import { DEFAULT_THEME, parseTheme, resolveTheme, THEME_STORAGE_KEY, type Theme } from "./theme";
 
 /**
  * Appearance store — one module-level
@@ -17,9 +17,15 @@ const listeners = new Set<() => void>();
 let current: Theme = DEFAULT_THEME;
 let initialized = false;
 let storageListenerAttached = false;
+let mediaListenerAttached = false;
 
 function notify(): void {
   for (const listener of listeners) listener();
+}
+
+function applyToDom(theme: Theme): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.toggle("dark", resolveTheme(theme) === "dark");
 }
 
 /** Cross-tab sync (next-themes' own pattern, referenced in this file's
@@ -35,9 +41,7 @@ function handleStorageEvent(event: StorageEvent): void {
   if (next === current) return;
   current = next;
   initialized = true;
-  if (typeof document !== "undefined") {
-    document.documentElement.classList.toggle("dark", next === "dark");
-  }
+  applyToDom(next);
   notify();
 }
 
@@ -47,14 +51,24 @@ function ensureStorageListenerAttached(): void {
   window.addEventListener("storage", handleStorageEvent);
 }
 
+/** Only matters while `current === "system"` — attached lazily from the
+ * first `subscribe()` call, same reasoning as `ensureStorageListenerAttached`. */
+function ensureMediaListenerAttached(): void {
+  if (mediaListenerAttached || typeof window === "undefined" || !window.matchMedia) return;
+  mediaListenerAttached = true;
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (current !== "system") return;
+    applyToDom(current);
+    notify();
+  });
+}
+
 /** Applies `theme` to the live DOM (`<html>` class — `globals.css`'s `.dark`
  * variant) and persists it, best-effort, for next load. */
 export function setTheme(theme: Theme): void {
   current = theme;
   initialized = true;
-  if (typeof document !== "undefined") {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-  }
+  applyToDom(theme);
   if (typeof window !== "undefined") {
     try {
       window.localStorage.setItem(THEME_STORAGE_KEY, theme);
@@ -78,6 +92,7 @@ function ensureInitialized(): void {
 
 function subscribe(listener: () => void): () => void {
   ensureStorageListenerAttached();
+  ensureMediaListenerAttached();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

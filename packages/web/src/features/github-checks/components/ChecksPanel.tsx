@@ -58,6 +58,7 @@ export function ChecksBody({
   checks,
   onFixWithAgent,
   onCreatePr,
+  isCreatingPr,
   actions,
   worktree,
 }: {
@@ -66,6 +67,7 @@ export function ChecksBody({
   checks: GithubChecksSnapshot | undefined;
   onFixWithAgent?: (check: CheckRun) => void;
   onCreatePr?: () => void;
+  isCreatingPr?: boolean;
   actions: GithubChecksActions;
   worktree: string;
 }) {
@@ -109,7 +111,7 @@ export function ChecksBody({
         <div className="flex flex-col items-center gap-2 p-4 text-center text-sm text-muted-foreground">
           <p>No open pull request for {checks.branch ?? "this branch"}.</p>
           {onCreatePr && (
-            <Button size="sm" onClick={onCreatePr}>
+            <Button size="sm" onClick={onCreatePr} disabled={isCreatingPr}>
               Create PR
             </Button>
           )}
@@ -172,8 +174,10 @@ export function ChecksPanel({
     !machine.isKnownUnavailable,
   );
   const queryClient = useQueryClient();
-  const invalidateChecks = () =>
+  const invalidateChecks = () => {
     void queryClient.invalidateQueries({ queryKey: ["github-checks", worktree] });
+    void queryClient.invalidateQueries({ queryKey: ["github-check-steps", worktree] });
+  };
   const rerunMutation = useMutation({
     mutationFn: () => actions.rerunChecks(worktree),
     onSuccess: invalidateChecks,
@@ -246,6 +250,7 @@ export function ChecksPanel({
         checks={checks}
         onFixWithAgent={onFixWithAgent}
         onCreatePr={() => createPrMutation.mutate()}
+        isCreatingPr={createPrMutation.isPending}
         actions={actions}
         worktree={worktree}
       />
