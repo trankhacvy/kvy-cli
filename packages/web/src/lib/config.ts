@@ -13,6 +13,9 @@ export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://kvy-cli.tk
 /** Brand chrome / splash color — keep in sync with `public/manifest.webmanifest`. */
 export const THEME_COLOR = "#0b0f19";
 
+/** True only in local development (`NODE_ENV !== "production"`). Gates dev-only UI like the email/password form. */
+export const IS_DEV = process.env.NODE_ENV !== "production";
+
 /** Google OAuth client id (OIDC implicit flow) — unset disables the Google button. */
 export const GOOGLE_OAUTH_CLIENT_ID: string | undefined =
   process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID || undefined;

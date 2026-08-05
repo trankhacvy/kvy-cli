@@ -86,6 +86,7 @@ export function libsodiumDecryptWithSecretKey(
 /**
  * Encrypt data using the secret key (NaCl secretbox — XSalsa20-Poly1305).
  */
+// biome-ignore lint/suspicious/noExplicitAny: intentional — encrypts arbitrary JSON-serializable data
 export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(sodium.crypto_secretbox_NONCEBYTES);
   const encrypted = sodium.crypto_secretbox_easy(
@@ -100,6 +101,7 @@ export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
 }
 
 /** Never throws — returns null on any decryption failure. */
+// biome-ignore lint/suspicious/noExplicitAny: intentional — decrypts arbitrary JSON-serializable data
 export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null {
   if (data.length < sodium.crypto_secretbox_NONCEBYTES) {
     return null;
@@ -155,6 +157,7 @@ async function importAesGcmKey(dataKey: Uint8Array): Promise<CryptoKey> {
  * Encrypt data using AES-256-GCM (WebCrypto). Async — WebCrypto has no sync
  * variant. Bundle layout is byte-identical to the node build's output.
  */
+// biome-ignore lint/suspicious/noExplicitAny: intentional — encrypts arbitrary JSON-serializable data
 export async function encryptWithDataKey(data: any, dataKey: Uint8Array): Promise<Uint8Array> {
   const nonce = getRandomBytes(12); // GCM uses 12-byte nonces
   const key = await importAesGcmKey(dataKey);
@@ -183,6 +186,7 @@ export async function encryptWithDataKey(data: any, dataKey: Uint8Array): Promis
 export async function decryptWithDataKey(
   bundle: Uint8Array,
   dataKey: Uint8Array,
+  // biome-ignore lint/suspicious/noExplicitAny: intentional — decrypts arbitrary JSON-serializable data
 ): Promise<any | null> {
   if (bundle.length < 1) {
     return null;
@@ -212,6 +216,7 @@ export async function decryptWithDataKey(
 export function encrypt(
   key: Uint8Array,
   variant: "legacy" | "dataKey",
+  // biome-ignore lint/suspicious/noExplicitAny: intentional — encrypts arbitrary JSON-serializable data
   data: any,
 ): Uint8Array | Promise<Uint8Array> {
   if (variant === "legacy") {
@@ -225,6 +230,7 @@ export function decrypt(
   key: Uint8Array,
   variant: "legacy" | "dataKey",
   data: Uint8Array,
+  // biome-ignore lint/suspicious/noExplicitAny: intentional — decrypts arbitrary JSON-serializable data
 ): any | null | Promise<any | null> {
   if (variant === "legacy") {
     return decryptLegacy(data, key);

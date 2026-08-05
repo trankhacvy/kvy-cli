@@ -361,6 +361,7 @@ export function Composer({
               className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-xs"
             >
               {p.previewUrl ? (
+                // biome-ignore lint/performance/noImgElement: preview URLs are blob object URLs, not optimizable by Next.js Image
                 <img src={p.previewUrl} alt={p.name} className="size-8 rounded object-cover" />
               ) : (
                 <Paperclip className="size-3.5 shrink-0 text-muted-foreground" />

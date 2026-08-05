@@ -148,7 +148,9 @@ describe("crypto-bridge client <-> worker RPC", () => {
       contentPubKey: expect.any(String),
     });
     const identity = await client.getIdentity();
+    // biome-ignore lint/style/noNonNullAssertion: identity is non-null here (worker just returned it)
     expect(decodeBase64(identity!.signPubKey)).toEqual(tree.signing.publicKey);
+    // biome-ignore lint/style/noNonNullAssertion: identity is non-null here (worker just returned it)
     expect(decodeBase64(identity!.contentPubKey)).toEqual(tree.content.publicKey);
   });
 

@@ -2,14 +2,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CryptoBridgeClient } from "@/crypto";
 import { createMemoryStorage } from "./__tests__/test-storage.js";
 
-const { passwordRegisterMock, passwordLoginMock, keysChallengeMock, keysBindMock } = vi.hoisted(
-  () => ({
-    passwordRegisterMock: vi.fn(),
-    passwordLoginMock: vi.fn(),
-    keysChallengeMock: vi.fn(),
-    keysBindMock: vi.fn(),
-  }),
-);
+const {
+  passwordRegisterMock,
+  passwordLoginMock,
+  keysChallengeMock,
+  keysBindMock,
+  revokeOtherSessionsMock,
+} = vi.hoisted(() => ({
+  passwordRegisterMock: vi.fn(),
+  passwordLoginMock: vi.fn(),
+  keysChallengeMock: vi.fn(),
+  keysBindMock: vi.fn(),
+  revokeOtherSessionsMock: vi.fn(),
+}));
 
 vi.mock("./api.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api.js")>();
@@ -19,6 +24,7 @@ vi.mock("./api.js", async (importOriginal) => {
     passwordLogin: passwordLoginMock,
     keysChallenge: keysChallengeMock,
     keysBind: keysBindMock,
+    revokeOtherSessions: revokeOtherSessionsMock,
   };
 });
 
@@ -75,6 +81,7 @@ beforeEach(() => {
   passwordLoginMock.mockReset();
   keysChallengeMock.mockReset().mockResolvedValue({ nonce: "n1" });
   keysBindMock.mockReset().mockResolvedValue({ success: true, keyEpoch: 1 });
+  revokeOtherSessionsMock.mockReset().mockResolvedValue({ success: true });
 });
 
 afterEach(() => {
@@ -253,10 +260,12 @@ describe("rotateKeyEpoch", () => {
     expect(outcome.kind).toBe("wrong-password");
   });
 
-  it("reports other-devices-online on a 409 from keys/bind (the interlock)", async () => {
-    keysBindMock.mockRejectedValue(
-      new ApiError("Other devices are online — pair from one instead of rotating", 409),
-    );
+  it("auto-revokes other sessions on 409 and retries bind", async () => {
+    keysBindMock
+      .mockRejectedValueOnce(
+        new ApiError("Other devices are online — pair from one instead of rotating", 409),
+      )
+      .mockResolvedValueOnce({ success: true, keyEpoch: 2 });
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
@@ -264,7 +273,24 @@ describe("rotateKeyEpoch", () => {
       mode: "device",
     });
 
-    expect(outcome.kind).toBe("other-devices-online");
+    expect(revokeOtherSessionsMock).toHaveBeenCalledOnce();
+    expect(keysBindMock).toHaveBeenCalledTimes(2);
+    expect(outcome.kind).toBe("ok");
+  });
+
+  it("returns an error if revokeOtherSessions itself fails on 409", async () => {
+    keysBindMock.mockRejectedValue(
+      new ApiError("Other devices are online — pair from one instead of rotating", 409),
+    );
+    revokeOtherSessionsMock.mockRejectedValue(new ApiError("Server error", 500));
+    const bridge = fakeBridge();
+    const token = fakeAccessToken("acct_1");
+
+    const outcome = await rotateKeyEpoch(bridge, token, "rt1", "correct-password", {
+      mode: "device",
+    });
+
+    expect(outcome.kind).toBe("error");
   });
 });
 
@@ -345,10 +371,12 @@ describe("rotateKeyEpochOAuth", () => {
     expect(outcome.kind).toBe("identity-mismatch");
   });
 
-  it("reports other-devices-online on a 409 from keys/bind (the interlock)", async () => {
-    keysBindMock.mockRejectedValue(
-      new ApiError("Other devices are online — pair from one instead of rotating", 409),
-    );
+  it("auto-revokes other sessions on 409 and retries bind", async () => {
+    keysBindMock
+      .mockRejectedValueOnce(
+        new ApiError("Other devices are online — pair from one instead of rotating", 409),
+      )
+      .mockResolvedValueOnce({ success: true, keyEpoch: 2 });
     const bridge = fakeBridge();
     const token = fakeAccessToken("acct_1");
 
@@ -357,13 +385,31 @@ describe("rotateKeyEpochOAuth", () => {
       token,
       "rt1",
       { mode: "device" },
-      {
-        provider: "google",
-        oauthProof: "id-token-1",
-      },
+      { provider: "google", oauthProof: "id-token-1" },
     );
 
-    expect(outcome.kind).toBe("other-devices-online");
+    expect(revokeOtherSessionsMock).toHaveBeenCalledOnce();
+    expect(keysBindMock).toHaveBeenCalledTimes(2);
+    expect(outcome.kind).toBe("ok");
+  });
+
+  it("returns an error if revokeOtherSessions itself fails on 409", async () => {
+    keysBindMock.mockRejectedValue(
+      new ApiError("Other devices are online — pair from one instead of rotating", 409),
+    );
+    revokeOtherSessionsMock.mockRejectedValue(new ApiError("Server error", 500));
+    const bridge = fakeBridge();
+    const token = fakeAccessToken("acct_1");
+
+    const outcome = await rotateKeyEpochOAuth(
+      bridge,
+      token,
+      "rt1",
+      { mode: "device" },
+      { provider: "google", oauthProof: "id-token-1" },
+    );
+
+    expect(outcome.kind).toBe("error");
   });
 
   it("resolves to a graceful error (not a thrown/unhandled rejection) when keysChallenge itself fails", async () => {

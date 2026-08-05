@@ -14,9 +14,9 @@ const BASE_SHELL = [
   "/dashboard/",
   "/offline.html",
   "/manifest.webmanifest",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
+  "/manifest-icon-192.maskable.png",
+  "/manifest-icon-512.maskable.png",
+  "/apple-icon-180.png",
   "/favicon.ico",
 ];
 
@@ -150,8 +150,8 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: "Tap to open the session.",
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
+      icon: "/manifest-icon-192.maskable.png",
+      badge: "/manifest-icon-192.maskable.png",
       tag: sessionId || "kvy-notification",
       data: { url },
     }),

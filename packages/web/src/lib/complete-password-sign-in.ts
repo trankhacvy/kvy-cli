@@ -12,7 +12,14 @@
  */
 import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
-import { ApiError, keysBind, keysChallenge, passwordLogin, passwordRegister } from "./api.js";
+import {
+  ApiError,
+  keysBind,
+  keysChallenge,
+  passwordLogin,
+  passwordRegister,
+  revokeOtherSessions,
+} from "./api.js";
 import { consumePendingPair } from "./pending-pair.js";
 import { setToken } from "./session.js";
 
@@ -38,7 +45,6 @@ export interface PasswordSignInResult {
 export type RotateKeyEpochOutcome =
   | { kind: "ok"; nextUrl: string }
   | { kind: "wrong-password"; message: string }
-  | { kind: "other-devices-online"; message: string }
   | { kind: "error"; message: string };
 
 function decodeAccountId(accessToken: string): string {
@@ -142,47 +148,50 @@ export async function rotateKeyEpoch(
   const masterSecret = getRandomBytes(32);
   await bridge.init(masterSecret, refreshToken, accountId, protection);
 
-  // Deliberately unscoped: this reads back the identity `init` just provisioned above, for
-  // THIS account, in the same call — not a "does this browser already know someone" check,
-  // so there is no foreign-record risk to guard against here.
   const identity = await bridge.getIdentity();
   if (!identity) {
     return { kind: "error", message: "Crypto bridge failed to provision new key material." };
   }
 
-  try {
-    const { nonce } = await keysChallenge(accessToken);
-    const proof = await bridge.bindKeysProof(accountId, nonce);
-    await keysBind(accessToken, {
-      signPubKey: proof.signPubKey,
-      contentPubKey: proof.contentPubKey,
-      nonce,
-      signature: proof.signature,
-      rotate: true,
-      stepUpProof: { kind: "password", password: stepUpPassword },
-    });
-    const pendingEphPub = consumePendingPair();
-    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
-      return { kind: "wrong-password", message: "That password is incorrect." };
-    }
-    if (err instanceof ApiError && err.status === 409) {
+  async function attemptBind(revokedOthers: boolean): Promise<RotateKeyEpochOutcome> {
+    try {
+      const { nonce } = await keysChallenge(accessToken);
+      const proof = await bridge.bindKeysProof(accountId, nonce);
+      await keysBind(accessToken, {
+        signPubKey: proof.signPubKey,
+        contentPubKey: proof.contentPubKey,
+        nonce,
+        signature: proof.signature,
+        rotate: true,
+        stepUpProof: { kind: "password", password: stepUpPassword },
+      });
+      const pendingEphPub = consumePendingPair();
+      return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        return { kind: "wrong-password", message: "That password is incorrect." };
+      }
+      if (err instanceof ApiError && err.status === 409 && !revokedOthers) {
+        try {
+          await revokeOtherSessions(accessToken);
+        } catch {
+          return { kind: "error", message: "Could not sign out other devices. Please try again." };
+        }
+        return attemptBind(true);
+      }
       return {
-        kind: "other-devices-online",
-        message:
-          "Another device is still signed in. Pair this browser from that device instead of rotating keys blind.",
+        kind: "error",
+        message: err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.",
       };
     }
-    const message = err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.";
-    return { kind: "error", message };
   }
+
+  return attemptBind(false);
 }
 
 export type RotateKeyEpochOAuthOutcome =
   | { kind: "ok"; nextUrl: string }
   | { kind: "identity-mismatch"; message: string }
-  | { kind: "other-devices-online"; message: string }
   | { kind: "error"; message: string };
 
 /**
@@ -209,36 +218,38 @@ export async function rotateKeyEpochOAuth(
   const masterSecret = getRandomBytes(32);
   await bridge.init(masterSecret, refreshToken, accountId, protection);
 
-  // `keysChallenge`/`bindKeysProof` are inside this same try (matching `rotateKeyEpoch`'s
-  // scope above) — `keysChallenge` is a network call and can throw an `ApiError` (e.g. a 401
-  // from an already-expired access token) just like `keysBind` does; leaving it unguarded
-  // would silently strand the caller on the "rotating" phase forever with no error surfaced
-  // ("no silent failures").
-  try {
-    const { nonce } = await keysChallenge(accessToken);
-    const proof = await bridge.bindKeysProof(accountId, nonce);
-    await keysBind(accessToken, {
-      signPubKey: proof.signPubKey,
-      contentPubKey: proof.contentPubKey,
-      nonce,
-      signature: proof.signature,
-      rotate: true,
-      stepUpProof: { kind: "oauth", provider: step.provider, oauthProof: step.oauthProof },
-    });
-    const pendingEphPub = consumePendingPair();
-    return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 401) {
-      return { kind: "identity-mismatch", message: "That account doesn't match this one." };
-    }
-    if (err instanceof ApiError && err.status === 409) {
+  async function attemptBind(revokedOthers: boolean): Promise<RotateKeyEpochOAuthOutcome> {
+    try {
+      const { nonce } = await keysChallenge(accessToken);
+      const proof = await bridge.bindKeysProof(accountId, nonce);
+      await keysBind(accessToken, {
+        signPubKey: proof.signPubKey,
+        contentPubKey: proof.contentPubKey,
+        nonce,
+        signature: proof.signature,
+        rotate: true,
+        stepUpProof: { kind: "oauth", provider: step.provider, oauthProof: step.oauthProof },
+      });
+      const pendingEphPub = consumePendingPair();
+      return { kind: "ok", nextUrl: pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/" };
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        return { kind: "identity-mismatch", message: "That account doesn't match this one." };
+      }
+      if (err instanceof ApiError && err.status === 409 && !revokedOthers) {
+        try {
+          await revokeOtherSessions(accessToken);
+        } catch {
+          return { kind: "error", message: "Could not sign out other devices. Please try again." };
+        }
+        return attemptBind(true);
+      }
       return {
-        kind: "other-devices-online",
-        message:
-          "Another device is still signed in. Pair this browser from that device instead of rotating keys blind.",
+        kind: "error",
+        message: err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.",
       };
     }
-    const message = err instanceof ApiError ? err.message : "Could not rotate keys. Please retry.";
-    return { kind: "error", message };
   }
+
+  return attemptBind(false);
 }

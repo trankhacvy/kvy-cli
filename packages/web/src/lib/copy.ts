@@ -108,9 +108,9 @@ export const copy = {
     cancelCta: "Cancel",
     pageTitle: "Recover this browser",
     pageSubtitle:
-      "The safest option keeps all your encrypted sessions. Resetting keys signs out every " +
-      "other device and locks away everything encrypted under your old keys.",
-    fetchKeysCta: "Get my keys from another device",
+      "This resets your encryption keys and permanently archives all past encrypted sessions. " +
+      "If you can reach another signed-in device, you can get your keys from it instead.",
+    fetchKeysCta: "I can reach another signed-in device",
     resetInsteadCta: "Reset keys instead",
     confirmHeading: "Confirm it's you",
     confirmBody:
@@ -130,9 +130,6 @@ export const copy = {
     signedOutMidFlow: "You've been signed out. Please start over.",
     signedOutTitle: "You've been signed out",
     backToSigninCta: "Back to sign in",
-    /** Shown when `keys/bind`'s "other devices online" 409 fires — the only self-serve way
-     *  out when the user genuinely can't reach any of those other devices. */
-    otherDevicesCta: "Log out all other devices",
   },
 
   lockedSession: {
@@ -144,7 +141,6 @@ export const copy = {
     title: "Connect your first machine",
     subtitle: "Kvy runs on your own computer. Two commands.",
     step1: "Install",
-    step1Cmd: "npm install -g @vibe-oss/kvy",
     step2: "Run it from any project",
     step2Cmd: "cd ~/your-project && kvy",
     step3: "Approve when your browser asks",

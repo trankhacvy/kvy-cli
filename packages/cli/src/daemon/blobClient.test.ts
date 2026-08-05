@@ -66,6 +66,7 @@ describe("uploadBlob", () => {
     // The bytes actually PUT are `encryptBlob`'s output — decrypting them
     // under the same key must recover the original plaintext.
     expect(capturedPutBody).not.toBeNull();
+    // biome-ignore lint/style/noNonNullAssertion: guarded by the not.toBeNull() assertion above
     const putBytes = new Uint8Array(capturedPutBody!);
     const decrypted = decryptBlob(putBytes, blobKey);
     expect(decrypted).toEqual(plaintext);

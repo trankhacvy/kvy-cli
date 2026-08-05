@@ -25,7 +25,7 @@
       "!.claude",
       "!.vscode",
       "!.idea",
-      "!packages/web/public/crypto-worker.js",
+      "!packages/web/public",
       "!.context"
     ]
   },

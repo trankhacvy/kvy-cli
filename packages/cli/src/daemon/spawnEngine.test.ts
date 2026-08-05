@@ -151,6 +151,7 @@ describe("spawnSession", () => {
   });
 
   it("fails fast when the env template references an unresolved variable", async () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: test data for expandEnvVars
     const deps = baseDeps({ envTemplate: { URL: "${MISSING_VAR}" }, baseEnv: {} });
     await expect(spawnSession(baseParams({ directory: root }), deps)).rejects.toThrow(
       /unresolved variable/,
@@ -160,6 +161,7 @@ describe("spawnSession", () => {
 
   it("merges expanded env vars into the spawned process's environment", async () => {
     const deps = baseDeps({
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: test data for expandEnvVars
       envTemplate: { KVY_BACKEND_URL: "${BACKEND_URL}" },
       baseEnv: { BACKEND_URL: "https://api.example.com" },
     });

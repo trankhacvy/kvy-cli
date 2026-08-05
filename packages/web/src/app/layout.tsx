@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/next";
 import type { Metadata, Viewport } from "next";
 
 import { DocumentTitle } from "@/components/DocumentTitle";
@@ -42,6 +43,7 @@ export default function RootLayout({
       <body className="antialiased">
         <DocumentTitle />
         <Providers>{children}</Providers>
+        <Analytics />
       </body>
     </html>
   );

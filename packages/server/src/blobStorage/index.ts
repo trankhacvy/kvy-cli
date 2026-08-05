@@ -25,7 +25,9 @@ export function buildBlobStorage(env: Env): BlobStorageDriver {
       bucket: env.S3_BUCKET,
       region: env.S3_REGION,
       endpoint: env.S3_ENDPOINT,
+      // biome-ignore lint/style/noNonNullAssertion: S3_ACCESS_KEY_ID presence is validated by the caller
       accessKeyId: env.S3_ACCESS_KEY_ID!,
+      // biome-ignore lint/style/noNonNullAssertion: S3_SECRET_ACCESS_KEY presence is validated by the caller
       secretAccessKey: env.S3_SECRET_ACCESS_KEY!,
       forcePathStyle: env.S3_FORCE_PATH_STYLE,
       urlExpirySeconds: env.BLOB_URL_EXPIRY_SECONDS,

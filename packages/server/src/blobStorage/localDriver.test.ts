@@ -66,6 +66,7 @@ describe("localDriver", () => {
       const url = new URL(target.url);
       expect(url.origin).toBe("https://api.kvy.dev");
       expect(url.pathname).toBe("/v1/blobs/local/blob-1");
+      // biome-ignore lint/style/noNonNullAssertion: token is always present in well-formed upload URLs
       const token = url.searchParams.get("token")!;
       const exp = Number(url.searchParams.get("exp"));
       expect(verifyBlobToken(config.tokenSecret, "upload", "blob-1", exp, token)).toBe(true);
@@ -82,6 +83,7 @@ describe("localDriver", () => {
       });
       expect(target.method).toBe("GET");
       const url = new URL(target.url);
+      // biome-ignore lint/style/noNonNullAssertion: token is always present in well-formed download URLs
       const token = url.searchParams.get("token")!;
       const exp = Number(url.searchParams.get("exp"));
       expect(verifyBlobToken(config.tokenSecret, "download", "blob-1", exp, token)).toBe(true);

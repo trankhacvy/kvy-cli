@@ -48,6 +48,7 @@ describe("encryption.ts (node)", () => {
     it("returns null on tampered ciphertext", () => {
       const bundle = encryptWithDataKey({ secret: true }, dek);
       const tampered = new Uint8Array(bundle);
+      // biome-ignore lint/style/noNonNullAssertion: index is within bounds (bundle is longer than 20 bytes)
       tampered[20]! ^= 0xff;
       expect(decryptWithDataKey(tampered, dek)).toBeNull();
     });
@@ -55,6 +56,7 @@ describe("encryption.ts (node)", () => {
     it("returns null on tampered auth tag", () => {
       const bundle = encryptWithDataKey({ secret: true }, dek);
       const tampered = new Uint8Array(bundle);
+      // biome-ignore lint/style/noNonNullAssertion: index is within bounds (non-empty bundle)
       tampered[tampered.length - 1]! ^= 0xff;
       expect(decryptWithDataKey(tampered, dek)).toBeNull();
     });
@@ -80,6 +82,7 @@ describe("encryption.ts (node)", () => {
       expect(decryptLegacy(bundle, secret)).toEqual({ hello: "world" });
 
       const tampered = new Uint8Array(bundle);
+      // biome-ignore lint/style/noNonNullAssertion: index is within bounds (non-empty bundle)
       tampered[tampered.length - 1]! ^= 0xff;
       expect(decryptLegacy(tampered, secret)).toBeNull();
 
@@ -112,6 +115,7 @@ describe("encryption.ts (node)", () => {
       expect(decryptBlob(new Uint8Array(10), key)).toBeNull();
 
       const tampered = new Uint8Array(bundle);
+      // biome-ignore lint/style/noNonNullAssertion: index is within bounds (bundle is non-empty)
       tampered[0]! ^= 0xff;
       expect(decryptBlob(tampered, key)).toBeNull();
     });
@@ -144,6 +148,7 @@ describe("encryption.ts (node)", () => {
       expect(libsodiumDecryptWithSecretKey(bundle, other.secretKey)).toBeNull();
 
       const tampered = new Uint8Array(bundle);
+      // biome-ignore lint/style/noNonNullAssertion: index is within bounds (non-empty bundle)
       tampered[tampered.length - 1]! ^= 0xff;
       expect(libsodiumDecryptWithSecretKey(tampered, recipient.secretKey)).toBeNull();
     });

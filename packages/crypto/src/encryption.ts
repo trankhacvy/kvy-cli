@@ -88,6 +88,7 @@ export function libsodiumDecryptWithSecretKey(
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: intentional — encrypts arbitrary JSON-serializable data
 export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(tweetnacl.secretbox.nonceLength);
   const encrypted = tweetnacl.secretbox(
@@ -101,6 +102,7 @@ export function encryptLegacy(data: any, secret: Uint8Array): Uint8Array {
   return result;
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: intentional — decrypts arbitrary JSON-serializable data
 export function decryptLegacy(data: Uint8Array, secret: Uint8Array): any | null {
   if (data.length < tweetnacl.secretbox.nonceLength) {
     return null;
@@ -161,6 +163,7 @@ export function decryptBlob(bundle: Uint8Array, key: Uint8Array): Uint8Array | n
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: intentional — encrypts arbitrary JSON-serializable data
 export function encryptWithDataKey(data: any, dataKey: Uint8Array): Uint8Array {
   const nonce = getRandomBytes(12); // GCM uses 12-byte nonces
   const cipher = createCipheriv("aes-256-gcm", dataKey, nonce);
@@ -180,6 +183,7 @@ export function encryptWithDataKey(data: any, dataKey: Uint8Array): Uint8Array {
   return bundle;
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: intentional — decrypts arbitrary JSON-serializable data
 export function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array): any | null {
   if (bundle.length < 1) {
     return null;
@@ -210,6 +214,7 @@ export function decryptWithDataKey(bundle: Uint8Array, dataKey: Uint8Array): any
   }
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: intentional — encrypts arbitrary JSON-serializable data
 export function encrypt(key: Uint8Array, variant: "legacy" | "dataKey", data: any): Uint8Array {
   if (variant === "legacy") {
     return encryptLegacy(data, key);
@@ -222,6 +227,7 @@ export function decrypt(
   key: Uint8Array,
   variant: "legacy" | "dataKey",
   data: Uint8Array,
+  // biome-ignore lint/suspicious/noExplicitAny: intentional — decrypts arbitrary JSON-serializable data
 ): any | null {
   if (variant === "legacy") {
     return decryptLegacy(data, key);

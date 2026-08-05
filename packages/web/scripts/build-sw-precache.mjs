@@ -31,7 +31,7 @@ function walk(dir, base = dir, acc = []) {
     if (SKIP_NAMES.has(name)) continue;
     const ext = path.extname(name).toLowerCase();
     if (!INCLUDE_EXT.has(ext)) continue;
-    const rel = "/" + path.relative(base, full).split(path.sep).join("/");
+    const rel = `/${path.relative(base, full).split(path.sep).join("/")}`;
     acc.push(rel);
   }
   return acc;
