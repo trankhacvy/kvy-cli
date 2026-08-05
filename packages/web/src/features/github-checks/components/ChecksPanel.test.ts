@@ -3,12 +3,30 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { MOCK_GITHUB_CHECKS_FIXTURES } from "../mock-source";
-import type { UseGithubChecksActions } from "../types";
+import type { GithubChecksActions, UseGithubChecksActions } from "../types";
 import { DaemonUnsupportedError } from "../types";
 import { ChecksBody } from "./ChecksPanel";
 
-function renderBody(props: Parameters<typeof ChecksBody>[0]): string {
-  return renderToStaticMarkup(createElement(ChecksBody, props));
+function neverResolvingActions(): GithubChecksActions {
+  const neverResolves = () => new Promise<never>(() => {});
+  return {
+    fetchChecks: neverResolves,
+    fetchCheckSteps: neverResolves,
+    rerunChecks: neverResolves,
+    cancelChecks: neverResolves,
+    createPr: neverResolves,
+  };
+}
+
+function renderBody(props: Omit<Parameters<typeof ChecksBody>[0], "actions" | "worktree">): string {
+  const queryClient = new QueryClient();
+  return renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client: queryClient },
+      createElement(ChecksBody, { actions: neverResolvingActions(), worktree: "/repo", ...props }),
+    ),
+  );
 }
 
 describe("ChecksBody", () => {
@@ -110,6 +128,15 @@ describe("ChecksBody", () => {
     expect(html).not.toContain("Fix with agent");
   });
 
+  it("shows the failure summary text only for the failed check", () => {
+    const html = renderBody({
+      isLoading: false,
+      error: null,
+      checks: MOCK_GITHUB_CHECKS_FIXTURES.ok,
+    });
+    expect(html).toContain("Cannot find module &#x27;@kvy/crypto/web&#x27;");
+  });
+
   it("never calls onFixWithAgent merely by rendering", () => {
     const onFixWithAgent = vi.fn();
     renderBody({
@@ -128,9 +155,7 @@ describe("ChecksPanel (integration via a mock actions source)", () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(["github-checks", "/repo"], MOCK_GITHUB_CHECKS_FIXTURES.ok);
 
-    const useActions: UseGithubChecksActions = () => ({
-      fetchChecks: () => new Promise(() => {}), // never resolves — cached data already satisfies the render
-    });
+    const useActions: UseGithubChecksActions = () => neverResolvingActions();
 
     const html = renderToStaticMarkup(
       createElement(
@@ -148,9 +173,7 @@ describe("ChecksPanel (integration via a mock actions source)", () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(["github-checks", "/repo"], MOCK_GITHUB_CHECKS_FIXTURES.ok);
 
-    const useActions: UseGithubChecksActions = () => ({
-      fetchChecks: () => new Promise(() => {}),
-    });
+    const useActions: UseGithubChecksActions = () => neverResolvingActions();
 
     const html = renderToStaticMarkup(
       createElement(

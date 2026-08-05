@@ -58,6 +58,8 @@ export const MOCK_GITHUB_CHECKS_FIXTURES: Record<
         detailsUrl: "https://github.com/kvy-dev/kvy/actions/runs/2",
         startedAt: 1_700_000_000,
         completedAt: 1_700_000_018,
+        summary: "error TS2307: Cannot find module '@kvy/crypto/web'.",
+        provider: "github-actions",
       },
       {
         name: "test",
@@ -80,6 +82,27 @@ export function createMockGithubChecksActions(
     async fetchChecks(_worktree) {
       await delay(LATENCY_MS);
       return MOCK_GITHUB_CHECKS_FIXTURES[state];
+    },
+    async fetchCheckSteps(_worktree, _checkName) {
+      await delay(LATENCY_MS);
+      return [
+        { name: "checkout", status: "completed", conclusion: "success", number: 1 },
+        { name: "run tests", status: "completed", conclusion: "failure", number: 2 },
+      ];
+    },
+    async rerunChecks(_worktree) {
+      await delay(LATENCY_MS);
+      return { rerunCount: 1 };
+    },
+    async cancelChecks(_worktree) {
+      await delay(LATENCY_MS);
+      return { cancelledCount: 1 };
+    },
+    async createPr(_worktree) {
+      await delay(LATENCY_MS);
+      const okFixture = MOCK_GITHUB_CHECKS_FIXTURES.ok;
+      if (!okFixture.pr) throw new Error("mock fixture has no pr");
+      return okFixture.pr;
     },
   };
 }

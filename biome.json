@@ -25,7 +25,8 @@
       "!.claude",
       "!.vscode",
       "!.idea",
-      "!packages/web/public"
+      "!packages/web/public",
+      "!.context"
     ]
   },
   "formatter": {

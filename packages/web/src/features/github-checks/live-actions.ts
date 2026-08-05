@@ -26,5 +26,30 @@ export function machineRpcToGithubChecksActions(rpc: MachineRpcClient): GithubCh
         throw error;
       }
     },
+
+    async fetchCheckSteps(worktree, checkName) {
+      const result = await rpc.call("github.checkSteps", {
+        idempotencyKey: crypto.randomUUID(),
+        worktree,
+        checkName,
+      });
+      return result.steps;
+    },
+
+    async rerunChecks(worktree) {
+      return rpc.call("github.rerunChecks", { idempotencyKey: crypto.randomUUID(), worktree });
+    },
+
+    async cancelChecks(worktree) {
+      return rpc.call("github.cancelChecks", { idempotencyKey: crypto.randomUUID(), worktree });
+    },
+
+    async createPr(worktree) {
+      const result = await rpc.call("github.createPr", {
+        idempotencyKey: crypto.randomUUID(),
+        worktree,
+      });
+      return result.pr;
+    },
   };
 }

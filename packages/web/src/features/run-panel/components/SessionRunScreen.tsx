@@ -8,8 +8,7 @@ import { RunPanel } from "./RunPanel";
 /**
  * The Setup/Run tab's session-scoped entry point (`/dashboard/session/[id]/run/`) —
  * verbatim structural copy of `features/git-diff/components/
- * SessionGitScreen.tsx` / `features/github-checks/components/
- * SessionChecksScreen.tsx`: resolves the session's real (plaintext)
+ * SessionGitScreen.tsx`: resolves the session's real (plaintext)
  * `machineId`/`workspaceId` off the live `['sync']` snapshot
  * (`SessionRow.machineId`/`.workspaceId` — the server is allowed to see
  * itself stays a thin static-export shell.

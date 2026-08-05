@@ -1,8 +1,8 @@
-import type { GithubChecksResult } from "@kvy/wire";
+import type { CheckStep, GithubChecksResult, PullRequestInfo } from "@kvy/wire";
 
 /**
  * `github.checks` (GitHub PR/CI integration). Structural clone of
- * `features/git-diff/types.ts` — read-only for the MVP, same seam pattern.
+ * `features/git-diff/types.ts`, same seam pattern.
  *
  * `GithubChecksSnapshot` is re-exported straight off `@kvy/wire` rather
  * than redeclared: the RPC result is already exactly what this panel wants
@@ -36,6 +36,14 @@ export class DaemonUnsupportedError extends Error {
 export interface GithubChecksActions {
   /** Fetches the PR/CI check state for `worktree`. Throws on failure — including a typed `DaemonUnsupportedError` for an older daemon (see above). */
   fetchChecks(worktree: string): Promise<GithubChecksSnapshot>;
+  /** Only ever called for a `CheckRun` with `provider: "github-actions"`. Throws on failure. */
+  fetchCheckSteps(worktree: string, checkName: string): Promise<CheckStep[]>;
+  /** Reruns every failed workflow run for the PR's head commit. */
+  rerunChecks(worktree: string): Promise<{ rerunCount: number }>;
+  /** Cancels every still-running workflow run for the PR's head commit. */
+  cancelChecks(worktree: string): Promise<{ cancelledCount: number }>;
+  /** Opens a PR for `worktree`'s current branch — no title/description input. */
+  createPr(worktree: string): Promise<PullRequestInfo>;
 }
 
 /** One Checks-tab actions client per chosen machine — mirrors `UseGitDiffActions = (machineId) => GitDiffActions`. */

@@ -1,13 +1,14 @@
 "use client";
 
 import type { CheckRun, PullRequestInfo } from "@kvy/wire";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { MachineOfflineNotice } from "@/components/machine-offline-notice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { useMachineOnline } from "@/lib/use-machine-online";
-import type { GithubChecksSnapshot, UseGithubChecksActions } from "../types";
+import type { GithubChecksActions, GithubChecksSnapshot, UseGithubChecksActions } from "../types";
 import { DaemonUnsupportedError } from "../types";
 import { useChecksPanel } from "../use-checks-panel";
 import { useLiveGithubChecksActions } from "../use-live-github-checks-actions";
@@ -56,11 +57,17 @@ export function ChecksBody({
   error,
   checks,
   onFixWithAgent,
+  onCreatePr,
+  actions,
+  worktree,
 }: {
   isLoading: boolean;
   error: Error | null;
   checks: GithubChecksSnapshot | undefined;
   onFixWithAgent?: (check: CheckRun) => void;
+  onCreatePr?: () => void;
+  actions: GithubChecksActions;
+  worktree: string;
 }) {
   if (isLoading) {
     return <EmptyState>Loading checks…</EmptyState>;
@@ -99,9 +106,14 @@ export function ChecksBody({
       return <EmptyState>Commit and push your changes, then create a PR.</EmptyState>;
     case "no-pr":
       return (
-        <EmptyState>
-          No open pull request for {checks.branch ?? "this branch"}. Create a PR to see CI checks.
-        </EmptyState>
+        <div className="flex flex-col items-center gap-2 p-4 text-center text-sm text-muted-foreground">
+          <p>No open pull request for {checks.branch ?? "this branch"}.</p>
+          {onCreatePr && (
+            <Button size="sm" onClick={onCreatePr}>
+              Create PR
+            </Button>
+          )}
+        </div>
       );
     case "ok":
       return (
@@ -115,6 +127,8 @@ export function ChecksBody({
                   key={`${check.name}-${index}`}
                   check={check}
                   onFixWithAgent={onFixWithAgent}
+                  actions={actions}
+                  worktree={worktree}
                 />
               ))}
             </ul>
@@ -130,7 +144,7 @@ export function ChecksBody({
  * GitHub PR/CI integration: PR header (when
  * one exists) plus its
  * check-run list, or a derived empty-state message otherwise (`ChecksBody`
- * above). Read-only — no re-run/cancel actions here (design: fast-follow).
+ * above).
  *
  * `useActions` is the injectable seam — mirrors `GitDiffPanel`'s own
  * `useActions` prop. Defaults to the real `useLiveGithubChecksActions`
@@ -146,8 +160,7 @@ export function ChecksPanel({
   machineId: string;
   worktree: string;
   /** Wired to the same lifted `onSend`/`ComposerState.send` every other
-   * session-panel-workflow action goes through — omitted entirely by
-   * `SessionChecksScreen.tsx`'s other, non-panel usage of this component. */
+   * session-panel-workflow action goes through. */
   onFixWithAgent?: (check: CheckRun) => void;
   useActions?: UseGithubChecksActions;
 }) {
@@ -158,10 +171,64 @@ export function ChecksPanel({
     worktree,
     !machine.isKnownUnavailable,
   );
+  const queryClient = useQueryClient();
+  const invalidateChecks = () =>
+    void queryClient.invalidateQueries({ queryKey: ["github-checks", worktree] });
+  const rerunMutation = useMutation({
+    mutationFn: () => actions.rerunChecks(worktree),
+    onSuccess: invalidateChecks,
+  });
+  const cancelMutation = useMutation({
+    mutationFn: () => actions.cancelChecks(worktree),
+    onSuccess: invalidateChecks,
+  });
+  const createPrMutation = useMutation({
+    mutationFn: () => actions.createPr(worktree),
+    onSuccess: invalidateChecks,
+  });
+
+  const hasRerunableCheck =
+    checks?.state === "ok" &&
+    (checks.checks ?? []).some(
+      (check) =>
+        check.status === "completed" &&
+        (check.conclusion === "failure" ||
+          check.conclusion === "timed_out" ||
+          check.conclusion === "cancelled"),
+    );
+  const hasRunningCheck =
+    checks?.state === "ok" &&
+    (checks.checks ?? []).some(
+      (check) => check.status === "queued" || check.status === "in_progress",
+    );
+
   return (
     <div className="flex flex-col gap-2">
       <MachineOfflineNotice state={machine} />
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {hasRerunableCheck && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-xs"
+            disabled={rerunMutation.isPending}
+            onClick={() => rerunMutation.mutate()}
+          >
+            <RefreshCw className="size-3.5" />
+            Re-run checks
+          </Button>
+        )}
+        {hasRunningCheck && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-xs"
+            disabled={cancelMutation.isPending}
+            onClick={() => cancelMutation.mutate()}
+          >
+            Cancel
+          </Button>
+        )}
         <Button
           size="sm"
           variant="ghost"
@@ -178,6 +245,9 @@ export function ChecksPanel({
         error={error}
         checks={checks}
         onFixWithAgent={onFixWithAgent}
+        onCreatePr={() => createPrMutation.mutate()}
+        actions={actions}
+        worktree={worktree}
       />
     </div>
   );

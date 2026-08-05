@@ -148,11 +148,13 @@ describe("sessionRegistry", () => {
     const registry = createSessionRegistry({ homeDir });
     registry.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
 
-    // persistSession() fires-and-forgets (best-effort) — poll briefly instead
-    // of assuming synchronous completion.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const persisted = await readPersistedSessions(homeDir);
-    expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1", encryption: ENCRYPTION });
+    // persistSession() fires-and-forgets (best-effort) — poll until it lands
+    // instead of assuming a fixed delay is always enough (flaky under CPU
+    // contention, e.g. `turbo` running every package's tests in parallel).
+    await vi.waitFor(async () => {
+      const persisted = await readPersistedSessions(homeDir);
+      expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1", encryption: ENCRYPTION });
+    });
   });
 
   it("does not persist when the webhook carries no encryption material", async () => {
@@ -247,9 +249,10 @@ describe("sessionRegistry", () => {
 
     expect(registry.findResumable("sess_1")).toMatchObject({ sessionId: "sess_1", pid: 4242 });
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const persisted = await readPersistedSessions(homeDir);
-    expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1", pid: 4242 });
+    await vi.waitFor(async () => {
+      const persisted = await readPersistedSessions(homeDir);
+      expect(persisted.sess_1).toMatchObject({ sessionId: "sess_1", pid: 4242 });
+    });
   });
 
   it("readoptLiveSessions re-adds a still-live orphaned session into the live map after a restart, without dropping the durable resumable record", async () => {

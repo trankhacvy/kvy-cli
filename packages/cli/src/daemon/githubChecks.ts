@@ -107,6 +107,8 @@ interface RawCheckRun {
   details_url: string | null;
   started_at: string | null;
   completed_at: string | null;
+  output: { summary: string | null } | null;
+  app: { slug: string } | null;
 }
 
 interface RawCheckRunsResponse {
@@ -124,6 +126,8 @@ function mapCheckRun(raw: RawCheckRun): CheckRun {
   const run: CheckRun = { name: raw.name, status: raw.status };
   if (raw.conclusion) run.conclusion = raw.conclusion as CheckRun["conclusion"];
   if (raw.details_url) run.detailsUrl = raw.details_url;
+  if (raw.output?.summary) run.summary = raw.output.summary;
+  run.provider = raw.app?.slug === "github-actions" ? "github-actions" : "other";
   const startedAt = toUnixSeconds(raw.started_at);
   if (startedAt !== undefined) run.startedAt = startedAt;
   const completedAt = toUnixSeconds(raw.completed_at);

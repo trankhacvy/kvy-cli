@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useRefetchOnMachineRecovery } from "@/lib/use-refetch-on-machine-recovery";
 import type { GithubChecksActions } from "./types";
@@ -27,11 +27,15 @@ export function useChecksPanel(
   worktree: string,
   machineOnline = true,
 ) {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["github-checks", worktree],
     queryFn: () => actions.fetchChecks(worktree),
     refetchInterval: 60_000,
     refetchIntervalInBackground: false,
+    // WebSocket RPC — navigator.onLine doesn't apply; without this the stub
+    // rejection on first mount parks the query in "paused" permanently.
+    networkMode: "always",
   });
 
   // `actions` starts out as a permanently-rejecting stub until this
@@ -40,6 +44,11 @@ export function useChecksPanel(
   // retries until the next `refetchInterval` tick, which itself only fires
   // for a foreground tab. Force a refetch the moment `actions`'s identity
   // changes after mount, the same fix `use-git-panel.ts` applies.
+  //
+  // Uses `queryClient.resetQueries` (not `refetch()`) for the same reason
+  // `use-git-panel.ts` does: when the tab is unfocused, a paused retryer
+  // ignores `refetch()` (`continueRetry()` no-op); `resetQueries` resets
+  // to "idle" first so the new retryer's `canStart()` fires unconditionally.
   const isFirstActionsRender = useRef(true);
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed only on `actions` — see use-git-panel.ts's identical effect.
   useEffect(() => {
@@ -47,7 +56,7 @@ export function useChecksPanel(
       isFirstActionsRender.current = false;
       return;
     }
-    void query.refetch();
+    void queryClient.resetQueries({ queryKey: ["github-checks", worktree] });
   }, [actions]);
 
   useRefetchOnMachineRecovery(machineOnline, () => {

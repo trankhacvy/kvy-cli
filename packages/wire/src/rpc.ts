@@ -485,6 +485,8 @@ export const CheckRunSchema = z.object({
   detailsUrl: z.string().optional(),
   startedAt: z.number().optional(),
   completedAt: z.number().optional(),
+  summary: z.string().optional(),
+  provider: z.enum(["github-actions", "other"]).optional(),
 });
 export type CheckRun = z.infer<typeof CheckRunSchema>;
 
@@ -520,6 +522,74 @@ export const GithubChecksResultSchema = z.object({
   message: z.string().optional(),
 });
 export type GithubChecksResult = z.infer<typeof GithubChecksResultSchema>;
+
+export const GithubCheckStepsParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+  checkName: z.string(),
+});
+export type GithubCheckStepsParams = z.infer<typeof GithubCheckStepsParamsSchema>;
+
+export const CheckStepSchema = z.object({
+  name: z.string(),
+  status: z.enum(["queued", "in_progress", "completed"]),
+  conclusion: z
+    .enum([
+      "success",
+      "failure",
+      "neutral",
+      "cancelled",
+      "skipped",
+      "timed_out",
+      "action_required",
+      "stale",
+    ])
+    .optional(),
+  number: z.number(),
+  startedAt: z.number().optional(),
+  completedAt: z.number().optional(),
+});
+export type CheckStep = z.infer<typeof CheckStepSchema>;
+
+export const GithubCheckStepsResultSchema = z.object({
+  steps: z.array(CheckStepSchema),
+});
+export type GithubCheckStepsResult = z.infer<typeof GithubCheckStepsResultSchema>;
+
+export const GithubRerunChecksParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GithubRerunChecksParams = z.infer<typeof GithubRerunChecksParamsSchema>;
+
+export const GithubRerunChecksResultSchema = z.object({
+  ok: z.literal(true),
+  rerunCount: z.number(),
+});
+export type GithubRerunChecksResult = z.infer<typeof GithubRerunChecksResultSchema>;
+
+export const GithubCancelChecksParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GithubCancelChecksParams = z.infer<typeof GithubCancelChecksParamsSchema>;
+
+export const GithubCancelChecksResultSchema = z.object({
+  ok: z.literal(true),
+  cancelledCount: z.number(),
+});
+export type GithubCancelChecksResult = z.infer<typeof GithubCancelChecksResultSchema>;
+
+export const GithubCreatePrParamsSchema = z.object({
+  idempotencyKey: z.string(),
+  worktree: z.string(),
+});
+export type GithubCreatePrParams = z.infer<typeof GithubCreatePrParamsSchema>;
+
+export const GithubCreatePrResultSchema = z.object({
+  pr: PullRequestInfoSchema,
+});
+export type GithubCreatePrResult = z.infer<typeof GithubCreatePrResultSchema>;
 
 export const FsReadParamsSchema = z.object({
   idempotencyKey: z.string(),
