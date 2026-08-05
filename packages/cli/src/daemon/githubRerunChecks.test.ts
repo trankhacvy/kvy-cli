@@ -76,8 +76,12 @@ describe("rerunGithubChecks", () => {
   });
 
   it("reruns cancelled workflow runs using the full-rerun endpoint", async () => {
-    const rerunFailedPost = vi.fn(async () => jsonResponse({}));
-    const rerunAllPost = vi.fn(async () => jsonResponse({}));
+    const rerunFailedPost = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      jsonResponse({}),
+    );
+    const rerunAllPost = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+      jsonResponse({}),
+    );
     const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
       const urlString = String(url);
       if (urlString.includes("/pulls")) return pullsResponse();
