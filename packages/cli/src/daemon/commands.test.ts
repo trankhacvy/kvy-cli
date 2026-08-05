@@ -87,7 +87,7 @@ describe("daemon commands", () => {
 
       expect(result).toEqual({
         code: 0,
-        message: "kvy daemon: already running (pid " + process.pid + ", port 4242)\n",
+        message: `kvy daemon: already running (pid ${process.pid}, port 4242)\n`,
       });
       expect(spawnStartSync).not.toHaveBeenCalled();
     });
