@@ -12,6 +12,7 @@ export function useCheckSteps(
     queryKey: ["github-check-steps", worktree, checkName],
     queryFn: () => actions.fetchCheckSteps(worktree, checkName as string),
     enabled: checkName !== null,
+    networkMode: "always",
   });
   return { steps: query.data, isLoading: query.isLoading, error: query.error };
 }

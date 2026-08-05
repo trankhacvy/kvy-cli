@@ -75,7 +75,40 @@ describe("rerunGithubChecks", () => {
     );
   });
 
-  it("reruns nothing when no workflow run failed", async () => {
+  it("reruns cancelled workflow runs using the full-rerun endpoint", async () => {
+    const rerunFailedPost = vi.fn(async () => jsonResponse({}));
+    const rerunAllPost = vi.fn(async () => jsonResponse({}));
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const urlString = String(url);
+      if (urlString.includes("/pulls")) return pullsResponse();
+      if (urlString.includes("/actions/runs?head_sha=")) {
+        return jsonResponse({
+          workflow_runs: [
+            { id: 1, status: "completed", conclusion: "failure" },
+            { id: 2, status: "completed", conclusion: "cancelled" },
+            { id: 3, status: "completed", conclusion: "success" },
+          ],
+        });
+      }
+      if (urlString.includes("/rerun-failed-jobs")) return rerunFailedPost(url, init);
+      if (urlString.endsWith("/rerun")) return rerunAllPost(url, init);
+      throw new Error(`fakeFetch: no handler for ${urlString}`);
+    });
+
+    const result = await rerunGithubChecks(PARAMS, { readToken: () => TOKEN, git, fetchImpl });
+
+    expect(result).toEqual({ ok: true, rerunCount: 2 });
+    expect(rerunFailedPost).toHaveBeenCalledExactlyOnceWith(
+      "https://api.github.com/repos/owner/repo/actions/runs/1/rerun-failed-jobs",
+      expect.anything(),
+    );
+    expect(rerunAllPost).toHaveBeenCalledExactlyOnceWith(
+      "https://api.github.com/repos/owner/repo/actions/runs/2/rerun",
+      expect.anything(),
+    );
+  });
+
+  it("reruns nothing when no workflow run failed or was cancelled", async () => {
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       const urlString = String(url);
       if (urlString.includes("/pulls")) return pullsResponse();

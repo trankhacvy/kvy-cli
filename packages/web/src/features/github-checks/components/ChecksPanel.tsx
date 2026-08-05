@@ -187,12 +187,14 @@ export function ChecksPanel({
     onSuccess: invalidateChecks,
   });
 
-  const hasFailedCheck =
+  const hasRerunableCheck =
     checks?.state === "ok" &&
     (checks.checks ?? []).some(
       (check) =>
         check.status === "completed" &&
-        (check.conclusion === "failure" || check.conclusion === "timed_out"),
+        (check.conclusion === "failure" ||
+          check.conclusion === "timed_out" ||
+          check.conclusion === "cancelled"),
     );
   const hasRunningCheck =
     checks?.state === "ok" &&
@@ -204,7 +206,7 @@ export function ChecksPanel({
     <div className="flex flex-col gap-2">
       <MachineOfflineNotice state={machine} />
       <div className="flex justify-end gap-2">
-        {hasFailedCheck && (
+        {hasRerunableCheck && (
           <Button
             size="sm"
             variant="outline"
@@ -213,7 +215,7 @@ export function ChecksPanel({
             onClick={() => rerunMutation.mutate()}
           >
             <RefreshCw className="size-3.5" />
-            Re-run failed checks
+            Re-run checks
           </Button>
         )}
         {hasRunningCheck && (

@@ -89,6 +89,11 @@ export function useGitPanel(
     queryKey: ["git-status", worktree],
     queryFn: () => actions.fetchStatus(worktree),
     refetchInterval: machineOnline ? LIVE_REFRESH_POLL_INTERVAL_MS : false,
+    // These are WebSocket RPC calls, not HTTP fetches — "network offline" detection
+    // via navigator.onLine doesn't apply. Without this, the stub-rejection on first
+    // mount puts the query into "paused" retry state that invalidateQueries can't
+    // escape, causing "Could not load git status" to stick permanently.
+    networkMode: "always",
   });
 
   const diffQuery = useQuery({
@@ -98,18 +103,21 @@ export function useGitPanel(
     // "all files" fetch racing ahead of `git.status` on first mount.
     enabled: statusQuery.isSuccess,
     refetchInterval: machineOnline ? LIVE_REFRESH_POLL_INTERVAL_MS : false,
+    networkMode: "always",
   });
 
   const branchesQuery = useQuery({
     queryKey: ["git-branches", worktree],
     queryFn: () => actions.listBranches(worktree),
     enabled: statusQuery.isSuccess,
+    networkMode: "always",
   });
 
   const remotesQuery = useQuery({
     queryKey: ["git-remotes", worktree],
     queryFn: () => actions.listRemotes(worktree),
     enabled: statusQuery.isSuccess,
+    networkMode: "always",
   });
 
   function invalidateStatusAndDiff(): void {
@@ -125,6 +133,15 @@ export function useGitPanel(
   // stuck showing "Could not load git status" even after the machine key is
   // ready. Force a refetch the moment `actions`'s identity changes after
   // mount — that's exactly when the stub gets replaced by the real one.
+  //
+  // `resetQueries` instead of `invalidateQueries`: when the browser tab is
+  // unfocused, TanStack Query's retryer pauses after the first failure
+  // (checking focusManager.isFocused() in `canContinue`). `invalidateQueries`
+  // on a "paused" query just calls `continueRetry()` which is a no-op while
+  // the tab is unfocused. `resetQueries` resets `fetchStatus` back to "idle"
+  // first, then `refetchQueries` creates a fresh retryer whose `canStart()`
+  // only checks `canFetch(networkMode)` (returns true for "always") — bypassing
+  // the focus check — so the real-actions fetch fires immediately regardless.
   const isFirstActionsRender = useRef(true);
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately keyed only on `actions` — this effect exists purely to notice the stub→real swap, not to re-run for every `worktree`/`queryClient` change (those are already handled by the queries' own `queryKey`s).
   useEffect(() => {
@@ -132,7 +149,8 @@ export function useGitPanel(
       isFirstActionsRender.current = false;
       return;
     }
-    invalidateStatusAndDiff();
+    void queryClient.resetQueries({ queryKey: ["git-status", worktree] });
+    void queryClient.resetQueries({ queryKey: ["git-diff", worktree] });
     void queryClient.invalidateQueries({ queryKey: ["git-branches", worktree] });
     void queryClient.invalidateQueries({ queryKey: ["git-remotes", worktree] });
   }, [actions]);

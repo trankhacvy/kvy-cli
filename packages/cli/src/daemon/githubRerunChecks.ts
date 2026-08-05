@@ -21,15 +21,16 @@ export async function rerunGithubChecks(
     fetchImpl,
   );
   const failedRuns = runs.filter((run) => run.conclusion === "failure");
-  await Promise.all(
-    failedRuns.map((run) =>
-      githubApiPost(
-        `https://api.github.com/repos/${target.repo.owner}/${target.repo.name}/actions/runs/${run.id}/rerun-failed-jobs`,
-        target.token,
-        {},
-        fetchImpl,
-      ),
+  const cancelledRuns = runs.filter((run) => run.conclusion === "cancelled");
+  const baseUrl = `https://api.github.com/repos/${target.repo.owner}/${target.repo.name}/actions/runs`;
+  await Promise.all([
+    ...failedRuns.map((run) =>
+      githubApiPost(`${baseUrl}/${run.id}/rerun-failed-jobs`, target.token, {}, fetchImpl),
     ),
-  );
-  return { ok: true, rerunCount: failedRuns.length };
+    // Cancelled runs have no failed jobs to target — rerun the whole run.
+    ...cancelledRuns.map((run) =>
+      githubApiPost(`${baseUrl}/${run.id}/rerun`, target.token, {}, fetchImpl),
+    ),
+  ]);
+  return { ok: true, rerunCount: failedRuns.length + cancelledRuns.length };
 }
