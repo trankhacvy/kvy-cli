@@ -1315,6 +1315,121 @@ describe("registerMachineRpcHandlers", () => {
     });
   });
 
+  describe("github.checkSteps", () => {
+    it("decrypts params, calls getGithubCheckSteps, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const getGithubCheckSteps = vi.fn(async () => ({
+        steps: [
+          {
+            name: "build",
+            status: "completed" as const,
+            conclusion: "success" as const,
+            number: 1,
+          },
+        ],
+      }));
+      register(socket, { getGithubCheckSteps });
+
+      const params = { idempotencyKey: "idem_gh_steps_1", worktree: "/repo", checkName: "build" };
+      const response = await callAndAwaitAck(socket, "github.checkSteps", seal(params, DEK));
+
+      expect(getGithubCheckSteps).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        steps: [{ name: "build", status: "completed", conclusion: "success", number: 1 }],
+      });
+    });
+  });
+
+  describe("github.rerunChecks", () => {
+    it("decrypts params, calls rerunGithubChecks, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const rerunGithubChecks = vi.fn(async () => ({ ok: true as const, rerunCount: 1 }));
+      register(socket, { rerunGithubChecks });
+
+      const params = { idempotencyKey: "idem_gh_rerun_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "github.rerunChecks", seal(params, DEK));
+
+      expect(rerunGithubChecks).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ ok: true, rerunCount: 1 });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of rerunning again", async () => {
+      const socket = new FakeSocket();
+      const rerunGithubChecks = vi.fn(async () => ({ ok: true as const, rerunCount: 1 }));
+      register(socket, { rerunGithubChecks });
+
+      const params = { idempotencyKey: "idem_gh_rerun_2", worktree: "/repo" };
+      await callAndAwaitAck(socket, "github.rerunChecks", seal(params, DEK));
+      await callAndAwaitAck(socket, "github.rerunChecks", seal(params, DEK));
+
+      expect(rerunGithubChecks).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("github.cancelChecks", () => {
+    it("decrypts params, calls cancelGithubChecks, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const cancelGithubChecks = vi.fn(async () => ({ ok: true as const, cancelledCount: 1 }));
+      register(socket, { cancelGithubChecks });
+
+      const params = { idempotencyKey: "idem_gh_cancel_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "github.cancelChecks", seal(params, DEK));
+
+      expect(cancelGithubChecks).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({ ok: true, cancelledCount: 1 });
+    });
+  });
+
+  describe("github.createPr", () => {
+    it("decrypts params, calls createGithubPr, and seals the result", async () => {
+      const socket = new FakeSocket();
+      const createGithubPr = vi.fn(async () => ({
+        pr: {
+          number: 1,
+          title: "t",
+          url: "https://github.com/a/b/pull/1",
+          state: "open" as const,
+          headSha: "sha1",
+        },
+      }));
+      register(socket, { createGithubPr });
+
+      const params = { idempotencyKey: "idem_gh_create_pr_1", worktree: "/repo" };
+      const response = await callAndAwaitAck(socket, "github.createPr", seal(params, DEK));
+
+      expect(createGithubPr).toHaveBeenCalledExactlyOnceWith(params);
+      expect(open(response, DEK)).toEqual({
+        pr: {
+          number: 1,
+          title: "t",
+          url: "https://github.com/a/b/pull/1",
+          state: "open",
+          headSha: "sha1",
+        },
+      });
+    });
+
+    it("replays the cached result for a retried idempotencyKey instead of creating a second PR", async () => {
+      const socket = new FakeSocket();
+      const createGithubPr = vi.fn(async () => ({
+        pr: {
+          number: 1,
+          title: "t",
+          url: "https://github.com/a/b/pull/1",
+          state: "open" as const,
+          headSha: "sha1",
+        },
+      }));
+      register(socket, { createGithubPr });
+
+      const params = { idempotencyKey: "idem_gh_create_pr_2", worktree: "/repo" };
+      await callAndAwaitAck(socket, "github.createPr", seal(params, DEK));
+      await callAndAwaitAck(socket, "github.createPr", seal(params, DEK));
+
+      expect(createGithubPr).toHaveBeenCalledOnce();
+    });
+  });
+
   describe("commands.list", () => {
     it("decrypts params, calls listSlashCommands, and seals the result", async () => {
       const socket = new FakeSocket();

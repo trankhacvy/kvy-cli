@@ -176,6 +176,8 @@ describe("getGithubChecks", () => {
                 details_url: "https://ci.example.com/build",
                 started_at: "2024-01-01T00:00:00Z",
                 completed_at: "2024-01-01T00:01:00Z",
+                output: null,
+                app: { slug: "github-actions" },
               },
               {
                 name: "test",
@@ -184,6 +186,8 @@ describe("getGithubChecks", () => {
                 details_url: null,
                 started_at: "2024-01-01T00:00:30Z",
                 completed_at: null,
+                output: { summary: "still running" },
+                app: { slug: "vercel" },
               },
             ],
           }),
@@ -212,11 +216,14 @@ describe("getGithubChecks", () => {
           detailsUrl: "https://ci.example.com/build",
           startedAt: 1_704_067_200,
           completedAt: 1_704_067_260,
+          provider: "github-actions",
         },
         {
           name: "test",
           status: "in_progress",
           startedAt: 1_704_067_230,
+          summary: "still running",
+          provider: "other",
         },
       ],
     });

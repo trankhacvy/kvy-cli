@@ -12,7 +12,14 @@ const NOT_READY_MESSAGE = "Machine key isn't unwrapped yet. Try again in a momen
  * Structurally satisfies `GithubChecksActions`, mirroring
  * `features/git-diff/use-live-git-diff-actions.ts`'s `pendingGitDiffActions`. */
 function pendingGithubChecksActions(): GithubChecksActions {
-  return { fetchChecks: () => Promise.reject(new Error(NOT_READY_MESSAGE)) };
+  const notReady = () => Promise.reject(new Error(NOT_READY_MESSAGE));
+  return {
+    fetchChecks: notReady,
+    fetchCheckSteps: notReady,
+    rerunChecks: notReady,
+    cancelChecks: notReady,
+    createPr: notReady,
+  };
 }
 
 /**

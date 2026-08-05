@@ -1,6 +1,7 @@
 "use client";
 
 import type { CheckRun } from "@kvy/wire";
+import { useMutation } from "@tanstack/react-query";
 import { EllipsisVertical, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -24,7 +25,7 @@ import { ChecksPanel, useChecksPanel, useLiveGithubChecksActions } from "@/featu
 import { FileTree, useLiveRepoFilesActions, useRepoFiles } from "@/features/repo-files";
 import { saveDraft } from "@/features/session-control";
 import { looksLikeWorktreePath, useReviewSpawn } from "@/features/session-list";
-import { buildFixCiPrompt, CREATE_PR_PROMPT, REVIEW_PROMPT } from "@/lib/agent-prompts";
+import { buildFixCiPrompt, REVIEW_PROMPT } from "@/lib/agent-prompts";
 import { type MachineOnlineState, useMachineOnline } from "@/lib/use-machine-online";
 
 type PanelTab = "changes" | "files" | "checks";
@@ -147,6 +148,7 @@ function GitActionsDialog({
   canUseWorkspaceActions,
   onSendAgentPrompt,
   isSendingAgentPrompt,
+  onCreatePr,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -156,6 +158,7 @@ function GitActionsDialog({
   canUseWorkspaceActions: boolean;
   onSendAgentPrompt: (text: string) => void;
   isSendingAgentPrompt: boolean;
+  onCreatePr: () => void;
 }) {
   if (!panel.status) return null;
 
@@ -175,7 +178,7 @@ function GitActionsDialog({
                 onCommitAndPush={() =>
                   document.getElementById("git-toolbar-commit-message")?.focus()
                 }
-                onCreatePr={() => onSendAgentPrompt(CREATE_PR_PROMPT)}
+                onCreatePr={onCreatePr}
               />
               <CreatePrRow
                 checks={checks}
@@ -236,7 +239,15 @@ function ChangesTab({
   actionsDisabled: boolean;
 }) {
   const checksActions = useLiveGithubChecksActions(machineId);
-  const { checks } = useChecksPanel(checksActions, worktree, !machine.isKnownUnavailable);
+  const { checks, refetch: refetchChecks } = useChecksPanel(
+    checksActions,
+    worktree,
+    !machine.isKnownUnavailable,
+  );
+  const createPrMutation = useMutation({
+    mutationFn: () => checksActions.createPr(worktree),
+    onSuccess: () => void refetchChecks(),
+  });
   const [actionsOpen, setActionsOpen] = useState(false);
 
   if (!panel.status) return null;
@@ -282,6 +293,7 @@ function ChangesTab({
         canUseWorkspaceActions={canUseWorkspaceActions}
         onSendAgentPrompt={onSendAgentPrompt}
         isSendingAgentPrompt={isSendingAgentPrompt}
+        onCreatePr={() => createPrMutation.mutate()}
       />
     </div>
   );

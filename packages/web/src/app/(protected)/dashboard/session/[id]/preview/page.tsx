@@ -1,7 +1,7 @@
 import { SessionPreviewScreen } from "@/features/preview";
 
 // Static export (next.config.ts) prerenders every route at build time (same
-// constraint as `/dashboard/session/[id]/git/page.tsx`/`/dashboard/session/[id]/checks/page.tsx`)
+// constraint as `/dashboard/session/[id]/git/page.tsx`)
 // — `generateStaticParams` just needs one concrete id to emit this route's
 // HTML/JS shell; `demo` is an arbitrary placeholder. `SessionPreviewScreen`
 // resolves the session's real `machineId` off the live `['sync']` snapshot

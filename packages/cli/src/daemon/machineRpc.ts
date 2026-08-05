@@ -52,10 +52,26 @@ import {
   GitFilesParamsSchema,
   type GitFilesResult,
   GitFilesResultSchema,
+  type GithubCancelChecksParams,
+  GithubCancelChecksParamsSchema,
+  type GithubCancelChecksResult,
+  GithubCancelChecksResultSchema,
+  type GithubCheckStepsParams,
+  GithubCheckStepsParamsSchema,
+  type GithubCheckStepsResult,
+  GithubCheckStepsResultSchema,
   type GithubChecksParams,
   GithubChecksParamsSchema,
   type GithubChecksResult,
   GithubChecksResultSchema,
+  type GithubCreatePrParams,
+  GithubCreatePrParamsSchema,
+  type GithubCreatePrResult,
+  GithubCreatePrResultSchema,
+  type GithubRerunChecksParams,
+  GithubRerunChecksParamsSchema,
+  type GithubRerunChecksResult,
+  GithubRerunChecksResultSchema,
   type GitInitParams,
   GitInitParamsSchema,
   type GitInitResult,
@@ -165,7 +181,11 @@ import { getGitBranches as getGitBranchesDefault } from "./gitBranches.js";
 import { handleGitCommit as handleGitCommitDefault } from "./gitCommit.js";
 import { getGitDiff as getGitDiffDefault } from "./gitDiff.js";
 import { getGitFiles as getGitFilesDefault } from "./gitFiles.js";
+import { cancelGithubChecks as cancelGithubChecksDefault } from "./githubCancelChecks.js";
+import { getGithubCheckSteps as getGithubCheckStepsDefault } from "./githubCheckSteps.js";
 import { getGithubChecks as getGithubChecksDefault } from "./githubChecks.js";
+import { createGithubPr as createGithubPrDefault } from "./githubCreatePr.js";
+import { rerunGithubChecks as rerunGithubChecksDefault } from "./githubRerunChecks.js";
 import { handleGitInit as handleGitInitDefault } from "./gitInit.js";
 import { handleGitPush as handleGitPushDefault } from "./gitPush.js";
 import { getGitRemotes as getGitRemotesDefault } from "./gitRemotes.js";
@@ -208,6 +228,10 @@ export const MACHINE_RPC_METHODS = [
   "git.init",
   "git.setRemote",
   "github.checks",
+  "github.checkSteps",
+  "github.rerunChecks",
+  "github.cancelChecks",
+  "github.createPr",
   "commands.list",
   "git.files",
   "fs.read",
@@ -267,6 +291,14 @@ export interface MachineRpcDeps {
   gitSetRemote?: (params: GitSetRemoteParams) => Promise<GitSetRemoteResult>;
   /** Backs the `github.checks` RPC. Injectable for tests; defaults to `githubChecks.ts`. A handled "nothing to show yet" case is a result `state`, not a throw. */
   getGithubChecks?: (params: GithubChecksParams) => Promise<GithubChecksResult>;
+  /** Backs the `github.checkSteps` RPC. Injectable for tests; defaults to `githubCheckSteps.ts`. Throws on failure. */
+  getGithubCheckSteps?: (params: GithubCheckStepsParams) => Promise<GithubCheckStepsResult>;
+  /** Backs the `github.rerunChecks` RPC. Injectable for tests; defaults to `githubRerunChecks.ts`. Mutating — needs idempotency-key replay. */
+  rerunGithubChecks?: (params: GithubRerunChecksParams) => Promise<GithubRerunChecksResult>;
+  /** Backs the `github.cancelChecks` RPC. Injectable for tests; defaults to `githubCancelChecks.ts`. Mutating — needs idempotency-key replay. */
+  cancelGithubChecks?: (params: GithubCancelChecksParams) => Promise<GithubCancelChecksResult>;
+  /** Backs the `github.createPr` RPC. Injectable for tests; defaults to `githubCreatePr.ts`. Mutating — needs idempotency-key replay. */
+  createGithubPr?: (params: GithubCreatePrParams) => Promise<GithubCreatePrResult>;
   /** Backs the `commands.list` RPC. Injectable for tests; defaults to `slashCommands.ts`. Never throws. */
   listSlashCommands?: (params: SlashCommandsListParams) => Promise<SlashCommandsListResult>;
   /** Backs the `git.files` RPC. Injectable for tests; defaults to `gitFiles.ts`. Throws on failure. */
@@ -474,6 +506,14 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
   const getGitRemotes = deps.getGitRemotes ?? getGitRemotesDefault;
   const listSlashCommands = deps.listSlashCommands ?? listSlashCommandsDefault;
   const getGithubChecks = deps.getGithubChecks ?? getGithubChecksDefault;
+  const getGithubCheckSteps = deps.getGithubCheckSteps ?? getGithubCheckStepsDefault;
+  const cachedRerunGithubChecks = withIdempotencyCache(
+    deps.rerunGithubChecks ?? rerunGithubChecksDefault,
+  );
+  const cachedCancelGithubChecks = withIdempotencyCache(
+    deps.cancelGithubChecks ?? cancelGithubChecksDefault,
+  );
+  const cachedCreateGithubPr = withIdempotencyCache(deps.createGithubPr ?? createGithubPrDefault);
   const getGitFiles = deps.getGitFiles ?? getGitFilesDefault;
   const readFile = deps.readFile ?? readFileDefault;
   const getProviderAccountInfo = deps.getProviderAccountInfo ?? getProviderAccountInfoDefault;
@@ -660,6 +700,26 @@ export function registerMachineRpcHandlers(deps: MachineRpcDeps): MachineRpcHand
       paramsSchema: GithubChecksParamsSchema,
       resultSchema: GithubChecksResultSchema,
       handle: getGithubChecks as (params: unknown) => Promise<unknown>,
+    },
+    "github.checkSteps": {
+      paramsSchema: GithubCheckStepsParamsSchema,
+      resultSchema: GithubCheckStepsResultSchema,
+      handle: getGithubCheckSteps as (params: unknown) => Promise<unknown>,
+    },
+    "github.rerunChecks": {
+      paramsSchema: GithubRerunChecksParamsSchema,
+      resultSchema: GithubRerunChecksResultSchema,
+      handle: cachedRerunGithubChecks as (params: unknown) => Promise<unknown>,
+    },
+    "github.cancelChecks": {
+      paramsSchema: GithubCancelChecksParamsSchema,
+      resultSchema: GithubCancelChecksResultSchema,
+      handle: cachedCancelGithubChecks as (params: unknown) => Promise<unknown>,
+    },
+    "github.createPr": {
+      paramsSchema: GithubCreatePrParamsSchema,
+      resultSchema: GithubCreatePrResultSchema,
+      handle: cachedCreateGithubPr as (params: unknown) => Promise<unknown>,
     },
     "provider.account": {
       paramsSchema: ProviderAccountParamsSchema,

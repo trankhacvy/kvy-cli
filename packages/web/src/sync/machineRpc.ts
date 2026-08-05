@@ -94,8 +94,16 @@ import {
   GitDiffResultSchema,
   type GitFilesParams,
   GitFilesResultSchema,
+  type GithubCancelChecksParams,
+  GithubCancelChecksResultSchema,
+  type GithubCheckStepsParams,
+  GithubCheckStepsResultSchema,
   type GithubChecksParams,
   GithubChecksResultSchema,
+  type GithubCreatePrParams,
+  GithubCreatePrResultSchema,
+  type GithubRerunChecksParams,
+  GithubRerunChecksResultSchema,
   type GitInitParams,
   GitInitResultSchema,
   type GitPushParams,
@@ -159,7 +167,11 @@ export type {
   GitCommitParams,
   GitDiffParams,
   GitFilesParams,
+  GithubCancelChecksParams,
+  GithubCheckStepsParams,
   GithubChecksParams,
+  GithubCreatePrParams,
+  GithubRerunChecksParams,
   GitInitParams,
   GitPushParams,
   GitRemotesParams,
@@ -211,6 +223,10 @@ export interface MachineRpcParams {
   "git.init": GitInitParams;
   "git.setRemote": GitSetRemoteParams;
   "github.checks": GithubChecksParams;
+  "github.checkSteps": GithubCheckStepsParams;
+  "github.rerunChecks": GithubRerunChecksParams;
+  "github.cancelChecks": GithubCancelChecksParams;
+  "github.createPr": GithubCreatePrParams;
   "commands.list": SlashCommandsListParams;
   "git.files": GitFilesParams;
   "fs.read": FsReadParams;
@@ -251,6 +267,10 @@ export interface MachineRpcResults {
   "git.init": import("@kvy/wire").GitInitResult;
   "git.setRemote": import("@kvy/wire").GitSetRemoteResult;
   "github.checks": import("@kvy/wire").GithubChecksResult;
+  "github.checkSteps": import("@kvy/wire").GithubCheckStepsResult;
+  "github.rerunChecks": import("@kvy/wire").GithubRerunChecksResult;
+  "github.cancelChecks": import("@kvy/wire").GithubCancelChecksResult;
+  "github.createPr": import("@kvy/wire").GithubCreatePrResult;
   "commands.list": import("@kvy/wire").SlashCommandsListResult;
   "git.files": import("@kvy/wire").GitFilesResult;
   "fs.read": import("@kvy/wire").FsReadResult;
@@ -292,6 +312,10 @@ const RESULT_SCHEMAS: { [M in MachineRpcMethod]: ZodType<MachineRpcResults[M]> }
   "git.init": GitInitResultSchema,
   "git.setRemote": GitSetRemoteResultSchema,
   "github.checks": GithubChecksResultSchema,
+  "github.checkSteps": GithubCheckStepsResultSchema,
+  "github.rerunChecks": GithubRerunChecksResultSchema,
+  "github.cancelChecks": GithubCancelChecksResultSchema,
+  "github.createPr": GithubCreatePrResultSchema,
   "commands.list": SlashCommandsListResultSchema,
   "git.files": GitFilesResultSchema,
   "fs.read": FsReadResultSchema,

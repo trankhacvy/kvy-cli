@@ -1,6 +1,5 @@
 export { CheckRunRow } from "./components/CheckRunRow";
 export { ChecksPanel } from "./components/ChecksPanel";
-export { SessionChecksScreen } from "./components/SessionChecksScreen";
 export { machineRpcToGithubChecksActions } from "./live-actions";
 export {
   createMockGithubChecksActions,
