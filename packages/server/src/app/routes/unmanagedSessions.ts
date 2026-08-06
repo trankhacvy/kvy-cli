@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { encodeBox } from "../../db/box.js";
-import { machines, unmanagedSessions } from "../../db/schema.js";
+import { machines, unmanagedSessions, workspaces } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
 import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
@@ -61,6 +61,13 @@ export function buildUnmanagedSessionsRoutes(
           where: and(eq(machines.id, machineId), eq(machines.accountId, accountId)),
         });
         if (!machine) return reply.code(404).send({});
+
+        // `workspaceId` must be an opaque `workspaces.id` this account owns —
+        // never a raw path (mirrors `POST /v1/sessions`'s same check).
+        const workspace = await db.query.workspaces.findFirst({
+          where: and(eq(workspaces.id, workspaceId), eq(workspaces.accountId, accountId)),
+        });
+        if (!workspace) return reply.code(404).send({});
 
         const outcome = await db.transaction(async (tx) => {
           const existing = await tx.query.unmanagedSessions.findFirst({

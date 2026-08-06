@@ -27,6 +27,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
   return {
     id: "s1",
     workspaceId: "w1",
+    path: null,
     machineId: "m1",
     title: "session",
     provider: "claude-code",
@@ -41,14 +42,14 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
 
 function singleMachineGroup(): WorkspaceGroup {
   return {
-    workspace: { id: "/repo/kvy", name: "kvy" },
+    workspace: { id: "/repo/kvy", name: "kvy", path: "/repo/kvy" },
     sessions: [session({ id: "a", machineId: "m1", updatedAt: 10 })],
   };
 }
 
 function multiMachineGroup(): WorkspaceGroup {
   return {
-    workspace: { id: "/repo/kvy", name: "kvy" },
+    workspace: { id: "/repo/kvy", name: "kvy", path: "/repo/kvy" },
     sessions: [
       session({ id: "a", machineId: "m1", updatedAt: 100 }),
       session({ id: "b", machineId: "m2", updatedAt: 10 }),

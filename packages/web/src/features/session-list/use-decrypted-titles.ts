@@ -8,11 +8,15 @@ import type { CryptoBridgeClient } from "@/crypto";
 const UNTITLED_SESSION = "(untitled session)";
 const UNNAMED_MACHINE = "(unnamed machine)";
 
-/** A session's decrypted title plus its Pin flag — both live in the same
- * encrypted metadata blob, so one `open()` call resolves both at once. */
+/** A session's decrypted title, Pin flag, and real working-directory path —
+ * all live in the same encrypted metadata blob, so one `open()` call resolves
+ * all three at once. `path` is `null` until decrypted (or if the row predates
+ * this field / decryption fails) — callers must treat that as "not known
+ * yet," the same as a session that hasn't synced. */
 interface DecryptedSessionMeta {
   title: string;
   pinned: boolean;
+  path: string | null;
 }
 
 export interface DecryptedTitles {
@@ -28,17 +32,21 @@ async function decryptSessionMeta(
 ): Promise<DecryptedSessionMeta> {
   try {
     const ok = await bridge.setSessionKey(decodeBase64(session.dek));
-    if (!ok) return { title: UNTITLED_SESSION, pinned: false };
-    const opened = await bridge.open<{ title?: unknown; pinned?: unknown }>(session.metadata.value);
+    if (!ok) return { title: UNTITLED_SESSION, pinned: false, path: null };
+    const opened = await bridge.open<{ title?: unknown; pinned?: unknown; path?: unknown }>(
+      session.metadata.value,
+    );
     const title =
       opened && typeof opened.title === "string" && opened.title.length > 0
         ? opened.title
         : UNTITLED_SESSION;
     const pinned = opened?.pinned === true;
-    return { title, pinned };
+    const path =
+      opened && typeof opened.path === "string" && opened.path.length > 0 ? opened.path : null;
+    return { title, pinned, path };
   } catch (err) {
     console.error(`use-decrypted-titles: failed to decrypt session ${session.id}'s metadata`, err);
-    return { title: UNTITLED_SESSION, pinned: false };
+    return { title: UNTITLED_SESSION, pinned: false, path: null };
   }
 }
 

@@ -29,6 +29,12 @@ export {
   libsodiumPublicKeyFromSecretKey,
   ready,
 } from "./encryption.web.js";
-export { deriveBlobKey, deriveKeyTree, signDetached, verifyDetached } from "./keys.js";
+export {
+  deriveBlobKey,
+  deriveKeyTree,
+  hashWorkspacePath,
+  signDetached,
+  verifyDetached,
+} from "./keys.js";
 export { pinReady, unwrapWithPin, wrapWithPin } from "./pin.web.js";
 export * from "./types.js";

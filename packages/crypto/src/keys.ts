@@ -6,7 +6,8 @@
  *  ├─ HKDF("kvy-auth")        → ed25519 seed → signing keypair   (server auth challenge)
  *  ├─ HKDF("kvy-content")     → x25519 seed  → content keypair   (wraps DEKs)
  *  ├─ HKDF("kvy-anon")        → anonId (16 hex)                  (analytics identity)
- *  └─ HKDF("kvy-blob-master") → legacy/global blob key           (rarely used)
+ *  ├─ HKDF("kvy-blob-master") → legacy/global blob key           (rarely used)
+ *  └─ HKDF("kvy-workspace-index") → workspaceIndexKey            (workspace-path blind index)
  *
  * Synchronous because tweetnacl.hash (SHA-512) is pure JS — no async WASM/native
  * boundary. Deliberately dependency-free of `./encryption(.web).ts` so it needs
@@ -90,6 +91,7 @@ export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
   const contentSeed = deriveDomainSeed(masterSecret, "kvy-content");
   const anonSeed = deriveDomainSeed(masterSecret, "kvy-anon");
   const blobMasterKey = deriveDomainSeed(masterSecret, "kvy-blob-master");
+  const workspaceIndexKey = deriveDomainSeed(masterSecret, "kvy-workspace-index");
 
   const signing = tweetnacl.sign.keyPair.fromSeed(authSeed);
 
@@ -111,7 +113,21 @@ export function deriveKeyTree(masterSecret: Uint8Array): KeyTree {
     },
     anonId: toHex(anonSeed).slice(0, 16),
     blobMasterKey,
+    workspaceIndexKey,
   };
+}
+
+/**
+ * Deterministic, server-unguessable blind index for a workspace's real
+ * absolute path: HMAC-SHA512 (truncated to 32 bytes, hex-encoded) keyed by
+ * `KeyTree.workspaceIndexKey`. The same (key, path) pair always produces the
+ * same hash, so it doubles as the workspace create-or-get idempotency key
+ * (`POST /v1/workspaces`) without ever exposing the path itself to the
+ * server — unlike a plain unkeyed hash, the server can't dictionary-attack
+ * this since it never has `workspaceIndexKey`.
+ */
+export function hashWorkspacePath(workspaceIndexKey: Uint8Array, path: string): string {
+  return toHex(hmacSha512(workspaceIndexKey, new TextEncoder().encode(path)).slice(0, 32));
 }
 
 /**

@@ -71,7 +71,7 @@ export function SessionCard({
           pinned={session.pinned}
           status={session.status}
           machineId={session.machineId}
-          workspaceId={session.workspaceId}
+          workspaceId={session.path}
         />
       </div>
     </div>

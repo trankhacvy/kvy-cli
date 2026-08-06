@@ -17,6 +17,7 @@ import type {
 import type { DaemonState } from "../daemon/state.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
+import type { resolveServerWorkspaceId as resolveServerWorkspaceIdType } from "../session/resolveServerWorkspaceId.js";
 import type { SessionClientHandle } from "../session/sessionClient.js";
 import type { registerWorkspace as registerWorkspaceType } from "../workspace/registry.js";
 import { runStartCodexCommand, type StartCodexCommandDeps } from "./startCodex.js";
@@ -155,6 +156,11 @@ function baseDeps(overrides: Partial<StartCodexCommandDeps> = {}): {
           ReturnType<typeof registerWorkspaceType>
         >,
     ) as unknown as typeof registerWorkspaceType,
+    // Never let a unit test hit the real `/v1/workspaces` create-or-get —
+    // a `null` workspaceId is a safe, fully-supported fallback.
+    resolveServerWorkspaceId: vi.fn(
+      async () => null,
+    ) as unknown as typeof resolveServerWorkspaceIdType,
     // A1: never let a unit test hit a real daemon control server — default
     // to the always-succeeding "no daemon" fake, same precedent as
     // `start.test.ts`'s `baseDeps`.
@@ -515,7 +521,7 @@ describe("runStartCodexCommand", () => {
     expect(bootstrapParams.metadata.model).toBeUndefined();
   });
 
-  it("registers workingDirectory as a workspace and threads its id into bootstrapSession", async () => {
+  it("registers workingDirectory as a workspace and threads its OPAQUE id (never the raw path) into bootstrapSession", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_codex_1",
       dek: getRandomBytes(32),
@@ -529,9 +535,12 @@ describe("runStartCodexCommand", () => {
           registeredAt: "2026-01-01T00:00:00.000Z",
         }) as unknown as Awaited<ReturnType<typeof registerWorkspaceType>>,
     );
+    const resolveServerWorkspaceId = vi.fn(async () => "ws_opaque_1");
     const { deps, releaseExit } = baseDeps({
       bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
       registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+      resolveServerWorkspaceId:
+        resolveServerWorkspaceId as unknown as typeof resolveServerWorkspaceIdType,
     });
 
     const run = runStartCodexCommand(deps);
@@ -539,12 +548,19 @@ describe("runStartCodexCommand", () => {
     await run;
 
     expect(registerWorkspace).toHaveBeenCalledWith("/fake/workdir");
+    expect(resolveServerWorkspaceId).toHaveBeenCalledWith(
+      "/fake/workdir",
+      expect.objectContaining({
+        contentPublicKey: expect.anything(),
+        workspaceIndexKey: expect.anything(),
+      }),
+    );
     expect(bootstrapSession).toHaveBeenCalledOnce();
     const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
       unknown,
       { workspaceId?: string | null },
     ];
-    expect(bootstrapParams.workspaceId).toBe("/fake/workdir");
+    expect(bootstrapParams.workspaceId).toBe("ws_opaque_1");
   });
 
   it("still starts the session with a null workspaceId when registerWorkspace fails, instead of failing the whole start", async () => {

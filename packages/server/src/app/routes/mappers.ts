@@ -60,7 +60,7 @@ export function toWorkspaceRow(row: typeof workspaces.$inferSelect): WorkspaceRo
   return {
     id: row.id,
     accountId: row.accountId,
-    path: row.path,
+    pathHash: row.pathHash,
     metadata: { value: decodeBox(row.metadata), version: row.metadataVersion },
     dek: encodeBase64(row.dek),
   };

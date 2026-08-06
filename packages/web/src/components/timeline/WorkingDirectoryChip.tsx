@@ -18,14 +18,14 @@ export function workingDirectoryBasename(path: string): string {
 
 /**
  * One-click "copy working directory path" affordance in the session header.
- * `path` is the session's registered
- * workspace path (`SessionRow.workspaceId`, which *is* the workspace's real
- * absolute directory path — the same convention `SessionGitScreen`/
- * `live-source.ts` already rely on) — shown as a quiet basename chip with
- * the full path on hover (native `title`, same tooltip convention as the
- * header's other disabled buttons) and copyable via the shared `CopyButton`.
- * The caller hides this entirely when there's no workspace path recorded
- * yet, rather than rendering a misleading empty chip.
+ * `path` is the session's real working-directory path, decrypted from
+ * `session.metadata` — never `SessionRow.workspaceId`, which is an opaque
+ * `workspaces.id` the server assigns, not a path (see `use-session-workspace-
+ * path.ts`) — shown as a quiet basename chip with the full path on hover
+ * (native `title`, same tooltip convention as the header's other disabled
+ * buttons) and copyable via the shared `CopyButton`. The caller hides this
+ * entirely when there's no workspace path decrypted yet, rather than
+ * rendering a misleading empty chip.
  */
 export function WorkingDirectoryChip({ path }: { path: string }) {
   return (

@@ -416,6 +416,31 @@
             "values": ["usage"]
           }
         }
+      },
+      {
+        "kind": "object",
+        "fields": {
+          "steps": {
+            "kind": "array",
+            "element": {
+              "kind": "object",
+              "fields": {
+                "status": {
+                  "kind": "enum",
+                  "options": ["completed", "in_progress", "pending"]
+                },
+                "text": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "t": {
+            "kind": "literal",
+            "values": ["plan"]
+          }
+        }
       }
     ]
   },
@@ -764,6 +789,31 @@
                 "values": ["usage"]
               }
             }
+          },
+          {
+            "kind": "object",
+            "fields": {
+              "steps": {
+                "kind": "array",
+                "element": {
+                  "kind": "object",
+                  "fields": {
+                    "status": {
+                      "kind": "enum",
+                      "options": ["completed", "in_progress", "pending"]
+                    },
+                    "text": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "t": {
+                "kind": "literal",
+                "values": ["plan"]
+              }
+            }
           }
         ]
       },
@@ -846,6 +896,13 @@
       "id": {
         "kind": "leaf",
         "type": "string"
+      },
+      "keyEpoch": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "number"
+        }
       },
       "machineId": {
         "kind": "nullable",
@@ -1109,6 +1166,13 @@
                   "id": {
                     "kind": "leaf",
                     "type": "string"
+                  },
+                  "keyEpoch": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "number"
+                    }
                   },
                   "machineId": {
                     "kind": "nullable",
@@ -1704,6 +1768,13 @@
                     }
                   },
                   "path": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  },
+                  "pathHash": {
                     "kind": "leaf",
                     "type": "string"
                   }
@@ -1760,6 +1831,13 @@
                     }
                   },
                   "path": {
+                    "kind": "optional",
+                    "inner": {
+                      "kind": "leaf",
+                      "type": "string"
+                    }
+                  },
+                  "pathHash": {
                     "kind": "leaf",
                     "type": "string"
                   }
@@ -2225,6 +2303,13 @@
         "kind": "leaf",
         "type": "string"
       },
+      "remote": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "boolean"
+        }
+      },
       "upstream": {
         "kind": "optional",
         "inner": {
@@ -2263,6 +2348,13 @@
             "name": {
               "kind": "leaf",
               "type": "string"
+            },
+            "remote": {
+              "kind": "optional",
+              "inner": {
+                "kind": "leaf",
+                "type": "boolean"
+              }
             },
             "upstream": {
               "kind": "optional",
@@ -2589,6 +2681,13 @@
         "kind": "leaf",
         "type": "string"
       },
+      "provider": {
+        "kind": "optional",
+        "inner": {
+          "kind": "enum",
+          "options": ["github-actions", "other"]
+        }
+      },
       "startedAt": {
         "kind": "optional",
         "inner": {
@@ -2599,6 +2698,13 @@
       "status": {
         "kind": "enum",
         "options": ["completed", "in_progress", "queued"]
+      },
+      "summary": {
+        "kind": "optional",
+        "inner": {
+          "kind": "leaf",
+          "type": "string"
+        }
       }
     }
   },
@@ -2685,6 +2791,13 @@
                 "kind": "leaf",
                 "type": "string"
               },
+              "provider": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "enum",
+                  "options": ["github-actions", "other"]
+                }
+              },
               "startedAt": {
                 "kind": "optional",
                 "inner": {
@@ -2695,6 +2808,13 @@
               "status": {
                 "kind": "enum",
                 "options": ["completed", "in_progress", "queued"]
+              },
+              "summary": {
+                "kind": "optional",
+                "inner": {
+                  "kind": "leaf",
+                  "type": "string"
+                }
               }
             }
           }
@@ -3615,6 +3735,31 @@
                   "t": {
                     "kind": "literal",
                     "values": ["usage"]
+                  }
+                }
+              },
+              {
+                "kind": "object",
+                "fields": {
+                  "steps": {
+                    "kind": "array",
+                    "element": {
+                      "kind": "object",
+                      "fields": {
+                        "status": {
+                          "kind": "enum",
+                          "options": ["completed", "in_progress", "pending"]
+                        },
+                        "text": {
+                          "kind": "leaf",
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "t": {
+                    "kind": "literal",
+                    "values": ["plan"]
                   }
                 }
               }

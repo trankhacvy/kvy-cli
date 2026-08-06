@@ -28,7 +28,7 @@ export function SessionActionsMenu({
   title,
   status,
   machineId,
-  workspaceId,
+  workspacePath,
 }: {
   sessionId: string;
   /** Decrypted session title (`useSessionTitle`), for the Rename dialog's
@@ -36,9 +36,11 @@ export function SessionActionsMenu({
   title: string;
   status: SessionRow["status"];
   machineId: string | null;
-  /** This session's `workspaceId` — `null` (or a plain repo-root path)
-   * means Archive has no worktree to clean up. */
-  workspaceId: string | null;
+  /** This session's real working-directory path, decrypted from
+   * `session.metadata` (never `session.workspaceId`, which is an opaque id) —
+   * `null` (or a plain repo-root path) means Archive has no worktree to
+   * clean up. */
+  workspacePath: string | null;
 }) {
   const router = useRouter();
   const [renameOpen, setRenameOpen] = useState(false);
@@ -89,7 +91,7 @@ export function SessionActionsMenu({
         title={title}
         status={status}
         machineId={machineId}
-        workspaceId={workspaceId}
+        workspaceId={workspacePath}
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
         onArchived={() => router.push("/dashboard/")}

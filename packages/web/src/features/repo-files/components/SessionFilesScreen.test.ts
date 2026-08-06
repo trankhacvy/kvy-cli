@@ -26,6 +26,18 @@ vi.mock("./RepoFilesPanel", () => ({
     createElement("div", { "data-testid": "repo-files-panel" }, `${machineId}::${worktree}`),
 }));
 
+// `useSessionWorkspacePath` decrypts `session.metadata` via an effect-driven
+// crypto bridge that `renderToStaticMarkup` never flushes — mocked here to a
+// canned decrypted value so these tests can still verify SessionFilesScreen
+// reads the real path from the RIGHT source (decrypted metadata, never the
+// now-opaque `session.workspaceId`) without needing a live worker.
+const { useSessionWorkspacePathMock } = vi.hoisted(() => ({
+  useSessionWorkspacePathMock: vi.fn(),
+}));
+vi.mock("@/features/session-list/use-session-workspace-path", () => ({
+  useSessionWorkspacePath: useSessionWorkspacePathMock,
+}));
+
 function box(c: string): EncryptedBox {
   return { t: "enc", v: 1, c };
 }
@@ -79,17 +91,20 @@ async function renderScreen(sessionId: string, snapshot: SyncSnapshot | undefine
 
 describe("SessionFilesScreen", () => {
   it("shows a loading state before the sync snapshot has populated the cache", async () => {
+    useSessionWorkspacePathMock.mockReturnValue(null);
     const html = await renderScreen("sess-1", undefined);
     expect(html).toContain("Loading session");
     expect(html).not.toContain("repo-files-panel");
   });
 
   it("shows a not-found state when the session id isn't in the synced snapshot", async () => {
+    useSessionWorkspacePathMock.mockReturnValue(null);
     const html = await renderScreen("sess-missing", makeSnapshot([makeSession()]));
     expect(html).toContain("Could not find session sess-missing");
   });
 
-  it("shows a missing-fields state when the session has no machineId/workspaceId recorded yet", async () => {
+  it("shows a missing-fields state when the session has no machineId recorded, or the workspace path hasn't decrypted yet", async () => {
+    useSessionWorkspacePathMock.mockReturnValue(null);
     const html = await renderScreen(
       "sess-1",
       makeSnapshot([makeSession({ machineId: null, workspaceId: null })]),
@@ -97,15 +112,18 @@ describe("SessionFilesScreen", () => {
     expect(html).toContain("no machine/workspace recorded yet");
   });
 
-  it("passes the session's real (plaintext) machineId/workspaceId through to the repo files panel", async () => {
+  it("passes machineId and the DECRYPTED workspace path through to the repo files panel, never session.workspaceId (which is now an opaque id)", async () => {
+    useSessionWorkspacePathMock.mockReturnValue("/repo/work");
     const html = await renderScreen(
       "sess-1",
-      makeSnapshot([makeSession({ machineId: "mach-42", workspaceId: "/repo/work" })]),
+      makeSnapshot([makeSession({ machineId: "mach-42", workspaceId: "ws_opaque_ignored" })]),
     );
     expect(html).toContain("mach-42::/repo/work");
+    expect(html).not.toContain("ws_opaque_ignored");
   });
 
-  it("only renders the repo files panel once both machineId and workspaceId are present", async () => {
+  it("only renders the repo files panel once both machineId and a decrypted workspace path are present", async () => {
+    useSessionWorkspacePathMock.mockReturnValue(null);
     const html = await renderScreen(
       "sess-1",
       makeSnapshot([makeSession({ machineId: "mach-42", workspaceId: null })]),

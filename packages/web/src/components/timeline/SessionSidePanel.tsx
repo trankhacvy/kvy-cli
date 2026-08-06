@@ -383,7 +383,9 @@ export function SessionSidePanel({
   defaultTab?: PanelTab;
   /** The session's owning machine (`SessionRow.machineId`). */
   machineId?: string;
-  /** The session's workspace path (`SessionRow.workspaceId`). */
+  /** The session's real working-directory path, decrypted from
+   * `session.metadata` (never `SessionRow.workspaceId`, which is an opaque
+   * id) — see `use-session-workspace-path.ts`. */
   worktree?: string;
   /** `deriveWorking(items, ephemeralWorking)` (`SessionTimelineScreen.tsx`) — the agent's own file-writing tool calls never invalidate the Changes/All Files queries themselves (no push channel of their own, `use-git-panel.ts`'s doc comment), so this panel refetches both on the true -> false ("turn just ended") edge instead (`use-refetch-on-turn-end.ts`). Defaults to `false` for callers that don't track it (no refetch-on-turn-end, today's behavior). */
   working?: boolean;

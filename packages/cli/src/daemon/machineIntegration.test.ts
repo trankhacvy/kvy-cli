@@ -339,3 +339,143 @@ describe("startMachineIntegration — transcript indexer isManaged wiring", () =
     await handle?.stop();
   });
 });
+
+describe("startMachineIntegration — transcript indexer opaque-workspaceId resolution", () => {
+  let homeDir: string;
+  let masterSecret: Uint8Array;
+  let credentials: KvyCredentials;
+
+  beforeEach(async () => {
+    homeDir = await mkdtemp(path.join(tmpdir(), "kvy-machine-integration-workspace-id-"));
+    masterSecret = getRandomBytes(32);
+    credentials = {
+      refreshToken: "test-refresh-token",
+      keyMaterial: plaintextFallbackKeyMaterial(masterSecret),
+    };
+    vi.clearAllMocks();
+  });
+
+  afterEach(async () => {
+    await rm(homeDir, { recursive: true, force: true });
+  });
+
+  /** Wraps `fakeServer()`'s fetch (handles `/v1/auth/refresh` + `/v1/machines`
+   * already) with `/v1/workspaces` and `/v1/unmanaged-sessions` handling —
+   * `workspacesFetch` lets each test control the `/v1/workspaces` response
+   * per call (to simulate a transient failure then a later success). */
+  function fetchImplWithWorkspaces(
+    machinesFetch: typeof fetch,
+    workspacesFetch: (call: number) => Response,
+  ) {
+    let workspacesCallCount = 0;
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      const href = url.toString();
+      if (href.endsWith("/v1/workspaces")) {
+        workspacesCallCount++;
+        return workspacesFetch(workspacesCallCount);
+      }
+      if (href.endsWith("/v1/unmanaged-sessions")) {
+        return new Response(JSON.stringify({ ok: true }), { status: 201 });
+      }
+      return machinesFetch(url, init);
+    }) as unknown as typeof fetch;
+  }
+
+  function upsertParams(overrides: Partial<{ workspaceId: string; providerRef: string }> = {}) {
+    return {
+      machineId: "mach-irrelevant",
+      workspaceId: "/real/repo/path",
+      providerRef: "provider-1",
+      summary: { title: "t", lastActivity: 0, running: false },
+      ...overrides,
+    };
+  }
+
+  it("retries workspace-id resolution on a later upsert after a transient failure, instead of caching the null forever", async () => {
+    const machinesFetch = fakeServer().fetchImpl;
+    // First `/v1/workspaces` call fails (transient network/auth error); the second succeeds.
+    const fetchImpl = fetchImplWithWorkspaces(machinesFetch, (call) =>
+      call === 1
+        ? new Response("server error", { status: 500 })
+        : new Response(
+            JSON.stringify({
+              id: "ws_opaque_1",
+              accountId: "acct_1",
+              pathHash: "hash",
+              metadata: { value: { t: "enc", v: 1, c: "x" }, version: 0 },
+              dek: "",
+            }),
+            { status: 201 },
+          ),
+    );
+
+    const { startTranscriptIndexer } = await import("./transcriptIndexer.js");
+    const handle = await startMachineIntegration(
+      createMachineIntegrationDeps(
+        { homeDir, registry: { getSessions: () => [] } as never, awaiter: createSpawnAwaiter() },
+        {
+          logger: silentLogger(),
+          serverUrl: "http://localhost:4000",
+          fetchImpl,
+          ioFactory: () => new FakeSocket() as unknown as Socket,
+          readCredentials: () => credentials,
+        },
+      ),
+    );
+    expect(handle).not.toBeNull();
+    const indexerDeps = vi.mocked(startTranscriptIndexer).mock.calls[0]?.[0];
+    expect(indexerDeps).toBeDefined();
+
+    // First upsert: workspace-id resolution fails, so the upsert itself is
+    // skipped (no unmanaged-session row created for unresolvable workspace data).
+    const firstResult = await indexerDeps?.upsert(upsertParams());
+    expect(firstResult).toBe(false);
+
+    // Second upsert, same real path: must retry resolution (not replay a
+    // cached `null`) and succeed once the transient failure has cleared.
+    const secondResult = await indexerDeps?.upsert(upsertParams());
+    expect(secondResult).toBe(true);
+
+    await handle?.stop();
+  });
+
+  it("caches a successful workspace-id resolution: a later upsert for the same path doesn't re-hit /v1/workspaces", async () => {
+    const machinesFetch = fakeServer().fetchImpl;
+    const workspacesFetch = vi.fn(
+      (): Response =>
+        new Response(
+          JSON.stringify({
+            id: "ws_opaque_1",
+            accountId: "acct_1",
+            pathHash: "hash",
+            metadata: { value: { t: "enc", v: 1, c: "x" }, version: 0 },
+            dek: "",
+          }),
+          { status: 201 },
+        ),
+    );
+    const fetchImpl = fetchImplWithWorkspaces(machinesFetch, workspacesFetch);
+
+    const { startTranscriptIndexer } = await import("./transcriptIndexer.js");
+    const handle = await startMachineIntegration(
+      createMachineIntegrationDeps(
+        { homeDir, registry: { getSessions: () => [] } as never, awaiter: createSpawnAwaiter() },
+        {
+          logger: silentLogger(),
+          serverUrl: "http://localhost:4000",
+          fetchImpl,
+          ioFactory: () => new FakeSocket() as unknown as Socket,
+          readCredentials: () => credentials,
+        },
+      ),
+    );
+    const indexerDeps = vi.mocked(startTranscriptIndexer).mock.calls[0]?.[0];
+
+    expect(await indexerDeps?.upsert(upsertParams())).toBe(true);
+    expect(await indexerDeps?.upsert(upsertParams({ providerRef: "provider-2" }))).toBe(true);
+
+    expect(workspacesFetch).toHaveBeenCalledTimes(1);
+
+    await handle?.stop();
+  });
+});

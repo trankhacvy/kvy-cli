@@ -77,6 +77,20 @@ export interface CreateDekRequest {
   data: unknown;
 }
 
+/**
+ * Deterministic, server-unguessable blind index for a workspace's real
+ * absolute path (`hashWorkspacePath`/`KeyTree.workspaceIndexKey`, `@kvy/
+ * crypto` — same primitive the CLI uses at `session/resolveServerWorkspaceId.ts`),
+ * for the Workspace Settings dialog's `POST /v1/workspaces` create-or-get.
+ * The real path never leaves this request — only the hash crosses back to
+ * the main thread.
+ */
+export interface HashWorkspacePathRequest {
+  id: string;
+  type: "hashWorkspacePath";
+  path: string;
+}
+
 export interface SealRequest {
   id: string;
   type: "seal";
@@ -229,7 +243,8 @@ export type CryptoWorkerRequest =
   | RefreshSessionRequest
   | BeginKeyRequestRequest
   | AcceptKeyResponseRequest
-  | SealKeysForPeerRequest;
+  | SealKeysForPeerRequest
+  | HashWorkspacePathRequest;
 
 export interface DeviceIdentity {
   signPubKey: string;
@@ -290,6 +305,7 @@ export interface CryptoWorkerResults {
   beginKeyRequest: string;
   acceptKeyResponse: boolean;
   sealKeysForPeer: string;
+  hashWorkspacePath: string;
 }
 
 export interface CryptoWorkerOkResponse<T = unknown> {

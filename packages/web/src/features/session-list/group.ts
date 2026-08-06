@@ -40,14 +40,36 @@ function mostRecentUpdatedAt(sessions: readonly SessionListSession[]): number {
  * when that parent is itself a known, registered workspace; otherwise it
  * stays its own top-level group rather than inventing one for an
  * unregistered parent.
+ *
+ * Re-parenting itself needs the REAL path (`.worktrees/<branch>` detection),
+ * never `workspaceId` — an opaque `workspaces.id` — so this looks up the
+ * session's own workspace's decrypted `path`, and matches candidate parents
+ * by THEIR decrypted `path` too (`pathToWorkspaceId`). A workspace whose path
+ * hasn't decrypted yet (`path: null`) just can't be re-parented this pass —
+ * it stays its own top-level group until decryption catches up, rather than
+ * guessing.
  */
 function resolveBucketKey(
   workspaceId: string | null,
   workspaceById: Map<string, SessionListWorkspace>,
+  pathToWorkspaceId: Map<string, string>,
 ): string {
   if (workspaceId === null || !workspaceById.has(workspaceId)) return UNGROUPED_WORKSPACE_ID;
-  const parentId = parentWorktreePath(workspaceId);
-  return parentId && workspaceById.has(parentId) ? parentId : workspaceId;
+  const path = workspaceById.get(workspaceId)?.path;
+  const parentPath = path ? parentWorktreePath(path) : null;
+  const parentId = parentPath ? pathToWorkspaceId.get(parentPath) : undefined;
+  return parentId ?? workspaceId;
+}
+
+/** Reverse lookup of `SessionListWorkspace.path` → `.id`, for
+ * `resolveBucketKey`'s re-parenting — built once per grouping pass rather
+ * than scanning `workspaces` per session. */
+function buildPathToWorkspaceId(workspaces: readonly SessionListWorkspace[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const w of workspaces) {
+    if (w.path) map.set(w.path, w.id);
+  }
+  return map;
 }
 
 /**
@@ -58,10 +80,11 @@ function resolveBucketKey(
  */
 export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): WorkspaceGroup[] {
   const workspaceById = new Map(snapshot.workspaces.map((w) => [w.id, w]));
+  const pathToWorkspaceId = buildPathToWorkspaceId(snapshot.workspaces);
   const buckets = new Map<string, SessionListSession[]>();
 
   for (const session of snapshot.sessions) {
-    const key = resolveBucketKey(session.workspaceId, workspaceById);
+    const key = resolveBucketKey(session.workspaceId, workspaceById, pathToWorkspaceId);
     const bucket = buckets.get(key);
     if (bucket) bucket.push(session);
     else buckets.set(key, [session]);
@@ -79,7 +102,7 @@ export function groupSessionsByWorkspace(snapshot: SessionListSnapshot): Workspa
   const ungrouped = buckets.get(UNGROUPED_WORKSPACE_ID);
   if (ungrouped && ungrouped.length > 0) {
     groups.push({
-      workspace: { id: UNGROUPED_WORKSPACE_ID, name: "Other sessions" },
+      workspace: { id: UNGROUPED_WORKSPACE_ID, name: "Other sessions", path: null },
       sessions: [...ungrouped].sort(byPinnedThenUpdatedAtDesc),
     });
   }
@@ -101,11 +124,12 @@ export function groupPagedSessions(
   workspaces: readonly SessionListWorkspace[],
 ): WorkspaceGroup[] {
   const workspaceById = new Map(workspaces.map((w) => [w.id, w]));
+  const pathToWorkspaceId = buildPathToWorkspaceId(workspaces);
   const order: string[] = [];
   const buckets = new Map<string, SessionListSession[]>();
 
   for (const session of sessions) {
-    const key = resolveBucketKey(session.workspaceId, workspaceById);
+    const key = resolveBucketKey(session.workspaceId, workspaceById, pathToWorkspaceId);
     let bucket = buckets.get(key);
     if (!bucket) {
       bucket = [];
@@ -118,7 +142,7 @@ export function groupPagedSessions(
   return order.map((id) => ({
     workspace:
       id === UNGROUPED_WORKSPACE_ID
-        ? { id: UNGROUPED_WORKSPACE_ID, name: "Other sessions" }
+        ? { id: UNGROUPED_WORKSPACE_ID, name: "Other sessions", path: null }
         : (workspaceById.get(id) as SessionListWorkspace),
     sessions: [...(buckets.get(id) ?? [])].sort(byPinnedThenUpdatedAtDesc),
   }));

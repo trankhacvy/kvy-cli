@@ -48,6 +48,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
     beginKeyRequest: notImplemented,
     acceptKeyResponse: notImplemented,
     sealKeysForPeer: notImplemented,
+    hashWorkspacePath: notImplemented,
     getIdentity: async () => null,
     sealForPeer: notImplemented,
     bindKeysProof: async () => ({

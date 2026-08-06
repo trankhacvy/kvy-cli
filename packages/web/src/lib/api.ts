@@ -355,10 +355,12 @@ export async function putSessionMetadataCas(
   );
 }
 
-/** `POST /v1/workspaces` — create-or-get a workspace row by its absolute path. Idempotent. */
+/** `POST /v1/workspaces` — create-or-get a workspace row by `pathHash`
+ * (`CryptoBridgeClient.hashWorkspacePath` — never the raw path itself, which
+ * the server must never see). Idempotent. */
 export function createWorkspace(
   token: string,
-  body: { path: string; metadata: EncryptedBox; dek: string },
+  body: { pathHash: string; metadata: EncryptedBox; dek: string },
 ): Promise<WorkspaceRow> {
   return postJson("/v1/workspaces", body, token);
 }

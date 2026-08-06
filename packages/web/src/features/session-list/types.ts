@@ -13,8 +13,17 @@ export type AttentionKind = Extract<Ephemeral, { t: "attention" }>["kind"];
 
 export interface SessionListWorkspace {
   id: string;
-  /** Decrypted workspace name (e.g. the directory basename). */
-  name: string;
+  /** Decrypted workspace name (the real directory's basename), sourced from
+   * any session in this workspace whose `metadata` has decrypted — never
+   * from `id` itself, which is an opaque `workspaces.id`. `null` means "not
+   * decrypted yet" — same Issue #13 "don't flash a placeholder while
+   * decryption is still in flight" precedent as `SessionListSession.title`. */
+  name: string | null;
+  /** The real, decrypted absolute path this workspace's sessions run in —
+   * `group.ts`'s worktree-reparenting (`resolveBucketKey`) needs the real
+   * path, never `id`, to detect a `.worktrees/<branch>` child and find its
+   * parent repo's own workspace entry. `null` until decrypted. */
+  path: string | null;
 }
 
 export interface SessionListMachine {
@@ -35,6 +44,10 @@ export interface SessionListMachine {
 export interface SessionListSession {
   id: string;
   workspaceId: string | null;
+  /** This session's real working-directory path, decrypted from
+   * `metadata` — never `workspaceId`, which is an opaque `workspaces.id`.
+   * `null` means "not decrypted yet", same convention as `title`. */
+  path: string | null;
   machineId: string | null;
   /** Decrypted session title. `null` means "not decrypted yet" — distinct
    * from a genuinely untitled session, which is a resolved placeholder

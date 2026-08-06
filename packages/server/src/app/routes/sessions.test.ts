@@ -97,6 +97,54 @@ describe("POST/GET /v1/sessions", () => {
     expect(all.filter((s: { tag: string }) => s.tag === "idempotent-tag")).toHaveLength(1);
   });
 
+  it("400s when workspaceId doesn't reference an existing workspace for this account", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        tag: "bad-workspace-id",
+        provider: "claude-code",
+        // Never a raw filesystem path — must be an opaque `workspaces.id` this
+        // account owns. A path (or any other account's workspace id) is rejected.
+        workspaceId: "/Users/someone/some-real-project",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("accepts a workspaceId that references a real workspace owned by this account", async () => {
+    const workspaceResponse = await app.inject({
+      method: "POST",
+      url: "/v1/workspaces",
+      headers: { authorization: authHeader },
+      payload: {
+        pathHash: "session-workspace-hash",
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    const workspaceId = workspaceResponse.json().id;
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        tag: "good-workspace-id",
+        provider: "claude-code",
+        workspaceId,
+        metadata: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json().workspaceId).toBe(workspaceId);
+  });
+
   it("lists sessions for the account, newest first, with cursor pagination", async () => {
     const { authHeader: listHeader } = await createTestAccount(db);
     for (let i = 0; i < 3; i++) {
