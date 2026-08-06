@@ -5,7 +5,7 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import { env } from "../../config.js";
 import { encodeBox } from "../../db/box.js";
-import { machines, sessions } from "../../db/schema.js";
+import { machines, sessions, workspaces } from "../../db/schema.js";
 import { allocHeaderSeq } from "../../db/seq.js";
 import type { Database } from "../../db/types.js";
 import type { EventRouterPort } from "../events/eventRouter.js";
@@ -57,6 +57,7 @@ export function buildSessionsRoutes(
           response: {
             200: SessionRowSchema,
             201: SessionRowSchema,
+            400: z.object({ error: z.string() }),
             429: z.object({ error: z.string() }),
           },
         },
@@ -64,6 +65,21 @@ export function buildSessionsRoutes(
       async (req, reply) => {
         const accountId = req.accountId;
         const { tag, provider, workspaceId, machineId, executionTarget, metadata, dek } = req.body;
+
+        // `workspaceId` must be an opaque `workspaces.id` this account actually owns —
+        // never a raw path (the FK on `sessions.workspace_id` enforces this at the DB
+        // level too, but checking here first turns a foreign-key violation into a
+        // friendly 400 instead of an opaque 500).
+        if (workspaceId) {
+          const workspace = await db.query.workspaces.findFirst({
+            where: and(eq(workspaces.id, workspaceId), eq(workspaces.accountId, accountId)),
+          });
+          if (!workspace) {
+            return reply
+              .code(400)
+              .send({ error: `workspaceId "${workspaceId}" does not exist for this account` });
+          }
+        }
 
         // NOT inside the transaction — this route is idempotent by (accountId, tag), so a
         // retry of an already-created session must never be refused for being over quota.

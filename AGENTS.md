@@ -191,6 +191,13 @@ Seven rules every auth-adjacent change follows:
 - **`@kvy/wire` builds first** — it has no workspace dependencies and everything else
   depends on its compiled output; this is why CI and `postinstall` (`scripts/postinstall.cjs`,
   skippable via `SKIP_KVY_WIRE_BUILD=1`) build it explicitly ahead of the general build.
+- **Changeset required for `packages/cli`, `packages/wire`, or `packages/crypto` changes** —
+  CI's changeset check fails the PR otherwise. This applies even for wire/crypto-only changes:
+  those two packages are excluded from versioning themselves (`.changeset/config.json`'s
+  `ignore`), but they're compiled into the published `kvy` CLI, so a change there can still
+  change its behavior and needs a changeset targeting it. Before committing such a change, run
+  `pnpm changeset`, answer the prompts, and commit the generated `.changeset/*.md` file
+  alongside it — see `CONTRIBUTING.md`'s "Changesets" section for the day-to-day flow.
 
 ## Docs
 

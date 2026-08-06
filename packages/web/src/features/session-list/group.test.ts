@@ -6,6 +6,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
   return {
     id: "s1",
     workspaceId: "w1",
+    path: null,
     machineId: "m1",
     title: "session",
     provider: "claude",
@@ -21,7 +22,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
 describe("groupSessionsByWorkspace", () => {
   it("groups sessions under their workspace and sorts each group newest-first", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: "w1" }],
       machines: [],
       sessions: [
         session({ id: "old", workspaceId: "w1", updatedAt: 1 }),
@@ -37,8 +38,8 @@ describe("groupSessionsByWorkspace", () => {
   it("orders workspace groups by their most recently active session", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "stale", name: "stale-repo" },
-        { id: "fresh", name: "fresh-repo" },
+        { id: "stale", name: "stale-repo", path: "stale" },
+        { id: "fresh", name: "fresh-repo", path: "fresh" },
       ],
       machines: [],
       sessions: [
@@ -52,7 +53,7 @@ describe("groupSessionsByWorkspace", () => {
 
   it("buckets sessions with no resolvable workspace into a trailing ungrouped group", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: "w1" }],
       machines: [],
       sessions: [
         session({ id: "placed", workspaceId: "w1", updatedAt: 1 }),
@@ -73,7 +74,7 @@ describe("groupSessionsByWorkspace", () => {
 
   it("sorts pinned sessions before unpinned ones, ahead of the updatedAt ordering", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: "w1" }],
       machines: [],
       sessions: [
         session({ id: "unpinned-new", workspaceId: "w1", updatedAt: 100, pinned: false }),
@@ -107,8 +108,8 @@ describe("groupSessionsByWorkspace", () => {
   it("orders groups by their most recently active session even when pinning reorders that session out of slot 0", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "a", name: "workspace-a" },
-        { id: "b", name: "workspace-b" },
+        { id: "a", name: "workspace-a", path: "a" },
+        { id: "b", name: "workspace-b", path: "b" },
       ],
       machines: [],
       sessions: [
@@ -129,8 +130,8 @@ describe("groupSessionsByWorkspace", () => {
   it("re-parents a worktree child onto its registered parent repo", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "/repo", name: "repo" },
-        { id: "/repo/.worktrees/wf/a", name: "wf/a" },
+        { id: "/repo", name: "repo", path: "/repo" },
+        { id: "/repo/.worktrees/wf/a", name: "wf/a", path: "/repo/.worktrees/wf/a" },
       ],
       machines: [],
       sessions: [
@@ -146,7 +147,7 @@ describe("groupSessionsByWorkspace", () => {
 
   it("leaves a worktree child top-level when its parent isn't a registered workspace", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "/repo/.worktrees/wf/a", name: "wf/a" }],
+      workspaces: [{ id: "/repo/.worktrees/wf/a", name: "wf/a", path: "/repo/.worktrees/wf/a" }],
       machines: [],
       sessions: [session({ id: "orphan-worktree", workspaceId: "/repo/.worktrees/wf/a" })],
     };
@@ -158,9 +159,9 @@ describe("groupSessionsByWorkspace", () => {
   it("groups two sibling worktrees under the same registered parent", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "/repo", name: "repo" },
-        { id: "/repo/.worktrees/wf/a", name: "wf/a" },
-        { id: "/repo/.worktrees/wf/b", name: "wf/b" },
+        { id: "/repo", name: "repo", path: "/repo" },
+        { id: "/repo/.worktrees/wf/a", name: "wf/a", path: "/repo/.worktrees/wf/a" },
+        { id: "/repo/.worktrees/wf/b", name: "wf/b", path: "/repo/.worktrees/wf/b" },
       ],
       machines: [],
       sessions: [
@@ -177,8 +178,8 @@ describe("groupSessionsByWorkspace", () => {
   it("omits a workspace that has no sessions", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "w1", name: "has-sessions" },
-        { id: "w2", name: "empty" },
+        { id: "w1", name: "has-sessions", path: "w1" },
+        { id: "w2", name: "empty", path: "w2" },
       ],
       machines: [],
       sessions: [session({ id: "a", workspaceId: "w1" })],
@@ -190,8 +191,8 @@ describe("groupSessionsByWorkspace", () => {
 
 describe("groupPagedSessions", () => {
   const workspaces: SessionListWorkspace[] = [
-    { id: "a", name: "workspace-a" },
-    { id: "b", name: "workspace-b" },
+    { id: "a", name: "workspace-a", path: "a" },
+    { id: "b", name: "workspace-b", path: "b" },
   ];
 
   it("preserves first-appearance order rather than re-deriving group recency", () => {
@@ -232,7 +233,7 @@ describe("groupPagedSessions", () => {
   it("re-parents a worktree child onto its registered parent repo", () => {
     const withWorktree: SessionListWorkspace[] = [
       ...workspaces,
-      { id: "a/.worktrees/wf/x", name: "wf/x" },
+      { id: "a/.worktrees/wf/x", name: "wf/x", path: "a/.worktrees/wf/x" },
     ];
     const sessions = [
       session({ id: "child", workspaceId: "a/.worktrees/wf/x", updatedAt: 10 }),
@@ -246,7 +247,7 @@ describe("groupPagedSessions", () => {
 
   it("leaves a worktree child top-level when its parent isn't registered", () => {
     const worktreeWorkspaces: SessionListWorkspace[] = [
-      { id: "unregistered/.worktrees/wf/x", name: "wf/x" },
+      { id: "unregistered/.worktrees/wf/x", name: "wf/x", path: "unregistered/.worktrees/wf/x" },
     ];
     const sessions = [session({ id: "orphan", workspaceId: "unregistered/.worktrees/wf/x" })];
     const groups = groupPagedSessions(sessions, worktreeWorkspaces);
@@ -256,8 +257,8 @@ describe("groupPagedSessions", () => {
   it("groups two sibling worktrees under the same registered parent", () => {
     const withWorktrees: SessionListWorkspace[] = [
       ...workspaces,
-      { id: "a/.worktrees/wf/a", name: "wf/a" },
-      { id: "a/.worktrees/wf/b", name: "wf/b" },
+      { id: "a/.worktrees/wf/a", name: "wf/a", path: "a/.worktrees/wf/a" },
+      { id: "a/.worktrees/wf/b", name: "wf/b", path: "a/.worktrees/wf/b" },
     ];
     const sessions = [
       session({ id: "sib-a", workspaceId: "a/.worktrees/wf/a" }),

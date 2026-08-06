@@ -184,6 +184,7 @@ import {
 import { extractModelFlag } from "../session/modelFlag.js";
 import { extractPermissionModeFlag } from "../session/permissionModeFlag.js";
 import { registerSessionWorkspace } from "../session/registerSessionWorkspace.js";
+import { resolveServerWorkspaceId as resolveServerWorkspaceIdDefault } from "../session/resolveServerWorkspaceId.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
@@ -313,6 +314,8 @@ export interface StartClaudeCommandDeps {
    * session start, matching `notifyDaemonSessionStarted`'s precedent above.
    */
   registerWorkspace?: typeof registerWorkspaceDefault;
+  /** Injectable for tests; defaults to the real `resolveServerWorkspaceId()`. */
+  resolveServerWorkspaceId?: typeof resolveServerWorkspaceIdDefault;
   frontendUrl?: string;
   /** Injectable for tests; defaults to a real `stat` of `<workingDirectory>/.git`. */
   hasGitDir?: (directory: string) => Promise<boolean>;
@@ -468,7 +471,8 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
     );
     return 1;
   }
-  const { contentKeyPair, machineId, tokenProvider, accessToken } = preflightResult.preflight;
+  const { contentKeyPair, workspaceIndexKey, machineId, tokenProvider, accessToken } =
+    preflightResult.preflight;
 
   const sessionMetadata = {
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,
@@ -522,11 +526,26 @@ export async function runStartClaudeCommand(deps: StartClaudeCommandDeps): Promi
   // 3.5. Register (or resolve) this directory as a workspace — shared with
   // `startCodex.ts` via `registerSessionWorkspace()`, and the same
   // register-or-resolve `workspace/registry.ts` logic the daemon's `spawn`
-  // RPC already runs before launching (`spawnEngine.ts`).
-  const workspaceId = await registerSessionWorkspace(deps.workingDirectory, {
+  // RPC already runs before launching (`spawnEngine.ts`). That call is local
+  // bookkeeping only (`~/.kvy/workspaces.json`) — the server-facing
+  // `workspaceId` below is a SEPARATE, opaque id resolved via
+  // `resolveServerWorkspaceId()`, never the real path itself.
+  const realWorkspacePath = await registerSessionWorkspace(deps.workingDirectory, {
     registerWorkspace: deps.registerWorkspace,
     logger,
   });
+  const doResolveServerWorkspaceId =
+    deps.resolveServerWorkspaceId ?? resolveServerWorkspaceIdDefault;
+  const workspaceId = realWorkspacePath
+    ? await doResolveServerWorkspaceId(realWorkspacePath, {
+        serverUrl: backendUrl,
+        fetchImpl,
+        getAuthToken: () => accessToken,
+        contentPublicKey: contentKeyPair.publicKey,
+        workspaceIndexKey,
+        logger,
+      })
+    : null;
 
   // 4. Bootstrap (create-or-get) the session row + its DEK.
   let bootstrap: Awaited<ReturnType<typeof bootstrapSessionDefault>>;

@@ -9,6 +9,7 @@ function session(overrides: Partial<SessionListSession> = {}): SessionListSessio
   return {
     id: "sess-1",
     workspaceId: null,
+    path: null,
     machineId: null,
     title: "My session",
     provider: "claude",

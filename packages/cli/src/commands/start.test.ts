@@ -23,6 +23,7 @@ import type { DaemonState } from "../daemon/state.js";
 import type { ClaudeCliLocation } from "../provider/claudeCliLocator.js";
 import type { SessionRpcHandlers } from "../rpc/sessionRpc.js";
 import type { bootstrapSession as bootstrapSessionType } from "../session/bootstrap.js";
+import type { resolveServerWorkspaceId as resolveServerWorkspaceIdType } from "../session/resolveServerWorkspaceId.js";
 import type { SessionClientDeps, SessionClientHandle } from "../session/sessionClient.js";
 import type {
   acquireSessionLock as acquireSessionLockType,
@@ -200,6 +201,13 @@ function baseDeps(overrides: Partial<StartClaudeCommandDeps> = {}): StartClaudeC
       ok: true,
       handle: fakeSessionLockHandle(),
     })) as unknown as typeof acquireSessionLockType,
+    // Never let a unit test hit the real `/v1/workspaces` create-or-get from
+    // the real default — a `null` workspaceId is a safe, fully-supported
+    // fallback (same "still starts the session" contract as a failed
+    // `registerWorkspace`).
+    resolveServerWorkspaceId: vi.fn(
+      async () => null,
+    ) as unknown as typeof resolveServerWorkspaceIdType,
     notifyDaemonSessionStarted: vi.fn(async () => ({
       type: "no-daemon",
     })) as unknown as typeof notifyDaemonSessionStartedType,
@@ -463,7 +471,7 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
     expect(bootstrapParams.metadata.model).toBe("opus");
   });
 
-  it("registers workingDirectory as a workspace and threads its id into bootstrapSession", async () => {
+  it("registers workingDirectory as a workspace and threads its OPAQUE id (never the raw path) into bootstrapSession", async () => {
     const bootstrapSession = vi.fn(async () => ({
       sessionId: "sess_1",
       dek: getRandomBytes(32),
@@ -477,21 +485,33 @@ describe("runStartClaudeCommand — terminal (PTY) flow", () => {
           registeredAt: "2026-01-01T00:00:00.000Z",
         }) as unknown as Awaited<ReturnType<typeof registerWorkspaceType>>,
     );
+    const resolveServerWorkspaceId = vi.fn(async () => "ws_opaque_1");
 
     await runStartClaudeCommand(
       baseDeps({
         bootstrapSession: bootstrapSession as unknown as typeof bootstrapSessionType,
         registerWorkspace: registerWorkspace as unknown as typeof registerWorkspaceType,
+        resolveServerWorkspaceId:
+          resolveServerWorkspaceId as unknown as typeof resolveServerWorkspaceIdType,
       }),
     );
 
     expect(registerWorkspace).toHaveBeenCalledWith("/fake/workdir");
+    // The real path never crosses into bootstrapSession's workspaceId param —
+    // only resolveServerWorkspaceId's opaque return value does.
+    expect(resolveServerWorkspaceId).toHaveBeenCalledWith(
+      "/fake/workdir",
+      expect.objectContaining({
+        contentPublicKey: expect.anything(),
+        workspaceIndexKey: expect.anything(),
+      }),
+    );
     expect(bootstrapSession).toHaveBeenCalledOnce();
     const [, bootstrapParams] = bootstrapSession.mock.calls[0] as unknown as [
       unknown,
       { workspaceId?: string | null },
     ];
-    expect(bootstrapParams.workspaceId).toBe("/fake/workdir");
+    expect(bootstrapParams.workspaceId).toBe("ws_opaque_1");
   });
 
   it("still starts the session with a null workspaceId when registerWorkspace fails, instead of failing the whole start", async () => {

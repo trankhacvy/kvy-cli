@@ -1,5 +1,6 @@
 "use client";
 
+import { Skeleton } from "@/components/ui/skeleton";
 import { UNGROUPED_WORKSPACE_ID, type WorkspaceGroup } from "../group";
 import type { SessionListMachine } from "../types";
 import { NewSessionTrigger } from "./new-session-panel";
@@ -25,7 +26,9 @@ export function WorkspaceSection({
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-1 px-1">
-        <h2 className="text-sm font-medium text-muted-foreground">{group.workspace.name}</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">
+          {group.workspace.name === null ? <Skeleton className="h-4 w-24" /> : group.workspace.name}
+        </h2>
         {isRealWorkspace && <NewSessionTrigger group={group} machinesById={machinesById} />}
       </div>
       <div className="flex flex-col gap-2">

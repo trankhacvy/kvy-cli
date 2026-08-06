@@ -12,7 +12,7 @@ import { toWorkspaceRow } from "./mappers.js";
 import { NotFoundSchema } from "./shared.js";
 
 const CreateWorkspaceBodySchema = z.object({
-  path: z.string().min(1),
+  pathHash: z.string().min(1),
   metadata: EncryptedBoxSchema,
   dek: z.string().min(1), // base64
 });
@@ -31,12 +31,15 @@ const CasConflictSchema = z.object({
 /**
  * `POST /v1/workspaces` + `PUT /v1/workspaces/:id/metadata` — server-synced
  * home for a workspace's `baseBranch`/`remote` config (docs conversation:
- * "why don't we store this in the workspaces table"). `path` is the
+ * "why don't we store this in the workspaces table"). `pathHash` is the
  * create-or-get idempotency key, mirroring `sessions`'s `(accountId, tag)` —
- * it's already sent in the clear elsewhere (`SessionRow.workspaceId`), so
- * using it as a plaintext lookup column here loses no confidentiality.
- * `metadata` stays an opaque, client-encrypted `EncryptedBox` throughout —
- * this server never decrypts it, same as every other synced entity.
+ * unlike a plaintext path, it's a client-computed HMAC keyed by a
+ * server-unknown secret (`hashWorkspacePath`/`KeyTree.workspaceIndexKey` in
+ * `@kvy/crypto`), so this server (or a DB breach) can dedup workspaces by
+ * directory without ever learning what that directory actually is. The real
+ * path lives only inside `metadata`. `metadata` stays an opaque,
+ * client-encrypted `EncryptedBox` throughout — this server never decrypts
+ * it, same as every other synced entity.
  */
 export function buildWorkspacesRoutes(
   db: Database,
@@ -55,20 +58,20 @@ export function buildWorkspacesRoutes(
       },
       async (req, reply) => {
         const accountId = req.accountId;
-        const { path, metadata, dek } = req.body;
+        const { pathHash, metadata, dek } = req.body;
 
-        // Create-or-get by (accountId, path) — idempotent, same shape as
+        // Create-or-get by (accountId, pathHash) — idempotent, same shape as
         // `POST /v1/sessions`'s (accountId, tag) dedup.
         const outcome = await db.transaction(async (tx) => {
           const [inserted] = await tx
             .insert(workspaces)
             .values({
               accountId,
-              path,
+              pathHash,
               metadata: encodeBox(metadata),
               dek: decodeBase64(dek),
             })
-            .onConflictDoNothing({ target: [workspaces.accountId, workspaces.path] })
+            .onConflictDoNothing({ target: [workspaces.accountId, workspaces.pathHash] })
             .returning();
 
           if (inserted) {
@@ -77,11 +80,11 @@ export function buildWorkspacesRoutes(
           }
 
           const existing = await tx.query.workspaces.findFirst({
-            where: and(eq(workspaces.accountId, accountId), eq(workspaces.path, path)),
+            where: and(eq(workspaces.accountId, accountId), eq(workspaces.pathHash, pathHash)),
           });
           if (!existing) {
             throw new Error(
-              `POST /v1/workspaces: conflict on (accountId, path=${path}) but no existing row found`,
+              `POST /v1/workspaces: conflict on (accountId, pathHash=${pathHash}) but no existing row found`,
             );
           }
           return { row: existing, created: false as const };

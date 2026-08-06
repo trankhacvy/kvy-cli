@@ -353,7 +353,11 @@ The server relays an opaque box; it cannot read the key material.
 | machine ids, hostnames? — NO: hostname is inside encrypted machine metadata | session titles, prompts, code |
 | seq numbers, versions, timestamps, session ids/tags | DEKs (stored wrapped) |
 | push subscriptions, app-focus state | RPC params/results |
-| workspace *ids* (display names encrypted) | provider tokens (never uploaded at all) |
+| workspace *ids* (opaque `workspaces.id`, cuid2 — never a real path) and `pathHash` (an HMAC of the real path, keyed by a client-held secret the server never has) | workspace/session real absolute filesystem paths, display names (encrypted) |
+
+**Historical note (independent architecture review, resolved):** `sessions.workspace_id`/`unmanaged_sessions.workspace_id` used to literally BE the client's real absolute directory path, sent and stored in the clear — a real leak of usernames and project/client names on any DB breach, contradicting this table. Fixed: both columns are now opaque `workspaces.id` values enforced by a foreign key; `workspaces.path_hash` (an HMAC-SHA512 keyed by `KeyTree.workspaceIndexKey`, `@kvy/crypto`) is the create-or-get idempotency key instead of the plaintext path; the real path lives only inside `workspaces.metadata`/`sessions.metadata`, encrypted as always.
+
+**Two small, deliberate plaintext exceptions, not covered by the table above, each with its own honest reason:** `pair_requests.cwd` and the `label` columns on `pair_requests`/`key_requests` are genuinely plaintext, but short-lived (the row is deleted the moment it's consumed, single-use) and exist purely so a human approving a pairing/key-share request from another device can recognize *what* they're approving (which directory, what the requester called it) before tapping approve — the same UX a phishing-resistant approval flow needs. Both are explicitly documented in `schema.ts` as untrusted, attacker-controllable display strings, length-capped, rendered as plain text only, and never used in any authorization decision. Unlike the historical `workspace_id` bug above, these were a considered tradeoff from the start, not an accidental leak — but they're still plaintext, so they're named here rather than left for a future reviewer to rediscover.
 
 **Honest trust boundary (must appear in public security docs):** the E2E guarantee is strongest for the **CLI** (installed, checksummed binary — the server can never read or influence its key handling). For the **web app**, encryption protects against database breach and passive operator access, but the client code itself is served — a malicious or compromised server could ship key-exfiltrating JavaScript. Mitigations (required, not optional): web app statically exported and served from a **separate origin** than the API, strict CSP (no inline/eval, no third-party scripts), Subresource Integrity on all bundles, reproducible builds published with checksums, and CLI-as-key-origin as the recommended setup. We do not market "we can't read your code" without this asterisk.
 
@@ -392,18 +396,26 @@ export const machines = pgTable('machines', {
 export const workspaces = pgTable('workspaces', {
   id:              text('id').primaryKey().$defaultFn(createId),
   accountId:       text('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
-  metadata:        customType.bytea('metadata').notNull(),     // enc: name, paths, baseRef, remote
+  // Client-computed HMAC of the real path (`hashWorkspacePath`, `@kvy/crypto`,
+  // keyed by `KeyTree.workspaceIndexKey` — a secret only the account's own
+  // devices hold). Create-or-get idempotency key; meaningless to the server
+  // or a DB breach without the key. The real path lives only in `metadata`.
+  pathHash:        text('path_hash').notNull(),
+  metadata:        customType.bytea('metadata').notNull(),     // enc: path, displayName, baseBranch, remote
   metadataVersion: integer('metadata_version').notNull().default(0),
   dek:             customType.bytea('dek').notNull(),
   // ---- deferred sandbox hooks (unused at MVP) ----
   syncEnabled:     boolean('sync_enabled').notNull().default(false),
   sandboxConfig:   customType.bytea('sandbox_config'),
-});
+}, (t) => [uniqueIndex().on(t.accountId, t.pathHash)]);
 
 export const sessions = pgTable('sessions', {
   id:                text('id').primaryKey().$defaultFn(createId),
   accountId:         text('account_id').notNull().references(() => accounts.id, { onDelete: 'cascade' }),
-  workspaceId:       text('workspace_id'),
+  // Opaque `workspaces.id` (cuid2) — never the real path. Enforced by this FK,
+  // not just convention (a historical bug here: this column used to just BE
+  // the real path, see §5.3's note).
+  workspaceId:       text('workspace_id').references(() => workspaces.id),
   machineId:         text('machine_id'),
   tag:               text('tag').notNull(),                    // client-minted; creation idempotency
   provider:          text('provider').notNull(),               // 'claude-code' | 'codex'
@@ -438,7 +450,7 @@ export const unmanagedSessions = pgTable('unmanaged_sessions', {  // adoption Ti
   id:          text('id').primaryKey().$defaultFn(createId),
   accountId:   text('account_id').notNull(),
   machineId:   text('machine_id').notNull(),
-  workspaceId: text('workspace_id').notNull(),
+  workspaceId: text('workspace_id').notNull().references(() => workspaces.id), // opaque, same as sessions.workspaceId
   providerRef: text('provider_ref').notNull(),                 // opaque provider uuid
   summary:     customType.bytea('summary').notNull(),          // enc: title, lastActivity, running?
   dek:         customType.bytea('dek').notNull(),
@@ -874,6 +886,7 @@ WS reconnect → emit app-state → GET /v1/sync?since=headerSeq
 | R10 | Migration style | **Hard cut** — old paths deleted as each phase lands; rollback = git tag `v1`. No transport flag |
 | R11 | Adapter distribution | **Managed installs**: pinned exact versions + integrity manifest under `~/.kvy/adapters/`; explicit upgrades; `kvy doctor` coverage. Never npx at session start |
 | R12 | CLI-local durability | **Send-idempotency claim only** (§7.10) — no local event WAL; the server (Postgres + msgSeq + outbox) remains the single durable event store. A local WAL only makes sense when the local process's own gateway is ephemeral, which isn't Kvy's topology |
+| R13 | Workspace identity (2026-08) | **Opaque `workspaces.id` + client-computed `pathHash`**, not the real path — an independent architecture review found `sessions.workspace_id` was literally the client's plaintext absolute directory path (real username + client/project name, on every DB breach), contradicting §5.3's own published table. Fixed by making `workspaceId` a real FK to an opaque `workspaces.id`, keying create-or-get on `hashWorkspacePath` (HMAC via `KeyTree.workspaceIndexKey`, a secret only the account's own devices hold) instead of the plaintext path, and moving the real path into encrypted `metadata` exclusively — see §5.3's "historical note" and §6.1's schema |
 
 **Still open:**
 

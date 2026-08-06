@@ -65,6 +65,7 @@ import {
 import { extractContinueFromFlag } from "../session/continueFromFlag.js";
 import { extractModelFlag } from "../session/modelFlag.js";
 import { registerSessionWorkspace } from "../session/registerSessionWorkspace.js";
+import { resolveServerWorkspaceId as resolveServerWorkspaceIdDefault } from "../session/resolveServerWorkspaceId.js";
 import {
   createSessionClientDeps,
   startSessionClient as startSessionClientDefault,
@@ -94,6 +95,8 @@ export interface StartCodexCommandDeps {
   detectCodex?: (options?: DetectCodexOptions) => Promise<ProviderDetectionResult>;
   bootstrapSession?: typeof bootstrapSessionDefault;
   registerWorkspace?: typeof registerWorkspaceDefault;
+  /** Injectable for tests; defaults to the real `resolveServerWorkspaceId()`. */
+  resolveServerWorkspaceId?: typeof resolveServerWorkspaceIdDefault;
   /**
    * Injectable for tests; defaults to the real `notifyDaemonSessionStarted()`
    * (`daemon/notify.ts` — best-effort, never throws). Mirrors `start.ts`'s
@@ -200,7 +203,8 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     );
     return 1;
   }
-  const { contentKeyPair, machineId, tokenProvider, accessToken } = preflightResult.preflight;
+  const { contentKeyPair, workspaceIndexKey, machineId, tokenProvider, accessToken } =
+    preflightResult.preflight;
 
   const sessionMetadata = {
     title: path.basename(deps.workingDirectory) || deps.workingDirectory,
@@ -208,10 +212,24 @@ export async function runStartCodexCommand(deps: StartCodexCommandDeps): Promise
     model: extractModelFlag(deps.codexArgs),
   };
 
-  const workspaceId = await registerSessionWorkspace(deps.workingDirectory, {
+  // Local bookkeeping only (`~/.kvy/workspaces.json`) — the server-facing
+  // `workspaceId` below is a SEPARATE, opaque id, never the real path itself.
+  const realWorkspacePath = await registerSessionWorkspace(deps.workingDirectory, {
     registerWorkspace: deps.registerWorkspace,
     logger,
   });
+  const doResolveServerWorkspaceId =
+    deps.resolveServerWorkspaceId ?? resolveServerWorkspaceIdDefault;
+  const workspaceId = realWorkspacePath
+    ? await doResolveServerWorkspaceId(realWorkspacePath, {
+        serverUrl: backendUrl,
+        fetchImpl,
+        getAuthToken: () => accessToken,
+        contentPublicKey: contentKeyPair.publicKey,
+        workspaceIndexKey,
+        logger,
+      })
+    : null;
 
   // Terminal run (no `--started-by daemon`): pairing + workspace registration
   // are this command's real job — there is no TUI for a foreground session to

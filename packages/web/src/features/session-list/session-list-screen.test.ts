@@ -10,6 +10,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
   return {
     id: "s1",
     workspaceId: "w1",
+    path: null,
     machineId: null,
     title: "session",
     provider: "claude",
@@ -42,7 +43,7 @@ function render(snapshot: SessionListSnapshot) {
 describe("SessionListScreen (archived filter)", () => {
   it("renders exactly the active session, excluding the archived one", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [
         session({ id: "active-sess", title: "Active session", status: "active" }),
@@ -57,7 +58,7 @@ describe("SessionListScreen (archived filter)", () => {
 
   it("falls through to the empty state when every session is archived", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [session({ id: "archived-sess", status: "archived" })],
     };
@@ -68,7 +69,7 @@ describe("SessionListScreen (archived filter)", () => {
 
   it("links to the Completed Chats screen", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [session({ id: "active-sess", status: "active" })],
     };
@@ -81,8 +82,8 @@ describe("SessionListScreen (archived filter)", () => {
   it("doesn't drop a workspace whose only sessions are all archived (no leaked empty group)", () => {
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "w1", name: "has-active" },
-        { id: "w2", name: "all-archived" },
+        { id: "w1", name: "has-active", path: null },
+        { id: "w2", name: "all-archived", path: null },
       ],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [
@@ -121,7 +122,7 @@ describe("SessionListScreen (archived filter)", () => {
 
   it("never renders the Unmanaged sessions section (hidden pending the duplicate-card fix)", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [session({ id: "active-sess", status: "active" })],
     };
@@ -145,7 +146,7 @@ describe("SessionListScreen (pagination)", () => {
 
   it("renders only the first page (10) and shows a Load more button when there are more", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: sessionsAcross("w1", 12, 1000),
     };
@@ -159,7 +160,7 @@ describe("SessionListScreen (pagination)", () => {
 
   it("doesn't show a Load more button when everything already fits on one page", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: sessionsAcross("w1", 5, 1000),
     };
@@ -175,8 +176,8 @@ describe("SessionListScreen (pagination)", () => {
     // grouped in the order it actually appears in that cut.
     const snapshot: SessionListSnapshot = {
       workspaces: [
-        { id: "a", name: "workspace-a" },
-        { id: "b", name: "workspace-b" },
+        { id: "a", name: "workspace-a", path: null },
+        { id: "b", name: "workspace-b", path: null },
       ],
       machines: [{ id: "m1", name: "mac", online: true, status: "online" }],
       sessions: [

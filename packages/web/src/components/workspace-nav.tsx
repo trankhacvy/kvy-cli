@@ -125,7 +125,7 @@ function WorkspaceNavItem({
         </CollapsibleTrigger>
         <div className="absolute top-1 right-1 flex items-center gap-0.5">
           <WorkspaceSettingsButton
-            workspaceName={group.workspace.name}
+            workspaceName={group.workspace.name ?? "Workspace"}
             onClick={() => setSettingsOpen(true)}
           />
           <NewSessionTrigger group={group} machinesById={machinesById} />
@@ -133,8 +133,8 @@ function WorkspaceNavItem({
         <WorkspaceSettingsDialog
           open={settingsOpen}
           onOpenChange={setSettingsOpen}
-          workspacePath={group.workspace.id}
-          workspaceName={group.workspace.name}
+          workspacePath={group.workspace.path ?? ""}
+          workspaceName={group.workspace.name ?? "Workspace"}
           machineId={machineId}
           machine={machine}
         />
