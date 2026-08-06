@@ -10,6 +10,7 @@ function session(overrides: Partial<SessionListSession>): SessionListSession {
   return {
     id: "s1",
     workspaceId: "w1",
+    path: null,
     machineId: null,
     title: "session",
     provider: "claude",
@@ -40,7 +41,7 @@ function render(snapshot: SessionListSnapshot) {
 describe("CompletedSessionsScreen", () => {
   it("renders exactly the archived session, excluding the active one", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [],
       sessions: [
         session({ id: "active-sess", title: "Active session", status: "active" }),
@@ -55,7 +56,7 @@ describe("CompletedSessionsScreen", () => {
 
   it("shows the empty state when nothing is archived", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [],
       sessions: [session({ id: "active-sess", status: "active" })],
     };
@@ -66,7 +67,7 @@ describe("CompletedSessionsScreen", () => {
 
   it("renders the heading and a link back to Home", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [],
       sessions: [session({ id: "archived-sess", status: "archived" })],
     };
@@ -78,7 +79,7 @@ describe("CompletedSessionsScreen", () => {
 
   it("never renders a 'New session' CTA", () => {
     const snapshot: SessionListSnapshot = {
-      workspaces: [{ id: "w1", name: "kvy" }],
+      workspaces: [{ id: "w1", name: "kvy", path: null }],
       machines: [],
       sessions: [session({ id: "archived-sess", status: "archived" })],
     };

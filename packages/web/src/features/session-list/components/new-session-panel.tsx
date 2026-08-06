@@ -202,11 +202,13 @@ export function NewSessionForm({
   // overwrite newer data.
   const branchesGeneration = useRef(0);
   function loadBranches() {
+    const worktree = group.workspace.path;
+    if (!worktree) return;
     const generation = ++branchesGeneration.current;
     setBranchesLoading(true);
     setBranchesError(null);
     actions
-      .listBranches(group.workspace.id)
+      .listBranches(worktree)
       .then((result) => {
         if (branchesGeneration.current !== generation) return;
         setBranches(result);
@@ -219,7 +221,7 @@ export function NewSessionForm({
         if (branchesGeneration.current === generation) setBranchesLoading(false);
       });
     actions
-      .getConfig(group.workspace.id)
+      .getConfig(worktree)
       .then((result) => {
         if (branchesGeneration.current !== generation) return;
         setConfiguredBaseRef(result.baseRef);
@@ -237,7 +239,7 @@ export function NewSessionForm({
   useEffect(() => {
     if (!machineId) return;
     loadBranches();
-  }, [machineId, group.workspace.id]);
+  }, [machineId, group.workspace.path]);
 
   // `actions` starts out as a permanently-rejecting stub until the chosen
   // machine's crypto key finishes unwrapping (`useLiveNewSessionActions`) —
@@ -281,11 +283,15 @@ export function NewSessionForm({
   // disabled Start button here is legible rather than mysterious.
   const machineUnavailable = selectedMachine !== undefined && selectedMachine.status !== "online";
   const canStart =
-    machineId !== null && canStartInlineSpawn(form) && !spawning && !machineUnavailable;
+    machineId !== null &&
+    group.workspace.path !== null &&
+    canStartInlineSpawn(form) &&
+    !spawning &&
+    !machineUnavailable;
 
   function handleStart() {
-    if (machineId === null) return;
-    spawn.start(group.workspace.id, form);
+    if (machineId === null || group.workspace.path === null) return;
+    spawn.start(group.workspace.path, form);
   }
 
   function handleMachineChange(nextMachineId: string) {
@@ -387,7 +393,7 @@ export function NewSessionForm({
           />
           <ContinueSessionPicker
             listImportCandidates={actions.listImportCandidates}
-            directory={group.workspace.id}
+            directory={group.workspace.path ?? ""}
             selected={form.continueFrom}
             onSelect={(continueFrom) => patchForm({ continueFrom })}
           />

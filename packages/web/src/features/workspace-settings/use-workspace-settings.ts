@@ -50,7 +50,11 @@ export function useWorkspaceSettings(actions: WorkspaceSettingsActions, worktree
 
       const token = getToken();
       if (token && bridge) {
-        const existing = snapshot.data?.workspaces.find((w) => w.path === worktree);
+        // Never compare against a plaintext `path` — the server doesn't
+        // return one. `pathHash` is the same create-or-get key `POST
+        // /v1/workspaces` itself uses, computed the same way (`server-config.ts`).
+        const pathHash = await bridge.hashWorkspacePath(worktree);
+        const existing = snapshot.data?.workspaces.find((w) => w.pathHash === pathHash);
         try {
           await saveWorkspaceServerConfig(
             {

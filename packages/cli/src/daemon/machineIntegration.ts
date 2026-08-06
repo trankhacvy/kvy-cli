@@ -46,6 +46,7 @@ import { withCredentialsLock } from "../auth/credentialsLock.js";
 import { resolveKeyMaterial } from "../auth/keyMaterial.js";
 import { createTokenProvider, type TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
+import { resolveServerWorkspaceId } from "../session/resolveServerWorkspaceId.js";
 import { createAdoptTakeDeps, handleAdoptTake } from "./adoptTake.js";
 import { createBlobClientDeps, uploadBlob as uploadBlobToServer } from "./blobClient.js";
 import { getGitDiff } from "./gitDiff.js";
@@ -560,12 +561,51 @@ export async function startMachineIntegration(
     },
     { serverUrl: deps.serverUrl, fetchImpl: deps.fetchImpl, logger: deps.logger },
   );
+  // `params.workspaceId` here is really the local registry's real path
+  // (`RegisteredWorkspace.workspaceId === .path`, `workspace/adapters.ts`'s
+  // own doc comment) — resolve it to the opaque `workspaces.id` the server
+  // actually stores before upserting, same as `start.ts`/`startCodex.ts`.
+  // Cached per real path for this daemon's lifetime once resolution actually
+  // succeeds: the transcript watch loop re-upserts on every debounced
+  // change, and a path's opaque id never changes for the life of an
+  // account/key-epoch. A `null` (transient network/auth failure —
+  // `resolveServerWorkspaceId` already swallows and logs the real error) is
+  // deliberately NOT cached, so the next debounced tick retries instead of
+  // silently dropping every future upsert for this path for the daemon's
+  // entire lifetime. The in-flight promise is still cached (not just the
+  // resolved value) so concurrent calls for the same path dedupe onto one
+  // request rather than firing a thundering herd.
+  const opaqueWorkspaceIdCache = new Map<string, Promise<string | null>>();
+  function resolveOpaqueWorkspaceId(realPath: string): Promise<string | null> {
+    const cached = opaqueWorkspaceIdCache.get(realPath);
+    if (cached) return cached;
+    const resolved = resolveServerWorkspaceId(realPath, {
+      serverUrl: deps.serverUrl,
+      fetchImpl: deps.fetchImpl,
+      getAuthToken: async () => (await tokenProvider.getAccessToken()) ?? "",
+      contentPublicKey: keyTree.content.publicKey,
+      workspaceIndexKey: keyTree.workspaceIndexKey,
+      logger: deps.logger,
+    }).then((id) => {
+      if (id === null) opaqueWorkspaceIdCache.delete(realPath);
+      return id;
+    });
+    opaqueWorkspaceIdCache.set(realPath, resolved);
+    return resolved;
+  }
   const transcriptIndexerHandle: TranscriptIndexerHandle = startTranscriptIndexer(
     createTranscriptIndexerDeps(
       {
         machineId,
         listWorkspaces: deps.listWorkspaces,
-        upsert: (params) => upsertUnmanagedSession(unmanagedSessionDeps, params),
+        upsert: async (params) => {
+          const opaqueWorkspaceId = await resolveOpaqueWorkspaceId(params.workspaceId);
+          if (!opaqueWorkspaceId) return false;
+          return upsertUnmanagedSession(unmanagedSessionDeps, {
+            ...params,
+            workspaceId: opaqueWorkspaceId,
+          });
+        },
       },
       {
         logger: deps.logger,

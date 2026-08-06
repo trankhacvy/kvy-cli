@@ -32,6 +32,7 @@ export interface Preflight {
   credentials: KvyCredentials;
   masterSecret: Uint8Array;
   contentKeyPair: KeyTree["content"];
+  workspaceIndexKey: KeyTree["workspaceIndexKey"];
   machineId: string;
   tokenProvider: TokenProvider;
   accessToken: string;
@@ -82,7 +83,7 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightResult
   if (!masterSecret || masterSecret.length !== MASTER_SECRET_LENGTH_BYTES) {
     return { ok: false, reason: "error", message: REDUCED_CUSTODY };
   }
-  const { content: contentKeyPair } = deriveKeyTree(masterSecret);
+  const { content: contentKeyPair, workspaceIndexKey } = deriveKeyTree(masterSecret);
 
   const machineId = await waitForMachineId(deps);
   if (!machineId) return { ok: false, reason: "error", message: MACHINE_NOT_REGISTERED };
@@ -102,7 +103,15 @@ export async function runPreflight(deps: PreflightDeps): Promise<PreflightResult
 
   return {
     ok: true,
-    preflight: { credentials, masterSecret, contentKeyPair, machineId, tokenProvider, accessToken },
+    preflight: {
+      credentials,
+      masterSecret,
+      contentKeyPair,
+      workspaceIndexKey,
+      machineId,
+      tokenProvider,
+      accessToken,
+    },
   };
 }
 

@@ -1,7 +1,7 @@
 import tweetnacl from "tweetnacl";
 import { describe, expect, it } from "vitest";
 import { decryptBlob, encryptBlob, getRandomBytes } from "../encryption.js";
-import { deriveBlobKey, deriveKeyTree, signDetached } from "../keys.js";
+import { deriveBlobKey, deriveKeyTree, hashWorkspacePath, signDetached } from "../keys.js";
 
 describe("deriveKeyTree", () => {
   it("is deterministic for a given masterSecret", () => {
@@ -21,6 +21,7 @@ describe("deriveKeyTree", () => {
       Buffer.from(tree.content.secretKey).toString("hex"),
       Buffer.from(new TextEncoder().encode(tree.anonId)).toString("hex"),
       Buffer.from(tree.blobMasterKey).toString("hex"),
+      Buffer.from(tree.workspaceIndexKey).toString("hex"),
     ];
     expect(new Set(values).size).toBe(values.length);
   });
@@ -58,6 +59,39 @@ describe("deriveKeyTree", () => {
   it("blobMasterKey is 32 bytes (usable as a secretbox key)", () => {
     const tree = deriveKeyTree(getRandomBytes(32));
     expect(tree.blobMasterKey.length).toBe(32);
+  });
+
+  it("workspaceIndexKey is 32 bytes", () => {
+    const tree = deriveKeyTree(getRandomBytes(32));
+    expect(tree.workspaceIndexKey.length).toBe(32);
+  });
+});
+
+describe("hashWorkspacePath", () => {
+  it("is deterministic for the same key and path", () => {
+    const key = getRandomBytes(32);
+    expect(hashWorkspacePath(key, "/Users/alice/project")).toBe(
+      hashWorkspacePath(key, "/Users/alice/project"),
+    );
+  });
+
+  it("is 64 lowercase hex chars (32 bytes)", () => {
+    const hash = hashWorkspacePath(getRandomBytes(32), "/Users/alice/project");
+    expect(hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it("different paths under the same key produce different hashes", () => {
+    const key = getRandomBytes(32);
+    expect(hashWorkspacePath(key, "/Users/alice/project-a")).not.toBe(
+      hashWorkspacePath(key, "/Users/alice/project-b"),
+    );
+  });
+
+  it("the same path under different keys produces different hashes (server can't dictionary-attack without the key)", () => {
+    const path = "/Users/alice/project";
+    expect(hashWorkspacePath(getRandomBytes(32), path)).not.toBe(
+      hashWorkspacePath(getRandomBytes(32), path),
+    );
   });
 });
 

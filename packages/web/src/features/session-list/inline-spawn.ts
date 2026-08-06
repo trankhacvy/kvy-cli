@@ -51,9 +51,10 @@ export function deriveDefaultBaseBranch(
 }
 
 /**
- * Builds the `spawn` RPC request for `directory` (a workspace's own
- * registered id/path — B1's "workspaceId IS a directory path" convention)
- * from the panel's form state. Unlike the old wizard's
+ * Builds the `spawn` RPC request for `directory` (a workspace's real,
+ * decrypted absolute path — `SessionListWorkspace.path`, never `.id`, which
+ * is an opaque `workspaces.id`) from the panel's form state. Unlike the old
+ * wizard's
  * `wizard-state.ts#buildSpawnRequest`, `branch` is never optional and
  * `createWorktree` is never anything but `true` — B3's product decision:
  * every session from this entry point gets a fresh worktree on a fresh

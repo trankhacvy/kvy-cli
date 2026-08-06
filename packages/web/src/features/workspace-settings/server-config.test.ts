@@ -3,6 +3,7 @@ import {
   deriveKeyTree,
   encodeBase64,
   getRandomBytes,
+  hashWorkspacePath,
   wrapDek,
 } from "@kvy/crypto/web";
 import type { EncryptedBox, WorkspaceRow } from "@kvy/wire";
@@ -20,6 +21,7 @@ import { saveWorkspaceServerConfig } from "./server-config.js";
 async function createTestBridge(): Promise<{
   bridge: CryptoBridgeClient;
   wrapForBridge: (rawDek: Uint8Array) => Uint8Array;
+  workspaceIndexKey: Uint8Array;
 }> {
   const masterSecret = getRandomBytes(32);
   const tree = deriveKeyTree(masterSecret);
@@ -28,14 +30,18 @@ async function createTestBridge(): Promise<{
   );
   const bridge = createCryptoBridgeClient(worker);
   await bridge.init(masterSecret, "test-refresh-token", "acct-test", { mode: "device" });
-  return { bridge, wrapForBridge: (rawDek) => wrapDek(rawDek, tree.content.publicKey) };
+  return {
+    bridge,
+    wrapForBridge: (rawDek) => wrapDek(rawDek, tree.content.publicKey),
+    workspaceIndexKey: tree.workspaceIndexKey,
+  };
 }
 
 function fakeWorkspaceRow(overrides: Partial<WorkspaceRow> = {}): WorkspaceRow {
   return {
     id: "ws-1",
     accountId: "acct-test",
-    path: "/work/project",
+    pathHash: "fake-path-hash",
     metadata: { value: { t: "enc", v: 1, c: "placeholder" }, version: 0 },
     dek: "placeholder-dek",
     ...overrides,
@@ -43,11 +49,11 @@ function fakeWorkspaceRow(overrides: Partial<WorkspaceRow> = {}): WorkspaceRow {
 }
 
 describe("saveWorkspaceServerConfig", () => {
-  it("no existing row: mints a fresh DEK and creates one via createWorkspace", async () => {
-    const { bridge } = await createTestBridge();
+  it("no existing row: mints a fresh DEK and creates one via createWorkspace, keyed by pathHash (never the raw path)", async () => {
+    const { bridge, workspaceIndexKey } = await createTestBridge();
     const created = fakeWorkspaceRow();
     const createWorkspace = vi.fn(
-      async (_token: string, _body: { path: string; metadata: EncryptedBox; dek: string }) =>
+      async (_token: string, _body: { pathHash: string; metadata: EncryptedBox; dek: string }) =>
         created,
     );
     const putMetadataCas = vi.fn();
@@ -61,7 +67,7 @@ describe("saveWorkspaceServerConfig", () => {
     expect(result).toBe(created);
     expect(putMetadataCas).not.toHaveBeenCalled();
     expect(createWorkspace).toHaveBeenCalledExactlyOnceWith("tok-1", {
-      path: "/work/project",
+      pathHash: hashWorkspacePath(workspaceIndexKey, "/work/project"),
       metadata: expect.any(Object),
       dek: expect.any(String),
     });
@@ -69,10 +75,11 @@ describe("saveWorkspaceServerConfig", () => {
     const call = createWorkspace.mock.calls[0];
     if (!call) throw new Error("createWorkspace was not called");
     const [, body] = call;
+    expect(JSON.stringify(body)).not.toContain("/work/project");
     const unwrapped = await bridge.setSessionKey(decodeBase64(body.dek));
     expect(unwrapped).toBe(true);
-    const opened = await bridge.open<{ baseRef: string }>(body.metadata);
-    expect(opened).toEqual({ baseRef: "main" });
+    const opened = await bridge.open<{ baseRef: string; path: string }>(body.metadata);
+    expect(opened).toEqual({ baseRef: "main", path: "/work/project" });
   });
 
   it("existing row: opens the current box under its own DEK, patches, and CAS-updates", async () => {

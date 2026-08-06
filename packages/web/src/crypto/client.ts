@@ -97,6 +97,10 @@ export interface CryptoBridgeClient {
   /** Seal ONLY the master secret to a peer's ephemeral public key — the requesting device
    * already has its own session. */
   sealKeysForPeer(ephPub: string): Promise<string>;
+  /** Deterministic, server-unguessable blind index for a workspace's real absolute path —
+   * the `POST /v1/workspaces` create-or-get key. The path never leaves the worker; only
+   * the hash comes back. */
+  hashWorkspacePath(path: string): Promise<string>;
   /** Terminate the underlying worker. */
   terminate(): void;
 }
@@ -208,6 +212,7 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
     acceptKeyResponse: (sealed, protection) =>
       call<boolean>({ type: "acceptKeyResponse", sealed, ...protection }),
     sealKeysForPeer: (ephPub) => call<string>({ type: "sealKeysForPeer", ephPub }),
+    hashWorkspacePath: (path) => call<string>({ type: "hashWorkspacePath", path }),
     terminate: () => {
       if (pending.size === 0) {
         rejectAllPending(new Error("crypto-bridge worker terminated"));

@@ -12,8 +12,10 @@ import type { WorkspaceGitConfig } from "./types.js";
  * `baseRef`/`remote` to the `workspaces` table (design conversation: "why
  * don't we store this centrally too") so the dialog can read/edit it even
  * when the daemon is offline, and so it's a single source of truth across
- * every machine that's checked the workspace out. `path` is the create-or-get
- * key (same idempotency shape as `sessions`' `tag`).
+ * every machine that's checked the workspace out. The create-or-get key is
+ * `hashWorkspacePath(path)` (same idempotency shape as `sessions`' `tag`) —
+ * never the raw path, which the server must never see; the real path travels
+ * only inside the sealed `metadata` box below.
  *
  * Unlike `use-session-metadata-write.ts`'s session-scoped CAS write (always
  * against an existing row), a workspace may have no server-side row yet —
@@ -38,9 +40,13 @@ export async function saveWorkspaceServerConfig(
   patch: WorkspaceServerConfigPatch,
 ): Promise<WorkspaceRow> {
   if (!existing) {
-    const initial = patch({});
+    // The real path is sealed into `metadata` alongside the git config (never
+    // sent to the server in the clear) — a freshly-created-by-web workspace
+    // row still needs it for the same reasons the CLI's own workspace rows do.
+    const initial = { ...patch({}), path: deps.path };
     const { wrappedDek, box } = await deps.bridge.createDek(initial);
-    return deps.createWorkspace(deps.token, { path: deps.path, metadata: box, dek: wrappedDek });
+    const pathHash = await deps.bridge.hashWorkspacePath(deps.path);
+    return deps.createWorkspace(deps.token, { pathHash, metadata: box, dek: wrappedDek });
   }
 
   const unwrapped = await deps.bridge.setSessionKey(decodeBase64(existing.dek));

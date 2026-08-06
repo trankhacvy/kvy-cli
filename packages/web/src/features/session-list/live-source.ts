@@ -82,18 +82,15 @@ import { useWorkspaceIndexContext } from "./workspace-index-context";
  * open session at a time.
  */
 
-/** `session.workspaceId` (when set) *is* a workspace's registered real
- * absolute path — there's no separate workspace-name lookup on the server
- * (the `workspaces` table exists in `schema.ts` but no route ever
- * reads/writes it yet; `cli/src/workspace/registry.ts`'s own doc comment:
- * "that resolved path also *is* the workspace's `workspaceId` everywhere").
- * So the friendliest name available for a first pass is the path's own
- * basename — falls back to the full id for a bare root path like `/` or a
- * value with no separator. */
-function workspaceNameFromId(workspaceId: string): string {
-  const trimmed = workspaceId.replace(/[/\\]+$/, "");
+/** `session.workspaceId` is an opaque `workspaces.id` now — never a real
+ * path. The friendliest name available is the real path's own basename,
+ * decrypted from any session in this workspace group (`titles.sessions.get
+ * (id)?.path`, `use-decrypted-titles.ts`) — falls back to the full path for
+ * a bare root path like `/` or a value with no separator. */
+function workspaceNameFromPath(path: string): string {
+  const trimmed = path.replace(/[/\\]+$/, "");
   const base = trimmed.split(/[/\\]/).pop();
-  return base && base.length > 0 ? base : workspaceId;
+  return base && base.length > 0 ? base : path;
 }
 
 /** The newest cached message's `seq` for a fetched page, or `0` for a
@@ -261,18 +258,28 @@ export function buildSnapshot(
     status: deriveMachineStatus(m, presence, now),
   }));
 
+  // One representative real path per workspace group — any session in the
+  // group whose metadata has decrypted works, since they all share the same
+  // real directory.
+  const pathByWorkspaceId = new Map<string, string>();
+  for (const s of sessionRows) {
+    if (s.workspaceId === null || pathByWorkspaceId.has(s.workspaceId)) continue;
+    const path = titles.sessions.get(s.id)?.path;
+    if (path) pathByWorkspaceId.set(s.workspaceId, path);
+  }
   const workspaceIds = new Set<string>();
   for (const s of sessionRows) {
     if (s.workspaceId !== null) workspaceIds.add(s.workspaceId);
   }
-  const workspaces: SessionListWorkspace[] = [...workspaceIds].map((id) => ({
-    id,
-    name: workspaceNameFromId(id),
-  }));
+  const workspaces: SessionListWorkspace[] = [...workspaceIds].map((id) => {
+    const path = pathByWorkspaceId.get(id) ?? null;
+    return { id, name: path ? workspaceNameFromPath(path) : null, path };
+  });
 
   const sessions: SessionListSession[] = sessionRows.map((s) => ({
     id: s.id,
     workspaceId: s.workspaceId,
+    path: titles.sessions.get(s.id)?.path ?? null,
     machineId: s.machineId,
     // `null` = not decrypted yet (see `SessionListSession.title`'s doc
     // comment) — the map only ever has an entry once `decryptSessionMeta`

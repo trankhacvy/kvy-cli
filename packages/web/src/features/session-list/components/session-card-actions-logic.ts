@@ -27,14 +27,15 @@ export function buildPinTogglePatch(currentlyPinned: boolean): SessionMetadataPa
 }
 
 /** Whether Archive has an actual worktree to clean up: needs both a known
- * owning machine (the RPC is machine-scoped) AND a `workspaceId` that
- * actually looks like a Kvy-managed `.worktrees/<branch>` directory
- * (`worktree-path.ts`) — never attempted for an ordinary repo-root session,
- * where "removing the worktree" would be nonsensical (there isn't one) and,
- * if it somehow reached the RPC, unsafe. */
+ * owning machine (the RPC is machine-scoped) AND a real working-directory
+ * path (decrypted from `session.metadata` — never `session.workspaceId`,
+ * which is an opaque id) that actually looks like a Kvy-managed
+ * `.worktrees/<branch>` directory (`worktree-path.ts`) — never attempted for
+ * an ordinary repo-root session, where "removing the worktree" would be
+ * nonsensical (there isn't one) and, if it somehow reached the RPC, unsafe. */
 export function canOfferRemoveWorktree(
   machineId: string | null,
-  workspaceId: string | null,
+  workspacePath: string | null,
 ): boolean {
-  return machineId !== null && looksLikeWorktreePath(workspaceId);
+  return machineId !== null && looksLikeWorktreePath(workspacePath);
 }

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { useSessionWorkspacePath } from "@/features/session-list/use-session-workspace-path";
 import { useSyncSnapshotQuery } from "@/lib/use-sync-snapshot";
 import { RepoFilesPanel } from "./RepoFilesPanel";
 
@@ -11,14 +12,15 @@ import { RepoFilesPanel } from "./RepoFilesPanel";
  * resolving real ids off the live sync snapshot, so the route itself
  * (`app/session/[id]/files/page.tsx`) stays a thin static-export shell.
  *
- * `machineId`/`worktree` come straight off the session's own row
- * (`SessionRow.machineId`/`.workspaceId`, `@kvy/wire`'s `rows.ts` —
- * source `SessionGitScreen` reads from — no decrypt needed, only the
- * `['sync']` snapshot to have synced the row at all.
+ * `machineId` comes straight off the session's own row (`SessionRow.machineId`,
+ * `@kvy/wire`'s `rows.ts`). `worktree` is the real path, decrypted from
+ * `session.metadata` — never `session.workspaceId`, which is an opaque id
+ * (see `use-session-workspace-path.ts`).
  */
 export function SessionFilesScreen({ sessionId }: { sessionId: string }) {
   const query = useSyncSnapshotQuery();
   const session = query.data?.sessions.find((s) => s.id === sessionId);
+  const worktree = useSessionWorkspacePath(session);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -35,13 +37,13 @@ export function SessionFilesScreen({ sessionId }: { sessionId: string }) {
           <p className="p-4 text-sm text-destructive">
             Could not find session {sessionId}. It may not have synced to this device yet.
           </p>
-        ) : !session.machineId || !session.workspaceId ? (
+        ) : !session.machineId || !worktree ? (
           <p className="p-4 text-sm text-destructive">
             This session has no machine/workspace recorded yet. The repo file browser needs both to
             know where to run.
           </p>
         ) : (
-          <RepoFilesPanel machineId={session.machineId} worktree={session.workspaceId} />
+          <RepoFilesPanel machineId={session.machineId} worktree={worktree} />
         )}
       </div>
     </div>

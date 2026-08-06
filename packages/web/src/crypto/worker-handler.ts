@@ -21,6 +21,7 @@ import {
   encryptBlob,
   generateEphemeralKeyPair,
   getRandomBytes,
+  hashWorkspacePath,
   libsodiumDecryptWithSecretKey,
   libsodiumEncryptForPublicKey,
   open,
@@ -323,6 +324,17 @@ export function createCryptoWorkerHandler(
             id: request.id,
             ok: true,
             result: { wrappedDek: encodeBase64(wrappedDek), box },
+          };
+        }
+
+        case "hashWorkspacePath": {
+          if (!(await ensureLoaded()) || !keyTree) {
+            return { id: request.id, ok: false, error: "needs-keys" };
+          }
+          return {
+            id: request.id,
+            ok: true,
+            result: hashWorkspacePath(keyTree.workspaceIndexKey, request.path),
           };
         }
 

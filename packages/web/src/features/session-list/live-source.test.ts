@@ -40,7 +40,7 @@ function makeMachine(overrides: Partial<MachineRow> = {}): MachineRow {
 }
 
 const EMPTY_TITLES = {
-  sessions: new Map<string, { title: string; pinned: boolean }>(),
+  sessions: new Map<string, { title: string; pinned: boolean; path: string | null }>(),
   machines: new Map<string, string>(),
 };
 
@@ -220,7 +220,7 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     const session = makeSession({ id: "sess-1" });
     const machine = makeMachine({ id: "mach-1" });
     const titles = {
-      sessions: new Map([["sess-1", { title: "(untitled session)", pinned: false }]]),
+      sessions: new Map([["sess-1", { title: "(untitled session)", pinned: false, path: null }]]),
       machines: new Map([["mach-1", "(unnamed machine)"]]),
     };
 
@@ -233,7 +233,7 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
   it("threads the decrypted pinned flag through, defaulting to false when not yet decrypted", () => {
     const session = makeSession({ id: "sess-1" });
     const titles = {
-      sessions: new Map([["sess-1", { title: "My session", pinned: true }]]),
+      sessions: new Map([["sess-1", { title: "My session", pinned: true, path: null }]]),
       machines: new Map<string, string>(),
     };
 
@@ -251,21 +251,36 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     expect(notYetDecrypted.sessions[0]?.pinned).toBe(false);
   });
 
-  it("derives a workspace's display name from the basename of its id/path", () => {
-    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/kvy" });
+  /** Builds a `titles` map whose entry for `sessionId` carries a decrypted
+   * `path` — `workspaceId` itself is now an opaque id, so a workspace's
+   * display name/path can only ever come from a session's DECRYPTED
+   * metadata (`use-decrypted-titles.ts`'s `DecryptedSessionMeta.path`). */
+  function titlesWithPath(sessionId: string, path: string) {
+    return {
+      sessions: new Map([[sessionId, { title: "session", pinned: false, path }]]),
+      machines: new Map<string, string>(),
+    };
+  }
 
-    const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+  it("derives a workspace's display name from the basename of its DECRYPTED path", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: "ws-opaque-1" });
+    const titles = titlesWithPath("sess-1", "/Users/vy/projects/kvy");
 
-    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/kvy", name: "kvy" }]);
+    const snapshot = buildSnapshot([session], [], titles, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([
+      { id: "ws-opaque-1", name: "kvy", path: "/Users/vy/projects/kvy" },
+    ]);
   });
 
   it("dedupes multiple sessions sharing the same workspaceId into one workspace entry", () => {
-    const a = makeSession({ id: "sess-1", workspaceId: "/ws/one" });
-    const b = makeSession({ id: "sess-2", workspaceId: "/ws/one" });
+    const a = makeSession({ id: "sess-1", workspaceId: "ws-opaque-one" });
+    const b = makeSession({ id: "sess-2", workspaceId: "ws-opaque-one" });
+    const titles = titlesWithPath("sess-1", "/ws/one");
 
-    const snapshot = buildSnapshot([a, b], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+    const snapshot = buildSnapshot([a, b], [], titles, new Map(), new Map(), new Map());
 
-    expect(snapshot.workspaces).toEqual([{ id: "/ws/one", name: "one" }]);
+    expect(snapshot.workspaces).toEqual([{ id: "ws-opaque-one", name: "one", path: "/ws/one" }]);
   });
 
   it("excludes sessions with no workspaceId from the workspaces list", () => {
@@ -277,19 +292,31 @@ describe("buildSnapshot (status-derivation fixtures)", () => {
     expect(snapshot.sessions[0]?.workspaceId).toBeNull();
   });
 
-  it("falls back to the full id for a workspace path with no usable basename", () => {
-    const session = makeSession({ id: "sess-1", workspaceId: "/" });
+  it("has a null name/path when the workspace's owning session hasn't decrypted yet", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: "ws-opaque-2" });
 
     const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
 
-    expect(snapshot.workspaces).toEqual([{ id: "/", name: "/" }]);
+    expect(snapshot.workspaces).toEqual([{ id: "ws-opaque-2", name: null, path: null }]);
+  });
+
+  it("falls back to the full path for a workspace path with no usable basename", () => {
+    const session = makeSession({ id: "sess-1", workspaceId: "ws-opaque-3" });
+    const titles = titlesWithPath("sess-1", "/");
+
+    const snapshot = buildSnapshot([session], [], titles, new Map(), new Map(), new Map());
+
+    expect(snapshot.workspaces).toEqual([{ id: "ws-opaque-3", name: "/", path: "/" }]);
   });
 
   it("strips a trailing slash before deriving the basename", () => {
-    const session = makeSession({ id: "sess-1", workspaceId: "/Users/vy/projects/kvy/" });
+    const session = makeSession({ id: "sess-1", workspaceId: "ws-opaque-4" });
+    const titles = titlesWithPath("sess-1", "/Users/vy/projects/kvy/");
 
-    const snapshot = buildSnapshot([session], [], EMPTY_TITLES, new Map(), new Map(), new Map());
+    const snapshot = buildSnapshot([session], [], titles, new Map(), new Map(), new Map());
 
-    expect(snapshot.workspaces).toEqual([{ id: "/Users/vy/projects/kvy/", name: "kvy" }]);
+    expect(snapshot.workspaces).toEqual([
+      { id: "ws-opaque-4", name: "kvy", path: "/Users/vy/projects/kvy/" },
+    ]);
   });
 });

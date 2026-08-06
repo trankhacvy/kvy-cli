@@ -28,6 +28,9 @@ export interface KeyTree {
   anonId: string;
   /** Legacy/global blob key, rarely used directly (HKDF("kvy-blob-master")). */
   blobMasterKey: Uint8Array;
+  /** HMAC key for `hashWorkspacePath` — server-unknown, so a workspace
+   * create-or-get blind index can't be dictionary-attacked (HKDF("kvy-workspace-index")). */
+  workspaceIndexKey: Uint8Array;
 }
 
 /**

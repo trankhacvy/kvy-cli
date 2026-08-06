@@ -137,12 +137,14 @@ export const workspaces = pgTable(
     accountId: text("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
-    // Plaintext, client-minted (mirrors `sessions.tag`) — the absolute
-    // workspace directory path, already sent in the clear elsewhere
-    // (`SessionRow.workspaceId`), so no confidentiality is lost by using it
-    // as this table's create-or-get idempotency key.
-    path: text("path").notNull(),
-    metadata: bytea("metadata").notNull(), // enc: baseBranch, remote
+    // Client-minted (mirrors `sessions.tag`) — an HMAC of the absolute
+    // workspace directory path keyed by a client-held, server-unknown secret
+    // (`hashWorkspacePath`/`KeyTree.workspaceIndexKey` in `@kvy/crypto`), used
+    // only as this table's create-or-get idempotency key. The real path
+    // lives solely inside the encrypted `metadata` blob below — this column
+    // deliberately reveals nothing the server (or a DB breach) can act on.
+    pathHash: text("path_hash").notNull(),
+    metadata: bytea("metadata").notNull(), // enc: path, displayName, baseBranch, remote
     metadataVersion: integer("metadata_version").notNull().default(0),
     dek: bytea("dek").notNull(),
     keyEpoch: integer("key_epoch").notNull().default(1),
@@ -150,7 +152,7 @@ export const workspaces = pgTable(
     syncEnabled: boolean("sync_enabled").notNull().default(false),
     sandboxConfig: bytea("sandbox_config"),
   },
-  (t) => [uniqueIndex().on(t.accountId, t.path), index().on(t.accountId)],
+  (t) => [uniqueIndex().on(t.accountId, t.pathHash), index().on(t.accountId)],
 );
 
 export const sessions = pgTable(
@@ -160,7 +162,9 @@ export const sessions = pgTable(
     accountId: text("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
-    workspaceId: text("workspace_id"),
+    // Opaque `workspaces.id` (cuid2) — never the real path (`workspaces.pathHash`
+    // is the create-or-get key for that row). Enforced by the FK, not just convention.
+    workspaceId: text("workspace_id").references(() => workspaces.id),
     machineId: text("machine_id"),
     tag: text("tag").notNull(), // client-minted; creation idempotency
     provider: text("provider").notNull(), // 'claude-code' | 'codex'
@@ -203,7 +207,10 @@ export const unmanagedSessions = pgTable(
     id: text("id").primaryKey().$defaultFn(createId),
     accountId: text("account_id").notNull(),
     machineId: text("machine_id").notNull(),
-    workspaceId: text("workspace_id").notNull(),
+    // Opaque `workspaces.id`, same as `sessions.workspace_id` — never the real path.
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
     providerRef: text("provider_ref").notNull(), // opaque provider uuid
     summary: bytea("summary").notNull(), // enc: title, lastActivity, running?
     dek: bytea("dek").notNull(),

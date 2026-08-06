@@ -24,6 +24,24 @@ async function registerMachine(app: FastifyInstance, authHeader: string): Promis
   return response.json().id;
 }
 
+async function registerWorkspace(
+  app: FastifyInstance,
+  authHeader: string,
+  pathHash: string,
+): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/workspaces",
+    headers: { authorization: authHeader },
+    payload: {
+      pathHash,
+      metadata: fakeBox(),
+      dek: encodeBase64(getRandomBytes(32)),
+    },
+  });
+  return response.json().id;
+}
+
 describe("POST /v1/unmanaged-sessions", () => {
   let pglite: PGlite;
   let db: Awaited<ReturnType<typeof createTestDb>>["db"];
@@ -31,6 +49,8 @@ describe("POST /v1/unmanaged-sessions", () => {
   let eventRouter: RecordingEventRouter;
   let authHeader: string;
   let machineId: string;
+  let workspaceId: string;
+  let workspaceId2: string;
 
   beforeAll(async () => {
     const created = await createTestDb();
@@ -41,6 +61,8 @@ describe("POST /v1/unmanaged-sessions", () => {
     const account = await createTestAccount(db);
     authHeader = account.authHeader;
     machineId = await registerMachine(app, authHeader);
+    workspaceId = await registerWorkspace(app, authHeader, "ws-1-hash");
+    workspaceId2 = await registerWorkspace(app, authHeader, "ws-2-hash");
   });
 
   afterAll(async () => {
@@ -58,7 +80,7 @@ describe("POST /v1/unmanaged-sessions", () => {
       headers: { authorization: authHeader },
       payload: {
         machineId,
-        workspaceId: "ws-1",
+        workspaceId,
         providerRef: "session-abc",
         summary: fakeBox(),
         dek: encodeBase64(getRandomBytes(32)),
@@ -69,7 +91,7 @@ describe("POST /v1/unmanaged-sessions", () => {
     expect(response.statusCode).toBe(201);
     const body = response.json();
     expect(body.machineId).toBe(machineId);
-    expect(body.workspaceId).toBe("ws-1");
+    expect(body.workspaceId).toBe(workspaceId);
     expect(body.providerRef).toBe("session-abc");
     expect(updates).toHaveLength(1);
     expect(updates[0]?.payload.body).toMatchObject({ t: "unmanaged-new" });
@@ -82,7 +104,7 @@ describe("POST /v1/unmanaged-sessions", () => {
       headers: { authorization: authHeader },
       payload: {
         machineId,
-        workspaceId: "ws-2",
+        workspaceId,
         providerRef: "session-xyz",
         summary: fakeBox(),
         dek: encodeBase64(getRandomBytes(32)),
@@ -98,7 +120,7 @@ describe("POST /v1/unmanaged-sessions", () => {
       headers: { authorization: authHeader },
       payload: {
         machineId,
-        workspaceId: "ws-2-renamed",
+        workspaceId: workspaceId2,
         providerRef: "session-xyz",
         summary: fakeBox(),
         dek: encodeBase64(getRandomBytes(32)),
@@ -107,7 +129,7 @@ describe("POST /v1/unmanaged-sessions", () => {
     unsubscribe();
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().workspaceId).toBe("ws-2-renamed");
+    expect(response.json().workspaceId).toBe(workspaceId2);
     expect(updates).toHaveLength(1);
     expect(updates[0]?.payload.body).toMatchObject({ t: "unmanaged-update" });
 
@@ -124,8 +146,25 @@ describe("POST /v1/unmanaged-sessions", () => {
       headers: { authorization: otherHeader },
       payload: {
         machineId,
-        workspaceId: "ws-1",
+        workspaceId,
         providerRef: "session-should-fail",
+        summary: fakeBox(),
+        dek: encodeBase64(getRandomBytes(32)),
+      },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("404s when workspaceId doesn't reference an existing workspace for this account", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/unmanaged-sessions",
+      headers: { authorization: authHeader },
+      payload: {
+        machineId,
+        // Never a raw filesystem path — must be an opaque `workspaces.id` this account owns.
+        workspaceId: "/Users/someone/some-real-project",
+        providerRef: "session-bad-workspace",
         summary: fakeBox(),
         dek: encodeBase64(getRandomBytes(32)),
       },

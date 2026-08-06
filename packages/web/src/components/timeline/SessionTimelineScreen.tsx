@@ -23,6 +23,7 @@ import {
   useSessionTitle,
   useTabAttention,
 } from "@/features/session-control";
+import { useSessionWorkspacePath } from "@/features/session-list/use-session-workspace-path";
 import { useLiveSlashCommandsActions, useSlashCommands } from "@/features/slash-commands";
 import { copy } from "@/lib/copy";
 import { useMachineOnline } from "@/lib/use-machine-online";
@@ -85,9 +86,10 @@ export function SessionTimelineScreen({
     session.keyEpoch < syncSnapshot.accountKeyEpoch;
   const sessionStatus: SessionRow["status"] = session?.status ?? "active";
   const provider = session?.provider ?? "";
-  // `workspaceId` is the workspace's real absolute path — stored plaintext on the row
-  // (the server may see it, unlike `metadata`'s encrypted title), so no decrypt needed.
-  const workspacePath = session?.workspaceId ?? null;
+  // `session.workspaceId` is an opaque `workspaces.id` now (never a real path
+  // — the server must never see one). The real path is decrypted from
+  // `session.metadata` instead, same as the session's title.
+  const workspacePath = useSessionWorkspacePath(session);
   // The session's owning machine (`SessionRow.machineId`, same plaintext-on-
   // the-row convention as `workspacePath` above) — `null` until the row has
   // synced. Needed alongside `workspacePath` to fetch this session's custom
@@ -265,7 +267,7 @@ function SessionTimelineBody({
               title={title ?? sessionId}
               status={sessionStatus}
               machineId={machineId}
-              workspaceId={workspacePath}
+              workspacePath={workspacePath}
             />
           </div>
         </header>

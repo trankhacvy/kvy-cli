@@ -53,8 +53,12 @@ export type MachineRow = z.infer<typeof MachineRowSchema>;
 export const WorkspaceRowSchema = z.object({
   id: z.string(),
   accountId: z.string(),
-  path: z.string(),
-  metadata: VersionedSchema(EncryptedBoxSchema), // enc: baseBranch, remote
+  // HMAC blind index of the real path (`hashWorkspacePath`, `@kvy/crypto`) —
+  // meaningless without `workspaceIndexKey`, which only this account's own
+  // devices hold, so exposing it here lets a client find "does a workspace
+  // row for this real path already exist" without leaking the path itself.
+  pathHash: z.string(),
+  metadata: VersionedSchema(EncryptedBoxSchema), // enc: path, displayName, baseBranch, remote
   dek: z.string(),
 });
 export type WorkspaceRow = z.infer<typeof WorkspaceRowSchema>;
