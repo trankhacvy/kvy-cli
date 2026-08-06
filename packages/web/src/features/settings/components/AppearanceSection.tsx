@@ -1,10 +1,18 @@
 "use client";
 
-import { DownloadIcon } from "lucide-react";
+import { DownloadIcon, type LucideIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import type { Theme } from "@/lib/theme";
 import { useTheme } from "@/lib/use-theme";
+import { cn } from "@/lib/utils";
+
+const THEME_OPTIONS: Array<{ value: Theme; label: string; Icon: LucideIcon }> = [
+  { value: "light", label: "Light", Icon: SunIcon },
+  { value: "dark", label: "Dark", Icon: MoonIcon },
+  { value: "system", label: "Match system", Icon: MonitorIcon },
+];
 
 export function AppearanceSection() {
   const [theme, setTheme] = useTheme();
@@ -16,27 +24,30 @@ export function AppearanceSection() {
     <div className="flex flex-col gap-8">
       <section className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          Kvy defaults to dark. Switch to light if you&apos;d rather.
+          Kvy defaults to dark. Switch to light, or match your system.
         </p>
 
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant={theme === "dark" ? "default" : "outline"}
-            aria-pressed={theme === "dark"}
-            onClick={() => setTheme("dark")}
-          >
-            Dark
-          </Button>
-          <Button
-            type="button"
-            variant={theme === "light" ? "default" : "outline"}
-            aria-pressed={theme === "light"}
-            onClick={() => setTheme("light")}
-          >
-            Light
-          </Button>
-        </div>
+        <fieldset
+          aria-label="Theme"
+          className="inline-flex w-fit gap-0.5 rounded-lg border-0 bg-muted p-1"
+        >
+          {THEME_OPTIONS.map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              title={label}
+              aria-label={label}
+              aria-pressed={theme === value}
+              onClick={() => setTheme(value)}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                theme === value && "bg-accent text-accent-foreground",
+              )}
+            >
+              <Icon className="size-4" />
+            </button>
+          ))}
+        </fieldset>
       </section>
 
       <section className="flex flex-col items-start gap-3">

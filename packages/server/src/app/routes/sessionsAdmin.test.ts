@@ -119,6 +119,41 @@ describe("sessions-admin routes", () => {
     expect(response.json().email).toBe("user@example.com");
   });
 
+  it("GET /v1/auth/sessions surfaces the identity kind and account creation date", async () => {
+    const accountId = "acct_sessions_identity_kind";
+    const session = await issueSession({ accountId, clientKind: "web" });
+    await db.insert(authIdentities).values({
+      accountId,
+      kind: "github",
+      identifier: "github-sub-1",
+      email: "dev@example.com",
+      emailVerified: true,
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/sessions",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    const body = response.json();
+    expect(body.identityKind).toBe("github");
+    expect(typeof body.accountCreatedAt).toBe("string");
+  });
+
+  it("GET /v1/auth/sessions returns null identityKind for an account with no auth_identities row", async () => {
+    const accountId = "acct_sessions_no_identity_kind";
+    const session = await issueSession({ accountId, clientKind: "web" });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/sessions",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(response.json().identityKind).toBeNull();
+  });
+
   it("POST /v1/auth/sessions/:id/revoke revokes the row AND disconnects its live socket immediately", async () => {
     const accountId = "acct_sessions_revoke";
     const caller = await issueSession({ accountId, clientKind: "web" });

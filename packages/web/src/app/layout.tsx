@@ -26,9 +26,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const themeInitScript = `(function(){try{var v=localStorage.getItem(${JSON.stringify(
-    THEME_STORAGE_KEY,
-  )});if(v==="light"){document.documentElement.classList.remove("dark")}}catch(e){}})();`;
+  const themeInitScript = `(function(){try{
+    var v=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
+    var prefersLight=window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches;
+    if(v==="light"||(v==="system"&&prefersLight)){document.documentElement.classList.remove("dark")}
+  })();`;
 
   return (
     <html

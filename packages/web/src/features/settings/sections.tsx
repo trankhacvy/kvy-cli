@@ -2,29 +2,29 @@ import {
   BellIcon,
   BotIcon,
   CreditCardIcon,
-  GitBranchIcon,
   LifeBuoyIcon,
   type LucideIcon,
   MonitorIcon,
   PaletteIcon,
   ShieldIcon,
+  UserIcon,
 } from "lucide-react";
 import { MachinesSettingsScreen } from "@/features/machine-settings";
 import { ProvidersSettingsScreen } from "@/features/provider-accounts";
+import { AccountSection } from "./components/AccountSection";
 import { AgentSection } from "./components/AgentSection";
 import { AppearanceSection } from "./components/AppearanceSection";
 import { DevicesSection } from "./components/DevicesSection";
-import { GitSection } from "./components/GitSection";
 import { NotificationsSection } from "./components/NotificationsSection";
 import { SupportSection } from "./components/SupportSection";
 
 export type SettingsSectionId =
   | "agent"
   | "appearance"
-  | "git"
   | "providers"
   | "machines"
   | "notifications"
+  | "account"
   | "devices"
   | "support";
 
@@ -47,7 +47,6 @@ export interface SettingsSectionMeta {
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   { id: "agent", label: "Agent", icon: BotIcon, Content: AgentSection },
   { id: "appearance", label: "Appearance", icon: PaletteIcon, Content: AppearanceSection },
-  { id: "git", label: "Git", icon: GitBranchIcon, Content: GitSection },
   { id: "providers", label: "Providers", icon: CreditCardIcon, Content: ProvidersSettingsScreen },
   { id: "machines", label: "Machines", icon: MonitorIcon, Content: MachinesSettingsScreen },
   {
@@ -56,6 +55,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
     icon: BellIcon,
     Content: NotificationsSection,
   },
+  { id: "account", label: "Account", icon: UserIcon, Content: AccountSection },
   { id: "devices", label: "Devices", icon: ShieldIcon, Content: DevicesSection },
   { id: "support", label: "Support", icon: LifeBuoyIcon, Content: SupportSection },
 ];

@@ -55,14 +55,25 @@ export function isStandaloneDisplay(): boolean {
   return nav.standalone === true;
 }
 
+let cachedSnapshot: { canInstall: boolean; isInstalled: boolean } = {
+  canInstall: false,
+  isInstalled: false,
+};
+
+/** Returns the SAME object reference across calls whenever the derived
+ * values haven't changed - `useSyncExternalStore` compares snapshots by
+ * reference, so a getter that allocates a new object every call looks like
+ * a change on every render and loops forever. */
 export function getInstallSnapshot(): {
   canInstall: boolean;
   isInstalled: boolean;
 } {
-  return {
-    canInstall: state.deferred !== null && !state.installed,
-    isInstalled: state.installed,
-  };
+  const canInstall = state.deferred !== null && !state.installed;
+  const isInstalled = state.installed;
+  if (cachedSnapshot.canInstall !== canInstall || cachedSnapshot.isInstalled !== isInstalled) {
+    cachedSnapshot = { canInstall, isInstalled };
+  }
+  return cachedSnapshot;
 }
 
 export function subscribeToInstall(listener: Listener): () => void {
