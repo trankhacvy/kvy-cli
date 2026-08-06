@@ -3,6 +3,7 @@ import {
   __resetInstallStateForTests,
   ensureInstallListeners,
   getInstallSnapshot,
+  isIosDevice,
   isStandaloneDisplay,
   promptInstall,
   subscribeToInstall,
@@ -68,5 +69,41 @@ describe("pwa-install", () => {
     expect(getInstallSnapshot().isInstalled).toBe(true);
     expect(seen.length).toBeGreaterThan(0);
     unsub();
+  });
+
+  it("returns false without a global navigator", () => {
+    expect(isIosDevice()).toBe(false);
+  });
+
+  it("detects iPhone/iPad/iPod from the user agent", () => {
+    vi.stubGlobal("navigator", { userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)" });
+    expect(isIosDevice()).toBe(true);
+  });
+
+  it("detects iPadOS 13+ reporting as MacIntel via touch support", () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      platform: "MacIntel",
+      maxTouchPoints: 5,
+    });
+    expect(isIosDevice()).toBe(true);
+  });
+
+  it("does not mistake a real Mac (no touch points) for iPadOS", () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+      platform: "MacIntel",
+      maxTouchPoints: 0,
+    });
+    expect(isIosDevice()).toBe(false);
+  });
+
+  it("returns false for a normal desktop/Android user agent", () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120",
+      platform: "Win32",
+      maxTouchPoints: 0,
+    });
+    expect(isIosDevice()).toBe(false);
   });
 });
