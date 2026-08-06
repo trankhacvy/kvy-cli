@@ -52,6 +52,10 @@ export const authIdentities = pgTable(
     passwordHash: text("password_hash"), // argon2id PHC string; null for oauth
     email: text("email"),
     emailVerified: boolean("email_verified").notNull().default(false),
+    // Avatar URL from the provider (Google's `picture` claim, GitHub's `avatar_url`) —
+    // display only, refreshed on every sign-in (unlike `email`, which is a one-time
+    // backfill) since there's no identity/security decision riding on it.
+    image: text("image"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // IP-rotating attacker defeats `password.ts`'s route-level Fastify rate limit alone,
     // so a wrong password against THIS identifier also counts here regardless of source

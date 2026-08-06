@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AuthArtPanel } from "@/components/auth/auth-art-panel";
 import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
 import { GithubIcon } from "@/components/icons/github";
@@ -74,7 +75,13 @@ export default function SignInPage() {
                   type="button"
                   size="lg"
                   className="h-11 w-full gap-2.5 border-zinc-200 bg-white text-zinc-900 shadow-xs hover:bg-zinc-100"
-                  onClick={() => beginGoogleSignIn()}
+                  onClick={() => {
+                    beginGoogleSignIn().catch((err: unknown) => {
+                      toast.error(
+                        err instanceof Error ? err.message : "Could not start Google sign-in.",
+                      );
+                    });
+                  }}
                 >
                   <GoogleIcon className="size-4.5" />
                   Continue with Google

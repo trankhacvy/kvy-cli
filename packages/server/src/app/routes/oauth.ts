@@ -3,8 +3,10 @@ import type { FastifyPluginAsyncZod } from "fastify-type-provider-zod";
 import { z } from "zod";
 import {
   defaultGithubCodeExchanger,
+  defaultGoogleCodeExchanger,
   defaultOAuthVerifier,
   type GithubCodeExchanger,
+  type GoogleCodeExchanger,
   type OAuthVerifier,
 } from "../../auth/oauth.js";
 import { issueSession } from "../../auth/refresh.js";
@@ -30,6 +32,7 @@ export function buildOAuthRoutes(
   db: Database,
   verifier: OAuthVerifier = defaultOAuthVerifier,
   githubExchanger: GithubCodeExchanger = defaultGithubCodeExchanger,
+  googleExchanger: GoogleCodeExchanger = defaultGoogleCodeExchanger,
 ): FastifyPluginAsyncZod {
   return async (app) => {
     // GitHub's token endpoint has no CORS allowance for browser fetches, so the browser
@@ -55,6 +58,38 @@ export function buildOAuthRoutes(
           return reply.code(401).send({ error: "GitHub code exchange failed" });
         }
         return reply.send({ accessToken });
+      },
+    );
+
+    // Google's "Web application" client type requires the client secret in the
+    // code→token exchange, so this mirrors the GitHub route above rather than
+    // letting the browser trade the code directly.
+    app.post(
+      "/v1/auth/oauth/google/exchange",
+      {
+        config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+        schema: {
+          body: z.object({
+            code: z.string().min(1),
+            codeVerifier: z.string().min(1),
+            redirectUri: z.string().min(1),
+          }),
+          response: {
+            200: z.object({ idToken: z.string() }),
+            401: RegisterErrorSchema,
+          },
+        },
+      },
+      async (request, reply) => {
+        const idToken = await googleExchanger.exchange(
+          request.body.code,
+          request.body.codeVerifier,
+          request.body.redirectUri,
+        );
+        if (!idToken) {
+          return reply.code(401).send({ error: "Google code exchange failed" });
+        }
+        return reply.send({ idToken });
       },
     );
 
@@ -95,17 +130,27 @@ export function buildOAuthRoutes(
                 identifier: identity.subject,
                 email: identity.email,
                 emailVerified: identity.emailVerified,
+                image: identity.image,
               });
               return account.id;
             });
 
-        // Backfill email on sign-in if the identity was created before email capture existed.
-        // Never overwrites an existing email — deliberately conservative.
-        if (existing && !existing.email && identity.email) {
-          await db
-            .update(authIdentities)
-            .set({ email: identity.email, emailVerified: identity.emailVerified })
-            .where(eq(authIdentities.id, existing.id));
+        if (existing) {
+          const updates: Partial<typeof authIdentities.$inferInsert> = {};
+          // Backfill email on sign-in if the identity was created before email capture
+          // existed. Never overwrites an existing email — deliberately conservative.
+          if (!existing.email && identity.email) {
+            updates.email = identity.email;
+            updates.emailVerified = identity.emailVerified;
+          }
+          // Unlike email, the avatar is purely cosmetic — no identity/security decision
+          // rides on it — so it's kept fresh on every sign-in rather than backfilled once.
+          if (identity.image !== existing.image) {
+            updates.image = identity.image;
+          }
+          if (Object.keys(updates).length > 0) {
+            await db.update(authIdentities).set(updates).where(eq(authIdentities.id, existing.id));
+          }
         }
 
         const { accessToken, refreshToken } = await issueSession(db, {

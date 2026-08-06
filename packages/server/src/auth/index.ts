@@ -1,9 +1,12 @@
 export { createDevLoggerEmailTransport, type EmailTransport } from "./email.js";
 export {
   defaultGithubCodeExchanger,
+  defaultGoogleCodeExchanger,
   defaultOAuthVerifier,
   exchangeGithubCode,
+  exchangeGoogleCode,
   type GithubCodeExchanger,
+  type GoogleCodeExchanger,
   type OAuthIdentity,
   type OAuthProvider,
   type OAuthVerifier,

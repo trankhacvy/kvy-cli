@@ -8,6 +8,7 @@ import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type {
   GithubCodeExchanger,
+  GoogleCodeExchanger,
   OAuthIdentity,
   OAuthProvider,
   OAuthVerifier,
@@ -23,20 +24,25 @@ const migrationsFolder = path.resolve(
 );
 
 // Fake verifier: proofs are `"<provider>:<subject>"`, optionally extended with
-// `:<email>:verified` or `:<email>:unverified` to exercise email capture, or the
-// literal string `"invalid"` to simulate a rejected proof — keeps these tests off
-// the network entirely (mirrors the `db` injection pattern in auth.test.ts).
+// `:<email>:verified|unverified` to exercise email capture and then `:<image>` to
+// exercise avatar capture, or the literal string `"invalid"` to simulate a rejected
+// proof — keeps these tests off the network entirely (mirrors the `db` injection
+// pattern in auth.test.ts).
 function fakeVerifier(): OAuthVerifier {
   return {
     async verify(provider: OAuthProvider, proof: string): Promise<OAuthIdentity | null> {
       if (proof === "invalid") return null;
-      const [proofProvider, subject, email, verifiedFlag] = proof.split(":");
+      // `image` is everything after the 4th `:` rejoined — a plain split would
+      // otherwise chop an "https://..." image URL apart at its own colons.
+      const [proofProvider, subject, email, verifiedFlag, ...imageParts] = proof.split(":");
       if (proofProvider !== provider || !subject) return null;
+      const image = imageParts.length > 0 ? imageParts.join(":") : null;
       return {
         provider,
         subject,
         email: email ?? null,
         emailVerified: verifiedFlag === "verified",
+        image,
       };
     },
   };
@@ -230,6 +236,53 @@ describe("POST /v1/auth/register", () => {
       .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
     expect(afterThirdLogin?.email).toBe("erin@example.com");
   });
+
+  it("persists the identity's avatar image on the auth_identities insert", async () => {
+    const { body } = registerBody({
+      oauthProvider: "google",
+      oauthProof: "google:grace-sub:grace@example.com:verified:https://example.com/grace.png",
+    });
+
+    const response = await app.inject({ method: "POST", url: "/v1/auth/register", payload: body });
+    const verified = await verifyToken(response.json().token);
+
+    const db = drizzle(pglite, { schema });
+    const [row] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, verified?.accountId ?? ""));
+    expect(row?.image).toBe("https://example.com/grace.png");
+  });
+
+  it("refreshes the avatar image on every sign-in, unlike email which only backfills once", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        oauthProvider: "google",
+        oauthProof: "google:henry-sub:henry@example.com:verified:https://example.com/old.png",
+      },
+    });
+    const firstVerified = await verifyToken(first.json().token);
+
+    await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        oauthProvider: "google",
+        oauthProof: "google:henry-sub:henry@example.com:verified:https://example.com/new.png",
+      },
+    });
+
+    const db = drizzle(pglite, { schema });
+    const [row] = await db
+      .select()
+      .from(authIdentities)
+      .where(eq(authIdentities.accountId, firstVerified?.accountId ?? ""));
+    expect(row?.image).toBe("https://example.com/new.png");
+    // Email backfill-once behavior is unaffected by the image refresh.
+    expect(row?.email).toBe("henry@example.com");
+  });
 });
 
 // Fake exchanger: `"valid-code"` succeeds, anything else fails — keeps these tests off
@@ -289,6 +342,79 @@ describe("POST /v1/auth/oauth/github/exchange", () => {
       method: "POST",
       url: "/v1/auth/oauth/github/exchange",
       payload: { code: "valid-code" },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+});
+
+// Fake exchanger: `"valid-code"` succeeds, anything else fails — mirrors `fakeGithubExchanger`.
+function fakeGoogleExchanger(): GoogleCodeExchanger {
+  return {
+    async exchange(code: string) {
+      return code === "valid-code" ? "fake-google-id-token" : null;
+    },
+  };
+}
+
+describe("POST /v1/auth/oauth/google/exchange", () => {
+  let pglite: PGlite;
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    pglite = new PGlite();
+    const db = drizzle(pglite, { schema });
+    await migrate(db, { migrationsFolder });
+
+    app = await buildServer(
+      { logger: false },
+      { db, oauthVerifier: fakeVerifier(), googleExchanger: fakeGoogleExchanger() },
+    );
+  });
+
+  afterAll(async () => {
+    await app.close();
+    await pglite.close();
+  });
+
+  it("returns the id token for a valid code", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/oauth/google/exchange",
+      payload: {
+        code: "valid-code",
+        codeVerifier: "a-verifier",
+        redirectUri: "https://kvy-cli.tkvy.dev/auth/callback/google/",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ idToken: "fake-google-id-token" });
+  });
+
+  it("returns 401 when the exchanger rejects the code", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/oauth/google/exchange",
+      payload: {
+        code: "bad-code",
+        codeVerifier: "a-verifier",
+        redirectUri: "https://kvy-cli.tkvy.dev/auth/callback/google/",
+      },
+    });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "Google code exchange failed" });
+  });
+
+  it("returns 400 when the body is missing codeVerifier", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/oauth/google/exchange",
+      payload: {
+        code: "valid-code",
+        redirectUri: "https://kvy-cli.tkvy.dev/auth/callback/google/",
+      },
     });
 
     expect(response.statusCode).toBe(400);

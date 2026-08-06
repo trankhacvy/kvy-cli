@@ -1,4 +1,8 @@
-import { createRemoteJWKSet, type JWTVerifyGetKey, jwtVerify } from "jose";
+import {
+  github,
+  google,
+  verifyGoogleIdToken as verifyGoogleIdTokenBetterAuth,
+} from "better-auth/social-providers";
 import { env } from "../config.js";
 
 /**
@@ -22,24 +26,15 @@ export interface OAuthIdentity {
    */
   email: string | null;
   emailVerified: boolean;
-}
-
-const GOOGLE_JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
-const GOOGLE_ISSUERS = ["https://accounts.google.com", "accounts.google.com"];
-
-let cachedGoogleJwks: JWTVerifyGetKey | undefined;
-
-function remoteGoogleJwks(): JWTVerifyGetKey {
-  // Lazily created (not at module load) so importing this file never makes a network
-  // call, and cached across calls (`createRemoteJWKSet` keeps its own internal
-  // key cache + rate limiting) rather than re-fetching Google's JWKS per request.
-  cachedGoogleJwks ??= createRemoteJWKSet(new URL(GOOGLE_JWKS_URL));
-  return cachedGoogleJwks;
+  /** Avatar URL — Google's `picture` claim or GitHub's `avatar_url`. Display only. */
+  image: string | null;
 }
 
 /**
  * Verify a Google-issued OpenID Connect ID token — the `oauthProof` the browser
- * obtained from Google's sign-in flow — and return the identity to bind.
+ * obtained from Google's sign-in flow — and return the identity to bind. Delegates
+ * signature/issuer/expiry verification to Better Auth's own `verifyGoogleIdToken`
+ * (`better-auth/social-providers`), same library used by `exchangeGoogleCode` below.
  *
  * Returns `null` on any failure: bad signature, wrong issuer, expired token, or a
  * server not configured with `GOOGLE_OAUTH_CLIENT_ID`. The unconfigured case is
@@ -48,28 +43,22 @@ function remoteGoogleJwks(): JWTVerifyGetKey {
  * *any* Google-issued token, including one minted for an unrelated application,
  * as proof of this account's identity.
  *
- * `jwks` is injectable so tests can verify against a local test keypair instead of
- * Google's live JWKS endpoint (see oauth.test.ts).
- *
  * `email`/`email_verified` are standard OIDC claims already present in this same
- * signed token — no extra network call needed to capture them (issue-6: "capture &
- * store email from Google/GitHub sign-in").
+ * signed token — no extra network call needed to capture them.
  */
-export async function verifyGoogleIdToken(
-  idToken: string,
-  jwks: JWTVerifyGetKey = remoteGoogleJwks(),
-): Promise<OAuthIdentity | null> {
+export async function verifyGoogleIdToken(idToken: string): Promise<OAuthIdentity | null> {
   if (!env.GOOGLE_OAUTH_CLIENT_ID) return null;
 
   try {
-    const { payload } = await jwtVerify(idToken, jwks, {
-      issuer: GOOGLE_ISSUERS,
+    const payload = await verifyGoogleIdTokenBetterAuth({
+      token: idToken,
       audience: env.GOOGLE_OAUTH_CLIENT_ID,
     });
-    if (typeof payload.sub !== "string" || payload.sub.length === 0) return null;
+    if (!payload || typeof payload.sub !== "string" || payload.sub.length === 0) return null;
     const email = typeof payload.email === "string" ? payload.email : null;
     const emailVerified = payload.email_verified === true;
-    return { provider: "google", subject: payload.sub, email, emailVerified };
+    const image = typeof payload.picture === "string" ? payload.picture : null;
+    return { provider: "google", subject: payload.sub, email, emailVerified, image };
   } catch {
     // Collapses every failure mode (bad signature, expired, wrong issuer/audience,
     // malformed JWT) to null — mirrors tokens.ts's "unwrap never throws" rule.
@@ -77,79 +66,61 @@ export async function verifyGoogleIdToken(
   }
 }
 
-const defaultFetchUser = (token: string): Promise<Response> =>
-  fetch("https://api.github.com/user", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "User-Agent": "kvy-server",
-      Accept: "application/vnd.github+json",
-    },
-  });
-
 /**
- * GitHub's `/user` endpoint only returns `email` when the user made it public;
- * private-by-default accounts need this second call (needs the `user:email` scope
- * — see `beginGithubSignIn` in web/src/lib/oauth.ts) to find the primary verified
- * address instead.
+ * Exchanges a Google OAuth authorization-code + PKCE verifier for an ID token — the
+ * piece of Google's flow that requires the app's client secret (Google's "Web
+ * application" client type requires it regardless of PKCE) and therefore can't
+ * happen in the (statically exported, secret-less) web app. Returns `null` on any
+ * failure: unconfigured credentials (fail closed), a rejected code, or a response
+ * with no `id_token` — never throws.
  */
-const defaultFetchEmails = (token: string): Promise<Response> =>
-  fetch("https://api.github.com/user/emails", {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "User-Agent": "kvy-server",
-      Accept: "application/vnd.github+json",
-    },
-  });
+export async function exchangeGoogleCode(
+  code: string,
+  codeVerifier: string,
+  redirectUri: string,
+): Promise<string | null> {
+  if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return null;
+
+  try {
+    const provider = google({
+      clientId: env.GOOGLE_OAUTH_CLIENT_ID,
+      clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+    });
+    const tokens = await provider.validateAuthorizationCode({
+      code,
+      codeVerifier,
+      redirectURI: redirectUri,
+    });
+    return tokens.idToken ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Verify a GitHub OAuth access token — the `oauthProof` from GitHub's sign-in flow
- * — by calling GitHub's `/user` endpoint. GitHub access tokens are opaque (no local
- * signature to check), so live confirmation via the API *is* the proof: a forged or
- * expired token gets a 401 straight from GitHub.
- *
- * Email capture (issue-6) is best-effort metadata layered on top of that same proof,
- * never a second auth gate: `/user/emails` failing (missing `user:email` scope on an
- * older grant, a network blip) degrades to `email: null, emailVerified: false` rather
- * than failing the whole sign-in.
- *
- * `fetchUser`/`fetchEmails` are injectable so tests can stub both HTTP calls instead
- * of hitting GitHub's live API (see oauth.test.ts).
+ * — via Better Auth's `github` social-provider primitive (`better-auth/social-providers`),
+ * which calls GitHub's `/user` endpoint and, when the user's email is private,
+ * falls back to `/user/emails` for the primary verified address (needs the
+ * `user:email` scope — see `beginGithubSignIn` in web/src/lib/oauth.ts). GitHub
+ * access tokens are opaque (no local signature to check), so live confirmation via
+ * the API *is* the proof: a forged or expired token gets a 401 straight from GitHub.
  */
-export async function verifyGithubAccessToken(
-  accessToken: string,
-  fetchUser: (token: string) => Promise<Response> = defaultFetchUser,
-  fetchEmails: (token: string) => Promise<Response> = defaultFetchEmails,
-): Promise<OAuthIdentity | null> {
+export async function verifyGithubAccessToken(accessToken: string): Promise<OAuthIdentity | null> {
   try {
-    const response = await fetchUser(accessToken);
-    if (!response.ok) return null;
-
-    const body = (await response.json()) as { id?: number | string; email?: string | null };
-    if (body.id === undefined || body.id === null) return null;
-
-    let email = typeof body.email === "string" ? body.email : null;
-    let emailVerified = false;
-    try {
-      const emailsRes = await fetchEmails(accessToken);
-      if (emailsRes.ok) {
-        const emails = (await emailsRes.json()) as Array<{
-          email: string;
-          primary: boolean;
-          verified: boolean;
-        }>;
-        const primary = emails.find((e) => e.primary) ?? emails.find((e) => e.verified);
-        if (primary) {
-          email = primary.email;
-          emailVerified = primary.verified;
-        }
-      }
-    } catch {
-      // `/user/emails` is best-effort metadata, not part of the auth proof — a
-      // failure here degrades to whatever `/user` already gave us (often nothing)
-      // rather than failing the whole sign-in.
-    }
-
-    return { provider: "github", subject: String(body.id), email, emailVerified };
+    const provider = github({ clientId: env.GITHUB_OAUTH_CLIENT_ID ?? "" });
+    const result = await provider.getUserInfo({ accessToken });
+    // Better Auth's own getUserInfo doesn't guard against a missing `id` in the
+    // profile response (it trusts GitHub's API shape) — this codebase's contract is
+    // that `subject` is never the literal string "undefined", so check explicitly.
+    if (!result || result.user.id === undefined || result.user.id === null) return null;
+    return {
+      provider: "github",
+      subject: String(result.user.id),
+      email: result.user.email ?? null,
+      emailVerified: result.user.emailVerified,
+      image: result.user.image ?? null,
+    };
   } catch {
     // Network failure or non-JSON body — same "expected, routine, collapse to null"
     // treatment as the Google path above.
@@ -163,35 +134,20 @@ export async function verifyGithubAccessToken(
  * the (statically exported, secret-less) web app. Returns `null` on any failure:
  * unconfigured credentials (fail closed, same rationale as the Google audience check
  * above), a rejected code, or a malformed response — never throws.
- *
- * `fetchToken` is injectable so tests can stub the HTTP call instead of hitting
- * GitHub's live token endpoint (see oauth.test.ts), mirroring `verifyGithubAccessToken`.
  */
 export async function exchangeGithubCode(
   code: string,
   redirectUri: string,
-  fetchToken: (body: Record<string, string>) => Promise<Response> = (body) =>
-    fetch("https://github.com/login/oauth/access_token", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    }),
 ): Promise<string | null> {
   if (!env.GITHUB_OAUTH_CLIENT_ID || !env.GITHUB_OAUTH_CLIENT_SECRET) return null;
 
   try {
-    const response = await fetchToken({
-      client_id: env.GITHUB_OAUTH_CLIENT_ID,
-      client_secret: env.GITHUB_OAUTH_CLIENT_SECRET,
-      code,
-      redirect_uri: redirectUri,
+    const provider = github({
+      clientId: env.GITHUB_OAUTH_CLIENT_ID,
+      clientSecret: env.GITHUB_OAUTH_CLIENT_SECRET,
     });
-    if (!response.ok) return null;
-
-    const body = (await response.json()) as { access_token?: string };
-    return typeof body.access_token === "string" && body.access_token.length > 0
-      ? body.access_token
-      : null;
+    const tokens = await provider.validateAuthorizationCode({ code, redirectURI: redirectUri });
+    return tokens?.accessToken ?? null;
   } catch {
     return null;
   }
@@ -209,6 +165,16 @@ export interface GithubCodeExchanger {
 /** Production exchanger: real GitHub token-endpoint call. */
 export const defaultGithubCodeExchanger: GithubCodeExchanger = {
   exchange: exchangeGithubCode,
+};
+
+/** Mirrors `GithubCodeExchanger` for Google's PKCE code exchange. */
+export interface GoogleCodeExchanger {
+  exchange(code: string, codeVerifier: string, redirectUri: string): Promise<string | null>;
+}
+
+/** Production exchanger: real Google token-endpoint call. */
+export const defaultGoogleCodeExchanger: GoogleCodeExchanger = {
+  exchange: exchangeGoogleCode,
 };
 
 /**

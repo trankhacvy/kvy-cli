@@ -51,6 +51,10 @@ export function buildSessionsAdminRoutes(
               // the same as verified ones (there's no auth decision riding on it
               // here), so this is a UI label, not a claim of ownership.
               email: z.string().nullable(),
+              // Avatar URL, same best-effort/display-only treatment as `email` — null
+              // for password identities (never captured) or before the first OAuth
+              // sign-in refreshed it.
+              image: z.string().nullable(),
               // 'password' identities exist for local/dev only (prod only offers
               // Google/GitHub sign-in) — null when there's no identity row yet.
               identityKind: z.enum(["password", "google", "github"]).nullable(),
@@ -77,6 +81,7 @@ export function buildSessionsAdminRoutes(
         const active = rows.filter((row) => !row.revokedAt);
         return reply.send({
           email: identity?.email ?? null,
+          image: identity?.image ?? null,
           identityKind: toIdentityKind(identity?.kind),
           accountCreatedAt: account?.createdAt.toISOString() ?? null,
           sessions: active.map((row) => ({

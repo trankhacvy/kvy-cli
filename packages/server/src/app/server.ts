@@ -10,9 +10,11 @@ import {
   authPlugin,
   createDevLoggerEmailTransport,
   defaultGithubCodeExchanger,
+  defaultGoogleCodeExchanger,
   defaultOAuthVerifier,
   type EmailTransport,
   type GithubCodeExchanger,
+  type GoogleCodeExchanger,
   type OAuthVerifier,
 } from "../auth/index.js";
 import {
@@ -71,6 +73,7 @@ export async function buildServer(
     db?: Database;
     oauthVerifier?: OAuthVerifier;
     githubExchanger?: GithubCodeExchanger;
+    googleExchanger?: GoogleCodeExchanger;
     eventRouter?: EventRouterPort;
     pushDispatcher?: PushDispatcherPort;
     blobStorage?: BlobStorageDriver;
@@ -145,6 +148,7 @@ export async function buildServer(
       db,
       deps.oauthVerifier ?? defaultOAuthVerifier,
       deps.githubExchanger ?? defaultGithubCodeExchanger,
+      deps.googleExchanger ?? defaultGoogleCodeExchanger,
     ),
   );
   await app.register(buildRefreshRoutes(db));

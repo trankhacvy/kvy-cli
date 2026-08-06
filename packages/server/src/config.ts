@@ -43,6 +43,9 @@ const EnvSchema = z
     // Optional — Google sign-in refuses proofs (401, fail closed) until configured.
     // An unset client id must never skip the audience check; it must reject everything.
     GOOGLE_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    // Google's "Web application" client type requires the secret in the code→token
+    // exchange regardless of PKCE. Optional — refuses exchanges (401) until both are set.
+    GOOGLE_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
     // GitHub OAuth app credentials. The web app (a static export) hands GitHub's
     // authorization `code` to this server to exchange, since GitHub's token endpoint
     // requires the client secret and has no browser-CORS path. Optional — refuses
@@ -135,6 +138,7 @@ export type Env = z.infer<typeof EnvSchema>;
 // ...) deliberately keep hard-failing on an explicit empty string — see config.test.ts.
 const OPTIONAL_ENV_KEYS = [
   "GOOGLE_OAUTH_CLIENT_ID",
+  "GOOGLE_OAUTH_CLIENT_SECRET",
   "GITHUB_OAUTH_CLIENT_ID",
   "GITHUB_OAUTH_CLIENT_SECRET",
   "VAPID_PUBLIC_KEY",

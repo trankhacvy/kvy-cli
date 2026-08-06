@@ -141,6 +141,27 @@ describe("sessions-admin routes", () => {
     expect(typeof body.accountCreatedAt).toBe("string");
   });
 
+  it("GET /v1/auth/sessions surfaces the identity's avatar image", async () => {
+    const accountId = "acct_sessions_with_image";
+    const session = await issueSession({ accountId, clientKind: "web" });
+    await db.insert(authIdentities).values({
+      accountId,
+      kind: "google",
+      identifier: "google-sub-2",
+      email: "img@example.com",
+      emailVerified: true,
+      image: "https://example.com/avatar.png",
+    });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/v1/auth/sessions",
+      headers: { authorization: `Bearer ${session.accessToken}` },
+    });
+
+    expect(response.json().image).toBe("https://example.com/avatar.png");
+  });
+
   it("GET /v1/auth/sessions returns null identityKind for an account with no auth_identities row", async () => {
     const accountId = "acct_sessions_no_identity_kind";
     const session = await issueSession({ accountId, clientKind: "web" });
