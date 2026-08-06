@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { GithubIcon } from "@/components/icons/github";
 import { GoogleIcon } from "@/components/icons/google";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { listDeviceSessions } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import { getToken } from "@/lib/session";
@@ -23,6 +24,7 @@ function ProviderIcon({ kind }: { kind: IdentityKind }) {
 
 export function AccountSection() {
   const [email, setEmail] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(null);
   const [identityKind, setIdentityKind] = useState<IdentityKind>(null);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +37,7 @@ export function AccountSection() {
       .then((result) => {
         if (cancelled) return;
         setEmail(result.email);
+        setImage(result.image);
         setIdentityKind(result.identityKind);
         setCreatedAt(result.accountCreatedAt);
       })
@@ -53,7 +56,12 @@ export function AccountSection() {
       {!error && (
         <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
           <div className="flex items-center gap-3">
-            <ProviderIcon kind={identityKind} />
+            <Avatar className="size-10">
+              {image && <AvatarImage src={image} alt="" />}
+              <AvatarFallback>
+                <ProviderIcon kind={identityKind} />
+              </AvatarFallback>
+            </Avatar>
             <div className="min-w-0">
               <p className="text-sm font-medium">
                 {identityKind

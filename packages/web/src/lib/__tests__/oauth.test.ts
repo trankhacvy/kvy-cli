@@ -3,6 +3,7 @@ import { consumeGithubCallback, consumeGoogleCallback } from "../oauth.js";
 import { createMemoryStorage } from "./test-storage.js";
 
 const STATE_KEY = "kvy:oauth:state";
+const GOOGLE_VERIFIER_KEY = "kvy:oauth:google:verifier";
 
 /**
  * Covers the CSRF/replay-guard logic in `consumeGoogleCallback` /
@@ -17,55 +18,85 @@ describe("consumeGoogleCallback", () => {
 
   beforeEach(() => {
     sessionStorage = createMemoryStorage();
-    (globalThis as { window?: unknown }).window = { sessionStorage };
+    (globalThis as { window?: unknown }).window = {
+      sessionStorage,
+      location: { origin: "https://app.kvy.dev" },
+    };
   });
 
   afterEach(() => {
     delete (globalThis as { window?: unknown }).window;
   });
 
-  it("succeeds when state matches and an id_token is present", () => {
+  it("succeeds when state matches and a code + stashed verifier are present", () => {
     sessionStorage.setItem(STATE_KEY, "state-abc");
-    const result = consumeGoogleCallback("#id_token=the-jwt&state=state-abc");
-    expect(result).toEqual({ ok: true, value: { idToken: "the-jwt" } });
+    sessionStorage.setItem(GOOGLE_VERIFIER_KEY, "verifier-xyz");
+    const result = consumeGoogleCallback("?code=auth-code&state=state-abc");
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        code: "auth-code",
+        codeVerifier: "verifier-xyz",
+        redirectUri: "https://app.kvy.dev/auth/callback/google/",
+      },
+    });
   });
 
-  it("clears the stashed state after a single use", () => {
+  it("clears the stashed state and verifier after a single use", () => {
     sessionStorage.setItem(STATE_KEY, "state-abc");
-    consumeGoogleCallback("#id_token=the-jwt&state=state-abc");
+    sessionStorage.setItem(GOOGLE_VERIFIER_KEY, "verifier-xyz");
+    consumeGoogleCallback("?code=auth-code&state=state-abc");
     expect(sessionStorage.getItem(STATE_KEY)).toBeNull();
+    expect(sessionStorage.getItem(GOOGLE_VERIFIER_KEY)).toBeNull();
   });
 
   it("fails when the returned state does not match the stashed one", () => {
     sessionStorage.setItem(STATE_KEY, "state-abc");
-    const result = consumeGoogleCallback("#id_token=the-jwt&state=wrong-state");
+    sessionStorage.setItem(GOOGLE_VERIFIER_KEY, "verifier-xyz");
+    const result = consumeGoogleCallback("?code=auth-code&state=wrong-state");
     expect(result.ok).toBe(false);
   });
 
   it("fails when no state was ever stashed (e.g. a replayed/bookmarked callback URL)", () => {
-    const result = consumeGoogleCallback("#id_token=the-jwt&state=state-abc");
+    const result = consumeGoogleCallback("?code=auth-code&state=state-abc");
+    expect(result.ok).toBe(false);
+  });
+
+  it("fails when state matches but no verifier was ever stashed", () => {
+    sessionStorage.setItem(STATE_KEY, "state-abc");
+    const result = consumeGoogleCallback("?code=auth-code&state=state-abc");
     expect(result.ok).toBe(false);
   });
 
   it("surfaces the provider's error param instead of a generic message", () => {
     sessionStorage.setItem(STATE_KEY, "state-abc");
-    const result = consumeGoogleCallback("#error=access_denied&state=state-abc");
+    sessionStorage.setItem(GOOGLE_VERIFIER_KEY, "verifier-xyz");
+    const result = consumeGoogleCallback("?error=access_denied&state=state-abc");
     expect(result).toEqual({
       ok: false,
       error: "Google sign-in was cancelled or failed (access_denied).",
     });
   });
 
-  it("fails when state matches but no id_token is present", () => {
+  it("fails when state matches but no code is present", () => {
     sessionStorage.setItem(STATE_KEY, "state-abc");
-    const result = consumeGoogleCallback("#state=state-abc");
+    sessionStorage.setItem(GOOGLE_VERIFIER_KEY, "verifier-xyz");
+    const result = consumeGoogleCallback("?state=state-abc");
     expect(result.ok).toBe(false);
   });
 
-  it("handles a hash without its leading '#'", () => {
+  it("handles a query string without its leading '?'", () => {
     sessionStorage.setItem(STATE_KEY, "state-abc");
-    const result = consumeGoogleCallback("id_token=the-jwt&state=state-abc");
-    expect(result).toEqual({ ok: true, value: { idToken: "the-jwt" } });
+    sessionStorage.setItem(GOOGLE_VERIFIER_KEY, "verifier-xyz");
+    const result = consumeGoogleCallback("code=auth-code&state=state-abc");
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        code: "auth-code",
+        codeVerifier: "verifier-xyz",
+        redirectUri: "https://app.kvy.dev/auth/callback/google/",
+      },
+    });
   });
 });
 

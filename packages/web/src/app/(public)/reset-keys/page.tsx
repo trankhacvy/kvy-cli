@@ -3,6 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { AuthArtPanel } from "@/components/auth/auth-art-panel";
 import { AuthBrandMark } from "@/components/auth/auth-brand-mark";
 import { KeyProtectionChoice } from "@/components/auth/key-protection-choice";
@@ -45,8 +46,13 @@ export default function ResetKeysPage() {
 
   function beginStepUp(provider: StepUpProvider): void {
     stashPendingStepUp({ provider });
-    if (provider === "google") beginGoogleSignIn();
-    else beginGithubSignIn();
+    if (provider === "google") {
+      beginGoogleSignIn().catch((err: unknown) => {
+        toast.error(err instanceof Error ? err.message : "Could not start Google sign-in.");
+      });
+    } else {
+      beginGithubSignIn();
+    }
   }
 
   async function handlePasswordStepUp(event: React.FormEvent): Promise<void> {

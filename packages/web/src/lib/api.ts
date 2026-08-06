@@ -95,6 +95,15 @@ export function exchangeGithubCode(body: {
   return postJson("/v1/auth/oauth/github/exchange", body);
 }
 
+/** `POST /v1/auth/oauth/google/exchange` — trades a Google authorization code + PKCE verifier for an ID token. */
+export function exchangeGoogleCode(body: {
+  code: string;
+  codeVerifier: string;
+  redirectUri: string;
+}): Promise<{ idToken: string }> {
+  return postJson("/v1/auth/oauth/google/exchange", body);
+}
+
 /** `POST /v1/auth/password/register` — email+password sign-up. */
 export function passwordRegister(body: {
   email: string;
@@ -148,6 +157,7 @@ export function keysBind(
  * the account's best-effort captured email for display only, `null` if none is on file. */
 export function listDeviceSessions(token: string): Promise<{
   email: string | null;
+  image: string | null;
   identityKind: "password" | "google" | "github" | null;
   accountCreatedAt: string | null;
   sessions: Array<{

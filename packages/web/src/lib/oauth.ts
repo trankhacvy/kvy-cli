@@ -2,18 +2,21 @@
  * Client-only OAuth redirect flows. Pure browser navigations - no popup, no
  * third-party SDK script.
  *
- * - Google: OIDC implicit flow (`response_type=id_token`). Google redirects back
- *   with a signed ID token in the URL fragment (never sent to any server).
+ * - Google: authorization-code flow with PKCE. Google's "Web application" client
+ *   type requires the client secret in the code→token exchange regardless of
+ *   PKCE, so the `code` (+ `codeVerifier`) goes through the server's
+ *   `/v1/auth/oauth/google/exchange` proxy, mirroring GitHub below.
  * - GitHub: authorization-code flow. GitHub's token endpoint requires a client
  *   secret and has no CORS allowance, so the `code` goes through the server's
  *   `/v1/auth/oauth/github/exchange` proxy.
  *
- * `state` (both flows) and `nonce` (Google only) guard against CSRF/replay;
- * both are one-time values round-tripped through `sessionStorage`.
+ * `state` (both flows) and the PKCE `codeVerifier` (Google only) guard against
+ * CSRF/replay; both are one-time values round-tripped through `sessionStorage`.
  */
 import { GITHUB_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_ID } from "./config.js";
 
 const STATE_KEY = "kvy:oauth:state";
+const GOOGLE_VERIFIER_KEY = "kvy:oauth:google:verifier";
 
 function randomToken(): string {
   const bytes = new Uint8Array(16);
@@ -25,25 +28,37 @@ function callbackUrl(provider: "google" | "github"): string {
   return `${window.location.origin}/auth/callback/${provider}/`;
 }
 
-/** Redirects the browser to Google's OIDC implicit-flow consent screen. */
-export function beginGoogleSignIn(): void {
+async function sha256Base64Url(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/** Redirects the browser to Google's authorization-code + PKCE consent screen. */
+export async function beginGoogleSignIn(): Promise<void> {
   if (!GOOGLE_OAUTH_CLIENT_ID) {
     throw new Error("Google sign-in is not configured");
   }
+  const codeVerifier = randomToken() + randomToken();
+  // Hashed before anything is written to sessionStorage — if `crypto.subtle` is
+  // unavailable (e.g. a non-secure origin), this throws with no stashed state to
+  // clean up, and the caller's rejection handler is the only thing that fires.
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+
   const state = randomToken();
   window.sessionStorage.setItem(STATE_KEY, state);
+  window.sessionStorage.setItem(GOOGLE_VERIFIER_KEY, codeVerifier);
 
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", GOOGLE_OAUTH_CLIENT_ID);
   url.searchParams.set("redirect_uri", callbackUrl("google"));
-  url.searchParams.set("response_type", "id_token");
-  url.searchParams.set("scope", "openid");
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", "openid email profile");
   url.searchParams.set("state", state);
-  // Google echoes `nonce` back inside the signed ID token's payload — the
-  // server's verifier doesn't check it (it only needs proof of a valid,
-  // freshly-scoped token), but including it is a defense-in-depth replay
-  // guard other implementations of this endpoint may add later.
-  url.searchParams.set("nonce", randomToken());
+  url.searchParams.set("code_challenge", codeChallenge);
+  url.searchParams.set("code_challenge_method", "S256");
   window.location.href = url.toString();
 }
 
@@ -76,23 +91,33 @@ function consumeExpectedState(): string | null {
 
 export type OAuthCallbackResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
-/** Parses Google's implicit-flow redirect back (`#id_token=...&state=...`). */
-export function consumeGoogleCallback(hash: string): OAuthCallbackResult<{ idToken: string }> {
-  const params = new URLSearchParams(hash.replace(/^#/, ""));
+/** Consumes (and clears) the one-time PKCE verifier stashed before redirecting. */
+function consumeGoogleVerifier(): string | null {
+  const verifier = window.sessionStorage.getItem(GOOGLE_VERIFIER_KEY);
+  window.sessionStorage.removeItem(GOOGLE_VERIFIER_KEY);
+  return verifier;
+}
+
+/** Parses Google's authorization-code redirect back (`?code=...&state=...`). */
+export function consumeGoogleCallback(
+  search: string,
+): OAuthCallbackResult<{ code: string; codeVerifier: string; redirectUri: string }> {
+  const params = new URLSearchParams(search.replace(/^\?/, ""));
   const expectedState = consumeExpectedState();
+  const codeVerifier = consumeGoogleVerifier();
 
   if (params.get("error")) {
     return { ok: false, error: `Google sign-in was cancelled or failed (${params.get("error")}).` };
   }
   const state = params.get("state");
-  if (!expectedState || !state || state !== expectedState) {
+  if (!expectedState || !state || state !== expectedState || !codeVerifier) {
     return { ok: false, error: "Sign-in request expired or was tampered with. Please try again." };
   }
-  const idToken = params.get("id_token");
-  if (!idToken) {
-    return { ok: false, error: "Google did not return a sign-in token." };
+  const code = params.get("code");
+  if (!code) {
+    return { ok: false, error: "Google did not return an authorization code." };
   }
-  return { ok: true, value: { idToken } };
+  return { ok: true, value: { code, codeVerifier, redirectUri: callbackUrl("google") } };
 }
 
 /** Parses GitHub's authorization-code redirect back (`?code=...&state=...`). */

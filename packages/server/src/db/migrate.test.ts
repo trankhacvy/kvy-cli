@@ -33,9 +33,9 @@ function createFakeClient(migrationCount: string, lockedAlways = true): postgres
 const migrationsFolder = path.resolve(process.cwd(), "drizzle");
 
 describe("journalEntryCount", () => {
-  it("reads the real shipped drizzle/meta/_journal.json and returns 11", async () => {
+  it("reads the real shipped drizzle/meta/_journal.json and returns 12", async () => {
     const { journalEntryCount } = await import("./migrate.js");
-    await expect(journalEntryCount(migrationsFolder)).resolves.toBe(11);
+    await expect(journalEntryCount(migrationsFolder)).resolves.toBe(12);
   });
 });
 
@@ -78,11 +78,11 @@ describe("runMigrations", () => {
     postgresMock.mockReturnValue(createFakeClient("6"));
     const { runMigrations } = await import("./migrate.js");
 
-    await expect(runMigrations()).rejects.toThrow(/expected 11 applied migrations, found 6/);
+    await expect(runMigrations()).rejects.toThrow(/expected 12 applied migrations, found 6/);
   });
 
   it("resolves when the post-migrate applied count matches the journal count", async () => {
-    postgresMock.mockReturnValue(createFakeClient("11"));
+    postgresMock.mockReturnValue(createFakeClient("12"));
     const { runMigrations } = await import("./migrate.js");
 
     await expect(runMigrations()).resolves.toBeUndefined();

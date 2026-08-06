@@ -4,7 +4,7 @@ import { ChevronsUpDownIcon, LogOutIcon, SettingsIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { SettingsDialog } from "@/components/settings-dialog";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +37,7 @@ export function NavUser() {
   const router = useRouter();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
+  const [image, setImage] = useState<string | null>(null);
   // Read lazily per render — the footer only exists inside the protected
   // route group, so a token is present by the time this mounts.
   const accountId = getAccountId();
@@ -48,7 +49,9 @@ export function NavUser() {
     if (!token) return;
     listDeviceSessions(token)
       .then((result) => {
-        if (!cancelled) setEmail(result.email);
+        if (cancelled) return;
+        setEmail(result.email);
+        setImage(result.image);
       })
       .catch(() => {
         // Best-effort only — falls back to the account-id label above.
@@ -75,6 +78,7 @@ export function NavUser() {
                 className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
               >
                 <Avatar className="size-8 rounded-lg">
+                  {image && <AvatarImage src={image} alt="" />}
                   <AvatarFallback className="rounded-lg">
                     {accountInitials(email, accountId)}
                   </AvatarFallback>
@@ -94,6 +98,7 @@ export function NavUser() {
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="size-8 rounded-lg grayscale">
+                    {image && <AvatarImage src={image} alt="" />}
                     <AvatarFallback className="rounded-lg">
                       {accountInitials(email, accountId)}
                     </AvatarFallback>
