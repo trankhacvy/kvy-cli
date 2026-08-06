@@ -1,4 +1,8 @@
-# Production stack: server + Postgres only.
+# Production stack: server only — Postgres is a separate, already-provisioned
+# instance (a Coolify-managed database resource, Neon, RDS, ...), not bundled
+# here. See the `networks:` block at the bottom for why that matters when the
+# Postgres is itself a Docker container next to this one (e.g. Coolify).
+#
 # Web (@kvy/web) deploys to Vercel as a static export.
 # Blobs use Cloudflare R2 (S3-compatible, cheap).
 #
@@ -11,40 +15,19 @@
 version: "3.8"
 
 services:
-  postgres:
-    image: postgres:16
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: kvy
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kvy}
-      POSTGRES_DB: kvy
-    volumes:
-      - kvy-pg-data-v3:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U kvy -d kvy"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   server:
     build:
       context: ..
       dockerfile: deploy/server.Dockerfile
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     ports:
       - "127.0.0.1:${SERVER_PORT:-3005}:3005"
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - PORT=3005
-      # Set DATABASE_URL directly to point at a Postgres you provisioned
-      # yourself (a Coolify-managed database resource, Neon, RDS, ...) —
-      # it always wins. Left unset, this falls back to the bundled
-      # `postgres` service above, using POSTGRES_PASSWORD for its password.
-      - DATABASE_URL=${DATABASE_URL:-postgres://kvy:${POSTGRES_PASSWORD:-kvy}@postgres:5432/kvy}
+      # REQUIRED: connection string for a Postgres you provisioned yourself.
+      - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL to your Postgres connection string}
       # REQUIRED: HMAC signing key for auth JWTs
       - KVY_MASTER_SECRET=${KVY_MASTER_SECRET:?Set KVY_MASTER_SECRET in .env}
       # Web app origin (Vercel) for CORS allowlist
@@ -72,12 +55,19 @@ services:
       - TELEGRAM_WEBHOOK_SECRET=${TELEGRAM_WEBHOOK_SECRET}
       - NTFY_BASE_URL=${NTFY_BASE_URL}
     networks:
-      - kvy-net
+      - coolify
 
+# External network Coolify already manages for standalone resources on this
+# server (Coolify UI: Destinations -> "coolify"). Attaching `server` to it is
+# what lets this container resolve a Coolify-managed database resource's
+# internal hostname (e.g. `v10o0vxevsrdxa3sd2q4ww4f`) by Docker DNS — a
+# service-scoped `networks:` list opts a container OUT of any network Compose
+# would otherwise attach by default, which is what silently broke this before.
+#
+# Not deploying via Coolify, or your Postgres is reachable over the public
+# internet (Neon, RDS, ...)? Delete the `networks:` list on `server` above
+# and this block below — the default Compose network already allows outbound
+# internet connections.
 networks:
-  kvy-net:
-    driver: bridge
-
-volumes:
-  kvy-pg-data-v3:
-    driver: local
+  coolify:
+    external: true
