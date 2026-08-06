@@ -86,7 +86,7 @@ export async function ensureLoggedIn(
 function describeFailure(reason: PairFailureReason): string {
   switch (reason) {
     case "request-failed":
-      return "Could not reach the Kvy server. Check KVY_BACKEND_URL and your network, then try again.";
+      return "Could not reach the Kvy server. Check your network connection, then try again.";
     case "expired":
       return "That sign-in link expired before it was approved. Starting over will get you a fresh one.";
     case "cancelled":

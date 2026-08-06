@@ -154,8 +154,7 @@ Usage:
   kvy --help, -h                 Show this help
   kvy --version, -v              Show the CLI version
 
-Environment: KVY_BACKEND_URL, KVY_FRONTEND_URL, KVY_HOME_DIR,
-KVY_DEBUG=1, KVY_NO_UPDATE=1, KVY_NO_SERVICE=1
+Environment: KVY_HOME_DIR, KVY_DEBUG=1, KVY_NO_UPDATE=1, KVY_NO_SERVICE=1
 `;
 
 /**
