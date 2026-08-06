@@ -34,8 +34,7 @@ type Status =
 const pushApi: PushApiPort = { subscribe: subscribePush, unsubscribe: unsubscribePush };
 
 /** Telegram/ntfy stay in the code and keep shipping in dev builds — just not
- * rendered in production yet. Same hide-don't-remove pattern
- * `settings-dialog.tsx`'s `SECTIONS_HIDDEN_IN_PRODUCTION` uses for whole tabs. */
+ * rendered in production yet, since only web push is offered there for now. */
 const SHOW_FALLBACK_CHANNELS = process.env.NODE_ENV !== "production";
 
 /**

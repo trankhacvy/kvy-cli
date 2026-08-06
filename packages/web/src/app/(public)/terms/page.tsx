@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SUPPORT_EMAIL } from "@/lib/config";
+import { FACEBOOK_URL, TWITTER_URL } from "@/lib/config";
 
 export const metadata: Metadata = {
   description: "Terms of use for the Kvy web app and related services.",
@@ -60,12 +60,23 @@ export default function TermsPage() {
           <section className="space-y-2">
             <h2 className="font-medium text-base">Contact</h2>
             <p>
-              Questions:{" "}
+              Questions: reach out on{" "}
               <a
                 className="underline underline-offset-4 hover:text-foreground"
-                href={`mailto:${SUPPORT_EMAIL}`}
+                href={FACEBOOK_URL}
+                target="_blank"
+                rel="noopener noreferrer"
               >
-                {SUPPORT_EMAIL}
+                Facebook
+              </a>{" "}
+              or{" "}
+              <a
+                className="underline underline-offset-4 hover:text-foreground"
+                href={TWITTER_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                X
               </a>
               .
             </p>

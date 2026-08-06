@@ -1,13 +1,12 @@
 "use client";
 
-import { MailIcon, MessageCircleIcon } from "lucide-react";
+import { AtSignIcon, UsersIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DISCORD_INVITE_URL, SUPPORT_EMAIL } from "@/lib/config";
+import { FACEBOOK_URL, TWITTER_URL } from "@/lib/config";
 
 /**
- * Settings → Support: two static,
- * always-on affordances — join the Discord community, or email support
- * directly. Moved verbatim out of the deleted
+ * Settings → Support: two static, always-on affordances — reach out on
+ * Facebook or X. Moved verbatim out of the deleted
  * `app/(protected)/settings/support/page.tsx` route — page chrome dropped;
  * unlike the notifications section's fallback channels, there's no
  * linking/subscribe flow here, just external links, so no state at all.
@@ -19,28 +18,25 @@ export function SupportSection() {
 
       <section className="flex flex-col items-start gap-3">
         <div>
-          <h3 className="text-sm font-medium">Community</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Join the Kvy Discord to chat with other users and the team.
-          </p>
+          <h3 className="text-sm font-medium">Facebook</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Message us on Facebook.</p>
         </div>
         <Button asChild variant="outline">
-          <a href={DISCORD_INVITE_URL} target="_blank" rel="noopener noreferrer">
-            <MessageCircleIcon data-icon="inline-start" />
-            Join Discord
+          <a href={FACEBOOK_URL} target="_blank" rel="noopener noreferrer">
+            <UsersIcon data-icon="inline-start" />
+            Facebook
           </a>
         </Button>
       </section>
 
       <section className="flex flex-col items-start gap-3">
         <div>
-          <h3 className="text-sm font-medium">Direct support</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Prefer email? We read every message.</p>
+          <h3 className="text-sm font-medium">X (Twitter)</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Message us on X.</p>
         </div>
         <Button asChild variant="outline">
-          <a href={`mailto:${SUPPORT_EMAIL}`}>
-            <MailIcon data-icon="inline-start" />
-            {SUPPORT_EMAIL}
+          <a href={TWITTER_URL} target="_blank" rel="noopener noreferrer">
+            <AtSignIcon data-icon="inline-start" />X
           </a>
         </Button>
       </section>

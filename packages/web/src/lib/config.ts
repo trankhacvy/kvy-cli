@@ -28,13 +28,13 @@ export const GITHUB_OAUTH_CLIENT_ID: string | undefined =
 export const VAPID_PUBLIC_KEY: string | undefined =
   process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || undefined;
 
-/** Settings → Support: invite link to Kvy's Discord community. Override via `NEXT_PUBLIC_DISCORD_INVITE_URL`. */
-export const DISCORD_INVITE_URL: string =
-  process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || "https://discord.gg/kvy";
+/** Settings → Support: Facebook profile for support/contact. Override via `NEXT_PUBLIC_FACEBOOK_URL`. */
+export const FACEBOOK_URL: string =
+  process.env.NEXT_PUBLIC_FACEBOOK_URL || "https://www.facebook.com/trankhacvy";
 
-/** Settings → Support: direct support email rendered as a `mailto:` link. */
-export const SUPPORT_EMAIL: string =
-  process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@kvy-cli.tkvy.dev";
+/** Settings → Support: X/Twitter profile for support/contact. Override via `NEXT_PUBLIC_TWITTER_URL`. */
+export const TWITTER_URL: string =
+  process.env.NEXT_PUBLIC_TWITTER_URL || "https://x.com/trankhac_vy";
 
 /**
  * Mirrors the CLI's `KVY_PTY_SETMODE` flag. Un-hides the mode-selector affordance
