@@ -16,8 +16,8 @@ describe("seo helpers", () => {
   it("root metadata points at the web manifest and icons", () => {
     const meta = rootMetadata();
     expect(meta.manifest).toBe("/manifest.webmanifest");
-    expect(meta.applicationName).toBe("Kvy");
-    expect(meta.appleWebApp).toMatchObject({ capable: true, title: "Kvy" });
+    expect(meta.applicationName).toBe("kvy");
+    expect(meta.appleWebApp).toMatchObject({ capable: true, title: "kvy" });
   });
 
   it("landing metadata is indexable with open graph", () => {
@@ -33,6 +33,6 @@ describe("seo helpers", () => {
   it("emits SoftwareApplication JSON-LD", () => {
     const json = softwareApplicationJsonLd();
     expect(json["@type"]).toBe("SoftwareApplication");
-    expect(json.name).toBe("Kvy");
+    expect(json.name).toBe("kvy");
   });
 });

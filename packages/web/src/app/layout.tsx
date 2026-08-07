@@ -6,11 +6,15 @@ import { THEME_COLOR } from "@/lib/config";
 import { rootMetadata } from "@/lib/seo";
 import { DEFAULT_THEME, THEME_STORAGE_KEY } from "@/lib/theme";
 import "./globals.css";
-import { Inter } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Providers } from "./providers";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
+
+const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = rootMetadata();
 
@@ -35,12 +39,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={cn(DEFAULT_THEME === "dark" ? "dark" : undefined, "font-sans", inter.variable)}
+      className={cn(
+        DEFAULT_THEME === "dark" ? "dark" : undefined,
+        "font-sans",
+        inter.variable,
+        spaceGrotesk.variable,
+        jetbrainsMono.variable,
+      )}
       suppressHydrationWarning
     >
       <head>
         <script suppressHydrationWarning>{themeInitScript}</script>
-        <meta name="apple-mobile-web-app-title" content="Kvy" />
+        <meta name="apple-mobile-web-app-title" content="kvy" />
       </head>
       <body className="antialiased">
         <DocumentTitle />
