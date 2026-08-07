@@ -55,6 +55,17 @@ export function isStandaloneDisplay(): boolean {
   return nav.standalone === true;
 }
 
+/** iOS/iPadOS never fires `beforeinstallprompt`, so `canInstall` alone can't
+ * tell "not installable here" apart from "installable, but only through
+ * Safari's manual Share -> Add to Home Screen flow". iPadOS 13+ reports a
+ * desktop-Safari-shaped `navigator.platform` ("MacIntel"), so a real Mac has
+ * to be ruled out via touch support, which no Mac has. */
+export function isIosDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
+  return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+}
+
 let cachedSnapshot: { canInstall: boolean; isInstalled: boolean } = {
   canInstall: false,
   isInstalled: false,
