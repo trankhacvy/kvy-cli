@@ -17,6 +17,20 @@ export type BridgeStatus =
   | { kind: "ready"; bridge: CryptoBridgeClient };
 
 /**
+ * Best-effort request that the browser not evict this origin's IndexedDB under storage
+ * pressure — without it, the wrapped key `key-storage.ts` persists there is "best-effort"
+ * storage a browser (Safari/WebKit especially, including installed home-screen PWAs) can
+ * silently clear, which reads to the user as "I keep getting asked to re-approve this
+ * device" even though they never signed out. Safe to call every time the bridge becomes
+ * ready — already-granted persistence is a harmless no-op, and a browser without the API
+ * (or one that denies the request) just keeps today's behavior.
+ */
+function requestPersistentStorage(): void {
+  if (typeof navigator === "undefined" || !navigator.storage?.persist) return;
+  void navigator.storage.persist().catch(() => {});
+}
+
+/**
  * The unlock state machine every key-dependent surface needs.
  *
  * Readiness comes from `describeStorage()` + `ensureLoaded()`, NOT from `getIdentity()`:
@@ -56,11 +70,12 @@ export function useCryptoBridgeStatus(accountId: string | null): {
       return;
     }
 
-    setStatus(
-      (await bridge.ensureLoaded(accountId, wrapKey))
-        ? { kind: "ready", bridge }
-        : { kind: "no-keys" },
-    );
+    if (await bridge.ensureLoaded(accountId, wrapKey)) {
+      requestPersistentStorage();
+      setStatus({ kind: "ready", bridge });
+    } else {
+      setStatus({ kind: "no-keys" });
+    }
   }, [bridge, accountId]);
 
   useEffect(() => {
