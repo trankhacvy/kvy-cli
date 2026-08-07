@@ -8,7 +8,7 @@ import { Reveal } from "./reveal";
 
 const FAQS = [
   {
-    q: "What is Kvy?",
+    q: "What is kvy?",
     a: "A CLI that runs coding agents like Claude Code and Codex on your own machine, plus a web dashboard that mirrors every session so you can approve, steer, and review from any browser.",
   },
   {
@@ -21,7 +21,7 @@ const FAQS = [
   },
   {
     q: "How is this different from running the CLI directly, or a cloud coding agent?",
-    a: "A bare CLI ties you to one terminal on one machine. A cloud agent runs your code on someone else's infrastructure. Kvy keeps execution on your machine like the CLI does, and adds the remote visibility and control of a cloud tool without moving your code off it.",
+    a: "A bare CLI ties you to one terminal on one machine. A cloud agent runs your code on someone else's infrastructure. kvy keeps execution on your machine like the CLI does, and adds the remote visibility and control of a cloud tool without moving your code off it.",
   },
   {
     q: "Does it support agents besides Claude Code and Codex?",
@@ -40,20 +40,25 @@ const FAQS = [
 /** Answers the objections a first-time visitor actually has, in their own words. */
 export function Faq() {
   return (
-    <section className="border-border border-t px-4 py-24 sm:px-6">
-      <div className="mx-auto w-full max-w-3xl">
-        <Reveal className="text-center">
-          <h2 className="font-semibold text-3xl tracking-tighter sm:text-4xl">
+    <section id="faq" className="scroll-mt-24 border-border border-t px-4 py-24 sm:px-6">
+      <div className="mx-auto grid w-full max-w-6xl gap-12 md:grid-cols-[2fr_3fr] md:gap-16">
+        <Reveal>
+          <p className="font-mono text-xs tracking-widest text-primary uppercase">FAQ</p>
+          <h2 className="mt-3 font-display text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
             Questions, answered.
           </h2>
+          <p className="mt-4 max-w-sm text-pretty text-muted-foreground leading-relaxed">
+            The honest version of how kvy works, in plain language. Something missing? Reach out on
+            GitHub.
+          </p>
         </Reveal>
 
-        <Reveal delay={0.08} className="mt-12">
+        <Reveal delay={0.08}>
           <Accordion type="single" collapsible>
             {FAQS.map((faq) => (
               <AccordionItem key={faq.q} value={faq.q}>
-                <AccordionTrigger className="text-base">{faq.q}</AccordionTrigger>
-                <AccordionContent className="text-muted-foreground leading-relaxed">
+                <AccordionTrigger className="text-left font-medium">{faq.q}</AccordionTrigger>
+                <AccordionContent className="text-pretty text-muted-foreground leading-relaxed">
                   {faq.a}
                 </AccordionContent>
               </AccordionItem>

@@ -27,20 +27,43 @@ const PILLARS: Pillar[] = [
   },
 ];
 
-/** Kvy's worldview in three lines, replacing a vanity stats strip. */
+/** Kvy's worldview — an editorial two-column block, not a vanity stats strip. */
 export function Pillars() {
   return (
-    <section className="border-border border-y px-4 sm:px-6">
-      <div className="mx-auto grid w-full max-w-6xl gap-10 py-16 sm:grid-cols-3 sm:gap-8">
-        {PILLARS.map((pillar, i) => (
-          <Reveal key={pillar.title} delay={i * 0.06}>
-            <pillar.icon className="size-5 text-primary" aria-hidden="true" />
-            <h3 className="mt-3 font-semibold text-base">{pillar.title}</h3>
-            <p className="mt-1.5 max-w-xs text-muted-foreground text-sm leading-relaxed">
-              {pillar.description}
-            </p>
-          </Reveal>
-        ))}
+    <section id="principles" className="scroll-mt-24 border-border border-y px-4 sm:px-6">
+      <div className="mx-auto grid w-full max-w-6xl gap-12 py-16 md:grid-cols-[1fr_2fr] md:gap-16 md:py-20">
+        <Reveal>
+          <p className="font-mono text-xs tracking-widest text-primary uppercase">Principles</p>
+          <h2 className="mt-3 max-w-sm font-display text-3xl leading-tight font-semibold tracking-tight text-balance sm:text-4xl">
+            Your machine, your keys, your agents.
+          </h2>
+          <p className="mt-4 max-w-sm text-pretty text-muted-foreground leading-relaxed">
+            Everything Kvy does follows from these three commitments. They are the product, not a
+            marketing line.
+          </p>
+        </Reveal>
+
+        <div className="divide-border divide-y">
+          {PILLARS.map((pillar, i) => (
+            <Reveal
+              key={pillar.title}
+              delay={i * 0.07}
+              className="flex flex-col gap-3 py-6 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-6"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-primary">
+                <pillar.icon className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h3 className="font-display text-lg font-semibold tracking-tight">
+                  {pillar.title}
+                </h3>
+                <p className="mt-1.5 max-w-md text-pretty text-muted-foreground leading-relaxed">
+                  {pillar.description}
+                </p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </div>
     </section>
   );

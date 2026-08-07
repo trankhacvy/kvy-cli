@@ -1,6 +1,6 @@
 export const DEFAULT_DOCUMENT_TITLE = "Kvy";
 
-export const LANDING_DOCUMENT_TITLE = "Kvy · Run coding agents from anywhere";
+export const LANDING_DOCUMENT_TITLE = "kvy · Run coding agents from anywhere";
 
 export function titleForPath(pathname: string): string {
   const path = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;

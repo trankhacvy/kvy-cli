@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Terminal } from "lucide-react";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const INSTALL_OPTIONS = [
   {
     id: "native",
-    label: "Native (Recommended)",
+    label: "Native",
     command: "curl -fsSL https://kvy-cli.tkvy.dev/install.sh | sh",
   },
   {
@@ -37,24 +37,25 @@ export function InstallTabs({ className }: { className?: string }) {
   }
 
   return (
-    <Tabs defaultValue="native" className={cn("w-full", className)}>
-      <TabsList variant="line" className="w-full">
+    <Tabs defaultValue="native" className={cn("w-full min-w-0", className)}>
+      <TabsList variant="line" className="w-full min-w-0">
         {INSTALL_OPTIONS.map((opt) => (
-          <TabsTrigger key={opt.id} value={opt.id} className="flex-1">
+          <TabsTrigger key={opt.id} value={opt.id} className="min-w-0 flex-1 px-1">
             {opt.label}
           </TabsTrigger>
         ))}
       </TabsList>
       {INSTALL_OPTIONS.map((opt) => (
-        <TabsContent key={opt.id} value={opt.id} className="w-full">
-          <div className="flex w-full items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5">
-            <code className="flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">
+        <TabsContent key={opt.id} value={opt.id} className="w-full min-w-0">
+          <div className="flex min-w-0 items-center gap-2 rounded-md border bg-muted/50 px-3 py-2.5">
+            <Terminal className="hidden size-4 shrink-0 text-muted-foreground sm:block" />
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-[13px]">
               {opt.command}
             </code>
             <button
               type="button"
               aria-label={`Copy: ${opt.command}`}
-              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+              className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => copy(opt.id, opt.command)}
             >
               {copiedId === opt.id ? (
