@@ -1,13 +1,13 @@
-import { SessionGitScreen } from "@/features/git-diff";
+import { SessionGitClient } from "./session-git-client";
 
 // Static export prerenders every route at build time — `generateStaticParams` needs at
 // least one concrete id to emit this route's HTML/JS shell; `demo` is a placeholder.
-// `SessionGitScreen` reads the real session id from the URL at runtime.
+// This server shell never reads its own (permanently `demo`-baked) `params` prop —
+// `SessionGitClient` reads the real id from the URL client-side via `useParams()`.
 export function generateStaticParams() {
   return [{ id: "demo" }];
 }
 
-export default async function SessionGitPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  return <SessionGitScreen sessionId={id} />;
+export default function SessionGitPage() {
+  return <SessionGitClient />;
 }
