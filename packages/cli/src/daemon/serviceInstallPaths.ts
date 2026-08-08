@@ -1,5 +1,5 @@
 /** Path/label resolution for `kvy daemon service install/uninstall/status`. */
-import { accessSync, constants as fsConstants } from "node:fs";
+import { accessSync, existsSync, constants as fsConstants } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { resolveHomeDir } from "../home.js";
@@ -64,6 +64,16 @@ export function systemdUnitPath(options: ServiceInstallOptions = {}): string {
 export function servicePath(options: ServiceInstallOptions = {}): string {
   const platform = resolveServicePlatform(options);
   return platform === "launchd" ? launchAgentPlistPath(options) : systemdUnitPath(options);
+}
+
+/**
+ * Whether the login/boot service (plist or unit file) is already on disk for
+ * this platform. Throws `UnsupportedPlatformError` on an unsupported
+ * platform, same as `servicePath` — callers that want to fail soft (e.g.
+ * auto-install on `kvy claude`/`kvy codex`) must catch it themselves.
+ */
+export function isServiceInstalled(options: ServiceInstallOptions = {}): boolean {
+  return existsSync(servicePath(options));
 }
 
 export function daemonServiceLogPaths(options: ServiceInstallOptions = {}): {

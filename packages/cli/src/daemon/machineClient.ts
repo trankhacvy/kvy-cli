@@ -6,6 +6,20 @@ import type { TokenProvider } from "../auth/tokenProvider.js";
 import type { Logger } from "../logger.js";
 import { readDaemonState, writeDaemonState } from "./state.js";
 
+/**
+ * A `setInterval` tick is scheduled relative to wall-clock time, but its
+ * callback only runs once the event loop resumes — so it keeps perfect
+ * cadence while the process is alive, except when the OS itself suspends
+ * (laptop sleep): every timer freezes along with the process, and the next
+ * tick only fires once the OS resumes, arriving far later than
+ * `watchdogIntervalMs` after the previous one. That gap is the only
+ * reliable, dependency-free signal a plain Node process has that it just
+ * woke up — there is no cross-platform sleep/wake event without a native
+ * module. A gap past this multiple of the interval is treated as a wake,
+ * not GC jitter or CPU contention.
+ */
+const WATCHDOG_WAKE_GAP_MULTIPLIER = 3;
+
 /** Plaintext machine facts, encrypted client-side before every `POST /v1/machines`. */
 export interface MachineMetadata {
   host: string;
@@ -54,6 +68,8 @@ export interface MachineClientDeps {
   now: () => number;
   heartbeatIntervalMs: number;
   maxCasRetries: number;
+  /** How often the sleep/wake watchdog checks for a clock gap — see `startMachineClient`. */
+  watchdogIntervalMs: number;
 }
 
 function defaultMetadata(): MachineMetadata {
@@ -91,6 +107,7 @@ export function createMachineClientDeps(
     now: () => Date.now(),
     heartbeatIntervalMs: 60_000,
     maxCasRetries: 3,
+    watchdogIntervalMs: 15_000,
     ...required,
     ...overrides,
   };
@@ -305,10 +322,11 @@ export type StartMachineClientResult =
 
 /**
  * Registers/resumes the machine, opens the `/v1/stream` socket
- * (`clientType: "machine-scoped"`), and starts the 60s heartbeat. Every
- * (re)connect re-pushes `daemonState` via CAS against the same
- * `machineId` — never a fresh insert — so a dropped-and-restored
- * connection cannot duplicate the machine row.
+ * (`clientType: "machine-scoped"`), and starts the 60s heartbeat plus the
+ * sleep/wake watchdog (`WATCHDOG_WAKE_GAP_MULTIPLIER`). Every (re)connect
+ * re-pushes `daemonState` via CAS against the same `machineId` — never a
+ * fresh insert — so a dropped-and-restored connection cannot duplicate the
+ * machine row.
  */
 export async function startMachineClient(
   deps: MachineClientDeps,
@@ -341,6 +359,8 @@ export async function startMachineClient(
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let renewTimer: ReturnType<typeof setTimeout> | null = null;
+  let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  let lastWatchdogTickAt = deps.now();
   let stopped = false;
 
   function stopRenewTimer(): void {
@@ -393,6 +413,45 @@ export async function startMachineClient(
     stopHeartbeat();
     sendHeartbeat();
     heartbeatTimer = setInterval(sendHeartbeat, deps.heartbeatIntervalMs);
+  }
+
+  function stopWatchdog(): void {
+    if (watchdogTimer) {
+      clearInterval(watchdogTimer);
+      watchdogTimer = null;
+    }
+  }
+
+  // Runs for the client's whole lifetime, independent of connect/disconnect
+  // state — see `WATCHDOG_WAKE_GAP_MULTIPLIER` for why a clock gap on this
+  // timer means the OS just resumed from sleep. If the socket still reports
+  // `connected` at that point, the transport is a zombie (the server likely
+  // dropped it while this machine was asleep and unable to see it) — force
+  // a fresh reconnect now rather than waiting out socket.io's own
+  // ping-timeout/backoff, which is what left a real user's dashboard
+  // reporting a machine offline for minutes after they reopened their
+  // laptop. If the socket already reports itself disconnected, its own
+  // reconnection loop is already responsible for recovering — nudging it
+  // with `connect()` is a harmless no-op there, unlike `disconnect()`,
+  // which would tear down an in-progress reconnect attempt.
+  function watchdogTick(): void {
+    const now = deps.now();
+    const gap = now - lastWatchdogTickAt;
+    lastWatchdogTickAt = now;
+    if (gap <= deps.watchdogIntervalMs * WATCHDOG_WAKE_GAP_MULTIPLIER) return;
+
+    deps.logger.info("[machine-client] watchdog detected a clock gap, forcing reconnect", {
+      gapMs: gap,
+      wasConnected: socket.connected,
+    });
+    if (socket.connected) socket.disconnect();
+    else socket.connect();
+  }
+
+  function startWatchdog(): void {
+    stopWatchdog();
+    lastWatchdogTickAt = deps.now();
+    watchdogTimer = setInterval(watchdogTick, deps.watchdogIntervalMs);
   }
 
   socket.on("connect", () => {
@@ -461,6 +520,8 @@ export async function startMachineClient(
     if (!stopped) socket.connect();
   });
 
+  startWatchdog();
+
   return {
     ok: true,
     handle: {
@@ -471,6 +532,7 @@ export async function startMachineClient(
         stopped = true;
         stopHeartbeat();
         stopRenewTimer();
+        stopWatchdog();
         socket.close();
       },
     },

@@ -186,6 +186,7 @@ describe("machineClient (integration: real socket.io + machines HTTP mock)", () 
       now: () => Date.now(),
       heartbeatIntervalMs: 60_000,
       maxCasRetries: 3,
+      watchdogIntervalMs: 15_000,
     });
 
     expect(result.ok).toBe(true);

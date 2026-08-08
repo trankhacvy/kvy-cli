@@ -11,11 +11,13 @@ import { mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   daemonServiceLogPaths,
+  isServiceInstalled,
   resolveKvyExecutable,
   resolveServicePlatform,
   SERVICE_LABEL,
   type ServiceInstallOptions,
   servicePath,
+  UnsupportedPlatformError,
 } from "./serviceInstallPaths.js";
 import { buildLaunchdPlist, buildSystemdUnit } from "./serviceInstallTemplates.js";
 
@@ -211,4 +213,40 @@ export async function serviceStatus(
       `  active:  ${active.output || (active.ok ? "active" : "inactive")}\n` +
       `  enabled: ${enabled.output || (enabled.ok ? "enabled" : "disabled")}\n`,
   };
+}
+
+export type EnsureServiceInstalledResult =
+  | { outcome: "already-installed" }
+  | { outcome: "unsupported-platform" }
+  | { outcome: "installed"; message: string }
+  | { outcome: "failed"; message: string };
+
+/**
+ * Best-effort auto-registration of the login/boot service, called ahead of
+ * every agent-invoking `kvy claude`/`kvy codex` run (`index.ts`'s
+ * `ensureDaemon()`) so a user never has to remember to run `kvy daemon
+ * service install` themselves. Never throws: an unsupported platform (only
+ * macOS/Linux ship a service template) or a failed write/`launchctl`/
+ * `systemctl` call both come back as a result the caller can log and move
+ * past, since this must never block the actual session the user asked for.
+ */
+export async function ensureServiceInstalled(
+  options: ServiceInstallOptions = {},
+  deps: ServiceCommandDeps = {},
+): Promise<EnsureServiceInstalledResult> {
+  try {
+    if (isServiceInstalled(options)) return { outcome: "already-installed" };
+  } catch (error) {
+    if (error instanceof UnsupportedPlatformError) return { outcome: "unsupported-platform" };
+    return { outcome: "failed", message: error instanceof Error ? error.message : String(error) };
+  }
+
+  try {
+    const result = await installService(options, deps);
+    return result.ok
+      ? { outcome: "installed", message: result.message }
+      : { outcome: "failed", message: result.message };
+  } catch (error) {
+    return { outcome: "failed", message: error instanceof Error ? error.message : String(error) };
+  }
 }

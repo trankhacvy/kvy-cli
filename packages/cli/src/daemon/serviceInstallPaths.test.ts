@@ -1,8 +1,11 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   daemonServiceLogPaths,
   findKvyOnPath,
+  isServiceInstalled,
   launchAgentPlistPath,
   resolveKvyExecutable,
   resolveServicePlatform,
@@ -82,6 +85,35 @@ describe("resolveKvyExecutable", () => {
   it("throws an actionable error when kvy isn't on PATH and no override is given", () => {
     expect(() => resolveKvyExecutable({ env: { PATH: "/nonexistent-dir-xyz" } })).toThrow(
       /Could not locate the `kvy` executable on PATH/,
+    );
+  });
+});
+
+describe("isServiceInstalled", () => {
+  let userHomeDir: string;
+
+  beforeEach(() => {
+    userHomeDir = mkdtempSync(path.join(tmpdir(), "kvy-service-installed-"));
+  });
+
+  afterEach(() => {
+    rmSync(userHomeDir, { recursive: true, force: true });
+  });
+
+  it("is false when no plist/unit file exists yet", () => {
+    expect(isServiceInstalled({ platform: "darwin", userHomeDir })).toBe(false);
+  });
+
+  it("is true once the plist file is on disk", () => {
+    const target = launchAgentPlistPath({ userHomeDir });
+    mkdirSync(path.dirname(target), { recursive: true });
+    writeFileSync(target, "<xml/>", "utf8");
+    expect(isServiceInstalled({ platform: "darwin", userHomeDir })).toBe(true);
+  });
+
+  it("propagates UnsupportedPlatformError on win32, same as servicePath", () => {
+    expect(() => isServiceInstalled({ platform: "win32", userHomeDir })).toThrow(
+      UnsupportedPlatformError,
     );
   });
 });
