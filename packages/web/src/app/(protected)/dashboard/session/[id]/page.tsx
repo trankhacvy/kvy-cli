@@ -1,13 +1,13 @@
-import { SessionTimelineScreen } from "@/components/timeline/SessionTimelineScreen";
+import { SessionDetailClient } from "./session-detail-client";
 
 // Static export prerenders every route at build time — `generateStaticParams` needs at
 // least one concrete id to emit this route's HTML/JS shell; `demo` is a placeholder.
-// `SessionTimelineScreen` reads the real session id from the URL at runtime.
+// This server shell never reads its own (permanently `demo`-baked) `params` prop —
+// `SessionDetailClient` reads the real id from the URL client-side via `useParams()`.
 export function generateStaticParams() {
   return [{ id: "demo" }];
 }
 
-export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  return <SessionTimelineScreen sessionId={id} />;
+export default function SessionPage() {
+  return <SessionDetailClient />;
 }
