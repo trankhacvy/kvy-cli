@@ -387,6 +387,7 @@ describe("main()", () => {
   describe("daemon auto-start wiring (ensureDaemonRunning)", () => {
     afterEach(() => {
       vi.doUnmock("./daemon/ensureDaemonRunning.js");
+      vi.doUnmock("./daemon/serviceInstall.js");
       vi.doUnmock("./auth/login.js");
     });
 
@@ -402,6 +403,20 @@ describe("main()", () => {
       }));
     }
 
+    /**
+     * `ensureDaemon()` also calls `ensureServiceInstalled()` once a daemon is
+     * confirmed running — every test in this block that mocks
+     * `ensureDaemonRunning` to `ok: true` must stub this too, or it would hit
+     * the real launchd/systemd install path against this machine's actual
+     * home directory (see `serviceInstall.test.ts`/`ensureDaemon.autoInstall.test.ts`
+     * for the auto-install behavior itself).
+     */
+    function mockServiceInstallNoop(): void {
+      vi.doMock("./daemon/serviceInstall.js", () => ({
+        ensureServiceInstalled: vi.fn(async () => ({ outcome: "already-installed" })),
+      }));
+    }
+
     it("calls ensureDaemonRunning before the start command, and proceeds when it succeeds", async () => {
       // `codex` here (not `claude`) deliberately: with an empty temp
       // KVY_HOME_DIR the real `runStartCodexCommand` still fails its own
@@ -409,6 +424,7 @@ describe("main()", () => {
       // control proceeded into the command, without needing a full stack.
       delete process.env.KVY_NO_SERVICE;
       mockSignedIn();
+      mockServiceInstallNoop();
       const ensureDaemonRunning = vi.fn(async () => ({
         ok: true,
         state: { pid: 123, port: 4242, version: "0.1.0-test", startedAt: 1 },
@@ -434,6 +450,7 @@ describe("main()", () => {
       // if credentials already exist then — so `auth login` must complete (writing
       // credentials) before the daemon is ever started, not after.
       delete process.env.KVY_NO_SERVICE;
+      mockServiceInstallNoop();
       const runAuthCommand = vi.fn(async () => 0);
       vi.doMock("./auth/index.js", () => ({ runAuthCommand }));
       const callOrder: string[] = [];
@@ -527,6 +544,107 @@ describe("main()", () => {
 
       expect(ensureDaemonRunning).toHaveBeenCalledTimes(3);
       stdout.mockRestore();
+    });
+  });
+
+  describe("login-service auto-install wiring (ensureServiceInstalled)", () => {
+    afterEach(() => {
+      vi.doUnmock("./daemon/ensureDaemonRunning.js");
+      vi.doUnmock("./daemon/serviceInstall.js");
+      vi.doUnmock("./auth/login.js");
+    });
+
+    function mockSignedIn(): void {
+      vi.doMock("./auth/login.js", () => ({
+        ensureLoggedIn: vi.fn(async () => ({ ok: true })),
+        runAuthLogin: vi.fn(async () => 0),
+      }));
+    }
+
+    function mockLiveDaemon(): void {
+      vi.doMock("./daemon/ensureDaemonRunning.js", () => ({
+        createEnsureDaemonRunningDeps: vi.fn((overrides) => overrides),
+        ensureDaemonRunning: vi.fn(async () => ({
+          ok: true,
+          state: { pid: 123, port: 4242, version: "0.1.0-test", startedAt: 1 },
+        })),
+      }));
+    }
+
+    it("prints a one-line message when the service was just installed", async () => {
+      delete process.env.KVY_NO_SERVICE;
+      mockSignedIn();
+      mockLiveDaemon();
+      const ensureServiceInstalled = vi.fn(async () => ({
+        outcome: "installed" as const,
+        message: "Installed launchd service dev.kvy.daemon (...)\n",
+      }));
+      vi.doMock("./daemon/serviceInstall.js", () => ({ ensureServiceInstalled }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      await main(["codex"]);
+
+      expect(ensureServiceInstalled).toHaveBeenCalledOnce();
+      expect(stdout.mock.calls.map((c) => c[0])).toContainEqual(
+        expect.stringContaining("start automatically when you log in"),
+      );
+      stdout.mockRestore();
+    });
+
+    it("stays silent and never fails the command when the service was already installed", async () => {
+      delete process.env.KVY_NO_SERVICE;
+      mockSignedIn();
+      mockLiveDaemon();
+      const ensureServiceInstalled = vi.fn(async () => ({ outcome: "already-installed" as const }));
+      vi.doMock("./daemon/serviceInstall.js", () => ({ ensureServiceInstalled }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      await main(["codex"]);
+
+      expect(ensureServiceInstalled).toHaveBeenCalledOnce();
+      expect(stdout.mock.calls.map((c) => c[0])).not.toContainEqual(
+        expect.stringContaining("start automatically when you log in"),
+      );
+      stdout.mockRestore();
+    });
+
+    it("never blocks or fails the command when auto-install itself fails", async () => {
+      delete process.env.KVY_NO_SERVICE;
+      mockSignedIn();
+      mockLiveDaemon();
+      const ensureServiceInstalled = vi.fn(async () => ({
+        outcome: "failed" as const,
+        message: "boom",
+      }));
+      vi.doMock("./daemon/serviceInstall.js", () => ({ ensureServiceInstalled }));
+      const main = await importMain();
+      const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+      vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+      // `codex` still exits 1 on its own honest pre-flight (same as the
+      // ensureDaemonRunning tests above) — the point here is only that a
+      // failed auto-install never throws or changes that outcome.
+      const code = await main(["codex"]);
+
+      expect(code).toBe(1);
+      expect(ensureServiceInstalled).toHaveBeenCalledOnce();
+      stdout.mockRestore();
+    });
+
+    it("does not attempt auto-install when the daemon is disabled (KVY_NO_SERVICE=1)", async () => {
+      process.env.KVY_NO_SERVICE = "1";
+      const ensureServiceInstalled = vi.fn(async () => ({ outcome: "already-installed" as const }));
+      vi.doMock("./daemon/serviceInstall.js", () => ({ ensureServiceInstalled }));
+      const main = await importMain();
+      vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+      await main(["auth", "status"]);
+
+      expect(ensureServiceInstalled).not.toHaveBeenCalled();
     });
   });
 

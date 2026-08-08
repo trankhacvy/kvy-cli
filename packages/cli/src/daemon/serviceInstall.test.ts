@@ -2,7 +2,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { installService, serviceStatus, uninstallService } from "./serviceInstall.js";
+import {
+  ensureServiceInstalled,
+  installService,
+  serviceStatus,
+  uninstallService,
+} from "./serviceInstall.js";
 import type { ServiceInstallOptions } from "./serviceInstallPaths.js";
 
 let homeDir: string;
@@ -134,5 +139,45 @@ describe("serviceStatus", () => {
 
     expect(result.message).toContain("missing");
     expect(result.message).toContain("inactive");
+  });
+});
+
+describe("ensureServiceInstalled", () => {
+  it("installs the service and reports 'installed' when nothing was there yet", async () => {
+    const result = await ensureServiceInstalled(options({ platform: "darwin" }), {
+      exec: fakeExec(),
+    });
+
+    expect(result).toEqual({ outcome: "installed", message: expect.any(String) });
+    const plistPath = path.join(userHomeDir, "Library", "LaunchAgents", "dev.kvy.daemon.plist");
+    expect(existsSync(plistPath)).toBe(true);
+  });
+
+  it("reports 'already-installed' and never touches launchctl when the plist already exists", async () => {
+    await installService(options({ platform: "darwin" }), { exec: fakeExec() });
+    calls = [];
+
+    const result = await ensureServiceInstalled(options({ platform: "darwin" }), {
+      exec: fakeExec(),
+    });
+
+    expect(result).toEqual({ outcome: "already-installed" });
+    expect(calls).toEqual([]);
+  });
+
+  it("reports 'unsupported-platform' instead of throwing on win32", async () => {
+    const result = await ensureServiceInstalled(options({ platform: "win32" }), {
+      exec: fakeExec(),
+    });
+
+    expect(result).toEqual({ outcome: "unsupported-platform" });
+  });
+
+  it("reports 'failed' (never throws) when the underlying install fails", async () => {
+    const result = await ensureServiceInstalled(options({ platform: "darwin" }), {
+      exec: fakeExec({}, { ok: false, output: "boom" }),
+    });
+
+    expect(result).toEqual({ outcome: "failed", message: expect.stringContaining("boom") });
   });
 });

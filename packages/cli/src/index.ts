@@ -47,6 +47,7 @@ import {
   killDaemon,
   killSessions,
 } from "./daemon/kill.js";
+import { ensureServiceInstalled } from "./daemon/serviceInstall.js";
 import { resolveHomeDir } from "./home.js";
 import { createLogger } from "./logger.js";
 import { runStart as dispatchStart } from "./provider/dispatch.js";
@@ -181,6 +182,26 @@ async function ensureDaemon(): Promise<{ ok: true } | { ok: false; message: stri
     homeDir: resolveHomeDir(),
     logger,
   });
+
+  // Registers the login/boot service the first time this machine ever gets
+  // a live daemon, so a laptop reboot brings the daemon back without the
+  // user having to remember `kvy daemon service install` themselves. Only
+  // attempted once `result.ok` — a genuinely running daemon this run, not
+  // the `KVY_NO_SERVICE=1` opt-out — and never blocks or fails this
+  // command: `ensureServiceInstalled` already fails soft on an unsupported
+  // platform or a failed write/`launchctl`/`systemctl` call.
+  if (result.ok) {
+    const serviceResult = await ensureServiceInstalled({ homeDir: resolveHomeDir() });
+    if (serviceResult.outcome === "installed") {
+      process.stdout.write(
+        "kvy: set up kvy to start automatically when you log in (run `kvy daemon service uninstall` to undo)\n",
+      );
+    } else if (serviceResult.outcome === "failed") {
+      logger.warn("[cli] auto-install of the login service failed", {
+        message: serviceResult.message,
+      });
+    }
+  }
 
   if (result.ok || result.reason === "disabled") return { ok: true };
   return { ok: false, message: result.message };

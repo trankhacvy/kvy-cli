@@ -101,6 +101,7 @@ function buildDeps(
     now: () => 5000,
     heartbeatIntervalMs: 60_000,
     maxCasRetries: 3,
+    watchdogIntervalMs: 15_000,
     ...overrides,
   };
 }
@@ -314,6 +315,9 @@ class FakeSocket {
   handlers = new Map<string, ((...args: unknown[]) => void)[]>();
   emitted: { event: string; payload: unknown }[] = [];
   closed = false;
+  connected = false;
+  connectCalls = 0;
+  disconnectCalls = 0;
 
   on(event: string, handler: (...args: unknown[]) => void): void {
     const list = this.handlers.get(event) ?? [];
@@ -330,10 +334,23 @@ class FakeSocket {
   }
 
   connect(): void {
-    // no-op stand-in for socket.io-client's manual-reconnect escape hatch
+    // no-op stand-in for socket.io-client's manual-reconnect escape hatch —
+    // tests that need `connected` to flip follow up with `trigger("connect")`,
+    // matching how the real client only connects once the handshake completes.
+    this.connectCalls += 1;
+  }
+
+  disconnect(): void {
+    // Mirrors socket.io-client's real `disconnect()`: only fires the local
+    // "disconnect" event (and flips `connected`) if it was actually connected —
+    // calling it while already disconnected is a safe no-op.
+    this.disconnectCalls += 1;
+    if (this.connected) this.trigger("disconnect", "io client disconnect");
   }
 
   trigger(event: string, ...args: unknown[]): void {
+    if (event === "connect") this.connected = true;
+    if (event === "disconnect") this.connected = false;
     for (const handler of this.handlers.get(event) ?? []) handler(...args);
   }
 }
@@ -563,5 +580,110 @@ describe("startMachineClient", () => {
 
     expect(result).toEqual({ ok: false, reason: "ECONNREFUSED" });
     expect(ioFactory).not.toHaveBeenCalled();
+  });
+});
+
+describe("startMachineClient watchdog (sleep/wake detection)", () => {
+  it("forces a reconnect when a wake-sized clock gap is seen while connected", async () => {
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_wake" })));
+      const fakeSocket = new FakeSocket();
+      const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+      const deps = buildDeps({
+        fetchImpl,
+        ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+        now: () => clock,
+        watchdogIntervalMs: 1_000,
+      });
+
+      const result = await startMachineClient(deps);
+      expect(result.ok).toBe(true);
+      fakeSocket.trigger("connect");
+
+      // A normal-sized gap (the OS never slept) must not touch the socket.
+      clock += 1_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(fakeSocket.disconnectCalls).toBe(0);
+
+      // Simulate the laptop sleeping for well over the wake-gap threshold —
+      // wall-clock jumps far ahead, then the next already-scheduled tick fires.
+      clock += 10_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(fakeSocket.disconnectCalls).toBe(1);
+      // The watchdog's disconnect() flips `connected`, which fires the
+      // module's own "disconnect" handler — that handler is what re-arms
+      // `connect()`, so the watchdog itself never calls `connect()` directly.
+      expect(fakeSocket.connectCalls).toBe(1);
+      expect(fakeSocket.connected).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("nudges connect() instead of disconnect() when already disconnected during a clock gap", async () => {
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_wake_disc" })));
+      const fakeSocket = new FakeSocket();
+      const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+      const deps = buildDeps({
+        fetchImpl,
+        ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+        now: () => clock,
+        watchdogIntervalMs: 1_000,
+      });
+
+      const result = await startMachineClient(deps);
+      expect(result.ok).toBe(true);
+      fakeSocket.trigger("connect");
+      fakeSocket.trigger("disconnect", "transport close");
+      const connectCallsBeforeGap = fakeSocket.connectCalls;
+
+      clock += 10_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(fakeSocket.disconnectCalls).toBe(0);
+      expect(fakeSocket.connectCalls).toBe(connectCallsBeforeGap + 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stop() clears the watchdog so no further checks run", async () => {
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValue(jsonResponse(201, machineRow({ id: "mach_wake_stop" })));
+      const fakeSocket = new FakeSocket();
+      const ioFactory = vi.fn().mockReturnValue(fakeSocket);
+      const deps = buildDeps({
+        fetchImpl,
+        ioFactory: ioFactory as unknown as MachineClientDeps["ioFactory"],
+        now: () => clock,
+        watchdogIntervalMs: 1_000,
+      });
+
+      const result = await startMachineClient(deps);
+      expect(result.ok).toBe(true);
+      fakeSocket.trigger("connect");
+      if (result.ok) result.handle.stop();
+
+      clock += 10_000;
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(fakeSocket.disconnectCalls).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
