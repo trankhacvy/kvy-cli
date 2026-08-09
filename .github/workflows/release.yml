@@ -312,3 +312,80 @@ jobs:
           body: "Rolling pointer to the most recently released kvy CLI — consumed by `kvy update` / auto-update-on-start, not meant for direct human download. See the versioned release for changelog/notes."
           files: dist-binaries/*
           fail_on_unmatched_files: true
+
+  bump-homebrew-cask:
+    # Casks/kvy.rb lives in a SEPARATE repo (trankhacvy/homebrew-vibe-oss),
+    # so this job's default GITHUB_TOKEN (scoped to this repo only) can't
+    # push to it — that's what left the cask silently stuck on an old
+    # version indefinitely before this job existed (confirmed live:
+    # `brew install kvy` kept reporting "already the latest version" two
+    # real releases behind). HOMEBREW_TAP_TOKEN must be a PAT (fine-grained,
+    # scoped to just that repo's contents: write) added as a repo secret
+    # here — this job is a safe no-op (skips cleanly) until that secret
+    # exists, it never fails the rest of the release.
+    #
+    # Only darwin-arm64 ships in the cask today (same reasoning as
+    # Casks/kvy.rb's own `depends_on arch: :arm64` comment), so this only
+    # ever needs that one leg's artifact — independent of whatever the
+    # other matrix legs did.
+    needs: [resolve-native-release, build-native-binaries]
+    if: |
+      !cancelled() &&
+      needs.resolve-native-release.result == 'success' &&
+      needs.resolve-native-release.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download darwin-arm64 binary (tolerate a failed/skipped leg)
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: kvy-binaries-darwin-arm64
+          path: dist-binaries
+
+      - name: Check whether HOMEBREW_TAP_TOKEN is configured and the binary is present
+        id: check
+        env:
+          HAS_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN is not set — skipping the Homebrew cask bump. See this job's own comment in release.yml for what's needed."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.download.outcome }}" != "success" ]; then
+            echo "::warning::darwin-arm64 binary missing from this release — skipping the Homebrew cask bump."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout trankhacvy/homebrew-vibe-oss
+        if: steps.check.outputs.proceed == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: trankhacvy/homebrew-vibe-oss
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-vibe-oss
+
+      - name: Bump Casks/kvy.rb and push
+        if: steps.check.outputs.proceed == 'true'
+        working-directory: homebrew-vibe-oss
+        env:
+          TAG: ${{ needs.resolve-native-release.outputs.tag }}
+        run: |
+          VERSION="${TAG#v}"
+          SHA256=$(cut -d ' ' -f1 ../dist-binaries/kvy-darwin-arm64.sha256)
+
+          sed -i \
+            -e "s/^  version \".*\"/  version \"${VERSION}\"/" \
+            -e "s/^  sha256 \".*\"/  sha256 \"${SHA256}\"/" \
+            Casks/kvy.rb
+
+          if git diff --quiet; then
+            echo "Casks/kvy.rb already at ${VERSION} — nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "kvy ${VERSION}"
+          git push origin main

@@ -56,6 +56,14 @@ the `changesets/action` publish step to authenticate — without it the job fail
 with `ENEEDAUTH` (harmless: nothing gets published, just retry once the secret
 exists).
 
+The `bump-homebrew-cask` job bumps `Casks/kvy.rb` in the separate
+`trankhacvy/homebrew-vibe-oss` tap repo on every real release, so `brew install
+kvy` never falls behind the versioned/npm releases above. This needs a
+`HOMEBREW_TAP_TOKEN` repo secret — a fine-grained PAT scoped to just that one
+repo's contents (read/write) — since the default `GITHUB_TOKEN` here has no
+access outside this repo. Also harmless without it: the job logs a warning and
+skips, same as a missing `NPM_TOKEN` above.
+
 ## Web / backend — redeploy, not "release"
 
 `@kvy/server` and `@kvy/web` are `"private": true` — never published anywhere, so
