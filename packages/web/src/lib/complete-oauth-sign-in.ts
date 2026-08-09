@@ -15,6 +15,7 @@
 import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
 import { keysBind, keysChallenge, register } from "./api.js";
+import { describeThisBrowser } from "./describe-device.js";
 import { consumePendingPair } from "./pending-pair.js";
 import { setToken } from "./session.js";
 
@@ -40,7 +41,11 @@ export async function completeOAuthSignIn(
   oauthProof: string,
   protection: KeyProtection,
 ): Promise<OAuthSignInOutcome> {
-  const { token, refreshToken } = await register({ oauthProvider: provider, oauthProof });
+  const { token, refreshToken } = await register({
+    oauthProvider: provider,
+    oauthProof,
+    label: describeThisBrowser(),
+  });
   setToken(token);
 
   // Scoped to THIS account. Unscoped, "a record exists" meant "this account's record", so

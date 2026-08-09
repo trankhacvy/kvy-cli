@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { decodeBase64, encodeBase64 } from "@kvy/crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mintAccessToken } from "../../auth/index.js";
+import { mintAccessToken, verifyToken } from "../../auth/index.js";
 import { db } from "../../db/client.js";
 import { runMigrations } from "../../db/migrate.js";
-import { accounts, pairRequests } from "../../db/schema.js";
+import { accounts, deviceSessions, pairRequests } from "../../db/schema.js";
 import { isDatabaseAvailable } from "../../db/testDbAvailable.js";
 import { buildServer } from "../server.js";
 
@@ -183,6 +183,28 @@ describe.skipIf(!dbAvailable)("pairing routes (requires Postgres)", () => {
       const [row] = await db.select().from(pairRequests).where(eq(pairRequests.ephPub, ephPub));
       expect(row?.response).toBeNull();
       expect(row?.state).toBe("pending");
+    });
+
+    it("carries the pair request's label onto the minted device_sessions row", async () => {
+      const ephPub = freshEphPub();
+      await app.inject({
+        method: "POST",
+        url: "/v1/auth/pair",
+        payload: { ephPub, label: "dev-laptop" },
+      });
+      const token = await createAccountAndToken();
+      const accountId = (await verifyToken(token))?.accountId ?? "";
+
+      const response = await mint(ephPub, token);
+      expect(response.statusCode).toBe(200);
+
+      const [session] = await db
+        .select()
+        .from(deviceSessions)
+        .where(
+          and(eq(deviceSessions.accountId, accountId), eq(deviceSessions.clientKind, "cli-daemon")),
+        );
+      expect(session?.label).toBe("dev-laptop");
     });
   });
 

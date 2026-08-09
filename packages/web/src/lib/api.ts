@@ -20,7 +20,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body: unknown,
   token?: string,
@@ -69,6 +69,10 @@ function putJson<T>(path: string, body: unknown, token?: string): Promise<T> {
   return request<T>("PUT", path, body, token);
 }
 
+function patchJson<T>(path: string, body: unknown, token?: string): Promise<T> {
+  return request<T>("PATCH", path, body, token);
+}
+
 function sendJson<T>(
   method: "POST" | "DELETE",
   path: string,
@@ -83,6 +87,7 @@ function sendJson<T>(
 export function register(body: {
   oauthProvider: "google" | "github";
   oauthProof: string;
+  label?: string;
 }): Promise<{ success: true; token: string; refreshToken: string }> {
   return postJson("/v1/auth/register", body);
 }
@@ -108,6 +113,7 @@ export function exchangeGoogleCode(body: {
 export function passwordRegister(body: {
   email: string;
   password: string;
+  label?: string;
 }): Promise<{ success: true; token: string; refreshToken: string }> {
   return postJson("/v1/auth/password/register", body);
 }
@@ -116,6 +122,7 @@ export function passwordRegister(body: {
 export function passwordLogin(body: {
   email: string;
   password: string;
+  label?: string;
 }): Promise<{ success: true; token: string; refreshToken: string }> {
   return postJson("/v1/auth/password/login", body);
 }
@@ -182,6 +189,20 @@ export function revokeSession(token: string, sessionId: string): Promise<{ succe
 /** `POST /v1/auth/sessions/revoke-others` — log out every other device. */
 export function revokeOtherSessions(token: string): Promise<{ success: true; revoked: number }> {
   return postJson("/v1/auth/sessions/revoke-others", undefined, token);
+}
+
+/** `POST /v1/auth/sessions/current/revoke` — revoke the caller's own session, server-side. */
+export function revokeCurrentSession(token: string): Promise<{ success: true }> {
+  return postJson("/v1/auth/sessions/current/revoke", undefined, token);
+}
+
+/** `PATCH /v1/auth/sessions/:id` — rename a device session's display label. */
+export function renameSession(
+  token: string,
+  sessionId: string,
+  label: string,
+): Promise<{ success: true; label: string }> {
+  return patchJson(`/v1/auth/sessions/${sessionId}`, { label }, token);
 }
 
 /** `POST /v1/auth/pair/mint` — mints the new device's session server-side and hands

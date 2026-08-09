@@ -16,6 +16,7 @@ import type { Database } from "../../db/types.js";
 const RegisterRequestSchema = z.object({
   oauthProvider: z.enum(["google", "github"]),
   oauthProof: z.string().min(1),
+  label: z.string().max(80).optional(),
 });
 
 const RegisterResponseSchema = z.object({
@@ -156,6 +157,7 @@ export function buildOAuthRoutes(
         const { accessToken, refreshToken } = await issueSession(db, {
           accountId,
           clientKind: "web",
+          label: request.body.label,
         });
         return reply.send({ success: true, token: accessToken, refreshToken });
       },

@@ -15,7 +15,7 @@ import type {
 } from "../../auth/oauth.js";
 import { verifyToken } from "../../auth/tokens.js";
 import * as schema from "../../db/schema.js";
-import { authIdentities } from "../../db/schema.js";
+import { authIdentities, deviceSessions } from "../../db/schema.js";
 import { buildServer } from "../server.js";
 
 const migrationsFolder = path.resolve(
@@ -282,6 +282,42 @@ describe("POST /v1/auth/register", () => {
     expect(row?.image).toBe("https://example.com/new.png");
     // Email backfill-once behavior is unaffected by the image refresh.
     expect(row?.email).toBe("henry@example.com");
+  });
+
+  it("stores the client-supplied label onto the minted device_sessions row", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: {
+        oauthProvider: "google",
+        oauthProof: "google:ivy-sub",
+        label: "Chrome on macOS",
+      },
+    });
+    const verified = await verifyToken(response.json().token);
+
+    const db = drizzle(pglite, { schema });
+    const [row] = await db
+      .select()
+      .from(deviceSessions)
+      .where(eq(deviceSessions.accountId, verified?.accountId ?? ""));
+    expect(row?.label).toBe("Chrome on macOS");
+  });
+
+  it("leaves the label null when the caller doesn't supply one", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/register",
+      payload: { oauthProvider: "google", oauthProof: "google:jack-sub" },
+    });
+    const verified = await verifyToken(response.json().token);
+
+    const db = drizzle(pglite, { schema });
+    const [row] = await db
+      .select()
+      .from(deviceSessions)
+      .where(eq(deviceSessions.accountId, verified?.accountId ?? ""));
+    expect(row?.label).toBeNull();
   });
 });
 

@@ -57,10 +57,10 @@ async function insertSession(accountId: string) {
 }
 
 describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)", () => {
-  // 20s, not vitest's 5s default: this serializes N real round trips to a
+  // 30s, not vitest's 5s default: this serializes N real round trips to a
   // remote (Neon) Postgres instance shared with every other concurrently
   // running test file, not an in-memory operation — observed timing out at
-  // 5s under normal contention from the rest of the suite.
+  // 5s under normal contention from the rest of the suite, then again at 20s.
   it("allocates a gapless, unique sequence for N concurrent callers on the same session", async () => {
     const account = await insertAccount();
     const session = await insertSession(account.id);
@@ -74,9 +74,9 @@ describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)"
     expect([...results].sort((a, b) => a - b)).toEqual(Array.from({ length: N }, (_, i) => i + 1)); // 1..N, no gaps
 
     await db.delete(accounts).where(sql`${accounts.id} = ${account.id}`);
-  }, 20_000);
+  }, 30_000);
 
-  // Same 20s reasoning as above.
+  // Same 30s reasoning as above.
   it("allocates a gapless, unique sequence for N concurrent callers on the same account (headerSeq)", async () => {
     const account = await insertAccount();
 
@@ -89,7 +89,7 @@ describe.skipIf(!dbAvailable)("allocMsgSeq / allocHeaderSeq (requires Postgres)"
     expect([...results].sort((a, b) => a - b)).toEqual(Array.from({ length: N }, (_, i) => i + 1));
 
     await db.delete(accounts).where(sql`${accounts.id} = ${account.id}`);
-  }, 20_000);
+  }, 30_000);
 
   it("does NOT contend across two different session rows (row-scoped lock, not table-scoped)", async () => {
     const account = await insertAccount();

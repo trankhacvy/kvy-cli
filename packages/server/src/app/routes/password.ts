@@ -62,7 +62,11 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         preValidation: requireNonProduction,
         schema: {
-          body: z.object({ email: z.string().email(), password: z.string().min(8) }),
+          body: z.object({
+            email: z.string().email(),
+            password: z.string().min(8),
+            label: z.string().max(80).optional(),
+          }),
           response: { 200: SessionResponseSchema, 400: ErrorSchema, 404: ErrorSchema },
         },
       },
@@ -107,6 +111,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         const { accessToken, refreshToken } = await issueSession(db, {
           accountId,
           clientKind: "web",
+          label: request.body.label,
         });
         return reply.send({ success: true, token: accessToken, refreshToken });
       },
@@ -118,7 +123,11 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
         preValidation: requireNonProduction,
         schema: {
-          body: z.object({ email: z.string().email(), password: z.string().min(1) }),
+          body: z.object({
+            email: z.string().email(),
+            password: z.string().min(1),
+            label: z.string().max(80).optional(),
+          }),
           response: { 200: SessionResponseSchema, 401: ErrorSchema, 404: ErrorSchema },
         },
       },
@@ -170,6 +179,7 @@ export function buildPasswordRoutes(db: Database, email: EmailTransport): Fastif
         const { accessToken, refreshToken } = await issueSession(db, {
           accountId: identity.accountId,
           clientKind: "web",
+          label: request.body.label,
         });
         return reply.send({ success: true, token: accessToken, refreshToken });
       },
