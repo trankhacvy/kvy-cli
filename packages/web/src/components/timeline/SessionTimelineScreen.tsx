@@ -2,9 +2,11 @@
 
 import type { PermissionMode, SessionRow } from "@kvy/wire";
 import { useQueryClient } from "@tanstack/react-query";
+import { Globe, Play } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   deriveAttention,
   deriveControlMode,
@@ -255,12 +257,26 @@ function SessionTimelineBody({
             {workspacePath && <WorkingDirectoryChip path={workspacePath} />}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/dashboard/session/${sessionId}/preview/`}>Preview</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/dashboard/session/${sessionId}/run/`}>Setup / Run</Link>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button asChild variant="outline" size="icon-sm" aria-label="Preview">
+                  <Link href={`/dashboard/session/${sessionId}/preview/`}>
+                    <Globe className="size-3.5" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Preview</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button asChild variant="outline" size="icon-sm" aria-label="Setup / Run">
+                  <Link href={`/dashboard/session/${sessionId}/run/`}>
+                    <Play className="size-3.5" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Setup / Run</TooltipContent>
+            </Tooltip>
             <MobileHandoffButton sessionId={sessionId} />
             <SessionActionsMenu
               sessionId={sessionId}
