@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { MobileHandoffButton, sessionShareUrl } from "./MobileHandoffDialog";
 
 describe("sessionShareUrl", () => {
@@ -24,7 +25,11 @@ describe("MobileHandoffButton", () => {
     // all in this test file's environment) — if the component read
     // `window.location.origin` unconditionally during render, this would
     // throw instead of rendering.
-    const html = renderToStaticMarkup(<MobileHandoffButton sessionId="abc123" />);
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <MobileHandoffButton sessionId="abc123" />
+      </TooltipProvider>,
+    );
     expect(html).toContain("Continue on mobile");
   });
 
@@ -32,7 +37,11 @@ describe("MobileHandoffButton", () => {
     // The trigger button itself renders a small `lucide-qr-code` icon
     // (also an `<svg>`) — assert on the dialog-content-only signals instead:
     // the encoded session URL text, and Radix's own portal-content marker.
-    const html = renderToStaticMarkup(<MobileHandoffButton sessionId="abc123" />);
+    const html = renderToStaticMarkup(
+      <TooltipProvider>
+        <MobileHandoffButton sessionId="abc123" />
+      </TooltipProvider>,
+    );
     expect(html).not.toContain("/dashboard/session/abc123/");
     expect(html).not.toContain('data-slot="dialog-content"');
   });

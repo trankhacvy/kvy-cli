@@ -12,6 +12,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CopyButton } from "./CopyButton";
 import { QrCodeSvg } from "./QrCodeSvg";
 
@@ -49,12 +50,16 @@ export function MobileHandoffButton({ sessionId }: { sessionId: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
-          <QrCode className="size-3.5" />
-          Continue on mobile
-        </Button>
-      </DialogTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DialogTrigger asChild>
+            <Button type="button" variant="outline" size="icon-sm" aria-label="Continue on mobile">
+              <QrCode className="size-3.5" />
+            </Button>
+          </DialogTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Continue on mobile</TooltipContent>
+      </Tooltip>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Continue on mobile</DialogTitle>

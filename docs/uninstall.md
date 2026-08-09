@@ -32,8 +32,14 @@ used):
 
 ```bash
 npm uninstall -g @vibe-oss/kvy      # npm install
-rm "$(which kvy)"             # curl | sh standalone binary
+rm "$(which kvy)"                   # curl | sh standalone binary
+brew uninstall kvy                  # Homebrew install
 ```
+
+For the Homebrew install specifically, `brew uninstall kvy` matters even if
+you're about to reinstall: `rm -rf ~/.kvy` only clears Kvy's own state, not
+Homebrew's Cellar/Caskroom receipt - skip this and `brew install kvy`
+will report the (old) version as "already installed" and do nothing.
 
 The rest of this page explains what each step actually does and why the
 order matters.
