@@ -20,6 +20,7 @@ import {
   passwordRegister,
   revokeOtherSessions,
 } from "./api.js";
+import { describeThisBrowser } from "./describe-device.js";
 import { consumePendingPair } from "./pending-pair.js";
 import { setToken } from "./session.js";
 
@@ -70,7 +71,11 @@ export async function completePasswordSignUp(
   password: string,
   protection: KeyProtection,
 ): Promise<PasswordSignUpOutcome> {
-  const { token, refreshToken } = await passwordRegister({ email, password });
+  const { token, refreshToken } = await passwordRegister({
+    email,
+    password,
+    label: describeThisBrowser(),
+  });
   if (!token || !refreshToken) {
     // No-enumeration: the server returns {success:true} with blank fields when the email is
     // already registered, rather than a 409 that would distinguish "new" from "existing".
@@ -123,7 +128,11 @@ export async function completePasswordSignIn(
   email: string,
   password: string,
 ): Promise<PasswordSignInResult> {
-  const { token, refreshToken } = await passwordLogin({ email, password });
+  const { token, refreshToken } = await passwordLogin({
+    email,
+    password,
+    label: describeThisBrowser(),
+  });
   setToken(token);
   const pendingEphPub = consumePendingPair();
   const nextUrl = pendingEphPub ? `/pair/#${pendingEphPub}` : "/dashboard/";

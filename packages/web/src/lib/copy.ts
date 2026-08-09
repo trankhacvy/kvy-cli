@@ -151,6 +151,11 @@ export const copy = {
   devices: {
     explainer:
       "Anyone using one of these devices can read your sessions. Sign out anything you don't recognise.",
+    renameCta: "Rename",
+    renameSaveCta: "Save",
+    renameCancelCta: "Cancel",
+    renamePlaceholder: "Device name",
+    renameError: "Couldn't rename that device. Try again.",
   },
 
   account: {

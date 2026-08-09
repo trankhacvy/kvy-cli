@@ -188,6 +188,7 @@ export const pairRoutes: FastifyPluginAsyncZod = async (app) => {
       const { refreshToken } = await issueSession(db, {
         accountId: request.accountId,
         clientKind: "cli-daemon",
+        label: row.label ?? undefined,
       });
       return reply.send({ refreshToken });
     },

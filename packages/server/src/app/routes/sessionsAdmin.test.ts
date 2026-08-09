@@ -206,6 +206,96 @@ describe("sessions-admin routes", () => {
     expect(refreshResponse.statusCode).toBe(401);
   });
 
+  it("PATCH /v1/auth/sessions/:id renames a session's label", async () => {
+    const accountId = "acct_sessions_rename";
+    const caller = await issueSession({ accountId, clientKind: "web" });
+    const target = await issueSession({ accountId, clientKind: "cli-daemon" });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/v1/auth/sessions/${target.sessionId}`,
+      headers: { authorization: `Bearer ${caller.accessToken}` },
+      payload: { label: "My laptop" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ success: true, label: "My laptop" });
+
+    const listResponse = await app.inject({
+      method: "GET",
+      url: "/v1/auth/sessions",
+      headers: { authorization: `Bearer ${caller.accessToken}` },
+    });
+    const renamed = listResponse
+      .json()
+      .sessions.find((s: { id: string }) => s.id === target.sessionId);
+    expect(renamed?.label).toBe("My laptop");
+  });
+
+  it("PATCH /v1/auth/sessions/:id trims whitespace and rejects a blank label", async () => {
+    const accountId = "acct_sessions_rename_blank";
+    const caller = await issueSession({ accountId, clientKind: "web" });
+
+    const padded = await app.inject({
+      method: "PATCH",
+      url: `/v1/auth/sessions/${caller.sessionId}`,
+      headers: { authorization: `Bearer ${caller.accessToken}` },
+      payload: { label: "  Padded  " },
+    });
+    expect(padded.statusCode).toBe(200);
+    expect(padded.json().label).toBe("Padded");
+
+    const blank = await app.inject({
+      method: "PATCH",
+      url: `/v1/auth/sessions/${caller.sessionId}`,
+      headers: { authorization: `Bearer ${caller.accessToken}` },
+      payload: { label: "   " },
+    });
+    expect(blank.statusCode).toBe(400);
+  });
+
+  it("404s renaming a session that doesn't belong to the caller", async () => {
+    const caller = await issueSession({ accountId: "acct_rename_caller", clientKind: "web" });
+    const other = await issueSession({ accountId: "acct_rename_other", clientKind: "web" });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/v1/auth/sessions/${other.sessionId}`,
+      headers: { authorization: `Bearer ${caller.accessToken}` },
+      payload: { label: "Not mine" },
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("POST /v1/auth/sessions/current/revoke revokes the caller's own session and disconnects it", async () => {
+    const accountId = "acct_sessions_current_revoke";
+    const caller = await issueSession({ accountId, clientKind: "web" });
+
+    const callerSocket = connectSocket(caller.accessToken);
+    await new Promise<void>((resolve) => callerSocket.once("connect", () => resolve()));
+
+    const disconnected = new Promise<void>((resolve) =>
+      callerSocket.once("disconnect", () => resolve()),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/auth/sessions/current/revoke",
+      headers: { authorization: `Bearer ${caller.accessToken}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await disconnected;
+
+    const refreshResponse = await app.inject({
+      method: "POST",
+      url: "/v1/auth/refresh",
+      payload: { refreshToken: caller.refreshToken },
+    });
+    expect(refreshResponse.statusCode).toBe(401);
+  });
+
   it("404s revoking a session that doesn't belong to the caller", async () => {
     const caller = await issueSession({ accountId: "acct_revoke_caller", clientKind: "web" });
     const other = await issueSession({ accountId: "acct_revoke_other", clientKind: "web" });

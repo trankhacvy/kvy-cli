@@ -146,6 +146,25 @@ describe("password auth routes — NODE_ENV=test (local-testing surface)", () =>
 
       expect(response.statusCode).toBe(400);
     });
+
+    it("stores the client-supplied label onto the minted device_sessions row", async () => {
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/auth/password/register",
+        payload: {
+          email: "label-register@example.com",
+          password: "correct-horse-battery",
+          label: "Chrome on macOS",
+        },
+      });
+      const verified = await verifyToken(response.json().token);
+
+      const [row] = await db
+        .select()
+        .from(deviceSessions)
+        .where(eq(deviceSessions.accountId, verified?.accountId ?? ""));
+      expect(row?.label).toBe("Chrome on macOS");
+    });
   });
 
   describe("POST /v1/auth/password/login", () => {
@@ -165,6 +184,32 @@ describe("password auth routes — NODE_ENV=test (local-testing surface)", () =>
       expect(response.statusCode).toBe(200);
       const verified = await verifyToken(response.json().token);
       expect(verified?.accountId).toEqual(expect.any(String));
+    });
+
+    it("stores the client-supplied label on the login-minted device_sessions row", async () => {
+      await app.inject({
+        method: "POST",
+        url: "/v1/auth/password/register",
+        payload: { email: "label-login@example.com", password: "carols-secret-pw" },
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: "/v1/auth/password/login",
+        payload: {
+          email: "label-login@example.com",
+          password: "carols-secret-pw",
+          label: "Safari on iOS",
+        },
+      });
+
+      const verified = await verifyToken(response.json().token);
+      const rows = await db
+        .select()
+        .from(deviceSessions)
+        .where(eq(deviceSessions.accountId, verified?.accountId ?? ""));
+      const loginRow = rows.find((row) => row.label === "Safari on iOS");
+      expect(loginRow).toBeDefined();
     });
 
     it("rejects a wrong password with a generic error", async () => {

@@ -8,6 +8,7 @@ import { provisionKeyProtection } from "@/crypto";
 import { claimKeyRequest, createKeyRequest, listDeviceSessions } from "@/lib/api";
 import { copy } from "@/lib/copy";
 import { describeThisBrowser } from "@/lib/describe-device";
+import { deviceSessionLabel } from "@/lib/device-session-label";
 import { getAccountId, getToken } from "@/lib/session";
 import { useCryptoBridge } from "@/lib/use-crypto-bridge";
 import { formatVerificationCode, verificationCode } from "@/lib/verification-code";
@@ -69,7 +70,7 @@ export function RequestKeysPanel({
         code,
         devices: (sessions?.sessions ?? [])
           .filter((session) => !session.isCurrent)
-          .map((session) => session.label ?? session.clientKind),
+          .map((session) => deviceSessionLabel(session)),
       });
 
       const poll = async (): Promise<void> => {

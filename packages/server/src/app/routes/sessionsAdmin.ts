@@ -1,5 +1,6 @@
 /**
- * `GET /v1/auth/sessions` + `POST /v1/auth/sessions/:id/revoke` +
+ * `GET /v1/auth/sessions` + `PATCH /v1/auth/sessions/:id` + `POST /v1/auth/sessions/:id/revoke` +
+ * `POST /v1/auth/sessions/current/revoke` + `POST /v1/auth/sessions/revoke-others` — lets an account
  * manage its own `device_sessions` (the web Settings "Devices" list), and makes
  * revocation genuinely immediate by disconnecting any live socket for the revoked
  */
@@ -95,6 +96,62 @@ export function buildSessionsAdminRoutes(
             isCurrent: row.id === request.sessionId,
           })),
         });
+      },
+    );
+
+    app.patch(
+      "/v1/auth/sessions/:id",
+      {
+        preHandler: app.authenticate,
+        config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+        schema: {
+          params: z.object({ id: z.string().min(1) }),
+          body: z.object({ label: z.string().trim().min(1).max(80) }),
+          response: {
+            200: z.object({ success: z.literal(true), label: z.string() }),
+            404: z.object({ error: z.string() }),
+          },
+        },
+      },
+      async (request, reply) => {
+        const rows = await db
+          .update(deviceSessions)
+          .set({ label: request.body.label })
+          .where(
+            and(
+              eq(deviceSessions.id, request.params.id),
+              eq(deviceSessions.accountId, request.accountId),
+            ),
+          )
+          .returning({ id: deviceSessions.id });
+        if (rows.length === 0) return reply.code(404).send({ error: "Session not found" });
+
+        return reply.send({ success: true, label: request.body.label });
+      },
+    );
+
+    app.post(
+      "/v1/auth/sessions/current/revoke",
+      {
+        preHandler: app.authenticate,
+        config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+        schema: {
+          response: { 200: z.object({ success: z.literal(true) }) },
+        },
+      },
+      async (request, reply) => {
+        await db
+          .update(deviceSessions)
+          .set({ revokedAt: new Date() })
+          .where(
+            and(
+              eq(deviceSessions.id, request.sessionId),
+              eq(deviceSessions.accountId, request.accountId),
+            ),
+          );
+
+        disconnect(request.accountId, request.sessionId);
+        return reply.send({ success: true });
       },
     );
 

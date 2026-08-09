@@ -3,11 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { SIGNIN_PATH } from "@/features/auth";
-import { listDeviceSessions, revokeOtherSessions, revokeSession } from "@/lib/api";
+import { listDeviceSessions, renameSession, revokeOtherSessions, revokeSession } from "@/lib/api";
 import { copy } from "@/lib/copy";
+import { clientKindLabel, deviceSessionLabel } from "@/lib/device-session-label";
 import { logout } from "@/lib/logout";
 import { getToken } from "@/lib/session";
+import { cancelRename, isRenaming, type RenamingId, startRename } from "../devices-rename-state";
 import {
   canConfirmRevoke,
   clearRevokeConfirm,
@@ -16,17 +19,6 @@ import {
 } from "../devices-revoke-state";
 
 type DeviceSession = Awaited<ReturnType<typeof listDeviceSessions>>["sessions"][number];
-
-const CLIENT_KIND_LABELS: Record<string, string> = {
-  web: "Web browser",
-  "cli-daemon": "CLI daemon",
-  "cli-session": "CLI session",
-  "cloud-sandbox": "Cloud sandbox",
-};
-
-function clientKindLabel(clientKind: string): string {
-  return CLIENT_KIND_LABELS[clientKind] ?? clientKind;
-}
 
 function formatRelative(iso: string | null): string {
   if (!iso) return "never";
@@ -59,6 +51,9 @@ export function DevicesSection() {
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | "others" | null>(null);
   const [confirmId, setConfirmId] = useState<RevokeConfirmId>(null);
+  const [renamingId, setRenamingId] = useState<RenamingId>(null);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [renamePending, setRenamePending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +112,38 @@ export function DevicesSection() {
       setError(err instanceof Error ? err.message : "Failed to log out that device");
     } finally {
       setPendingId(null);
+    }
+  }
+
+  function requestRenameClick(session: DeviceSession): void {
+    setError(null);
+    setDraftLabel(deviceSessionLabel(session));
+    setRenamingId(startRename(session.id));
+  }
+
+  function cancelRenameClick(): void {
+    setRenamingId(cancelRename());
+  }
+
+  async function confirmRename(session: DeviceSession): Promise<void> {
+    if (!isRenaming(renamingId, session.id)) return;
+    const label = draftLabel.trim();
+    if (!label) return;
+    const token = getToken();
+    if (!token) return;
+    setRenamePending(true);
+    setError(null);
+    try {
+      const result = await renameSession(token, session.id, label);
+      setSessions(
+        (prev) =>
+          prev?.map((s) => (s.id === session.id ? { ...s, label: result.label } : s)) ?? prev,
+      );
+      setRenamingId(cancelRename());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : copy.devices.renameError);
+    } finally {
+      setRenamePending(false);
     }
   }
 
@@ -179,7 +206,7 @@ export function DevicesSection() {
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">
-                  {session.label ?? clientKindLabel(session.clientKind)}
+                  {deviceSessionLabel(session)}
                   {session.isCurrent && (
                     <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-xs font-normal text-muted-foreground">
                       This device
@@ -191,7 +218,29 @@ export function DevicesSection() {
                   {formatRelative(session.lastRefreshedAt ?? session.createdAt)}
                 </p>
               </div>
-              {confirmId === session.id ? (
+              {isRenaming(renamingId, session.id) ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    autoFocus
+                    value={draftLabel}
+                    onChange={(e) => setDraftLabel(e.target.value)}
+                    placeholder={copy.devices.renamePlaceholder}
+                    maxLength={80}
+                    className="h-8 w-40"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={renamePending || draftLabel.trim().length === 0}
+                    onClick={() => confirmRename(session)}
+                  >
+                    {renamePending ? "Working…" : copy.devices.renameSaveCta}
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" onClick={cancelRenameClick}>
+                    {copy.devices.renameCancelCta}
+                  </Button>
+                </div>
+              ) : confirmId === session.id ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">
                     {session.isCurrent ? "Log out this browser?" : "Log out this device?"}
@@ -215,15 +264,26 @@ export function DevicesSection() {
                   </Button>
                 </div>
               ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pendingId !== null}
-                  onClick={() => requestRevokeClick(session)}
-                >
-                  {session.isCurrent ? "Log out this device" : "Log out"}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={pendingId !== null || renamePending}
+                    onClick={() => requestRenameClick(session)}
+                  >
+                    {copy.devices.renameCta}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pendingId !== null}
+                    onClick={() => requestRevokeClick(session)}
+                  >
+                    {session.isCurrent ? "Log out this device" : "Log out"}
+                  </Button>
+                </div>
               )}
             </li>
           ))}

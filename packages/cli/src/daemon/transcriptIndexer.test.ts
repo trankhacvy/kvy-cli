@@ -292,10 +292,17 @@ describe("startTranscriptIndexer", () => {
             upserts.push(params);
             return true;
           },
+          // watchWorkspace's own initial scan and watchDirectoryForever's onReady scan
+          // (an intentional redundant catch-up scan, not a bug — see its doc comment)
+          // both fire on first attach; the debounce window is what coalesces them into
+          // one processFile call. The default 30ms is too tight under contention (the
+          // two scans can land further apart than that), so widen it here — same
+          // reasoning as the neighboring "upserts once" test.
+          debounceMs: 300,
         }),
       );
 
-      await sleep(300);
+      await sleep(900);
       expect(upserts).toHaveLength(0);
     });
 
@@ -315,10 +322,20 @@ describe("startTranscriptIndexer", () => {
             upserts.push(params);
             return true;
           },
+          // watchWorkspace's initial scanExisting() and watchDirectoryForever's onReady
+          // callback both scan on first attach (intentionally — onReady closes the race
+          // between "scan finished" and "watch() actually attached"). The debounce timer
+          // is what's supposed to coalesce both scans' scheduleProcess() calls into one
+          // processFile() run — but with the default 30ms debounce, real scheduling delay
+          // between the two scans under contention can exceed the window, so the first
+          // timer already fires (and clears itself) before the second scan re-triggers a
+          // new one, producing a genuine duplicate upsert. Widen the debounce well past
+          // any realistic inter-scan delay instead.
+          debounceMs: 300,
         }),
       );
 
-      await sleep(300);
+      await sleep(900);
       expect(upserts).toHaveLength(1);
       expect(upserts[0]?.providerRef).toBe("sess-resumed");
     });
@@ -332,10 +349,12 @@ describe("startTranscriptIndexer", () => {
             upserts.push(params);
             return true;
           },
+          // Same coalescing-window reasoning as the two tests above.
+          debounceMs: 300,
         }),
       );
 
-      await sleep(300);
+      await sleep(900);
       expect(upserts).toHaveLength(1);
     });
   });
