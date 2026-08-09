@@ -115,10 +115,14 @@ describe("sessionRegistry", () => {
     first.trackSpawned(4242, realDirectory);
     first.onSessionStarted("sess_1", { title: "x" }, ENCRYPTION, 4242);
 
-    // onSessionStarted's persistSession() fires-and-forgets — let it land on
-    // disk (with the directory) before we simulate the restart.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const onDisk = await readPersistedSessions(homeDir);
+    // onSessionStarted's persistSession() fires-and-forgets — poll until it lands on
+    // disk (with the directory) before we simulate the restart, rather than a fixed
+    // delay: a real fs write can take longer than a flat margin under contention.
+    const onDisk = await vi.waitFor(async () => {
+      const persisted = await readPersistedSessions(homeDir);
+      expect(persisted.sess_1?.directory).toBe(realDirectory);
+      return persisted;
+    });
     expect(onDisk.sess_1?.directory).toBe(realDirectory);
 
     // --- daemon restart: a BRAND-NEW registry, no shared in-memory state,

@@ -482,8 +482,9 @@ describe("createSessionScanner", () => {
     });
 
     await writeFile(join(projectDir, "A.jsonl"), userLine("a-1"));
-    // The rotation fallback debounces 2s before acting; give it enough room.
-    await sleep(3000);
+    // The rotation fallback debounces 2s before acting; give it enough room
+    // (bumped from 3s — 2s margin observed too tight under real contention).
+    await sleep(4000);
 
     expect(uuids(seen)).toContain("a-1");
     const rotationLogs = infoRecords.filter((r) =>
@@ -500,7 +501,7 @@ describe("createSessionScanner", () => {
     await scanner.onNewSession("A");
 
     await writeFile(join(projectDir, "B.jsonl"), userLine("b-1"));
-    await sleep(3000);
+    await sleep(4000);
 
     expect(uuids(seen)).toEqual(["a-1"]);
     const ignored = debugRecords.filter((r) =>
@@ -508,7 +509,7 @@ describe("createSessionScanner", () => {
     );
     expect(ignored.length).toBeGreaterThan(0);
     expect(ignored[0]?.meta?.newSessionId).toBe("B");
-  }, 10_000);
+  }, 15_000);
 
   it("ignores a new transcript file once the fallback's armed window has expired, even with no hook coverage", async () => {
     const { logger, debugRecords } = collectingLogger();

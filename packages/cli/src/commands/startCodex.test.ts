@@ -722,11 +722,19 @@ describe("runStartCodexCommand", () => {
 
       const envelope = createEnvelope("user", { t: "text", md: "run a task" });
       await h.message({ envelope });
-      // Turn reaches a terminal stopReason → claim completes.
+      // Turn reaches a terminal stopReason → claim completes. `completeMessageSend`
+      // is fire-and-forget (real disk I/O, not awaited by the RPC handler), so a
+      // single macrotask tick isn't a reliable enough margin under contention —
+      // poll until the claim actually flushes to "completed" instead of a fixed
+      // delay. Re-issuing `h.message` while still in flight is safe: the claim was
+      // already registered above, so a retry only ever sees "in-progress" (a
+      // harmless re-check) or "completed", never re-queues a fresh send.
       fakeRemote.settle({ messageId: envelope.id, status: "completed" });
-      await new Promise((r) => setTimeout(r, 0));
-
-      const dup = await h.message({ envelope });
+      const dup = await vi.waitFor(async () => {
+        const result = await h.message({ envelope });
+        expect(result).toEqual({ queued: false, status: "duplicate" });
+        return result;
+      });
       expect(dup).toEqual({ queued: false, status: "duplicate" });
 
       releaseExit();

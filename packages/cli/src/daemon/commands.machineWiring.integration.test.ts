@@ -77,7 +77,9 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
   // every time). Same "bump the timeout for real, slow setup" precedent as
   // `index.test.ts`'s cold node-pty load and `worker-handler.test.ts`'s
   // PIN-migration case (both 15s) — this hook does strictly more work than
-  // either, so 20s.
+  // either. Bumped 20s -> 30s again after it still timed out under heavier
+  // multi-package contention (the whole monorepo's test suites running
+  // concurrently via turbo).
   beforeAll(async () => {
     const created = await createTestDb();
     db = created.db;
@@ -91,7 +93,7 @@ describe("runDaemonStartSync (integration: machine client + RPC handlers over a 
     token = account.token;
     refreshToken = account.refreshToken;
     accountId = account.account.id;
-  }, 20_000);
+  }, 30_000);
 
   afterAll(async () => {
     await app.close();
