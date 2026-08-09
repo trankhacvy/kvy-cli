@@ -1,5 +1,12 @@
 # @vibe-oss/kvy
 
+## 0.1.3
+
+### Patch Changes
+
+- beebc40: Fix `kvy update` always failing with "could not check for updates": the self-update repo default was a stale placeholder (`kvy-dev/kvy`, a nonexistent repo) instead of the real `trankhacvy/kvy-cli`, so every version check 404'd.
+- beebc40: Fix the daemon staying "offline" on the dashboard after a laptop sleeps and wakes: the machine client now runs a sleep/wake watchdog that detects the clock gap left by OS suspend and immediately forces a fresh reconnect, instead of waiting out socket.io's own ping-timeout/backoff. `kvy claude`/`kvy codex` also now auto-register the background login service (same as `kvy daemon service install`) the first time a daemon comes up, so a full reboot brings the daemon back too, without the user having to run that command themselves.
+
 ## 0.1.2
 
 ### Patch Changes
