@@ -1,6 +1,6 @@
 {
   "name": "@vibe-oss/kvy",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "license": "MIT",
   "description": "kvy — CLI wrapper for Claude Code / Codex agent sessions. Hand-rolled arg parsing (no framework), full flag passthrough to the underlying provider CLI, file-only logging (stdout/stderr are reserved for the real provider TUI once local-mode spawning lands).",
