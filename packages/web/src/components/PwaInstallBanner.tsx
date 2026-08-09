@@ -152,7 +152,10 @@ export function PwaInstallBanner() {
 
   return (
     <>
-      <section aria-label="Install Kvy" className="border-b border-border bg-accent px-4 py-2">
+      <section
+        aria-label="Install Kvy"
+        className="shrink-0 border-b border-border bg-accent px-4 py-2"
+      >
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-center gap-x-3 gap-y-1.5">
           <span className="text-center text-sm text-accent-foreground">
             <span className="hidden sm:inline">

@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isSessionDetailRoute = isSessionRoute(pathname) && !pathname.includes("/git/");
 
   return (
-    <SidebarProvider className="h-svh overflow-hidden">
+    <SidebarProvider className="min-h-0 flex-1 overflow-hidden">
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <SidebarMenu>

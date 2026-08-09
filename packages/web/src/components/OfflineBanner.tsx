@@ -24,7 +24,7 @@ export function OfflineBanner() {
     return (
       <div
         role="status"
-        className="border-b border-border bg-amber-500/10 px-4 py-1.5 text-center text-xs text-amber-600 dark:text-amber-400"
+        className="shrink-0 border-b border-border bg-amber-500/10 px-4 py-1.5 text-center text-xs text-amber-600 dark:text-amber-400"
       >
         Your session expired.{" "}
         <Link href={SIGNIN_PATH} className="underline">
