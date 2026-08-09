@@ -7,8 +7,8 @@ import {
 } from "./config.js";
 
 describe("resolveUpdateRepo", () => {
-  it("defaults to kvy-dev/kvy (same slug as scripts/install.sh)", () => {
-    expect(resolveUpdateRepo({})).toBe("kvy-dev/kvy");
+  it("defaults to trankhacvy/kvy-cli (same slug as scripts/install.sh)", () => {
+    expect(resolveUpdateRepo({})).toBe("trankhacvy/kvy-cli");
   });
 
   it("honors KVY_REPO override", () => {
@@ -16,7 +16,7 @@ describe("resolveUpdateRepo", () => {
   });
 
   it("ignores a blank override", () => {
-    expect(resolveUpdateRepo({ KVY_REPO: "   " })).toBe("kvy-dev/kvy");
+    expect(resolveUpdateRepo({ KVY_REPO: "   " })).toBe("trankhacvy/kvy-cli");
   });
 });
 
@@ -46,8 +46,8 @@ describe("isBackgroundUpdateRun", () => {
 
 describe("releaseAssetUrl", () => {
   it("builds a cli-latest rolling-tag download URL", () => {
-    expect(releaseAssetUrl("kvy-dev/kvy", "kvy-darwin-arm64")).toBe(
-      "https://github.com/kvy-dev/kvy/releases/download/cli-latest/kvy-darwin-arm64",
+    expect(releaseAssetUrl("trankhacvy/kvy-cli", "kvy-darwin-arm64")).toBe(
+      "https://github.com/trankhacvy/kvy-cli/releases/download/cli-latest/kvy-darwin-arm64",
     );
   });
 });

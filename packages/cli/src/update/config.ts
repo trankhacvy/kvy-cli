@@ -6,7 +6,7 @@
  * (installer script, release workflow) already points at.
  */
 
-const DEFAULT_REPO = "kvy-dev/kvy";
+const DEFAULT_REPO = "trankhacvy/kvy-cli";
 
 /** `owner/repo` on GitHub — same override convention as `scripts/install.sh`. */
 export function resolveUpdateRepo(env: NodeJS.ProcessEnv = process.env): string {
