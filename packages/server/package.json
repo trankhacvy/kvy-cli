@@ -18,11 +18,11 @@
   "dependencies": {
     "@aws-sdk/s3-request-presigner": "^3.700.0",
     "@fastify/cors": "^11.3.0",
-    "@fastify/rate-limit": "^10.2.0",
+    "@fastify/rate-limit": "^11.2.0",
     "@kvy/crypto": "workspace:*",
     "@kvy/wire": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
-    "@paralleldrive/cuid2": "^2.2.2",
+    "@paralleldrive/cuid2": "^3.3.0",
     "better-auth": "^1.6.26",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.10.0",
@@ -40,7 +40,7 @@
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.1089.0",
     "@electric-sql/pglite": "^0.5.4",
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.1.2",
     "@types/web-push": "^3.6.4",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
@@ -49,7 +49,7 @@
     "shx": "^0.3.4",
     "socket.io-client": "^4.8.1",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.0",
-    "vitest": "^3.2.4"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
