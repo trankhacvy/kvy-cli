@@ -57,6 +57,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
       signature: "sig",
     }),
     setRefreshToken: async () => undefined,
+    claimPasskey: notImplemented,
     refreshSession: notImplemented,
     terminate: () => {},
     ...overrides,

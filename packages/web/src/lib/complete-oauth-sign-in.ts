@@ -14,6 +14,7 @@
  */
 import { getRandomBytes, ready } from "@kvy/crypto/web";
 import type { CryptoBridgeClient, KeyProtection } from "@/crypto";
+import { derivePrfMasterSecret } from "@/crypto";
 import { keysBind, keysChallenge, register } from "./api.js";
 import { describeThisBrowser } from "./describe-device.js";
 import { consumePendingPair } from "./pending-pair.js";
@@ -59,7 +60,17 @@ export async function completeOAuthSignIn(
   const isNewIdentity = !identity;
   if (!identity) {
     await ready;
-    const masterSecret = getRandomBytes(32);
+    let masterSecret: Uint8Array;
+    if (protection.mode === "passkey") {
+      if (!protection.credentialId) {
+        throw new Error("Internal: passkey mode requires a credentialId");
+      }
+      const derived = await derivePrfMasterSecret(protection.credentialId, accountId);
+      if (!derived) throw new Error("Passkey authentication failed. Please try again.");
+      masterSecret = derived;
+    } else {
+      masterSecret = getRandomBytes(32);
+    }
     await bridge.init(masterSecret, refreshToken, accountId, protection);
     identity = await bridge.getIdentity(accountId);
   }

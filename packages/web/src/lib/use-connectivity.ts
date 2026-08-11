@@ -35,7 +35,7 @@ export interface ConnectivityState {
 }
 
 function readBrowserOnline(): boolean {
-  if (typeof navigator === "undefined") return true;
+  if (typeof navigator === "undefined" || typeof navigator.onLine !== "boolean") return true;
   return navigator.onLine;
 }
 

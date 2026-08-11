@@ -51,10 +51,23 @@ export interface CryptoBridgeClient {
    * different account. */
   describeStorage(accountId?: string): Promise<StorageDescription>;
   /** Load and unwrap stored key material into worker memory. No interaction for
-   * `"device"` mode; a biometric gesture for `"prf"`. False if there is nothing usable, or
-   * if `accountId` is given and the loaded/stored record is known to belong to someone
-   * else. */
-  ensureLoaded(accountId?: string, wrapKey?: CryptoKey): Promise<boolean>;
+   * `"device"` mode; a biometric gesture for `"prf"` or `"passkey"`. False if there is
+   * nothing usable, or if `accountId` is given and the loaded/stored record is known to
+   * belong to someone else. For `"passkey"` records, supply the masterSecret derived from
+   * PRF by the main thread. */
+  ensureLoaded(
+    accountId?: string,
+    wrapKey?: CryptoKey,
+    masterSecret?: Uint8Array,
+  ): Promise<boolean>;
+  /** Claim an existing passkey identity in this browser: derive the key tree from
+   * `masterSecret`, write a passkey record to IDB, and load into worker memory. Does NOT
+   * touch session storage — the refresh token must already be stored. */
+  claimPasskey(
+    accountId: string,
+    masterSecret: Uint8Array,
+    credentialId: Uint8Array,
+  ): Promise<boolean>;
   /** One-time upgrade of a pre-Phase-5 PIN-wrapped record. False on a wrong PIN. */
   migrateFromPin(pin: string, protection: KeyProtection): Promise<boolean>;
   /** Unwrap a per-session DEK and hold it as the active session key. Resolves `false` on a bad/foreign DEK. */
@@ -189,8 +202,10 @@ export function createCryptoBridgeClient(worker: WorkerLike): CryptoBridgeClient
       ),
     describeStorage: (accountId) =>
       call<StorageDescription>({ type: "describeStorage", accountId }),
-    ensureLoaded: (accountId, wrapKey) =>
-      call<boolean>({ type: "ensureLoaded", accountId, wrapKey }),
+    ensureLoaded: (accountId, wrapKey, masterSecret) =>
+      call<boolean>({ type: "ensureLoaded", accountId, wrapKey, masterSecret }),
+    claimPasskey: (accountId, masterSecret, credentialId) =>
+      call<boolean>({ type: "claimPasskey", accountId, masterSecret, credentialId }),
     migrateFromPin: (pin, protection) =>
       call<boolean>({ type: "migrateFromPin", pin, ...protection }),
     setSessionKey: (wrappedDek) => call<boolean>({ type: "setSessionKey", wrappedDek }),

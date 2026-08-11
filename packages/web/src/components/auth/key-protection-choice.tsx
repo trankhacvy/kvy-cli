@@ -8,11 +8,11 @@ import { isPrfAvailable, type KeyWrapMode } from "@/crypto";
 /**
  * Key-protection mode selector, shown once at first setup.
  *
- *  - "prf"    — wrap key re-derived from a passkey each session; never exists at rest, so
- *               copying the browser profile yields nothing usable. Costs one biometric tap
- *               per page load.
- *  - "device" — non-extractable key stored in IndexedDB. No prompt, but same-origin script
- *               can use the handle, and anyone who can access this machine can read sessions.
+ *  - "passkey" — masterSecret derived from a passkey's PRF output on every load; never
+ *                stored. Syncs across devices via iCloud Keychain or Google Password Manager,
+ *                so the same key works in Safari, Chrome, and installed PWAs automatically.
+ *  - "device"  — non-extractable key stored in IndexedDB. No prompt, but same-origin script
+ *                can use the handle, and anyone who can access this machine can read sessions.
  *
  * Auto-resolves to "device" when no platform authenticator exists.
  */
@@ -63,15 +63,15 @@ export function KeyProtectionChoice({
       <button
         type="button"
         disabled={pending}
-        onClick={() => onChoose("prf")}
+        onClick={() => onChoose("passkey")}
         className="flex items-start gap-3 rounded-lg border p-4 text-left hover:bg-muted/40 disabled:opacity-60"
       >
         <Fingerprint className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
         <span>
-          <span className="block text-sm font-medium">Ask for my fingerprint</span>
+          <span className="block text-sm font-medium">Face ID / Touch ID / Passkey</span>
           <span className="block text-sm text-muted-foreground">
-            One quick check each time you open Kvy. Someone who steals this computer still can't
-            read your sessions.
+            One tap each time you open Kvy. Works in Safari, Chrome, and the installed app - your
+            key syncs automatically via iCloud Keychain or Google Passkeys.
           </span>
         </span>
       </button>

@@ -10,10 +10,14 @@
 export type { CryptoBridgeClient } from "./client.js";
 export { createCryptoBridgeClient, type WorkerLike } from "./client.js";
 export { createCryptoBridge } from "./factory.js";
-export type { KeyProtection } from "./key-protection.js";
-export { provisionKeyProtection, resolveWrapKeyForRecord } from "./key-protection.js";
+export type { KeyProtection, ResolvedKeyMaterial } from "./key-protection.js";
+export {
+  provisionKeyProtection,
+  resolveKeyMaterial,
+  resolveWrapKeyForRecord,
+} from "./key-protection.js";
 export type { KeyWrapMode } from "./key-storage.js";
-export { isPrfAvailable } from "./prf-key.js";
+export { derivePrfMasterSecret, discoverPasskey, isPrfAvailable } from "./prf-key.js";
 export type {
   CryptoWorkerRequest,
   CryptoWorkerResponse,

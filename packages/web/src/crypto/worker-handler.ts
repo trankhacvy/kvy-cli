@@ -37,9 +37,11 @@ import { API_URL } from "@/lib/config.js";
 import { createWrapKey, unwrapBytes, wrapBytes } from "./device-key.js";
 import {
   type AnyStoredKeyRecord,
+  isPasskeyRecord,
   isV2Record,
   type KeyStorage,
   type KeyWrapMode,
+  type StoredKeyRecordPasskey,
   type StoredKeyRecordV2,
 } from "./key-storage.js";
 import type { CryptoWorkerRequest, CryptoWorkerResponse } from "./protocol.js";
@@ -129,7 +131,9 @@ export function createCryptoWorkerHandler(
    * (`server/src/app/routes/keys.ts:207-214`).
    */
   function belongsTo(record: AnyStoredKeyRecord, accountId?: string): boolean {
-    if (!accountId || !isV2Record(record) || record.accountId === undefined) return true;
+    if (!accountId) return true;
+    if (isPasskeyRecord(record)) return record.accountId === accountId;
+    if (!isV2Record(record) || record.accountId === undefined) return true;
     return record.accountId === accountId;
   }
 
@@ -140,7 +144,11 @@ export function createCryptoWorkerHandler(
    * wrap key that could not be resolved (e.g. a dismissed biometric prompt), or — when
    * `accountId` is given — a record positively known to belong to a different account.
    */
-  async function ensureLoaded(providedWrapKey?: CryptoKey, accountId?: string): Promise<boolean> {
+  async function ensureLoaded(
+    providedWrapKey?: CryptoKey,
+    accountId?: string,
+    masterSecretFromMain?: Uint8Array,
+  ): Promise<boolean> {
     if (keyTree) {
       // A `keyTree` already in memory for a DIFFERENT, known account must not be handed to
       // this account — see `loadedForAccount`'s docblock for why `null` stays permissive.
@@ -150,7 +158,21 @@ export function createCryptoWorkerHandler(
       return true;
     }
     const record = await storage.load();
-    if (!record || !isV2Record(record) || !belongsTo(record, accountId)) return false;
+    if (!record || !belongsTo(record, accountId)) return false;
+
+    // Passkey mode: the masterSecret is derived on the main thread and passed in directly.
+    // The worker never unwraps anything from storage — there is nothing to unwrap.
+    if (isPasskeyRecord(record)) {
+      if (!masterSecretFromMain || masterSecretFromMain.length !== MASTER_SECRET_BYTES) {
+        return false;
+      }
+      await ready;
+      deriveFrom(masterSecretFromMain);
+      loadedForAccount = accountId ?? record.accountId;
+      return true;
+    }
+
+    if (!isV2Record(record)) return false;
 
     // A "prf" record's wrap key can only be derived on the main thread (WebAuthn is not
     // exposed to workers), so the caller must hand it in. Refusing here — rather than
@@ -221,14 +243,32 @@ export function createCryptoWorkerHandler(
           await ready;
           deriveFrom(request.masterSecret);
           if (!keyTree) return { id: request.id, ok: false, error: "not-initialized" };
-          await persistKeyMaterial(
-            request.masterSecret,
-            keyTree,
-            request.mode,
-            request.accountId,
-            request.wrapKey,
-            request.credentialId,
-          );
+
+          if (request.mode === "passkey") {
+            if (!request.credentialId) {
+              return { id: request.id, ok: false, error: "passkey-mode-requires-credential-id" };
+            }
+            const record: StoredKeyRecordPasskey = {
+              v: 3,
+              mode: "passkey",
+              accountId: request.accountId,
+              credentialId: request.credentialId,
+              signPubKey: encodeBase64(keyTree.signing.publicKey),
+              contentPubKey: encodeBase64(keyTree.content.publicKey),
+            };
+            await storage.save(record);
+            loadedForAccount = request.accountId;
+          } else {
+            await persistKeyMaterial(
+              request.masterSecret,
+              keyTree,
+              request.mode,
+              request.accountId,
+              request.wrapKey,
+              request.credentialId,
+            );
+          }
+
           refreshToken = request.refreshToken;
           await sessionStorage.save(request.refreshToken);
           activeDek = null;
@@ -244,17 +284,29 @@ export function createCryptoWorkerHandler(
               result: { present: false, version: 2, mode: null, credentialId: null },
             };
           }
+          if (isPasskeyRecord(record)) {
+            return {
+              id: request.id,
+              ok: true,
+              result: {
+                present: true,
+                version: 3 as const,
+                mode: "passkey" as const,
+                credentialId: record.credentialId,
+              },
+            };
+          }
           return {
             id: request.id,
             ok: true,
             result: isV2Record(record)
               ? {
                   present: true,
-                  version: 2,
+                  version: 2 as const,
                   mode: record.mode,
                   credentialId: record.credentialId ?? null,
                 }
-              : { present: true, version: 1, mode: null, credentialId: null },
+              : { present: true, version: 1 as const, mode: null, credentialId: null },
           };
         }
 
@@ -262,13 +314,13 @@ export function createCryptoWorkerHandler(
           return {
             id: request.id,
             ok: true,
-            result: await ensureLoaded(request.wrapKey, request.accountId),
+            result: await ensureLoaded(request.wrapKey, request.accountId, request.masterSecret),
           };
         }
 
         case "migrateFromPin": {
           const record = await storage.load();
-          if (!record || isV2Record(record)) {
+          if (!record || isV2Record(record) || isPasskeyRecord(record)) {
             return { id: request.id, ok: true, result: false };
           }
           await ready;
@@ -548,6 +600,24 @@ export function createCryptoWorkerHandler(
           } catch {
             return { id: request.id, ok: true, result: { kind: "unreachable" } };
           }
+        }
+
+        case "claimPasskey": {
+          await ready;
+          deriveFrom(request.masterSecret);
+          if (!keyTree) return { id: request.id, ok: true, result: false };
+          const record: StoredKeyRecordPasskey = {
+            v: 3,
+            mode: "passkey",
+            accountId: request.accountId,
+            credentialId: request.credentialId,
+            signPubKey: encodeBase64(keyTree.signing.publicKey),
+            contentPubKey: encodeBase64(keyTree.content.publicKey),
+          };
+          await storage.save(record);
+          loadedForAccount = request.accountId;
+          activeDek = null;
+          return { id: request.id, ok: true, result: true };
         }
 
         default: {

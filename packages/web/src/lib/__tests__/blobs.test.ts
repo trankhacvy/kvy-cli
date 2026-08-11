@@ -37,6 +37,7 @@ function fakeBridge(overrides: Partial<CryptoBridgeClient> = {}): CryptoBridgeCl
     sealForPeer: notImplemented,
     bindKeysProof: notImplemented,
     setRefreshToken: notImplemented,
+    claimPasskey: notImplemented,
     refreshSession: notImplemented,
     terminate: () => {},
     ...overrides,
