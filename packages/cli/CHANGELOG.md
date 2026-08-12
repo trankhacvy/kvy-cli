@@ -1,5 +1,11 @@
 # @vibe-oss/kvy
 
+## 0.1.4
+
+### Patch Changes
+
+- cb1231e: Fix flaky CLI tests that only failed under multi-package parallel test contention (widened timeouts/debounce margins, replaced fixed-delay waits with polling). Test-only change, no behavior difference.
+
 ## 0.1.3
 
 ### Patch Changes
