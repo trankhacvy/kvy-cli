@@ -594,4 +594,185 @@ describe("createCryptoWorkerHandler", () => {
     expect(proof.contentPubKey).toBe(encodeBase64(tree.content.publicKey));
     expect(decodeBase64(proof.signature).length).toBe(64);
   });
+
+  describe("passkey mode (PRF-derived masterSecret)", () => {
+    const credentialId = new Uint8Array([0xaa, 0xbb, 0xcc, 0xdd]);
+
+    it("init with mode:passkey writes a v3 record with no wrapped field", async () => {
+      await handler.handle(
+        req("1", {
+          type: "init",
+          masterSecret,
+          refreshToken: "t",
+          accountId: TEST_ACCOUNT_ID,
+          mode: "passkey",
+          credentialId,
+        }),
+      );
+      const stored = await storage.load();
+      expect(stored?.v).toBe(3);
+      if (stored?.v !== 3) throw new Error("unreachable");
+      expect(stored.mode).toBe("passkey");
+      expect(stored.credentialId).toEqual(credentialId);
+      expect(stored.signPubKey).toBe(encodeBase64(tree.signing.publicKey));
+      expect(stored.contentPubKey).toBe(encodeBase64(tree.content.publicKey));
+      expect("wrapped" in stored).toBe(false);
+    });
+
+    it("init with mode:passkey but no credentialId returns an error and writes nothing", async () => {
+      const res = await handler.handle(
+        req("1", {
+          type: "init",
+          masterSecret,
+          refreshToken: "t",
+          accountId: TEST_ACCOUNT_ID,
+          mode: "passkey",
+        }),
+      );
+      expect(res.ok).toBe(false);
+      expect(await storage.load()).toBeNull();
+    });
+
+    it("describeStorage returns version:3 for a passkey record", async () => {
+      const record: AnyStoredKeyRecord = {
+        v: 3,
+        mode: "passkey",
+        accountId: TEST_ACCOUNT_ID,
+        credentialId,
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      };
+      storage = createMemoryKeyStorage(record);
+      handler = createCryptoWorkerHandler(storage, sessions);
+
+      expect(
+        await handler.handle(req("1", { type: "describeStorage", accountId: TEST_ACCOUNT_ID })),
+      ).toEqual({
+        id: "1",
+        ok: true,
+        result: { present: true, version: 3, mode: "passkey", credentialId },
+      });
+    });
+
+    it("ensureLoaded with passkey record and correct masterSecret loads successfully", async () => {
+      const record: AnyStoredKeyRecord = {
+        v: 3,
+        mode: "passkey",
+        accountId: TEST_ACCOUNT_ID,
+        credentialId,
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      };
+      storage = createMemoryKeyStorage(record);
+      handler = createCryptoWorkerHandler(storage, sessions);
+
+      expect(
+        await handler.handle(
+          req("1", { type: "ensureLoaded", accountId: TEST_ACCOUNT_ID, masterSecret }),
+        ),
+      ).toEqual({ id: "1", ok: true, result: true });
+
+      expect(await handler.handle(req("2", { type: "setSessionKey", wrappedDek }))).toEqual({
+        id: "2",
+        ok: true,
+        result: true,
+      });
+    });
+
+    it("ensureLoaded with passkey record and no masterSecret returns false", async () => {
+      const record: AnyStoredKeyRecord = {
+        v: 3,
+        mode: "passkey",
+        accountId: TEST_ACCOUNT_ID,
+        credentialId,
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      };
+      storage = createMemoryKeyStorage(record);
+      handler = createCryptoWorkerHandler(storage, sessions);
+
+      expect(
+        await handler.handle(req("1", { type: "ensureLoaded", accountId: TEST_ACCOUNT_ID })),
+      ).toEqual({ id: "1", ok: true, result: false });
+    });
+
+    it("ensureLoaded with passkey record and wrong-length masterSecret returns false", async () => {
+      const record: AnyStoredKeyRecord = {
+        v: 3,
+        mode: "passkey",
+        accountId: TEST_ACCOUNT_ID,
+        credentialId,
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      };
+      storage = createMemoryKeyStorage(record);
+      handler = createCryptoWorkerHandler(storage, sessions);
+
+      expect(
+        await handler.handle(
+          req("1", {
+            type: "ensureLoaded",
+            accountId: TEST_ACCOUNT_ID,
+            masterSecret: new Uint8Array(16),
+          }),
+        ),
+      ).toEqual({ id: "1", ok: true, result: false });
+    });
+
+    it("claimPasskey saves a v3 record, loads key tree, does NOT write to sessionStorage", async () => {
+      const sessionsBefore = await sessions.load();
+
+      const res = await handler.handle(
+        req("1", { type: "claimPasskey", accountId: TEST_ACCOUNT_ID, masterSecret, credentialId }),
+      );
+      expect(res).toEqual({ id: "1", ok: true, result: true });
+
+      const stored = await storage.load();
+      expect(stored?.v).toBe(3);
+      if (stored?.v !== 3) throw new Error("unreachable");
+      expect(stored.mode).toBe("passkey");
+      expect(stored.credentialId).toEqual(credentialId);
+
+      expect(await sessions.load()).toBe(sessionsBefore);
+    });
+
+    it("claimPasskey followed by getIdentity returns the public keys derived from masterSecret", async () => {
+      await handler.handle(
+        req("1", { type: "claimPasskey", accountId: TEST_ACCOUNT_ID, masterSecret, credentialId }),
+      );
+
+      const identity = await handler.handle(
+        req("2", { type: "getIdentity", accountId: TEST_ACCOUNT_ID }),
+      );
+      expect(identity.ok && identity.result).toBeTruthy();
+      if (!identity.ok) throw new Error("unreachable");
+      const result = identity.result as { signPubKey: string; contentPubKey: string };
+      expect(result.signPubKey).toBe(encodeBase64(tree.signing.publicKey));
+      expect(result.contentPubKey).toBe(encodeBase64(tree.content.publicKey));
+    });
+
+    it("passkey record for account A is invisible to account B (cross-account isolation)", async () => {
+      const record: AnyStoredKeyRecord = {
+        v: 3,
+        mode: "passkey",
+        accountId: "acct-A",
+        credentialId,
+        signPubKey: encodeBase64(tree.signing.publicKey),
+        contentPubKey: encodeBase64(tree.content.publicKey),
+      };
+      storage = createMemoryKeyStorage(record);
+      handler = createCryptoWorkerHandler(storage, sessions);
+
+      expect(
+        await handler.handle(req("1", { type: "describeStorage", accountId: "acct-B" })),
+      ).toEqual({
+        id: "1",
+        ok: true,
+        result: { present: false, version: 2, mode: null, credentialId: null },
+      });
+      expect(
+        await handler.handle(req("2", { type: "ensureLoaded", accountId: "acct-B", masterSecret })),
+      ).toEqual({ id: "2", ok: true, result: false });
+    });
+  });
 });

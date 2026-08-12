@@ -4,11 +4,39 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { KeyRequestListener } from "@/components/auth/key-request-listener";
 import { MigratePinPrompt } from "@/components/auth/migrate-pin-prompt";
+import { PasskeyUnlockPanel } from "@/components/auth/passkey-unlock-panel";
 import { RequestKeysPanel } from "@/components/auth/request-keys-panel";
 import { Button } from "@/components/ui/button";
+import { isPrfAvailable } from "@/crypto";
 import { copy } from "@/lib/copy";
 import { getAccountId, isSignedIn, silentRefresh } from "@/lib/session";
 import { useCryptoBridgeStatus } from "@/lib/use-crypto-bridge-status";
+
+function NoKeysGate({ accountId, onReady }: { accountId: string; onReady: () => void }) {
+  const [mode, setMode] = useState<"auto" | "request">("auto");
+  const [prfAvailable, setPrfAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    void isPrfAvailable().then(setPrfAvailable);
+  }, []);
+
+  // Hold off until the PRF check resolves — RequestKeysPanel starts a key
+  // request on mount, so we must not render it before we know whether
+  // PasskeyUnlockPanel should be shown instead.
+  if (prfAvailable === null) return null;
+
+  if (mode === "request" || !prfAvailable) {
+    return <RequestKeysPanel onReady={onReady} />;
+  }
+
+  return (
+    <PasskeyUnlockPanel
+      accountId={accountId}
+      onReady={onReady}
+      onFallback={() => setMode("request")}
+    />
+  );
+}
 
 export const SIGNIN_PATH = "/signin/";
 
@@ -131,7 +159,7 @@ export function RequireAuth({ children }: { children: React.ReactNode }) {
   if (status.kind === "no-keys") {
     return (
       <main className="flex min-h-screen items-center justify-center p-8">
-        <RequestKeysPanel onReady={() => void refresh()} />
+        <NoKeysGate accountId={accountId ?? ""} onReady={() => void refresh()} />
       </main>
     );
   }

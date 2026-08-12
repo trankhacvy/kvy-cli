@@ -20,7 +20,25 @@
 import type { PinWrapped } from "@kvy/crypto/web";
 import type { WrappedBytes } from "./device-key.js";
 
-export type KeyWrapMode = "prf" | "device";
+export type KeyWrapMode = "prf" | "device" | "passkey";
+
+/**
+ * v3: passkey mode. The masterSecret is never stored — it is derived from the
+ * passkey's PRF output on every page load via HKDF. Only the credentialId (to
+ * know which credential to authenticate with) and the public keys (so
+ * getIdentity() works without a biometric gesture) are persisted.
+ *
+ * Works across any browser or PWA that has the passkey synced (iCloud Keychain,
+ * Google Password Manager, Windows Hello).
+ */
+export interface StoredKeyRecordPasskey {
+  v: 3;
+  mode: "passkey";
+  accountId: string;
+  credentialId: Uint8Array;
+  signPubKey: string;
+  contentPubKey: string;
+}
 
 export interface StoredKeyRecordV2 {
   v: 2;
@@ -56,14 +74,18 @@ export interface StoredKeyRecordV1 {
   wrappedRefreshToken?: PinWrapped;
 }
 
-export type AnyStoredKeyRecord = StoredKeyRecordV1 | StoredKeyRecordV2;
+export type AnyStoredKeyRecord = StoredKeyRecordV1 | StoredKeyRecordV2 | StoredKeyRecordPasskey;
 
 export function isV2Record(record: AnyStoredKeyRecord): record is StoredKeyRecordV2 {
   return record.v === 2;
 }
 
+export function isPasskeyRecord(record: AnyStoredKeyRecord): record is StoredKeyRecordPasskey {
+  return (record as StoredKeyRecordPasskey).v === 3;
+}
+
 export interface KeyStorage {
-  save(record: StoredKeyRecordV2): Promise<void>;
+  save(record: StoredKeyRecordV2 | StoredKeyRecordPasskey): Promise<void>;
   load(): Promise<AnyStoredKeyRecord | null>;
   clear(): Promise<void>;
   /**

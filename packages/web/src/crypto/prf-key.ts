@@ -22,6 +22,7 @@
  */
 
 const PRF_SALT = new TextEncoder().encode("kvy-key-wrap-v1") as BufferSource;
+const PRF_DERIVE_SALT = new TextEncoder().encode("kvy-master-v1") as BufferSource;
 const RP_NAME = "Kvy";
 
 export async function isPrfAvailable(): Promise<boolean> {
@@ -63,6 +64,102 @@ export async function createPrfCredential(accountLabel: string): Promise<Uint8Ar
     if (!credential) return null;
     if (credential.getClientExtensionResults().prf?.enabled !== true) return null;
     return new Uint8Array(credential.rawId);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Derive a 32-byte masterSecret from a known passkey's PRF output via HKDF.
+ * Called on every page load instead of unwrapping from IndexedDB.
+ * Returns null when the user dismisses the prompt or the passkey is gone.
+ */
+export async function derivePrfMasterSecret(
+  credentialId: Uint8Array,
+  accountId: string,
+): Promise<Uint8Array | null> {
+  try {
+    const assertion = (await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ id: credentialId as BufferSource, type: "public-key" }],
+        userVerification: "required",
+        extensions: { prf: { eval: { first: PRF_SALT } } },
+      },
+    })) as PublicKeyCredential | null;
+
+    const secret = assertion?.getClientExtensionResults().prf?.results?.first;
+    if (!secret) return null;
+
+    const ikm = await crypto.subtle.importKey(
+      "raw",
+      secret as BufferSource,
+      { name: "HKDF" },
+      false,
+      ["deriveBits"],
+    );
+    const bits = await crypto.subtle.deriveBits(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: new TextEncoder().encode(accountId),
+        info: PRF_DERIVE_SALT,
+      },
+      ikm,
+      256,
+    );
+    return new Uint8Array(bits);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Discoverable passkey authentication — no credentialId required.
+ * Used when a new browser or PWA has an empty IDB but the user may have
+ * a synced passkey from another context. The platform shows the passkey
+ * picker; the user picks theirs; we derive the masterSecret from the PRF
+ * output and return both the secret and the discovered credentialId.
+ *
+ * Returns null if the user cancels, no passkey exists for this RP, or
+ * the authenticator does not support PRF.
+ */
+export async function discoverPasskey(
+  accountId: string,
+): Promise<{ masterSecret: Uint8Array; credentialId: Uint8Array } | null> {
+  try {
+    const assertion = (await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        userVerification: "required",
+        extensions: { prf: { eval: { first: PRF_SALT } } },
+      },
+    })) as PublicKeyCredential | null;
+
+    const secret = assertion?.getClientExtensionResults().prf?.results?.first;
+    if (!secret || !assertion) return null;
+
+    const ikm = await crypto.subtle.importKey(
+      "raw",
+      secret as BufferSource,
+      { name: "HKDF" },
+      false,
+      ["deriveBits"],
+    );
+    const bits = await crypto.subtle.deriveBits(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: new TextEncoder().encode(accountId),
+        info: PRF_DERIVE_SALT,
+      },
+      ikm,
+      256,
+    );
+    return {
+      masterSecret: new Uint8Array(bits),
+      credentialId: new Uint8Array(assertion.rawId),
+    };
   } catch {
     return null;
   }

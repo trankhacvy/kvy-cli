@@ -106,7 +106,13 @@ describe("require-auth.tsx — key-state wiring", () => {
   it("offers to fetch keys rather than dead-ending a browser that has none", () => {
     const noKeysIndex = source.indexOf('status.kind === "no-keys"');
     expect(noKeysIndex).toBeGreaterThan(-1);
-    expect(source.slice(noKeysIndex, noKeysIndex + 400)).toContain("RequestKeysPanel");
+    // The no-keys branch now renders NoKeysGate, which shows PasskeyUnlockPanel when PRF is
+    // available (the PWA/new-browser fix) and falls back to RequestKeysPanel otherwise.
+    const noKeysBranch = source.slice(noKeysIndex, noKeysIndex + 400);
+    expect(noKeysBranch).toContain("NoKeysGate");
+    // RequestKeysPanel and PasskeyUnlockPanel are used inside NoKeysGate.
+    expect(source).toContain("RequestKeysPanel");
+    expect(source).toContain("PasskeyUnlockPanel");
   });
 
   it("has no PIN gate left", () => {

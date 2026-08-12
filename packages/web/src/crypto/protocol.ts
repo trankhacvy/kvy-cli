@@ -153,7 +153,7 @@ export interface DescribeStorageRequest {
 }
 
 /** Load and unwrap the stored key material into worker memory. No user interaction for
- * `"device"` mode; a biometric gesture for `"prf"`. */
+ * `"device"` mode; a biometric gesture for `"prf"` or `"passkey"`. */
 export interface EnsureLoadedRequest {
   id: string;
   type: "ensureLoaded";
@@ -161,6 +161,29 @@ export interface EnsureLoadedRequest {
   accountId?: string;
   /** Required for a `"prf"` record — see `InitRequest.wrapKey`. */
   wrapKey?: CryptoKey;
+  /**
+   * For `"passkey"` records — 32-byte masterSecret derived from PRF by the main thread via
+   * HKDF. The worker loads it directly without touching the wrapped field in storage.
+   * The bytes are kept in worker memory only.
+   */
+  masterSecret?: Uint8Array;
+}
+
+/**
+ * A new browser or PWA has discovered the user's passkey and derived the masterSecret
+ * from it. This is NOT first-time provisioning: the account already exists on the server,
+ * the public keys are already bound. This writes a passkey record to this browser's IDB
+ * and loads the key tree into memory.
+ *
+ * Does NOT touch session storage — the refresh token is already there from the sign-in
+ * that preceded this call.
+ */
+export interface ClaimPasskeyRequest {
+  id: string;
+  type: "claimPasskey";
+  accountId: string;
+  masterSecret: Uint8Array;
+  credentialId: Uint8Array;
 }
 
 /** One-time upgrade of a pre-Phase-5 PIN-wrapped record to the current shape. */
@@ -244,7 +267,8 @@ export type CryptoWorkerRequest =
   | BeginKeyRequestRequest
   | AcceptKeyResponseRequest
   | SealKeysForPeerRequest
-  | HashWorkspacePathRequest;
+  | HashWorkspacePathRequest
+  | ClaimPasskeyRequest;
 
 export interface DeviceIdentity {
   signPubKey: string;
@@ -257,8 +281,8 @@ export interface BindKeysProofResult extends DeviceIdentity {
 
 export interface StorageDescription {
   present: boolean;
-  /** 1 = pre-Phase-5 PIN record needing migration, 2 = current. */
-  version: 1 | 2;
+  /** 1 = pre-Phase-5 PIN record needing migration, 2 = current, 3 = passkey derive-on-demand. */
+  version: 1 | 2 | 3;
   mode: KeyWrapMode | null;
   /** For a `"prf"` record — the main thread needs it to re-derive the wrap key. Not a
    * secret: it identifies a passkey, it does not unlock one. */
@@ -306,6 +330,7 @@ export interface CryptoWorkerResults {
   acceptKeyResponse: boolean;
   sealKeysForPeer: string;
   hashWorkspacePath: string;
+  claimPasskey: boolean;
 }
 
 export interface CryptoWorkerOkResponse<T = unknown> {
