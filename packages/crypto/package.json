@@ -42,9 +42,9 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "@types/node": "^22.10.0",
+    "@types/node": "^26.2.0",
     "pkgroll": "^2.14.2",
-    "typescript": "^5.9.0",
-    "vitest": "^3.2.4"
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   }
 }
