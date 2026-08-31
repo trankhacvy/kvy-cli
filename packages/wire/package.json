@@ -30,9 +30,9 @@
   },
   "devDependencies": {
     "@types/node": ">=20",
-    "pkgroll": "^2.14.2",
-    "shx": "^0.3.4",
-    "tsx": "^4.20.0",
+    "pkgroll": "^2.28.1",
+    "shx": "^0.4.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.9.0",
     "vitest": "^3.2.4"
   }
